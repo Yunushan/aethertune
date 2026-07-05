@@ -1,0 +1,112 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../player/player_controller.dart';
+
+class PlayerBar extends StatelessWidget {
+  const PlayerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.watch<PlayerController>();
+    final current = player.current;
+
+    if (current == null) {
+      return Material(
+        elevation: 3,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: <Widget>[
+                const Icon(Icons.music_note_outlined),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No track playing. Import local audio to start.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            StreamBuilder<Duration>(
+              stream: player.positionStream,
+              builder: (context, snapshot) {
+                final position = snapshot.data ?? Duration.zero;
+                final duration = player.duration;
+                final max = duration.inMilliseconds <= 0
+                    ? 1.0
+                    : duration.inMilliseconds.toDouble();
+                final value = position.inMilliseconds.clamp(0, max.toInt()).toDouble();
+
+                return Slider(
+                  value: value,
+                  max: max,
+                  onChanged: (value) {
+                    player.seek(Duration(milliseconds: value.round()));
+                  },
+                );
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: <Widget>[
+                  const CircleAvatar(child: Icon(Icons.music_note)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          current.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          current.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Previous',
+                    onPressed: player.previous,
+                    icon: const Icon(Icons.skip_previous),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: player.togglePlayPause,
+                    icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
+                    label: Text(player.isPlaying ? 'Pause' : 'Play'),
+                  ),
+                  IconButton(
+                    tooltip: 'Next',
+                    onPressed: player.next,
+                    icon: const Icon(Icons.skip_next),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

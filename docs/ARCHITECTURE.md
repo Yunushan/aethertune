@@ -1,0 +1,89 @@
+# Architecture
+
+AetherTune is a local-first Flutter application with a provider-based source layer.
+
+## Goals
+
+- Run on Android and iOS from one Flutter codebase.
+- Keep the player, library, queue, and UI open-source and source-agnostic.
+- Allow legal source adapters without coupling the app to any single service.
+- Avoid telemetry and forced accounts.
+- Keep proprietary or legally risky behavior out of the core project.
+
+## Layers
+
+```text
+UI layer
+  HomeScreen, Library tab, Sources tab, Options tab, PlayerBar, TrackTile
+
+State layer
+  LibraryStore, PlayerController
+
+Domain layer
+  Track, MusicSourceProvider
+
+Data/provider layer
+  Local file import, DemoSourceProvider, future legal provider adapters
+
+Platform layer
+  Flutter Android/iOS wrappers, file picker, audio backend
+```
+
+## Domain model
+
+`Track` is provider-independent. A track may have:
+
+- `localPath` for local files.
+- `streamUrl` for legal direct streams.
+- metadata only while a provider resolves playback.
+- `sourceId` to trace where it came from.
+
+## Provider contract
+
+Every source adapter implements:
+
+```dart
+abstract interface class MusicSourceProvider {
+  String get id;
+  String get name;
+  String get description;
+  Future<List<Track>> search(String query);
+  Future<Uri?> resolveStream(Track track);
+}
+```
+
+Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects.
+
+## Playback
+
+`PlayerController` wraps `just_audio` and provides:
+
+- local file playback
+- stream URL playback
+- play/pause
+- stop
+- seek
+- next/previous
+- queue
+- shuffle
+- repeat mode
+- sleep timer
+
+## Persistence
+
+`LibraryStore` currently uses `shared_preferences` for a simple JSON track store. When the app grows, migrate to a structured local database such as SQLite, Drift, Isar, or ObjectBox.
+
+## Future modules
+
+Recommended packages/modules:
+
+```text
+packages/core/             Provider-neutral models and contracts
+packages/provider_local/   Local library scanner/importer
+packages/provider_rss/     Podcast adapter
+packages/provider_radio/   Radio adapter
+packages/provider_jellyfin/Jellyfin adapter
+packages/provider_archive/ Internet Archive adapter
+packages/cache/            Offline cache/download manager
+packages/lyrics/           LRC/plain lyrics parser
+```
