@@ -10,6 +10,7 @@
 - [x] Local playback
 - [x] Queue
 - [x] Favorites
+- [x] Manual playlists
 - [x] Sleep timer
 - [x] Provider interface
 - [ ] More unit tests
@@ -17,7 +18,9 @@
 
 ## 0.2.x: Library
 
-- [ ] Manual playlists
+- [x] Manual playlists
+- [ ] Playlist reorder
+- [ ] Playlist artwork
 - [ ] Backup/restore JSON
 - [ ] Folder browser
 - [ ] Metadata scanner

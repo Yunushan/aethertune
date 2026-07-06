@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
 import '../data/library_store.dart';
+import '../domain/playlist.dart';
 import '../domain/track.dart';
 import '../player/player_controller.dart';
 import 'widgets/player_bar.dart';
@@ -64,7 +65,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() => _favoritesOnly = value);
                     },
                     onImport: () => _importAudio(context),
+                    onAddToPlaylist: (track) => _showAddToPlaylist(
+                      context,
+                      track,
+                    ),
                   ),
+                  const _PlaylistsTab(),
                   const _SourcesTab(),
                   const _SettingsTab(),
                 ],
@@ -84,6 +90,11 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Library',
           ),
           NavigationDestination(
+            icon: Icon(Icons.playlist_play_outlined),
+            selectedIcon: Icon(Icons.playlist_play),
+            label: 'Playlists',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.extension_outlined),
             selectedIcon: Icon(Icons.extension),
             label: 'Sources',
@@ -96,6 +107,135 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showAddToPlaylist(BuildContext context, Track track) async {
+    final library = context.read<LibraryStore>();
+
+    if (library.playlists.isEmpty) {
+      await _createPlaylist(context, seedTrack: track);
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.playlist_add),
+                title: const Text('New playlist'),
+                subtitle: Text('Create a playlist with ${track.title}.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _createPlaylist(context, seedTrack: track);
+                },
+              ),
+              const Divider(height: 1),
+              for (final playlist in library.playlists)
+                ListTile(
+                  leading: const Icon(Icons.queue_music),
+                  title: Text(playlist.name),
+                  subtitle: Text('${playlist.trackCount} track(s)'),
+                  enabled: !playlist.containsTrack(track.id),
+                  onTap: playlist.containsTrack(track.id)
+                      ? null
+                      : () async {
+                          Navigator.of(sheetContext).pop();
+                          await library.addTrackToPlaylist(
+                            playlist.id,
+                            track.id,
+                          );
+
+                          if (!mounted) {
+                            return;
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Added to ${playlist.name}.'),
+                            ),
+                          );
+                        },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _createPlaylist(
+    BuildContext context, {
+    Track? seedTrack,
+  }) async {
+    final name = await _promptForPlaylistName(context);
+    if (!context.mounted || name == null) {
+      return;
+    }
+
+    final library = context.read<LibraryStore>();
+    final playlist = await library.createPlaylist(
+      name,
+      trackIds: seedTrack == null ? const <String>[] : <String>[seedTrack.id],
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Created ${playlist.name}.')),
+    );
+  }
+
+  Future<String?> _promptForPlaylistName(BuildContext context) async {
+    final controller = TextEditingController();
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('New playlist'),
+            content: TextField(
+              autofocus: true,
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Playlist name',
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) {
+                final normalized = value.trim();
+                if (normalized.isNotEmpty) {
+                  Navigator.of(dialogContext).pop(normalized);
+                }
+              },
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final normalized = controller.text.trim();
+                  if (normalized.isNotEmpty) {
+                    Navigator.of(dialogContext).pop(normalized);
+                  }
+                },
+                child: const Text('Create'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _importAudio(BuildContext context) async {
@@ -179,6 +319,7 @@ class _LibraryTab extends StatelessWidget {
     required this.onQueryChanged,
     required this.onFavoritesOnlyChanged,
     required this.onImport,
+    required this.onAddToPlaylist,
   });
 
   final TextEditingController searchController;
@@ -187,6 +328,7 @@ class _LibraryTab extends StatelessWidget {
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<bool> onFavoritesOnlyChanged;
   final VoidCallback onImport;
+  final ValueChanged<Track> onAddToPlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +381,7 @@ class _LibraryTab extends StatelessWidget {
                   track: track,
                   onPlay: () => player.playTrack(track, queue: tracks),
                   onFavorite: () => library.toggleFavorite(track.id),
+                  onAddToPlaylist: () => onAddToPlaylist(track),
                   onRemove: () => library.removeTrack(track.id),
                 );
               },
@@ -248,6 +391,304 @@ class _LibraryTab extends StatelessWidget {
     );
   }
 }
+
+class _PlaylistsTab extends StatelessWidget {
+  const _PlaylistsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+
+    if (!library.loaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Playlists',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            IconButton.filledTonal(
+              tooltip: 'Create playlist',
+              onPressed: () => _createPlaylist(context),
+              icon: const Icon(Icons.playlist_add),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (library.playlists.isEmpty)
+          _EmptyPlaylists(onCreate: () => _createPlaylist(context))
+        else
+          for (final playlist in library.playlists)
+            _PlaylistCard(
+              playlist: playlist,
+              onOpen: () => _showPlaylist(context, playlist.id),
+              onRename: () => _renamePlaylist(context, playlist),
+              onDelete: () => _deletePlaylist(context, playlist),
+            ),
+      ],
+    );
+  }
+
+  Future<void> _createPlaylist(BuildContext context) async {
+    final name = await _promptForPlaylistName(context, title: 'New playlist');
+    if (!context.mounted || name == null) {
+      return;
+    }
+
+    final playlist = await context.read<LibraryStore>().createPlaylist(name);
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Created ${playlist.name}.')),
+    );
+  }
+
+  Future<void> _renamePlaylist(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final name = await _promptForPlaylistName(
+      context,
+      title: 'Rename playlist',
+      initialValue: playlist.name,
+    );
+    if (!context.mounted || name == null) {
+      return;
+    }
+
+    await context.read<LibraryStore>().renamePlaylist(playlist.id, name);
+  }
+
+  Future<void> _deletePlaylist(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    await context.read<LibraryStore>().deletePlaylist(playlist.id);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Deleted ${playlist.name}.')),
+    );
+  }
+
+  Future<void> _showPlaylist(BuildContext context, String playlistId) async {
+    final player = context.read<PlayerController>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return Consumer<LibraryStore>(
+          builder: (context, library, _) {
+            final playlist = library.playlistById(playlistId);
+            final tracks = library.tracksForPlaylist(playlistId);
+
+            if (playlist == null) {
+              return const SizedBox.shrink();
+            }
+
+            return SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  ListTile(
+                    leading: const Icon(Icons.queue_music),
+                    title: Text(playlist.name),
+                    subtitle: Text('${playlist.trackCount} track(s)'),
+                    trailing: FilledButton.tonalIcon(
+                      onPressed: tracks.isEmpty
+                          ? null
+                          : () {
+                              Navigator.of(sheetContext).pop();
+                              player.playTrack(tracks.first, queue: tracks);
+                            },
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Play'),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  if (tracks.isEmpty)
+                    const ListTile(
+                      leading: Icon(Icons.playlist_remove),
+                      title: Text('No tracks yet'),
+                      subtitle: Text('Add tracks from the Library tab.'),
+                    )
+                  else
+                    for (final track in tracks)
+                      ListTile(
+                        leading: const Icon(Icons.music_note_outlined),
+                        title: Text(track.title),
+                        subtitle: Text('${track.artist} · ${track.album}'),
+                        trailing: IconButton(
+                          tooltip: 'Remove from playlist',
+                          onPressed: () => library.removeTrackFromPlaylist(
+                            playlist.id,
+                            track.id,
+                          ),
+                          icon: const Icon(Icons.playlist_remove),
+                        ),
+                      ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<String?> _promptForPlaylistName(
+    BuildContext context, {
+    required String title,
+    String initialValue = '',
+  }) async {
+    final controller = TextEditingController(text: initialValue);
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text(title),
+            content: TextField(
+              autofocus: true,
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Playlist name',
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) {
+                final normalized = value.trim();
+                if (normalized.isNotEmpty) {
+                  Navigator.of(dialogContext).pop(normalized);
+                }
+              },
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final normalized = controller.text.trim();
+                  if (normalized.isNotEmpty) {
+                    Navigator.of(dialogContext).pop(normalized);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+}
+
+class _PlaylistCard extends StatelessWidget {
+  const _PlaylistCard({
+    required this.playlist,
+    required this.onOpen,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  final Playlist playlist;
+  final VoidCallback onOpen;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.queue_music),
+        title: Text(playlist.name),
+        subtitle: Text('${playlist.trackCount} track(s)'),
+        onTap: onOpen,
+        trailing: PopupMenuButton<_PlaylistAction>(
+          onSelected: (action) {
+            switch (action) {
+              case _PlaylistAction.rename:
+                onRename();
+                break;
+              case _PlaylistAction.delete:
+                onDelete();
+                break;
+            }
+          },
+          itemBuilder: (context) => const <PopupMenuEntry<_PlaylistAction>>[
+            PopupMenuItem(
+              value: _PlaylistAction.rename,
+              child: ListTile(
+                leading: Icon(Icons.drive_file_rename_outline),
+                title: Text('Rename'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.delete,
+              child: ListTile(
+                leading: Icon(Icons.delete_outline),
+                title: Text('Delete'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPlaylists extends StatelessWidget {
+  const _EmptyPlaylists({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: <Widget>[
+          const Icon(Icons.queue_music, size: 56),
+          const SizedBox(height: 16),
+          Text(
+            'No playlists yet',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Create manual playlists and add tracks from your library.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.playlist_add),
+            label: const Text('Create playlist'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _PlaylistAction { rename, delete }
 
 class _EmptyLibrary extends StatelessWidget {
   const _EmptyLibrary({

@@ -7,6 +7,7 @@ class TrackTile extends StatelessWidget {
     required this.track,
     required this.onPlay,
     required this.onFavorite,
+    required this.onAddToPlaylist,
     required this.onRemove,
     super.key,
   });
@@ -14,6 +15,7 @@ class TrackTile extends StatelessWidget {
   final Track track;
   final VoidCallback onPlay;
   final VoidCallback onFavorite;
+  final VoidCallback onAddToPlaylist;
   final VoidCallback onRemove;
 
   @override
@@ -35,6 +37,9 @@ class TrackTile extends StatelessWidget {
               break;
             case _TrackAction.favorite:
               onFavorite();
+              break;
+            case _TrackAction.addToPlaylist:
+              onAddToPlaylist();
               break;
             case _TrackAction.remove:
               onRemove();
@@ -59,6 +64,13 @@ class TrackTile extends StatelessWidget {
             ),
           ),
           const PopupMenuItem(
+            value: _TrackAction.addToPlaylist,
+            child: ListTile(
+              leading: Icon(Icons.playlist_add),
+              title: Text('Add to playlist'),
+            ),
+          ),
+          const PopupMenuItem(
             value: _TrackAction.remove,
             child: ListTile(
               leading: Icon(Icons.delete_outline),
@@ -71,4 +83,4 @@ class TrackTile extends StatelessWidget {
   }
 }
 
-enum _TrackAction { play, favorite, remove }
+enum _TrackAction { play, favorite, addToPlaylist, remove }

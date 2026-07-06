@@ -48,6 +48,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played as queue. | Persistent queue, reorder, save as playlist. |
+| Manual playlists | Done | Persisted user playlists with add/remove/play UI. | Reorder, artwork, import/export, sync. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute timer. | End-of-track mode, fade-out, custom duration. |
 | Shuffle | Done | `just_audio` shuffle flag. | Persisted shuffle and queue-aware shuffle. |
@@ -113,7 +114,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Current queue playback | Done | All music apps | Persistence and reorder. |
-| Manual playlists | Roadmap | All music apps | Playlist schema, editor, reorder, cover art. |
+| Manual playlists | Done | All music apps | Reorder, artwork, import/export, sync. |
 | Smart playlists | Roadmap | Namida, desktop players | Rule engine and dynamic queries. |
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |
 | Playlist import/export | Roadmap | Spotube, YouTube Music migration needs | M3U/JSON/CSV import-export. |

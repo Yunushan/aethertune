@@ -3,16 +3,23 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/playlist.dart';
 import '../domain/track.dart';
 
 class LibraryStore extends ChangeNotifier {
+  LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+
   static const _tracksKey = 'aethertune.tracks.v1';
+  static const _playlistsKey = 'aethertune.playlists.v1';
 
   final List<Track> _tracks = <Track>[];
+  final List<Playlist> _playlists = <Playlist>[];
+  final DateTime Function() _clock;
   bool _loaded = false;
 
   bool get loaded => _loaded;
   List<Track> get tracks => List.unmodifiable(_tracks);
+  List<Playlist> get playlists => List.unmodifiable(_playlists);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
 
@@ -22,9 +29,9 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_tracksKey);
-    if (raw != null && raw.isNotEmpty) {
-      final decoded = jsonDecode(raw) as List<dynamic>;
+    final rawTracks = prefs.getString(_tracksKey);
+    if (rawTracks != null && rawTracks.isNotEmpty) {
+      final decoded = jsonDecode(rawTracks) as List<dynamic>;
       _tracks
         ..clear()
         ..addAll(
@@ -35,6 +42,22 @@ class LibraryStore extends ChangeNotifier {
         );
     }
 
+    final rawPlaylists = prefs.getString(_playlistsKey);
+    if (rawPlaylists != null && rawPlaylists.isNotEmpty) {
+      final decoded = jsonDecode(rawPlaylists) as List<dynamic>;
+      _playlists
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => Playlist.fromJson(Map<String, Object?>.from(item)),
+              )
+              .toList(growable: false),
+        );
+    }
+
+    _removeMissingPlaylistTracks();
     _loaded = true;
     notifyListeners();
   }
@@ -52,7 +75,7 @@ class LibraryStore extends ChangeNotifier {
     }
 
     if (changed) {
-      _sort();
+      _sortTracks();
       await _save();
       notifyListeners();
     }
@@ -60,12 +83,14 @@ class LibraryStore extends ChangeNotifier {
 
   Future<void> removeTrack(String id) async {
     _tracks.removeWhere((track) => track.id == id);
+    _removeTrackFromPlaylists(id);
     await _save();
     notifyListeners();
   }
 
   Future<void> clear() async {
     _tracks.clear();
+    _playlists.clear();
     await _save();
     notifyListeners();
   }
@@ -97,13 +122,184 @@ class LibraryStore extends ChangeNotifier {
     }).toList(growable: false);
   }
 
-  void _sort() {
+  Playlist? playlistById(String id) {
+    final index = _playlists.indexWhere((playlist) => playlist.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    return _playlists[index];
+  }
+
+  List<Track> tracksForPlaylist(String playlistId) {
+    final playlist = playlistById(playlistId);
+    if (playlist == null) {
+      return <Track>[];
+    }
+
+    final byId = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+
+    return playlist.trackIds
+        .map((trackId) => byId[trackId])
+        .whereType<Track>()
+        .toList(growable: false);
+  }
+
+  Future<Playlist> createPlaylist(
+    String name, {
+    Iterable<String> trackIds = const <String>[],
+  }) async {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Playlist name cannot be empty.');
+    }
+
+    final now = _clock();
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+    final filteredTrackIds = trackIds
+        .where(knownTrackIds.contains)
+        .toSet()
+        .toList(growable: false);
+    final playlist = Playlist(
+      id: _playlistId(normalizedName, now),
+      name: normalizedName,
+      trackIds: filteredTrackIds,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    _playlists.add(playlist);
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+
+    return playlist;
+  }
+
+  Future<void> renamePlaylist(String playlistId, String name) async {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Playlist name cannot be empty.');
+    }
+
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return;
+    }
+
+    _playlists[index] = _playlists[index].copyWith(
+      name: normalizedName,
+      updatedAt: _clock(),
+    );
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> deletePlaylist(String playlistId) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return;
+    }
+
+    _playlists.removeAt(index);
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> addTrackToPlaylist(String playlistId, String trackId) async {
+    if (!_tracks.any((track) => track.id == trackId)) {
+      return;
+    }
+
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1 || _playlists[index].containsTrack(trackId)) {
+      return;
+    }
+
+    _playlists[index] = _playlists[index].copyWith(
+      trackIds: <String>[..._playlists[index].trackIds, trackId],
+      updatedAt: _clock(),
+    );
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> removeTrackFromPlaylist(
+    String playlistId,
+    String trackId,
+  ) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1 || !_playlists[index].containsTrack(trackId)) {
+      return;
+    }
+
+    _playlists[index] = _playlists[index].copyWith(
+      trackIds: _playlists[index]
+          .trackIds
+          .where((existingId) => existingId != trackId)
+          .toList(growable: false),
+      updatedAt: _clock(),
+    );
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+  }
+
+  void _sortTracks() {
     _tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+  }
+
+  void _sortPlaylists() {
+    _playlists.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  void _removeMissingPlaylistTracks() {
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+
+    for (var index = 0; index < _playlists.length; index += 1) {
+      final playlist = _playlists[index];
+      final filteredTrackIds = playlist.trackIds
+          .where(knownTrackIds.contains)
+          .toList(growable: false);
+
+      if (filteredTrackIds.length != playlist.trackIds.length) {
+        _playlists[index] = playlist.copyWith(trackIds: filteredTrackIds);
+      }
+    }
+  }
+
+  void _removeTrackFromPlaylists(String trackId) {
+    for (var index = 0; index < _playlists.length; index += 1) {
+      final playlist = _playlists[index];
+      if (playlist.containsTrack(trackId)) {
+        _playlists[index] = playlist.copyWith(
+          trackIds: playlist.trackIds
+              .where((existingId) => existingId != trackId)
+              .toList(growable: false),
+          updatedAt: _clock(),
+        );
+      }
+    }
+  }
+
+  String _playlistId(String name, DateTime createdAt) {
+    final base = '${createdAt.microsecondsSinceEpoch}-$name';
+    return base64Url.encode(utf8.encode(base)).replaceAll('=', '');
   }
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(_tracks.map((track) => track.toJson()).toList());
-    await prefs.setString(_tracksKey, encoded);
+    final encodedTracks = jsonEncode(
+      _tracks.map((track) => track.toJson()).toList(),
+    );
+    final encodedPlaylists = jsonEncode(
+      _playlists.map((playlist) => playlist.toJson()).toList(),
+    );
+    await prefs.setString(_tracksKey, encodedTracks);
+    await prefs.setString(_playlistsKey, encodedPlaylists);
   }
 }

@@ -48,6 +48,10 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 When you play a track from the library, the current filtered list becomes the queue. Use previous/next controls in the player bar.
 
+## Playlists
+
+Use the Playlists tab to create, rename, delete, open, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**.
+
 ## Sleep timer
 
 Tap the moon icon in the top-right corner and choose a duration. Playback stops automatically when the timer ends.

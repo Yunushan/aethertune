@@ -85,6 +85,7 @@ This scaffold includes real app code, not only a README:
 | Persistence | Saves imported tracks and favorites with `shared_preferences` |
 | Search | Local library filtering by title, artist, and album |
 | Queue | Play current list as a queue with next/previous controls |
+| Playlists | Create, rename, delete, open, and play manual playlists |
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after 5, 15, 30, 60, or 90 minutes |
 | Repeat/shuffle | Runtime shuffle flag and repeat-mode hook |
@@ -104,7 +105,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Synced LRC and plain text lyrics roadmap |
-| Playlists | Manual playlists, smart playlists, import/export roadmap |
+| Playlists | Manual playlists implemented; smart playlists and import/export roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
