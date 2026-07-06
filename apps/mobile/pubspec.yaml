@@ -1,5 +1,5 @@
-name: aethertune_mobile
-description: Free and open-source Android/iOS music app with local playback and provider plugins.
+name: aethertune
+description: Free and open-source music app with local playback and provider plugins.
 publish_to: "none"
 version: 0.1.0+1
 

@@ -1,4 +1,4 @@
-name: mobile-ci
+name: aethertune-ci
 
 on:
   push:

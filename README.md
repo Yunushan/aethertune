@@ -1,7 +1,7 @@
-<h1 align="center">AetherTune Mobile</h1>
+<h1 align="center">AetherTune</h1>
 
 <p align="center">
-  <strong>Free, open-source, Android/iOS music workspace with local playback, provider plugins, queue, favorites, search, sleep timer, offline-first architecture, and privacy-first design.</strong>
+  <strong>Free, open-source music workspace with local playback, provider plugins, queue, favorites, search, sleep timer, offline-first architecture, and privacy-first design.</strong>
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 
 ## What is AetherTune?
 
-**AetherTune Mobile** is a GitHub-ready Flutter project for a completely free and open-source music app targeting **Android and iOS**. The project is designed to combine the best product ideas from apps such as Kreate, OpenTune, InnerTune, SimpMusic, ArchiveTune, Spotube, Echo Music, Namida, PipePipe, NewPipe, LibreTube, Musify, AuraMusic, Bloomee Tunes, Gyawun Music, Music You, Muzza, SoundPod, NouTube, Grayjay, OuterTune, ViTune, RiMusic, Harmony Music, YMusic, YouTube Music, Flow, and MetroList.
+**AetherTune** is a GitHub-ready project for a completely free and open-source music app, starting with a Flutter app targeting **Android and iOS**. The project is designed to combine the best product ideas from apps such as Kreate, OpenTune, InnerTune, SimpMusic, ArchiveTune, Spotube, Echo Music, Namida, PipePipe, NewPipe, LibreTube, Musify, AuraMusic, Bloomee Tunes, Gyawun Music, Music You, Muzza, SoundPod, NouTube, Grayjay, OuterTune, ViTune, RiMusic, Harmony Music, YMusic, YouTube Music, Flow, and MetroList.
 
 The app is intentionally **provider-based**: the player, library, queue, cache, favorites, playlists, search, and UI are open-source core features, while source adapters can be added for legal sources such as local files, self-hosted servers, Internet Archive, Radio Browser, Jellyfin, Navidrome/Subsonic, podcasts, or other official APIs.
 
@@ -40,8 +40,8 @@ The app is intentionally **provider-based**: the player, library, queue, cache, 
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_NAME/aethertune-mobile.git
-cd aethertune-mobile
+git clone https://github.com/YOUR_NAME/aethertune.git
+cd aethertune
 
 # Creates platform wrappers when they are not already generated.
 ./scripts/bootstrap_mobile.sh
@@ -101,7 +101,7 @@ For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md)
 ## Project Layout
 
 ```text
-aethertune-mobile/
+aethertune/
 ├─ apps/mobile/                 # Flutter Android/iOS app
 │  ├─ lib/src/domain/            # Track and provider contracts
 │  ├─ lib/src/data/              # Local persistence and demo provider
@@ -128,4 +128,4 @@ Pull requests are welcome. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), then
 
 ## License
 
-AetherTune Mobile is released under the **MIT License**. See [`LICENSE`](LICENSE).
+AetherTune is released under the **MIT License**. See [`LICENSE`](LICENSE).

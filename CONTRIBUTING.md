@@ -1,4 +1,4 @@
-# Contributing to AetherTune Mobile
+# Contributing to AetherTune
 
 Thanks for helping build a free and open music app.
 

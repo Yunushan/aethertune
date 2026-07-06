@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:aethertune_mobile/src/domain/track.dart';
+import 'package:aethertune/src/domain/track.dart';
 
 void main() {
   test('Track JSON round trip keeps core fields', () {

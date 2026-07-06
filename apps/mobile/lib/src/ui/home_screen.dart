@@ -327,7 +327,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           'AetherTune separates the open-source player from source adapters. Add legal providers for local files, self-hosted music, podcasts, radio, Internet Archive, or official APIs.',
         ),
         const SizedBox(height: 16),
-        _ProviderCard(
+        const _ProviderCard(
           title: 'Local Files',
           status: 'Enabled',
           description: 'Import and play files selected through the native picker.',
@@ -339,19 +339,19 @@ class _SourcesTabState extends State<_SourcesTab> {
           description: _provider.description,
           icon: Icons.code,
         ),
-        _ProviderCard(
+        const _ProviderCard(
           title: 'Jellyfin / Navidrome / Subsonic',
           status: 'Adapter roadmap',
           description: 'User-owned/self-hosted music server support belongs here.',
           icon: Icons.dns_outlined,
         ),
-        _ProviderCard(
+        const _ProviderCard(
           title: 'Podcasts / Radio / Internet Archive',
           status: 'Adapter roadmap',
           description: 'Open catalogs can provide discovery, streaming, and offline caching.',
           icon: Icons.public,
         ),
-        _ProviderCard(
+        const _ProviderCard(
           title: 'Commercial services',
           status: 'Official APIs only',
           description: 'No DRM bypass, scraping, or paid-service cloning is included.',

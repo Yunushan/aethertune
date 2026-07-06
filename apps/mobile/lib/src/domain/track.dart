@@ -5,7 +5,7 @@ import 'dart:convert';
 /// A track can be backed by a local file, a resolved stream URL from a legal
 /// provider adapter, or metadata only while a provider resolves the stream.
 class Track {
-  const Track({
+  Track({
     required this.id,
     required this.title,
     this.artist = 'Unknown Artist',

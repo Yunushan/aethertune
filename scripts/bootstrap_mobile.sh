@@ -14,12 +14,19 @@ mkdir -p "$APP_DIR"
 if [ ! -d "$APP_DIR/android" ] || [ ! -d "$APP_DIR/ios" ]; then
   echo "Generating Flutter Android/iOS platform wrappers..."
   flutter create "$APP_DIR" \
-    --project-name aethertune_mobile \
+    --project-name aethertune \
     --org dev.aethertune \
     --platforms android,ios
+fi
+
+DEFAULT_WIDGET_TEST="$APP_DIR/test/widget_test.dart"
+if [ -f "$DEFAULT_WIDGET_TEST" ] &&
+  grep -q "Counter increments smoke test" "$DEFAULT_WIDGET_TEST" &&
+  grep -q "MyApp" "$DEFAULT_WIDGET_TEST"; then
+  rm "$DEFAULT_WIDGET_TEST"
 fi
 
 cd "$APP_DIR"
 flutter pub get
 
-echo "AetherTune Mobile is ready. Run: cd apps/mobile && flutter run"
+echo "AetherTune is ready. Run: cd apps/mobile && flutter run"
