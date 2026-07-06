@@ -46,7 +46,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
-| Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
+| Search | Done | Local title/artist/album/genre filtering. | Global multi-provider search and ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
@@ -91,7 +91,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Metadata scanner | Roadmap | Namida | Tag parser, artwork extraction, background indexing. |
 | Metadata editing | Roadmap | Namida | Safe tag writer and rollback handling. |
 | Duplicate resolver | Roadmap | Local library apps | Fingerprint/path/hash matching. |
-| Album/artist/genre views | Roadmap | YouTube Music, Namida | Library schema and browse UI. |
+| Album/artist/genre views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, and source; metadata scanner still needs richer tags. |
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
 | Stats / recap | Scaffolded | YouTube Music | Play counts are done; aggregation jobs and recap UI still needed. |
@@ -102,7 +102,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Local library search | Done | All music apps | Advanced filters and typo tolerance. |
+| Local library search | Done | All music apps | Searches title, artist, album, and genre; advanced filters and typo tolerance remain. |
 | Multi-provider search | Scaffolded | Spotube, Grayjay, Echo Music | Provider registry, query fan-out, ranking, errors. |
 | Search suggestions | Roadmap | YouTube Music | Provider suggestions and local history. |
 | Home feed | Roadmap | YouTube Music, InnerTune, RiMusic | Feed sections from legal providers. |
@@ -311,7 +311,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 ## Minimum Build Plan To Reach Real 100% Implemented Parity
 
 1. Replace JSON preferences with a real local database and migrations.
-2. Build full local library: folders, metadata scanner, album/artist/genre views, playlists, backup/restore.
+2. Build full local library: folders, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
 3. Add `audio_service` and platform media sessions for background playback, notifications, lock screen, media keys, and Android Auto/CarPlay where allowed.
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
 5. Implement legal providers: local folder scanner, Jellyfin, Navidrome/Subsonic, Podcast RSS, Radio Browser, Internet Archive.

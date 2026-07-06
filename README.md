@@ -81,7 +81,7 @@ This scaffold includes real app code, not only a README:
 | Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI |
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
-| Local library | Import audio files through the native file picker and sort by recently added, title, artist, or album |
+| Local library | Import audio files through the native file picker; search, sort, and browse by artist, album, genre, or source |
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, and playback history with `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup from the Options tab |
 | Search | Local library filtering by title, artist, and album with sortable results |

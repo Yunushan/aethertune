@@ -12,6 +12,24 @@ enum LibrarySortMode { recentlyAdded, title, artist, album }
 
 enum PlaylistDocumentFormat { json, m3u, csv }
 
+enum LibraryBrowseType { artist, album, genre, source }
+
+class LibraryBrowseGroup {
+  const LibraryBrowseGroup({
+    required this.type,
+    required this.key,
+    required this.label,
+    required this.trackCount,
+    required this.totalDuration,
+  });
+
+  final LibraryBrowseType type;
+  final String key;
+  final String label;
+  final int trackCount;
+  final Duration totalDuration;
+}
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
@@ -187,6 +205,63 @@ class LibraryStore extends ChangeNotifier {
     return _sortTrackResults(results, sortMode);
   }
 
+  List<LibraryBrowseGroup> browseGroups(
+    LibraryBrowseType type, {
+    String query = '',
+  }) {
+    final groupsByKey = <String, _MutableBrowseGroup>{};
+
+    for (final track in _tracks) {
+      final label = _browseLabelForTrack(track, type);
+      final key = _browseKey(label);
+      final group = groupsByKey.putIfAbsent(
+        key,
+        () => _MutableBrowseGroup(
+          type: type,
+          key: key,
+          label: label,
+        ),
+      );
+      group.add(track);
+    }
+
+    final normalized = _normalizeQuery(query);
+    final groups = groupsByKey.values
+        .where(
+          (group) =>
+              normalized.isEmpty ||
+              group.label.toLowerCase().contains(normalized),
+        )
+        .map((group) => group.toBrowseGroup())
+        .toList(growable: false);
+
+    groups.sort((a, b) {
+      final byLabel = _compareText(a.label, b.label);
+      if (byLabel != 0) {
+        return byLabel;
+      }
+
+      return b.trackCount.compareTo(a.trackCount);
+    });
+
+    return groups;
+  }
+
+  List<Track> tracksForBrowseGroup(
+    LibraryBrowseType type,
+    String key, {
+    LibrarySortMode sortMode = LibrarySortMode.album,
+  }) {
+    final normalizedKey = _browseKey(key);
+    final tracks = _tracks
+        .where((track) {
+          return _browseKey(_browseLabelForTrack(track, type)) == normalizedKey;
+        })
+        .toList(growable: false);
+
+    return _sortTrackResults(tracks, sortMode);
+  }
+
   String exportBackupJson() {
     const encoder = JsonEncoder.withIndent('  ');
 
@@ -257,6 +332,7 @@ class LibraryStore extends ChangeNotifier {
           'title',
           'artist',
           'album',
+          'genre',
           'id',
           'localPath',
           'streamUrl',
@@ -270,6 +346,7 @@ class LibraryStore extends ChangeNotifier {
           track.title,
           track.artist,
           track.album,
+          track.genre,
           track.id,
           track.localPath ?? '',
           track.streamUrl ?? '',
@@ -425,6 +502,7 @@ class LibraryStore extends ChangeNotifier {
           'title': _fieldAt(row, indexes['title']),
           'artist': _fieldAt(row, indexes['artist']),
           'album': _fieldAt(row, indexes['album']),
+          'genre': _fieldAt(row, indexes['genre']),
           'localPath': _fieldAt(row, indexes['localPath']),
           'streamUrl': _fieldAt(row, indexes['streamUrl']),
         }),
@@ -1035,8 +1113,29 @@ class LibraryStore extends ChangeNotifier {
   bool _trackMatchesQuery(Track track, String normalizedQuery) {
     return track.title.toLowerCase().contains(normalizedQuery) ||
         track.artist.toLowerCase().contains(normalizedQuery) ||
-        track.album.toLowerCase().contains(normalizedQuery);
+        track.album.toLowerCase().contains(normalizedQuery) ||
+        track.genre.toLowerCase().contains(normalizedQuery);
   }
+
+  String _browseLabelForTrack(Track track, LibraryBrowseType type) {
+    switch (type) {
+      case LibraryBrowseType.artist:
+        return _nonEmptyMetadata(track.artist, 'Unknown Artist');
+      case LibraryBrowseType.album:
+        return _nonEmptyMetadata(track.album, 'Unknown Album');
+      case LibraryBrowseType.genre:
+        return _nonEmptyMetadata(track.genre, 'Unknown Genre');
+      case LibraryBrowseType.source:
+        return _nonEmptyMetadata(track.sourceId, 'Unknown Source');
+    }
+  }
+
+  String _nonEmptyMetadata(String value, String fallback) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  String _browseKey(String value) => _nonEmptyMetadata(value, '').toLowerCase();
 
   void _sortPlaylists() {
     _playlists.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -1141,5 +1240,34 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_playlistsKey, encodedPlaylists);
     await prefs.setString(_historyKey, encodedHistory);
     await prefs.setString(_lyricsKey, encodedLyrics);
+  }
+}
+
+class _MutableBrowseGroup {
+  _MutableBrowseGroup({
+    required this.type,
+    required this.key,
+    required this.label,
+  });
+
+  final LibraryBrowseType type;
+  final String key;
+  final String label;
+  int trackCount = 0;
+  Duration totalDuration = Duration.zero;
+
+  void add(Track track) {
+    trackCount += 1;
+    totalDuration += track.duration;
+  }
+
+  LibraryBrowseGroup toBrowseGroup() {
+    return LibraryBrowseGroup(
+      type: type,
+      key: key,
+      label: label,
+      trackCount: trackCount,
+      totalDuration: totalDuration,
+    );
   }
 }

@@ -762,7 +762,7 @@ class _LibraryTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: SearchBar(
             controller: searchController,
-            hintText: 'Search title, artist, or album',
+            hintText: 'Search title, artist, album, or genre',
             leading: const Icon(Icons.search),
             trailing: <Widget>[
               PopupMenuButton<LibrarySortMode>(
@@ -796,6 +796,28 @@ class _LibraryTab extends StatelessWidget {
             onChanged: onQueryChanged,
           ),
         ),
+        SizedBox(
+          height: 48,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            children: <Widget>[
+              for (final type in LibraryBrowseType.values) ...[
+                ActionChip(
+                  avatar: Icon(_libraryBrowseTypeIcon(type), size: 18),
+                  label: Text(_libraryBrowseTypeLabel(type)),
+                  onPressed: () => _showLibraryBrowseGroups(
+                    context,
+                    type,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
         if (tracks.isEmpty)
           Expanded(
             child: _EmptyLibrary(
@@ -824,6 +846,210 @@ class _LibraryTab extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<void> _showLibraryBrowseGroups(
+  BuildContext context,
+  LibraryBrowseType type, {
+  required ValueChanged<Track> onAddToPlaylist,
+  required ValueChanged<Track> onLyrics,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      return _LibraryBrowseGroupsSheet(
+        rootContext: context,
+        type: type,
+        onAddToPlaylist: onAddToPlaylist,
+        onLyrics: onLyrics,
+      );
+    },
+  );
+}
+
+Future<void> _showLibraryBrowseTracks(
+  BuildContext context, {
+  required LibraryBrowseType type,
+  required LibraryBrowseGroup group,
+  required ValueChanged<Track> onAddToPlaylist,
+  required ValueChanged<Track> onLyrics,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (_) {
+      return _LibraryBrowseTracksSheet(
+        type: type,
+        group: group,
+        onAddToPlaylist: onAddToPlaylist,
+        onLyrics: onLyrics,
+      );
+    },
+  );
+}
+
+class _LibraryBrowseGroupsSheet extends StatelessWidget {
+  const _LibraryBrowseGroupsSheet({
+    required this.rootContext,
+    required this.type,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final BuildContext rootContext;
+  final LibraryBrowseType type;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final groups = library.browseGroups(type);
+
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: <Widget>[
+          ListTile(
+            leading: Icon(_libraryBrowseTypeIcon(type)),
+            title: Text(_libraryBrowseTypeLabel(type)),
+            subtitle: Text('${groups.length} group(s)'),
+          ),
+          const Divider(height: 1),
+          if (groups.isEmpty)
+            ListTile(
+              leading: Icon(_libraryBrowseTypeIcon(type)),
+              title: const Text('Nothing to browse yet'),
+              subtitle: const Text('Import local audio to build your library.'),
+            )
+          else
+            for (final group in groups)
+              ListTile(
+                leading: Icon(_libraryBrowseTypeIcon(type)),
+                title: Text(group.label),
+                subtitle: Text(_libraryBrowseGroupSubtitle(group)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  unawaited(
+                    _showLibraryBrowseTracks(
+                      rootContext,
+                      type: type,
+                      group: group,
+                      onAddToPlaylist: onAddToPlaylist,
+                      onLyrics: onLyrics,
+                    ),
+                  );
+                },
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LibraryBrowseTracksSheet extends StatelessWidget {
+  const _LibraryBrowseTracksSheet({
+    required this.type,
+    required this.group,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final LibraryBrowseType type;
+  final LibraryBrowseGroup group;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final tracks = library.tracksForBrowseGroup(type, group.key);
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView.separated(
+            controller: controller,
+            itemCount: tracks.length + 1,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  leading: Icon(_libraryBrowseTypeIcon(type)),
+                  title: Text(group.label),
+                  subtitle: Text(_libraryBrowseGroupSubtitle(group)),
+                );
+              }
+
+              final track = tracks[index - 1];
+              return TrackTile(
+                track: track,
+                onPlay: () => player.playTrack(track, queue: tracks),
+                onFavorite: () => library.toggleFavorite(track.id),
+                onAddToPlaylist: () => onAddToPlaylist(track),
+                onLyrics: () => onLyrics(track),
+                onRemove: () => library.removeTrack(track.id),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+String _libraryBrowseTypeLabel(LibraryBrowseType type) {
+  switch (type) {
+    case LibraryBrowseType.artist:
+      return 'Artists';
+    case LibraryBrowseType.album:
+      return 'Albums';
+    case LibraryBrowseType.genre:
+      return 'Genres';
+    case LibraryBrowseType.source:
+      return 'Sources';
+  }
+}
+
+IconData _libraryBrowseTypeIcon(LibraryBrowseType type) {
+  switch (type) {
+    case LibraryBrowseType.artist:
+      return Icons.person_outline;
+    case LibraryBrowseType.album:
+      return Icons.album_outlined;
+    case LibraryBrowseType.genre:
+      return Icons.category_outlined;
+    case LibraryBrowseType.source:
+      return Icons.source_outlined;
+  }
+}
+
+String _libraryBrowseGroupSubtitle(LibraryBrowseGroup group) {
+  final duration = group.totalDuration;
+  final parts = <String>['${group.trackCount} track(s)'];
+  if (duration > Duration.zero) {
+    parts.add(_formatBrowseDuration(duration));
+  }
+
+  return parts.join(' · ');
+}
+
+String _formatBrowseDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  if (hours > 0) {
+    return '${hours}h ${minutes}m';
+  }
+
+  return '${minutes}m';
 }
 
 String _librarySortLabel(LibrarySortMode sortMode) {

@@ -439,6 +439,7 @@ void main() {
         title: 'Beta',
         artist: 'Ari',
         album: 'Second',
+        genre: 'Ambient',
         addedAt: DateTime.utc(2026, 1, 3),
       ),
     ]);
@@ -470,6 +471,73 @@ void main() {
     expect(
       albumSorted.map((track) => track.album),
       <String>['First', 'Second', 'Third'],
+    );
+    expect(store.search('ambient').single.id, 'new');
+  });
+
+  test('groups library tracks by artist album genre and source', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'First',
+        artist: 'Ari',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 2),
+      ),
+      _track(
+        '2',
+        title: 'Second',
+        artist: 'Ari',
+        album: 'Dusk',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        '3',
+        title: 'Third',
+        artist: 'Mia',
+        album: 'Dawn',
+        genre: 'Jazz',
+        sourceId: 'demo',
+        duration: const Duration(minutes: 4),
+      ),
+    ]);
+
+    final artistGroups = store.browseGroups(LibraryBrowseType.artist);
+    final albumGroups = store.browseGroups(LibraryBrowseType.album);
+    final genreGroups = store.browseGroups(LibraryBrowseType.genre);
+    final sourceGroups = store.browseGroups(LibraryBrowseType.source);
+
+    expect(artistGroups.map((group) => group.label), <String>['Ari', 'Mia']);
+    expect(artistGroups.first.trackCount, 2);
+    expect(artistGroups.first.totalDuration, const Duration(minutes: 5));
+    expect(albumGroups.map((group) => group.label), <String>['Dawn', 'Dusk']);
+    expect(
+      genreGroups.map((group) => group.label),
+      <String>['Ambient', 'Jazz'],
+    );
+    expect(
+      sourceGroups.map((group) => group.label),
+      <String>['demo', 'local'],
+    );
+    expect(
+      store
+          .browseGroups(LibraryBrowseType.genre, query: 'amb')
+          .map((group) => group.label),
+      <String>['Ambient'],
+    );
+    expect(
+      store
+          .tracksForBrowseGroup(
+            LibraryBrowseType.genre,
+            'ambient',
+            sortMode: LibrarySortMode.title,
+          )
+          .map((track) => track.id),
+      <String>['1', '2'],
     );
   });
 
@@ -553,6 +621,9 @@ Track _track(
   String? title,
   String artist = 'Artist',
   String album = 'Album',
+  String genre = 'Unknown Genre',
+  String sourceId = 'local',
+  Duration duration = Duration.zero,
   DateTime? addedAt,
 }) {
   return Track(
@@ -560,7 +631,10 @@ Track _track(
     title: title ?? 'Track $id',
     artist: artist,
     album: album,
+    genre: genre,
+    duration: duration,
     localPath: '/music/$id.mp3',
+    sourceId: sourceId,
     addedAt: addedAt ?? DateTime.utc(2026),
   );
 }

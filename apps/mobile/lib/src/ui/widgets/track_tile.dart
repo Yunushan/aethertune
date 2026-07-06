@@ -26,7 +26,7 @@ class TrackTile extends StatelessWidget {
       leading: const CircleAvatar(child: Icon(Icons.music_note)),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        '${track.artist} · ${track.album}',
+        '${track.artist} · ${track.album} · ${track.genre}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

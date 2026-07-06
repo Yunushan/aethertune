@@ -39,8 +39,9 @@ Use the search box on the Library tab. Search matches:
 - title
 - artist
 - album/folder
+- genre
 
-Use the sort button in the search bar to order the library by recently added, title, artist, or album.
+Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the Artists, Albums, Genres, and Sources chips below the search bar to browse grouped library views and play a group as a queue.
 
 ## Favorites
 

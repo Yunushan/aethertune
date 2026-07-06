@@ -9,6 +9,7 @@ void main() {
       title: 'Song',
       artist: 'Artist',
       album: 'Album',
+      genre: 'Jazz',
       duration: const Duration(seconds: 42),
       localPath: '/music/song.mp3',
       sourceId: 'local',
@@ -22,9 +23,19 @@ void main() {
     expect(decoded.title, track.title);
     expect(decoded.artist, track.artist);
     expect(decoded.album, track.album);
+    expect(decoded.genre, track.genre);
     expect(decoded.duration, track.duration);
     expect(decoded.localPath, track.localPath);
     expect(decoded.isFavorite, isTrue);
+  });
+
+  test('Track JSON falls back to unknown genre for older saved tracks', () {
+    final decoded = Track.fromJson(<String, Object?>{
+      'id': 'legacy',
+      'title': 'Legacy Song',
+    });
+
+    expect(decoded.genre, 'Unknown Genre');
   });
 
   test('Stable local id is deterministic', () {

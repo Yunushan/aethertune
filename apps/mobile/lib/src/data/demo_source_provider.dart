@@ -25,6 +25,7 @@ class DemoSourceProvider implements MusicSourceProvider {
         title: 'Provider Architecture Demo',
         artist: 'AetherTune Contributors',
         album: 'Open Source Samples',
+        genre: 'Architecture',
         sourceId: id,
       ),
       Track(
@@ -32,6 +33,7 @@ class DemoSourceProvider implements MusicSourceProvider {
         title: 'Import local audio to play real music',
         artist: 'Your Library',
         album: 'Local Files',
+        genre: 'Local Library',
         sourceId: id,
       ),
     ];
@@ -44,7 +46,8 @@ class DemoSourceProvider implements MusicSourceProvider {
     return all.where((track) {
       return track.title.toLowerCase().contains(normalized) ||
           track.artist.toLowerCase().contains(normalized) ||
-          track.album.toLowerCase().contains(normalized);
+          track.album.toLowerCase().contains(normalized) ||
+          track.genre.toLowerCase().contains(normalized);
     }).toList(growable: false);
   }
 
