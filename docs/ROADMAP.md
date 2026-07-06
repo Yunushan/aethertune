@@ -35,7 +35,8 @@
 - [ ] Custom rule smart playlists
 - [ ] Playlist artwork
 - [x] Backup/restore JSON
-- [ ] Folder browser
+- [x] Imported-track folder browse
+- [ ] Recursive folder browser
 - [ ] Metadata scanner
 - [ ] Duplicate resolver
 - [x] Recently played

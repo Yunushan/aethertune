@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/playback_history_entry.dart';
@@ -12,7 +13,7 @@ enum LibrarySortMode { recentlyAdded, title, artist, album }
 
 enum PlaylistDocumentFormat { json, m3u, csv }
 
-enum LibraryBrowseType { artist, album, genre, source }
+enum LibraryBrowseType { artist, album, genre, source, folder }
 
 enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 
@@ -56,6 +57,8 @@ class LibraryStore extends ChangeNotifier {
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _maxHistoryEntries = 500;
+  static final _posixPathContext = path.Context(style: path.Style.posix);
+  static final _windowsPathContext = path.Context(style: path.Style.windows);
 
   final List<Track> _tracks = <Track>[];
   final List<Playlist> _playlists = <Playlist>[];
@@ -1240,7 +1243,30 @@ class LibraryStore extends ChangeNotifier {
         return _nonEmptyMetadata(track.genre, 'Unknown Genre');
       case LibraryBrowseType.source:
         return _nonEmptyMetadata(track.sourceId, 'Unknown Source');
+      case LibraryBrowseType.folder:
+        return _folderLabelForTrack(track);
     }
+  }
+
+  String _folderLabelForTrack(Track track) {
+    final localPath = track.localPath?.trim();
+    if (localPath == null || localPath.isEmpty) {
+      return 'Remote Streams';
+    }
+
+    final context = _looksLikeWindowsPath(localPath)
+        ? _windowsPathContext
+        : _posixPathContext;
+    final directory = context.dirname(localPath);
+    if (directory == '.' || directory == localPath) {
+      return 'Unknown Folder';
+    }
+
+    return _nonEmptyMetadata(directory, 'Unknown Folder');
+  }
+
+  bool _looksLikeWindowsPath(String value) {
+    return value.contains('\\') || RegExp(r'^[A-Za-z]:').hasMatch(value);
   }
 
   String _nonEmptyMetadata(String value, String fallback) {

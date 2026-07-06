@@ -1025,6 +1025,8 @@ String _libraryBrowseTypeLabel(LibraryBrowseType type) {
       return 'Genres';
     case LibraryBrowseType.source:
       return 'Sources';
+    case LibraryBrowseType.folder:
+      return 'Folders';
   }
 }
 
@@ -1038,6 +1040,8 @@ IconData _libraryBrowseTypeIcon(LibraryBrowseType type) {
       return Icons.category_outlined;
     case LibraryBrowseType.source:
       return Icons.source_outlined;
+    case LibraryBrowseType.folder:
+      return Icons.folder_outlined;
   }
 }
 

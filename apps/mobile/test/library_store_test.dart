@@ -562,7 +562,7 @@ void main() {
     );
   });
 
-  test('groups library tracks by artist album genre and source', () async {
+  test('groups library tracks by artist album genre source and folder', () async {
     final store = LibraryStore();
     await store.load();
     await store.addTracks(<Track>[
@@ -573,6 +573,7 @@ void main() {
         album: 'Dawn',
         genre: 'Ambient',
         duration: const Duration(minutes: 2),
+        localPath: '/music/Ari/Dawn/first.mp3',
       ),
       _track(
         '2',
@@ -581,6 +582,7 @@ void main() {
         album: 'Dusk',
         genre: 'Ambient',
         duration: const Duration(minutes: 3),
+        localPath: '/music/Ari/Dusk/second.mp3',
       ),
       _track(
         '3',
@@ -590,6 +592,7 @@ void main() {
         genre: 'Jazz',
         sourceId: 'demo',
         duration: const Duration(minutes: 4),
+        localPath: r'C:\Music\Mia\Dawn\third.mp3',
       ),
     ]);
 
@@ -597,6 +600,7 @@ void main() {
     final albumGroups = store.browseGroups(LibraryBrowseType.album);
     final genreGroups = store.browseGroups(LibraryBrowseType.genre);
     final sourceGroups = store.browseGroups(LibraryBrowseType.source);
+    final folderGroups = store.browseGroups(LibraryBrowseType.folder);
 
     expect(artistGroups.map((group) => group.label), <String>['Ari', 'Mia']);
     expect(artistGroups.first.trackCount, 2);
@@ -611,10 +615,27 @@ void main() {
       <String>['demo', 'local'],
     );
     expect(
+      folderGroups.map((group) => group.label),
+      <String>[
+        '/music/Ari/Dawn',
+        '/music/Ari/Dusk',
+        r'C:\Music\Mia\Dawn',
+      ],
+    );
+    expect(
       store
           .browseGroups(LibraryBrowseType.genre, query: 'amb')
           .map((group) => group.label),
       <String>['Ambient'],
+    );
+    expect(
+      store
+          .tracksForBrowseGroup(
+            LibraryBrowseType.folder,
+            '/music/Ari/Dawn',
+          )
+          .map((track) => track.id),
+      <String>['1'],
     );
     expect(
       store
@@ -712,6 +733,7 @@ Track _track(
   String sourceId = 'local',
   Duration duration = Duration.zero,
   DateTime? addedAt,
+  String? localPath,
 }) {
   return Track(
     id: id,
@@ -720,7 +742,7 @@ Track _track(
     album: album,
     genre: genre,
     duration: duration,
-    localPath: '/music/$id.mp3',
+    localPath: localPath ?? '/music/$id.mp3',
     sourceId: sourceId,
     addedAt: addedAt ?? DateTime.utc(2026),
   );

@@ -88,11 +88,11 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Local file import | Done | Namida, Musify | Folder and recursive import. |
-| Folder browsing | Roadmap | Namida, local music players | File tree UI and platform permissions. |
+| Folder browsing | Scaffolded | Namida, local music players | Imported-track folder groups are implemented; recursive folder tree UI and platform permissions remain. |
 | Metadata scanner | Roadmap | Namida | Tag parser, artwork extraction, background indexing. |
 | Metadata editing | Roadmap | Namida | Safe tag writer and rollback handling. |
 | Duplicate resolver | Roadmap | Local library apps | Fingerprint/path/hash matching. |
-| Album/artist/genre views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, and source; metadata scanner still needs richer tags. |
+| Album/artist/genre/source/folder views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, source, and imported folder; metadata scanner still needs richer tags. |
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
 | Stats / recap | Scaffolded | YouTube Music | Play counts are done; aggregation jobs and recap UI still needed. |
