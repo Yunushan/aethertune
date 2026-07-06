@@ -118,6 +118,22 @@ String formatSyncedLyricTimestamp(Duration timestamp) {
   return '$minutes:$secondsLabel';
 }
 
+int syncedLyricLineIndexAt(
+  List<SyncedLyricLine> lines,
+  Duration position,
+) {
+  var activeIndex = -1;
+  for (var index = 0; index < lines.length; index += 1) {
+    if (lines[index].timestamp > position) {
+      break;
+    }
+
+    activeIndex = index;
+  }
+
+  return activeIndex;
+}
+
 final _lrcTagPattern = RegExp(r'\[([^\]]+)\]');
 final _lrcTimestampPattern = RegExp(r'^(\d+):([0-5]?\d)(?:[\.:](\d{1,3}))?$');
 

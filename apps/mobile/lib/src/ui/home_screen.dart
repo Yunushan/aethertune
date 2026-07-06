@@ -136,6 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
             PlayerBar(
               onOpenQueue: () => _showQueue(context),
               onSaveQueue: () => _saveQueueAsPlaylist(context),
+              onOpenLyrics: () => _showNowPlayingLyrics(context),
             ),
           ],
         ),
@@ -395,6 +396,32 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       showDragHandle: true,
       builder: (_) => const _QueueSheet(),
+    );
+  }
+
+  Future<void> _showNowPlayingLyrics(BuildContext context) async {
+    final player = context.read<PlayerController>();
+    final library = context.read<LibraryStore>();
+    final track = player.current;
+    if (track == null) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _NowPlayingLyricsSheet(
+          track: track,
+          lyrics: library.lyricsForTrack(track.id),
+          player: player,
+          onEdit: () {
+            Navigator.of(sheetContext).pop();
+            unawaited(_showLyricsEditor(context, track));
+          },
+        );
+      },
     );
   }
 
@@ -677,6 +704,294 @@ class _SyncedLyricsPreview extends StatelessWidget {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _NowPlayingLyricsSheet extends StatelessWidget {
+  const _NowPlayingLyricsSheet({
+    required this.track,
+    required this.lyrics,
+    required this.player,
+    required this.onEdit,
+  });
+
+  final Track track;
+  final TrackLyrics? lyrics;
+  final PlayerController player;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentLyrics = lyrics;
+    if (currentLyrics == null || currentLyrics.isEmpty) {
+      return _EmptyNowPlayingLyrics(track: track, onEdit: onEdit);
+    }
+
+    final syncedLines = currentLyrics.syncedLines;
+    if (syncedLines.isEmpty) {
+      return _PlainNowPlayingLyrics(
+        track: track,
+        lyrics: currentLyrics.plainText,
+        onEdit: onEdit,
+      );
+    }
+
+    return _SyncedNowPlayingLyrics(
+      track: track,
+      lines: syncedLines,
+      player: player,
+      onEdit: onEdit,
+    );
+  }
+}
+
+class _EmptyNowPlayingLyrics extends StatelessWidget {
+  const _EmptyNowPlayingLyrics({
+    required this.track,
+    required this.onEdit,
+  });
+
+  final Track track;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: <Widget>[
+          _NowPlayingLyricsHeader(
+            track: track,
+            subtitle: 'No lyrics saved',
+            onEdit: onEdit,
+          ),
+          const Divider(height: 1),
+          const ListTile(
+            leading: Icon(Icons.subtitles_outlined),
+            title: Text('No lyrics yet'),
+            subtitle: Text('Add plain lyrics or paste LRC timestamped lyrics.'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlainNowPlayingLyrics extends StatelessWidget {
+  const _PlainNowPlayingLyrics({
+    required this.track,
+    required this.lyrics,
+    required this.onEdit,
+  });
+
+  final Track track;
+  final String lyrics;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            children: <Widget>[
+              _NowPlayingLyricsHeader(
+                track: track,
+                subtitle: 'Plain lyrics',
+                onEdit: onEdit,
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText(lyrics),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SyncedNowPlayingLyrics extends StatefulWidget {
+  const _SyncedNowPlayingLyrics({
+    required this.track,
+    required this.lines,
+    required this.player,
+    required this.onEdit,
+  });
+
+  final Track track;
+  final List<SyncedLyricLine> lines;
+  final PlayerController player;
+  final VoidCallback onEdit;
+
+  @override
+  State<_SyncedNowPlayingLyrics> createState() =>
+      _SyncedNowPlayingLyricsState();
+}
+
+class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
+  static const _estimatedLineExtent = 72.0;
+  int _lastScrolledIndex = -1;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return StreamBuilder<Duration>(
+            stream: widget.player.positionStream,
+            builder: (context, snapshot) {
+              final position = snapshot.data ?? Duration.zero;
+              final activeIndex = syncedLyricLineIndexAt(
+                widget.lines,
+                position,
+              );
+              _scrollToActiveLine(controller, activeIndex);
+
+              return ListView.separated(
+                controller: controller,
+                itemCount: widget.lines.length + 1,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _NowPlayingLyricsHeader(
+                      track: widget.track,
+                      subtitle: activeIndex == -1
+                          ? 'Synced lyrics'
+                          : 'Line ${activeIndex + 1} of ${widget.lines.length}',
+                      onEdit: widget.onEdit,
+                    );
+                  }
+
+                  final lineIndex = index - 1;
+                  final line = widget.lines[lineIndex];
+                  return _SyncedNowPlayingLyricLine(
+                    line: line,
+                    isActive: lineIndex == activeIndex,
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  void _scrollToActiveLine(ScrollController controller, int activeIndex) {
+    if (activeIndex < 0 || activeIndex == _lastScrolledIndex) {
+      return;
+    }
+
+    _lastScrolledIndex = activeIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !controller.hasClients) {
+        return;
+      }
+
+      final targetOffset = (activeIndex * _estimatedLineExtent).clamp(
+        0.0,
+        controller.position.maxScrollExtent,
+      ).toDouble();
+      controller.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+}
+
+class _NowPlayingLyricsHeader extends StatelessWidget {
+  const _NowPlayingLyricsHeader({
+    required this.track,
+    required this.subtitle,
+    required this.onEdit,
+  });
+
+  final Track track;
+  final String subtitle;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.subtitles_outlined),
+      title: Text(track.title),
+      subtitle: Text('${track.artist} · $subtitle'),
+      trailing: IconButton(
+        tooltip: 'Edit lyrics',
+        onPressed: onEdit,
+        icon: const Icon(Icons.edit_outlined),
+      ),
+    );
+  }
+}
+
+class _SyncedNowPlayingLyricLine extends StatelessWidget {
+  const _SyncedNowPlayingLyricLine({
+    required this.line,
+    required this.isActive,
+  });
+
+  final SyncedLyricLine line;
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final backgroundColor = isActive
+        ? colorScheme.primaryContainer
+        : Colors.transparent;
+    final textStyle = isActive
+        ? textTheme.titleMedium?.copyWith(
+            color: colorScheme.onPrimaryContainer,
+            fontWeight: FontWeight.w700,
+          )
+        : textTheme.bodyLarge;
+
+    return ColoredBox(
+      color: backgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(
+              width: 52,
+              child: Text(
+                formatSyncedLyricTimestamp(line.timestamp),
+                textAlign: TextAlign.end,
+                style: textTheme.labelMedium?.copyWith(
+                  color: isActive
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                line.text,
+                style: textStyle,
+              ),
+            ),
+          ],
         ),
       ),
     );

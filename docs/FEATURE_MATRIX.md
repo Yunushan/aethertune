@@ -53,7 +53,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI. | Artwork and sync. |
 | Built-in smart playlists | Done | Playlists tab exposes dynamic Favorites, Recently added, Recently played, and Most played collections. | Custom rule builder, sync, and artwork. |
-| Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing and preview. | Provider lyrics, file import/export, sharing, and playback-synced highlighting. |
+| Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing, preview, and playback-linked highlighting/autoscroll. | Provider lyrics, file import/export, and sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, and end-of-current-track mode. | Fade-out. |
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
@@ -132,7 +132,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Plain lyrics | Done | YouTube Music, InnerTune, Namida | Provider-backed lyrics, richer display, sharing. |
-| Synced LRC lyrics | Scaffolded | InnerTune, RiMusic, Namida | LRC parser and timestamped editor preview are implemented; synchronized player highlighting/autoscroll still needs a playback-linked lyrics view. |
+| Synced LRC lyrics | Done | InnerTune, RiMusic, Namida | LRC parser, timestamped editor preview, and playback-linked now-playing highlighting/autoscroll are implemented; provider LRC fetching remains separate. |
 | Lyrics search | Roadmap | YouTube Music | Official/open lyrics provider. |
 | Offline lyrics cache | Roadmap | InnerTune, Namida | Cache store and invalidation. |
 | Lyrics sharing cards | Roadmap | YouTube Music | Rendered share image and permissions. |

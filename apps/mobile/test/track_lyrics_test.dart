@@ -44,6 +44,23 @@ Plain lyric line
     );
   });
 
+  test('finds the active synced lyric line for a playback position', () {
+    final lines = parseSyncedLyricLines('''
+[00:01.00]Intro
+[00:05.00]Verse
+[00:10.00]Chorus
+''');
+
+    expect(syncedLyricLineIndexAt(lines, Duration.zero), -1);
+    expect(
+      syncedLyricLineIndexAt(lines, const Duration(milliseconds: 1000)),
+      0,
+    );
+    expect(syncedLyricLineIndexAt(lines, const Duration(seconds: 7)), 1);
+    expect(syncedLyricLineIndexAt(lines, const Duration(seconds: 30)), 2);
+    expect(syncedLyricLineIndexAt(<SyncedLyricLine>[], Duration.zero), -1);
+  });
+
   test('plain lyrics are not treated as synced lyrics', () {
     final lyrics = TrackLyrics(
       trackId: 'track-1',

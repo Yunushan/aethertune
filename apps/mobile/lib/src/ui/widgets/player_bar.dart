@@ -7,11 +7,13 @@ class PlayerBar extends StatelessWidget {
   const PlayerBar({
     required this.onOpenQueue,
     required this.onSaveQueue,
+    required this.onOpenLyrics,
     super.key,
   });
 
   final VoidCallback onOpenQueue;
   final VoidCallback onSaveQueue;
+  final VoidCallback onOpenLyrics;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +94,11 @@ class PlayerBar extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Lyrics',
+                    onPressed: onOpenLyrics,
+                    icon: const Icon(Icons.subtitles_outlined),
                   ),
                   IconButton(
                     tooltip: 'Edit queue',

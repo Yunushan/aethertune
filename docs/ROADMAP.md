@@ -77,7 +77,7 @@
 - [ ] Cache size limits
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview
-- [ ] Playback-synced lyric highlighting
+- [x] Playback-synced lyric highlighting
 - [ ] Lyrics provider/search/cache
 
 ## 1.0.0: Stable
