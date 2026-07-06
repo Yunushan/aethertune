@@ -56,7 +56,7 @@ The History tab shows recently played library tracks, local play counts, and las
 
 ## Playlists
 
-Use the Playlists tab to create, rename, delete, open, search within, reorder, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**. Open a playlist and use the search box to find tracks by title, artist, or album; use a track menu to move a track up, move it down, or remove it.
+Use the Playlists tab to create, rename, delete, open, search within, reorder, import, export, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**. Use the import button to paste JSON, M3U, or CSV playlist content; imports link tracks that already exist in your local library. Use a playlist menu to export JSON/M3U/CSV. Open a playlist and use the search box to find tracks by title, artist, or album; use a track menu to move a track up, move it down, or remove it.
 
 ## Lyrics
 

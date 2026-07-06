@@ -716,6 +716,39 @@ IconData _librarySortIcon(LibrarySortMode sortMode) {
   }
 }
 
+String _playlistDocumentFormatLabel(PlaylistDocumentFormat format) {
+  switch (format) {
+    case PlaylistDocumentFormat.json:
+      return 'JSON';
+    case PlaylistDocumentFormat.m3u:
+      return 'M3U';
+    case PlaylistDocumentFormat.csv:
+      return 'CSV';
+  }
+}
+
+String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
+  switch (format) {
+    case PlaylistDocumentFormat.json:
+      return 'JSON';
+    case PlaylistDocumentFormat.m3u:
+      return 'M3U';
+    case PlaylistDocumentFormat.csv:
+      return 'CSV';
+  }
+}
+
+IconData _playlistDocumentFormatIcon(PlaylistDocumentFormat format) {
+  switch (format) {
+    case PlaylistDocumentFormat.json:
+      return Icons.data_object;
+    case PlaylistDocumentFormat.m3u:
+      return Icons.queue_music;
+    case PlaylistDocumentFormat.csv:
+      return Icons.table_chart_outlined;
+  }
+}
+
 class _PlaylistsTab extends StatelessWidget {
   const _PlaylistsTab();
 
@@ -739,6 +772,12 @@ class _PlaylistsTab extends StatelessWidget {
               ),
             ),
             IconButton.filledTonal(
+              tooltip: 'Import playlist',
+              onPressed: () => _showPlaylistImportFormatPicker(context),
+              icon: const Icon(Icons.upload_file),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
               tooltip: 'Create playlist',
               onPressed: () => _createPlaylist(context),
               icon: const Icon(Icons.playlist_add),
@@ -753,11 +792,122 @@ class _PlaylistsTab extends StatelessWidget {
             _PlaylistCard(
               playlist: playlist,
               onOpen: () => _showPlaylist(context, playlist.id),
+              onExport: (format) => _showPlaylistExport(
+                context,
+                playlist,
+                format,
+              ),
               onRename: () => _renamePlaylist(context, playlist),
               onDelete: () => _deletePlaylist(context, playlist),
             ),
       ],
     );
+  }
+
+  Future<void> _showPlaylistImportFormatPicker(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              for (final format in PlaylistDocumentFormat.values)
+                ListTile(
+                  leading: Icon(_playlistDocumentFormatIcon(format)),
+                  title: Text('Import ${_playlistDocumentFormatLabel(format)}'),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _importPlaylist(context, format);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _importPlaylist(
+    BuildContext context,
+    PlaylistDocumentFormat format,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final document = await _promptForPlaylistDocument(context, format);
+    if (!context.mounted || document == null) {
+      return;
+    }
+
+    try {
+      final playlist = await library.importPlaylistDocument(
+        document,
+        format: format,
+      );
+
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Imported ${playlist.name}.')),
+      );
+    } on FormatException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  }
+
+  Future<String?> _promptForPlaylistDocument(
+    BuildContext context,
+    PlaylistDocumentFormat format,
+  ) async {
+    final controller = TextEditingController();
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('Import ${_playlistDocumentFormatLabel(format)}'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: TextField(
+                autofocus: true,
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText:
+                      '${_playlistDocumentFormatExtension(format)} content',
+                ),
+                keyboardType: TextInputType.multiline,
+                minLines: 8,
+                maxLines: 14,
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
+                child: const Text('Import'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _createPlaylist(BuildContext context) async {
@@ -810,6 +960,39 @@ class _PlaylistsTab extends StatelessWidget {
 
     messenger.showSnackBar(
       SnackBar(content: Text('Deleted ${playlist.name}.')),
+    );
+  }
+
+  Future<void> _showPlaylistExport(
+    BuildContext context,
+    Playlist playlist,
+    PlaylistDocumentFormat format,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final document = library.exportPlaylistDocument(
+      playlist.id,
+      format: format,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Export ${_playlistDocumentFormatLabel(format)}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(document),
+            ),
+          ),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1058,12 +1241,14 @@ class _PlaylistCard extends StatelessWidget {
   const _PlaylistCard({
     required this.playlist,
     required this.onOpen,
+    required this.onExport,
     required this.onRename,
     required this.onDelete,
   });
 
   final Playlist playlist;
   final VoidCallback onOpen;
+  final ValueChanged<PlaylistDocumentFormat> onExport;
   final VoidCallback onRename;
   final VoidCallback onDelete;
 
@@ -1078,6 +1263,15 @@ class _PlaylistCard extends StatelessWidget {
         trailing: PopupMenuButton<_PlaylistAction>(
           onSelected: (action) {
             switch (action) {
+              case _PlaylistAction.exportJson:
+                onExport(PlaylistDocumentFormat.json);
+                break;
+              case _PlaylistAction.exportM3u:
+                onExport(PlaylistDocumentFormat.m3u);
+                break;
+              case _PlaylistAction.exportCsv:
+                onExport(PlaylistDocumentFormat.csv);
+                break;
               case _PlaylistAction.rename:
                 onRename();
                 break;
@@ -1087,6 +1281,28 @@ class _PlaylistCard extends StatelessWidget {
             }
           },
           itemBuilder: (context) => const <PopupMenuEntry<_PlaylistAction>>[
+            PopupMenuItem(
+              value: _PlaylistAction.exportJson,
+              child: ListTile(
+                leading: Icon(Icons.data_object),
+                title: Text('Export JSON'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.exportM3u,
+              child: ListTile(
+                leading: Icon(Icons.queue_music),
+                title: Text('Export M3U'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.exportCsv,
+              child: ListTile(
+                leading: Icon(Icons.table_chart_outlined),
+                title: Text('Export CSV'),
+              ),
+            ),
+            PopupMenuDivider(),
             PopupMenuItem(
               value: _PlaylistAction.rename,
               child: ListTile(
@@ -1142,7 +1358,7 @@ class _EmptyPlaylists extends StatelessWidget {
   }
 }
 
-enum _PlaylistAction { rename, delete }
+enum _PlaylistAction { exportJson, exportM3u, exportCsv, rename, delete }
 
 enum _PlaylistTrackAction { moveUp, moveDown, remove }
 

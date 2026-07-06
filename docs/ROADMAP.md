@@ -26,6 +26,7 @@
 - [x] Manual playlists
 - [x] Playlist reorder
 - [x] Find in playlist
+- [x] Playlist import/export JSON/M3U/CSV
 - [ ] Playlist artwork
 - [x] Backup/restore JSON
 - [ ] Folder browser

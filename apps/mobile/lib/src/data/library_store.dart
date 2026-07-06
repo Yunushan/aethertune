@@ -10,10 +10,13 @@ import '../domain/track_lyrics.dart';
 
 enum LibrarySortMode { recentlyAdded, title, artist, album }
 
+enum PlaylistDocumentFormat { json, m3u, csv }
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   static const _backupVersion = 1;
+  static const _playlistDocumentVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
@@ -197,6 +200,246 @@ class LibraryStore extends ChangeNotifier {
           .map((lyrics) => lyrics.toJson())
           .toList(),
     });
+  }
+
+  String exportPlaylistDocument(
+    String playlistId, {
+    required PlaylistDocumentFormat format,
+  }) {
+    switch (format) {
+      case PlaylistDocumentFormat.json:
+        return exportPlaylistJson(playlistId);
+      case PlaylistDocumentFormat.m3u:
+        return exportPlaylistM3u(playlistId);
+      case PlaylistDocumentFormat.csv:
+        return exportPlaylistCsv(playlistId);
+    }
+  }
+
+  String exportPlaylistJson(String playlistId) {
+    final playlist = _requirePlaylist(playlistId);
+    final tracks = tracksForPlaylist(playlistId);
+    const encoder = JsonEncoder.withIndent('  ');
+
+    return encoder.convert(<String, Object?>{
+      'type': 'aethertune.playlist',
+      'version': _playlistDocumentVersion,
+      'exportedAt': _clock().toIso8601String(),
+      'playlist': playlist.toJson(),
+      'tracks': tracks.map((track) => track.toJson()).toList(),
+    });
+  }
+
+  String exportPlaylistM3u(String playlistId) {
+    final playlist = _requirePlaylist(playlistId);
+    final buffer = StringBuffer()
+      ..writeln('#EXTM3U')
+      ..writeln('#PLAYLIST:${playlist.name}');
+
+    for (final track in tracksForPlaylist(playlistId)) {
+      final seconds = track.duration == Duration.zero
+          ? -1
+          : track.duration.inSeconds;
+      buffer
+        ..writeln('#EXTINF:$seconds,${track.artist} - ${track.title}')
+        ..writeln(_playlistTrackLocator(track));
+    }
+
+    return buffer.toString();
+  }
+
+  String exportPlaylistCsv(String playlistId) {
+    final playlist = _requirePlaylist(playlistId);
+    final buffer = StringBuffer()
+      ..writeln(
+        <String>[
+          'playlist',
+          'title',
+          'artist',
+          'album',
+          'id',
+          'localPath',
+          'streamUrl',
+        ].map(_escapeCsvField).join(','),
+      );
+
+    for (final track in tracksForPlaylist(playlistId)) {
+      buffer.writeln(
+        <String>[
+          playlist.name,
+          track.title,
+          track.artist,
+          track.album,
+          track.id,
+          track.localPath ?? '',
+          track.streamUrl ?? '',
+        ].map(_escapeCsvField).join(','),
+      );
+    }
+
+    return buffer.toString();
+  }
+
+  Future<Playlist> importPlaylistDocument(
+    String document, {
+    required PlaylistDocumentFormat format,
+    String fallbackName = 'Imported playlist',
+  }) {
+    switch (format) {
+      case PlaylistDocumentFormat.json:
+        return importPlaylistJson(document, fallbackName: fallbackName);
+      case PlaylistDocumentFormat.m3u:
+        return importPlaylistM3u(document, fallbackName: fallbackName);
+      case PlaylistDocumentFormat.csv:
+        return importPlaylistCsv(document, fallbackName: fallbackName);
+    }
+  }
+
+  Future<Playlist> importPlaylistJson(
+    String document, {
+    String fallbackName = 'Imported playlist',
+  }) async {
+    final decoded = jsonDecode(document);
+    if (decoded is! Map) {
+      throw const FormatException('Playlist JSON must be an object.');
+    }
+
+    final root = Map<String, Object?>.from(decoded);
+    if (root['type'] != 'aethertune.playlist') {
+      throw const FormatException('Unsupported playlist JSON type.');
+    }
+
+    if (root['version'] != _playlistDocumentVersion) {
+      throw FormatException(
+        'Unsupported playlist JSON version: ${root['version']}.',
+      );
+    }
+
+    final rawPlaylist = root['playlist'];
+    if (rawPlaylist is! Map) {
+      throw const FormatException('Playlist JSON is missing playlist data.');
+    }
+
+    final playlistData = Map<String, Object?>.from(rawPlaylist);
+    final name = (playlistData['name'] as String?)?.trim();
+    final rawTracks = root['tracks'];
+    if (rawTracks is! List) {
+      throw const FormatException('Playlist JSON is missing track data.');
+    }
+
+    final importedTrackIds = <String?>[];
+    for (final item in rawTracks) {
+      if (item is! Map) {
+        throw const FormatException('Playlist JSON contains invalid tracks.');
+      }
+
+      importedTrackIds.add(
+        _matchImportedTrack(Map<String, Object?>.from(item)),
+      );
+    }
+
+    final matchedTrackIds = _dedupeTrackIds(importedTrackIds);
+    if (matchedTrackIds.isEmpty) {
+      throw const FormatException(
+        'Imported playlist did not match any library tracks.',
+      );
+    }
+
+    return createPlaylist(
+      name == null || name.isEmpty ? fallbackName : name,
+      trackIds: matchedTrackIds,
+    );
+  }
+
+  Future<Playlist> importPlaylistM3u(
+    String document, {
+    String fallbackName = 'Imported playlist',
+  }) async {
+    String? name;
+    String? extInfo;
+    final trackIds = <String?>[];
+
+    for (final rawLine in const LineSplitter().convert(document)) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        continue;
+      }
+
+      if (line.startsWith('#PLAYLIST:')) {
+        name = line.substring('#PLAYLIST:'.length).trim();
+        continue;
+      }
+
+      if (line.startsWith('#EXTINF:')) {
+        extInfo = line;
+        continue;
+      }
+
+      if (line.startsWith('#')) {
+        continue;
+      }
+
+      trackIds.add(
+        _matchM3uEntry(line, extInfo),
+      );
+      extInfo = null;
+    }
+
+    final importedTrackIds = _dedupeTrackIds(trackIds);
+    if (importedTrackIds.isEmpty) {
+      throw const FormatException(
+        'Imported playlist did not match any library tracks.',
+      );
+    }
+
+    final playlistName = name == null || name.isEmpty ? fallbackName : name;
+    return createPlaylist(playlistName, trackIds: importedTrackIds);
+  }
+
+  Future<Playlist> importPlaylistCsv(
+    String document, {
+    String fallbackName = 'Imported playlist',
+  }) async {
+    final rows = _parseCsvRows(document);
+    if (rows.isEmpty) {
+      throw const FormatException('Playlist CSV is empty.');
+    }
+
+    final header = rows.first.map((field) => field.trim()).toList();
+    final indexes = <String, int>{
+      for (var index = 0; index < header.length; index += 1)
+        header[index]: index,
+    };
+    String? name;
+    final trackIds = <String?>[];
+
+    for (final row in rows.skip(1)) {
+      if (row.every((field) => field.trim().isEmpty)) {
+        continue;
+      }
+
+      name ??= _fieldAt(row, indexes['playlist'])?.trim();
+      trackIds.add(
+        _matchImportedTrack(<String, Object?>{
+          'id': _fieldAt(row, indexes['id']),
+          'title': _fieldAt(row, indexes['title']),
+          'artist': _fieldAt(row, indexes['artist']),
+          'album': _fieldAt(row, indexes['album']),
+          'localPath': _fieldAt(row, indexes['localPath']),
+          'streamUrl': _fieldAt(row, indexes['streamUrl']),
+        }),
+      );
+    }
+
+    final importedTrackIds = _dedupeTrackIds(trackIds);
+    if (importedTrackIds.isEmpty) {
+      throw const FormatException(
+        'Imported playlist did not match any library tracks.',
+      );
+    }
+
+    final playlistName = name == null || name.isEmpty ? fallbackName : name;
+    return createPlaylist(playlistName, trackIds: importedTrackIds);
   }
 
   Future<void> restoreBackupJson(String backupJson) async {
@@ -551,6 +794,205 @@ class LibraryStore extends ChangeNotifier {
     _sortPlaylists();
     await _save();
     notifyListeners();
+  }
+
+  Playlist _requirePlaylist(String playlistId) {
+    final playlist = playlistById(playlistId);
+    if (playlist == null) {
+      throw StateError('Playlist does not exist: $playlistId');
+    }
+
+    return playlist;
+  }
+
+  String _playlistTrackLocator(Track track) {
+    return track.localPath ?? track.streamUrl ?? track.id;
+  }
+
+  List<String> _dedupeTrackIds(Iterable<String?> trackIds) {
+    final seen = <String>{};
+    final result = <String>[];
+
+    for (final trackId in trackIds) {
+      if (trackId == null || trackId.isEmpty || seen.contains(trackId)) {
+        continue;
+      }
+
+      seen.add(trackId);
+      result.add(trackId);
+    }
+
+    return result;
+  }
+
+  String? _matchImportedTrack(Map<String, Object?> candidate) {
+    final id = _stringValue(candidate['id']);
+    if (id != null && _tracks.any((track) => track.id == id)) {
+      return id;
+    }
+
+    final localPath = _stringValue(candidate['localPath']);
+    if (localPath != null) {
+      final track = _tracks.where((track) => track.localPath == localPath);
+      if (track.isNotEmpty) {
+        return track.first.id;
+      }
+    }
+
+    final streamUrl = _stringValue(candidate['streamUrl']);
+    if (streamUrl != null) {
+      final track = _tracks.where((track) => track.streamUrl == streamUrl);
+      if (track.isNotEmpty) {
+        return track.first.id;
+      }
+    }
+
+    final title = _stringValue(candidate['title']);
+    final artist = _stringValue(candidate['artist']);
+    final album = _stringValue(candidate['album']);
+    if (title == null || artist == null) {
+      return null;
+    }
+
+    final matches = _tracks.where((track) {
+      final titleMatches = _sameText(track.title, title);
+      final artistMatches = _sameText(track.artist, artist);
+      final albumMatches = album == null || _sameText(track.album, album);
+
+      return titleMatches && artistMatches && albumMatches;
+    });
+
+    return matches.isEmpty ? null : matches.first.id;
+  }
+
+  String? _matchM3uEntry(String locator, String? extInfo) {
+    final directMatch = _matchImportedTrack(<String, Object?>{
+      'id': locator,
+      'localPath': locator,
+      'streamUrl': locator,
+    });
+    if (directMatch != null) {
+      return directMatch;
+    }
+
+    final commaIndex = extInfo?.indexOf(',') ?? -1;
+    if (commaIndex == -1 || extInfo == null) {
+      return null;
+    }
+
+    final label = extInfo.substring(commaIndex + 1).trim();
+    final separatorIndex = label.indexOf(' - ');
+    if (separatorIndex == -1) {
+      return _matchImportedTrack(<String, Object?>{
+        'title': label,
+        'artist': 'Unknown Artist',
+      });
+    }
+
+    return _matchImportedTrack(<String, Object?>{
+      'artist': label.substring(0, separatorIndex),
+      'title': label.substring(separatorIndex + 3),
+    });
+  }
+
+  String? _stringValue(Object? value) {
+    if (value is! String) {
+      return null;
+    }
+
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  bool _sameText(String left, String right) {
+    return left.trim().toLowerCase() == right.trim().toLowerCase();
+  }
+
+  String _escapeCsvField(String value) {
+    if (!value.contains(',') &&
+        !value.contains('"') &&
+        !value.contains('\n') &&
+        !value.contains('\r')) {
+      return value;
+    }
+
+    return '"${value.replaceAll('"', '""')}"';
+  }
+
+  List<List<String>> _parseCsvRows(String input) {
+    final rows = <List<String>>[];
+    var row = <String>[];
+    final field = StringBuffer();
+    var inQuotes = false;
+
+    for (var index = 0; index < input.length; index += 1) {
+      final char = input[index];
+
+      if (inQuotes) {
+        if (char == '"') {
+          final nextIndex = index + 1;
+          if (nextIndex < input.length && input[nextIndex] == '"') {
+            field.write('"');
+            index += 1;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          field.write(char);
+        }
+        continue;
+      }
+
+      if (char == '"') {
+        if (field.length > 0) {
+          throw const FormatException('Invalid quoted CSV field.');
+        }
+        inQuotes = true;
+        continue;
+      }
+
+      if (char == ',') {
+        row.add(field.toString());
+        field.clear();
+        continue;
+      }
+
+      if (char == '\n' || char == '\r') {
+        row.add(field.toString());
+        field.clear();
+        if (row.any((value) => value.isNotEmpty)) {
+          rows.add(row);
+        }
+        row = <String>[];
+        if (char == '\r' &&
+            index + 1 < input.length &&
+            input[index + 1] == '\n') {
+          index += 1;
+        }
+        continue;
+      }
+
+      field.write(char);
+    }
+
+    if (inQuotes) {
+      throw const FormatException('CSV contains an unterminated quoted field.');
+    }
+
+    row.add(field.toString());
+    if (row.any((value) => value.isNotEmpty)) {
+      rows.add(row);
+    }
+
+    return rows;
+  }
+
+  String? _fieldAt(List<String> row, int? index) {
+    if (index == null || index < 0 || index >= row.length) {
+      return null;
+    }
+
+    return row[index];
   }
 
   void _sortTracks() {

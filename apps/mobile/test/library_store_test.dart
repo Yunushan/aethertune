@@ -184,6 +184,127 @@ void main() {
     expect(secondStore.tracksForPlaylist(playlist.id).single.id, '1');
   });
 
+  test('exports and imports playlist JSON documents', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 1),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'First'),
+      _track('2', title: 'Second'),
+      _track('3', title: 'Third'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road JSON',
+      trackIds: <String>['2', '1', '3'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.json,
+    );
+    final decoded = jsonDecode(document) as Map<String, dynamic>;
+
+    expect(decoded['type'], 'aethertune.playlist');
+    expect((decoded['tracks'] as List<dynamic>), hasLength(3));
+
+    await store.deletePlaylist(playlist.id);
+    final imported = await store.importPlaylistDocument(
+      document,
+      format: PlaylistDocumentFormat.json,
+    );
+
+    expect(imported.name, 'Road JSON');
+    expect(imported.trackIds, <String>['2', '1', '3']);
+  });
+
+  test('exports and imports M3U playlists by track path', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 2),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'Path One', artist: 'Ari'),
+      _track('2', title: 'Path Two', artist: 'Mia'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road M3U',
+      trackIds: <String>['2', '1'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.m3u,
+    );
+
+    expect(document, contains('#EXTM3U'));
+    expect(document, contains('#PLAYLIST:Road M3U'));
+    expect(document, contains('/music/2.mp3'));
+
+    await store.deletePlaylist(playlist.id);
+    final imported = await store.importPlaylistDocument(
+      document,
+      format: PlaylistDocumentFormat.m3u,
+    );
+
+    expect(imported.name, 'Road M3U');
+    expect(imported.trackIds, <String>['2', '1']);
+  });
+
+  test('exports and imports CSV playlists with quoted fields', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 3),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'Road, Theme',
+        artist: 'Ari "Sky"',
+        album: 'Comma Album',
+      ),
+      _track('2', title: 'Plain Track'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road CSV',
+      trackIds: <String>['1', '2'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.csv,
+    );
+
+    expect(document, contains('"Road, Theme"'));
+    expect(document, contains('"Ari ""Sky"""'));
+
+    await store.deletePlaylist(playlist.id);
+    final imported = await store.importPlaylistDocument(
+      document,
+      format: PlaylistDocumentFormat.csv,
+    );
+
+    expect(imported.name, 'Road CSV');
+    expect(imported.trackIds, <String>['1', '2']);
+  });
+
+  test('rejects playlist imports that do not match library tracks', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 4),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1')]);
+
+    expect(
+      store.importPlaylistDocument(
+        '#EXTM3U\n#PLAYLIST:Missing\n/missing/file.mp3\n',
+        format: PlaylistDocumentFormat.m3u,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(store.playlists, isEmpty);
+  });
+
   test('saves and deletes plain lyrics for library tracks', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 5),
