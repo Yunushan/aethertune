@@ -16,6 +16,7 @@
 - [x] Plain lyrics editor
 - [x] JSON backup/restore
 - [x] Sleep timer
+- [x] Custom sleep timer duration
 - [x] Provider interface
 - [ ] More unit tests
 - [ ] UI polish

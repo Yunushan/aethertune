@@ -90,7 +90,7 @@ This scaffold includes real app code, not only a README:
 | Playlists | Create, rename, delete, open, find within, reorder tracks, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text lyrics per library track |
 | Favorites | Toggle favorites per track |
-| Sleep timer | Stop playback after 5, 15, 30, 60, or 90 minutes |
+| Sleep timer | Stop playback after presets or a custom 1-1440 minute duration |
 | Repeat/shuffle | Runtime shuffle flag and repeat-mode hook |
 | Provider architecture | `MusicSourceProvider` interface for legal source adapters |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |

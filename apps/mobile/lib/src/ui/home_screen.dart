@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../data/demo_source_provider.dart';
 import '../data/library_store.dart';
 import '../domain/playlist.dart';
+import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../player/player_controller.dart';
 import 'widgets/player_bar.dart';
@@ -451,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -461,7 +462,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: const Text('Cancel sleep timer'),
                 onTap: () {
                   player.cancelSleepTimer();
-                  Navigator.of(context).pop();
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Custom duration'),
+                subtitle: const Text(
+                  'Choose any duration from 1 minute to 24 hours.',
+                ),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _showCustomSleepTimer(context, player);
                 },
               ),
               for (final minutes in durations)
@@ -470,7 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: Text('Stop playback in $minutes minutes'),
                   onTap: () {
                     player.startSleepTimer(Duration(minutes: minutes));
-                    Navigator.of(context).pop();
+                    Navigator.of(sheetContext).pop();
                   },
                 ),
             ],
@@ -478,6 +490,94 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Future<void> _showCustomSleepTimer(
+    BuildContext context,
+    PlayerController player,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final duration = await _promptForCustomSleepTimerDuration(context);
+    if (!context.mounted || duration == null) {
+      return;
+    }
+
+    player.startSleepTimer(duration);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Sleep timer set for ${duration.inMinutes} minute(s).',
+        ),
+      ),
+    );
+  }
+
+  Future<Duration?> _promptForCustomSleepTimerDuration(
+    BuildContext context,
+  ) async {
+    final controller = TextEditingController();
+    String? errorText;
+
+    try {
+      return showDialog<Duration>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              void submit(String value) {
+                final duration = parseCustomSleepTimerDuration(value);
+                if (duration == null) {
+                  setDialogState(() {
+                    errorText = 'Enter a whole number from '
+                        '$minCustomSleepTimerMinutes to '
+                        '$maxCustomSleepTimerMinutes.';
+                  });
+                  return;
+                }
+
+                Navigator.of(dialogContext).pop(duration);
+              }
+
+              return AlertDialog(
+                title: const Text('Custom sleep timer'),
+                content: TextField(
+                  autofocus: true,
+                  controller: controller,
+                  decoration: InputDecoration(
+                    errorText: errorText,
+                    helperText: '$minCustomSleepTimerMinutes to '
+                        '$maxCustomSleepTimerMinutes minutes',
+                    labelText: 'Minutes',
+                  ),
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: submit,
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      submit(controller.text);
+                    },
+                    child: const Text('Start'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }
 
@@ -951,6 +1051,7 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
       },
     );
   }
+
 }
 
 class _PlaylistCard extends StatelessWidget {
