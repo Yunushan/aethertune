@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
   bool _favoritesOnly = false;
   String _query = '';
+  LibrarySortMode _librarySortMode = LibrarySortMode.recentlyAdded;
   PlayerController? _historyPlayer;
   LibraryStore? _historyLibrary;
   int _lastRecordedPlaybackSerial = 0;
@@ -96,9 +97,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     searchController: _searchController,
                     query: _query,
                     favoritesOnly: _favoritesOnly,
+                    sortMode: _librarySortMode,
                     onQueryChanged: (value) => setState(() => _query = value),
                     onFavoritesOnlyChanged: (value) {
                       setState(() => _favoritesOnly = value);
+                    },
+                    onSortModeChanged: (value) {
+                      setState(() => _librarySortMode = value);
                     },
                     onImport: () => _importAudio(context),
                     onAddToPlaylist: (track) => _showAddToPlaylist(
@@ -445,8 +450,10 @@ class _LibraryTab extends StatelessWidget {
     required this.searchController,
     required this.query,
     required this.favoritesOnly,
+    required this.sortMode,
     required this.onQueryChanged,
     required this.onFavoritesOnlyChanged,
+    required this.onSortModeChanged,
     required this.onImport,
     required this.onAddToPlaylist,
     required this.onLyrics,
@@ -455,8 +462,10 @@ class _LibraryTab extends StatelessWidget {
   final TextEditingController searchController;
   final String query;
   final bool favoritesOnly;
+  final LibrarySortMode sortMode;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<bool> onFavoritesOnlyChanged;
+  final ValueChanged<LibrarySortMode> onSortModeChanged;
   final VoidCallback onImport;
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
@@ -468,6 +477,7 @@ class _LibraryTab extends StatelessWidget {
     final tracks = library.search(
       query,
       favoritesOnly: favoritesOnly,
+      sortMode: sortMode,
     );
 
     if (!library.loaded) {
@@ -483,6 +493,26 @@ class _LibraryTab extends StatelessWidget {
             hintText: 'Search title, artist, or album',
             leading: const Icon(Icons.search),
             trailing: <Widget>[
+              PopupMenuButton<LibrarySortMode>(
+                tooltip: 'Sort library',
+                icon: const Icon(Icons.sort),
+                initialValue: sortMode,
+                onSelected: onSortModeChanged,
+                itemBuilder: (context) => LibrarySortMode.values
+                    .map(
+                      (mode) => PopupMenuItem<LibrarySortMode>(
+                        value: mode,
+                        child: ListTile(
+                          leading: Icon(_librarySortIcon(mode)),
+                          title: Text(_librarySortLabel(mode)),
+                          trailing: mode == sortMode
+                              ? const Icon(Icons.check)
+                              : null,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
               IconButton(
                 tooltip: favoritesOnly ? 'Showing favorites' : 'Show favorites',
                 onPressed: () => onFavoritesOnlyChanged(!favoritesOnly),
@@ -521,6 +551,32 @@ class _LibraryTab extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+String _librarySortLabel(LibrarySortMode sortMode) {
+  switch (sortMode) {
+    case LibrarySortMode.recentlyAdded:
+      return 'Recently added';
+    case LibrarySortMode.title:
+      return 'Title';
+    case LibrarySortMode.artist:
+      return 'Artist';
+    case LibrarySortMode.album:
+      return 'Album';
+  }
+}
+
+IconData _librarySortIcon(LibrarySortMode sortMode) {
+  switch (sortMode) {
+    case LibrarySortMode.recentlyAdded:
+      return Icons.new_releases_outlined;
+    case LibrarySortMode.title:
+      return Icons.sort_by_alpha;
+    case LibrarySortMode.artist:
+      return Icons.person_outline;
+    case LibrarySortMode.album:
+      return Icons.album_outlined;
   }
 }
 

@@ -81,10 +81,10 @@ This scaffold includes real app code, not only a README:
 | Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI |
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
-| Local library | Import audio files through the native file picker |
+| Local library | Import audio files through the native file picker and sort by recently added, title, artist, or album |
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, and playback history with `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup from the Options tab |
-| Search | Local library filtering by title, artist, and album |
+| Search | Local library filtering by title, artist, and album with sortable results |
 | Queue | Play current list as a queue with next/previous controls |
 | History | Recently played tab with local playback history, play counts, and clear action |
 | Playlists | Create, rename, delete, open, and play manual playlists |
@@ -103,7 +103,7 @@ AetherTune is designed to support the combined feature categories users expect f
 
 | Feature category | Target support |
 |---|---|
-| Local files | Library import, playback, search, favorites, folders, metadata editing roadmap |
+| Local files | Library import, playback, search, favorites, recently added sorting, folders and metadata editing roadmap |
 | History/stats | Recently played and local play counts implemented; deeper recaps roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface for legal source adapters |

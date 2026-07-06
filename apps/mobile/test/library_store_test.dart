@@ -196,6 +196,63 @@ void main() {
     expect(secondStore.recentlyPlayedTracks().single.id, '1');
   });
 
+  test('sorts library searches and exposes recently added tracks', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'old',
+        title: 'Gamma',
+        artist: 'Zed',
+        album: 'Third',
+        addedAt: DateTime.utc(2026, 1, 1),
+      ),
+      _track(
+        'middle',
+        title: 'Alpha',
+        artist: 'Mia',
+        album: 'First',
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+      _track(
+        'new',
+        title: 'Beta',
+        artist: 'Ari',
+        album: 'Second',
+        addedAt: DateTime.utc(2026, 1, 3),
+      ),
+    ]);
+
+    expect(
+      store.recentlyAddedTracks().map((track) => track.id),
+      <String>['new', 'middle', 'old'],
+    );
+    expect(
+      store.recentlyAddedTracks(limit: 2).map((track) => track.id),
+      <String>['new', 'middle'],
+    );
+    expect(
+      store.search('').map((track) => track.id),
+      <String>['new', 'middle', 'old'],
+    );
+    final titleSorted = store.search('', sortMode: LibrarySortMode.title);
+    final artistSorted = store.search('', sortMode: LibrarySortMode.artist);
+    final albumSorted = store.search('', sortMode: LibrarySortMode.album);
+
+    expect(
+      titleSorted.map((track) => track.title),
+      <String>['Alpha', 'Beta', 'Gamma'],
+    );
+    expect(
+      artistSorted.map((track) => track.artist),
+      <String>['Ari', 'Mia', 'Zed'],
+    );
+    expect(
+      albumSorted.map((track) => track.album),
+      <String>['First', 'Second', 'Third'],
+    );
+  });
+
   test('exports and restores a full library backup', () async {
     DateTime clock() => DateTime.utc(2026, 1, 11);
     final firstStore = LibraryStore(clock: clock);
@@ -271,13 +328,19 @@ void main() {
   });
 }
 
-Track _track(String id) {
+Track _track(
+  String id, {
+  String? title,
+  String artist = 'Artist',
+  String album = 'Album',
+  DateTime? addedAt,
+}) {
   return Track(
     id: id,
-    title: 'Track $id',
-    artist: 'Artist',
-    album: 'Album',
+    title: title ?? 'Track $id',
+    artist: artist,
+    album: album,
     localPath: '/music/$id.mp3',
-    addedAt: DateTime.utc(2026),
+    addedAt: addedAt ?? DateTime.utc(2026),
   );
 }

@@ -8,6 +8,8 @@ import '../domain/playlist.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
 
+enum LibrarySortMode { recentlyAdded, title, artist, album }
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
@@ -165,19 +167,23 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Track> search(String query, {bool favoritesOnly = false}) {
+  List<Track> search(
+    String query, {
+    bool favoritesOnly = false,
+    LibrarySortMode sortMode = LibrarySortMode.recentlyAdded,
+  }) {
     final normalized = query.trim().toLowerCase();
     final source = favoritesOnly ? favorites : tracks;
 
-    if (normalized.isEmpty) {
-      return source;
-    }
+    final results = normalized.isEmpty
+        ? source.toList(growable: false)
+        : source.where((track) {
+            return track.title.toLowerCase().contains(normalized) ||
+                track.artist.toLowerCase().contains(normalized) ||
+                track.album.toLowerCase().contains(normalized);
+          }).toList(growable: false);
 
-    return source.where((track) {
-      return track.title.toLowerCase().contains(normalized) ||
-          track.artist.toLowerCase().contains(normalized) ||
-          track.album.toLowerCase().contains(normalized);
-    }).toList(growable: false);
+    return _sortTrackResults(results, sortMode);
   }
 
   String exportBackupJson() {
@@ -324,6 +330,14 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return recentTracks;
+  }
+
+  List<Track> recentlyAddedTracks({int limit = 25}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    return tracks.take(limit).toList(growable: false);
   }
 
   int playCountForTrack(String trackId) {
@@ -503,6 +517,37 @@ class LibraryStore extends ChangeNotifier {
 
   void _sortTracks() {
     _tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+  }
+
+  List<Track> _sortTrackResults(
+    List<Track> results,
+    LibrarySortMode sortMode,
+  ) {
+    results.sort((a, b) {
+      switch (sortMode) {
+        case LibrarySortMode.recentlyAdded:
+          return _compareByDateThenTitle(a, b);
+        case LibrarySortMode.title:
+          return _compareText(a.title, b.title);
+        case LibrarySortMode.artist:
+          final byArtist = _compareText(a.artist, b.artist);
+          return byArtist == 0 ? _compareText(a.title, b.title) : byArtist;
+        case LibrarySortMode.album:
+          final byAlbum = _compareText(a.album, b.album);
+          return byAlbum == 0 ? _compareText(a.title, b.title) : byAlbum;
+      }
+    });
+
+    return results;
+  }
+
+  int _compareByDateThenTitle(Track a, Track b) {
+    final byDate = b.addedAt.compareTo(a.addedAt);
+    return byDate == 0 ? _compareText(a.title, b.title) : byDate;
+  }
+
+  int _compareText(String a, String b) {
+    return a.toLowerCase().compareTo(b.toLowerCase());
   }
 
   void _sortPlaylists() {

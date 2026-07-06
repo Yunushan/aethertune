@@ -40,6 +40,8 @@ Use the search box on the Library tab. Search matches:
 - artist
 - album/folder
 
+Use the sort button in the search bar to order the library by recently added, title, artist, or album.
+
 ## Favorites
 
 Open a track menu and choose **Favorite**. Use the heart button in the search bar to filter favorites.

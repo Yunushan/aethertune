@@ -30,7 +30,7 @@
 - [ ] Duplicate resolver
 - [x] Recently played
 - [x] Local play counts
-- [ ] Recently added view
+- [x] Recently added view
 
 ## 0.3.x: Platform audio
 

@@ -47,6 +47,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
+| Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played as queue. | Persistent queue, reorder, save as playlist. |
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
@@ -91,7 +92,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Metadata editing | Roadmap | Namida | Safe tag writer and rollback handling. |
 | Duplicate resolver | Roadmap | Local library apps | Fingerprint/path/hash matching. |
 | Album/artist/genre views | Roadmap | YouTube Music, Namida | Library schema and browse UI. |
-| Recently added / recently played | Scaffolded | YouTube Music, Namida | Recently played is done; recently added views and sort filters still needed. |
+| Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
 | Stats / recap | Scaffolded | YouTube Music | Play counts are done; aggregation jobs and recap UI still needed. |
 | Backup/restore | Done | Namida, local-first apps | File picker integration, cloud targets, migration checks. |
