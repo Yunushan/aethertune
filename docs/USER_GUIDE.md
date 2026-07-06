@@ -48,6 +48,10 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 When you play a track from the library, the current filtered list becomes the queue. Use previous/next controls in the player bar.
 
+## History
+
+The History tab shows recently played library tracks, local play counts, and last played times. Tap a track to play it again or use the clear button to remove local listening history.
+
 ## Playlists
 
 Use the Playlists tab to create, rename, delete, open, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**.

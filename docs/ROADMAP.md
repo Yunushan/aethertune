@@ -8,6 +8,7 @@
 - [x] MIT license
 - [x] Local import
 - [x] Local playback
+- [x] Listening history
 - [x] Queue
 - [x] Favorites
 - [x] Manual playlists
@@ -27,6 +28,9 @@
 - [ ] Folder browser
 - [ ] Metadata scanner
 - [ ] Duplicate resolver
+- [x] Recently played
+- [x] Local play counts
+- [ ] Recently added view
 
 ## 0.3.x: Platform audio
 

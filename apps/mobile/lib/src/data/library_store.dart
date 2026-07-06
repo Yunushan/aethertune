@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/playback_history_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
@@ -14,9 +15,12 @@ class LibraryStore extends ChangeNotifier {
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
+  static const _historyKey = 'aethertune.playback_history.v1';
+  static const _maxHistoryEntries = 500;
 
   final List<Track> _tracks = <Track>[];
   final List<Playlist> _playlists = <Playlist>[];
+  final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final DateTime Function() _clock;
   bool _loaded = false;
@@ -24,6 +28,8 @@ class LibraryStore extends ChangeNotifier {
   bool get loaded => _loaded;
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
+  List<PlaybackHistoryEntry> get playbackHistory =>
+      List.unmodifiable(_history);
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
@@ -85,8 +91,27 @@ class LibraryStore extends ChangeNotifier {
         );
     }
 
+    final rawHistory = prefs.getString(_historyKey);
+    if (rawHistory != null && rawHistory.isNotEmpty) {
+      final decoded = jsonDecode(rawHistory) as List<dynamic>;
+      _history
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => PlaybackHistoryEntry.fromJson(
+                  Map<String, Object?>.from(item),
+                ),
+              )
+              .toList(growable: false),
+        );
+    }
+
     _removeMissingPlaylistTracks();
     _removeMissingLyrics();
+    _removeMissingHistory();
+    _sortHistory();
     _loaded = true;
     notifyListeners();
   }
@@ -114,6 +139,7 @@ class LibraryStore extends ChangeNotifier {
     _tracks.removeWhere((track) => track.id == id);
     _removeTrackFromPlaylists(id);
     _lyricsByTrackId.remove(id);
+    _history.removeWhere((entry) => entry.trackId == id);
     await _save();
     notifyListeners();
   }
@@ -121,6 +147,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> clear() async {
     _tracks.clear();
     _playlists.clear();
+    _history.clear();
     _lyricsByTrackId.clear();
     await _save();
     notifyListeners();
@@ -161,6 +188,7 @@ class LibraryStore extends ChangeNotifier {
       'exportedAt': _clock().toIso8601String(),
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
+      'history': _history.map((entry) => entry.toJson()).toList(),
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
           .toList(),
@@ -182,6 +210,7 @@ class LibraryStore extends ChangeNotifier {
 
     final restoredTracks = <Track>[];
     final restoredPlaylists = <Playlist>[];
+    final restoredHistory = <PlaybackHistoryEntry>[];
     final restoredLyrics = <TrackLyrics>[];
 
     try {
@@ -190,6 +219,11 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredPlaylists.addAll(
         _jsonObjectList(backup, 'playlists').map(Playlist.fromJson),
+      );
+      restoredHistory.addAll(
+        _jsonObjectList(backup, 'history', isRequired: false).map(
+          PlaybackHistoryEntry.fromJson,
+        ),
       );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
@@ -215,6 +249,9 @@ class LibraryStore extends ChangeNotifier {
         if (knownTrackIds.contains(lyrics.trackId) && !lyrics.isEmpty)
           lyrics.trackId: lyrics,
     };
+    final sanitizedHistory = restoredHistory
+        .where((entry) => knownTrackIds.contains(entry.trackId))
+        .toList(growable: false);
 
     _tracks
       ..clear()
@@ -222,12 +259,17 @@ class LibraryStore extends ChangeNotifier {
     _playlists
       ..clear()
       ..addAll(sanitizedPlaylists);
+    _history
+      ..clear()
+      ..addAll(sanitizedHistory);
     _lyricsByTrackId
       ..clear()
       ..addAll(sanitizedLyrics);
 
     _sortTracks();
     _sortPlaylists();
+    _sortHistory();
+    _trimHistory();
     await _save();
     notifyListeners();
   }
@@ -255,6 +297,74 @@ class LibraryStore extends ChangeNotifier {
         .map((trackId) => byId[trackId])
         .whereType<Track>()
         .toList(growable: false);
+  }
+
+  List<Track> recentlyPlayedTracks({int limit = 25}) {
+    final byId = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+    final seen = <String>{};
+    final recentTracks = <Track>[];
+
+    for (final entry in _history) {
+      if (seen.contains(entry.trackId)) {
+        continue;
+      }
+
+      final track = byId[entry.trackId];
+      if (track == null) {
+        continue;
+      }
+
+      seen.add(entry.trackId);
+      recentTracks.add(track);
+      if (recentTracks.length >= limit) {
+        break;
+      }
+    }
+
+    return recentTracks;
+  }
+
+  int playCountForTrack(String trackId) {
+    return _history.where((entry) => entry.trackId == trackId).length;
+  }
+
+  DateTime? lastPlayedAt(String trackId) {
+    for (final entry in _history) {
+      if (entry.trackId == trackId) {
+        return entry.playedAt;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> recordPlayback(String trackId) async {
+    if (!_tracks.any((track) => track.id == trackId)) {
+      return;
+    }
+
+    _history.insert(
+      0,
+      PlaybackHistoryEntry(
+        trackId: trackId,
+        playedAt: _clock(),
+      ),
+    );
+    _trimHistory();
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> clearPlaybackHistory() async {
+    if (_history.isEmpty) {
+      return;
+    }
+
+    _history.clear();
+    await _save();
+    notifyListeners();
   }
 
   TrackLyrics? lyricsForTrack(String trackId) => _lyricsByTrackId[trackId];
@@ -421,6 +531,23 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  void _removeMissingHistory() {
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+    _history.removeWhere((entry) => !knownTrackIds.contains(entry.trackId));
+  }
+
+  void _sortHistory() {
+    _history.sort((a, b) => b.playedAt.compareTo(a.playedAt));
+  }
+
+  void _trimHistory() {
+    if (_history.length <= _maxHistoryEntries) {
+      return;
+    }
+
+    _history.removeRange(_maxHistoryEntries, _history.length);
+  }
+
   void _removeTrackFromPlaylists(String trackId) {
     for (var index = 0; index < _playlists.length; index += 1) {
       final playlist = _playlists[index];
@@ -442,9 +569,15 @@ class LibraryStore extends ChangeNotifier {
 
   List<Map<String, Object?>> _jsonObjectList(
     Map<String, Object?> backup,
-    String key,
+    String key, {
+    bool isRequired = true,
+  },
   ) {
     final rawList = backup[key];
+    if (rawList == null && !isRequired) {
+      return <Map<String, Object?>>[];
+    }
+
     if (rawList is! List) {
       throw FormatException('Backup field "$key" must be a list.');
     }
@@ -466,11 +599,15 @@ class LibraryStore extends ChangeNotifier {
     final encodedPlaylists = jsonEncode(
       _playlists.map((playlist) => playlist.toJson()).toList(),
     );
+    final encodedHistory = jsonEncode(
+      _history.map((entry) => entry.toJson()).toList(),
+    );
     final encodedLyrics = jsonEncode(
       _lyricsByTrackId.values.map((lyrics) => lyrics.toJson()).toList(),
     );
     await prefs.setString(_tracksKey, encodedTracks);
     await prefs.setString(_playlistsKey, encodedPlaylists);
+    await prefs.setString(_historyKey, encodedHistory);
     await prefs.setString(_lyricsKey, encodedLyrics);
   }
 }

@@ -28,9 +28,11 @@ class PlayerController extends ChangeNotifier {
   Timer? _sleepTimer;
   Duration _duration = Duration.zero;
   Track? _current;
+  int _playbackStartSerial = 0;
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
+  int get playbackStartSerial => _playbackStartSerial;
   bool get isPlaying => _audio.playing;
   bool get shuffleEnabled => _audio.shuffleModeEnabled;
   LoopMode get loopMode => _audio.loopMode;
@@ -52,6 +54,7 @@ class PlayerController extends ChangeNotifier {
 
     await _load(track);
     await _audio.play();
+    _playbackStartSerial += 1;
     notifyListeners();
   }
 

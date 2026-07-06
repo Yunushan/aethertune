@@ -49,6 +49,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played as queue. | Persistent queue, reorder, save as playlist. |
+| Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
 | Manual playlists | Done | Persisted user playlists with add/remove/play UI. | Reorder, artwork, import/export, sync. |
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
@@ -90,9 +91,9 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Metadata editing | Roadmap | Namida | Safe tag writer and rollback handling. |
 | Duplicate resolver | Roadmap | Local library apps | Fingerprint/path/hash matching. |
 | Album/artist/genre views | Roadmap | YouTube Music, Namida | Library schema and browse UI. |
-| Recently added / recently played | Roadmap | YouTube Music, Namida | Playback history and sort filters. |
-| Listening history | Roadmap | YouTube Music, Last.fm-style clients | Local history store and privacy controls. |
-| Stats / recap | Roadmap | YouTube Music | Aggregation jobs and recap UI. |
+| Recently added / recently played | Scaffolded | YouTube Music, Namida | Recently played is done; recently added views and sort filters still needed. |
+| Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
+| Stats / recap | Scaffolded | YouTube Music | Play counts are done; aggregation jobs and recap UI still needed. |
 | Backup/restore | Done | Namida, local-first apps | File picker integration, cloud targets, migration checks. |
 | Cross-device library sync | Roadmap | YouTube Music, Grayjay-style multi-device needs | Server auth, sync API, conflict handling. |
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -24,11 +26,45 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
   bool _favoritesOnly = false;
   String _query = '';
+  PlayerController? _historyPlayer;
+  LibraryStore? _historyLibrary;
+  int _lastRecordedPlaybackSerial = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final player = context.read<PlayerController>();
+    if (_historyPlayer != player) {
+      _historyPlayer?.removeListener(_recordPlaybackHistory);
+      _historyPlayer = player;
+      player.addListener(_recordPlaybackHistory);
+    }
+
+    _historyLibrary = context.read<LibraryStore>();
+  }
 
   @override
   void dispose() {
+    _historyPlayer?.removeListener(_recordPlaybackHistory);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _recordPlaybackHistory() {
+    final player = _historyPlayer;
+    final library = _historyLibrary;
+    final track = player?.current;
+    if (player == null || library == null || track == null) {
+      return;
+    }
+
+    if (player.playbackStartSerial == _lastRecordedPlaybackSerial) {
+      return;
+    }
+
+    _lastRecordedPlaybackSerial = player.playbackStartSerial;
+    unawaited(library.recordPlayback(track.id));
   }
 
   @override
@@ -75,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const _PlaylistsTab(),
+                  const _HistoryTab(),
                   const _SourcesTab(),
                   const _SettingsTab(),
                 ],
@@ -97,6 +134,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.playlist_play_outlined),
             selectedIcon: Icon(Icons.playlist_play),
             label: 'Playlists',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'History',
           ),
           NavigationDestination(
             icon: Icon(Icons.extension_outlined),
@@ -785,6 +827,101 @@ class _EmptyPlaylists extends StatelessWidget {
 }
 
 enum _PlaylistAction { rename, delete }
+
+class _HistoryTab extends StatelessWidget {
+  const _HistoryTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final recentlyPlayed = library.recentlyPlayedTracks();
+
+    if (!library.loaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'History',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Clear history',
+              onPressed: library.playbackHistory.isEmpty
+                  ? null
+                  : library.clearPlaybackHistory,
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (recentlyPlayed.isEmpty)
+          const _EmptyHistory()
+        else
+          for (final track in recentlyPlayed)
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: Text(track.title),
+              subtitle: Text(
+                '${track.artist} · '
+                '${library.playCountForTrack(track.id)} play(s)',
+              ),
+              trailing: Text(
+                _formatHistoryTime(library.lastPlayedAt(track.id)),
+              ),
+              onTap: () => player.playTrack(
+                track,
+                queue: recentlyPlayed,
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _EmptyHistory extends StatelessWidget {
+  const _EmptyHistory();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: <Widget>[
+          const Icon(Icons.history, size: 56),
+          const SizedBox(height: 16),
+          Text(
+            'No listening history yet',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Played library tracks will appear here.',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatHistoryTime(DateTime? value) {
+  if (value == null) {
+    return '';
+  }
+
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+
+  return '${value.year}-${twoDigits(value.month)}-${twoDigits(value.day)} '
+      '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
+}
 
 class _EmptyLibrary extends StatelessWidget {
   const _EmptyLibrary({

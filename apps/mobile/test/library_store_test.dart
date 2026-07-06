@@ -128,8 +128,76 @@ void main() {
     expect(secondStore.lyricsForTrack('1')!.plainText, 'saved lyrics');
   });
 
+  test(
+    'records recently played tracks with counts and last played time',
+    () async {
+      var now = DateTime.utc(2026, 1, 8, 12);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      await store.addTracks(<Track>[_track('1'), _track('2'), _track('3')]);
+
+      await store.recordPlayback('1');
+      now = DateTime.utc(2026, 1, 8, 12, 1);
+      await store.recordPlayback('2');
+      now = DateTime.utc(2026, 1, 8, 12, 2);
+      await store.recordPlayback('1');
+      await store.recordPlayback('missing');
+
+      expect(
+        store.playbackHistory.map((entry) => entry.trackId),
+        <String>['1', '2', '1'],
+      );
+      expect(
+        store.recentlyPlayedTracks().map((track) => track.id),
+        <String>['1', '2'],
+      );
+      expect(
+        store.recentlyPlayedTracks(limit: 1).map((track) => track.id),
+        <String>['1'],
+      );
+      expect(store.playCountForTrack('1'), 2);
+      expect(store.playCountForTrack('2'), 1);
+      expect(store.lastPlayedAt('1'), DateTime.utc(2026, 1, 8, 12, 2));
+
+      await store.clearPlaybackHistory();
+
+      expect(store.playbackHistory, isEmpty);
+    },
+  );
+
+  test('removing a library track removes its playback history', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 9),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1'), _track('2')]);
+    await store.recordPlayback('1');
+    await store.recordPlayback('2');
+
+    await store.removeTrack('1');
+
+    expect(
+      store.playbackHistory.map((entry) => entry.trackId),
+      <String>['2'],
+    );
+  });
+
+  test('persists playback history across store instances', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 10);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('1')]);
+    await firstStore.recordPlayback('1');
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+
+    expect(secondStore.playbackHistory.single.trackId, '1');
+    expect(secondStore.recentlyPlayedTracks().single.id, '1');
+  });
+
   test('exports and restores a full library backup', () async {
-    DateTime clock() => DateTime.utc(2026, 1, 8);
+    DateTime clock() => DateTime.utc(2026, 1, 11);
     final firstStore = LibraryStore(clock: clock);
     await firstStore.load();
     await firstStore.addTracks(<Track>[_track('1'), _track('2')]);
@@ -139,6 +207,7 @@ void main() {
       trackIds: <String>['1', '2'],
     );
     await firstStore.setLyrics('1', 'backup lyrics');
+    await firstStore.recordPlayback('2');
 
     final backupJson = firstStore.exportBackupJson();
 
@@ -168,11 +237,13 @@ void main() {
       ],
     );
     expect(secondStore.lyricsForTrack('1')!.plainText, 'backup lyrics');
+    expect(secondStore.playbackHistory.single.trackId, '2');
+    expect(secondStore.recentlyPlayedTracks().single.id, '2');
   });
 
   test('rejects invalid backup JSON without replacing the library', () async {
     final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 9),
+      clock: () => DateTime.utc(2026, 1, 12),
     );
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
@@ -186,7 +257,7 @@ void main() {
 
   test('rejects unsupported backup versions', () async {
     final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 10),
+      clock: () => DateTime.utc(2026, 1, 13),
     );
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
