@@ -66,7 +66,7 @@ void main() {
   });
 
   test('persists playlists across store instances', () async {
-    final clock = () => DateTime.utc(2026, 1, 4);
+    DateTime clock() => DateTime.utc(2026, 1, 4);
     final firstStore = LibraryStore(clock: clock);
     await firstStore.load();
     await firstStore.addTracks(<Track>[_track('1')]);
