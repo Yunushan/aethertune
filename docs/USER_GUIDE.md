@@ -72,7 +72,7 @@ Tap the moon icon in the top-right corner and choose a preset duration, or choos
 
 ## Options
 
-The Options tab contains playback settings such as shuffle and repeat mode.
+The Options tab contains playback settings such as shuffle and repeat mode. AetherTune restores those playback settings when you reopen the app.
 
 ## Provider plugins
 

@@ -23,6 +23,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   static const _queueSnapshotKey = 'aethertune.player_queue.v1';
+  static const _playbackSettingsKey = 'aethertune.playback_settings.v1';
 
   final AudioPlayer _audio = AudioPlayer();
   final List<Track> _queue = <Track>[];
@@ -35,6 +36,7 @@ class PlayerController extends ChangeNotifier {
   Track? _current;
   String? _loadedTrackId;
   bool _queueSnapshotLoaded = false;
+  bool _playbackSettingsLoaded = false;
   int _playbackStartSerial = 0;
 
   Track? get current => _current;
@@ -72,6 +74,32 @@ class PlayerController extends ChangeNotifier {
     }
 
     _queueSnapshotLoaded = true;
+    notifyListeners();
+  }
+
+  Future<void> loadPersistedPlaybackSettings() async {
+    if (_playbackSettingsLoaded) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final rawSettings = prefs.getString(_playbackSettingsKey);
+    if (rawSettings != null && rawSettings.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawSettings) as Map;
+        final settings = Map<String, Object?>.from(decoded);
+        await _audio.setShuffleModeEnabled(
+          settings['shuffleEnabled'] as bool? ?? false,
+        );
+        await _audio.setLoopMode(
+          _loopModeFromJson(settings['loopMode'] as String?),
+        );
+      } catch (_) {
+        await prefs.remove(_playbackSettingsKey);
+      }
+    }
+
+    _playbackSettingsLoaded = true;
     notifyListeners();
   }
 
@@ -192,11 +220,13 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setShuffleEnabled(bool enabled) async {
     await _audio.setShuffleModeEnabled(enabled);
+    await _savePlaybackSettings();
     notifyListeners();
   }
 
   Future<void> setLoopMode(LoopMode mode) async {
     await _audio.setLoopMode(mode);
+    await _savePlaybackSettings();
     notifyListeners();
   }
 
@@ -244,6 +274,42 @@ class PlayerController extends ChangeNotifier {
       currentTrackId: _current?.id,
     );
     await prefs.setString(_queueSnapshotKey, jsonEncode(snapshot.toJson()));
+  }
+
+  Future<void> _savePlaybackSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _playbackSettingsKey,
+      jsonEncode(
+        <String, Object?>{
+          'shuffleEnabled': _audio.shuffleModeEnabled,
+          'loopMode': _loopModeToJson(_audio.loopMode),
+        },
+      ),
+    );
+  }
+
+  LoopMode _loopModeFromJson(String? value) {
+    switch (value) {
+      case 'one':
+        return LoopMode.one;
+      case 'all':
+        return LoopMode.all;
+      case 'off':
+      default:
+        return LoopMode.off;
+    }
+  }
+
+  String _loopModeToJson(LoopMode mode) {
+    switch (mode) {
+      case LoopMode.one:
+        return 'one';
+      case LoopMode.all:
+        return 'all';
+      case LoopMode.off:
+        return 'off';
+    }
   }
 
   bool _sameQueueOrder(List<Track> left, List<Track> right) {

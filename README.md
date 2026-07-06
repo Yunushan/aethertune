@@ -91,7 +91,7 @@ This scaffold includes real app code, not only a README:
 | Lyrics | Add, edit, view, and delete plain text lyrics per library track |
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets or a custom 1-1440 minute duration |
-| Repeat/shuffle | Runtime shuffle flag and repeat-mode hook |
+| Repeat/shuffle | Persisted shuffle flag and repeat mode |
 | Provider architecture | `MusicSourceProvider` interface for legal source adapters |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |

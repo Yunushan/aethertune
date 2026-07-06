@@ -13,6 +13,7 @@
 - [x] Queue reorder/remove
 - [x] Persistent queue
 - [x] Save queue as playlist
+- [x] Persist shuffle/repeat settings
 - [x] Favorites
 - [x] Manual playlists
 - [x] Plain lyrics editor

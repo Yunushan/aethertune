@@ -55,8 +55,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute presets plus custom 1-1440 minute duration. | End-of-track mode and fade-out. |
-| Shuffle | Done | `just_audio` shuffle flag. | Persisted shuffle and queue-aware shuffle. |
-| Repeat one/all/off | Done | `just_audio` loop mode. | Persisted repeat and UI tests. |
+| Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
+| Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider`. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile. | Release artifact workflow and integration tests. |
