@@ -24,7 +24,9 @@ jobs:
         run: bash ./scripts/bootstrap_client.sh
 
       - name: Analyze
-        run: cd apps/mobile && flutter analyze
+        run: |
+          cd apps/mobile
+          bash ../../scripts/ci/flutter_analyze_with_annotations.sh
 
       - name: Test
         run: cd apps/mobile && flutter test
