@@ -65,7 +65,8 @@
 ## 0.5.x: Open providers
 
 - [x] Provider capability and privacy disclosure contract
-- [ ] Podcast RSS provider
+- [x] Podcast RSS parser/provider foundation
+- [ ] Podcast RSS feed subscriptions and episode UI
 - [ ] Radio provider
 - [ ] Internet Archive provider
 - [ ] Jellyfin provider

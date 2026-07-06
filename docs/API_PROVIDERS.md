@@ -39,6 +39,10 @@ Use `ProviderPrivacyDisclosure` to list:
 - whether media is cached
 - whether downloads are allowed
 
+## Podcast RSS foundation
+
+`PodcastRssProvider` is the first open provider foundation. It parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, and resolves enclosure URLs for playback. Feed subscription management, episode progress, offline cache, and user-facing feed import are still separate roadmap work.
+
 ## Minimal provider
 
 ```dart

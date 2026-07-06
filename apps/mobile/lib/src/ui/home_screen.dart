@@ -2476,6 +2476,18 @@ class _SourcesTabState extends State<_SourcesTab> {
           disclosure: _provider.disclosure,
         ),
         const _ProviderCard(
+          title: 'Podcast RSS',
+          status: 'Adapter foundation',
+          description: 'Parse legal RSS feeds with audio enclosures into playable episode tracks.',
+          icon: Icons.rss_feed,
+          capabilities: <MusicSourceCapability>{
+            MusicSourceCapability.metadataSearch,
+            MusicSourceCapability.streamResolution,
+            MusicSourceCapability.directPlayback,
+            MusicSourceCapability.subscriptions,
+          },
+        ),
+        const _ProviderCard(
           title: 'Jellyfin / Navidrome / Subsonic',
           status: 'Adapter roadmap',
           description: 'User-owned/self-hosted music server support belongs here.',

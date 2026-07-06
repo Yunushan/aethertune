@@ -92,7 +92,7 @@ This scaffold includes real app code, not only a README:
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
-| Provider architecture | `MusicSourceProvider` interface with capability flags and privacy/network disclosure for legal source adapters |
+| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, demo provider, and Podcast RSS adapter foundation |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
@@ -116,7 +116,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
-| Multi-source | Local, self-hosted, open catalog, podcasts, radio, and official API providers |
+| Multi-source | Local provider support plus a Podcast RSS parser/provider foundation; self-hosted, radio, open catalog, and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 
