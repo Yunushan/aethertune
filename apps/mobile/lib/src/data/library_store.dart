@@ -75,10 +75,12 @@ class LibraryStore extends ChangeNotifier {
                 ),
               )
               .where((lyrics) => !lyrics.isEmpty)
-              .map((lyrics) => MapEntry<String, TrackLyrics>(
-                    lyrics.trackId,
-                    lyrics,
-                  )),
+              .map(
+                (lyrics) => MapEntry<String, TrackLyrics>(
+                  lyrics.trackId,
+                  lyrics,
+                ),
+              ),
         );
     }
 
