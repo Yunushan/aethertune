@@ -56,6 +56,10 @@ Use the Playlists tab to create, rename, delete, open, and play manual playlists
 
 Open a track menu in the Library tab and choose **Lyrics**. You can save plain text lyrics for that track, edit them later, or delete them from the same dialog.
 
+## Backup and restore
+
+Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library with that backup.
+
 ## Sleep timer
 
 Tap the moon icon in the top-right corner and choose a duration. Playback stops automatically when the timer ends.

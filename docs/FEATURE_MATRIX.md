@@ -44,7 +44,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Local audio import | Done | Native file picker. | Folder watch, recursive import, scoped storage UX. |
 | Local playback | Done | `just_audio` local file playback. | Background service, notification controls, codec matrix. |
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
-| Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema, migrations, backup/restore. |
+| Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
+| Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played as queue. | Persistent queue, reorder, save as playlist. |
@@ -92,7 +93,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently added / recently played | Roadmap | YouTube Music, Namida | Playback history and sort filters. |
 | Listening history | Roadmap | YouTube Music, Last.fm-style clients | Local history store and privacy controls. |
 | Stats / recap | Roadmap | YouTube Music | Aggregation jobs and recap UI. |
-| Backup/restore | Roadmap | Namida, local-first apps | JSON export/import and migration checks. |
+| Backup/restore | Done | Namida, local-first apps | File picker integration, cloud targets, migration checks. |
 | Cross-device library sync | Roadmap | YouTube Music, Grayjay-style multi-device needs | Server auth, sync API, conflict handling. |
 
 ### Search, Discovery, And Recommendations

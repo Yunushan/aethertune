@@ -10,6 +10,7 @@ import '../domain/track_lyrics.dart';
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
+  static const _backupVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
@@ -150,6 +151,85 @@ class LibraryStore extends ChangeNotifier {
           track.artist.toLowerCase().contains(normalized) ||
           track.album.toLowerCase().contains(normalized);
     }).toList(growable: false);
+  }
+
+  String exportBackupJson() {
+    const encoder = JsonEncoder.withIndent('  ');
+
+    return encoder.convert(<String, Object?>{
+      'version': _backupVersion,
+      'exportedAt': _clock().toIso8601String(),
+      'tracks': _tracks.map((track) => track.toJson()).toList(),
+      'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
+      'lyrics': _lyricsByTrackId.values
+          .map((lyrics) => lyrics.toJson())
+          .toList(),
+    });
+  }
+
+  Future<void> restoreBackupJson(String backupJson) async {
+    final decoded = jsonDecode(backupJson);
+    if (decoded is! Map) {
+      throw const FormatException('Backup must be a JSON object.');
+    }
+
+    final backup = Map<String, Object?>.from(decoded);
+    if (backup['version'] != _backupVersion) {
+      throw FormatException(
+        'Unsupported backup version: ${backup['version']}.',
+      );
+    }
+
+    final restoredTracks = <Track>[];
+    final restoredPlaylists = <Playlist>[];
+    final restoredLyrics = <TrackLyrics>[];
+
+    try {
+      restoredTracks.addAll(
+        _jsonObjectList(backup, 'tracks').map(Track.fromJson),
+      );
+      restoredPlaylists.addAll(
+        _jsonObjectList(backup, 'playlists').map(Playlist.fromJson),
+      );
+      restoredLyrics.addAll(
+        _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
+      );
+    } on Object catch (error) {
+      throw FormatException('Invalid backup data: $error');
+    }
+
+    final uniqueTracks = <String, Track>{
+      for (final track in restoredTracks) track.id: track,
+    };
+    final knownTrackIds = uniqueTracks.keys.toSet();
+    final sanitizedPlaylists = restoredPlaylists.map((playlist) {
+      final filteredTrackIds = playlist.trackIds
+          .where(knownTrackIds.contains)
+          .toSet()
+          .toList(growable: false);
+
+      return playlist.copyWith(trackIds: filteredTrackIds);
+    }).toList(growable: false);
+    final sanitizedLyrics = <String, TrackLyrics>{
+      for (final lyrics in restoredLyrics)
+        if (knownTrackIds.contains(lyrics.trackId) && !lyrics.isEmpty)
+          lyrics.trackId: lyrics,
+    };
+
+    _tracks
+      ..clear()
+      ..addAll(uniqueTracks.values);
+    _playlists
+      ..clear()
+      ..addAll(sanitizedPlaylists);
+    _lyricsByTrackId
+      ..clear()
+      ..addAll(sanitizedLyrics);
+
+    _sortTracks();
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
   }
 
   Playlist? playlistById(String id) {
@@ -358,6 +438,24 @@ class LibraryStore extends ChangeNotifier {
   String _playlistId(String name, DateTime createdAt) {
     final base = '${createdAt.microsecondsSinceEpoch}-$name';
     return base64Url.encode(utf8.encode(base)).replaceAll('=', '');
+  }
+
+  List<Map<String, Object?>> _jsonObjectList(
+    Map<String, Object?> backup,
+    String key,
+  ) {
+    final rawList = backup[key];
+    if (rawList is! List) {
+      throw FormatException('Backup field "$key" must be a list.');
+    }
+
+    return rawList.map((item) {
+      if (item is! Map) {
+        throw FormatException('Backup field "$key" contains a non-object.');
+      }
+
+      return Map<String, Object?>.from(item);
+    }).toList(growable: false);
   }
 
   Future<void> _save() async {

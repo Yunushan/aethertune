@@ -12,6 +12,7 @@
 - [x] Favorites
 - [x] Manual playlists
 - [x] Plain lyrics editor
+- [x] JSON backup/restore
 - [x] Sleep timer
 - [x] Provider interface
 - [ ] More unit tests
@@ -22,7 +23,7 @@
 - [x] Manual playlists
 - [ ] Playlist reorder
 - [ ] Playlist artwork
-- [ ] Backup/restore JSON
+- [x] Backup/restore JSON
 - [ ] Folder browser
 - [ ] Metadata scanner
 - [ ] Duplicate resolver

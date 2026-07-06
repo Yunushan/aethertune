@@ -83,6 +83,7 @@ This scaffold includes real app code, not only a README:
 | Playback | `just_audio` playback controller for local files and URL-based streams |
 | Local library | Import audio files through the native file picker |
 | Persistence | Saves imported tracks, favorites, playlists, and lyrics with `shared_preferences` |
+| Backup/restore | Export and restore a versioned JSON backup from the Options tab |
 | Search | Local library filtering by title, artist, and album |
 | Queue | Play current list as a queue with next/previous controls |
 | Playlists | Create, rename, delete, open, and play manual playlists |
@@ -102,6 +103,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Feature category | Target support |
 |---|---|
 | Local files | Library import, playback, search, favorites, folders, metadata editing roadmap |
+| Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface for legal source adapters |
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |

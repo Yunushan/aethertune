@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -124,6 +126,77 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.lyricsForTrack('1')!.plainText, 'saved lyrics');
+  });
+
+  test('exports and restores a full library backup', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 8);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('1'), _track('2')]);
+    await firstStore.toggleFavorite('2');
+    final playlist = await firstStore.createPlaylist(
+      'Backup Mix',
+      trackIds: <String>['1', '2'],
+    );
+    await firstStore.setLyrics('1', 'backup lyrics');
+
+    final backupJson = firstStore.exportBackupJson();
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+    await secondStore.addTracks(<Track>[_track('stale')]);
+    await secondStore.restoreBackupJson(backupJson);
+
+    expect(
+      secondStore.tracks.map((track) => track.id),
+      containsAll(<String>[
+        '1',
+        '2',
+      ]),
+    );
+    expect(secondStore.tracks, hasLength(2));
+    expect(
+      secondStore.tracks.singleWhere((track) => track.id == '2').isFavorite,
+      isTrue,
+    );
+    expect(secondStore.playlistById(playlist.id)!.name, 'Backup Mix');
+    expect(
+      secondStore.playlistById(playlist.id)!.trackIds,
+      <String>[
+        '1',
+        '2',
+      ],
+    );
+    expect(secondStore.lyricsForTrack('1')!.plainText, 'backup lyrics');
+  });
+
+  test('rejects invalid backup JSON without replacing the library', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 9),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1')]);
+
+    expect(
+      store.restoreBackupJson('[]'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(store.tracks.single.id, '1');
+  });
+
+  test('rejects unsupported backup versions', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 10),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1')]);
+    final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
+    backup['version'] = 999;
+
+    expect(
+      store.restoreBackupJson(jsonEncode(backup)),
+      throwsA(isA<FormatException>()),
+    );
   });
 }
 

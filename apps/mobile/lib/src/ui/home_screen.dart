@@ -969,6 +969,17 @@ class _SettingsTab extends StatelessWidget {
           ),
         ),
         const Divider(),
+        ListTile(
+          leading: const Icon(Icons.file_upload_outlined),
+          title: const Text('Export backup'),
+          onTap: () => _showBackupExport(context),
+        ),
+        ListTile(
+          leading: const Icon(Icons.restore_page_outlined),
+          title: const Text('Restore backup'),
+          onTap: () => _showBackupRestore(context),
+        ),
+        const Divider(),
         const ListTile(
           leading: Icon(Icons.privacy_tip_outlined),
           title: Text('Privacy'),
@@ -981,5 +992,103 @@ class _SettingsTab extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _showBackupExport(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final backupJson = library.exportBackupJson();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Export backup'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(backupJson),
+            ),
+          ),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showBackupRestore(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final backupJson = await _promptForBackupJson(context);
+    if (!context.mounted || backupJson == null) {
+      return;
+    }
+
+    try {
+      await library.restoreBackupJson(backupJson);
+    } on FormatException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+      return;
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Restored backup.')),
+    );
+  }
+
+  Future<String?> _promptForBackupJson(BuildContext context) async {
+    final controller = TextEditingController();
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Restore backup'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: TextField(
+                autofocus: true,
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Backup JSON',
+                ),
+                keyboardType: TextInputType.multiline,
+                minLines: 8,
+                maxLines: 14,
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
+                child: const Text('Restore'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }
