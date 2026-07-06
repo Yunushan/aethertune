@@ -1,0 +1,155 @@
+name: aethertune-release-artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+
+      - name: Generate platform wrappers
+        run: bash ./scripts/bootstrap_client.sh
+
+      - name: Build APK
+        run: cd apps/mobile && flutter build apk --release
+
+      - name: Build app bundle
+        run: cd apps/mobile && flutter build appbundle --release
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: aethertune-android
+          if-no-files-found: error
+          path: |
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+            apps/mobile/build/app/outputs/bundle/release/app-release.aab
+
+  desktop:
+    name: Desktop release artifact (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+            artifact_name: aethertune-linux-x64
+          - os: windows-latest
+            target: windows
+            artifact_name: aethertune-windows-x64
+          - os: macos-latest
+            target: macos
+            artifact_name: aethertune-macos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Linux desktop dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libasound2-dev libgtk-3-dev liblzma-dev ninja-build pkg-config
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+
+      - name: Enable desktop target
+        run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: Generate platform wrappers
+        run: bash ./scripts/bootstrap_client.sh
+
+      - name: Build desktop app
+        run: cd apps/mobile && flutter build ${{ matrix.target }} --release
+
+      - name: Package Linux desktop app
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          tar -czf release/aethertune-linux-x64.tar.gz -C apps/mobile/build/linux/x64/release/bundle .
+
+      - name: Package macOS desktop app
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          app_bundle="$(find apps/mobile/build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          ditto -c -k --sequesterRsrc --keepParent "$app_bundle" release/aethertune-macos.zip
+
+      - name: Package Windows desktop app
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive -Path apps/mobile/build/windows/x64/runner/Release/* -DestinationPath release/aethertune-windows-x64.zip -Force
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          if-no-files-found: error
+          path: release/*
+
+  server:
+    name: Server executable (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x64
+            binary_name: aethertune-server-linux-x64
+          - os: windows-latest
+            label: windows-x64
+            binary_name: aethertune-server-windows-x64.exe
+          - os: macos-latest
+            label: macos
+            binary_name: aethertune-server-macos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1.7.2
+        with:
+          sdk: stable
+
+      - name: Install server dependencies
+        run: cd services/server && dart pub get
+
+      - name: Compile server executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd services/server
+          mkdir -p build
+          dart compile exe bin/server.dart -o "build/${{ matrix.binary_name }}"
+
+      - name: Upload server executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: aethertune-server-${{ matrix.label }}
+          if-no-files-found: error
+          path: services/server/build/${{ matrix.binary_name }}

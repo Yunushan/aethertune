@@ -59,7 +59,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider`. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
-| CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile. | Release artifact workflow and integration tests. |
+| CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
 ## Full Parity Feature Surface
 
@@ -218,7 +218,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Server health endpoint | Done | Production services | Deployment checks. |
 | Server info endpoint | Done | Client compatibility | Versioned capabilities. |
 | Server catalog endpoint | Done | API foundation | Persistence and auth. |
-| Server executable compile | Done | Release readiness | Release artifacts and deployment workflow. |
+| Server executable compile | Done | Release readiness and release workflow server artifacts. | Deployment workflow. |
 | Authentication | Roadmap | Sync services | Token model, secure storage, tests. |
 | User profiles | Roadmap | YouTube Music | Optional account model. |
 | Library sync | Roadmap | YouTube Music / multi-device needs | Conflict resolution and encrypted transport. |
@@ -265,7 +265,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Flutter analyze/test CI | Done | Broader widget/integration tests. |
 | Desktop build CI | Done | Release-mode packaging and smoke tests. |
 | Server analyze/test/compile CI | Done | API integration tests and load tests. |
-| Release artifact workflow | Roadmap | APK/AAB, desktop zips/installers, server binaries. |
+| Release artifact workflow | Done | Tag/manual workflow builds APK/AAB, desktop archives, and server binaries. | Signing, notarization, installers, and store packaging. |
 | Signed releases | Roadmap | Android signing, macOS notarization, Windows signing. |
 | SBOM / dependency audit | Roadmap | License and vulnerability scanning. |
 | Golden UI tests | Roadmap | Stable screenshots for key views. |
@@ -322,7 +322,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 10. Add video surfaces only through legal providers: video player, PiP, captions, chapters, subscriptions.
 11. Build server auth, sync, provider credential vault, playlist/library/playback-position APIs, and self-hosting docs.
 12. Polish desktop: responsive layout, tray/menu bar, global hotkeys, installers, signing.
-13. Add release workflow artifacts: Android APK/AAB, Linux package, Windows package, macOS package, server binaries.
+13. Harden release artifacts with signing, notarization, installers, and store-ready packaging.
 14. Add accessibility, localization, golden tests, integration tests, provider tests, dependency audits, and privacy/network audits.
 
 ## Definition of "100% free/open-source"

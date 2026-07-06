@@ -95,7 +95,7 @@ This scaffold includes real app code, not only a README:
 | Provider architecture | `MusicSourceProvider` interface for legal source adapters |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
-| Proof gates | CI analyzes/tests Flutter, builds desktop targets, and analyzes/tests/compiles the server |
+| Proof gates | CI analyzes/tests Flutter, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
 
 ## Feature Goal
 

@@ -78,6 +78,7 @@
 ## 1.0.0: Stable
 
 - [ ] Stable provider SDK
-- [ ] Fully documented build/release process
+- [x] Release artifact workflow
+- [ ] Fully signed/notarized release process
 - [ ] Accessibility pass
 - [ ] Localization setup

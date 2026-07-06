@@ -40,7 +40,13 @@ flutter build macos --release
 flutter build windows --release
 ```
 
-The GitHub Actions workflow proves debug desktop builds for Linux, macOS, and Windows. Release packaging still needs platform-specific signing, notarization, installer, or archive work.
+The `aethertune-release-artifacts` GitHub Actions workflow can also build downloadable desktop archives on tags or manual dispatch:
+
+- `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`
+- `aethertune-macos`: `aethertune-macos.zip`
+- `aethertune-windows-x64`: `aethertune-windows-x64.zip`
+
+Release packaging still needs platform-specific signing, notarization, and installer work before store-quality distribution.
 
 ## Server release
 
@@ -51,6 +57,22 @@ dart compile exe bin/server.dart -o build/aethertune-server
 ```
 
 For hosted deployments, set `PORT` in the environment. The server exposes `/health` for uptime checks.
+
+The release workflow uploads native server executables as:
+
+- `aethertune-server-linux-x64`
+- `aethertune-server-macos`
+- `aethertune-server-windows-x64`
+
+## GitHub release workflow
+
+Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts` workflow manually. It uploads:
+
+- Android: `app-release.apk` and `app-release.aab`
+- Linux desktop archive
+- macOS desktop archive
+- Windows desktop archive
+- Linux/macOS/Windows server executables
 
 ## F-Droid notes
 
@@ -66,6 +88,7 @@ AetherTune is MIT licensed and has no telemetry. To prepare for F-Droid:
 - [ ] `flutter analyze` passes.
 - [ ] `flutter test` passes.
 - [ ] Desktop debug builds pass in GitHub Actions.
+- [ ] Release artifact workflow completes.
 - [ ] `dart analyze` passes in `services/server`.
 - [ ] `dart test` passes in `services/server`.
 - [ ] `dart compile exe` passes in `services/server`.
