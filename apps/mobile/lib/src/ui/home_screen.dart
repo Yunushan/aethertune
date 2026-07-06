@@ -111,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showAddToPlaylist(BuildContext context, Track track) async {
     final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
 
     if (library.playlists.isEmpty) {
       await _createPlaylist(context, seedTrack: track);
@@ -150,11 +151,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             track.id,
                           );
 
-                          if (!mounted) {
+                          if (!context.mounted) {
                             return;
                           }
 
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             SnackBar(
                               content: Text('Added to ${playlist.name}.'),
                             ),
@@ -172,12 +173,13 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context, {
     Track? seedTrack,
   }) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
     final name = await _promptForPlaylistName(context);
     if (!context.mounted || name == null) {
       return;
     }
 
-    final library = context.read<LibraryStore>();
     final playlist = await library.createPlaylist(
       name,
       trackIds: seedTrack == null ? const <String>[] : <String>[seedTrack.id],
@@ -187,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text('Created ${playlist.name}.')),
     );
   }
@@ -437,17 +439,19 @@ class _PlaylistsTab extends StatelessWidget {
   }
 
   Future<void> _createPlaylist(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
     final name = await _promptForPlaylistName(context, title: 'New playlist');
     if (!context.mounted || name == null) {
       return;
     }
 
-    final playlist = await context.read<LibraryStore>().createPlaylist(name);
+    final playlist = await library.createPlaylist(name);
     if (!context.mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text('Created ${playlist.name}.')),
     );
   }
@@ -456,6 +460,7 @@ class _PlaylistsTab extends StatelessWidget {
     BuildContext context,
     Playlist playlist,
   ) async {
+    final library = context.read<LibraryStore>();
     final name = await _promptForPlaylistName(
       context,
       title: 'Rename playlist',
@@ -465,20 +470,23 @@ class _PlaylistsTab extends StatelessWidget {
       return;
     }
 
-    await context.read<LibraryStore>().renamePlaylist(playlist.id, name);
+    await library.renamePlaylist(playlist.id, name);
   }
 
   Future<void> _deletePlaylist(
     BuildContext context,
     Playlist playlist,
   ) async {
-    await context.read<LibraryStore>().deletePlaylist(playlist.id);
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    await library.deletePlaylist(playlist.id);
 
     if (!context.mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text('Deleted ${playlist.name}.')),
     );
   }
