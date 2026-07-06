@@ -571,8 +571,7 @@ class LibraryStore extends ChangeNotifier {
     Map<String, Object?> backup,
     String key, {
     bool isRequired = true,
-  },
-  ) {
+  }) {
     final rawList = backup[key];
     if (rawList == null && !isRequired) {
       return <Map<String, Object?>>[];
