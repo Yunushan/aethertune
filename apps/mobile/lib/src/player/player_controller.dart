@@ -17,7 +17,7 @@ class PlayerController extends ChangeNotifier {
     });
     _completedSub = _audio.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
-        next();
+        unawaited(_handleTrackCompleted());
       }
     });
   }
@@ -35,6 +35,7 @@ class PlayerController extends ChangeNotifier {
   Duration _duration = Duration.zero;
   Track? _current;
   String? _loadedTrackId;
+  bool _stopAtEndOfTrack = false;
   bool _queueSnapshotLoaded = false;
   bool _playbackSettingsLoaded = false;
   int _playbackStartSerial = 0;
@@ -48,6 +49,7 @@ class PlayerController extends ChangeNotifier {
   Duration get duration => _duration;
   Stream<Duration> get positionStream => _audio.positionStream;
   Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
+  bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
 
   Future<void> loadPersistedQueue() async {
     if (_queueSnapshotLoaded) {
@@ -232,6 +234,7 @@ class PlayerController extends ChangeNotifier {
 
   void startSleepTimer(Duration duration) {
     _sleepTimer?.cancel();
+    _stopAtEndOfTrack = false;
     _sleepTimer = Timer(duration, () async {
       await stop();
       _sleepTimer = null;
@@ -240,10 +243,28 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void stopAtEndOfTrack() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _stopAtEndOfTrack = true;
+    notifyListeners();
+  }
+
   void cancelSleepTimer() {
     _sleepTimer?.cancel();
     _sleepTimer = null;
+    _stopAtEndOfTrack = false;
     notifyListeners();
+  }
+
+  Future<void> _handleTrackCompleted() async {
+    if (_stopAtEndOfTrack) {
+      _stopAtEndOfTrack = false;
+      await stop();
+      return;
+    }
+
+    await next();
   }
 
   Future<void> _load(Track track) async {

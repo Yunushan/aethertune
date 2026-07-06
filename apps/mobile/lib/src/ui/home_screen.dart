@@ -485,6 +485,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   await _showCustomSleepTimer(context, player);
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('Stop at end of current track'),
+                subtitle: const Text(
+                  'Finish this track, then stop playback.',
+                ),
+                enabled: player.current != null,
+                onTap: player.current == null
+                    ? null
+                    : () {
+                        player.stopAtEndOfTrack();
+                        Navigator.of(sheetContext).pop();
+                      },
+              ),
               for (final minutes in durations)
                 ListTile(
                   leading: const Icon(Icons.bedtime_outlined),

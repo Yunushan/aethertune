@@ -20,6 +20,7 @@
 - [x] JSON backup/restore
 - [x] Sleep timer
 - [x] Custom sleep timer duration
+- [x] End-of-track sleep timer
 - [x] Provider interface
 - [ ] More unit tests
 - [ ] UI polish

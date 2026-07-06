@@ -54,7 +54,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI. | Artwork and sync. |
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
-| Sleep timer | Done | 5/15/30/60/90 minute presets plus custom 1-1440 minute duration. | End-of-track mode and fade-out. |
+| Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, and end-of-current-track mode. | Fade-out. |
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider`. | Stable provider SDK, packaging, sandbox rules. |
@@ -79,7 +79,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Pitch / tempo control | Roadmap | Podcast/video clients | DSP backend and UI controls. |
 | Skip silence | Roadmap | Podcast/music clients | Audio analysis or playback backend support. |
 | Audio-only mode for video sources | Blocked / official-only | YouTube Music, YMusic | Only through official APIs or user-provided legal streams. |
-| Sleep timer with fade/custom rules | Scaffolded | InnerTune, Namida, YouTube Music | Custom duration is done; fade-out and end-of-track action still need implementation. |
+| Sleep timer with fade/custom rules | Scaffolded | InnerTune, Namida, YouTube Music | Custom duration and end-of-track action are done; fade-out still needs implementation. |
 | Output device picker | Roadmap | YouTube Music, desktop players | Platform route picker and Bluetooth/cast support. |
 
 ### Library And Local Files
