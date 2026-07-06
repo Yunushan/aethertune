@@ -720,18 +720,64 @@ class _PlaylistsTab extends StatelessWidget {
                       subtitle: Text('Add tracks from the Library tab.'),
                     )
                   else
-                    for (final track in tracks)
+                    for (final entry in tracks.asMap().entries)
                       ListTile(
                         leading: const Icon(Icons.music_note_outlined),
-                        title: Text(track.title),
-                        subtitle: Text('${track.artist} · ${track.album}'),
-                        trailing: IconButton(
-                          tooltip: 'Remove from playlist',
-                          onPressed: () => library.removeTrackFromPlaylist(
-                            playlist.id,
-                            track.id,
-                          ),
-                          icon: const Icon(Icons.playlist_remove),
+                        title: Text(entry.value.title),
+                        subtitle: Text(
+                          '${entry.value.artist} · ${entry.value.album}',
+                        ),
+                        trailing: PopupMenuButton<_PlaylistTrackAction>(
+                          onSelected: (action) {
+                            switch (action) {
+                              case _PlaylistTrackAction.moveUp:
+                                library.moveTrackInPlaylist(
+                                  playlist.id,
+                                  entry.key,
+                                  entry.key - 1,
+                                );
+                                break;
+                              case _PlaylistTrackAction.moveDown:
+                                library.moveTrackInPlaylist(
+                                  playlist.id,
+                                  entry.key,
+                                  entry.key + 1,
+                                );
+                                break;
+                              case _PlaylistTrackAction.remove:
+                                library.removeTrackFromPlaylist(
+                                  playlist.id,
+                                  entry.value.id,
+                                );
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) =>
+                              <PopupMenuEntry<_PlaylistTrackAction>>[
+                            PopupMenuItem(
+                              value: _PlaylistTrackAction.moveUp,
+                              enabled: entry.key > 0,
+                              child: const ListTile(
+                                leading: Icon(Icons.arrow_upward),
+                                title: Text('Move up'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: _PlaylistTrackAction.moveDown,
+                              enabled: entry.key < tracks.length - 1,
+                              child: const ListTile(
+                                leading: Icon(Icons.arrow_downward),
+                                title: Text('Move down'),
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: _PlaylistTrackAction.remove,
+                              child: ListTile(
+                                leading: Icon(Icons.playlist_remove),
+                                title: Text('Remove from playlist'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                 ],
@@ -883,6 +929,8 @@ class _EmptyPlaylists extends StatelessWidget {
 }
 
 enum _PlaylistAction { rename, delete }
+
+enum _PlaylistTrackAction { moveUp, moveDown, remove }
 
 class _HistoryTab extends StatelessWidget {
   const _HistoryTab();

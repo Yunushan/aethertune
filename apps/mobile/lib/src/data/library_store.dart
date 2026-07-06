@@ -515,6 +515,38 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> moveTrackInPlaylist(
+    String playlistId,
+    int fromIndex,
+    int toIndex,
+  ) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return;
+    }
+
+    final playlist = _playlists[index];
+    if (fromIndex < 0 ||
+        fromIndex >= playlist.trackIds.length ||
+        toIndex < 0 ||
+        toIndex >= playlist.trackIds.length ||
+        fromIndex == toIndex) {
+      return;
+    }
+
+    final trackIds = playlist.trackIds.toList(growable: true);
+    final trackId = trackIds.removeAt(fromIndex);
+    trackIds.insert(toIndex, trackId);
+
+    _playlists[index] = playlist.copyWith(
+      trackIds: trackIds,
+      updatedAt: _clock(),
+    );
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+  }
+
   void _sortTracks() {
     _tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
   }

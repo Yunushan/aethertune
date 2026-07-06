@@ -22,7 +22,7 @@
 ## 0.2.x: Library
 
 - [x] Manual playlists
-- [ ] Playlist reorder
+- [x] Playlist reorder
 - [ ] Playlist artwork
 - [x] Backup/restore JSON
 - [ ] Folder browser

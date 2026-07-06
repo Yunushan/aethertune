@@ -51,6 +51,28 @@ void main() {
     expect(store.playlistById(playlist.id)!.trackIds, <String>['2']);
   });
 
+  test('reorders playlist tracks by index', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 2, 12),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1'), _track('2'), _track('3')]);
+    final playlist = await store.createPlaylist(
+      'Ordered',
+      trackIds: <String>['1', '2', '3'],
+    );
+
+    await store.moveTrackInPlaylist(playlist.id, 2, 0);
+
+    expect(store.playlistById(playlist.id)!.trackIds, <String>['3', '1', '2']);
+
+    await store.moveTrackInPlaylist(playlist.id, 0, 2);
+    await store.moveTrackInPlaylist(playlist.id, -1, 2);
+    await store.moveTrackInPlaylist(playlist.id, 0, 99);
+
+    expect(store.playlistById(playlist.id)!.trackIds, <String>['1', '2', '3']);
+  });
+
   test('removing a library track removes it from playlists', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 3),
