@@ -29,5 +29,5 @@ DerivedData/
 .DS_Store
 Thumbs.db
 
-# Generated app wrappers can be regenerated with scripts/bootstrap_mobile.sh
+# Generated app wrappers can be regenerated with scripts/bootstrap_client.sh
 # Keep them tracked if you decide to publish platform-specific settings.

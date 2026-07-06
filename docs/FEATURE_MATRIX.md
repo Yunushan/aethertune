@@ -14,6 +14,9 @@ Legend:
 | Feature | Status | Notes |
 |---|---:|---|
 | Android/iOS app shell | Done | Flutter app with Material 3 UI. |
+| Linux/macOS/Windows desktop build | Done | Generated Flutter desktop wrappers are built in CI. |
+| Server package | Done | Dart HTTP service under `services/server`. |
+| Server health/info/catalog endpoints | Done | Covered by server tests. |
 | MIT license | Done | Root `LICENSE`. |
 | No telemetry | Done | No analytics SDK or tracking dependency. |
 | Local audio import | Done | Native file picker. |
@@ -30,6 +33,8 @@ Legend:
 | Provider plugin contract | Done | `MusicSourceProvider`. |
 | Demo provider | Done | Metadata-only template provider. |
 | Release workflow | Done | GitHub Actions scaffold. |
+| Desktop build workflow | Done | CI builds Linux, macOS, and Windows debug apps. |
+| Server workflow | Done | CI runs `dart analyze`, `dart test`, and `dart compile exe`. |
 
 ## Music-client feature targets
 
@@ -41,6 +46,8 @@ Legend:
 | Android Auto | Roadmap | Requires media browser service and testing in car emulator/device. |
 | iOS Control Center / lock screen | Roadmap | Requires audio session and Now Playing metadata. |
 | CarPlay | Roadmap | Requires Apple entitlement and extra app review requirements. |
+| Desktop-specific layout polish | Roadmap | Builds exist; larger-window UX should be expanded. |
+| Server sync API | Roadmap | Add auth, library sync, and remote provider coordination. |
 | Offline cache manager | Roadmap | Add download queue, cache size limits, source permissions. |
 | Manual playlists | Roadmap | Add playlist table/store. |
 | Smart playlists | Roadmap | Add rules engine. |

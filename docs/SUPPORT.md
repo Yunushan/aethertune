@@ -5,7 +5,7 @@
 Open a GitHub issue with:
 
 - device model
-- Android/iOS version
+- Android/iOS/desktop OS version, or server OS/runtime version
 - app version
 - exact steps to reproduce
 - logs or screenshots when useful
@@ -16,17 +16,17 @@ Open a GitHub issue with:
 
 Install Flutter and make sure `flutter` is on your PATH.
 
-### Android/iOS folders are missing
+### Platform folders are missing
 
 Run:
 
 ```bash
-./scripts/bootstrap_mobile.sh
+./scripts/bootstrap_client.sh
 ```
 
 ### Audio file does not play
 
-Try another local file first. Some codecs may not be supported equally across Android and iOS.
+Try another local file first. Some codecs may not be supported equally across Android, iOS, Linux, macOS, and Windows.
 
 ### Provider does not stream
 

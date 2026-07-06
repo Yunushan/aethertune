@@ -3,6 +3,8 @@
 ## 0.1.x: Foundation
 
 - [x] Flutter mobile shell
+- [x] Flutter desktop build support
+- [x] Dart server foundation
 - [x] MIT license
 - [x] Local import
 - [x] Local playback
@@ -27,8 +29,19 @@
 - [ ] Android Auto
 - [ ] iOS lock screen controls
 - [ ] iOS background audio session
+- [ ] Desktop media key support
+- [ ] Desktop layout polish
 
-## 0.4.x: Open providers
+## 0.4.x: Server foundation
+
+- [x] Server health endpoint
+- [x] Server info endpoint
+- [x] Server catalog endpoint
+- [ ] Auth model
+- [ ] Library sync API
+- [ ] Remote provider coordination
+
+## 0.5.x: Open providers
 
 - [ ] Podcast RSS provider
 - [ ] Radio provider
@@ -36,7 +49,7 @@
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider
 
-## 0.5.x: Offline and lyrics
+## 0.6.x: Offline and lyrics
 
 - [ ] Cache manager
 - [ ] Download queue

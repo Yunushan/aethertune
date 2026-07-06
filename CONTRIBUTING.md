@@ -8,16 +8,13 @@ Thanks for helping build a free and open music app.
 2. **Legal sources only**: do not submit code for DRM bypass, credential theft, paid-service cloning, or private API scraping.
 3. **Provider isolation**: source adapters belong behind the `MusicSourceProvider` interface.
 4. **Truthful README**: never mark a feature complete until it works in the app.
-5. **Mobile compatibility**: every core change should be tested on Android and iOS, or clearly documented as platform-specific.
+5. **Platform compatibility**: every core change should be tested on the affected mobile, desktop, or server target, or clearly documented as platform-specific.
 
 ## Local setup
 
 ```bash
-./scripts/bootstrap_mobile.sh
-cd apps/mobile
-flutter pub get
-flutter test
-flutter analyze
+./scripts/bootstrap_client.sh
+./scripts/check.sh
 ```
 
 ## Branch naming
@@ -42,8 +39,11 @@ docs(readme): update Android build steps
 
 ## Pull request checklist
 
-- [ ] The code builds with `flutter analyze`.
-- [ ] Tests pass with `flutter test`.
+- [ ] Client analysis passes with `flutter analyze`.
+- [ ] Client tests pass with `flutter test`.
+- [ ] Server analysis passes with `dart analyze`.
+- [ ] Server tests pass with `dart test`.
+- [ ] Desktop CI builds remain green for Linux, macOS, and Windows when client behavior changes.
 - [ ] The feature matrix is updated if a feature changed.
 - [ ] No proprietary assets or copyrighted media are included.
 - [ ] No terms-of-service circumvention or DRM bypass is included.

@@ -29,6 +29,29 @@ flutter build ios --release
 
 Open the generated iOS project in Xcode for signing, capabilities, and App Store upload.
 
+## Desktop release
+
+Build desktop packages on their native operating systems:
+
+```bash
+cd apps/mobile
+flutter build linux --release
+flutter build macos --release
+flutter build windows --release
+```
+
+The GitHub Actions workflow proves debug desktop builds for Linux, macOS, and Windows. Release packaging still needs platform-specific signing, notarization, installer, or archive work.
+
+## Server release
+
+```bash
+cd services/server
+dart pub get
+dart compile exe bin/server.dart -o build/aethertune-server
+```
+
+For hosted deployments, set `PORT` in the environment. The server exposes `/health` for uptime checks.
+
 ## F-Droid notes
 
 AetherTune is MIT licensed and has no telemetry. To prepare for F-Droid:
@@ -42,6 +65,10 @@ AetherTune is MIT licensed and has no telemetry. To prepare for F-Droid:
 
 - [ ] `flutter analyze` passes.
 - [ ] `flutter test` passes.
+- [ ] Desktop debug builds pass in GitHub Actions.
+- [ ] `dart analyze` passes in `services/server`.
+- [ ] `dart test` passes in `services/server`.
+- [ ] `dart compile exe` passes in `services/server`.
 - [ ] Feature matrix is current.
 - [ ] Changelog is written.
 - [ ] APK/AAB/IPA build instructions are verified.

@@ -1,10 +1,10 @@
-# AetherTune Mobile App
+# AetherTune Client App
 
-This is the Flutter app package for AetherTune.
+This is the Flutter client package for AetherTune mobile and desktop targets.
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-The repository-level script `../../scripts/bootstrap_mobile.sh` generates Android and iOS platform wrappers if they are missing.
+The repository-level script `../../scripts/bootstrap_client.sh` generates Android, iOS, Linux, macOS, and Windows platform wrappers if they are missing.

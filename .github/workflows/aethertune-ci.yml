@@ -1,0 +1,91 @@
+name: aethertune-ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  flutter:
+    name: Flutter analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+
+      - name: Generate platform wrappers
+        run: bash ./scripts/bootstrap_client.sh
+
+      - name: Analyze
+        run: cd apps/mobile && flutter analyze
+
+      - name: Test
+        run: cd apps/mobile && flutter test
+
+  desktop:
+    name: Desktop build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: windows
+          - os: macos-latest
+            target: macos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Linux desktop dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libasound2-dev libgtk-3-dev liblzma-dev ninja-build pkg-config
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+
+      - name: Enable desktop target
+        run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: Generate platform wrappers
+        run: bash ./scripts/bootstrap_client.sh
+
+      - name: Build desktop app
+        run: cd apps/mobile && flutter build ${{ matrix.target }} --debug
+
+  server:
+    name: Server analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1.7.2
+        with:
+          sdk: stable
+
+      - name: Install server dependencies
+        run: cd services/server && dart pub get
+
+      - name: Analyze server
+        run: cd services/server && dart analyze
+
+      - name: Test server
+        run: cd services/server && dart test
+
+      - name: Compile server executable
+        run: cd services/server && mkdir -p build && dart compile exe bin/server.dart -o build/aethertune-server

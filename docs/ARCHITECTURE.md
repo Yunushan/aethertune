@@ -1,10 +1,11 @@
 # Architecture
 
-AetherTune is a local-first Flutter application with a provider-based source layer.
+AetherTune is a local-first Flutter client with a provider-based source layer plus a small Dart server foundation for health checks, metadata, and future sync APIs.
 
 ## Goals
 
-- Run on Android and iOS from one Flutter codebase.
+- Run on Android, iOS, Linux, macOS, and Windows from one Flutter codebase.
+- Provide a real server package that can be analyzed, tested, and run independently.
 - Keep the player, library, queue, and UI open-source and source-agnostic.
 - Allow legal source adapters without coupling the app to any single service.
 - Avoid telemetry and forced accounts.
@@ -26,7 +27,10 @@ Data/provider layer
   Local file import, DemoSourceProvider, future legal provider adapters
 
 Platform layer
-  Flutter Android/iOS wrappers, file picker, audio backend
+  Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker, audio backend
+
+Server layer
+  Dart Shelf handler, health endpoint, app info endpoint, catalog endpoint
 ```
 
 ## Domain model
@@ -72,6 +76,16 @@ Adapters should not leak service-specific logic into the player or UI. They shou
 ## Persistence
 
 `LibraryStore` currently uses `shared_preferences` for a simple JSON track store. When the app grows, migrate to a structured local database such as SQLite, Drift, Isar, or ObjectBox.
+
+## Server
+
+`services/server` is a Dart package with a Shelf-compatible request handler. It currently exposes:
+
+- `GET /health`
+- `GET /api/v1/info`
+- `GET /api/v1/tracks`
+
+The server is intentionally small, but it is real code with tests and CI coverage. Future server work should add authenticated sync, remote library metadata, and provider coordination without weakening the client-first privacy model.
 
 ## Future modules
 

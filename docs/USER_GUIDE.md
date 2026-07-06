@@ -3,9 +3,26 @@
 ## Install for development
 
 ```bash
-./scripts/bootstrap_mobile.sh
+./scripts/bootstrap_client.sh
 cd apps/mobile
 flutter run
+```
+
+For desktop development, run the same Flutter package on a desktop target:
+
+```bash
+cd apps/mobile
+flutter run -d linux
+flutter run -d macos
+flutter run -d windows
+```
+
+For server development:
+
+```bash
+cd services/server
+dart pub get
+dart run bin/server.dart
 ```
 
 ## Import local music
