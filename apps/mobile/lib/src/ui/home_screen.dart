@@ -719,107 +719,10 @@ class _PlaylistsTab extends StatelessWidget {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) {
-        return Consumer<LibraryStore>(
-          builder: (context, library, _) {
-            final playlist = library.playlistById(playlistId);
-            final tracks = library.tracksForPlaylist(playlistId);
-
-            if (playlist == null) {
-              return const SizedBox.shrink();
-            }
-
-            return SafeArea(
-              child: ListView(
-                shrinkWrap: true,
-                children: <Widget>[
-                  ListTile(
-                    leading: const Icon(Icons.queue_music),
-                    title: Text(playlist.name),
-                    subtitle: Text('${playlist.trackCount} track(s)'),
-                    trailing: FilledButton.tonalIcon(
-                      onPressed: tracks.isEmpty
-                          ? null
-                          : () {
-                              Navigator.of(sheetContext).pop();
-                              player.playTrack(tracks.first, queue: tracks);
-                            },
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Play'),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  if (tracks.isEmpty)
-                    const ListTile(
-                      leading: Icon(Icons.playlist_remove),
-                      title: Text('No tracks yet'),
-                      subtitle: Text('Add tracks from the Library tab.'),
-                    )
-                  else
-                    for (final entry in tracks.asMap().entries)
-                      ListTile(
-                        leading: const Icon(Icons.music_note_outlined),
-                        title: Text(entry.value.title),
-                        subtitle: Text(
-                          '${entry.value.artist} · ${entry.value.album}',
-                        ),
-                        trailing: PopupMenuButton<_PlaylistTrackAction>(
-                          onSelected: (action) {
-                            switch (action) {
-                              case _PlaylistTrackAction.moveUp:
-                                library.moveTrackInPlaylist(
-                                  playlist.id,
-                                  entry.key,
-                                  entry.key - 1,
-                                );
-                                break;
-                              case _PlaylistTrackAction.moveDown:
-                                library.moveTrackInPlaylist(
-                                  playlist.id,
-                                  entry.key,
-                                  entry.key + 1,
-                                );
-                                break;
-                              case _PlaylistTrackAction.remove:
-                                library.removeTrackFromPlaylist(
-                                  playlist.id,
-                                  entry.value.id,
-                                );
-                                break;
-                            }
-                          },
-                          itemBuilder: (context) =>
-                              <PopupMenuEntry<_PlaylistTrackAction>>[
-                            PopupMenuItem(
-                              value: _PlaylistTrackAction.moveUp,
-                              enabled: entry.key > 0,
-                              child: const ListTile(
-                                leading: Icon(Icons.arrow_upward),
-                                title: Text('Move up'),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: _PlaylistTrackAction.moveDown,
-                              enabled: entry.key < tracks.length - 1,
-                              child: const ListTile(
-                                leading: Icon(Icons.arrow_downward),
-                                title: Text('Move down'),
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: _PlaylistTrackAction.remove,
-                              child: ListTile(
-                                leading: Icon(Icons.playlist_remove),
-                                title: Text('Remove from playlist'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                ],
-              ),
-            );
-          },
+      builder: (_) {
+        return _PlaylistSheet(
+          playlistId: playlistId,
+          player: player,
         );
       },
     );
@@ -873,6 +776,180 @@ class _PlaylistsTab extends StatelessWidget {
     } finally {
       controller.dispose();
     }
+  }
+}
+
+class _PlaylistSheet extends StatefulWidget {
+  const _PlaylistSheet({
+    required this.playlistId,
+    required this.player,
+  });
+
+  final String playlistId;
+  final PlayerController player;
+
+  @override
+  State<_PlaylistSheet> createState() => _PlaylistSheetState();
+}
+
+class _PlaylistSheetState extends State<_PlaylistSheet> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<LibraryStore>(
+      builder: (context, library, _) {
+        final playlist = library.playlistById(widget.playlistId);
+        if (playlist == null) {
+          return const SizedBox.shrink();
+        }
+
+        final allTracks = library.tracksForPlaylist(widget.playlistId);
+        final tracks = library.tracksForPlaylist(
+          widget.playlistId,
+          query: _query,
+        );
+        final trackEntries = tracks
+            .map(
+              (track) => MapEntry<int, Track>(
+                allTracks.indexWhere((candidate) => candidate.id == track.id),
+                track,
+              ),
+            )
+            .where((entry) => entry.key != -1)
+            .toList(growable: false);
+        final hasQuery = _query.trim().isNotEmpty;
+
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: Text(playlist.name),
+                subtitle: Text(
+                  hasQuery
+                      ? '${tracks.length} of ${playlist.trackCount} track(s)'
+                      : '${playlist.trackCount} track(s)',
+                ),
+                trailing: FilledButton.tonalIcon(
+                  onPressed: tracks.isEmpty
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                          widget.player.playTrack(tracks.first, queue: tracks);
+                        },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Play'),
+                ),
+              ),
+              if (allTracks.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: SearchBar(
+                    controller: _searchController,
+                    hintText: 'Find in playlist',
+                    leading: const Icon(Icons.search),
+                    trailing: <Widget>[
+                      if (hasQuery)
+                        IconButton(
+                          tooltip: 'Clear playlist search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.clear),
+                        ),
+                    ],
+                    onChanged: (value) => setState(() => _query = value),
+                  ),
+                ),
+              const Divider(height: 1),
+              if (allTracks.isEmpty)
+                const ListTile(
+                  leading: Icon(Icons.playlist_remove),
+                  title: Text('No tracks yet'),
+                  subtitle: Text('Add tracks from the Library tab.'),
+                )
+              else if (trackEntries.isEmpty)
+                const ListTile(
+                  leading: Icon(Icons.search_off),
+                  title: Text('No matching tracks'),
+                  subtitle: Text('Try another title, artist, or album.'),
+                )
+              else
+                for (final entry in trackEntries)
+                  ListTile(
+                    leading: const Icon(Icons.music_note_outlined),
+                    title: Text(entry.value.title),
+                    subtitle: Text(
+                      '${entry.value.artist} · ${entry.value.album}',
+                    ),
+                    trailing: PopupMenuButton<_PlaylistTrackAction>(
+                      onSelected: (action) {
+                        switch (action) {
+                          case _PlaylistTrackAction.moveUp:
+                            library.moveTrackInPlaylist(
+                              playlist.id,
+                              entry.key,
+                              entry.key - 1,
+                            );
+                            break;
+                          case _PlaylistTrackAction.moveDown:
+                            library.moveTrackInPlaylist(
+                              playlist.id,
+                              entry.key,
+                              entry.key + 1,
+                            );
+                            break;
+                          case _PlaylistTrackAction.remove:
+                            library.removeTrackFromPlaylist(
+                              playlist.id,
+                              entry.value.id,
+                            );
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) =>
+                          <PopupMenuEntry<_PlaylistTrackAction>>[
+                        PopupMenuItem(
+                          value: _PlaylistTrackAction.moveUp,
+                          enabled: entry.key > 0,
+                          child: const ListTile(
+                            leading: Icon(Icons.arrow_upward),
+                            title: Text('Move up'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _PlaylistTrackAction.moveDown,
+                          enabled: entry.key < allTracks.length - 1,
+                          child: const ListTile(
+                            leading: Icon(Icons.arrow_downward),
+                            title: Text('Move down'),
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: _PlaylistTrackAction.remove,
+                          child: ListTile(
+                            leading: Icon(Icons.playlist_remove),
+                            title: Text('Remove from playlist'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

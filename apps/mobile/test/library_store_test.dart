@@ -93,6 +93,63 @@ void main() {
     );
   });
 
+  test('filters playlist tracks without changing playlist order', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 2, 20),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'Road One',
+        artist: 'Ari',
+        album: 'Home',
+      ),
+      _track(
+        '2',
+        title: 'Night Ride',
+        artist: 'Road Crew',
+        album: 'City',
+      ),
+      _track(
+        '3',
+        title: 'Archive Theme',
+        artist: 'Orion',
+        album: 'Road Album',
+      ),
+      _track(
+        '4',
+        title: 'Other Track',
+        artist: 'Mia',
+        album: 'Elsewhere',
+      ),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Searchable',
+      trackIds: <String>['3', '1', '2', '4'],
+    );
+
+    expect(
+      store.tracksForPlaylist(playlist.id, query: '  road  ').map(
+            (track) => track.id,
+          ),
+      <String>['3', '1', '2'],
+    );
+    expect(
+      store.tracksForPlaylist(playlist.id, query: 'night').map(
+            (track) => track.id,
+          ),
+      <String>['2'],
+    );
+    expect(
+      store.tracksForPlaylist(playlist.id, query: 'orion').map(
+            (track) => track.id,
+          ),
+      <String>['3'],
+    );
+    expect(store.tracksForPlaylist(playlist.id, query: 'missing'), isEmpty);
+  });
+
   test('removing a library track removes it from playlists', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 3),

@@ -172,16 +172,14 @@ class LibraryStore extends ChangeNotifier {
     bool favoritesOnly = false,
     LibrarySortMode sortMode = LibrarySortMode.recentlyAdded,
   }) {
-    final normalized = query.trim().toLowerCase();
+    final normalized = _normalizeQuery(query);
     final source = favoritesOnly ? favorites : tracks;
 
     final results = normalized.isEmpty
         ? source.toList(growable: false)
-        : source.where((track) {
-            return track.title.toLowerCase().contains(normalized) ||
-                track.artist.toLowerCase().contains(normalized) ||
-                track.album.toLowerCase().contains(normalized);
-          }).toList(growable: false);
+        : source
+            .where((track) => _trackMatchesQuery(track, normalized))
+            .toList(growable: false);
 
     return _sortTrackResults(results, sortMode);
   }
@@ -289,7 +287,7 @@ class LibraryStore extends ChangeNotifier {
     return _playlists[index];
   }
 
-  List<Track> tracksForPlaylist(String playlistId) {
+  List<Track> tracksForPlaylist(String playlistId, {String query = ''}) {
     final playlist = playlistById(playlistId);
     if (playlist == null) {
       return <Track>[];
@@ -299,9 +297,17 @@ class LibraryStore extends ChangeNotifier {
       for (final track in _tracks) track.id: track,
     };
 
-    return playlist.trackIds
+    final tracks = playlist.trackIds
         .map((trackId) => byId[trackId])
         .whereType<Track>()
+        .toList(growable: false);
+    final normalized = _normalizeQuery(query);
+    if (normalized.isEmpty) {
+      return tracks;
+    }
+
+    return tracks
+        .where((track) => _trackMatchesQuery(track, normalized))
         .toList(growable: false);
   }
 
@@ -580,6 +586,14 @@ class LibraryStore extends ChangeNotifier {
 
   int _compareText(String a, String b) {
     return a.toLowerCase().compareTo(b.toLowerCase());
+  }
+
+  String _normalizeQuery(String query) => query.trim().toLowerCase();
+
+  bool _trackMatchesQuery(Track track, String normalizedQuery) {
+    return track.title.toLowerCase().contains(normalizedQuery) ||
+        track.artist.toLowerCase().contains(normalizedQuery) ||
+        track.album.toLowerCase().contains(normalizedQuery);
   }
 
   void _sortPlaylists() {

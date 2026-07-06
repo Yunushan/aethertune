@@ -24,6 +24,7 @@
 
 - [x] Manual playlists
 - [x] Playlist reorder
+- [x] Find in playlist
 - [ ] Playlist artwork
 - [x] Backup/restore JSON
 - [ ] Folder browser

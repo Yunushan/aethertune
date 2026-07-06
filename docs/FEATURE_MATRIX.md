@@ -51,7 +51,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played as queue and saved as a playlist. | Persistent queue and queue reorder. |
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
-| Manual playlists | Done | Persisted user playlists with add/remove/reorder/play UI. | Artwork, import/export, sync. |
+| Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/play UI. | Artwork, import/export, sync. |
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute timer. | End-of-track mode, fade-out, custom duration. |
@@ -122,7 +122,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Smart playlists | Roadmap | Namida, desktop players | Rule engine and dynamic queries. |
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |
 | Playlist import/export | Roadmap | Spotube, YouTube Music migration needs | M3U/JSON/CSV import-export. |
-| Find in playlist | Roadmap | YouTube Music | In-playlist search UI. |
+| Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, or album while preserving playlist order. |
 | Save queue as playlist | Done | Common player feature | Queue persistence and richer queue editing. |
 | Radio queue generation | Roadmap | YouTube Music, RiMusic | Seed-based queue builder. |
 
