@@ -43,6 +43,10 @@ Use `ProviderPrivacyDisclosure` to list:
 
 `PodcastRssProvider` is the first open provider foundation. It parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, and resolves enclosure URLs for playback. Feed subscription management, episode progress, offline cache, and user-facing feed import are still separate roadmap work.
 
+## Radio Browser foundation
+
+`RadioBrowserProvider` searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the selected API mirror in `ProviderPrivacyDisclosure`, and resolves public stream URLs for playback. Mirror discovery, station click accounting, richer browse filters, stream validation, and cache policy are still separate roadmap work.
+
 ## Minimal provider
 
 ```dart

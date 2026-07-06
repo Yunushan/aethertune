@@ -67,7 +67,8 @@
 - [x] Provider capability and privacy disclosure contract
 - [x] Podcast RSS parser/provider foundation
 - [ ] Podcast RSS feed subscriptions and episode UI
-- [ ] Radio provider
+- [x] Radio Browser parser/provider foundation
+- [ ] Radio Browser browse UI, mirror discovery, and click accounting
 - [ ] Internet Archive provider
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider

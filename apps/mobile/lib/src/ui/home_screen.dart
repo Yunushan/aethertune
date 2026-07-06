@@ -2488,6 +2488,18 @@ class _SourcesTabState extends State<_SourcesTab> {
           },
         ),
         const _ProviderCard(
+          title: 'Radio Browser',
+          status: 'Adapter foundation',
+          description: 'Search an open radio directory and resolve public station streams.',
+          icon: Icons.radio_outlined,
+          capabilities: <MusicSourceCapability>{
+            MusicSourceCapability.metadataSearch,
+            MusicSourceCapability.radioDirectory,
+            MusicSourceCapability.streamResolution,
+            MusicSourceCapability.directPlayback,
+          },
+        ),
+        const _ProviderCard(
           title: 'Jellyfin / Navidrome / Subsonic',
           status: 'Adapter roadmap',
           description: 'User-owned/self-hosted music server support belongs here.',

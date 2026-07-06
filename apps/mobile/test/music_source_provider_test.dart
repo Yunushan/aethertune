@@ -35,6 +35,7 @@ void main() {
 
   test('capabilities have user-facing labels', () {
     expect(MusicSourceCapability.metadataSearch.label, 'Search');
+    expect(MusicSourceCapability.radioDirectory.label, 'Radio directory');
     expect(MusicSourceCapability.offlineCache.label, 'Offline cache');
     expect(MusicSourceCapability.authentication.label, 'Authentication');
   });

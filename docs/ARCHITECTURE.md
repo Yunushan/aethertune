@@ -24,7 +24,8 @@ Domain layer
   Track, MusicSourceProvider
 
 Data/provider layer
-  Local file import, DemoSourceProvider, PodcastRssProvider, future legal provider adapters
+  Local file import, DemoSourceProvider, PodcastRssProvider,
+  RadioBrowserProvider, future legal provider adapters
 
 Platform layer
   Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker, audio backend
@@ -97,7 +98,7 @@ Recommended packages/modules:
 packages/core/             Provider-neutral models and contracts
 packages/provider_local/   Local library scanner/importer
 packages/provider_rss/     Podcast adapter extraction from current mobile foundation
-packages/provider_radio/   Radio adapter
+packages/provider_radio/   Radio Browser adapter extraction from current mobile foundation
 packages/provider_jellyfin/Jellyfin adapter
 packages/provider_archive/ Internet Archive adapter
 packages/cache/            Offline cache/download manager

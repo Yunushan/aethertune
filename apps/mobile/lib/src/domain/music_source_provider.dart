@@ -3,6 +3,7 @@ import 'track.dart';
 /// Feature flags that a provider can expose to the app.
 enum MusicSourceCapability {
   metadataSearch,
+  radioDirectory,
   streamResolution,
   directPlayback,
   libraryBrowse,
@@ -21,6 +22,8 @@ extension MusicSourceCapabilityLabel on MusicSourceCapability {
     switch (this) {
       case MusicSourceCapability.metadataSearch:
         return 'Search';
+      case MusicSourceCapability.radioDirectory:
+        return 'Radio directory';
       case MusicSourceCapability.streamResolution:
         return 'Stream resolver';
       case MusicSourceCapability.directPlayback:

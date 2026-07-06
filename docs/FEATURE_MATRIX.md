@@ -61,6 +61,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Provider plugin contract | Done | `MusicSourceProvider` requires capability flags and privacy/network disclosure. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
 | Podcast RSS adapter foundation | Scaffolded | `PodcastRssProvider` parses RSS audio enclosures into playable `Track` objects with tests. | Feed subscription UI, episode progress, cache, and import flow. |
+| Radio Browser adapter foundation | Scaffolded | `RadioBrowserProvider` maps station search JSON into playable `Track` objects with tests. | Mirror discovery, station click accounting, browse UI, and cache policy. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
 ## Full Parity Feature Surface
@@ -160,7 +161,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |
 | Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider and playable episode model are implemented; feed subscription UI, playback position, cache, and import flow remain. |
-| Radio Browser / internet radio | Roadmap | Radio apps | Directory adapter, stream validation. |
+| Radio Browser / internet radio | Scaffolded | Radio apps | Station search parser/provider and playable station model are implemented; mirror discovery, click accounting, browse UI, stream validation, and cache policy remain. |
 | Internet Archive | Roadmap | ArchiveTune | Metadata search, file resolver, collection browse. |
 | Spotify metadata | Blocked / official-only | Spotube | Official API metadata only; playback must be legal/user-authorized. |
 | YouTube / YouTube Music | Blocked / official-only | YouTube Music, InnerTune, NewPipe family | Official API, embeds, or user-provided legal URLs only; no private API scraping. |
@@ -316,7 +317,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 2. Build full local library: folders, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
 3. Add `audio_service` and platform media sessions for background playback, notifications, lock screen, media keys, and Android Auto/CarPlay where allowed.
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
-5. Implement legal providers: local folder scanner, feed-managed Podcast RSS, Jellyfin, Navidrome/Subsonic, Radio Browser, Internet Archive.
+5. Implement legal providers: local folder scanner, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin, Navidrome/Subsonic, Internet Archive.
 6. Add official-only adapters where terms allow: Spotify metadata, YouTube/YouTube Music, SoundCloud, Bandcamp, or others.
 7. Build offline cache/download manager with per-provider legal capability checks.
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.

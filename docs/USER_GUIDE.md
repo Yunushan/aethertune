@@ -82,5 +82,6 @@ The Sources tab explains the provider model and shows capability/privacy disclos
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
 - Podcast RSS: adapter foundation for legal audio RSS feeds.
+- Radio Browser: adapter foundation for public internet radio station search.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.
