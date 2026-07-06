@@ -10,6 +10,7 @@
 - [x] Local playback
 - [x] Listening history
 - [x] Queue
+- [x] Queue reorder/remove
 - [x] Save queue as playlist
 - [x] Favorites
 - [x] Manual playlists

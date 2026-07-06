@@ -85,7 +85,7 @@ This scaffold includes real app code, not only a README:
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, and playback history with `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup from the Options tab |
 | Search | Local library filtering by title, artist, and album with sortable results |
-| Queue | Play current list as a queue with next/previous controls and save it as a playlist |
+| Queue | Play current list as a queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
 | History | Recently played tab with local playback history, play counts, and clear action |
 | Playlists | Create, rename, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text lyrics per library track |

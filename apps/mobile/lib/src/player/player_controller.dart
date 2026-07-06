@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
+import '../domain/track_queue.dart';
 
 class PlayerController extends ChangeNotifier {
   PlayerController() {
@@ -116,6 +117,34 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
+  void moveTrackInQueue(int fromIndex, int toIndex) {
+    final reordered = moveQueueItem(_queue, fromIndex, toIndex);
+    if (_sameQueueOrder(_queue, reordered)) {
+      return;
+    }
+
+    _queue
+      ..clear()
+      ..addAll(reordered);
+    notifyListeners();
+  }
+
+  void removeTrackFromQueue(String trackId) {
+    if (_current?.id == trackId) {
+      return;
+    }
+
+    final remaining = removeTrackFromQueueItems(_queue, trackId);
+    if (_sameQueueOrder(_queue, remaining)) {
+      return;
+    }
+
+    _queue
+      ..clear()
+      ..addAll(remaining);
+    notifyListeners();
+  }
+
   Future<void> setShuffleEnabled(bool enabled) async {
     await _audio.setShuffleModeEnabled(enabled);
     notifyListeners();
@@ -154,6 +183,20 @@ class PlayerController extends ChangeNotifier {
     }
 
     throw StateError('Track has no local path or stream URL: ${track.title}');
+  }
+
+  bool _sameQueueOrder(List<Track> left, List<Track> right) {
+    if (left.length != right.length) {
+      return false;
+    }
+
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index].id != right[index].id) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   @override

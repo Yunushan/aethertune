@@ -49,7 +49,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
-| Queue | Done | Current list can be played as queue and saved as a playlist. | Persistent queue and queue reorder. |
+| Queue | Done | Current list can be played, reordered, trimmed, and saved as a playlist. | Persistent queue. |
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI. | Artwork and sync. |
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
@@ -117,7 +117,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Current queue playback | Done | All music apps | Persistence and reorder. |
+| Current queue playback | Done | All music apps | Persistence. |
 | Manual playlists | Done | All music apps | Artwork and sync. |
 | Smart playlists | Roadmap | Namida, desktop players | Rule engine and dynamic queries. |
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |

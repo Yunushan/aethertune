@@ -124,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             PlayerBar(
+              onOpenQueue: () => _showQueue(context),
               onSaveQueue: () => _saveQueueAsPlaylist(context),
             ),
           ],
@@ -360,6 +361,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _showQueue(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => const _QueueSheet(),
+    );
+  }
+
   Future<String?> _promptForPlaylistName(
     BuildContext context, {
     String title = 'New playlist',
@@ -580,6 +589,119 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 }
+
+class _QueueSheet extends StatelessWidget {
+  const _QueueSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.watch<PlayerController>();
+    final queue = player.queue;
+    final current = player.current;
+
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: <Widget>[
+          ListTile(
+            leading: const Icon(Icons.queue_music),
+            title: const Text('Queue'),
+            subtitle: Text('${queue.length} track(s)'),
+          ),
+          const Divider(height: 1),
+          if (queue.isEmpty)
+            const ListTile(
+              leading: Icon(Icons.queue_music_outlined),
+              title: Text('Queue is empty'),
+              subtitle: Text('Play tracks from Library, Playlists, or History.'),
+            )
+          else
+            for (final entry in queue.asMap().entries)
+              _QueueTrackTile(
+                index: entry.key,
+                track: entry.value,
+                queueLength: queue.length,
+                isCurrent: current?.id == entry.value.id,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QueueTrackTile extends StatelessWidget {
+  const _QueueTrackTile({
+    required this.index,
+    required this.track,
+    required this.queueLength,
+    required this.isCurrent,
+  });
+
+  final int index;
+  final Track track;
+  final int queueLength;
+  final bool isCurrent;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.read<PlayerController>();
+
+    return ListTile(
+      leading: Icon(
+        isCurrent ? Icons.graphic_eq : Icons.music_note_outlined,
+      ),
+      title: Text(track.title),
+      subtitle: Text(
+        isCurrent
+            ? '${track.artist} · Now playing'
+            : '${track.artist} · ${track.album}',
+      ),
+      trailing: PopupMenuButton<_QueueTrackAction>(
+        onSelected: (action) {
+          switch (action) {
+            case _QueueTrackAction.moveUp:
+              player.moveTrackInQueue(index, index - 1);
+              break;
+            case _QueueTrackAction.moveDown:
+              player.moveTrackInQueue(index, index + 1);
+              break;
+            case _QueueTrackAction.remove:
+              player.removeTrackFromQueue(track.id);
+              break;
+          }
+        },
+        itemBuilder: (context) => <PopupMenuEntry<_QueueTrackAction>>[
+          PopupMenuItem(
+            value: _QueueTrackAction.moveUp,
+            enabled: index > 0,
+            child: const ListTile(
+              leading: Icon(Icons.arrow_upward),
+              title: Text('Move up'),
+            ),
+          ),
+          PopupMenuItem(
+            value: _QueueTrackAction.moveDown,
+            enabled: index < queueLength - 1,
+            child: const ListTile(
+              leading: Icon(Icons.arrow_downward),
+              title: Text('Move down'),
+            ),
+          ),
+          PopupMenuItem(
+            value: _QueueTrackAction.remove,
+            enabled: !isCurrent,
+            child: const ListTile(
+              leading: Icon(Icons.playlist_remove),
+              title: Text('Remove from queue'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _QueueTrackAction { moveUp, moveDown, remove }
 
 class _LibraryTab extends StatelessWidget {
   const _LibraryTab({
