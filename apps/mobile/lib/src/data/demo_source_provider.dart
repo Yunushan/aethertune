@@ -18,6 +18,14 @@ class DemoSourceProvider implements MusicSourceProvider {
       'Provider template with metadata-only sample tracks. Add legal adapters in this shape.';
 
   @override
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+      };
+
+  @override
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
+
+  @override
   Future<List<Track>> search(String query) async {
     final all = <Track>[
       Track(

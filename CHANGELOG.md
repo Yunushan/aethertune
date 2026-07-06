@@ -10,6 +10,7 @@ Initial GitHub-ready scaffold.
 - Added local/URL playback controller.
 - Added queue, favorites, search, sleep timer, shuffle, repeat.
 - Added provider plugin contract.
+- Added provider capability flags and privacy/network disclosure metadata.
 - Added README, docs, CI, issue templates, contribution docs.
 - Added Flutter desktop wrapper generation and desktop CI build gates.
 - Added Dart server package with health, info, catalog endpoints, and tests.

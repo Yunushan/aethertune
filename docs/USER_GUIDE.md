@@ -77,9 +77,9 @@ The Options tab contains playback settings such as shuffle and repeat mode. Aeth
 
 ## Provider plugins
 
-The Sources tab explains the provider model. The current app includes:
+The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. The current app includes:
 
 - Local Files: working.
-- Demo Provider: template.
+- Demo Provider: template with declared search capability and no network access.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.

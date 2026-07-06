@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
 import '../data/library_store.dart';
+import '../domain/music_source_provider.dart';
 import '../domain/playlist.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
@@ -2460,12 +2461,19 @@ class _SourcesTabState extends State<_SourcesTab> {
           status: 'Enabled',
           description: 'Import and play files selected through the native picker.',
           icon: Icons.folder_open,
+          capabilities: <MusicSourceCapability>{
+            MusicSourceCapability.directPlayback,
+            MusicSourceCapability.libraryBrowse,
+          },
+          disclosure: ProviderPrivacyDisclosure(readsLocalFiles: true),
         ),
         _ProviderCard(
           title: _provider.name,
           status: 'Template',
           description: _provider.description,
           icon: Icons.code,
+          capabilities: _provider.capabilities,
+          disclosure: _provider.disclosure,
         ),
         const _ProviderCard(
           title: 'Jellyfin / Navidrome / Subsonic',
@@ -2504,12 +2512,16 @@ class _ProviderCard extends StatelessWidget {
     required this.status,
     required this.description,
     required this.icon,
+    this.capabilities = const <MusicSourceCapability>{},
+    this.disclosure,
   });
 
   final String title;
   final String status;
   final String description;
   final IconData icon;
+  final Set<MusicSourceCapability> capabilities;
+  final ProviderPrivacyDisclosure? disclosure;
 
   @override
   Widget build(BuildContext context) {
@@ -2517,11 +2529,59 @@ class _ProviderCard extends StatelessWidget {
       child: ListTile(
         leading: Icon(icon),
         title: Text(title),
-        subtitle: Text(description),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(description),
+            if (capabilities.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: <Widget>[
+                  for (final capability in capabilities)
+                    Chip(
+                      label: Text(capability.label),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ],
+            if (disclosure != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                _providerDisclosureSummary(disclosure!),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
         trailing: Chip(label: Text(status)),
       ),
     );
   }
+}
+
+String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
+  final parts = <String>[disclosure.networkSummary];
+  if (disclosure.requiresUserCredentials) {
+    parts.add('Credentials required');
+  }
+  if (disclosure.readsLocalFiles) {
+    parts.add('Reads selected local files');
+  }
+  if (disclosure.cachesMedia) {
+    parts.add('Caches media');
+  }
+  if (disclosure.supportsDownloads) {
+    parts.add('Downloads allowed');
+  }
+  if (disclosure.dataSent.isNotEmpty) {
+    parts.add('Sends ${disclosure.dataSent.join(', ')}');
+  }
+
+  return parts.join(' · ');
 }
 
 class _SettingsTab extends StatelessWidget {

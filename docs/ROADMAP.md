@@ -64,6 +64,7 @@
 
 ## 0.5.x: Open providers
 
+- [x] Provider capability and privacy disclosure contract
 - [ ] Podcast RSS provider
 - [ ] Radio provider
 - [ ] Internet Archive provider

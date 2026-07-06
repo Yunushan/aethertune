@@ -51,12 +51,14 @@ abstract interface class MusicSourceProvider {
   String get id;
   String get name;
   String get description;
+  Set<MusicSourceCapability> get capabilities;
+  ProviderPrivacyDisclosure get disclosure;
   Future<List<Track>> search(String query);
   Future<Uri?> resolveStream(Track track);
 }
 ```
 
-Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects.
+Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy.
 
 ## Playback
 

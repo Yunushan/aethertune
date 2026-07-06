@@ -92,7 +92,7 @@ This scaffold includes real app code, not only a README:
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
-| Provider architecture | `MusicSourceProvider` interface for legal source adapters |
+| Provider architecture | `MusicSourceProvider` interface with capability flags and privacy/network disclosure for legal source adapters |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
@@ -106,7 +106,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Local files | Library import, playback, search, favorites, recently added sorting, imported-folder browsing, folders scanner roadmap, and metadata editing roadmap |
 | History/stats | Recently played and local play counts implemented; deeper recaps roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
-| Streaming providers | Pluggable provider interface for legal source adapters |
+| Streaming providers | Pluggable provider interface with declared capabilities, permissions, and network disclosure for legal source adapters |
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |

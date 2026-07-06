@@ -58,7 +58,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, and end-of-current-track mode. | Fade-out. |
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
-| Provider plugin contract | Done | `MusicSourceProvider`. | Stable provider SDK, packaging, sandbox rules. |
+| Provider plugin contract | Done | `MusicSourceProvider` requires capability flags and privacy/network disclosure. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
@@ -146,7 +146,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Stream cache | Roadmap | InnerTune, RiMusic, YouTube Music | Cache manager and source permissions. |
 | Download queue | Roadmap | YouTube Music, NewPipe | Legal download support only. |
 | Cache size limits | Roadmap | All offline clients | Storage settings and eviction policy. |
-| Per-provider offline policy | Roadmap | Spotube, Grayjay | Provider capability flags and legal checks. |
+| Per-provider offline policy | Scaffolded | Spotube, Grayjay | Provider capability flags and privacy disclosure are implemented; cache/download enforcement still needs implementation. |
 | Offline mode toggle | Roadmap | YouTube Music | Network gate and offline-only UI. |
 | Partial/resumable downloads | Roadmap | NewPipe-style clients | Downloader with resume and checksum support. |
 
@@ -165,7 +165,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | YouTube / YouTube Music | Blocked / official-only | YouTube Music, InnerTune, NewPipe family | Official API, embeds, or user-provided legal URLs only; no private API scraping. |
 | SoundCloud or similar services | Blocked / official-only | Multi-source clients | Official API or documented public feeds only. |
 | Bandcamp / artist stores | Blocked / official-only | Open music discovery | Official/public pages only where terms allow. |
-| User-added custom provider plugins | Roadmap | Echo Music, Bloomee Tunes, Grayjay | Plugin SDK, permissions, signing, sandbox. |
+| User-added custom provider plugins | Roadmap | Echo Music, Bloomee Tunes, Grayjay | Plugin SDK, packaging, signing, sandbox, and provider contract test suite. |
 
 ### Video And Media Browsing
 
@@ -254,8 +254,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | No credential stealing | Not included | Will not be implemented. |
 | No paid-service cloning | Not included | Will not be implemented. |
 | No private API scraping | Not included | Use official/documented APIs, open feeds, or user-owned servers. |
-| Provider permission model | Roadmap | Plugins need declared capabilities and visible network behavior. |
-| Network request disclosure | Roadmap | Provider docs must list contacted domains and data sent. |
+| Provider permission model | Done | Providers declare capabilities and privacy-sensitive behaviors through `MusicSourceProvider`; Sources tab displays the disclosure. |
+| Network request disclosure | Done | `ProviderPrivacyDisclosure` lists contacted domains and data sent for each adapter. |
 | Secure token storage | Roadmap | Required before account/provider auth. |
 | Content policy/moderation | Roadmap | Required before public profiles, comments, or social surfaces. |
 
