@@ -49,6 +49,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played as queue. | Persistent queue, reorder, save as playlist. |
 | Manual playlists | Done | Persisted user playlists with add/remove/play UI. | Reorder, artwork, import/export, sync. |
+| Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute timer. | End-of-track mode, fade-out, custom duration. |
 | Shuffle | Done | `just_audio` shuffle flag. | Persisted shuffle and queue-aware shuffle. |
@@ -126,12 +127,12 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Plain lyrics | Roadmap | YouTube Music, InnerTune, Namida | Lyrics repository and display UI. |
+| Plain lyrics | Done | YouTube Music, InnerTune, Namida | Provider-backed lyrics, richer display, sharing. |
 | Synced LRC lyrics | Roadmap | InnerTune, RiMusic, Namida | LRC parser and synchronized player view. |
 | Lyrics search | Roadmap | YouTube Music | Official/open lyrics provider. |
 | Offline lyrics cache | Roadmap | InnerTune, Namida | Cache store and invalidation. |
 | Lyrics sharing cards | Roadmap | YouTube Music | Rendered share image and permissions. |
-| Manual lyrics import/edit | Roadmap | Local library players | Editor, validation, file association. |
+| Manual lyrics import/edit | Scaffolded | Local library players | Manual editor is implemented; file import/association still needed. |
 
 ### Offline, Cache, And Downloads
 

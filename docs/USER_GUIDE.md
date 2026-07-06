@@ -52,6 +52,10 @@ When you play a track from the library, the current filtered list becomes the qu
 
 Use the Playlists tab to create, rename, delete, open, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**.
 
+## Lyrics
+
+Open a track menu in the Library tab and choose **Lyrics**. You can save plain text lyrics for that track, edit them later, or delete them from the same dialog.
+
 ## Sleep timer
 
 Tap the moon icon in the top-right corner and choose a duration. Playback stops automatically when the timer ends.

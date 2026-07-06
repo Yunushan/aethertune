@@ -5,21 +5,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/playlist.dart';
 import '../domain/track.dart';
+import '../domain/track_lyrics.dart';
 
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
+  static const _lyricsKey = 'aethertune.lyrics.v1';
 
   final List<Track> _tracks = <Track>[];
   final List<Playlist> _playlists = <Playlist>[];
+  final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final DateTime Function() _clock;
   bool _loaded = false;
 
   bool get loaded => _loaded;
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
+  List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
 
@@ -57,7 +61,29 @@ class LibraryStore extends ChangeNotifier {
         );
     }
 
+    final rawLyrics = prefs.getString(_lyricsKey);
+    if (rawLyrics != null && rawLyrics.isNotEmpty) {
+      final decoded = jsonDecode(rawLyrics) as List<dynamic>;
+      _lyricsByTrackId
+        ..clear()
+        ..addEntries(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => TrackLyrics.fromJson(
+                  Map<String, Object?>.from(item),
+                ),
+              )
+              .where((lyrics) => !lyrics.isEmpty)
+              .map((lyrics) => MapEntry<String, TrackLyrics>(
+                    lyrics.trackId,
+                    lyrics,
+                  )),
+        );
+    }
+
     _removeMissingPlaylistTracks();
+    _removeMissingLyrics();
     _loaded = true;
     notifyListeners();
   }
@@ -84,6 +110,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> removeTrack(String id) async {
     _tracks.removeWhere((track) => track.id == id);
     _removeTrackFromPlaylists(id);
+    _lyricsByTrackId.remove(id);
     await _save();
     notifyListeners();
   }
@@ -91,6 +118,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> clear() async {
     _tracks.clear();
     _playlists.clear();
+    _lyricsByTrackId.clear();
     await _save();
     notifyListeners();
   }
@@ -145,6 +173,38 @@ class LibraryStore extends ChangeNotifier {
         .map((trackId) => byId[trackId])
         .whereType<Track>()
         .toList(growable: false);
+  }
+
+  TrackLyrics? lyricsForTrack(String trackId) => _lyricsByTrackId[trackId];
+
+  Future<void> setLyrics(String trackId, String plainText) async {
+    if (!_tracks.any((track) => track.id == trackId)) {
+      return;
+    }
+
+    final normalized = plainText.trim();
+    if (normalized.isEmpty) {
+      await deleteLyrics(trackId);
+      return;
+    }
+
+    _lyricsByTrackId[trackId] = TrackLyrics(
+      trackId: trackId,
+      plainText: normalized,
+      updatedAt: _clock(),
+    );
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> deleteLyrics(String trackId) async {
+    if (!_lyricsByTrackId.containsKey(trackId)) {
+      return;
+    }
+
+    _lyricsByTrackId.remove(trackId);
+    await _save();
+    notifyListeners();
   }
 
   Future<Playlist> createPlaylist(
@@ -272,6 +332,13 @@ class LibraryStore extends ChangeNotifier {
     }
   }
 
+  void _removeMissingLyrics() {
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+    _lyricsByTrackId.removeWhere(
+      (trackId, _) => !knownTrackIds.contains(trackId),
+    );
+  }
+
   void _removeTrackFromPlaylists(String trackId) {
     for (var index = 0; index < _playlists.length; index += 1) {
       final playlist = _playlists[index];
@@ -299,7 +366,11 @@ class LibraryStore extends ChangeNotifier {
     final encodedPlaylists = jsonEncode(
       _playlists.map((playlist) => playlist.toJson()).toList(),
     );
+    final encodedLyrics = jsonEncode(
+      _lyricsByTrackId.values.map((lyrics) => lyrics.toJson()).toList(),
+    );
     await prefs.setString(_tracksKey, encodedTracks);
     await prefs.setString(_playlistsKey, encodedPlaylists);
+    await prefs.setString(_lyricsKey, encodedLyrics);
   }
 }

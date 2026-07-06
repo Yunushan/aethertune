@@ -82,10 +82,11 @@ This scaffold includes real app code, not only a README:
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
 | Local library | Import audio files through the native file picker |
-| Persistence | Saves imported tracks and favorites with `shared_preferences` |
+| Persistence | Saves imported tracks, favorites, playlists, and lyrics with `shared_preferences` |
 | Search | Local library filtering by title, artist, and album |
 | Queue | Play current list as a queue with next/previous controls |
 | Playlists | Create, rename, delete, open, and play manual playlists |
+| Lyrics | Add, edit, view, and delete plain text lyrics per library track |
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after 5, 15, 30, 60, or 90 minutes |
 | Repeat/shuffle | Runtime shuffle flag and repeat-mode hook |
@@ -104,7 +105,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Streaming providers | Pluggable provider interface for legal source adapters |
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
-| Lyrics | Synced LRC and plain text lyrics roadmap |
+| Lyrics | Plain text lyrics implemented; synced LRC, search, and provider lyrics roadmap |
 | Playlists | Manual playlists implemented; smart playlists and import/export roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |

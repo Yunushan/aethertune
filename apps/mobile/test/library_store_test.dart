@@ -82,6 +82,49 @@ void main() {
     expect(secondStore.playlistById(playlist.id)!.name, 'Saved');
     expect(secondStore.tracksForPlaylist(playlist.id).single.id, '1');
   });
+
+  test('saves and deletes plain lyrics for library tracks', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 5),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1')]);
+
+    await store.setLyrics('1', '  first line\nsecond line  ');
+
+    expect(store.lyricsForTrack('1')!.plainText, 'first line\nsecond line');
+    expect(store.lyricsForTrack('1')!.updatedAt, DateTime.utc(2026, 1, 5));
+
+    await store.setLyrics('1', '   ');
+
+    expect(store.lyricsForTrack('1'), isNull);
+  });
+
+  test('removing a library track removes its lyrics', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 6),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1')]);
+    await store.setLyrics('1', 'lyrics');
+
+    await store.removeTrack('1');
+
+    expect(store.lyricsForTrack('1'), isNull);
+  });
+
+  test('persists lyrics across store instances', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 7);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('1')]);
+    await firstStore.setLyrics('1', 'saved lyrics');
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+
+    expect(secondStore.lyricsForTrack('1')!.plainText, 'saved lyrics');
+  });
 }
 
 Track _track(String id) {

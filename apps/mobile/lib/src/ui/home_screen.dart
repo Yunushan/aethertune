@@ -69,6 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       track,
                     ),
+                    onLyrics: (track) => _showLyricsEditor(
+                      context,
+                      track,
+                    ),
                   ),
                   const _PlaylistsTab(),
                   const _SourcesTab(),
@@ -167,6 +171,87 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Future<void> _showLyricsEditor(BuildContext context, Track track) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final existingLyrics = library.lyricsForTrack(track.id)?.plainText ?? '';
+    final plainText = await _promptForLyrics(
+      context,
+      track: track,
+      initialValue: existingLyrics,
+    );
+
+    if (!context.mounted || plainText == null) {
+      return;
+    }
+
+    await library.setLyrics(track.id, plainText);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    final saved = plainText.trim().isNotEmpty;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          saved ? 'Saved lyrics for ${track.title}.' : 'Removed lyrics.',
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _promptForLyrics(
+    BuildContext context, {
+    required Track track,
+    required String initialValue,
+  }) async {
+    final controller = TextEditingController(text: initialValue);
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text(track.title),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: TextField(
+                autofocus: initialValue.isEmpty,
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Lyrics',
+                ),
+                keyboardType: TextInputType.multiline,
+                minLines: 8,
+                maxLines: 14,
+              ),
+            ),
+            actions: <Widget>[
+              if (initialValue.isNotEmpty)
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(''),
+                  child: const Text('Delete'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(controller.text);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _createPlaylist(
@@ -322,6 +407,7 @@ class _LibraryTab extends StatelessWidget {
     required this.onFavoritesOnlyChanged,
     required this.onImport,
     required this.onAddToPlaylist,
+    required this.onLyrics,
   });
 
   final TextEditingController searchController;
@@ -331,6 +417,7 @@ class _LibraryTab extends StatelessWidget {
   final ValueChanged<bool> onFavoritesOnlyChanged;
   final VoidCallback onImport;
   final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +471,7 @@ class _LibraryTab extends StatelessWidget {
                   onPlay: () => player.playTrack(track, queue: tracks),
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
+                  onLyrics: () => onLyrics(track),
                   onRemove: () => library.removeTrack(track.id),
                 );
               },

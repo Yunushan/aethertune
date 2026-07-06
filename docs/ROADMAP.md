@@ -11,6 +11,7 @@
 - [x] Queue
 - [x] Favorites
 - [x] Manual playlists
+- [x] Plain lyrics editor
 - [x] Sleep timer
 - [x] Provider interface
 - [ ] More unit tests
@@ -57,8 +58,9 @@
 - [ ] Cache manager
 - [ ] Download queue
 - [ ] Cache size limits
+- [x] Plain lyrics display/edit
 - [ ] LRC parser
-- [ ] Lyrics display
+- [ ] Lyrics provider/search/cache
 
 ## 1.0.0: Stable
 
