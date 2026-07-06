@@ -49,7 +49,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
-| Queue | Done | Current list can be played, reordered, trimmed, and saved as a playlist. | Persistent queue. |
+| Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI. | Artwork and sync. |
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
@@ -117,13 +117,13 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Current queue playback | Done | All music apps | Persistence. |
+| Current queue playback | Done | All music apps | Cross-device queue sync and richer queue actions. |
 | Manual playlists | Done | All music apps | Artwork and sync. |
 | Smart playlists | Roadmap | Namida, desktop players | Rule engine and dynamic queries. |
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |
 | Playlist import/export | Done | Spotube, YouTube Music migration needs | JSON, M3U, and CSV import/export are implemented for tracks already in the local library. |
 | Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, or album while preserving playlist order. |
-| Save queue as playlist | Done | Common player feature | Queue persistence and richer queue editing. |
+| Save queue as playlist | Done | Common player feature | Bulk queue actions and sync. |
 | Radio queue generation | Roadmap | YouTube Music, RiMusic | Seed-based queue builder. |
 
 ### Lyrics

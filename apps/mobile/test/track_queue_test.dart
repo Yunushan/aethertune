@@ -4,6 +4,28 @@ import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_queue.dart';
 
 void main() {
+  test('serializes queue snapshots with the current track', () {
+    final snapshot = TrackQueueSnapshot(
+      currentTrackId: '2',
+      tracks: <Track>[_track('1'), _track('2')],
+    );
+
+    final restored = TrackQueueSnapshot.fromJson(snapshot.toJson());
+
+    expect(restored.currentTrackId, '2');
+    expect(restored.currentTrack?.id, '2');
+    expect(restored.tracks.map((track) => track.id), <String>['1', '2']);
+  });
+
+  test('falls back to the first queue track when current track is missing', () {
+    final snapshot = TrackQueueSnapshot(
+      currentTrackId: 'missing',
+      tracks: <Track>[_track('1'), _track('2')],
+    );
+
+    expect(snapshot.currentTrack?.id, '1');
+  });
+
   test('moves queue items without mutating the original queue', () {
     final queue = <Track>[
       _track('1'),

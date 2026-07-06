@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
@@ -20,6 +22,8 @@ class PlayerController extends ChangeNotifier {
     });
   }
 
+  static const _queueSnapshotKey = 'aethertune.player_queue.v1';
+
   final AudioPlayer _audio = AudioPlayer();
   final List<Track> _queue = <Track>[];
 
@@ -29,6 +33,8 @@ class PlayerController extends ChangeNotifier {
   Timer? _sleepTimer;
   Duration _duration = Duration.zero;
   Track? _current;
+  String? _loadedTrackId;
+  bool _queueSnapshotLoaded = false;
   int _playbackStartSerial = 0;
 
   Track? get current => _current;
@@ -41,6 +47,34 @@ class PlayerController extends ChangeNotifier {
   Stream<Duration> get positionStream => _audio.positionStream;
   Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
 
+  Future<void> loadPersistedQueue() async {
+    if (_queueSnapshotLoaded) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final rawSnapshot = prefs.getString(_queueSnapshotKey);
+    if (rawSnapshot != null && rawSnapshot.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawSnapshot) as Map;
+        final snapshot = TrackQueueSnapshot.fromJson(
+          Map<String, Object?>.from(decoded),
+        );
+
+        _queue
+          ..clear()
+          ..addAll(snapshot.tracks);
+        _current = snapshot.currentTrack;
+        _loadedTrackId = null;
+      } catch (_) {
+        await prefs.remove(_queueSnapshotKey);
+      }
+    }
+
+    _queueSnapshotLoaded = true;
+    notifyListeners();
+  }
+
   Future<void> playTrack(Track track, {List<Track>? queue}) async {
     if (queue != null) {
       _queue
@@ -52,6 +86,7 @@ class PlayerController extends ChangeNotifier {
 
     _current = track;
     notifyListeners();
+    await _saveQueueSnapshot();
 
     await _load(track);
     await _audio.play();
@@ -67,7 +102,15 @@ class PlayerController extends ChangeNotifier {
     if (_audio.playing) {
       await _audio.pause();
     } else {
+      final wasLoaded = _loadedTrackId == _current!.id;
+      if (!wasLoaded) {
+        await _load(_current!);
+      }
+
       await _audio.play();
+      if (!wasLoaded) {
+        _playbackStartSerial += 1;
+      }
     }
     notifyListeners();
   }
@@ -126,6 +169,7 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(reordered);
+    unawaited(_saveQueueSnapshot());
     notifyListeners();
   }
 
@@ -142,6 +186,7 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(remaining);
+    unawaited(_saveQueueSnapshot());
     notifyListeners();
   }
 
@@ -174,15 +219,31 @@ class PlayerController extends ChangeNotifier {
   Future<void> _load(Track track) async {
     if (track.localPath != null) {
       await _audio.setFilePath(track.localPath!);
+      _loadedTrackId = track.id;
       return;
     }
 
     if (track.streamUrl != null) {
       await _audio.setUrl(track.streamUrl!);
+      _loadedTrackId = track.id;
       return;
     }
 
     throw StateError('Track has no local path or stream URL: ${track.title}');
+  }
+
+  Future<void> _saveQueueSnapshot() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_queue.isEmpty) {
+      await prefs.remove(_queueSnapshotKey);
+      return;
+    }
+
+    final snapshot = TrackQueueSnapshot(
+      tracks: _queue,
+      currentTrackId: _current?.id,
+    );
+    await prefs.setString(_queueSnapshotKey, jsonEncode(snapshot.toJson()));
   }
 
   bool _sameQueueOrder(List<Track> left, List<Track> right) {

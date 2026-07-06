@@ -16,7 +16,7 @@ class AetherTuneApp extends StatelessWidget {
           create: (_) => LibraryStore()..load(),
         ),
         ChangeNotifierProvider<PlayerController>(
-          create: (_) => PlayerController(),
+          create: (_) => PlayerController()..loadPersistedQueue(),
         ),
       ],
       child: MaterialApp(

@@ -11,6 +11,7 @@
 - [x] Listening history
 - [x] Queue
 - [x] Queue reorder/remove
+- [x] Persistent queue
 - [x] Save queue as playlist
 - [x] Favorites
 - [x] Manual playlists
