@@ -4,7 +4,12 @@ import 'package:provider/provider.dart';
 import '../../player/player_controller.dart';
 
 class PlayerBar extends StatelessWidget {
-  const PlayerBar({super.key});
+  const PlayerBar({
+    required this.onSaveQueue,
+    super.key,
+  });
+
+  final VoidCallback onSaveQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +90,11 @@ class PlayerBar extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Save queue as playlist',
+                    onPressed: player.queue.isEmpty ? null : onSaveQueue,
+                    icon: const Icon(Icons.playlist_add),
                   ),
                   IconButton(
                     tooltip: 'Previous',

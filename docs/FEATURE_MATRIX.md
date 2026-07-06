@@ -49,7 +49,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Search | Done | Local title/artist/album filtering. | Global multi-provider search and ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
-| Queue | Done | Current list can be played as queue. | Persistent queue, reorder, save as playlist. |
+| Queue | Done | Current list can be played as queue and saved as a playlist. | Persistent queue and queue reorder. |
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
 | Manual playlists | Done | Persisted user playlists with add/remove/reorder/play UI. | Artwork, import/export, sync. |
 | Plain lyrics | Done | Persisted per-track lyrics editor and library track menu. | Synced/provider lyrics, import/export, sharing. |
@@ -123,7 +123,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |
 | Playlist import/export | Roadmap | Spotube, YouTube Music migration needs | M3U/JSON/CSV import-export. |
 | Find in playlist | Roadmap | YouTube Music | In-playlist search UI. |
-| Save queue as playlist | Roadmap | Common player feature | Queue persistence and playlist creation. |
+| Save queue as playlist | Done | Common player feature | Queue persistence and richer queue editing. |
 | Radio queue generation | Roadmap | YouTube Music, RiMusic | Seed-based queue builder. |
 
 ### Lyrics

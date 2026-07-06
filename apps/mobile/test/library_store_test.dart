@@ -73,6 +73,26 @@ void main() {
     expect(store.playlistById(playlist.id)!.trackIds, <String>['1', '2', '3']);
   });
 
+  test('saves queue track order as a playlist', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 2, 18),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1'), _track('2'), _track('3')]);
+
+    final playlist = await store.createPlaylist(
+      'Queue Save',
+      trackIds: <String>['3', 'missing', '1', '2'],
+    );
+
+    expect(playlist.name, 'Queue Save');
+    expect(playlist.trackIds, <String>['3', '1', '2']);
+    expect(
+      store.tracksForPlaylist(playlist.id).map((track) => track.id),
+      <String>['3', '1', '2'],
+    );
+  });
+
   test('removing a library track removes it from playlists', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 3),

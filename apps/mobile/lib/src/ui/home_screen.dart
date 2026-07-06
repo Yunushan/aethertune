@@ -122,7 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const PlayerBar(),
+            PlayerBar(
+              onSaveQueue: () => _saveQueueAsPlaylist(context),
+            ),
           ],
         ),
       ),
@@ -326,7 +328,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<String?> _promptForPlaylistName(BuildContext context) async {
+  Future<void> _saveQueueAsPlaylist(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final queue = player.queue;
+    if (queue.isEmpty) {
+      return;
+    }
+
+    final name = await _promptForPlaylistName(
+      context,
+      title: 'Save queue as playlist',
+    );
+    if (!context.mounted || name == null) {
+      return;
+    }
+
+    final playlist = await library.createPlaylist(
+      name,
+      trackIds: queue.map((track) => track.id),
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Saved queue as ${playlist.name}.')),
+    );
+  }
+
+  Future<String?> _promptForPlaylistName(
+    BuildContext context, {
+    String title = 'New playlist',
+  }) async {
     final controller = TextEditingController();
 
     try {
@@ -334,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('New playlist'),
+            title: Text(title),
             content: TextField(
               autofocus: true,
               controller: controller,

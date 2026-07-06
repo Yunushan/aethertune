@@ -10,6 +10,7 @@
 - [x] Local playback
 - [x] Listening history
 - [x] Queue
+- [x] Save queue as playlist
 - [x] Favorites
 - [x] Manual playlists
 - [x] Plain lyrics editor

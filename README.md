@@ -85,7 +85,7 @@ This scaffold includes real app code, not only a README:
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, and playback history with `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup from the Options tab |
 | Search | Local library filtering by title, artist, and album with sortable results |
-| Queue | Play current list as a queue with next/previous controls |
+| Queue | Play current list as a queue with next/previous controls and save it as a playlist |
 | History | Recently played tab with local playback history, play counts, and clear action |
 | Playlists | Create, rename, delete, open, reorder tracks, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text lyrics per library track |
@@ -110,7 +110,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Plain text lyrics implemented; synced LRC, search, and provider lyrics roadmap |
-| Playlists | Manual playlists and track reordering implemented; smart playlists and import/export roadmap |
+| Playlists | Manual playlists, track reordering, and save-queue-as-playlist implemented; smart playlists and import/export roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |

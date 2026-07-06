@@ -48,7 +48,7 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 ## Queue controls
 
-When you play a track from the library, the current filtered list becomes the queue. Use previous/next controls in the player bar.
+When you play a track from the library, the current filtered list becomes the queue. Use previous/next controls in the player bar, or use the playlist-add button to save the current queue as a playlist.
 
 ## History
 
