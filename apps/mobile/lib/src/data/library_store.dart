@@ -14,6 +14,8 @@ enum PlaylistDocumentFormat { json, m3u, csv }
 
 enum LibraryBrowseType { artist, album, genre, source }
 
+enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
+
 class LibraryBrowseGroup {
   const LibraryBrowseGroup({
     required this.type,
@@ -28,6 +30,20 @@ class LibraryBrowseGroup {
   final String label;
   final int trackCount;
   final Duration totalDuration;
+}
+
+class SmartPlaylist {
+  const SmartPlaylist({
+    required this.type,
+    required this.name,
+    required this.description,
+    required this.trackCount,
+  });
+
+  final SmartPlaylistType type;
+  final String name;
+  final String description;
+  final int trackCount;
 }
 
 class LibraryStore extends ChangeNotifier {
@@ -260,6 +276,46 @@ class LibraryStore extends ChangeNotifier {
         .toList(growable: false);
 
     return _sortTrackResults(tracks, sortMode);
+  }
+
+  List<SmartPlaylist> smartPlaylists() {
+    return SmartPlaylistType.values.map((type) {
+      final trackCount = tracksForSmartPlaylist(
+        type,
+        limit: _tracks.length,
+      ).length;
+
+      return SmartPlaylist(
+        type: type,
+        name: _smartPlaylistName(type),
+        description: _smartPlaylistDescription(type),
+        trackCount: trackCount,
+      );
+    }).toList(growable: false);
+  }
+
+  List<Track> tracksForSmartPlaylist(
+    SmartPlaylistType type, {
+    int limit = 50,
+  }) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    switch (type) {
+      case SmartPlaylistType.favorites:
+        final tracks = _sortTrackResults(
+          favorites.toList(growable: false),
+          LibrarySortMode.artist,
+        );
+        return tracks.take(limit).toList(growable: false);
+      case SmartPlaylistType.recentlyAdded:
+        return recentlyAddedTracks(limit: limit);
+      case SmartPlaylistType.recentlyPlayed:
+        return recentlyPlayedTracks(limit: limit);
+      case SmartPlaylistType.mostPlayed:
+        return _mostPlayedTracks(limit: limit);
+    }
   }
 
   String exportBackupJson() {
@@ -633,6 +689,10 @@ class LibraryStore extends ChangeNotifier {
   }
 
   List<Track> recentlyPlayedTracks({int limit = 25}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
     final byId = <String, Track>{
       for (final track in _tracks) track.id: track,
     };
@@ -679,6 +739,59 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return null;
+  }
+
+  List<Track> _mostPlayedTracks({required int limit}) {
+    final tracks = _tracks
+        .where((track) => playCountForTrack(track.id) > 0)
+        .toList(growable: false);
+
+    tracks.sort((a, b) {
+      final byPlayCount =
+          playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+      if (byPlayCount != 0) {
+        return byPlayCount;
+      }
+
+      final aLastPlayed = lastPlayedAt(a.id);
+      final bLastPlayed = lastPlayedAt(b.id);
+      if (aLastPlayed != null && bLastPlayed != null) {
+        final byLastPlayed = bLastPlayed.compareTo(aLastPlayed);
+        if (byLastPlayed != 0) {
+          return byLastPlayed;
+        }
+      }
+
+      return _compareText(a.title, b.title);
+    });
+
+    return tracks.take(limit).toList(growable: false);
+  }
+
+  String _smartPlaylistName(SmartPlaylistType type) {
+    switch (type) {
+      case SmartPlaylistType.favorites:
+        return 'Favorites';
+      case SmartPlaylistType.recentlyAdded:
+        return 'Recently added';
+      case SmartPlaylistType.recentlyPlayed:
+        return 'Recently played';
+      case SmartPlaylistType.mostPlayed:
+        return 'Most played';
+    }
+  }
+
+  String _smartPlaylistDescription(SmartPlaylistType type) {
+    switch (type) {
+      case SmartPlaylistType.favorites:
+        return 'Tracks marked with the heart.';
+      case SmartPlaylistType.recentlyAdded:
+        return 'Newest imports first.';
+      case SmartPlaylistType.recentlyPlayed:
+        return 'Latest unique tracks from history.';
+      case SmartPlaylistType.mostPlayed:
+        return 'Highest local play counts.';
+    }
   }
 
   Future<void> recordPlayback(String trackId) async {

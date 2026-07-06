@@ -31,6 +31,8 @@
 - [x] Playlist reorder
 - [x] Find in playlist
 - [x] Playlist import/export JSON/M3U/CSV
+- [x] Built-in smart playlists
+- [ ] Custom rule smart playlists
 - [ ] Playlist artwork
 - [x] Backup/restore JSON
 - [ ] Folder browser

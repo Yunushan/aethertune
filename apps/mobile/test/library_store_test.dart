@@ -475,6 +475,93 @@ void main() {
     expect(store.search('ambient').single.id, 'new');
   });
 
+  test('builds smart playlists from library and playback state', () async {
+    var now = DateTime.utc(2026, 1, 14, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'old',
+        title: 'Gamma',
+        artist: 'Zed',
+        addedAt: DateTime.utc(2026, 1, 1),
+      ),
+      _track(
+        'middle',
+        title: 'Alpha',
+        artist: 'Ari',
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+      _track(
+        'new',
+        title: 'Beta',
+        artist: 'Mia',
+        addedAt: DateTime.utc(2026, 1, 3),
+      ),
+    ]);
+
+    await store.toggleFavorite('old');
+    await store.toggleFavorite('middle');
+    await store.recordPlayback('old');
+    now = DateTime.utc(2026, 1, 14, 12, 1);
+    await store.recordPlayback('new');
+    now = DateTime.utc(2026, 1, 14, 12, 2);
+    await store.recordPlayback('old');
+    now = DateTime.utc(2026, 1, 14, 12, 3);
+    await store.recordPlayback('middle');
+
+    final smartPlaylists = store.smartPlaylists();
+
+    expect(
+      smartPlaylists.map((playlist) => playlist.type),
+      SmartPlaylistType.values,
+    );
+    expect(
+      smartPlaylists
+          .firstWhere(
+            (playlist) => playlist.type == SmartPlaylistType.favorites,
+          )
+          .trackCount,
+      2,
+    );
+    expect(
+      store.tracksForSmartPlaylist(
+        SmartPlaylistType.favorites,
+      ).map((track) => track.id),
+      <String>['middle', 'old'],
+    );
+    expect(
+      store.tracksForSmartPlaylist(
+        SmartPlaylistType.recentlyAdded,
+        limit: 2,
+      ).map((track) => track.id),
+      <String>['new', 'middle'],
+    );
+    expect(
+      store.tracksForSmartPlaylist(
+        SmartPlaylistType.recentlyPlayed,
+      ).map((track) => track.id),
+      <String>['middle', 'old', 'new'],
+    );
+    expect(
+      store.tracksForSmartPlaylist(
+        SmartPlaylistType.mostPlayed,
+      ).map((track) => track.id),
+      <String>['old', 'middle', 'new'],
+    );
+    expect(
+      store.tracksForSmartPlaylist(
+        SmartPlaylistType.mostPlayed,
+        limit: 2,
+      ).map((track) => track.id),
+      <String>['old', 'middle'],
+    );
+    expect(
+      store.tracksForSmartPlaylist(SmartPlaylistType.mostPlayed, limit: 0),
+      isEmpty,
+    );
+  });
+
   test('groups library tracks by artist album genre and source', () async {
     final store = LibraryStore();
     await store.load();

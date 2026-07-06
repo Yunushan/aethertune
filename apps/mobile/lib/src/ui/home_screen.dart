@@ -116,7 +116,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       track,
                     ),
                   ),
-                  const _PlaylistsTab(),
+                  _PlaylistsTab(
+                    onAddToPlaylist: (track) => _showAddToPlaylist(
+                      context,
+                      track,
+                    ),
+                    onLyrics: (track) => _showLyricsEditor(
+                      context,
+                      track,
+                    ),
+                  ),
                   const _HistoryTab(),
                   const _SourcesTab(),
                   const _SettingsTab(),
@@ -1111,8 +1120,27 @@ IconData _playlistDocumentFormatIcon(PlaylistDocumentFormat format) {
   }
 }
 
+IconData _smartPlaylistIcon(SmartPlaylistType type) {
+  switch (type) {
+    case SmartPlaylistType.favorites:
+      return Icons.favorite_border;
+    case SmartPlaylistType.recentlyAdded:
+      return Icons.new_releases_outlined;
+    case SmartPlaylistType.recentlyPlayed:
+      return Icons.history;
+    case SmartPlaylistType.mostPlayed:
+      return Icons.trending_up;
+  }
+}
+
 class _PlaylistsTab extends StatelessWidget {
-  const _PlaylistsTab();
+  const _PlaylistsTab({
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,6 +1149,8 @@ class _PlaylistsTab extends StatelessWidget {
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final smartPlaylists = library.smartPlaylists();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1145,6 +1175,22 @@ class _PlaylistsTab extends StatelessWidget {
               icon: const Icon(Icons.playlist_add),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Smart playlists',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        for (final smartPlaylist in smartPlaylists)
+          _SmartPlaylistCard(
+            smartPlaylist: smartPlaylist,
+            onOpen: () => _showSmartPlaylist(context, smartPlaylist.type),
+          ),
+        const SizedBox(height: 16),
+        Text(
+          'Manual playlists',
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
         if (library.playlists.isEmpty)
@@ -1358,6 +1404,27 @@ class _PlaylistsTab extends StatelessWidget {
     );
   }
 
+  Future<void> _showSmartPlaylist(
+    BuildContext context,
+    SmartPlaylistType type,
+  ) async {
+    final player = context.read<PlayerController>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) {
+        return _SmartPlaylistSheet(
+          type: type,
+          player: player,
+          onAddToPlaylist: onAddToPlaylist,
+          onLyrics: onLyrics,
+        );
+      },
+    );
+  }
+
   Future<void> _showPlaylist(BuildContext context, String playlistId) async {
     final player = context.read<PlayerController>();
 
@@ -1421,6 +1488,82 @@ class _PlaylistsTab extends StatelessWidget {
     } finally {
       controller.dispose();
     }
+  }
+}
+
+class _SmartPlaylistSheet extends StatelessWidget {
+  const _SmartPlaylistSheet({
+    required this.type,
+    required this.player,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final SmartPlaylistType type;
+  final PlayerController player;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final smartPlaylist = library.smartPlaylists().firstWhere(
+      (playlist) => playlist.type == type,
+    );
+    final tracks = library.tracksForSmartPlaylist(type);
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView.separated(
+            controller: controller,
+            itemCount: tracks.isEmpty ? 2 : tracks.length + 1,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  leading: Icon(_smartPlaylistIcon(type)),
+                  title: Text(smartPlaylist.name),
+                  subtitle: Text('${smartPlaylist.trackCount} track(s)'),
+                  trailing: FilledButton.tonalIcon(
+                    onPressed: tracks.isEmpty
+                        ? null
+                        : () {
+                            Navigator.of(context).pop();
+                            player.playTrack(tracks.first, queue: tracks);
+                          },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Play'),
+                  ),
+                );
+              }
+
+              if (tracks.isEmpty) {
+                return ListTile(
+                  leading: Icon(_smartPlaylistIcon(type)),
+                  title: const Text('No tracks yet'),
+                  subtitle: Text(smartPlaylist.description),
+                );
+              }
+
+              final track = tracks[index - 1];
+              return TrackTile(
+                track: track,
+                onPlay: () => player.playTrack(track, queue: tracks),
+                onFavorite: () => library.toggleFavorite(track.id),
+                onAddToPlaylist: () => onAddToPlaylist(track),
+                onLyrics: () => onLyrics(track),
+                onRemove: () => library.removeTrack(track.id),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -1597,6 +1740,32 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
     );
   }
 
+}
+
+class _SmartPlaylistCard extends StatelessWidget {
+  const _SmartPlaylistCard({
+    required this.smartPlaylist,
+    required this.onOpen,
+  });
+
+  final SmartPlaylist smartPlaylist;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Icon(_smartPlaylistIcon(smartPlaylist.type)),
+        title: Text(smartPlaylist.name),
+        subtitle: Text(
+          '${smartPlaylist.trackCount} track(s) · '
+          '${smartPlaylist.description}',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onOpen,
+      ),
+    );
+  }
 }
 
 class _PlaylistCard extends StatelessWidget {
