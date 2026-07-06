@@ -88,7 +88,7 @@ This scaffold includes real app code, not only a README:
 | Queue | Play current list as a persistent queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
 | History | Recently played tab with local playback history, play counts, and clear action |
 | Playlists | Built-in smart playlists plus create, rename, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
-| Lyrics | Add, edit, view, and delete plain text lyrics per library track |
+| Lyrics | Add, edit, view, and delete plain text or LRC timestamped lyrics per library track |
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
@@ -109,7 +109,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Streaming providers | Pluggable provider interface for legal source adapters |
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
-| Lyrics | Plain text lyrics implemented; synced LRC, search, and provider lyrics roadmap |
+| Lyrics | Plain text lyrics and LRC timestamp parsing/preview implemented; playback-synced highlighting, search, and provider lyrics roadmap |
 | Playlists | Manual playlists, built-in smart playlists, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; custom smart rules roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |

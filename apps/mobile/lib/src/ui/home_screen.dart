@@ -11,6 +11,7 @@ import '../data/library_store.dart';
 import '../domain/playlist.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
+import '../domain/track_lyrics.dart';
 import '../player/player_controller.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
@@ -274,38 +275,57 @@ class _HomeScreenState extends State<HomeScreen> {
       return showDialog<String>(
         context: context,
         builder: (dialogContext) {
-          return AlertDialog(
-            title: Text(track.title),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: TextField(
-                autofocus: initialValue.isEmpty,
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Lyrics',
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final syncedLines = parseSyncedLyricLines(controller.text);
+
+              return AlertDialog(
+                title: Text(track.title),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        TextField(
+                          autofocus: initialValue.isEmpty,
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            labelText: 'Lyrics',
+                          ),
+                          keyboardType: TextInputType.multiline,
+                          minLines: 8,
+                          maxLines: 14,
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                        if (syncedLines.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _SyncedLyricsPreview(lines: syncedLines),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-                keyboardType: TextInputType.multiline,
-                minLines: 8,
-                maxLines: 14,
-              ),
-            ),
-            actions: <Widget>[
-              if (initialValue.isNotEmpty)
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(''),
-                  child: const Text('Delete'),
-                ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(controller.text);
-                },
-                child: const Text('Save'),
-              ),
-            ],
+                actions: <Widget>[
+                  if (initialValue.isNotEmpty)
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(''),
+                      child: const Text('Delete'),
+                    ),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop(controller.text);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
           );
         },
       );
@@ -610,6 +630,56 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       controller.dispose();
     }
+  }
+}
+
+class _SyncedLyricsPreview extends StatelessWidget {
+  const _SyncedLyricsPreview({required this.lines});
+
+  final List<SyncedLyricLine> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final timestampStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: colorScheme.primary,
+        );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SizedBox(
+        height: 180,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: lines.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final line = lines[index];
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      formatSyncedLyricTimestamp(line.timestamp),
+                      textAlign: TextAlign.end,
+                      style: timestampStyle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(line.text)),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 
