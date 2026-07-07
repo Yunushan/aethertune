@@ -8,9 +8,11 @@ import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
 import '../data/library_store.dart';
+import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/playlist.dart';
+import '../domain/podcast_subscription.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
@@ -2431,10 +2433,15 @@ class _SourcesTab extends StatefulWidget {
 
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
+  final _podcastFeedController = TextEditingController();
   final _radioProvider = RadioBrowserProvider();
   final _radioSearchController = TextEditingController();
   List<Track> _demoTracks = <Track>[];
+  List<Track> _podcastEpisodeTracks = <Track>[];
   List<Track> _radioTracks = <Track>[];
+  bool _podcastLoading = false;
+  String? _podcastError;
+  String? _selectedPodcastSubscriptionId;
   bool _radioLoading = false;
   String? _radioError;
 
@@ -2450,12 +2457,16 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   @override
   void dispose() {
+    _podcastFeedController.dispose();
     _radioSearchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final podcastSubscriptions = library.podcastSubscriptions;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
@@ -2529,6 +2540,121 @@ class _SourcesTabState extends State<_SourcesTab> {
           description: 'No DRM bypass, scraping, or paid-service cloning is included.',
           icon: Icons.verified_user_outlined,
         ),
+        const SizedBox(height: 16),
+        Text(
+          'Podcast RSS feeds',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: _podcastFeedController,
+                decoration: const InputDecoration(
+                  labelText: 'Feed URL',
+                  prefixIcon: Icon(Icons.rss_feed),
+                ),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addPodcastFeed(context),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Add podcast feed',
+              onPressed: _podcastLoading ? null : () => _addPodcastFeed(context),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        if (_podcastLoading) ...<Widget>[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+        if (_podcastError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Podcast feed failed'),
+            subtitle: Text(_podcastError!),
+          ),
+        ],
+        if (podcastSubscriptions.isEmpty && !_podcastLoading) ...<Widget>[
+          const SizedBox(height: 8),
+          const ListTile(
+            leading: Icon(Icons.rss_feed),
+            title: Text('No podcast feeds yet'),
+            subtitle: Text('Add a legal RSS feed URL to browse episodes.'),
+          ),
+        ] else ...<Widget>[
+          const SizedBox(height: 8),
+          for (final subscription in podcastSubscriptions)
+            ListTile(
+              leading: const Icon(Icons.rss_feed),
+              selected: subscription.id == _selectedPodcastSubscriptionId,
+              title: Text(subscription.title),
+              subtitle: Text(
+                subscription.author.isEmpty
+                    ? subscription.feedUrl
+                    : '${subscription.author} / ${subscription.feedUrl}',
+              ),
+              onTap: () => _loadPodcastEpisodes(context, subscription),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Load episodes',
+                    onPressed: _podcastLoading
+                        ? null
+                        : () => _loadPodcastEpisodes(context, subscription),
+                    icon: const Icon(Icons.list_alt_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove feed',
+                    onPressed: () => _removePodcastFeed(context, subscription),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        if (_selectedPodcastSubscriptionId != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            'Podcast episodes',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          if (_podcastEpisodeTracks.isEmpty && !_podcastLoading)
+            const ListTile(
+              leading: Icon(Icons.podcasts_outlined),
+              title: Text('No playable episodes loaded'),
+              subtitle: Text('This feed may not expose audio enclosures.'),
+            )
+          else
+            for (final track in _podcastEpisodeTracks)
+              ListTile(
+                leading: const Icon(Icons.podcasts_outlined),
+                title: Text(track.title),
+                subtitle: Text('${track.artist} / ${track.album}'),
+                onTap: () => _playPodcastEpisode(context, track),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    IconButton(
+                      tooltip: 'Save episode',
+                      onPressed: () => _savePodcastEpisode(context, track),
+                      icon: const Icon(Icons.library_add_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Play episode',
+                      onPressed: () => _playPodcastEpisode(context, track),
+                      icon: const Icon(Icons.play_arrow),
+                    ),
+                  ],
+                ),
+              ),
+        ],
         const SizedBox(height: 16),
         Text(
           'Radio Browser search',
@@ -2613,6 +2739,144 @@ class _SourcesTabState extends State<_SourcesTab> {
             subtitle: Text('${track.artist} · ${track.album}'),
           ),
       ],
+    );
+  }
+
+  Future<void> _addPodcastFeed(BuildContext context) async {
+    final rawUrl = _podcastFeedController.text.trim();
+    final feedUri = Uri.tryParse(rawUrl);
+    if (feedUri == null || !feedUri.hasScheme || feedUri.host.isEmpty) {
+      setState(() {
+        _podcastError = 'Enter a full RSS feed URL.';
+      });
+      return;
+    }
+
+    await _loadAndSavePodcastFeed(context, feedUri);
+  }
+
+  Future<void> _loadPodcastEpisodes(
+    BuildContext context,
+    PodcastSubscription subscription,
+  ) async {
+    final feedUri = Uri.tryParse(subscription.feedUrl);
+    if (feedUri == null) {
+      setState(() {
+        _podcastError = 'Saved feed URL is invalid.';
+      });
+      return;
+    }
+
+    await _loadAndSavePodcastFeed(context, feedUri);
+  }
+
+  Future<void> _loadAndSavePodcastFeed(
+    BuildContext context,
+    Uri feedUri,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final provider = PodcastRssProvider(feedUri: feedUri);
+
+    setState(() {
+      _podcastLoading = true;
+      _podcastError = null;
+    });
+
+    try {
+      final feed = await provider.fetchFeed();
+      final saved = await library.savePodcastSubscription(
+        PodcastSubscription(
+          id: stablePodcastSubscriptionId(feed.feedUri.toString()),
+          feedUrl: feed.feedUri.toString(),
+          title: feed.title,
+          description: feed.description,
+          author: feed.author,
+          artworkUri: feed.artworkUri,
+        ),
+      );
+      final tracks = feed.episodes
+          .map((episode) => episode.toTrack(sourceId: provider.id, feed: feed))
+          .toList(growable: false);
+
+      if (!context.mounted) {
+        return;
+      }
+
+      setState(() {
+        _podcastEpisodeTracks = tracks;
+        _selectedPodcastSubscriptionId = saved.id;
+        _podcastLoading = false;
+      });
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Loaded ${feed.title}.')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      setState(() {
+        _podcastEpisodeTracks = <Track>[];
+        _podcastLoading = false;
+        _podcastError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _removePodcastFeed(
+    BuildContext context,
+    PodcastSubscription subscription,
+  ) async {
+    final library = context.read<LibraryStore>();
+    await library.deletePodcastSubscription(subscription.id);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    if (_selectedPodcastSubscriptionId == subscription.id) {
+      setState(() {
+        _selectedPodcastSubscriptionId = null;
+        _podcastEpisodeTracks = <Track>[];
+      });
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed ${subscription.title}.')),
+    );
+  }
+
+  Future<void> _playPodcastEpisode(BuildContext context, Track track) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final player = context.read<PlayerController>();
+
+    try {
+      await player.playTrack(track, queue: _podcastEpisodeTracks);
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not play ${track.title}.')),
+      );
+    }
+  }
+
+  Future<void> _savePodcastEpisode(BuildContext context, Track track) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    await library.addTracks(<Track>[track]);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Saved ${track.title}.')),
     );
   }
 

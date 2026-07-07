@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/playback_history_entry.dart';
 import '../domain/playlist.dart';
+import '../domain/podcast_subscription.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
 
@@ -54,6 +55,8 @@ class LibraryStore extends ChangeNotifier {
   static const _playlistDocumentVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
+  static const _podcastSubscriptionsKey =
+      'aethertune.podcast_subscriptions.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _maxHistoryEntries = 500;
@@ -62,6 +65,8 @@ class LibraryStore extends ChangeNotifier {
 
   final List<Track> _tracks = <Track>[];
   final List<Playlist> _playlists = <Playlist>[];
+  final List<PodcastSubscription> _podcastSubscriptions =
+      <PodcastSubscription>[];
   final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final DateTime Function() _clock;
@@ -70,6 +75,8 @@ class LibraryStore extends ChangeNotifier {
   bool get loaded => _loaded;
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
+  List<PodcastSubscription> get podcastSubscriptions =>
+      List.unmodifiable(_podcastSubscriptions);
   List<PlaybackHistoryEntry> get playbackHistory =>
       List.unmodifiable(_history);
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
@@ -106,6 +113,24 @@ class LibraryStore extends ChangeNotifier {
               .map(
                 (item) => Playlist.fromJson(Map<String, Object?>.from(item)),
               )
+              .toList(growable: false),
+        );
+    }
+
+    final rawPodcastSubscriptions = prefs.getString(_podcastSubscriptionsKey);
+    if (rawPodcastSubscriptions != null && rawPodcastSubscriptions.isNotEmpty) {
+      final decoded = jsonDecode(rawPodcastSubscriptions) as List<dynamic>;
+      _podcastSubscriptions
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => PodcastSubscription.fromJson(
+                  Map<String, Object?>.from(item),
+                ),
+              )
+              .where((subscription) => subscription.feedUrl.isNotEmpty)
               .toList(growable: false),
         );
     }
@@ -154,6 +179,7 @@ class LibraryStore extends ChangeNotifier {
     _removeMissingLyrics();
     _removeMissingHistory();
     _sortHistory();
+    _sortPodcastSubscriptions();
     _loaded = true;
     notifyListeners();
   }
@@ -189,6 +215,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> clear() async {
     _tracks.clear();
     _playlists.clear();
+    _podcastSubscriptions.clear();
     _history.clear();
     _lyricsByTrackId.clear();
     await _save();
@@ -329,6 +356,8 @@ class LibraryStore extends ChangeNotifier {
       'exportedAt': _clock().toIso8601String(),
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
+      'podcastSubscriptions':
+          _podcastSubscriptions.map((item) => item.toJson()).toList(),
       'history': _history.map((entry) => entry.toJson()).toList(),
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
@@ -594,6 +623,7 @@ class LibraryStore extends ChangeNotifier {
 
     final restoredTracks = <Track>[];
     final restoredPlaylists = <Playlist>[];
+    final restoredPodcastSubscriptions = <PodcastSubscription>[];
     final restoredHistory = <PlaybackHistoryEntry>[];
     final restoredLyrics = <TrackLyrics>[];
 
@@ -608,6 +638,13 @@ class LibraryStore extends ChangeNotifier {
         _jsonObjectList(backup, 'history', isRequired: false).map(
           PlaybackHistoryEntry.fromJson,
         ),
+      );
+      restoredPodcastSubscriptions.addAll(
+        _jsonObjectList(
+          backup,
+          'podcastSubscriptions',
+          isRequired: false,
+        ).map(PodcastSubscription.fromJson),
       );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
@@ -636,6 +673,9 @@ class LibraryStore extends ChangeNotifier {
     final sanitizedHistory = restoredHistory
         .where((entry) => knownTrackIds.contains(entry.trackId))
         .toList(growable: false);
+    final sanitizedPodcastSubscriptions = _dedupePodcastSubscriptions(
+      restoredPodcastSubscriptions,
+    );
 
     _tracks
       ..clear()
@@ -643,6 +683,9 @@ class LibraryStore extends ChangeNotifier {
     _playlists
       ..clear()
       ..addAll(sanitizedPlaylists);
+    _podcastSubscriptions
+      ..clear()
+      ..addAll(sanitizedPodcastSubscriptions);
     _history
       ..clear()
       ..addAll(sanitizedHistory);
@@ -652,6 +695,7 @@ class LibraryStore extends ChangeNotifier {
 
     _sortTracks();
     _sortPlaylists();
+    _sortPodcastSubscriptions();
     _sortHistory();
     _trimHistory();
     await _save();
@@ -825,6 +869,71 @@ class LibraryStore extends ChangeNotifier {
   }
 
   TrackLyrics? lyricsForTrack(String trackId) => _lyricsByTrackId[trackId];
+
+  PodcastSubscription? podcastSubscriptionById(String id) {
+    final index = _podcastSubscriptions.indexWhere(
+      (subscription) => subscription.id == id,
+    );
+    if (index == -1) {
+      return null;
+    }
+
+    return _podcastSubscriptions[index];
+  }
+
+  Future<PodcastSubscription> savePodcastSubscription(
+    PodcastSubscription subscription,
+  ) async {
+    final normalizedFeedUrl = subscription.feedUrl.trim();
+    if (normalizedFeedUrl.isEmpty) {
+      throw ArgumentError.value(
+        subscription.feedUrl,
+        'feedUrl',
+        'Podcast feed URL cannot be empty.',
+      );
+    }
+
+    final saved = PodcastSubscription(
+      id: stablePodcastSubscriptionId(normalizedFeedUrl),
+      feedUrl: normalizedFeedUrl,
+      title: subscription.title.trim().isEmpty
+          ? 'Untitled podcast'
+          : subscription.title.trim(),
+      description: subscription.description.trim(),
+      author: subscription.author.trim(),
+      artworkUri: subscription.artworkUri,
+      addedAt: subscription.addedAt == DateTime.fromMillisecondsSinceEpoch(0)
+          ? _clock()
+          : subscription.addedAt,
+    );
+    final index = _podcastSubscriptions.indexWhere(
+      (existing) => existing.id == saved.id,
+    );
+    if (index == -1) {
+      _podcastSubscriptions.add(saved);
+    } else {
+      _podcastSubscriptions[index] = saved;
+    }
+
+    _sortPodcastSubscriptions();
+    await _save();
+    notifyListeners();
+
+    return saved;
+  }
+
+  Future<void> deletePodcastSubscription(String id) async {
+    final index = _podcastSubscriptions.indexWhere(
+      (subscription) => subscription.id == id,
+    );
+    if (index == -1) {
+      return;
+    }
+
+    _podcastSubscriptions.removeAt(index);
+    await _save();
+    notifyListeners();
+  }
 
   Future<void> setLyrics(String trackId, String plainText) async {
     if (!_tracks.any((track) => track.id == trackId)) {
@@ -1361,6 +1470,36 @@ class LibraryStore extends ChangeNotifier {
     }).toList(growable: false);
   }
 
+  List<PodcastSubscription> _dedupePodcastSubscriptions(
+    Iterable<PodcastSubscription> subscriptions,
+  ) {
+    final byId = <String, PodcastSubscription>{};
+    for (final subscription in subscriptions) {
+      if (subscription.feedUrl.trim().isEmpty) {
+        continue;
+      }
+
+      final id = stablePodcastSubscriptionId(subscription.feedUrl);
+      byId[id] = PodcastSubscription(
+        id: id,
+        feedUrl: subscription.feedUrl.trim(),
+        title: subscription.title,
+        description: subscription.description,
+        author: subscription.author,
+        artworkUri: subscription.artworkUri,
+        addedAt: subscription.addedAt,
+      );
+    }
+
+    return byId.values.toList(growable: false);
+  }
+
+  void _sortPodcastSubscriptions() {
+    _podcastSubscriptions.sort(
+      (a, b) => _compareText(a.title, b.title),
+    );
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     final encodedTracks = jsonEncode(
@@ -1368,6 +1507,9 @@ class LibraryStore extends ChangeNotifier {
     );
     final encodedPlaylists = jsonEncode(
       _playlists.map((playlist) => playlist.toJson()).toList(),
+    );
+    final encodedPodcastSubscriptions = jsonEncode(
+      _podcastSubscriptions.map((item) => item.toJson()).toList(),
     );
     final encodedHistory = jsonEncode(
       _history.map((entry) => entry.toJson()).toList(),
@@ -1377,6 +1519,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setString(_tracksKey, encodedTracks);
     await prefs.setString(_playlistsKey, encodedPlaylists);
+    await prefs.setString(
+      _podcastSubscriptionsKey,
+      encodedPodcastSubscriptions,
+    );
     await prefs.setString(_historyKey, encodedHistory);
     await prefs.setString(_lyricsKey, encodedLyrics);
   }

@@ -57,6 +57,19 @@ void main() {
     );
   });
 
+  test('fetches feed metadata for subscription UI', () async {
+    final provider = PodcastRssProvider(
+      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+      feedLoader: (_) async => _samplePodcastFeed,
+    );
+
+    final feed = await provider.fetchFeed();
+
+    expect(feed.title, 'Aether Radio');
+    expect(feed.description, 'Open podcast feed.');
+    expect(feed.episodes.single.title, 'Open Audio Episode');
+  });
+
   test('duration parser accepts common RSS formats', () {
     expect(parsePodcastDuration('3723'), const Duration(seconds: 3723));
     expect(parsePodcastDuration('02:03'), const Duration(minutes: 2, seconds: 3));

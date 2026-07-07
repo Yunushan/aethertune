@@ -47,10 +47,7 @@ class PodcastRssProvider implements MusicSourceProvider {
 
   @override
   Future<List<Track>> search(String query) async {
-    final feed = parsePodcastRssFeed(
-      await _feedLoader(feedUri),
-      feedUri: feedUri,
-    );
+    final feed = await fetchFeed();
     final normalized = query.trim().toLowerCase();
     final tracks = feed.episodes
         .map((episode) => episode.toTrack(sourceId: id, feed: feed))
@@ -66,6 +63,12 @@ class PodcastRssProvider implements MusicSourceProvider {
     }).toList(growable: false);
 
     return tracks;
+  }
+
+  Future<PodcastRssFeed> fetchFeed() {
+    return _feedLoader(feedUri).then(
+      (xml) => parsePodcastRssFeed(xml, feedUri: feedUri),
+    );
   }
 
   @override

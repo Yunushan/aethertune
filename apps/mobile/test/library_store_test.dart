@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/domain/podcast_subscription.dart';
 import 'package:aethertune/src/domain/track.dart';
 
 void main() {
@@ -416,6 +417,51 @@ void main() {
     expect(secondStore.recentlyPlayedTracks().single.id, '1');
   });
 
+  test('saves persists and deletes podcast feed subscriptions', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 15);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+
+    final subscription = await firstStore.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'ignored',
+        feedUrl: ' https://feeds.example.test/aether.xml ',
+        title: ' Aether Radio ',
+        description: ' Open feed ',
+        author: ' Aether Hosts ',
+        artworkUri: Uri.parse('https://media.example.test/show.jpg'),
+      ),
+    );
+    await firstStore.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'ignored-again',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether Radio Updated',
+      ),
+    );
+
+    expect(firstStore.podcastSubscriptions, hasLength(1));
+    expect(
+      firstStore.podcastSubscriptions.single.id,
+      stablePodcastSubscriptionId('https://feeds.example.test/aether.xml'),
+    );
+    expect(firstStore.podcastSubscriptions.single.title, 'Aether Radio Updated');
+    expect(subscription.addedAt, DateTime.utc(2026, 1, 15));
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+
+    expect(secondStore.podcastSubscriptions, hasLength(1));
+    expect(
+      secondStore.podcastSubscriptionById(subscription.id)!.feedUrl,
+      'https://feeds.example.test/aether.xml',
+    );
+
+    await secondStore.deletePodcastSubscription(subscription.id);
+
+    expect(secondStore.podcastSubscriptions, isEmpty);
+  });
+
   test('sorts library searches and exposes recently added tracks', () async {
     final store = LibraryStore();
     await store.load();
@@ -661,6 +707,13 @@ void main() {
     );
     await firstStore.setLyrics('1', 'backup lyrics');
     await firstStore.recordPlayback('2');
+    final subscription = await firstStore.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'podcast',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether Radio',
+      ),
+    );
 
     final backupJson = firstStore.exportBackupJson();
 
@@ -692,6 +745,10 @@ void main() {
     expect(secondStore.lyricsForTrack('1')!.plainText, 'backup lyrics');
     expect(secondStore.playbackHistory.single.trackId, '2');
     expect(secondStore.recentlyPlayedTracks().single.id, '2');
+    expect(
+      secondStore.podcastSubscriptionById(subscription.id)!.title,
+      'Aether Radio',
+    );
   });
 
   test('rejects invalid backup JSON without replacing the library', () async {

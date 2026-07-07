@@ -82,7 +82,7 @@ This scaffold includes real app code, not only a README:
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
 | Local library | Import audio files through the native file picker; search, sort, and browse by artist, album, genre, source, or folder |
-| Persistence | Saves imported tracks, favorites, playlists, lyrics, and playback history with `shared_preferences` |
+| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, and playback history with `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup from the Options tab |
 | Search | Local library filtering by title, artist, album, and genre with sortable results |
 | Queue | Play current list as a persistent queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
@@ -92,7 +92,7 @@ This scaffold includes real app code, not only a README:
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
-| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, demo provider, Podcast RSS foundation, and Radio Browser foundation |
+| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, demo provider, Podcast RSS feeds, and Radio Browser station search |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
@@ -116,7 +116,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
-| Multi-source | Local provider support plus Podcast RSS foundation and Radio Browser station search/play/save; self-hosted, open catalog, and official API providers remain roadmap |
+| Multi-source | Local provider support plus Podcast RSS feed subscriptions/play/save and Radio Browser station search/play/save; self-hosted, open catalog, and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 
