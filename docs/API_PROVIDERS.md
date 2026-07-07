@@ -41,7 +41,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Podcast RSS foundation
 
-`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, load episodes, play them, save them to the local library, and include subscriptions in backups. Episode progress, refresh policy, offline cache, and OPML/import flow are still separate roadmap work.
+`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, play them, save them to the local library, and include subscriptions in backups. Episode progress, refresh policy, and offline cache are still separate roadmap work.
 
 ## Radio Browser foundation
 

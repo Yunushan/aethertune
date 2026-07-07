@@ -67,7 +67,8 @@
 - [x] Provider capability and privacy disclosure contract
 - [x] Podcast RSS parser/provider foundation
 - [x] Podcast RSS feed subscriptions and episode UI
-- [ ] Podcast episode progress, refresh policy, cache, and OPML import
+- [x] Podcast OPML import/export
+- [ ] Podcast episode progress, refresh policy, and cache
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [ ] Radio Browser mirror discovery, click accounting, and richer browse filters

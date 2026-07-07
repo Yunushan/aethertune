@@ -81,7 +81,7 @@ The Sources tab explains the provider model and shows capability/privacy disclos
 
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
-- Podcast RSS: add a legal RSS feed URL in Sources, then load, play, save, or remove feed episodes.
+- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then load, play, save, or remove feed episodes.
 - Radio Browser: search public internet radio stations in Sources, then play a station or save it to the local library.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.

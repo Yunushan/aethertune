@@ -12,6 +12,7 @@ import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/playlist.dart';
+import '../domain/podcast_opml.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
@@ -2568,6 +2569,25 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            OutlinedButton.icon(
+              onPressed: () => _importPodcastOpml(context),
+              icon: const Icon(Icons.file_upload_outlined),
+              label: const Text('Import OPML'),
+            ),
+            OutlinedButton.icon(
+              onPressed: podcastSubscriptions.isEmpty
+                  ? null
+                  : () => _showPodcastOpmlExport(context),
+              icon: const Icon(Icons.file_download_outlined),
+              label: const Text('Export OPML'),
+            ),
+          ],
+        ),
         if (_podcastLoading) ...<Widget>[
           const SizedBox(height: 12),
           const LinearProgressIndicator(),
@@ -2753,6 +2773,108 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
 
     await _loadAndSavePodcastFeed(context, feedUri);
+  }
+
+  Future<void> _importPodcastOpml(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final opml = await _promptForPodcastOpml(context);
+    if (!context.mounted || opml == null) {
+      return;
+    }
+
+    try {
+      final subscriptions = parsePodcastOpml(opml);
+      for (final subscription in subscriptions) {
+        await library.savePodcastSubscription(subscription);
+      }
+
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Imported ${subscriptions.length} podcast feed(s).'),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not import OPML: $error')),
+      );
+    }
+  }
+
+  Future<void> _showPodcastOpmlExport(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final opml = exportPodcastOpml(library.podcastSubscriptions);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Export OPML'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(opml),
+            ),
+          ),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _promptForPodcastOpml(BuildContext context) async {
+    final controller = TextEditingController();
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Import OPML'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: TextField(
+                autofocus: true,
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'OPML',
+                ),
+                keyboardType: TextInputType.multiline,
+                minLines: 8,
+                maxLines: 14,
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
+                child: const Text('Import'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _loadPodcastEpisodes(
