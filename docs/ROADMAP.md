@@ -103,6 +103,7 @@
 
 - [x] Offline mode toggle
 - [x] Player-wide saved stream blocking while offline mode is enabled
+- [x] Local-files-only library filter for offline-ready browsing
 - [x] Per-provider cache/download policy gate
 - [ ] Cache manager
 - [ ] Download queue

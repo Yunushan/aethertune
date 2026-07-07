@@ -605,10 +605,12 @@ class LibraryStore extends ChangeNotifier {
   List<Track> search(
     String query, {
     bool favoritesOnly = false,
+    bool offlineOnly = false,
     LibrarySortMode sortMode = LibrarySortMode.recentlyAdded,
   }) {
     final normalized = _normalizeQuery(query);
-    final source = favoritesOnly ? favorites : tracks;
+    final source = (favoritesOnly ? favorites : tracks)
+        .where((track) => !offlineOnly || track.hasLocalSource);
 
     final results = normalized.isEmpty
         ? source.toList(growable: false)

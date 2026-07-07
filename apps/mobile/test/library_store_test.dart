@@ -992,6 +992,39 @@ void main() {
     expect(store.search('ambient').single.id, 'new');
   });
 
+  test('filters library searches to local offline-playable tracks', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      Track(
+        id: 'local',
+        title: 'Ambient Local',
+        artist: 'Mia',
+        album: 'Offline',
+        genre: 'Ambient',
+        localPath: '/music/ambient-local.mp3',
+      ),
+      Track(
+        id: 'stream',
+        title: 'Ambient Stream',
+        artist: 'Mia',
+        album: 'Archive',
+        genre: 'Ambient',
+        streamUrl: 'https://media.example.test/ambient.mp3',
+        sourceId: 'archive',
+      ),
+    ]);
+
+    expect(
+      store.search('ambient').map((track) => track.id),
+      containsAll(<String>['local', 'stream']),
+    );
+    expect(
+      store.search('ambient', offlineOnly: true).map((track) => track.id),
+      <String>['local'],
+    );
+  });
+
   test('builds local search suggestions from recent playback and metadata', () async {
     var now = DateTime.utc(2026, 1, 15, 12);
     final store = LibraryStore(clock: () => now);

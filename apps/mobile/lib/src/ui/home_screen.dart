@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _radioClickProvider = RadioBrowserProvider();
   int _tabIndex = 0;
   bool _favoritesOnly = false;
+  bool _offlineLibraryOnly = false;
   String _query = '';
   LibrarySortMode _librarySortMode = LibrarySortMode.recentlyAdded;
   PlayerController? _historyPlayer;
@@ -155,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     searchController: _searchController,
                     query: _query,
                     favoritesOnly: _favoritesOnly,
+                    offlineOnly: _offlineLibraryOnly,
                     sortMode: _librarySortMode,
                     onQueryChanged: (value) => setState(() => _query = value),
                     onQuerySubmitted: (value) {
@@ -165,6 +167,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                     onFavoritesOnlyChanged: (value) {
                       setState(() => _favoritesOnly = value);
+                    },
+                    onOfflineOnlyChanged: (value) {
+                      setState(() => _offlineLibraryOnly = value);
                     },
                     onSortModeChanged: (value) {
                       setState(() => _librarySortMode = value);
@@ -954,6 +959,7 @@ class _SyncedLyricsPreview extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _NowPlayingLyricsSheet extends StatelessWidget {
@@ -1362,10 +1368,12 @@ class _LibraryTab extends StatelessWidget {
     required this.searchController,
     required this.query,
     required this.favoritesOnly,
+    required this.offlineOnly,
     required this.sortMode,
     required this.onQueryChanged,
     required this.onQuerySubmitted,
     required this.onFavoritesOnlyChanged,
+    required this.onOfflineOnlyChanged,
     required this.onSortModeChanged,
     required this.onImport,
     required this.onAddToPlaylist,
@@ -1375,10 +1383,12 @@ class _LibraryTab extends StatelessWidget {
   final TextEditingController searchController;
   final String query;
   final bool favoritesOnly;
+  final bool offlineOnly;
   final LibrarySortMode sortMode;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<String> onQuerySubmitted;
   final ValueChanged<bool> onFavoritesOnlyChanged;
+  final ValueChanged<bool> onOfflineOnlyChanged;
   final ValueChanged<LibrarySortMode> onSortModeChanged;
   final VoidCallback onImport;
   final ValueChanged<Track> onAddToPlaylist;
@@ -1391,6 +1401,7 @@ class _LibraryTab extends StatelessWidget {
     final tracks = library.search(
       query,
       favoritesOnly: favoritesOnly,
+      offlineOnly: offlineOnly,
       sortMode: sortMode,
     );
     final suggestions = library.searchSuggestions(query);
@@ -1433,6 +1444,15 @@ class _LibraryTab extends StatelessWidget {
                 onPressed: () => onFavoritesOnlyChanged(!favoritesOnly),
                 icon: Icon(
                   favoritesOnly ? Icons.favorite : Icons.favorite_border,
+                ),
+              ),
+              IconButton(
+                tooltip: offlineOnly
+                    ? 'Showing local files only'
+                    : 'Show local files only',
+                onPressed: () => onOfflineOnlyChanged(!offlineOnly),
+                icon: Icon(
+                  offlineOnly ? Icons.cloud_off : Icons.cloud_off_outlined,
                 ),
               ),
             ],
@@ -1499,6 +1519,7 @@ class _LibraryTab extends StatelessWidget {
           Expanded(
             child: _EmptyLibrary(
               favoritesOnly: favoritesOnly,
+              offlineOnly: offlineOnly,
               onImport: onImport,
             ),
           )
@@ -3849,10 +3870,12 @@ String _formatRefreshAge(Duration age) {
 class _EmptyLibrary extends StatelessWidget {
   const _EmptyLibrary({
     required this.favoritesOnly,
+    required this.offlineOnly,
     required this.onImport,
   });
 
   final bool favoritesOnly;
+  final bool offlineOnly;
   final VoidCallback onImport;
 
   @override
@@ -3866,14 +3889,12 @@ class _EmptyLibrary extends StatelessWidget {
             const Icon(Icons.music_note, size: 56),
             const SizedBox(height: 16),
             Text(
-              favoritesOnly ? 'No favorite tracks yet' : 'Your library is empty',
+              _emptyLibraryTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             Text(
-              favoritesOnly
-                  ? 'Favorite a track from your library to see it here.'
-                  : 'Import local audio files to start using the real player.',
+              _emptyLibrarySubtitle,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -3886,6 +3907,30 @@ class _EmptyLibrary extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String get _emptyLibraryTitle {
+    if (offlineOnly) {
+      return 'No local files match';
+    }
+
+    if (favoritesOnly) {
+      return 'No favorite tracks yet';
+    }
+
+    return 'Your library is empty';
+  }
+
+  String get _emptyLibrarySubtitle {
+    if (offlineOnly) {
+      return 'Turn off the local-files-only filter or import audio files for offline playback.';
+    }
+
+    if (favoritesOnly) {
+      return 'Favorite a track from your library to see it here.';
+    }
+
+    return 'Import local audio files to start using the real player.';
   }
 }
 
@@ -5365,6 +5410,7 @@ class _ProviderCard extends StatelessWidget {
       ),
     );
   }
+
 }
 
 String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
