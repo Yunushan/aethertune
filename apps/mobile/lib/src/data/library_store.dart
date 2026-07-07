@@ -688,6 +688,25 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  Future<OfflineCacheEntry?> markOfflineCacheEntryEvicted(
+    String id, {
+    required String reason,
+  }) {
+    final entry = offlineCacheEntryById(id);
+    if (entry == null) {
+      return Future<OfflineCacheEntry?>.value(null);
+    }
+
+    return _updateOfflineCacheEntry(
+      id,
+      track: entry.track.copyWith(localPath: ''),
+      status: OfflineCacheEntryStatus.queued,
+      reason: reason,
+      upsertCachedTrack: true,
+      addCachedTrackIfMissing: false,
+    );
+  }
+
   Future<void> toggleFavorite(String id) async {
     final index = _tracks.indexWhere((track) => track.id == id);
     if (index == -1) {
@@ -3250,6 +3269,7 @@ class LibraryStore extends ChangeNotifier {
     OfflineCacheEntryStatus? status,
     String? reason,
     bool upsertCachedTrack = false,
+    bool addCachedTrackIfMissing = true,
   }) async {
     final index = _offlineCacheQueue.indexWhere((entry) => entry.id == id);
     if (index == -1) {
@@ -3264,7 +3284,10 @@ class LibraryStore extends ChangeNotifier {
     );
     _offlineCacheQueue[index] = updated;
     if (upsertCachedTrack && track != null) {
-      _upsertOfflineCachedTrack(track);
+      _upsertOfflineCachedTrack(
+        track,
+        addIfMissing: addCachedTrackIfMissing,
+      );
     }
 
     _sortOfflineCacheQueue();
@@ -3274,9 +3297,16 @@ class LibraryStore extends ChangeNotifier {
     return updated;
   }
 
-  void _upsertOfflineCachedTrack(Track cachedTrack) {
+  void _upsertOfflineCachedTrack(
+    Track cachedTrack, {
+    bool addIfMissing = true,
+  }) {
     final index = _tracks.indexWhere((track) => track.id == cachedTrack.id);
     if (index == -1) {
+      if (!addIfMissing) {
+        return;
+      }
+
       _tracks.add(
         cachedTrack.copyWith(
           addedAt: cachedTrack.addedAt == DateTime.fromMillisecondsSinceEpoch(0)

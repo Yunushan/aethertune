@@ -1317,6 +1317,18 @@ void main() {
     expect(store.tracks.single.localPath, '/cache/audio.mp3');
     expect(store.search('', offlineOnly: true).single.id, track.id);
 
+    now = DateTime.utc(2026, 1, 16, 16, 30);
+    final evicted = await store.markOfflineCacheEntryEvicted(
+      queued.id,
+      reason: 'Evicted to keep cache under 500.0 MB.',
+    );
+
+    expect(evicted!.status, OfflineCacheEntryStatus.queued);
+    expect(evicted.reason, 'Evicted to keep cache under 500.0 MB.');
+    expect(evicted.track.localPath, '');
+    expect(store.tracks.single.localPath, '');
+    expect(store.search('', offlineOnly: true), isEmpty);
+
     now = DateTime.utc(2026, 1, 16, 17);
     final failed = await store.markOfflineCacheEntryFailed(
       queued.id,
@@ -1326,6 +1338,10 @@ void main() {
     expect(failed!.status, OfflineCacheEntryStatus.failed);
     expect(failed.reason, 'Network failed.');
     expect(await store.markOfflineCacheEntryProcessing('missing'), isNull);
+    expect(
+      await store.markOfflineCacheEntryEvicted('missing', reason: 'Missing.'),
+      isNull,
+    );
   });
 
   test('edits persisted track metadata for search browse and suggestions', () async {

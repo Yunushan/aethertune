@@ -5889,6 +5889,8 @@ bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
       entry.status == OfflineCacheEntryStatus.failed;
 }
 
+const int _offlineCacheTrimLimitBytes = 500 * 1024 * 1024;
+
 String _formatByteCount(int bytes) {
   if (bytes < 1024) {
     return '$bytes B';
@@ -6008,6 +6010,52 @@ class _SettingsTab extends StatelessWidget {
             ],
           ),
         ),
+        FutureBuilder<OfflineCacheUsage>(
+          future: _offlineCacheUsage(offlineQueue),
+          builder: (context, snapshot) {
+            final usage = snapshot.data;
+            final canTrim =
+                usage != null && usage.byteCount > _offlineCacheTrimLimitBytes;
+            final canClear = usage != null && usage.byteCount > 0;
+            final subtitle = snapshot.hasError
+                ? 'Could not read cache usage.'
+                : usage == null
+                    ? 'Calculating private cache usage...'
+                    : '${_formatByteCount(usage.byteCount)} across '
+                        '${usage.cachedEntryCount} cached item(s)';
+
+            return ListTile(
+              leading: const Icon(Icons.storage_outlined),
+              title: const Text('Offline cache storage'),
+              subtitle: Text(subtitle),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Trim cache to '
+                        '${_formatByteCount(_offlineCacheTrimLimitBytes)}',
+                    onPressed: canTrim
+                        ? () => unawaited(
+                              _trimOfflineCache(
+                                context,
+                                _offlineCacheTrimLimitBytes,
+                              ),
+                            )
+                        : null,
+                    icon: const Icon(Icons.cleaning_services_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Clear cached media',
+                    onPressed: canClear
+                        ? () => unawaited(_trimOfflineCache(context, 0))
+                        : null,
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
         for (final entry in offlineQueue.take(5))
           ListTile(
             dense: true,
@@ -6090,6 +6138,46 @@ class _SettingsTab extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<OfflineCacheUsage> _offlineCacheUsage(
+    List<OfflineCacheEntry> entries,
+  ) async {
+    final cacheRoot = await getApplicationDocumentsDirectory();
+    return OfflineCacheManager(cacheRoot: cacheRoot).usage(entries);
+  }
+
+  Future<void> _trimOfflineCache(
+    BuildContext context,
+    int maxBytes,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final cacheRoot = await getApplicationDocumentsDirectory();
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    final result = await manager.evictToSize(
+      entries: library.offlineCacheQueue,
+      maxBytes: maxBytes,
+    );
+    final reason = maxBytes <= 0
+        ? 'Cached media cleared.'
+        : 'Evicted to keep cache under ${_formatByteCount(maxBytes)}.';
+
+    for (final entryId in result.evictedEntryIds) {
+      await library.markOfflineCacheEntryEvicted(entryId, reason: reason);
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+
+    final message = result.evictedEntryIds.isEmpty
+        ? maxBytes <= 0
+            ? 'No cached media to clear.'
+            : 'Offline cache already under ${_formatByteCount(maxBytes)}.'
+        : 'Cleared ${_formatByteCount(result.evictedBytes)} from '
+            '${result.evictedEntryIds.length} cached item(s).';
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _processOfflineCacheEntries(

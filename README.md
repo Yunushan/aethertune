@@ -134,7 +134,7 @@ This scaffold includes real app code, not only a README:
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track, with optional final-30-second fade-out |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
-| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered private cache storage for direct media URLs, unified provider search, demo provider, Podcast RSS feeds, Radio Browser mirror discovery/search/filtering/stream validation, and Internet Archive audio search/filtering |
+| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered private cache storage and eviction for direct media URLs, unified provider search, demo provider, Podcast RSS feeds, Radio Browser mirror discovery/search/filtering/stream validation, and Internet Archive audio search/filtering |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
@@ -149,7 +149,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | History/stats | Recently played, local play counts, estimated listening time, date-range filters, JSON/CSV export, and top track/artist/album/genre recap implemented; richer yearly/monthly cards and visualizations roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, network disclosure, and cache/download policy gates for legal source adapters |
-| Offline | Local-first data model, offline library filter, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, persisted cache/download queue manager, private direct-URL cache storage, and resumable/background download plus eviction roadmap |
+| Offline | Local-first data model, offline library filter, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, persisted cache/download queue manager, private direct-URL cache storage with usage/trim/clear controls, and resumable/background download plus configurable limits roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, and cross-device artwork sync roadmap |
@@ -158,7 +158,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
-| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download queue and private cache eligibility, Radio Browser mirror discovery/search/filter/stream validation/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download queue and private cache eligibility with multi-file item results; self-hosted and official API providers remain roadmap |
+| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download queue and private cache eligibility/eviction, Radio Browser mirror discovery/search/filter/stream validation/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download queue and private cache eligibility/eviction with multi-file item results; self-hosted and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 
