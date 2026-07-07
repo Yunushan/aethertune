@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
 
@@ -32,13 +33,17 @@ class PlayerController extends ChangeNotifier {
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<ProcessingState>? _completedSub;
   Timer? _sleepTimer;
+  Timer? _sleepFadeStartTimer;
+  Timer? _sleepFadeStepTimer;
   Duration _duration = Duration.zero;
   Track? _current;
   String? _loadedTrackId;
   bool _stopAtEndOfTrack = false;
+  bool _sleepTimerFadesOut = false;
   bool _queueSnapshotLoaded = false;
   bool _playbackSettingsLoaded = false;
   int _playbackStartSerial = 0;
+  double? _sleepFadeStartVolume;
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
@@ -51,6 +56,7 @@ class PlayerController extends ChangeNotifier {
   Stream<Duration> get positionStream => _audio.positionStream;
   Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
+  bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
 
   Future<void> loadPersistedQueue() async {
     if (_queueSnapshotLoaded) {
@@ -154,6 +160,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _cancelSleepFadeSteps(restoreVolume: true);
     await _audio.stop();
     notifyListeners();
   }
@@ -240,27 +247,37 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void startSleepTimer(Duration duration) {
-    _sleepTimer?.cancel();
+  void startSleepTimer(
+    Duration duration, {
+    bool fadeOut = false,
+    Duration fadeDuration = defaultSleepTimerFadeDuration,
+  }) {
+    _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = false;
+    _sleepTimerFadesOut = fadeOut;
     _sleepTimer = Timer(duration, () async {
-      await stop();
       _sleepTimer = null;
-      notifyListeners();
+      _sleepTimerFadesOut = false;
+      await _stopForSleepTimer(restoreVolume: fadeOut);
     });
+
+    if (fadeOut) {
+      _sleepFadeStartTimer = Timer(
+        sleepTimerFadeStartDelay(duration, fadeDuration: fadeDuration),
+        () => _startSleepFade(fadeDuration),
+      );
+    }
     notifyListeners();
   }
 
   void stopAtEndOfTrack() {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
+    _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = true;
     notifyListeners();
   }
 
   void cancelSleepTimer() {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
+    _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = false;
     notifyListeners();
   }
@@ -273,6 +290,70 @@ class PlayerController extends ChangeNotifier {
     }
 
     await next();
+  }
+
+  void _startSleepFade(Duration fadeDuration) {
+    _sleepFadeStartTimer = null;
+    _sleepFadeStepTimer?.cancel();
+    final stepInterval = sleepTimerFadeStepInterval(fadeDuration);
+    if (stepInterval <= Duration.zero) {
+      unawaited(_audio.setVolume(0));
+      return;
+    }
+
+    var step = 0;
+    _sleepFadeStartVolume = _audio.volume;
+    _sleepFadeStepTimer = Timer.periodic(stepInterval, (timer) {
+      step += 1;
+      unawaited(
+        _audio.setVolume(
+          sleepTimerFadeVolume(
+            startVolume: _sleepFadeStartVolume ?? _audio.volume,
+            step: step,
+          ),
+        ),
+      );
+
+      if (step >= sleepTimerFadeSteps) {
+        timer.cancel();
+        _sleepFadeStepTimer = null;
+      }
+    });
+  }
+
+  Future<void> _stopForSleepTimer({required bool restoreVolume}) async {
+    final startVolume = _sleepFadeStartVolume;
+    _cancelSleepFade(restoreVolume: false);
+    await _audio.stop();
+    if (restoreVolume && startVolume != null) {
+      await _audio.setVolume(startVolume);
+    }
+    notifyListeners();
+  }
+
+  void _cancelSleepTimerState({required bool restoreVolume}) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepTimerFadesOut = false;
+    _sleepFadeStartTimer?.cancel();
+    _sleepFadeStartTimer = null;
+    _cancelSleepFade(restoreVolume: restoreVolume);
+  }
+
+  void _cancelSleepFade({required bool restoreVolume}) {
+    _sleepFadeStartTimer?.cancel();
+    _sleepFadeStartTimer = null;
+    _cancelSleepFadeSteps(restoreVolume: restoreVolume);
+  }
+
+  void _cancelSleepFadeSteps({required bool restoreVolume}) {
+    _sleepFadeStepTimer?.cancel();
+    _sleepFadeStepTimer = null;
+    final startVolume = _sleepFadeStartVolume;
+    _sleepFadeStartVolume = null;
+    if (restoreVolume && startVolume != null) {
+      unawaited(_audio.setVolume(startVolume));
+    }
   }
 
   Future<void> _load(Track track) async {
@@ -357,7 +438,7 @@ class PlayerController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _sleepTimer?.cancel();
+    _cancelSleepTimerState(restoreVolume: false);
     _playerStateSub?.cancel();
     _durationSub?.cancel();
     _completedSub?.cancel();

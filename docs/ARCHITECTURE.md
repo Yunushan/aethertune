@@ -74,7 +74,7 @@ Adapters should not leak service-specific logic into the player or UI. They shou
 - queue
 - shuffle
 - repeat mode
-- sleep timer
+- sleep timer with optional fade-out
 
 ## Persistence
 

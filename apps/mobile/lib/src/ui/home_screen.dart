@@ -568,59 +568,88 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showSleepTimer(BuildContext context) async {
     final player = context.read<PlayerController>();
     final durations = <int>[5, 15, 30, 60, 90];
+    var fadeOut = player.sleepTimerFadeOutEnabled;
 
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.timer_off_outlined),
-                title: const Text('Cancel sleep timer'),
-                onTap: () {
-                  player.cancelSleepTimer();
-                  Navigator.of(sheetContext).pop();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Custom duration'),
-                subtitle: const Text(
-                  'Choose any duration from 1 minute to 24 hours.',
-                ),
-                onTap: () async {
-                  Navigator.of(sheetContext).pop();
-                  await _showCustomSleepTimer(context, player);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.timer_outlined),
-                title: const Text('Stop at end of current track'),
-                subtitle: const Text(
-                  'Finish this track, then stop playback.',
-                ),
-                enabled: player.current != null,
-                onTap: player.current == null
-                    ? null
-                    : () {
-                        player.stopAtEndOfTrack();
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  SwitchListTile(
+                    secondary: const Icon(Icons.volume_down_outlined),
+                    title: const Text('Fade out before stopping'),
+                    subtitle: const Text(
+                      'Lower volume during the final 30 seconds.',
+                    ),
+                    value: fadeOut,
+                    onChanged: (value) {
+                      setSheetState(() {
+                        fadeOut = value;
+                      });
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.timer_off_outlined),
+                    title: const Text('Cancel sleep timer'),
+                    onTap: () {
+                      player.cancelSleepTimer();
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('Custom duration'),
+                    subtitle: const Text(
+                      'Choose any duration from 1 minute to 24 hours.',
+                    ),
+                    onTap: () async {
+                      Navigator.of(sheetContext).pop();
+                      await _showCustomSleepTimer(
+                        context,
+                        player,
+                        fadeOut: fadeOut,
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.timer_outlined),
+                    title: const Text('Stop at end of current track'),
+                    subtitle: const Text(
+                      'Finish this track, then stop playback.',
+                    ),
+                    enabled: player.current != null,
+                    onTap: player.current == null
+                        ? null
+                        : () {
+                            player.stopAtEndOfTrack();
+                            Navigator.of(sheetContext).pop();
+                          },
+                  ),
+                  for (final minutes in durations)
+                    ListTile(
+                      leading: const Icon(Icons.bedtime_outlined),
+                      title: Text('Stop playback in $minutes minutes'),
+                      subtitle: fadeOut
+                          ? const Text('Fade out in the final 30 seconds.')
+                          : null,
+                      onTap: () {
+                        player.startSleepTimer(
+                          Duration(minutes: minutes),
+                          fadeOut: fadeOut,
+                        );
                         Navigator.of(sheetContext).pop();
                       },
+                    ),
+                ],
               ),
-              for (final minutes in durations)
-                ListTile(
-                  leading: const Icon(Icons.bedtime_outlined),
-                  title: Text('Stop playback in $minutes minutes'),
-                  onTap: () {
-                    player.startSleepTimer(Duration(minutes: minutes));
-                    Navigator.of(sheetContext).pop();
-                  },
-                ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -628,15 +657,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showCustomSleepTimer(
     BuildContext context,
-    PlayerController player,
-  ) async {
+    PlayerController player, {
+    required bool fadeOut,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final duration = await _promptForCustomSleepTimerDuration(context);
     if (!context.mounted || duration == null) {
       return;
     }
 
-    player.startSleepTimer(duration);
+    player.startSleepTimer(duration, fadeOut: fadeOut);
 
     if (!context.mounted) {
       return;
@@ -645,7 +675,10 @@ class _HomeScreenState extends State<HomeScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'Sleep timer set for ${duration.inMinutes} minute(s).',
+          fadeOut
+              ? 'Sleep timer set for ${duration.inMinutes} minute(s) '
+                  'with fade-out.'
+              : 'Sleep timer set for ${duration.inMinutes} minute(s).',
         ),
       ),
     );

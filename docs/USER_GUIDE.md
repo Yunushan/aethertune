@@ -78,7 +78,7 @@ Open the Options tab and choose **Export backup** to view a versioned JSON backu
 
 ## Sleep timer
 
-Tap the moon icon in the top-right corner and choose a preset duration, choose **Custom duration** and enter 1 to 1440 minutes, or choose **Stop at end of current track**. Playback stops automatically when the timer or selected track ends.
+Tap the moon icon in the top-right corner and choose a preset duration, choose **Custom duration** and enter 1 to 1440 minutes, or choose **Stop at end of current track**. Turn on **Fade out before stopping** to lower volume during the final 30 seconds of a timed sleep timer. Playback stops automatically when the timer or selected track ends.
 
 ## Options
 

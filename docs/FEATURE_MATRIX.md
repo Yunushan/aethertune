@@ -57,7 +57,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Smart playlists | Scaffolded | Playlists tab exposes built-in dynamic Favorites, Recently added, Recently played, and Most played collections plus persisted custom smart playlists with search text, favorites-only, minimum play count, sort mode, and result limit rules. Store tests cover rule matching, persistence, update/delete, and backup restore. | Rich nested rule builder, sync, artwork, and cross-device dynamic queries. |
 | Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing, preview, and playback-linked highlighting/autoscroll. | Provider lyrics, file import/export, and sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
-| Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, and end-of-current-track mode. | Fade-out. |
+| Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, end-of-current-track mode, optional final-30-second fade-out, and unit coverage for timer/fade rules. | More fade duration controls and platform media-session integration. |
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider` requires capability flags and privacy/network disclosure. | Stable provider SDK, packaging, sandbox rules. |
@@ -85,7 +85,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Pitch / tempo control | Roadmap | Podcast/video clients | DSP backend and UI controls. |
 | Skip silence | Roadmap | Podcast/music clients | Audio analysis or playback backend support. |
 | Audio-only mode for video sources | Blocked / official-only | YouTube Music, YMusic | Only through official APIs or user-provided legal streams. |
-| Sleep timer with fade/custom rules | Scaffolded | InnerTune, Namida, YouTube Music | Custom duration and end-of-track action are done; fade-out still needs implementation. |
+| Sleep timer with fade/custom rules | Done | InnerTune, Namida, YouTube Music | Presets, custom 1-1440 minute duration, end-of-current-track action, opt-in final-30-second fade-out, volume restore on cancel/stop, and unit-tested fade timing/volume rules are implemented. Needed next: user-adjustable fade duration and media-session-aware sleep timer notifications. |
 | Output device picker | Roadmap | YouTube Music, desktop players | Platform route picker and Bluetooth/cast support. |
 
 ### Library And Local Files

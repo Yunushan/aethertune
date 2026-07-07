@@ -16,6 +16,7 @@ Initial GitHub-ready scaffold.
 - Added playlist artwork URL editing, display, export/import, and backup restore.
 - Added local listening stats recap for tracks, artists, albums, genres, and listening time.
 - Added listening stats date ranges and JSON/CSV export.
+- Added optional sleep timer fade-out during the final 30 seconds before playback stops.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
 - Added unified provider search fan-out with ranking and per-provider error reporting.

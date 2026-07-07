@@ -130,7 +130,7 @@ This scaffold includes real app code, not only a README:
 | Playlists | Built-in and custom rule smart playlists plus create, rename, artwork URL edit, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text or LRC timestamped lyrics, including playback-linked synced highlighting |
 | Favorites | Toggle favorites per track |
-| Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track |
+| Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track, with optional final-30-second fade-out |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
 | Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, unified provider search, demo provider, Podcast RSS feeds, Radio Browser station search/filtering, and Internet Archive audio search/filtering |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
