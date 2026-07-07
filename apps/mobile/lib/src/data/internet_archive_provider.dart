@@ -9,6 +9,26 @@ typedef InternetArchiveMetadataLoader = Future<String> Function(
   Uri metadataUri,
 );
 
+final class InternetArchiveSearchFilters {
+  const InternetArchiveSearchFilters({
+    this.collection = '',
+    this.subject = '',
+    this.creator = '',
+    this.year = '',
+  });
+
+  final String collection;
+  final String subject;
+  final String creator;
+  final String year;
+
+  bool get isEmpty =>
+      collection.trim().isEmpty &&
+      subject.trim().isEmpty &&
+      creator.trim().isEmpty &&
+      year.trim().isEmpty;
+}
+
 class InternetArchiveProvider implements MusicSourceProvider {
   InternetArchiveProvider({
     Uri? baseUri,
@@ -54,17 +74,21 @@ class InternetArchiveProvider implements MusicSourceProvider {
 
   @override
   Future<List<Track>> search(String query) async {
-    final results = parseInternetArchiveSearchResults(
-      await _searchLoader(_searchUri(query.trim())),
+    return searchAudio(query);
+  }
+
+  Future<List<Track>> searchAudio(
+    String query, {
+    InternetArchiveSearchFilters filters = const InternetArchiveSearchFilters(),
+  }) async {
+    final results = parseInternetArchiveSearchPage(
+      await _searchLoader(_searchUri(query.trim(), filters)),
     );
     final tracks = <Track>[];
 
-    for (final result in results.take(limit)) {
+    for (final result in results.results.take(limit)) {
       final item = await fetchItem(result.identifier);
-      final track = item.toTrack(sourceId: id, baseUri: baseUri);
-      if (track != null) {
-        tracks.add(track);
-      }
+      tracks.addAll(item.toTracks(sourceId: id, baseUri: baseUri));
     }
 
     return tracks;
@@ -100,10 +124,8 @@ class InternetArchiveProvider implements MusicSourceProvider {
     );
   }
 
-  Uri _searchUri(String query) {
-    final archiveQuery = query.isEmpty
-        ? 'mediatype:audio'
-        : 'mediatype:audio AND (${_searchTerm(query)})';
+  Uri _searchUri(String query, InternetArchiveSearchFilters filters) {
+    final archiveQuery = _searchQuery(query, filters);
 
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, '/advancedsearch.php'),
@@ -138,10 +160,38 @@ class InternetArchiveProvider implements MusicSourceProvider {
   }
 }
 
+final class InternetArchiveSearchPage {
+  const InternetArchiveSearchPage({
+    required this.results,
+    required this.facets,
+  });
+
+  final List<InternetArchiveSearchResult> results;
+  final List<InternetArchiveFacet> facets;
+
+  List<InternetArchiveFacet> facetsFor(String field) {
+    return facets
+        .where((facet) => facet.field == field)
+        .toList(growable: false);
+  }
+}
+
 final class InternetArchiveSearchResult {
   const InternetArchiveSearchResult({required this.identifier});
 
   final String identifier;
+}
+
+final class InternetArchiveFacet {
+  const InternetArchiveFacet({
+    required this.field,
+    required this.value,
+    required this.count,
+  });
+
+  final String field;
+  final String value;
+  final int count;
 }
 
 final class InternetArchiveItem {
@@ -189,15 +239,58 @@ final class InternetArchiveItem {
       return null;
     }
 
+    return _toTrack(
+      audioFile: audioFile,
+      sourceId: sourceId,
+      baseUri: baseUri,
+      includeFileTitle: false,
+    );
+  }
+
+  List<Track> toTracks({
+    required String sourceId,
+    required Uri baseUri,
+  }) {
+    final playable = files
+        .where((file) => file.isPlayableAudio)
+        .toList(growable: false)
+      ..sort(
+        (left, right) => left.playbackPriority.compareTo(
+          right.playbackPriority,
+        ),
+      );
+
+    return playable
+        .map(
+          (file) => _toTrack(
+            audioFile: file,
+            sourceId: sourceId,
+            baseUri: baseUri,
+            includeFileTitle: playable.length > 1,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Track _toTrack({
+    required InternetArchiveFile audioFile,
+    required String sourceId,
+    required Uri baseUri,
+    required bool includeFileTitle,
+  }) {
     final genre = subjects.isEmpty ? 'Internet Archive Audio' : subjects.first;
     final albumParts = <String>[
       'Internet Archive',
       if (year.isNotEmpty) year,
     ];
+    final itemTitle = title.isEmpty ? audioFile.displayTitle : title;
+    final trackTitle = includeFileTitle && title.isNotEmpty
+        ? '$itemTitle - ${audioFile.displayTitle}'
+        : itemTitle;
 
     return Track(
       id: Track.stableLocalId('$sourceId|$identifier|${audioFile.name}'),
-      title: title.isEmpty ? audioFile.displayTitle : title,
+      title: trackTitle,
       artist: creator.isEmpty ? 'Internet Archive' : creator,
       album: albumParts.join(' / '),
       genre: genre,
@@ -289,6 +382,10 @@ final class InternetArchiveFile {
 List<InternetArchiveSearchResult> parseInternetArchiveSearchResults(
   String jsonText,
 ) {
+  return parseInternetArchiveSearchPage(jsonText).results;
+}
+
+InternetArchiveSearchPage parseInternetArchiveSearchPage(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
     throw const FormatException(
@@ -298,19 +395,29 @@ List<InternetArchiveSearchResult> parseInternetArchiveSearchResults(
 
   final response = decoded['response'];
   if (response is! Map<dynamic, dynamic>) {
-    return const <InternetArchiveSearchResult>[];
+    return const InternetArchiveSearchPage(
+      results: <InternetArchiveSearchResult>[],
+      facets: <InternetArchiveFacet>[],
+    );
   }
 
   final docs = response['docs'];
   if (docs is! List<dynamic>) {
-    return const <InternetArchiveSearchResult>[];
+    return const InternetArchiveSearchPage(
+      results: <InternetArchiveSearchResult>[],
+      facets: <InternetArchiveFacet>[],
+    );
   }
 
-  return docs
+  final results = docs
       .whereType<Map<dynamic, dynamic>>()
       .map((json) => _searchResultFromJson(json.cast<String, Object?>()))
       .whereType<InternetArchiveSearchResult>()
       .toList(growable: false);
+  final facetsJson = response['facets'] ?? decoded['facets'];
+  final facets = _facetsFromJson(facetsJson);
+
+  return InternetArchiveSearchPage(results: results, facets: facets);
 }
 
 InternetArchiveItem parseInternetArchiveItem(String jsonText) {
@@ -361,6 +468,39 @@ InternetArchiveSearchResult? _searchResultFromJson(
   }
 
   return InternetArchiveSearchResult(identifier: identifier);
+}
+
+List<InternetArchiveFacet> _facetsFromJson(Object? value) {
+  if (value is! Map<dynamic, dynamic>) {
+    return const <InternetArchiveFacet>[];
+  }
+
+  final facets = <InternetArchiveFacet>[];
+  for (final entry in value.entries) {
+    final field = _stringValue(entry.key);
+    final counts = entry.value;
+    if (field.isEmpty || counts is! Map<dynamic, dynamic>) {
+      continue;
+    }
+
+    for (final countEntry in counts.entries) {
+      final facetValue = _stringValue(countEntry.key);
+      final count = _intValue(countEntry.value);
+      if (facetValue.isEmpty || count <= 0) {
+        continue;
+      }
+
+      facets.add(
+        InternetArchiveFacet(
+          field: field,
+          value: facetValue,
+          count: count,
+        ),
+      );
+    }
+  }
+
+  return facets;
 }
 
 InternetArchiveFile _fileFromJson(Map<String, Object?> json) {
@@ -422,6 +562,28 @@ String _searchTerm(String query) {
       .trim();
 }
 
+String _searchQuery(String query, InternetArchiveSearchFilters filters) {
+  final parts = <String>['mediatype:audio'];
+  final normalizedQuery = _searchTerm(query);
+  if (normalizedQuery.isNotEmpty) {
+    parts.add('($normalizedQuery)');
+  }
+
+  void addField(String field, String value) {
+    final normalized = _searchTerm(value);
+    if (normalized.isNotEmpty) {
+      parts.add('$field:($normalized)');
+    }
+  }
+
+  addField('collection', filters.collection);
+  addField('subject', filters.subject);
+  addField('creator', filters.creator);
+  addField('year', filters.year);
+
+  return parts.join(' AND ');
+}
+
 Duration _durationValue(Object? value) {
   if (value is num) {
     return Duration(milliseconds: (value * 1000).round());
@@ -455,6 +617,17 @@ Duration _durationValue(Object? value) {
   }
 
   return Duration.zero;
+}
+
+int _intValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+
+  return int.tryParse(_stringValue(value)) ?? 0;
 }
 
 String _stringValue(Object? value) {

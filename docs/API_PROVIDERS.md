@@ -49,7 +49,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Internet Archive foundation
 
-`InternetArchiveProvider` searches the public Internet Archive audio catalog, reads item metadata, chooses a playable audio file, maps it to a provider-neutral `Track`, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search public archive audio, play results, and save tracks. Collection browsing, richer facets, file selection for multi-file items, download/offline policy, and cache management are still separate roadmap work.
+`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, and save tracks. Collection browsing pages, facet suggestion UI, download/offline policy, and cache management are still separate roadmap work.
 
 ## Minimal provider
 

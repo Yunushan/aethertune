@@ -2559,6 +2559,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
   final _archiveProvider = InternetArchiveProvider();
   final _archiveSearchController = TextEditingController();
+  final _archiveCollectionController = TextEditingController();
+  final _archiveSubjectController = TextEditingController();
+  final _archiveCreatorController = TextEditingController();
+  final _archiveYearController = TextEditingController();
   final _podcastFeedController = TextEditingController();
   final _radioProvider = RadioBrowserProvider();
   final _radioSearchController = TextEditingController();
@@ -2593,6 +2597,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   @override
   void dispose() {
     _archiveSearchController.dispose();
+    _archiveCollectionController.dispose();
+    _archiveSubjectController.dispose();
+    _archiveCreatorController.dispose();
+    _archiveYearController.dispose();
     _podcastFeedController.dispose();
     _radioSearchController.dispose();
     _radioCountryCodeController.dispose();
@@ -2669,7 +2677,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           title: 'Internet Archive',
           status: 'Adapter foundation',
           description:
-              'Search public audio items and resolve playable archive files.',
+              'Search and filter public audio items, then resolve playable archive files.',
           icon: Icons.archive_outlined,
           capabilities: <MusicSourceCapability>{
             MusicSourceCapability.metadataSearch,
@@ -2978,6 +2986,40 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            _archiveFilterField(
+              controller: _archiveCollectionController,
+              labelText: 'Collection',
+              icon: Icons.collections_bookmark_outlined,
+            ),
+            _archiveFilterField(
+              controller: _archiveSubjectController,
+              labelText: 'Subject',
+              icon: Icons.sell_outlined,
+            ),
+            _archiveFilterField(
+              controller: _archiveCreatorController,
+              labelText: 'Creator',
+              icon: Icons.person_search_outlined,
+            ),
+            _archiveFilterField(
+              controller: _archiveYearController,
+              labelText: 'Year',
+              icon: Icons.calendar_month_outlined,
+              keyboardType: TextInputType.number,
+            ),
+            OutlinedButton.icon(
+              onPressed: _clearArchiveFilters,
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              label: const Text('Clear'),
+            ),
+          ],
+        ),
         if (_archiveLoading) ...<Widget>[
           const SizedBox(height: 12),
           const LinearProgressIndicator(),
@@ -2995,7 +3037,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             leading: Icon(Icons.archive_outlined),
             title: Text('No archive audio loaded'),
             subtitle: Text(
-              'Search public Internet Archive audio items to play or save.',
+              'Search by keyword, collection, subject, creator, or year.',
             ),
           ),
         ] else ...<Widget>[
@@ -3332,8 +3374,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
 
     try {
-      final tracks = await _archiveProvider.search(
+      final tracks = await _archiveProvider.searchAudio(
         _archiveSearchController.text,
+        filters: _archiveFilters(),
       );
       if (!mounted) {
         return;
@@ -3386,6 +3429,43 @@ class _SourcesTabState extends State<_SourcesTab> {
     messenger.showSnackBar(
       SnackBar(content: Text('Saved ${track.title}.')),
     );
+  }
+
+  Widget _archiveFilterField({
+    required TextEditingController controller,
+    required String labelText,
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
+    return SizedBox(
+      width: 168,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: labelText,
+          prefixIcon: Icon(icon),
+        ),
+        keyboardType: keyboardType,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => _searchArchiveItems(),
+      ),
+    );
+  }
+
+  InternetArchiveSearchFilters _archiveFilters() {
+    return InternetArchiveSearchFilters(
+      collection: _archiveCollectionController.text,
+      subject: _archiveSubjectController.text,
+      creator: _archiveCreatorController.text,
+      year: _archiveYearController.text,
+    );
+  }
+
+  void _clearArchiveFilters() {
+    _archiveCollectionController.clear();
+    _archiveSubjectController.clear();
+    _archiveCreatorController.clear();
+    _archiveYearController.clear();
   }
 
   Widget _radioFilterField({

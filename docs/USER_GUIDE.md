@@ -83,6 +83,6 @@ The Sources tab explains the provider model and shows capability/privacy disclos
 - Demo Provider: template with declared search capability and no network access.
 - Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, or remove feed episodes.
 - Radio Browser: search public internet radio stations in Sources, filter by country/language/tag/codec/bitrate, then play a station or save it to the local library; station plays are reported to Radio Browser's click endpoint.
-- Internet Archive: search public archive audio in Sources, then play a resolved audio file or save it to the local library.
+- Internet Archive: search public archive audio in Sources, filter by collection/subject/creator/year, then play a resolved audio file or save it to the local library; multi-file archive items appear as separate playable results.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.

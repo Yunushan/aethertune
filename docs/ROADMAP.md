@@ -77,7 +77,9 @@
 - [x] Radio Browser richer browse filters
 - [ ] Radio Browser mirror discovery, stream validation, and cache policy
 - [x] Internet Archive audio search/provider foundation
-- [ ] Internet Archive collection browse, facets, and offline/download policy
+- [x] Internet Archive collection, subject, creator, and year search filters
+- [x] Internet Archive multi-file item result expansion
+- [ ] Internet Archive collection browse, facet suggestion UI, and offline/download policy
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider
 
