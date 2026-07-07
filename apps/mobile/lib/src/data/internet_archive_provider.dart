@@ -464,7 +464,7 @@ String _stringValue(Object? value) {
   if (value == null) {
     return '';
   }
-  if (value is Iterable<Object?>) {
+  if (value is Iterable) {
     return value.map(_stringValue).where((value) => value.isNotEmpty).join(', ');
   }
 
@@ -475,7 +475,7 @@ List<String> _stringList(Object? value) {
   if (value == null) {
     return const <String>[];
   }
-  if (value is Iterable<Object?>) {
+  if (value is Iterable) {
     return value
         .map(_stringValue)
         .where((value) => value.isNotEmpty)
