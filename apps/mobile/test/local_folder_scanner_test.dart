@@ -70,7 +70,7 @@ void main() {
   });
 
   test('rejects a missing folder path', () async {
-    final scanner = const LocalFolderScanner();
+    const scanner = LocalFolderScanner();
 
     expect(
       scanner.scan(p.join(root.path, 'missing')),
