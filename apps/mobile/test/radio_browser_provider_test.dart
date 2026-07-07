@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
+import 'package:aethertune/src/domain/track.dart';
 
 void main() {
   test('parses radio browser station JSON into playable tracks', () {
@@ -60,6 +61,7 @@ void main() {
       expect(provider.disclosure.dataSent, <String>[
         'station search query',
         'station click UUID',
+        'station stream validation request',
       ]);
       expect(provider.disclosure.cachesMedia, isFalse);
       expect(provider.disclosure.supportsDownloads, isFalse);
@@ -149,6 +151,7 @@ void main() {
         'mirror discovery request',
         'station search query',
         'station click UUID',
+        'station stream validation request',
       ],
     );
 
@@ -231,6 +234,59 @@ void main() {
     );
 
     expect(clicked, isFalse);
+  });
+
+  test('validates radio stream URLs with an injected validator', () async {
+    Uri? capturedStreamUri;
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (_) async => _sampleStationsJson,
+      streamValidator: (uri) async {
+        capturedStreamUri = uri;
+        return RadioBrowserStreamValidation(
+          streamUri: uri,
+          isPlayable: true,
+          statusCode: 200,
+          contentType: 'audio/aac',
+          reason: 'Stream responded as audio/aac.',
+        );
+      },
+    );
+    final tracks = await provider.search('aether');
+
+    final validation = await provider.validateStream(tracks.single);
+
+    expect(capturedStreamUri, Uri.parse('https://stream.example.test/aac'));
+    expect(validation.isPlayable, isTrue);
+    expect(validation.statusCode, 200);
+    expect(validation.contentType, 'audio/aac');
+  });
+
+  test('rejects stream validation for non-radio tracks', () async {
+    var validated = false;
+    final provider = RadioBrowserProvider(
+      streamValidator: (uri) async {
+        validated = true;
+        return RadioBrowserStreamValidation(
+          streamUri: uri,
+          isPlayable: true,
+          reason: 'validated',
+        );
+      },
+    );
+
+    final validation = await provider.validateStream(
+      Track(
+        id: 'podcast',
+        title: 'Podcast',
+        sourceId: 'podcast-rss',
+        streamUrl: 'https://media.example.test/audio.mp3',
+      ),
+    );
+
+    expect(validated, isFalse);
+    expect(validation.isPlayable, isFalse);
+    expect(validation.reason, 'Track is not from Radio Browser.');
   });
 
   test('skips stations without a usable stream URL', () {

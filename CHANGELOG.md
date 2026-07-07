@@ -32,6 +32,7 @@ Initial GitHub-ready scaffold.
 - Added Radio Browser station click accounting on playback.
 - Added Radio Browser country, language, tag, codec, and bitrate search filters.
 - Added Radio Browser mirror discovery with fallback to the bundled default mirror.
+- Added Radio Browser station stream validation before playback/save decisions.
 - Added Internet Archive public audio search with playable file resolution.
 - Added Internet Archive collection, subject, creator, and year filters with multi-file item results.
 - Added persisted Podcast RSS feed subscriptions with episode play/save actions.

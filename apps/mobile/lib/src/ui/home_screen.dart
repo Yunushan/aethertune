@@ -4059,6 +4059,9 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<ProviderSearchResult> _providerSearchResults = <ProviderSearchResult>[];
   List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
   List<Track> _radioTracks = <Track>[];
+  final Map<String, RadioBrowserStreamValidation> _radioValidationByTrackId =
+      <String, RadioBrowserStreamValidation>{};
+  final Set<String> _radioValidatingTrackIds = <String>{};
   bool _archiveLoading = false;
   String? _archiveError;
   bool _podcastLoading = false;
@@ -4161,18 +4164,13 @@ class _SourcesTabState extends State<_SourcesTab> {
             MusicSourceCapability.subscriptions,
           },
         ),
-        const _ProviderCard(
-          title: 'Radio Browser',
+        _ProviderCard(
+          title: _radioProvider.name,
           status: 'Enabled',
-          description:
-              'Search and filter an open radio directory, then resolve public station streams.',
+          description: _radioProvider.description,
           icon: Icons.radio_outlined,
-          capabilities: <MusicSourceCapability>{
-            MusicSourceCapability.metadataSearch,
-            MusicSourceCapability.radioDirectory,
-            MusicSourceCapability.streamResolution,
-            MusicSourceCapability.directPlayback,
-          },
+          capabilities: _radioProvider.capabilities,
+          disclosure: _radioProvider.disclosure,
         ),
         _ProviderCard(
           title: _archiveProvider.name,
@@ -4568,7 +4566,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             ListTile(
               leading: const Icon(Icons.radio_outlined),
               title: Text(track.title),
-              subtitle: Text('${track.artist} / ${track.genre}'),
+              subtitle: Text(_radioStationSubtitle(track)),
               onTap: () => _playRadioStation(context, track),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -4577,6 +4575,19 @@ class _SourcesTabState extends State<_SourcesTab> {
                     tooltip: 'Save station',
                     onPressed: () => _saveRadioStation(context, track),
                     icon: const Icon(Icons.library_add_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Validate stream',
+                    onPressed: _radioValidatingTrackIds.contains(track.id) ||
+                            offlineModeEnabled
+                        ? null
+                        : () => _validateRadioStation(context, track),
+                    icon: _radioValidatingTrackIds.contains(track.id)
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(_radioValidationIcon(track)),
                   ),
                   _offlineQueueMenu(
                     context: context,
@@ -5498,6 +5509,32 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  String _radioStationSubtitle(Track track) {
+    final parts = <String>[track.artist, track.genre];
+    if (_radioValidatingTrackIds.contains(track.id)) {
+      parts.add('Validating stream...');
+      return parts.join(' / ');
+    }
+
+    final validation = _radioValidationByTrackId[track.id];
+    if (validation != null) {
+      parts.add(validation.isPlayable ? 'Stream validated' : validation.reason);
+    }
+
+    return parts.join(' / ');
+  }
+
+  IconData _radioValidationIcon(Track track) {
+    final validation = _radioValidationByTrackId[track.id];
+    if (validation == null) {
+      return Icons.fact_check_outlined;
+    }
+
+    return validation.isPlayable
+        ? Icons.check_circle_outline
+        : Icons.error_outline;
+  }
+
   int? _positiveInt(String value) {
     final parsed = int.tryParse(value.trim());
     if (parsed == null || parsed <= 0) {
@@ -5520,6 +5557,8 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
         _radioTracks = <Track>[];
+        _radioValidationByTrackId.clear();
+        _radioValidatingTrackIds.clear();
         _radioLoading = false;
         _radioError = 'Offline mode is on.';
       });
@@ -5529,6 +5568,8 @@ class _SourcesTabState extends State<_SourcesTab> {
     setState(() {
       _radioLoading = true;
       _radioError = null;
+      _radioValidationByTrackId.clear();
+      _radioValidatingTrackIds.clear();
     });
 
     try {
@@ -5551,10 +5592,41 @@ class _SourcesTabState extends State<_SourcesTab> {
 
       setState(() {
         _radioTracks = <Track>[];
+        _radioValidationByTrackId.clear();
+        _radioValidatingTrackIds.clear();
         _radioLoading = false;
         _radioError = error.toString();
       });
     }
+  }
+
+  Future<void> _validateRadioStation(BuildContext context, Track track) async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _radioValidatingTrackIds.add(track.id));
+
+    final validation = await _radioProvider.validateStream(track);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _radioValidatingTrackIds.remove(track.id);
+      _radioValidationByTrackId[track.id] = validation;
+    });
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          validation.isPlayable
+              ? 'Validated ${track.title}.'
+              : 'Could not validate ${track.title}: ${validation.reason}',
+        ),
+      ),
+    );
   }
 
   Future<void> _playRadioStation(BuildContext context, Track track) async {

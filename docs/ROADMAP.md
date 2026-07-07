@@ -93,7 +93,7 @@
 - [x] Radio Browser richer browse filters
 - [x] Radio Browser mirror discovery
 - [x] Radio Browser live-stream cache/download denial policy
-- [ ] Radio Browser stream validation
+- [x] Radio Browser stream validation
 - [x] Internet Archive audio search/provider foundation
 - [x] Internet Archive collection, subject, creator, and year search filters
 - [x] Internet Archive multi-file item result expansion

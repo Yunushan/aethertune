@@ -7,6 +7,8 @@ import '../domain/track.dart';
 typedef RadioBrowserSearchLoader = Future<String> Function(Uri searchUri);
 typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
 typedef RadioBrowserMirrorLoader = Future<String> Function(Uri mirrorsUri);
+typedef RadioBrowserStreamValidator = Future<RadioBrowserStreamValidation>
+    Function(Uri streamUri);
 
 final Uri defaultRadioBrowserBaseUri = Uri(
   scheme: 'https',
@@ -44,6 +46,22 @@ final class RadioBrowserSearchFilters {
       maxBitrateKbps == null;
 }
 
+final class RadioBrowserStreamValidation {
+  const RadioBrowserStreamValidation({
+    required this.streamUri,
+    required this.isPlayable,
+    required this.reason,
+    this.statusCode,
+    this.contentType,
+  });
+
+  final Uri? streamUri;
+  final bool isPlayable;
+  final String reason;
+  final int? statusCode;
+  final String? contentType;
+}
+
 class RadioBrowserProvider implements MusicSourceProvider {
   RadioBrowserProvider({
     Uri? baseUri,
@@ -51,6 +69,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
     RadioBrowserMirrorLoader? mirrorLoader,
     RadioBrowserSearchLoader? searchLoader,
     RadioBrowserClickLoader? clickLoader,
+    RadioBrowserStreamValidator? streamValidator,
     this.limit = 20,
   })  : _baseUri = baseUri ?? defaultRadioBrowserBaseUri,
         _mirrorDirectoryUri =
@@ -58,6 +77,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
         _mirrorLoader = mirrorLoader ?? _loadRadioBrowserMirrors,
         _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
         _clickLoader = clickLoader ?? _loadRadioBrowserClick,
+        _streamValidator = streamValidator ?? _validateRadioBrowserStream,
         _discoversMirrors = baseUri == null;
 
   Uri _baseUri;
@@ -66,6 +86,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
   final RadioBrowserMirrorLoader _mirrorLoader;
   final RadioBrowserSearchLoader _searchLoader;
   final RadioBrowserClickLoader _clickLoader;
+  final RadioBrowserStreamValidator _streamValidator;
   final bool _discoversMirrors;
   Future<Uri>? _mirrorDiscovery;
 
@@ -100,6 +121,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
           if (_discoversMirrors) 'mirror discovery request',
           'station search query',
           'station click UUID',
+          'station stream validation request',
         ],
       );
 
@@ -134,6 +156,26 @@ class RadioBrowserProvider implements MusicSourceProvider {
     }
 
     return Uri.tryParse(track.streamUrl!);
+  }
+
+  Future<RadioBrowserStreamValidation> validateStream(Track track) async {
+    final streamUri = await resolveStream(track);
+    if (track.sourceId != id) {
+      return const RadioBrowserStreamValidation(
+        streamUri: null,
+        isPlayable: false,
+        reason: 'Track is not from Radio Browser.',
+      );
+    }
+    if (streamUri == null) {
+      return const RadioBrowserStreamValidation(
+        streamUri: null,
+        isPlayable: false,
+        reason: 'Station does not have a usable stream URL.',
+      );
+    }
+
+    return _streamValidator(streamUri);
   }
 
   Future<void> recordStationClick(Track track) async {
@@ -432,6 +474,82 @@ Future<String> _loadRadioBrowserMirrors(Uri mirrorsUri) async {
   } finally {
     client.close(force: true);
   }
+}
+
+Future<RadioBrowserStreamValidation> _validateRadioBrowserStream(
+  Uri streamUri,
+) async {
+  if (streamUri.scheme != 'http' && streamUri.scheme != 'https') {
+    return RadioBrowserStreamValidation(
+      streamUri: streamUri,
+      isPlayable: false,
+      reason: 'Unsupported stream URL scheme: ${streamUri.scheme}.',
+    );
+  }
+
+  final client = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 10);
+  try {
+    final request = await client.getUrl(streamUri);
+    request.headers.set(HttpHeaders.acceptHeader, 'audio/*,*/*;q=0.8');
+    request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
+    request.headers.set('Icy-MetaData', '1');
+    final response = await request.close();
+    final contentType = response.headers.contentType?.mimeType ??
+        response.headers.value(HttpHeaders.contentTypeHeader);
+    if (response.statusCode < 200 || response.statusCode >= 400) {
+      return RadioBrowserStreamValidation(
+        streamUri: streamUri,
+        isPlayable: false,
+        statusCode: response.statusCode,
+        contentType: contentType,
+        reason: 'Stream returned HTTP ${response.statusCode}.',
+      );
+    }
+    if (!_looksLikeRadioStreamContentType(contentType)) {
+      return RadioBrowserStreamValidation(
+        streamUri: streamUri,
+        isPlayable: false,
+        statusCode: response.statusCode,
+        contentType: contentType,
+        reason: 'Stream content type is not audio: $contentType.',
+      );
+    }
+
+    return RadioBrowserStreamValidation(
+      streamUri: streamUri,
+      isPlayable: true,
+      statusCode: response.statusCode,
+      contentType: contentType,
+      reason: contentType == null || contentType.trim().isEmpty
+          ? 'Stream responded successfully.'
+          : 'Stream responded as $contentType.',
+    );
+  } on Object catch (error) {
+    return RadioBrowserStreamValidation(
+      streamUri: streamUri,
+      isPlayable: false,
+      reason: 'Stream validation failed: $error',
+    );
+  } finally {
+    client.close(force: true);
+  }
+}
+
+bool _looksLikeRadioStreamContentType(String? contentType) {
+  final normalized = contentType?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) {
+    return true;
+  }
+  if (normalized.startsWith('audio/')) {
+    return true;
+  }
+
+  return normalized == 'application/ogg' ||
+      normalized == 'application/octet-stream' ||
+      normalized == 'binary/octet-stream' ||
+      normalized.contains('mpegurl') ||
+      normalized.contains('shoutcast');
 }
 
 Uri? _mirrorUriFromJson(Object? value) {

@@ -92,7 +92,7 @@ The Sources tab explains the provider model and shows capability/privacy disclos
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
 - Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, queue/cache eligible feed enclosures, or remove feed episodes. Background/resumable downloads and eviction remain roadmap work.
-- Radio Browser: AetherTune discovers a public Radio Browser API mirror with fallback to the bundled default, searches public internet radio stations in Sources, filters by country/language/tag/codec/bitrate, then plays a station or saves it to the local library; station plays are reported to Radio Browser's click endpoint. Live radio streams do not declare cache/download eligibility.
+- Radio Browser: AetherTune discovers a public Radio Browser API mirror with fallback to the bundled default, searches public internet radio stations in Sources, filters by country/language/tag/codec/bitrate, validates selected station stream reachability, then plays a station or saves it to the local library; station plays are reported to Radio Browser's click endpoint. Live radio streams do not declare cache/download eligibility.
 - Internet Archive: search public archive audio in Sources, filter by collection/subject/creator/year, then play a resolved audio file, save it to the local library, or queue/cache public files; multi-file archive items appear as separate playable results. Background/resumable downloads and eviction remain roadmap work.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.

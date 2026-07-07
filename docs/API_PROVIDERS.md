@@ -53,7 +53,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Radio Browser foundation
 
-`RadioBrowserProvider` discovers a public Radio Browser API mirror with fallback to the bundled default, searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the mirror and directory lookup domains in `ProviderPrivacyDisclosure`, resolves public stream URLs for playback, and sends Radio Browser station click accounting on playback. The Sources tab can search, filter by country, language, tag, codec, and bitrate, play stations, and save stations. Radio Browser intentionally does not declare cache/download support for live streams; stream validation is still separate roadmap work.
+`RadioBrowserProvider` discovers a public Radio Browser API mirror with fallback to the bundled default, searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the mirror and directory lookup domains in `ProviderPrivacyDisclosure`, resolves public stream URLs for playback, validates selected station stream reachability/content type, and sends Radio Browser station click accounting on playback. The Sources tab can search, filter by country, language, tag, codec, and bitrate, validate streams, play stations, and save stations. Radio Browser intentionally does not declare cache/download support for live streams; deeper codec probing and retry/backoff policy are still separate roadmap work.
 
 ## Internet Archive foundation
 
