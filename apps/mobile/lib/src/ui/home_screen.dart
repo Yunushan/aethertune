@@ -5017,6 +5017,10 @@ class _SourcesTabState extends State<_SourcesTab> {
 
     try {
       await library.addTracks(<Track>[track]);
+      if (!context.mounted) {
+        return;
+      }
+
       await _playTrackWithResume(
         context,
         player,
