@@ -46,7 +46,8 @@
 - [x] Recently played
 - [x] Local play counts
 - [x] Local stats recap
-- [ ] Stats date ranges and export
+- [x] Stats date ranges and export
+- [ ] Yearly/monthly recap cards and richer visualizations
 - [x] Recently added view
 - [x] Local search suggestions
 - [x] Artist/album/genre/source browse

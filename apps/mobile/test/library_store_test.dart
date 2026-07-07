@@ -669,6 +669,101 @@ void main() {
     expect(store.libraryStats(limit: 0).topTracks, isEmpty);
   });
 
+  test('filters and exports library stats by playback date range', () async {
+    var now = DateTime.utc(2026, 1, 1, 9);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'Aether One',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        '2',
+        title: 'Night Two',
+        artist: 'Orion',
+        album: 'Night',
+        genre: 'Jazz',
+        duration: const Duration(minutes: 4),
+      ),
+      _track(
+        '3',
+        title: 'Old Three',
+        artist: 'Ari',
+        album: 'Archive',
+        genre: 'Folk',
+        duration: const Duration(minutes: 5),
+      ),
+    ]);
+
+    await store.recordPlayback('3');
+    now = DateTime.utc(2026, 1, 10, 10);
+    await store.recordPlayback('1');
+    now = DateTime.utc(2026, 1, 11, 10);
+    await store.recordPlayback('1');
+    now = DateTime.utc(2026, 1, 12, 10);
+    await store.recordPlayback('2');
+
+    final from = DateTime.utc(2026, 1, 10);
+    final to = DateTime.utc(2026, 1, 13);
+    final stats = store.libraryStats(limit: 2, from: from, to: to);
+
+    expect(stats.from, from);
+    expect(stats.to, to);
+    expect(stats.playbackCount, 3);
+    expect(stats.uniquePlayedTrackCount, 2);
+    expect(stats.estimatedListeningDuration, const Duration(minutes: 10));
+    expect(
+      stats.topTracks.map((trackStats) => trackStats.track.id),
+      <String>['1', '2'],
+    );
+    expect(store.playCountForTrack('1', from: from, to: to), 2);
+    expect(
+      store.lastPlayedAt('1', from: from, to: to),
+      DateTime.utc(2026, 1, 11, 10),
+    );
+    expect(
+      store.recentlyPlayedTracks(from: from, to: to).map((track) => track.id),
+      <String>['2', '1'],
+    );
+    expect(store.libraryStats(from: to).playbackCount, 0);
+
+    final jsonDocument = store.exportLibraryStatsDocument(
+      format: LibraryStatsExportFormat.json,
+      limit: 1,
+      from: from,
+      to: to,
+    );
+    final decoded = jsonDecode(jsonDocument) as Map<String, dynamic>;
+
+    expect(decoded['type'], 'aethertune.library_stats');
+    expect(decoded['version'], 1);
+    expect(decoded['from'], from.toIso8601String());
+    expect(decoded['to'], to.toIso8601String());
+    expect((decoded['summary'] as Map<String, dynamic>)['playbackCount'], 3);
+    expect((decoded['topTracks'] as List<dynamic>), hasLength(1));
+    expect(
+      ((decoded['topTracks'] as List<dynamic>).single
+          as Map<String, dynamic>)['trackId'],
+      '1',
+    );
+
+    final csvDocument = store.exportLibraryStatsDocument(
+      format: LibraryStatsExportFormat.csv,
+      from: from,
+      to: to,
+    );
+
+    expect(csvDocument, contains('summary,playbackCount,3'));
+    expect(csvDocument, contains('top_track,Aether One'));
+    expect(csvDocument, contains(from.toIso8601String()));
+    expect(csvDocument, contains(to.toIso8601String()));
+  });
+
   test('removing a library track removes its playback history', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 9),

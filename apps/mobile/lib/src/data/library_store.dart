@@ -15,6 +15,8 @@ enum LibrarySortMode { recentlyAdded, title, artist, album }
 
 enum PlaylistDocumentFormat { json, m3u, csv }
 
+enum LibraryStatsExportFormat { json, csv }
+
 enum LibraryBrowseType { artist, album, genre, source, folder }
 
 enum SearchSuggestionType { recent, title, artist, album, genre, source, folder }
@@ -167,6 +169,8 @@ class CustomSmartPlaylist {
 
 class LibraryStatsSummary {
   const LibraryStatsSummary({
+    this.from,
+    this.to,
     required this.trackCount,
     required this.libraryDuration,
     required this.favoriteTrackCount,
@@ -179,6 +183,8 @@ class LibraryStatsSummary {
     required this.topGenres,
   });
 
+  final DateTime? from;
+  final DateTime? to;
   final int trackCount;
   final Duration libraryDuration;
   final int favoriteTrackCount;
@@ -235,6 +241,7 @@ class LibraryStore extends ChangeNotifier {
 
   static const _backupVersion = 1;
   static const _playlistDocumentVersion = 1;
+  static const _libraryStatsDocumentVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
   static const _customSmartPlaylistsKey =
@@ -848,7 +855,11 @@ class LibraryStore extends ChangeNotifier {
     return tracks.take(rule.limit).toList(growable: false);
   }
 
-  LibraryStatsSummary libraryStats({int limit = 5}) {
+  LibraryStatsSummary libraryStats({
+    int limit = 5,
+    DateTime? from,
+    DateTime? to,
+  }) {
     final normalizedLimit = limit < 0 ? 0 : limit;
     final byId = <String, Track>{
       for (final track in _tracks) track.id: track,
@@ -879,6 +890,10 @@ class LibraryStore extends ChangeNotifier {
     }
 
     for (final entry in _history) {
+      if (!_historyEntryInRange(entry, from: from, to: to)) {
+        continue;
+      }
+
       final track = byId[entry.trackId];
       if (track == null) {
         continue;
@@ -917,6 +932,8 @@ class LibraryStore extends ChangeNotifier {
     );
 
     return LibraryStatsSummary(
+      from: from,
+      to: to,
       trackCount: _tracks.length,
       libraryDuration: libraryDuration,
       favoriteTrackCount: favorites.length,
@@ -928,6 +945,177 @@ class LibraryStore extends ChangeNotifier {
       topAlbums: _topLibraryStatsGroups(albumGroups, normalizedLimit),
       topGenres: _topLibraryStatsGroups(genreGroups, normalizedLimit),
     );
+  }
+
+  String exportLibraryStatsDocument({
+    required LibraryStatsExportFormat format,
+    int limit = 25,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    switch (format) {
+      case LibraryStatsExportFormat.json:
+        return exportLibraryStatsJson(limit: limit, from: from, to: to);
+      case LibraryStatsExportFormat.csv:
+        return exportLibraryStatsCsv(limit: limit, from: from, to: to);
+    }
+  }
+
+  String exportLibraryStatsJson({
+    int limit = 25,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    final stats = libraryStats(limit: limit, from: from, to: to);
+    const encoder = JsonEncoder.withIndent('  ');
+
+    return encoder.convert(<String, Object?>{
+      'type': 'aethertune.library_stats',
+      'version': _libraryStatsDocumentVersion,
+      'exportedAt': _clock().toIso8601String(),
+      'from': stats.from?.toIso8601String(),
+      'to': stats.to?.toIso8601String(),
+      'summary': _libraryStatsSummaryToJson(stats),
+      'topTracks': stats.topTracks.map(_libraryStatsTrackToJson).toList(),
+      'topArtists': stats.topArtists.map(_libraryStatsGroupToJson).toList(),
+      'topAlbums': stats.topAlbums.map(_libraryStatsGroupToJson).toList(),
+      'topGenres': stats.topGenres.map(_libraryStatsGroupToJson).toList(),
+    });
+  }
+
+  String exportLibraryStatsCsv({
+    int limit = 25,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    final stats = libraryStats(limit: limit, from: from, to: to);
+    final buffer = StringBuffer()
+      ..writeln(
+        <String>[
+          'section',
+          'label',
+          'value',
+          'trackId',
+          'title',
+          'artist',
+          'album',
+          'genre',
+          'playCount',
+          'trackCount',
+          'estimatedListeningMs',
+          'lastPlayedAt',
+        ].map(_escapeCsvField).join(','),
+      );
+
+    void writeRow({
+      required String section,
+      required String label,
+      String value = '',
+      String trackId = '',
+      String title = '',
+      String artist = '',
+      String album = '',
+      String genre = '',
+      String playCount = '',
+      String trackCount = '',
+      String estimatedListeningMs = '',
+      String lastPlayedAt = '',
+    }) {
+      buffer.writeln(
+        <String>[
+          section,
+          label,
+          value,
+          trackId,
+          title,
+          artist,
+          album,
+          genre,
+          playCount,
+          trackCount,
+          estimatedListeningMs,
+          lastPlayedAt,
+        ].map(_escapeCsvField).join(','),
+      );
+    }
+
+    writeRow(
+      section: 'range',
+      label: 'from',
+      value: stats.from?.toIso8601String() ?? '',
+    );
+    writeRow(
+      section: 'range',
+      label: 'to',
+      value: stats.to?.toIso8601String() ?? '',
+    );
+    writeRow(
+      section: 'summary',
+      label: 'trackCount',
+      value: stats.trackCount.toString(),
+    );
+    writeRow(
+      section: 'summary',
+      label: 'libraryDurationMs',
+      value: stats.libraryDuration.inMilliseconds.toString(),
+    );
+    writeRow(
+      section: 'summary',
+      label: 'favoriteTrackCount',
+      value: stats.favoriteTrackCount.toString(),
+    );
+    writeRow(
+      section: 'summary',
+      label: 'playbackCount',
+      value: stats.playbackCount.toString(),
+    );
+    writeRow(
+      section: 'summary',
+      label: 'uniquePlayedTrackCount',
+      value: stats.uniquePlayedTrackCount.toString(),
+    );
+    writeRow(
+      section: 'summary',
+      label: 'estimatedListeningMs',
+      value: stats.estimatedListeningDuration.inMilliseconds.toString(),
+    );
+
+    for (final trackStats in stats.topTracks) {
+      writeRow(
+        section: 'top_track',
+        label: trackStats.track.title,
+        trackId: trackStats.track.id,
+        title: trackStats.track.title,
+        artist: trackStats.track.artist,
+        album: trackStats.track.album,
+        genre: trackStats.track.genre,
+        playCount: trackStats.playCount.toString(),
+        trackCount: '1',
+        estimatedListeningMs:
+            trackStats.estimatedListeningDuration.inMilliseconds.toString(),
+        lastPlayedAt: trackStats.lastPlayedAt?.toIso8601String() ?? '',
+      );
+    }
+
+    void writeGroupRows(String section, List<LibraryStatsGroup> groups) {
+      for (final group in groups) {
+        writeRow(
+          section: section,
+          label: group.label,
+          playCount: group.playCount.toString(),
+          trackCount: group.trackCount.toString(),
+          estimatedListeningMs:
+              group.estimatedListeningDuration.inMilliseconds.toString(),
+          lastPlayedAt: group.lastPlayedAt?.toIso8601String() ?? '',
+        );
+      }
+    }
+
+    writeGroupRows('top_artist', stats.topArtists);
+    writeGroupRows('top_album', stats.topAlbums);
+    writeGroupRows('top_genre', stats.topGenres);
+
+    return buffer.toString();
   }
 
   String exportBackupJson() {
@@ -1353,7 +1541,11 @@ class LibraryStore extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  List<Track> recentlyPlayedTracks({int limit = 25}) {
+  List<Track> recentlyPlayedTracks({
+    int limit = 25,
+    DateTime? from,
+    DateTime? to,
+  }) {
     if (limit <= 0) {
       return <Track>[];
     }
@@ -1365,6 +1557,10 @@ class LibraryStore extends ChangeNotifier {
     final recentTracks = <Track>[];
 
     for (final entry in _history) {
+      if (!_historyEntryInRange(entry, from: from, to: to)) {
+        continue;
+      }
+
       if (seen.contains(entry.trackId)) {
         continue;
       }
@@ -1392,18 +1588,41 @@ class LibraryStore extends ChangeNotifier {
     return tracks.take(limit).toList(growable: false);
   }
 
-  int playCountForTrack(String trackId) {
-    return _history.where((entry) => entry.trackId == trackId).length;
+  int playCountForTrack(String trackId, {DateTime? from, DateTime? to}) {
+    return _history
+        .where(
+          (entry) =>
+              entry.trackId == trackId &&
+              _historyEntryInRange(entry, from: from, to: to),
+        )
+        .length;
   }
 
-  DateTime? lastPlayedAt(String trackId) {
+  DateTime? lastPlayedAt(String trackId, {DateTime? from, DateTime? to}) {
     for (final entry in _history) {
-      if (entry.trackId == trackId) {
+      if (entry.trackId == trackId &&
+          _historyEntryInRange(entry, from: from, to: to)) {
         return entry.playedAt;
       }
     }
 
     return null;
+  }
+
+  bool _historyEntryInRange(
+    PlaybackHistoryEntry entry, {
+    DateTime? from,
+    DateTime? to,
+  }) {
+    if (from != null && entry.playedAt.isBefore(from)) {
+      return false;
+    }
+
+    if (to != null && !entry.playedAt.isBefore(to)) {
+      return false;
+    }
+
+    return true;
   }
 
   List<Track> _mostPlayedTracks({required int limit}) {
@@ -2021,6 +2240,48 @@ class LibraryStore extends ChangeNotifier {
 
   bool _sameText(String left, String right) {
     return left.trim().toLowerCase() == right.trim().toLowerCase();
+  }
+
+  Map<String, Object?> _libraryStatsSummaryToJson(
+    LibraryStatsSummary stats,
+  ) {
+    return <String, Object?>{
+      'trackCount': stats.trackCount,
+      'libraryDurationMs': stats.libraryDuration.inMilliseconds,
+      'favoriteTrackCount': stats.favoriteTrackCount,
+      'playbackCount': stats.playbackCount,
+      'uniquePlayedTrackCount': stats.uniquePlayedTrackCount,
+      'estimatedListeningMs':
+          stats.estimatedListeningDuration.inMilliseconds,
+    };
+  }
+
+  Map<String, Object?> _libraryStatsTrackToJson(
+    LibraryStatsTrack trackStats,
+  ) {
+    return <String, Object?>{
+      'trackId': trackStats.track.id,
+      'title': trackStats.track.title,
+      'artist': trackStats.track.artist,
+      'album': trackStats.track.album,
+      'genre': trackStats.track.genre,
+      'playCount': trackStats.playCount,
+      'estimatedListeningMs':
+          trackStats.estimatedListeningDuration.inMilliseconds,
+      'lastPlayedAt': trackStats.lastPlayedAt?.toIso8601String(),
+    };
+  }
+
+  Map<String, Object?> _libraryStatsGroupToJson(
+    LibraryStatsGroup group,
+  ) {
+    return <String, Object?>{
+      'label': group.label,
+      'playCount': group.playCount,
+      'trackCount': group.trackCount,
+      'estimatedListeningMs': group.estimatedListeningDuration.inMilliseconds,
+      'lastPlayedAt': group.lastPlayedAt?.toIso8601String(),
+    };
   }
 
   String _escapeCsvField(String value) {

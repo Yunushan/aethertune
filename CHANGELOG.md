@@ -15,6 +15,7 @@ Initial GitHub-ready scaffold.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added playlist artwork URL editing, display, export/import, and backup restore.
 - Added local listening stats recap for tracks, artists, albums, genres, and listening time.
+- Added listening stats date ranges and JSON/CSV export.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
 - Added unified provider search fan-out with ranking and per-provider error reporting.

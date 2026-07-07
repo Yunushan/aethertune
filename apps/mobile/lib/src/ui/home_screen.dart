@@ -3242,15 +3242,28 @@ enum _CustomSmartPlaylistAction { edit, delete }
 
 enum _PlaylistTrackAction { moveUp, moveDown, editMetadata, remove }
 
-class _HistoryTab extends StatelessWidget {
+class _HistoryTab extends StatefulWidget {
   const _HistoryTab();
+
+  @override
+  State<_HistoryTab> createState() => _HistoryTabState();
+}
+
+class _HistoryTabState extends State<_HistoryTab> {
+  _HistoryStatsRange _statsRange = _HistoryStatsRange.all;
 
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final player = context.read<PlayerController>();
-    final recentlyPlayed = library.recentlyPlayedTracks();
-    final stats = library.libraryStats();
+    final now = DateTime.now();
+    final statsFrom = _historyStatsRangeStart(_statsRange, now);
+    final statsTo = _statsRange == _HistoryStatsRange.all ? null : now;
+    final recentlyPlayed = library.recentlyPlayedTracks(
+      from: statsFrom,
+      to: statsTo,
+    );
+    final stats = library.libraryStats(from: statsFrom, to: statsTo);
 
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
@@ -3268,6 +3281,15 @@ class _HistoryTab extends StatelessWidget {
               ),
             ),
             IconButton(
+              tooltip: 'Export stats',
+              onPressed: () => _showStatsExportPicker(
+                context,
+                from: statsFrom,
+                to: statsTo,
+              ),
+              icon: const Icon(Icons.ios_share),
+            ),
+            IconButton(
               tooltip: 'Clear history',
               onPressed: library.playbackHistory.isEmpty
                   ? null
@@ -3277,6 +3299,28 @@ class _HistoryTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
+        DropdownButtonFormField<_HistoryStatsRange>(
+          value: _statsRange,
+          decoration: const InputDecoration(
+            labelText: 'Stats range',
+            prefixIcon: Icon(Icons.date_range),
+          ),
+          items: <DropdownMenuItem<_HistoryStatsRange>>[
+            for (final range in _HistoryStatsRange.values)
+              DropdownMenuItem<_HistoryStatsRange>(
+                value: range,
+                child: Text(_historyStatsRangeLabel(range)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value == null) {
+              return;
+            }
+
+            setState(() => _statsRange = value);
+          },
+        ),
+        const SizedBox(height: 12),
         _LibraryStatsOverview(stats: stats),
         if (stats.playbackCount > 0) ...<Widget>[
           const SizedBox(height: 16),
@@ -3315,10 +3359,20 @@ class _HistoryTab extends StatelessWidget {
               title: Text(track.title),
               subtitle: Text(
                 '${track.artist} · '
-                '${library.playCountForTrack(track.id)} play(s)',
+                '${library.playCountForTrack(
+                  track.id,
+                  from: statsFrom,
+                  to: statsTo,
+                )} play(s)',
               ),
               trailing: Text(
-                _formatHistoryTime(library.lastPlayedAt(track.id)),
+                _formatHistoryTime(
+                  library.lastPlayedAt(
+                    track.id,
+                    from: statsFrom,
+                    to: statsTo,
+                  ),
+                ),
               ),
               onTap: () => _playTrackWithResume(
                 player,
@@ -3329,6 +3383,126 @@ class _HistoryTab extends StatelessWidget {
             ),
       ],
     );
+  }
+
+  Future<void> _showStatsExportPicker(
+    BuildContext context, {
+    required DateTime? from,
+    required DateTime? to,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              for (final format in LibraryStatsExportFormat.values)
+                ListTile(
+                  leading: Icon(_statsExportFormatIcon(format)),
+                  title: Text('Export ${_statsExportFormatLabel(format)}'),
+                  subtitle: Text(_historyStatsRangeLabel(_statsRange)),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _showStatsExportDocument(
+                      context,
+                      format: format,
+                      from: from,
+                      to: to,
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showStatsExportDocument(
+    BuildContext context, {
+    required LibraryStatsExportFormat format,
+    required DateTime? from,
+    required DateTime? to,
+  }) async {
+    final library = context.read<LibraryStore>();
+    final document = library.exportLibraryStatsDocument(
+      format: format,
+      from: from,
+      to: to,
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Export ${_statsExportFormatLabel(format)} stats'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(document),
+            ),
+          ),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+enum _HistoryStatsRange { all, sevenDays, thirtyDays, year }
+
+String _historyStatsRangeLabel(_HistoryStatsRange range) {
+  switch (range) {
+    case _HistoryStatsRange.all:
+      return 'All time';
+    case _HistoryStatsRange.sevenDays:
+      return 'Last 7 days';
+    case _HistoryStatsRange.thirtyDays:
+      return 'Last 30 days';
+    case _HistoryStatsRange.year:
+      return 'Last year';
+  }
+}
+
+DateTime? _historyStatsRangeStart(_HistoryStatsRange range, DateTime now) {
+  switch (range) {
+    case _HistoryStatsRange.all:
+      return null;
+    case _HistoryStatsRange.sevenDays:
+      return now.subtract(const Duration(days: 7));
+    case _HistoryStatsRange.thirtyDays:
+      return now.subtract(const Duration(days: 30));
+    case _HistoryStatsRange.year:
+      return now.subtract(const Duration(days: 365));
+  }
+}
+
+String _statsExportFormatLabel(LibraryStatsExportFormat format) {
+  switch (format) {
+    case LibraryStatsExportFormat.json:
+      return 'JSON';
+    case LibraryStatsExportFormat.csv:
+      return 'CSV';
+  }
+}
+
+IconData _statsExportFormatIcon(LibraryStatsExportFormat format) {
+  switch (format) {
+    case LibraryStatsExportFormat.json:
+      return Icons.data_object;
+    case LibraryStatsExportFormat.csv:
+      return Icons.table_chart_outlined;
   }
 }
 
