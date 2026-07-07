@@ -45,7 +45,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Radio Browser foundation
 
-`RadioBrowserProvider` searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the selected API mirror in `ProviderPrivacyDisclosure`, and resolves public stream URLs for playback. Mirror discovery, station click accounting, richer browse filters, stream validation, and cache policy are still separate roadmap work.
+`RadioBrowserProvider` searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the selected API mirror in `ProviderPrivacyDisclosure`, and resolves public stream URLs for playback. The Sources tab can search, play, and save stations. Mirror discovery, station click accounting, richer browse filters, stream validation, and cache policy are still separate roadmap work.
 
 ## Minimal provider
 

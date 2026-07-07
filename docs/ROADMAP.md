@@ -68,7 +68,8 @@
 - [x] Podcast RSS parser/provider foundation
 - [ ] Podcast RSS feed subscriptions and episode UI
 - [x] Radio Browser parser/provider foundation
-- [ ] Radio Browser browse UI, mirror discovery, and click accounting
+- [x] Radio Browser station search/play/save UI
+- [ ] Radio Browser mirror discovery, click accounting, and richer browse filters
 - [ ] Internet Archive provider
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider

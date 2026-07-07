@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
 import '../data/library_store.dart';
+import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/playlist.dart';
 import '../domain/sleep_timer_duration.dart';
@@ -2430,7 +2431,12 @@ class _SourcesTab extends StatefulWidget {
 
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
+  final _radioProvider = RadioBrowserProvider();
+  final _radioSearchController = TextEditingController();
   List<Track> _demoTracks = <Track>[];
+  List<Track> _radioTracks = <Track>[];
+  bool _radioLoading = false;
+  String? _radioError;
 
   @override
   void initState() {
@@ -2440,6 +2446,12 @@ class _SourcesTabState extends State<_SourcesTab> {
         setState(() => _demoTracks = tracks);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _radioSearchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -2518,7 +2530,82 @@ class _SourcesTabState extends State<_SourcesTab> {
           icon: Icons.verified_user_outlined,
         ),
         const SizedBox(height: 16),
-        Text('Demo provider tracks', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Radio Browser search',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: _radioSearchController,
+                decoration: const InputDecoration(
+                  labelText: 'Station search',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _searchRadioStations(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Search stations',
+              onPressed: _radioLoading ? null : _searchRadioStations,
+              icon: const Icon(Icons.search),
+            ),
+          ],
+        ),
+        if (_radioLoading) ...<Widget>[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+        if (_radioError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Radio search failed'),
+            subtitle: Text(_radioError!),
+          ),
+        ] else if (_radioTracks.isEmpty && !_radioLoading) ...<Widget>[
+          const SizedBox(height: 8),
+          const ListTile(
+            leading: Icon(Icons.radio_outlined),
+            title: Text('No stations loaded'),
+            subtitle: Text(
+              'Search by station name, tag, country, or language.',
+            ),
+          ),
+        ] else ...<Widget>[
+          const SizedBox(height: 8),
+          for (final track in _radioTracks)
+            ListTile(
+              leading: const Icon(Icons.radio_outlined),
+              title: Text(track.title),
+              subtitle: Text('${track.artist} / ${track.genre}'),
+              onTap: () => _playRadioStation(context, track),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Save station',
+                    onPressed: () => _saveRadioStation(context, track),
+                    icon: const Icon(Icons.library_add_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Play station',
+                    onPressed: () => _playRadioStation(context, track),
+                    icon: const Icon(Icons.play_arrow),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          'Demo provider tracks',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         for (final track in _demoTracks)
           ListTile(
             leading: const Icon(Icons.music_note_outlined),
@@ -2526,6 +2613,67 @@ class _SourcesTabState extends State<_SourcesTab> {
             subtitle: Text('${track.artist} · ${track.album}'),
           ),
       ],
+    );
+  }
+
+  Future<void> _searchRadioStations() async {
+    setState(() {
+      _radioLoading = true;
+      _radioError = null;
+    });
+
+    try {
+      final tracks = await _radioProvider.search(_radioSearchController.text);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _radioTracks = tracks;
+        _radioLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _radioTracks = <Track>[];
+        _radioLoading = false;
+        _radioError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _playRadioStation(BuildContext context, Track track) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final player = context.read<PlayerController>();
+
+    try {
+      await player.playTrack(track, queue: _radioTracks);
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not play ${track.title}.')),
+      );
+    }
+  }
+
+  Future<void> _saveRadioStation(BuildContext context, Track track) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    await library.addTracks(<Track>[track]);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Saved ${track.title}.')),
     );
   }
 }
