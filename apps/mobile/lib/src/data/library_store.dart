@@ -23,6 +23,15 @@ enum DuplicateMatchType { localPath, sourceExternalId, streamUrl, metadata }
 
 enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 
+enum CustomSmartPlaylistSortMode {
+  recentlyAdded,
+  title,
+  artist,
+  album,
+  recentlyPlayed,
+  mostPlayed,
+}
+
 class SearchSuggestion {
   const SearchSuggestion({
     required this.type,
@@ -75,6 +84,96 @@ class SmartPlaylist {
   final int trackCount;
 }
 
+class CustomSmartPlaylist {
+  CustomSmartPlaylist({
+    required this.id,
+    required this.name,
+    this.query = '',
+    this.favoritesOnly = false,
+    this.minimumPlayCount = 0,
+    this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
+    this.limit = 50,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+  final String id;
+  final String name;
+  final String query;
+  final bool favoritesOnly;
+  final int minimumPlayCount;
+  final CustomSmartPlaylistSortMode sortMode;
+  final int limit;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  CustomSmartPlaylist copyWith({
+    String? id,
+    String? name,
+    String? query,
+    bool? favoritesOnly,
+    int? minimumPlayCount,
+    CustomSmartPlaylistSortMode? sortMode,
+    int? limit,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return CustomSmartPlaylist(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      query: query ?? this.query,
+      favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+      minimumPlayCount: minimumPlayCount ?? this.minimumPlayCount,
+      sortMode: sortMode ?? this.sortMode,
+      limit: limit ?? this.limit,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'id': id,
+      'name': name,
+      'query': query,
+      'favoritesOnly': favoritesOnly,
+      'minimumPlayCount': minimumPlayCount,
+      'sortMode': sortMode.name,
+      'limit': limit,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  factory CustomSmartPlaylist.fromJson(Map<String, Object?> json) {
+    return CustomSmartPlaylist(
+      id: json['id'] as String,
+      name: json['name'] as String? ?? 'Untitled smart playlist',
+      query: json['query'] as String? ?? '',
+      favoritesOnly: json['favoritesOnly'] as bool? ?? false,
+      minimumPlayCount: json['minimumPlayCount'] as int? ?? 0,
+      sortMode: _customSmartPlaylistSortModeFromName(
+        json['sortMode'] as String?,
+      ),
+      limit: json['limit'] as int? ?? 50,
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+}
+
+CustomSmartPlaylistSortMode _customSmartPlaylistSortModeFromName(
+  String? value,
+) {
+  return CustomSmartPlaylistSortMode.values.firstWhere(
+    (mode) => mode.name == value,
+    orElse: () => CustomSmartPlaylistSortMode.recentlyAdded,
+  );
+}
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
@@ -82,6 +181,8 @@ class LibraryStore extends ChangeNotifier {
   static const _playlistDocumentVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
+  static const _customSmartPlaylistsKey =
+      'aethertune.custom_smart_playlists.v1';
   static const _podcastSubscriptionsKey =
       'aethertune.podcast_subscriptions.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
@@ -95,6 +196,8 @@ class LibraryStore extends ChangeNotifier {
 
   final List<Track> _tracks = <Track>[];
   final List<Playlist> _playlists = <Playlist>[];
+  final List<CustomSmartPlaylist> _customSmartPlaylists =
+      <CustomSmartPlaylist>[];
   final List<PodcastSubscription> _podcastSubscriptions =
       <PodcastSubscription>[];
   final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
@@ -107,6 +210,8 @@ class LibraryStore extends ChangeNotifier {
   bool get loaded => _loaded;
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
+  List<CustomSmartPlaylist> get customSmartPlaylists =>
+      List.unmodifiable(_customSmartPlaylists);
   List<PodcastSubscription> get podcastSubscriptions =>
       List.unmodifiable(_podcastSubscriptions);
   List<PlaybackHistoryEntry> get playbackHistory =>
@@ -146,6 +251,23 @@ class LibraryStore extends ChangeNotifier {
               .whereType<Map>()
               .map(
                 (item) => Playlist.fromJson(Map<String, Object?>.from(item)),
+              )
+              .toList(growable: false),
+        );
+    }
+
+    final rawCustomSmartPlaylists = prefs.getString(_customSmartPlaylistsKey);
+    if (rawCustomSmartPlaylists != null && rawCustomSmartPlaylists.isNotEmpty) {
+      final decoded = jsonDecode(rawCustomSmartPlaylists) as List<dynamic>;
+      _customSmartPlaylists
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => CustomSmartPlaylist.fromJson(
+                  Map<String, Object?>.from(item),
+                ),
               )
               .toList(growable: false),
         );
@@ -237,6 +359,7 @@ class LibraryStore extends ChangeNotifier {
     _removeMissingHistory();
     _removeMissingProgress();
     _sortHistory();
+    _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
     _loaded = true;
     notifyListeners();
@@ -315,6 +438,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> clear() async {
     _tracks.clear();
     _playlists.clear();
+    _customSmartPlaylists.clear();
     _podcastSubscriptions.clear();
     _history.clear();
     _progressByTrackId.clear();
@@ -633,6 +757,41 @@ class LibraryStore extends ChangeNotifier {
     }
   }
 
+  CustomSmartPlaylist? customSmartPlaylistById(String id) {
+    final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    return _customSmartPlaylists[index];
+  }
+
+  List<Track> tracksForCustomSmartPlaylist(String id) {
+    final rule = customSmartPlaylistById(id);
+    if (rule == null || rule.limit <= 0) {
+      return <Track>[];
+    }
+
+    final normalizedQuery = _normalizeQuery(rule.query);
+    final tracks = _tracks.where((track) {
+      if (rule.favoritesOnly && !track.isFavorite) {
+        return false;
+      }
+
+      if (rule.minimumPlayCount > 0 &&
+          playCountForTrack(track.id) < rule.minimumPlayCount) {
+        return false;
+      }
+
+      return normalizedQuery.isEmpty ||
+          _trackMatchesQuery(track, normalizedQuery);
+    }).toList(growable: false);
+
+    _sortCustomSmartPlaylistTracks(tracks, rule.sortMode);
+
+    return tracks.take(rule.limit).toList(growable: false);
+  }
+
   String exportBackupJson() {
     const encoder = JsonEncoder.withIndent('  ');
 
@@ -641,6 +800,8 @@ class LibraryStore extends ChangeNotifier {
       'exportedAt': _clock().toIso8601String(),
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
+      'customSmartPlaylists':
+          _customSmartPlaylists.map((rule) => rule.toJson()).toList(),
       'podcastSubscriptions':
           _podcastSubscriptions.map((item) => item.toJson()).toList(),
       'history': _history.map((entry) => entry.toJson()).toList(),
@@ -910,6 +1071,7 @@ class LibraryStore extends ChangeNotifier {
 
     final restoredTracks = <Track>[];
     final restoredPlaylists = <Playlist>[];
+    final restoredCustomSmartPlaylists = <CustomSmartPlaylist>[];
     final restoredPodcastSubscriptions = <PodcastSubscription>[];
     final restoredHistory = <PlaybackHistoryEntry>[];
     final restoredProgress = <PlaybackProgressEntry>[];
@@ -921,6 +1083,13 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredPlaylists.addAll(
         _jsonObjectList(backup, 'playlists').map(Playlist.fromJson),
+      );
+      restoredCustomSmartPlaylists.addAll(
+        _jsonObjectList(
+          backup,
+          'customSmartPlaylists',
+          isRequired: false,
+        ).map(CustomSmartPlaylist.fromJson),
       );
       restoredHistory.addAll(
         _jsonObjectList(backup, 'history', isRequired: false).map(
@@ -975,6 +1144,9 @@ class LibraryStore extends ChangeNotifier {
     final sanitizedPodcastSubscriptions = _dedupePodcastSubscriptions(
       restoredPodcastSubscriptions,
     );
+    final sanitizedCustomSmartPlaylists = _dedupeCustomSmartPlaylists(
+      restoredCustomSmartPlaylists,
+    );
 
     _tracks
       ..clear()
@@ -982,6 +1154,9 @@ class LibraryStore extends ChangeNotifier {
     _playlists
       ..clear()
       ..addAll(sanitizedPlaylists);
+    _customSmartPlaylists
+      ..clear()
+      ..addAll(sanitizedCustomSmartPlaylists);
     _podcastSubscriptions
       ..clear()
       ..addAll(sanitizedPodcastSubscriptions);
@@ -997,6 +1172,7 @@ class LibraryStore extends ChangeNotifier {
 
     _sortTracks();
     _sortPlaylists();
+    _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
     _sortHistory();
     _trimHistory();
@@ -1347,6 +1523,79 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _lyricsByTrackId.remove(trackId);
+    await _save();
+    notifyListeners();
+  }
+
+  Future<CustomSmartPlaylist> createCustomSmartPlaylist({
+    required String name,
+    String query = '',
+    bool favoritesOnly = false,
+    int minimumPlayCount = 0,
+    CustomSmartPlaylistSortMode sortMode =
+        CustomSmartPlaylistSortMode.recentlyAdded,
+    int limit = 50,
+  }) async {
+    final normalizedName = _normalizeCustomSmartPlaylistName(name);
+    final now = _clock();
+    final rule = CustomSmartPlaylist(
+      id: _customSmartPlaylistId(normalizedName, now),
+      name: normalizedName,
+      query: query.trim(),
+      favoritesOnly: favoritesOnly,
+      minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
+      sortMode: sortMode,
+      limit: _sanitizeCustomSmartPlaylistLimit(limit),
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    _customSmartPlaylists.add(rule);
+    _sortCustomSmartPlaylists();
+    await _save();
+    notifyListeners();
+
+    return rule;
+  }
+
+  Future<CustomSmartPlaylist?> updateCustomSmartPlaylist(
+    String id, {
+    required String name,
+    required String query,
+    required bool favoritesOnly,
+    required int minimumPlayCount,
+    required CustomSmartPlaylistSortMode sortMode,
+    required int limit,
+  }) async {
+    final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final updated = _customSmartPlaylists[index].copyWith(
+      name: _normalizeCustomSmartPlaylistName(name),
+      query: query.trim(),
+      favoritesOnly: favoritesOnly,
+      minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
+      sortMode: sortMode,
+      limit: _sanitizeCustomSmartPlaylistLimit(limit),
+      updatedAt: _clock(),
+    );
+    _customSmartPlaylists[index] = updated;
+    _sortCustomSmartPlaylists();
+    await _save();
+    notifyListeners();
+
+    return updated;
+  }
+
+  Future<void> deleteCustomSmartPlaylist(String id) async {
+    final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
+    if (index == -1) {
+      return;
+    }
+
+    _customSmartPlaylists.removeAt(index);
     await _save();
     notifyListeners();
   }
@@ -1850,6 +2099,57 @@ class LibraryStore extends ChangeNotifier {
     ].any((value) => value.toLowerCase().contains(normalizedQuery));
   }
 
+  void _sortCustomSmartPlaylistTracks(
+    List<Track> tracks,
+    CustomSmartPlaylistSortMode sortMode,
+  ) {
+    tracks.sort((a, b) {
+      switch (sortMode) {
+        case CustomSmartPlaylistSortMode.recentlyAdded:
+          return _compareByDateThenTitle(a, b);
+        case CustomSmartPlaylistSortMode.title:
+          return _compareText(a.title, b.title);
+        case CustomSmartPlaylistSortMode.artist:
+          final byArtist = _compareText(a.artist, b.artist);
+          return byArtist == 0 ? _compareText(a.title, b.title) : byArtist;
+        case CustomSmartPlaylistSortMode.album:
+          final byAlbum = _compareText(a.album, b.album);
+          return byAlbum == 0 ? _compareText(a.title, b.title) : byAlbum;
+        case CustomSmartPlaylistSortMode.recentlyPlayed:
+          return _compareByLastPlayedThenTitle(a, b);
+        case CustomSmartPlaylistSortMode.mostPlayed:
+          return _compareByPlayCountThenLastPlayed(a, b);
+      }
+    });
+  }
+
+  int _compareByLastPlayedThenTitle(Track a, Track b) {
+    final aLastPlayed = lastPlayedAt(a.id);
+    final bLastPlayed = lastPlayedAt(b.id);
+    if (aLastPlayed != null && bLastPlayed != null) {
+      final byLastPlayed = bLastPlayed.compareTo(aLastPlayed);
+      if (byLastPlayed != 0) {
+        return byLastPlayed;
+      }
+    } else if (aLastPlayed != null) {
+      return -1;
+    } else if (bLastPlayed != null) {
+      return 1;
+    }
+
+    return _compareText(a.title, b.title);
+  }
+
+  int _compareByPlayCountThenLastPlayed(Track a, Track b) {
+    final byPlayCount =
+        playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    return _compareByLastPlayedThenTitle(a, b);
+  }
+
   String _browseLabelForTrack(Track track, LibraryBrowseType type) {
     switch (type) {
       case LibraryBrowseType.artist:
@@ -1892,6 +2192,45 @@ class LibraryStore extends ChangeNotifier {
   }
 
   String _browseKey(String value) => _nonEmptyMetadata(value, '').toLowerCase();
+
+  String _normalizeCustomSmartPlaylistName(String name) {
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        name,
+        'name',
+        'Smart playlist name cannot be empty.',
+      );
+    }
+
+    return normalized;
+  }
+
+  int _sanitizeMinimumPlayCount(int value) {
+    if (value < 0) {
+      return 0;
+    }
+
+    return value;
+  }
+
+  int _sanitizeCustomSmartPlaylistLimit(int value) {
+    if (value <= 0) {
+      return 50;
+    }
+
+    if (value > 500) {
+      return 500;
+    }
+
+    return value;
+  }
+
+  void _sortCustomSmartPlaylists() {
+    _customSmartPlaylists.sort(
+      (a, b) => b.updatedAt.compareTo(a.updatedAt),
+    );
+  }
 
   void _sortPlaylists() {
     _playlists.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -1973,6 +2312,11 @@ class LibraryStore extends ChangeNotifier {
     return base64Url.encode(utf8.encode(base)).replaceAll('=', '');
   }
 
+  String _customSmartPlaylistId(String name, DateTime createdAt) {
+    final base = 'smart-${createdAt.microsecondsSinceEpoch}-$name';
+    return base64Url.encode(utf8.encode(base)).replaceAll('=', '');
+  }
+
   List<Map<String, Object?>> _jsonObjectList(
     Map<String, Object?> backup,
     String key, {
@@ -1994,6 +2338,29 @@ class LibraryStore extends ChangeNotifier {
 
       return Map<String, Object?>.from(item);
     }).toList(growable: false);
+  }
+
+  List<CustomSmartPlaylist> _dedupeCustomSmartPlaylists(
+    Iterable<CustomSmartPlaylist> rules,
+  ) {
+    final byId = <String, CustomSmartPlaylist>{};
+    for (final rule in rules) {
+      final id = rule.id.trim();
+      final name = rule.name.trim();
+      if (id.isEmpty || name.isEmpty) {
+        continue;
+      }
+
+      byId[id] = rule.copyWith(
+        id: id,
+        name: name,
+        query: rule.query.trim(),
+        minimumPlayCount: _sanitizeMinimumPlayCount(rule.minimumPlayCount),
+        limit: _sanitizeCustomSmartPlaylistLimit(rule.limit),
+      );
+    }
+
+    return byId.values.toList(growable: false);
   }
 
   List<PodcastSubscription> _dedupePodcastSubscriptions(
@@ -2036,6 +2403,9 @@ class LibraryStore extends ChangeNotifier {
     final encodedPlaylists = jsonEncode(
       _playlists.map((playlist) => playlist.toJson()).toList(),
     );
+    final encodedCustomSmartPlaylists = jsonEncode(
+      _customSmartPlaylists.map((rule) => rule.toJson()).toList(),
+    );
     final encodedPodcastSubscriptions = jsonEncode(
       _podcastSubscriptions.map((item) => item.toJson()).toList(),
     );
@@ -2050,6 +2420,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setString(_tracksKey, encodedTracks);
     await prefs.setString(_playlistsKey, encodedPlaylists);
+    await prefs.setString(
+      _customSmartPlaylistsKey,
+      encodedCustomSmartPlaylists,
+    );
     await prefs.setString(
       _podcastSubscriptionsKey,
       encodedPodcastSubscriptions,

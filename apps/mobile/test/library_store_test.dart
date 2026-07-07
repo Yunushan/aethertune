@@ -1019,6 +1019,98 @@ void main() {
     );
   });
 
+  test('creates updates and persists custom smart playlist rules', () async {
+    var now = DateTime.utc(2026, 1, 15, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'ari-old',
+        title: 'Low Tide',
+        artist: 'Ari',
+        genre: 'Ambient',
+        addedAt: DateTime.utc(2026, 1),
+      ),
+      _track(
+        'ari-new',
+        title: 'Dawn Tide',
+        artist: 'Ari',
+        genre: 'Ambient',
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+      _track(
+        'ari-rock',
+        title: 'Rock Sun',
+        artist: 'Ari',
+        genre: 'Rock',
+        addedAt: DateTime.utc(2026, 1, 3),
+      ),
+      _track(
+        'mia',
+        title: 'Mia Drift',
+        artist: 'Mia',
+        genre: 'Ambient',
+        addedAt: DateTime.utc(2026, 1, 4),
+      ),
+    ]);
+    await store.toggleFavorite('ari-old');
+    await store.toggleFavorite('ari-new');
+    await store.toggleFavorite('ari-rock');
+    await store.recordPlayback('ari-old');
+    now = DateTime.utc(2026, 1, 15, 12, 1);
+    await store.recordPlayback('ari-new');
+    now = DateTime.utc(2026, 1, 15, 12, 2);
+    await store.recordPlayback('ari-old');
+
+    final rule = await store.createCustomSmartPlaylist(
+      name: '  Ambient Ari  ',
+      query: 'ambient',
+      favoritesOnly: true,
+      minimumPlayCount: 1,
+      sortMode: CustomSmartPlaylistSortMode.mostPlayed,
+      limit: 2,
+    );
+
+    expect(rule.name, 'Ambient Ari');
+    expect(rule.query, 'ambient');
+    expect(
+      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['ari-old', 'ari-new'],
+    );
+
+    final secondStore = LibraryStore(clock: () => now);
+    await secondStore.load();
+
+    expect(secondStore.customSmartPlaylists.single.id, rule.id);
+    expect(
+      secondStore.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['ari-old', 'ari-new'],
+    );
+
+    final updated = await secondStore.updateCustomSmartPlaylist(
+      rule.id,
+      name: 'Ari Library',
+      query: 'ari',
+      favoritesOnly: false,
+      minimumPlayCount: 0,
+      sortMode: CustomSmartPlaylistSortMode.title,
+      limit: 3,
+    );
+
+    expect(updated!.name, 'Ari Library');
+    expect(
+      secondStore
+          .tracksForCustomSmartPlaylist(rule.id)
+          .map((track) => track.id),
+      <String>['ari-new', 'ari-old', 'ari-rock'],
+    );
+
+    await secondStore.deleteCustomSmartPlaylist(rule.id);
+
+    expect(secondStore.customSmartPlaylists, isEmpty);
+    expect(secondStore.tracksForCustomSmartPlaylist(rule.id), isEmpty);
+  });
+
   test('groups library tracks by artist album genre source and folder', () async {
     final store = LibraryStore();
     await store.load();
@@ -1123,6 +1215,13 @@ void main() {
       const Duration(minutes: 4),
       const Duration(minutes: 20),
     );
+    final smartRule = await firstStore.createCustomSmartPlaylist(
+      name: 'Favorite plays',
+      favoritesOnly: true,
+      minimumPlayCount: 1,
+      sortMode: CustomSmartPlaylistSortMode.mostPlayed,
+      limit: 10,
+    );
     final subscription = await firstStore.savePodcastSubscription(
       PodcastSubscription(
         id: 'podcast',
@@ -1173,6 +1272,13 @@ void main() {
     expect(
       secondStore.podcastSubscriptionById(subscription.id)!.lastFetchedAt,
       DateTime.utc(2026, 1, 11),
+    );
+    expect(secondStore.customSmartPlaylists.single.name, 'Favorite plays');
+    expect(
+      secondStore
+          .tracksForCustomSmartPlaylist(smartRule.id)
+          .map((track) => track.id),
+      <String>['2'],
     );
   });
 

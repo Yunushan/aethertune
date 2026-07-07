@@ -12,6 +12,7 @@ Initial GitHub-ready scaffold.
 - Added local search suggestions from playback history and library metadata.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added duplicate track detection and merge handling for local library entries.
+- Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
 - Added unified provider search fan-out with ranking and per-provider error reporting.

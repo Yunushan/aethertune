@@ -32,7 +32,8 @@
 - [x] Find in playlist
 - [x] Playlist import/export JSON/M3U/CSV
 - [x] Built-in smart playlists
-- [ ] Custom rule smart playlists
+- [x] Custom rule smart playlists
+- [ ] Nested smart playlist rule builder
 - [ ] Playlist artwork
 - [x] Backup/restore JSON
 - [x] Imported-track folder browse

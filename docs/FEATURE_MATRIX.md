@@ -54,7 +54,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
 | Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI. | Artwork and sync. |
-| Built-in smart playlists | Done | Playlists tab exposes dynamic Favorites, Recently added, Recently played, and Most played collections. | Custom rule builder, sync, and artwork. |
+| Smart playlists | Scaffolded | Playlists tab exposes built-in dynamic Favorites, Recently added, Recently played, and Most played collections plus persisted custom smart playlists with search text, favorites-only, minimum play count, sort mode, and result limit rules. Store tests cover rule matching, persistence, update/delete, and backup restore. | Rich nested rule builder, sync, artwork, and cross-device dynamic queries. |
 | Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing, preview, and playback-linked highlighting/autoscroll. | Provider lyrics, file import/export, and sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, and end-of-current-track mode. | Fade-out. |
@@ -125,7 +125,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Current queue playback | Done | All music apps | Cross-device queue sync and richer queue actions. |
 | Manual playlists | Done | All music apps | Artwork and sync. |
-| Smart playlists | Scaffolded | Namida, desktop players | Built-in dynamic playlists for favorites, recently added, recently played, and most played are implemented; user-created rules and synced dynamic queries remain. |
+| Smart playlists | Scaffolded | Namida, desktop players | Built-in dynamic playlists plus persisted user-created smart rules are implemented for search text, favorites-only, minimum play count, sort mode, and result limit. Needed next: nested rule builder, artwork, sync, and shared dynamic queries. |
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |
 | Playlist import/export | Done | Spotube, YouTube Music migration needs | JSON, M3U, and CSV import/export are implemented for tracks already in the local library. |
 | Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, or album while preserving playlist order. |

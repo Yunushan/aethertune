@@ -1796,6 +1796,61 @@ IconData _smartPlaylistIcon(SmartPlaylistType type) {
   }
 }
 
+String _customSmartPlaylistSortLabel(CustomSmartPlaylistSortMode sortMode) {
+  switch (sortMode) {
+    case CustomSmartPlaylistSortMode.recentlyAdded:
+      return 'Recently added';
+    case CustomSmartPlaylistSortMode.title:
+      return 'Title';
+    case CustomSmartPlaylistSortMode.artist:
+      return 'Artist';
+    case CustomSmartPlaylistSortMode.album:
+      return 'Album';
+    case CustomSmartPlaylistSortMode.recentlyPlayed:
+      return 'Recently played';
+    case CustomSmartPlaylistSortMode.mostPlayed:
+      return 'Most played';
+  }
+}
+
+String _customSmartPlaylistSubtitle(
+  CustomSmartPlaylist rule,
+  int trackCount,
+) {
+  final parts = <String>['$trackCount track(s)'];
+  if (rule.query.trim().isNotEmpty) {
+    parts.add('Search: ${rule.query}');
+  }
+  if (rule.favoritesOnly) {
+    parts.add('Favorites');
+  }
+  if (rule.minimumPlayCount > 0) {
+    parts.add('${rule.minimumPlayCount}+ plays');
+  }
+  parts.add(_customSmartPlaylistSortLabel(rule.sortMode));
+  parts.add('Limit ${rule.limit}');
+
+  return parts.join(' · ');
+}
+
+class _CustomSmartPlaylistDraft {
+  const _CustomSmartPlaylistDraft({
+    required this.name,
+    required this.query,
+    required this.favoritesOnly,
+    required this.minimumPlayCount,
+    required this.sortMode,
+    required this.limit,
+  });
+
+  final String name;
+  final String query;
+  final bool favoritesOnly;
+  final int minimumPlayCount;
+  final CustomSmartPlaylistSortMode sortMode;
+  final int limit;
+}
+
 class _PlaylistsTab extends StatelessWidget {
   const _PlaylistsTab({
     required this.onAddToPlaylist,
@@ -1814,6 +1869,7 @@ class _PlaylistsTab extends StatelessWidget {
     }
 
     final smartPlaylists = library.smartPlaylists();
+    final customSmartPlaylists = library.customSmartPlaylists;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1837,11 +1893,17 @@ class _PlaylistsTab extends StatelessWidget {
               onPressed: () => _createPlaylist(context),
               icon: const Icon(Icons.playlist_add),
             ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              tooltip: 'Create smart playlist',
+              onPressed: () => _createCustomSmartPlaylist(context),
+              icon: const Icon(Icons.filter_alt_outlined),
+            ),
           ],
         ),
         const SizedBox(height: 8),
         Text(
-          'Smart playlists',
+          'Built-in smart playlists',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
@@ -1850,6 +1912,33 @@ class _PlaylistsTab extends StatelessWidget {
             smartPlaylist: smartPlaylist,
             onOpen: () => _showSmartPlaylist(context, smartPlaylist.type),
           ),
+        const SizedBox(height: 16),
+        Text(
+          'Custom smart playlists',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        if (customSmartPlaylists.isEmpty)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.filter_alt_outlined),
+              title: const Text('No custom smart playlists'),
+              trailing: IconButton(
+                tooltip: 'Create smart playlist',
+                onPressed: () => _createCustomSmartPlaylist(context),
+                icon: const Icon(Icons.add),
+              ),
+            ),
+          )
+        else
+          for (final rule in customSmartPlaylists)
+            _CustomSmartPlaylistCard(
+              rule: rule,
+              trackCount: library.tracksForCustomSmartPlaylist(rule.id).length,
+              onOpen: () => _showCustomSmartPlaylist(context, rule.id),
+              onEdit: () => _editCustomSmartPlaylist(context, rule),
+              onDelete: () => _deleteCustomSmartPlaylist(context, rule),
+            ),
         const SizedBox(height: 16),
         Text(
           'Manual playlists',
@@ -1999,6 +2088,77 @@ class _PlaylistsTab extends StatelessWidget {
     );
   }
 
+  Future<void> _createCustomSmartPlaylist(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final draft = await _promptForCustomSmartPlaylistRule(
+      context,
+      title: 'New smart playlist',
+    );
+    if (!context.mounted || draft == null) {
+      return;
+    }
+
+    final rule = await library.createCustomSmartPlaylist(
+      name: draft.name,
+      query: draft.query,
+      favoritesOnly: draft.favoritesOnly,
+      minimumPlayCount: draft.minimumPlayCount,
+      sortMode: draft.sortMode,
+      limit: draft.limit,
+    );
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Created ${rule.name}.')),
+    );
+  }
+
+  Future<void> _editCustomSmartPlaylist(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final draft = await _promptForCustomSmartPlaylistRule(
+      context,
+      title: 'Edit smart playlist',
+      initialRule: rule,
+    );
+    if (!context.mounted || draft == null) {
+      return;
+    }
+
+    await library.updateCustomSmartPlaylist(
+      rule.id,
+      name: draft.name,
+      query: draft.query,
+      favoritesOnly: draft.favoritesOnly,
+      minimumPlayCount: draft.minimumPlayCount,
+      sortMode: draft.sortMode,
+      limit: draft.limit,
+    );
+  }
+
+  Future<void> _deleteCustomSmartPlaylist(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    await library.deleteCustomSmartPlaylist(rule.id);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Deleted ${rule.name}.')),
+    );
+  }
+
   Future<void> _renamePlaylist(
     BuildContext context,
     Playlist playlist,
@@ -2088,6 +2248,27 @@ class _PlaylistsTab extends StatelessWidget {
     );
   }
 
+  Future<void> _showCustomSmartPlaylist(
+    BuildContext context,
+    String ruleId,
+  ) async {
+    final player = context.read<PlayerController>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) {
+        return _CustomSmartPlaylistSheet(
+          ruleId: ruleId,
+          player: player,
+          onAddToPlaylist: onAddToPlaylist,
+          onLyrics: onLyrics,
+        );
+      },
+    );
+  }
+
   Future<void> _showPlaylist(BuildContext context, String playlistId) async {
     final player = context.read<PlayerController>();
 
@@ -2150,6 +2331,148 @@ class _PlaylistsTab extends StatelessWidget {
       );
     } finally {
       controller.dispose();
+    }
+  }
+
+  Future<_CustomSmartPlaylistDraft?> _promptForCustomSmartPlaylistRule(
+    BuildContext context, {
+    required String title,
+    CustomSmartPlaylist? initialRule,
+  }) async {
+    final nameController = TextEditingController(text: initialRule?.name ?? '');
+    final queryController = TextEditingController(
+      text: initialRule?.query ?? '',
+    );
+    final minimumPlayCountController = TextEditingController(
+      text: (initialRule?.minimumPlayCount ?? 0).toString(),
+    );
+    final limitController = TextEditingController(
+      text: (initialRule?.limit ?? 50).toString(),
+    );
+    var favoritesOnly = initialRule?.favoritesOnly ?? false;
+    var sortMode =
+        initialRule?.sortMode ?? CustomSmartPlaylistSortMode.recentlyAdded;
+
+    try {
+      return showDialog<_CustomSmartPlaylistDraft>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              _CustomSmartPlaylistDraft? draftFromControllers() {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  return null;
+                }
+
+                return _CustomSmartPlaylistDraft(
+                  name: name,
+                  query: queryController.text.trim(),
+                  favoritesOnly: favoritesOnly,
+                  minimumPlayCount:
+                      int.tryParse(minimumPlayCountController.text.trim()) ??
+                          0,
+                  sortMode: sortMode,
+                  limit: int.tryParse(limitController.text.trim()) ?? 50,
+                );
+              }
+
+              return AlertDialog(
+                title: Text(title),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        TextField(
+                          autofocus: true,
+                          controller: nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Name',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: queryController,
+                          decoration: const InputDecoration(
+                            labelText: 'Search text',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Favorites only'),
+                          value: favoritesOnly,
+                          onChanged: (value) {
+                            setDialogState(() => favoritesOnly = value);
+                          },
+                        ),
+                        TextField(
+                          controller: minimumPlayCountController,
+                          decoration: const InputDecoration(
+                            labelText: 'Minimum plays',
+                          ),
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                        ),
+                        DropdownButtonFormField<CustomSmartPlaylistSortMode>(
+                          value: sortMode,
+                          decoration: const InputDecoration(
+                            labelText: 'Sort by',
+                          ),
+                          items: CustomSmartPlaylistSortMode.values
+                              .map(
+                                (mode) => DropdownMenuItem(
+                                  value: mode,
+                                  child: Text(
+                                    _customSmartPlaylistSortLabel(mode),
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setDialogState(() => sortMode = value);
+                            }
+                          },
+                        ),
+                        TextField(
+                          controller: limitController,
+                          decoration: const InputDecoration(
+                            labelText: 'Result limit',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final draft = draftFromControllers();
+                      if (draft != null) {
+                        Navigator.of(dialogContext).pop(draft);
+                      }
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      queryController.dispose();
+      minimumPlayCountController.dispose();
+      limitController.dispose();
     }
   }
 }
@@ -2215,6 +2538,98 @@ class _SmartPlaylistSheet extends StatelessWidget {
                   leading: Icon(_smartPlaylistIcon(type)),
                   title: const Text('No tracks yet'),
                   subtitle: Text(smartPlaylist.description),
+                );
+              }
+
+              final track = tracks[index - 1];
+              return TrackTile(
+                track: track,
+                onPlay: () => _playTrackWithResume(
+                  player,
+                  library,
+                  track,
+                  queue: tracks,
+                ),
+                onFavorite: () => library.toggleFavorite(track.id),
+                onAddToPlaylist: () => onAddToPlaylist(track),
+                onLyrics: () => onLyrics(track),
+                onEditMetadata: () => unawaited(
+                  _showTrackMetadataEditor(context, track),
+                ),
+                onRemove: () => library.removeTrack(track.id),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CustomSmartPlaylistSheet extends StatelessWidget {
+  const _CustomSmartPlaylistSheet({
+    required this.ruleId,
+    required this.player,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final String ruleId;
+  final PlayerController player;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final rule = library.customSmartPlaylistById(ruleId);
+    if (rule == null) {
+      return const SizedBox.shrink();
+    }
+
+    final tracks = library.tracksForCustomSmartPlaylist(ruleId);
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView.separated(
+            controller: controller,
+            itemCount: tracks.isEmpty ? 2 : tracks.length + 1,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  leading: const Icon(Icons.filter_alt_outlined),
+                  title: Text(rule.name),
+                  subtitle: Text(
+                    _customSmartPlaylistSubtitle(rule, tracks.length),
+                  ),
+                  trailing: FilledButton.tonalIcon(
+                    onPressed: tracks.isEmpty
+                        ? null
+                        : () {
+                            Navigator.of(context).pop();
+                            _playTrackWithResume(
+                              player,
+                              library,
+                              tracks.first,
+                              queue: tracks,
+                            );
+                          },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Play'),
+                  ),
+                );
+              }
+
+              if (tracks.isEmpty) {
+                return const ListTile(
+                  leading: Icon(Icons.filter_alt_outlined),
+                  title: Text('No matching tracks'),
                 );
               }
 
@@ -2461,6 +2876,63 @@ class _SmartPlaylistCard extends StatelessWidget {
   }
 }
 
+class _CustomSmartPlaylistCard extends StatelessWidget {
+  const _CustomSmartPlaylistCard({
+    required this.rule,
+    required this.trackCount,
+    required this.onOpen,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final CustomSmartPlaylist rule;
+  final int trackCount;
+  final VoidCallback onOpen;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.filter_alt_outlined),
+        title: Text(rule.name),
+        subtitle: Text(_customSmartPlaylistSubtitle(rule, trackCount)),
+        onTap: onOpen,
+        trailing: PopupMenuButton<_CustomSmartPlaylistAction>(
+          onSelected: (action) {
+            switch (action) {
+              case _CustomSmartPlaylistAction.edit:
+                onEdit();
+                break;
+              case _CustomSmartPlaylistAction.delete:
+                onDelete();
+                break;
+            }
+          },
+          itemBuilder: (context) =>
+              const <PopupMenuEntry<_CustomSmartPlaylistAction>>[
+            PopupMenuItem(
+              value: _CustomSmartPlaylistAction.edit,
+              child: ListTile(
+                leading: Icon(Icons.tune),
+                title: Text('Edit rules'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _CustomSmartPlaylistAction.delete,
+              child: ListTile(
+                leading: Icon(Icons.delete_outline),
+                title: Text('Delete'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PlaylistCard extends StatelessWidget {
   const _PlaylistCard({
     required this.playlist,
@@ -2583,6 +3055,8 @@ class _EmptyPlaylists extends StatelessWidget {
 }
 
 enum _PlaylistAction { exportJson, exportM3u, exportCsv, rename, delete }
+
+enum _CustomSmartPlaylistAction { edit, delete }
 
 enum _PlaylistTrackAction { moveUp, moveDown, editMetadata, remove }
 

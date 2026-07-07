@@ -108,7 +108,7 @@ This scaffold includes real app code, not only a README:
 | Search | Local library filtering by title, artist, album, genre, source, and folder with sortable results and suggestion chips from playback history and library metadata |
 | Queue | Play current list as a persistent queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
 | History | Recently played tab with local playback history, play counts, and clear action |
-| Playlists | Built-in smart playlists plus create, rename, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
+| Playlists | Built-in and custom rule smart playlists plus create, rename, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text or LRC timestamped lyrics, including playback-linked synced highlighting |
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track |
@@ -131,7 +131,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Offline | Local-first data model, offline library, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |
-| Playlists | Manual playlists, built-in smart playlists, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; custom smart rules roadmap |
+| Playlists | Manual playlists, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; synced rules and artwork roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
