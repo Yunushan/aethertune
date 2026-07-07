@@ -2417,7 +2417,7 @@ class _PlaylistsTab extends StatelessWidget {
                           textInputAction: TextInputAction.next,
                         ),
                         DropdownButtonFormField<CustomSmartPlaylistSortMode>(
-                          value: sortMode,
+                          initialValue: sortMode,
                           decoration: const InputDecoration(
                             labelText: 'Sort by',
                           ),
