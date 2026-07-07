@@ -52,7 +52,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
-| Recently played / listening history | Done | Persisted playback history with History tab and play counts. | Advanced stats, export filters, recap UI. |
+| Recently played / listening history | Done | Persisted playback history with History tab, play counts, estimated listening time, and top track/artist/album/genre recap. | Export filters, date ranges, privacy controls, and richer recaps. |
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI. | Artwork and sync. |
 | Smart playlists | Scaffolded | Playlists tab exposes built-in dynamic Favorites, Recently added, Recently played, and Most played collections plus persisted custom smart playlists with search text, favorites-only, minimum play count, sort mode, and result limit rules. Store tests cover rule matching, persistence, update/delete, and backup restore. | Rich nested rule builder, sync, artwork, and cross-device dynamic queries. |
 | Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing, preview, and playback-linked highlighting/autoscroll. | Provider lyrics, file import/export, and sharing. |
@@ -100,7 +100,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Album/artist/genre/source/folder views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, source, and imported folder; metadata scanner still needs richer tags. |
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
-| Stats / recap | Scaffolded | YouTube Music | Play counts are done; aggregation jobs and recap UI still needed. |
+| Stats / recap | Scaffolded | YouTube Music, Namida | Store-level stats aggregate local tracks, favorites, play counts, estimated listening duration, and top tracks/artists/albums/genres; History tab shows the recap and store tests cover ranking. Needed next: date ranges, export, yearly/monthly cards, and richer visualizations. |
 | Backup/restore | Done | Namida, local-first apps | File picker integration, cloud targets, migration checks. |
 | Cross-device library sync | Roadmap | YouTube Music, Grayjay-style multi-device needs | Server auth, sync API, conflict handling. |
 

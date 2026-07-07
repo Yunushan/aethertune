@@ -107,7 +107,7 @@ This scaffold includes real app code, not only a README:
 | Backup/restore | Export and restore a versioned JSON backup from the Options tab |
 | Search | Local library filtering by title, artist, album, genre, source, and folder with sortable results and suggestion chips from playback history and library metadata |
 | Queue | Play current list as a persistent queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
-| History | Recently played tab with local playback history, play counts, and clear action |
+| History/stats | Recently played tab with local playback history, play counts, listening recap, top tracks/artists/albums/genres, and clear action |
 | Playlists | Built-in and custom rule smart playlists plus create, rename, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text or LRC timestamped lyrics, including playback-linked synced highlighting |
 | Favorites | Toggle favorites per track |
@@ -125,7 +125,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Feature category | Target support |
 |---|---|
 | Local files | Library import, playback, search, favorites, recently added sorting, imported-folder browsing, stored metadata editing, duplicate resolver scaffold, folders scanner roadmap, and audio tag writer roadmap |
-| History/stats | Recently played and local play counts implemented; deeper recaps roadmap |
+| History/stats | Recently played, local play counts, estimated listening time, and top track/artist/album/genre recap implemented; richer exports and period filters roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, and network disclosure for legal source adapters |
 | Offline | Local-first data model, offline library, cache/download manager roadmap |

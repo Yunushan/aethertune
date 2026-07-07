@@ -165,6 +165,62 @@ class CustomSmartPlaylist {
   }
 }
 
+class LibraryStatsSummary {
+  const LibraryStatsSummary({
+    required this.trackCount,
+    required this.libraryDuration,
+    required this.favoriteTrackCount,
+    required this.playbackCount,
+    required this.uniquePlayedTrackCount,
+    required this.estimatedListeningDuration,
+    required this.topTracks,
+    required this.topArtists,
+    required this.topAlbums,
+    required this.topGenres,
+  });
+
+  final int trackCount;
+  final Duration libraryDuration;
+  final int favoriteTrackCount;
+  final int playbackCount;
+  final int uniquePlayedTrackCount;
+  final Duration estimatedListeningDuration;
+  final List<LibraryStatsTrack> topTracks;
+  final List<LibraryStatsGroup> topArtists;
+  final List<LibraryStatsGroup> topAlbums;
+  final List<LibraryStatsGroup> topGenres;
+}
+
+class LibraryStatsTrack {
+  const LibraryStatsTrack({
+    required this.track,
+    required this.playCount,
+    required this.estimatedListeningDuration,
+    this.lastPlayedAt,
+  });
+
+  final Track track;
+  final int playCount;
+  final Duration estimatedListeningDuration;
+  final DateTime? lastPlayedAt;
+}
+
+class LibraryStatsGroup {
+  const LibraryStatsGroup({
+    required this.label,
+    required this.playCount,
+    required this.trackCount,
+    required this.estimatedListeningDuration,
+    this.lastPlayedAt,
+  });
+
+  final String label;
+  final int playCount;
+  final int trackCount;
+  final Duration estimatedListeningDuration;
+  final DateTime? lastPlayedAt;
+}
+
 CustomSmartPlaylistSortMode _customSmartPlaylistSortModeFromName(
   String? value,
 ) {
@@ -790,6 +846,88 @@ class LibraryStore extends ChangeNotifier {
     _sortCustomSmartPlaylistTracks(tracks, rule.sortMode);
 
     return tracks.take(rule.limit).toList(growable: false);
+  }
+
+  LibraryStatsSummary libraryStats({int limit = 5}) {
+    final normalizedLimit = limit < 0 ? 0 : limit;
+    final byId = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+    final trackPlayCounts = <String, int>{};
+    final trackListeningDurations = <String, Duration>{};
+    final trackLastPlayed = <String, DateTime>{};
+    final artistGroups = <String, _MutableLibraryStatsGroup>{};
+    final albumGroups = <String, _MutableLibraryStatsGroup>{};
+    final genreGroups = <String, _MutableLibraryStatsGroup>{};
+    var playbackCount = 0;
+    var estimatedListeningDuration = Duration.zero;
+
+    void addGroupPlay(
+      Map<String, _MutableLibraryStatsGroup> groups,
+      String label,
+      Track track,
+      DateTime playedAt,
+    ) {
+      final normalizedLabel = _nonEmptyMetadata(label, 'Unknown');
+      final key = normalizedLabel.toLowerCase();
+      groups
+          .putIfAbsent(
+            key,
+            () => _MutableLibraryStatsGroup(label: normalizedLabel),
+          )
+          .add(track, playedAt);
+    }
+
+    for (final entry in _history) {
+      final track = byId[entry.trackId];
+      if (track == null) {
+        continue;
+      }
+
+      playbackCount += 1;
+      trackPlayCounts[track.id] = (trackPlayCounts[track.id] ?? 0) + 1;
+      trackListeningDurations[track.id] =
+          (trackListeningDurations[track.id] ?? Duration.zero) +
+              track.duration;
+      final currentLastPlayed = trackLastPlayed[track.id];
+      if (currentLastPlayed == null ||
+          entry.playedAt.isAfter(currentLastPlayed)) {
+        trackLastPlayed[track.id] = entry.playedAt;
+      }
+      estimatedListeningDuration += track.duration;
+      addGroupPlay(artistGroups, track.artist, track, entry.playedAt);
+      addGroupPlay(albumGroups, track.album, track, entry.playedAt);
+      addGroupPlay(genreGroups, track.genre, track, entry.playedAt);
+    }
+
+    final topTracks = trackPlayCounts.entries.map((entry) {
+      return LibraryStatsTrack(
+        track: byId[entry.key]!,
+        playCount: entry.value,
+        estimatedListeningDuration:
+            trackListeningDurations[entry.key] ?? Duration.zero,
+        lastPlayedAt: trackLastPlayed[entry.key],
+      );
+    }).toList(growable: false);
+    topTracks.sort(_compareLibraryStatsTrack);
+
+    final libraryDuration = _tracks.fold<Duration>(
+      Duration.zero,
+      (total, track) => total + track.duration,
+    );
+
+    return LibraryStatsSummary(
+      trackCount: _tracks.length,
+      libraryDuration: libraryDuration,
+      favoriteTrackCount: favorites.length,
+      playbackCount: playbackCount,
+      uniquePlayedTrackCount: trackPlayCounts.length,
+      estimatedListeningDuration: estimatedListeningDuration,
+      topTracks: topTracks.take(normalizedLimit).toList(growable: false),
+      topArtists: _topLibraryStatsGroups(artistGroups, normalizedLimit),
+      topAlbums: _topLibraryStatsGroups(albumGroups, normalizedLimit),
+      topGenres: _topLibraryStatsGroups(genreGroups, normalizedLimit),
+    );
   }
 
   String exportBackupJson() {
@@ -2150,6 +2288,82 @@ class LibraryStore extends ChangeNotifier {
     return _compareByLastPlayedThenTitle(a, b);
   }
 
+  int _compareLibraryStatsTrack(
+    LibraryStatsTrack a,
+    LibraryStatsTrack b,
+  ) {
+    final byPlayCount = b.playCount.compareTo(a.playCount);
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareText(a.track.title, b.track.title);
+  }
+
+  int _compareLibraryStatsGroup(
+    LibraryStatsGroup a,
+    LibraryStatsGroup b,
+  ) {
+    final byPlayCount = b.playCount.compareTo(a.playCount);
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byDuration =
+        b.estimatedListeningDuration.compareTo(a.estimatedListeningDuration);
+    if (byDuration != 0) {
+      return byDuration;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareText(a.label, b.label);
+  }
+
+  int _compareNullableDateDesc(DateTime? a, DateTime? b) {
+    if (a != null && b != null) {
+      return b.compareTo(a);
+    }
+    if (a != null) {
+      return -1;
+    }
+    if (b != null) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  List<LibraryStatsGroup> _topLibraryStatsGroups(
+    Map<String, _MutableLibraryStatsGroup> groups,
+    int limit,
+  ) {
+    if (limit <= 0) {
+      return <LibraryStatsGroup>[];
+    }
+
+    final statsGroups = groups.values
+        .map((group) => group.toLibraryStatsGroup())
+        .toList(growable: false);
+    statsGroups.sort(_compareLibraryStatsGroup);
+
+    return statsGroups.take(limit).toList(growable: false);
+  }
+
   String _browseLabelForTrack(Track track, LibraryBrowseType type) {
     switch (type) {
       case LibraryBrowseType.artist:
@@ -2488,6 +2702,36 @@ class _MutableDuplicateTrackGroup {
       key: key,
       type: type,
       tracks: List.unmodifiable(tracks),
+    );
+  }
+}
+
+class _MutableLibraryStatsGroup {
+  _MutableLibraryStatsGroup({required this.label});
+
+  final String label;
+  final Set<String> trackIds = <String>{};
+  int playCount = 0;
+  Duration estimatedListeningDuration = Duration.zero;
+  DateTime? lastPlayedAt;
+
+  void add(Track track, DateTime playedAt) {
+    trackIds.add(track.id);
+    playCount += 1;
+    estimatedListeningDuration += track.duration;
+    final currentLastPlayed = lastPlayedAt;
+    if (currentLastPlayed == null || playedAt.isAfter(currentLastPlayed)) {
+      lastPlayedAt = playedAt;
+    }
+  }
+
+  LibraryStatsGroup toLibraryStatsGroup() {
+    return LibraryStatsGroup(
+      label: label,
+      playCount: playCount,
+      trackCount: trackIds.length,
+      estimatedListeningDuration: estimatedListeningDuration,
+      lastPlayedAt: lastPlayedAt,
     );
   }
 }

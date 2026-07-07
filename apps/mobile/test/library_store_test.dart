@@ -550,6 +550,73 @@ void main() {
     },
   );
 
+  test('builds library listening stats from playback history', () async {
+    var now = DateTime.utc(2026, 1, 8, 13);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'Aether One',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        '2',
+        title: 'Aether Two',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 4),
+      ),
+      _track(
+        '3',
+        title: 'Night Three',
+        artist: 'Orion',
+        album: 'Night',
+        genre: 'Jazz',
+        duration: const Duration(minutes: 5),
+      ),
+    ]);
+    await store.toggleFavorite('2');
+    await store.recordPlayback('1');
+    now = DateTime.utc(2026, 1, 8, 13, 1);
+    await store.recordPlayback('2');
+    now = DateTime.utc(2026, 1, 8, 13, 2);
+    await store.recordPlayback('1');
+    now = DateTime.utc(2026, 1, 8, 13, 3);
+    await store.recordPlayback('3');
+
+    final stats = store.libraryStats(limit: 2);
+
+    expect(stats.trackCount, 3);
+    expect(stats.libraryDuration, const Duration(minutes: 12));
+    expect(stats.favoriteTrackCount, 1);
+    expect(stats.playbackCount, 4);
+    expect(stats.uniquePlayedTrackCount, 3);
+    expect(stats.estimatedListeningDuration, const Duration(minutes: 15));
+    expect(
+      stats.topTracks.map((trackStats) => trackStats.track.id),
+      <String>['1', '3'],
+    );
+    expect(stats.topTracks.first.playCount, 2);
+    expect(
+      stats.topTracks.first.estimatedListeningDuration,
+      const Duration(minutes: 6),
+    );
+    expect(stats.topArtists.map((group) => group.label), <String>[
+      'Mira',
+      'Orion',
+    ]);
+    expect(stats.topArtists.first.playCount, 3);
+    expect(stats.topArtists.first.trackCount, 2);
+    expect(stats.topAlbums.first.label, 'Dawn');
+    expect(stats.topGenres.first.label, 'Ambient');
+    expect(store.libraryStats(limit: 0).topTracks, isEmpty);
+  });
+
   test('removing a library track removes its playback history', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 9),

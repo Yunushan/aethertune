@@ -44,6 +44,8 @@
 - [ ] Audio fingerprint and file-hash duplicate matching
 - [x] Recently played
 - [x] Local play counts
+- [x] Local stats recap
+- [ ] Stats date ranges and export
 - [x] Recently added view
 - [x] Local search suggestions
 - [x] Artist/album/genre/source browse

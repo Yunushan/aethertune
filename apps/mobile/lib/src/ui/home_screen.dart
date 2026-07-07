@@ -3068,6 +3068,7 @@ class _HistoryTab extends StatelessWidget {
     final library = context.watch<LibraryStore>();
     final player = context.read<PlayerController>();
     final recentlyPlayed = library.recentlyPlayedTracks();
+    final stats = library.libraryStats();
 
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
@@ -3094,6 +3095,35 @@ class _HistoryTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
+        _LibraryStatsOverview(stats: stats),
+        if (stats.playbackCount > 0) ...<Widget>[
+          const SizedBox(height: 16),
+          _LibraryStatsTrackSection(stats: stats),
+          const SizedBox(height: 12),
+          _LibraryStatsGroupSection(
+            title: 'Top artists',
+            icon: Icons.person_outline,
+            groups: stats.topArtists,
+          ),
+          const SizedBox(height: 12),
+          _LibraryStatsGroupSection(
+            title: 'Top albums',
+            icon: Icons.album_outlined,
+            groups: stats.topAlbums,
+          ),
+          const SizedBox(height: 12),
+          _LibraryStatsGroupSection(
+            title: 'Top genres',
+            icon: Icons.category_outlined,
+            groups: stats.topGenres,
+          ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          'Recently played',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
         if (recentlyPlayed.isEmpty)
           const _EmptyHistory()
         else
@@ -3115,6 +3145,180 @@ class _HistoryTab extends StatelessWidget {
                 queue: recentlyPlayed,
               ),
             ),
+      ],
+    );
+  }
+}
+
+class _LibraryStatsOverview extends StatelessWidget {
+  const _LibraryStatsOverview({required this.stats});
+
+  final LibraryStatsSummary stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        _StatsMetricTile(
+          icon: Icons.library_music_outlined,
+          label: 'Tracks',
+          value: stats.trackCount.toString(),
+        ),
+        _StatsMetricTile(
+          icon: Icons.favorite_border,
+          label: 'Favorites',
+          value: stats.favoriteTrackCount.toString(),
+        ),
+        _StatsMetricTile(
+          icon: Icons.play_circle_outline,
+          label: 'Plays',
+          value: stats.playbackCount.toString(),
+        ),
+        _StatsMetricTile(
+          icon: Icons.schedule,
+          label: 'Listening',
+          value: _formatStatsDuration(stats.estimatedListeningDuration),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatsMetricTile extends StatelessWidget {
+  const _StatsMetricTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 150,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: <Widget>[
+              Icon(icon),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      value,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryStatsTrackSection extends StatelessWidget {
+  const _LibraryStatsTrackSection({required this.stats});
+
+  final LibraryStatsSummary stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StatsSection(
+      title: 'Top tracks',
+      children: <Widget>[
+        for (final trackStats in stats.topTracks)
+          ListTile(
+            leading: const Icon(Icons.music_note_outlined),
+            title: Text(trackStats.track.title),
+            subtitle: Text(
+              '${trackStats.track.artist} · '
+              '${trackStats.playCount} play(s) · '
+              '${_formatStatsDuration(trackStats.estimatedListeningDuration)}',
+            ),
+            trailing: Text(_formatHistoryTime(trackStats.lastPlayedAt)),
+          ),
+      ],
+    );
+  }
+}
+
+class _LibraryStatsGroupSection extends StatelessWidget {
+  const _LibraryStatsGroupSection({
+    required this.title,
+    required this.icon,
+    required this.groups,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<LibraryStatsGroup> groups;
+
+  @override
+  Widget build(BuildContext context) {
+    if (groups.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return _StatsSection(
+      title: title,
+      children: <Widget>[
+        for (final group in groups)
+          ListTile(
+            leading: Icon(icon),
+            title: Text(group.label),
+            subtitle: Text(
+              '${group.playCount} play(s) · '
+              '${group.trackCount} track(s) · '
+              '${_formatStatsDuration(group.estimatedListeningDuration)}',
+            ),
+            trailing: Text(_formatHistoryTime(group.lastPlayedAt)),
+          ),
+      ],
+    );
+  }
+}
+
+class _StatsSection extends StatelessWidget {
+  const _StatsSection({
+    required this.title,
+    required this.children,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Card(
+          child: Column(
+            children: children,
+          ),
+        ),
       ],
     );
   }
@@ -3144,6 +3348,23 @@ class _EmptyHistory extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatStatsDuration(Duration duration) {
+  if (duration <= Duration.zero) {
+    return '0m';
+  }
+
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  if (hours > 0 && minutes > 0) {
+    return '${hours}h ${minutes}m';
+  }
+  if (hours > 0) {
+    return '${hours}h';
+  }
+
+  return '${duration.inMinutes}m';
 }
 
 String _formatHistoryTime(DateTime? value) {
