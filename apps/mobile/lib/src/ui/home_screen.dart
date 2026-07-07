@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
+import '../data/internet_archive_provider.dart';
 import '../data/library_store.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
@@ -2556,6 +2557,8 @@ class _SourcesTab extends StatefulWidget {
 
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
+  final _archiveProvider = InternetArchiveProvider();
+  final _archiveSearchController = TextEditingController();
   final _podcastFeedController = TextEditingController();
   final _radioProvider = RadioBrowserProvider();
   final _radioSearchController = TextEditingController();
@@ -2565,9 +2568,12 @@ class _SourcesTabState extends State<_SourcesTab> {
   final _radioCodecController = TextEditingController();
   final _radioMinBitrateController = TextEditingController();
   final _radioMaxBitrateController = TextEditingController();
+  List<Track> _archiveTracks = <Track>[];
   List<Track> _demoTracks = <Track>[];
   List<Track> _podcastEpisodeTracks = <Track>[];
   List<Track> _radioTracks = <Track>[];
+  bool _archiveLoading = false;
+  String? _archiveError;
   bool _podcastLoading = false;
   String? _podcastError;
   String? _selectedPodcastSubscriptionId;
@@ -2586,6 +2592,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   @override
   void dispose() {
+    _archiveSearchController.dispose();
     _podcastFeedController.dispose();
     _radioSearchController.dispose();
     _radioCountryCodeController.dispose();
@@ -2659,15 +2666,28 @@ class _SourcesTabState extends State<_SourcesTab> {
           },
         ),
         const _ProviderCard(
+          title: 'Internet Archive',
+          status: 'Adapter foundation',
+          description:
+              'Search public audio items and resolve playable archive files.',
+          icon: Icons.archive_outlined,
+          capabilities: <MusicSourceCapability>{
+            MusicSourceCapability.metadataSearch,
+            MusicSourceCapability.streamResolution,
+            MusicSourceCapability.directPlayback,
+          },
+        ),
+        const _ProviderCard(
           title: 'Jellyfin / Navidrome / Subsonic',
           status: 'Adapter roadmap',
           description: 'User-owned/self-hosted music server support belongs here.',
           icon: Icons.dns_outlined,
         ),
         const _ProviderCard(
-          title: 'Podcasts / Radio / Internet Archive',
+          title: 'More open catalogs',
           status: 'Adapter roadmap',
-          description: 'Open catalogs can provide discovery, streaming, and offline caching.',
+          description:
+              'Additional legal catalogs can provide discovery, streaming, and offline caching.',
           icon: Icons.public,
         ),
         const _ProviderCard(
@@ -2925,6 +2945,78 @@ class _SourcesTabState extends State<_SourcesTab> {
                   IconButton(
                     tooltip: 'Play station',
                     onPressed: () => _playRadioStation(context, track),
+                    icon: const Icon(Icons.play_arrow),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          'Internet Archive audio',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: _archiveSearchController,
+                decoration: const InputDecoration(
+                  labelText: 'Archive search',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _searchArchiveItems(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Search archive audio',
+              onPressed: _archiveLoading ? null : _searchArchiveItems,
+              icon: const Icon(Icons.search),
+            ),
+          ],
+        ),
+        if (_archiveLoading) ...<Widget>[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+        if (_archiveError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Archive search failed'),
+            subtitle: Text(_archiveError!),
+          ),
+        ] else if (_archiveTracks.isEmpty && !_archiveLoading) ...<Widget>[
+          const SizedBox(height: 8),
+          const ListTile(
+            leading: Icon(Icons.archive_outlined),
+            title: Text('No archive audio loaded'),
+            subtitle: Text(
+              'Search public Internet Archive audio items to play or save.',
+            ),
+          ),
+        ] else ...<Widget>[
+          const SizedBox(height: 8),
+          for (final track in _archiveTracks)
+            ListTile(
+              leading: const Icon(Icons.archive_outlined),
+              title: Text(track.title),
+              subtitle: Text('${track.artist} / ${track.genre}'),
+              onTap: () => _playArchiveTrack(context, track),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Save archive track',
+                    onPressed: () => _saveArchiveTrack(context, track),
+                    icon: const Icon(Icons.library_add_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Play archive track',
+                    onPressed: () => _playArchiveTrack(context, track),
                     icon: const Icon(Icons.play_arrow),
                   ),
                 ],
@@ -3219,6 +3311,69 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _savePodcastEpisode(BuildContext context, Track track) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    await library.addTracks(<Track>[track]);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Saved ${track.title}.')),
+    );
+  }
+
+  Future<void> _searchArchiveItems() async {
+    setState(() {
+      _archiveLoading = true;
+      _archiveError = null;
+    });
+
+    try {
+      final tracks = await _archiveProvider.search(
+        _archiveSearchController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _archiveTracks = tracks;
+        _archiveLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _archiveTracks = <Track>[];
+        _archiveLoading = false;
+        _archiveError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _playArchiveTrack(BuildContext context, Track track) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final player = context.read<PlayerController>();
+
+    try {
+      await player.playTrack(track, queue: _archiveTracks);
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not play ${track.title}.')),
+      );
+    }
+  }
+
+  Future<void> _saveArchiveTrack(BuildContext context, Track track) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 

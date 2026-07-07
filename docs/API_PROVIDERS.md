@@ -47,6 +47,10 @@ Use `ProviderPrivacyDisclosure` to list:
 
 `RadioBrowserProvider` searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the selected API mirror in `ProviderPrivacyDisclosure`, resolves public stream URLs for playback, and sends Radio Browser station click accounting on playback. The Sources tab can search, filter by country, language, tag, codec, and bitrate, play stations, and save stations. Mirror discovery, stream validation, and cache policy are still separate roadmap work.
 
+## Internet Archive foundation
+
+`InternetArchiveProvider` searches the public Internet Archive audio catalog, reads item metadata, chooses a playable audio file, maps it to a provider-neutral `Track`, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search public archive audio, play results, and save tracks. Collection browsing, richer facets, file selection for multi-file items, download/offline policy, and cache management are still separate roadmap work.
+
 ## Minimal provider
 
 ```dart

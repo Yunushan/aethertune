@@ -76,7 +76,8 @@
 - [x] Radio Browser station click accounting
 - [x] Radio Browser richer browse filters
 - [ ] Radio Browser mirror discovery, stream validation, and cache policy
-- [ ] Internet Archive provider
+- [x] Internet Archive audio search/provider foundation
+- [ ] Internet Archive collection browse, facets, and offline/download policy
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider
 
