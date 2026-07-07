@@ -1,0 +1,58 @@
+<svg width="1040" height="620" viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune server preview</title>
+  <desc id="desc">Server preview showing AetherTune health, info, catalog, provider, and sync API foundations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="0.52" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#e0f2fe"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#020617" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+  <rect width="1040" height="620" rx="32" fill="url(#bg)"/>
+  <rect x="76" y="64" width="888" height="492" rx="28" fill="url(#panel)" filter="url(#shadow)"/>
+  <rect x="76" y="64" width="888" height="48" rx="28" fill="#0b1220"/>
+  <circle cx="112" cy="88" r="7" fill="#22c55e"/>
+  <text x="136" y="94" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">AetherTune Server</text>
+  <text x="816" y="94" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#67e8f9">Dart HTTP API</text>
+
+  <rect x="110" y="146" width="286" height="346" rx="24" fill="#111827"/>
+  <text x="140" y="188" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" fill="#f8fafc">API foundation</text>
+  <text x="140" y="216" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#cbd5e1">Local-first clients can talk to a simple server core.</text>
+  <g transform="translate(140 256)">
+    <rect width="226" height="48" rx="16" fill="#064e3b"/>
+    <text x="18" y="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#a7f3d0">GET /health</text>
+    <text x="154" y="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#ffffff">200</text>
+  </g>
+  <g transform="translate(140 320)">
+    <rect width="226" height="48" rx="16" fill="#1e3a8a"/>
+    <text x="18" y="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#bfdbfe">GET /api/v1/info</text>
+    <text x="154" y="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#ffffff">JSON</text>
+  </g>
+  <g transform="translate(140 384)">
+    <rect width="226" height="48" rx="16" fill="#7c2d12"/>
+    <text x="18" y="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#fed7aa">GET /catalog</text>
+    <text x="154" y="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#ffffff">ready</text>
+  </g>
+
+  <rect x="432" y="146" width="472" height="346" rx="24" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="464" y="188" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Shared music workspace</text>
+  <rect x="464" y="216" width="376" height="52" rx="18" fill="#ecfeff" stroke="#a5f3fc"/>
+  <text x="490" y="248" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#155e75">Sync-ready library and playlists</text>
+  <rect x="464" y="292" width="180" height="86" rx="22" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="492" y="326" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="800" fill="#166534">Providers</text>
+  <text x="492" y="350" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#15803d">Legal source adapters</text>
+  <rect x="668" y="292" width="180" height="86" rx="22" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="696" y="326" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="800" fill="#3730a3">Catalog</text>
+  <text x="696" y="350" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#4f46e5">Tracks and metadata</text>
+  <rect x="464" y="404" width="384" height="48" rx="18" fill="#111827"/>
+  <text x="490" y="434" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#f8fafc">Server base today, remote library and sync next</text>
+  <rect x="420" y="536" width="200" height="15" rx="8" fill="#020617"/>
+  <rect x="470" y="552" width="100" height="15" rx="8" fill="#020617"/>
+</svg>

@@ -44,19 +44,38 @@ The app is intentionally **provider-based**: the player, library, queue, cache, 
   <img src="docs/media/readme/aethertune-platform-tour.gif" alt="AetherTune platform tour showing Android, iOS, Windows, macOS, Linux, and server support" width="840">
 </p>
 
-These README previews introduce the supported app surfaces. The actual Flutter client builds for Android, iOS, Linux, macOS, and Windows; CI verifies desktop build targets, and release workflows package Android plus desktop artifacts.
+These illustrated README previews introduce the supported app surfaces. The Flutter client targets Android, iOS, Linux, macOS, and Windows; CI verifies desktop build targets, release workflows package Android plus desktop artifacts, and the Dart server exposes the API foundation.
+
+| Surface | What the preview introduces |
+|---|---|
+| Android | Touch-first library search, provider search, and mini player |
+| iOS | Playlists, synced lyrics, history, and privacy-first sources |
+| Windows | Wide desktop layout with provider search, queue, and playback controls |
+| macOS | Artwork-first player, lyrics, playlists, and provider privacy |
+| Linux | Local library, folders, open providers, backup, and server-friendly foundations |
+| Server | Health, info, catalog, provider, and future sync API foundations |
 
 ### Mobile
 
 | Android | iOS |
 |---|---|
 | <img src="docs/media/readme/aethertune-android.svg" alt="AetherTune Android preview with library search, provider search, and mini player" width="300"> | <img src="docs/media/readme/aethertune-ios.svg" alt="AetherTune iOS preview with playlists, synced lyrics, and privacy-first providers" width="300"> |
+| Library search, provider search, local playback, and mini player | Playlists, synced lyrics, privacy notes, and iOS/iPadOS-ready layout |
 
 ### Desktop
 
 | Windows | macOS | Linux |
 |---|---|---|
 | <img src="docs/media/readme/aethertune-windows.svg" alt="AetherTune Windows desktop preview with unified provider search and queue" width="300"> | <img src="docs/media/readme/aethertune-macos.svg" alt="AetherTune macOS desktop preview with artwork, lyrics, and provider privacy" width="300"> | <img src="docs/media/readme/aethertune-linux.svg" alt="AetherTune Linux desktop preview with local library, folders, providers, and server foundations" width="300"> |
+| Unified search, queue, and mini player on a wide desktop surface | Artwork, lyrics, smart playlists, and provider privacy | Local library, folders, backup, providers, and Linux CI coverage |
+
+### Server
+
+<p align="center">
+  <img src="docs/media/readme/aethertune-server.svg" alt="AetherTune server preview with health, info, catalog, provider, and sync API foundations" width="560">
+</p>
+
+The server preview covers the Dart service that ships with the repo: health checks, API info, catalog endpoints, and the foundation for provider-backed sync or remote-library features.
 
 ## Quick Start
 
