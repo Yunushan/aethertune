@@ -2808,7 +2808,7 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
             shrinkWrap: true,
             children: <Widget>[
               ListTile(
-                leading: _PlaylistArtwork(playlist: playlist),
+                leading: _PlaylistArtwork(playlist: playlist, size: 48),
                 title: Text(playlist.name),
                 subtitle: Text(
                   hasQuery
