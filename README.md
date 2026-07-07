@@ -124,8 +124,8 @@ This scaffold includes real app code, not only a README:
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
 | Local library | Import audio files through the native file picker or recursive folder scanner; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, or folder |
-| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, offline mode, and the offline cache/download queue with `shared_preferences` |
-| Backup/restore | Export and restore a versioned JSON backup, including submitted search history, offline mode, and queued offline media requests, from the Options tab |
+| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, theme preference, offline mode, and the offline cache/download queue with `shared_preferences` |
+| Backup/restore | Export and restore a versioned JSON backup, including submitted search history, theme preference, offline mode, and queued offline media requests, from the Options tab |
 | Search | Local library filtering by title, artist, album, genre, source, folder, favorites, and local-files-only offline readiness with sortable results and suggestion chips from submitted searches, playback history, and library metadata |
 | Queue | Play current list as a persistent queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
 | History/stats | Recently played tab with local playback history, play counts, listening recap, date ranges, JSON/CSV stats export, top tracks/artists/albums/genres, and clear action |
@@ -157,6 +157,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
+| UI customization | Material 3 shell with persisted system/light/dark/AMOLED theme preference; dynamic color and custom accents roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
 | Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download queue and private cache eligibility/eviction, Radio Browser mirror discovery/search/filter/stream validation/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download queue and private cache eligibility/eviction with multi-file item results; self-hosted and official API providers remain roadmap |
 

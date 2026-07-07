@@ -29,22 +29,60 @@ class AetherTuneApp extends StatelessWidget {
           },
         ),
       ],
-      child: MaterialApp(
-        title: 'AetherTune',
-        debugShowCheckedModeBanner: false,
-        themeMode: ThemeMode.system,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.indigo,
-          brightness: Brightness.light,
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
-        home: const HomeScreen(),
+      child: Consumer<LibraryStore>(
+        builder: (context, library, _) {
+          return MaterialApp(
+            title: 'AetherTune',
+            debugShowCheckedModeBanner: false,
+            themeMode: _themeModeForPreference(library.themePreference),
+            theme: _lightTheme(),
+            darkTheme: _darkThemeForPreference(library.themePreference),
+            home: const HomeScreen(),
+          );
+        },
       ),
     );
   }
+}
+
+ThemeMode _themeModeForPreference(AppThemePreference preference) {
+  switch (preference) {
+    case AppThemePreference.system:
+      return ThemeMode.system;
+    case AppThemePreference.light:
+      return ThemeMode.light;
+    case AppThemePreference.dark:
+    case AppThemePreference.amoled:
+      return ThemeMode.dark;
+  }
+}
+
+ThemeData _lightTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    colorSchemeSeed: Colors.indigo,
+    brightness: Brightness.light,
+  );
+}
+
+ThemeData _darkThemeForPreference(AppThemePreference preference) {
+  if (preference == AppThemePreference.amoled) {
+    return ThemeData(
+      useMaterial3: true,
+      colorSchemeSeed: Colors.indigo,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: Colors.black,
+      canvasColor: Colors.black,
+      appBarTheme: const AppBarTheme(backgroundColor: Colors.black),
+      navigationBarTheme: const NavigationBarThemeData(
+        backgroundColor: Colors.black,
+      ),
+    );
+  }
+
+  return ThemeData(
+    useMaterial3: true,
+    colorSchemeSeed: Colors.indigo,
+    brightness: Brightness.dark,
+  );
 }

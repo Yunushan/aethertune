@@ -127,5 +127,7 @@
 - [ ] Stable provider SDK
 - [x] Release artifact workflow
 - [ ] Fully signed/notarized release process
+- [x] Persisted system/light/dark/AMOLED theme preference
+- [ ] Material You dynamic color and custom accent picker
 - [ ] Accessibility pass
 - [ ] Localization setup

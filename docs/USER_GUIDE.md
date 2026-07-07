@@ -74,7 +74,7 @@ Open a track menu in the Library tab and choose **Lyrics**. You can save plain t
 
 ## Backup and restore
 
-Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, offline mode, queued offline media requests, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup. Backups preserve queue metadata and local cache paths, not copied media bytes.
+Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, theme preference, offline mode, queued offline media requests, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup. Backups preserve queue metadata and local cache paths, not copied media bytes.
 
 ## Sleep timer
 
@@ -82,7 +82,7 @@ Tap the moon icon in the top-right corner and choose a preset duration, choose *
 
 ## Options
 
-The Options tab contains playback settings such as shuffle and repeat mode. Turn on **Offline mode** to pause network-backed source searches, feed refreshes, and saved stream playback from every player surface while keeping local file playback available. The Offline queue section shows provider-approved cache/download requests, lets you cache queued direct media URLs into private app storage, shows private cache usage, and lets you trim the private cache to 500.0 MB, clear cached media, remove one item, or clear the queue. AetherTune restores those playback settings, offline mode, and the offline queue when you reopen the app.
+The Options tab contains playback settings such as shuffle and repeat mode plus a **Theme** selector for System, Light, Dark, or AMOLED. Turn on **Offline mode** to pause network-backed source searches, feed refreshes, and saved stream playback from every player surface while keeping local file playback available. The Offline queue section shows provider-approved cache/download requests, lets you cache queued direct media URLs into private app storage, shows private cache usage, and lets you trim the private cache to 500.0 MB, clear cached media, remove one item, or clear the queue. AetherTune restores those playback settings, theme preference, offline mode, and the offline queue when you reopen the app.
 
 ## Provider plugins
 

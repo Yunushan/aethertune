@@ -45,7 +45,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Local playback | Done | `just_audio` local file playback. | Background service, notification controls, codec matrix. |
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
-| Backup/restore | Done | Versioned JSON export/restore UI plus store tests, including offline mode and queued offline media requests. | File-based import/export and migration tooling. |
+| Backup/restore | Done | Versioned JSON export/restore UI plus store tests, including theme preference, offline mode, and queued offline media requests. | File-based import/export and migration tooling. |
 | Stored metadata editing | Scaffolded | Track menus edit saved title, artist, album, and genre, with store tests for persistence/search/browse/suggestions. | Audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Scaffolded | Options tab finds duplicate library tracks by normalized local path, provider/external ID, stream URL, or metadata plus known duration, then merges the selected keeper while preserving playlists, favorites, lyrics, history, and progress; store tests cover detection and persistence. | Audio fingerprinting, file hashes, scanner reconciliation, batch review UI, and undo. |
 | Search | Done | Local title/artist/album/genre/source/folder filtering plus submitted-query/playback/metadata suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
@@ -102,7 +102,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
 | Stats / recap | Scaffolded | YouTube Music, Namida | Store-level stats aggregate local tracks, favorites, play counts, estimated listening duration, and top tracks/artists/albums/genres; History tab filters stats by all time, last 7 days, last 30 days, or last year, and exports the selected range as JSON/CSV. Store tests cover ranking, date filtering, and exports. Needed next: yearly/monthly cards, shareable recap visuals, and richer charts. |
-| Backup/restore | Done | Namida, local-first apps | Includes local library data, offline mode, and queued offline media requests; file picker integration, cloud targets, migration checks remain. |
+| Backup/restore | Done | Namida, local-first apps | Includes local library data, theme preference, offline mode, and queued offline media requests; file picker integration, cloud targets, migration checks remain. |
 | Cross-device library sync | Roadmap | YouTube Music, Grayjay-style multi-device needs | Server auth, sync API, conflict handling. |
 
 ### Search, Discovery, And Recommendations
@@ -243,8 +243,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Material 3 shell | Done | Music You, modern Android apps | Full design system. |
 | Mini player / full player | Scaffolded | All music apps | Full-screen now-playing view and gestures. |
 | Desktop responsive layout | Roadmap | Desktop players | Split panes, resizable sidebars, keyboard focus. |
-| Themes | Roadmap | Music You, RiMusic | Dynamic color, dark/light, custom accent. |
-| AMOLED theme | Roadmap | Android music apps | Theme variant. |
+| Themes | Scaffolded | Music You, RiMusic | Options exposes persisted System, Light, Dark, and AMOLED choices; the app shell switches `ThemeMode`, backups preserve the preference, and store tests cover persistence/restore. Needed next: Material You dynamic color, custom accents, and per-platform polish. |
+| AMOLED theme | Scaffolded | Android music apps | AMOLED preference forces dark mode and uses black scaffold/canvas/navigation surfaces. Needed next: full component contrast audit and per-screen black-surface tuning. |
 | Artwork-dominant player | Roadmap | Namida, YouTube Music | Player redesign and animated transitions. |
 | Visualizer | Roadmap | Namida-style polish | Audio analysis and render surface. |
 | Accessibility pass | Roadmap | Required quality gate | Screen reader labels, focus order, contrast. |
@@ -309,7 +309,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 | Grayjay | Multi-source subscriptions, creator following, unified feeds. | Roadmap |
 | OuterTune | YouTube Music-style client features. | Roadmap / official-only |
 | ViTune | YouTube Music-style playback, cache, lyrics. | Roadmap / official-only |
-| RiMusic | YouTube Music-style playback, cache, lyrics, Android polish. | Roadmap / official-only |
+| RiMusic | YouTube Music-style playback, cache, lyrics, Android polish. | Scaffolded / official-only |
 | Harmony Music | Lightweight music client UX and provider ideas. | Roadmap |
 | YMusic | YouTube-audio-oriented UX. | Roadmap / official-only |
 | YouTube Music | Official music/video streaming UX, recommendations, radio, podcasts, downloads, profiles. | Roadmap / official-only |

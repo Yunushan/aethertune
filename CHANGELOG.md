@@ -9,6 +9,7 @@ Initial GitHub-ready scaffold.
 - Added local file import.
 - Added local/URL playback controller.
 - Added queue, favorites, search, sleep timer, shuffle, repeat.
+- Added persisted system/light/dark/AMOLED theme preference.
 - Added local search suggestions from submitted query history, playback history, and library metadata.
 - Added provider offline cache/download policy gates with Podcast RSS and Internet Archive allow rules plus Radio Browser live-stream denial.
 - Added persisted offline cache/download queue with Sources-tab provider actions and Options-tab queue management.

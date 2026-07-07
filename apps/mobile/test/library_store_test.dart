@@ -1134,34 +1134,42 @@ void main() {
     expect(thirdStore.searchQueryHistory, secondStore.searchQueryHistory);
   });
 
-  test('persists offline mode and restores it from backups', () async {
+  test('persists app settings and restores them from backups', () async {
     final firstStore = LibraryStore();
     await firstStore.load();
 
     expect(firstStore.offlineModeEnabled, isFalse);
+    expect(firstStore.themePreference, AppThemePreference.system);
 
     await firstStore.setOfflineModeEnabled(true);
+    await firstStore.setThemePreference(AppThemePreference.amoled);
 
     expect(firstStore.offlineModeEnabled, isTrue);
+    expect(firstStore.themePreference, AppThemePreference.amoled);
 
     final secondStore = LibraryStore();
     await secondStore.load();
 
     expect(secondStore.offlineModeEnabled, isTrue);
+    expect(secondStore.themePreference, AppThemePreference.amoled);
 
     final backupJson = secondStore.exportBackupJson();
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
+    expect(backup['themePreference'], AppThemePreference.amoled.name);
 
     final legacyBackup = Map<String, dynamic>.from(backup)
-      ..remove('offlineModeEnabled');
+      ..remove('offlineModeEnabled')
+      ..remove('themePreference');
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
 
     expect(secondStore.offlineModeEnabled, isFalse);
+    expect(secondStore.themePreference, AppThemePreference.system);
 
     await secondStore.restoreBackupJson(backupJson);
 
     expect(secondStore.offlineModeEnabled, isTrue);
+    expect(secondStore.themePreference, AppThemePreference.amoled);
   });
 
   test(

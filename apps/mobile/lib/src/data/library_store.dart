@@ -45,6 +45,23 @@ enum CustomSmartPlaylistSortMode {
   mostPlayed,
 }
 
+enum AppThemePreference { system, light, dark, amoled }
+
+extension AppThemePreferenceLabel on AppThemePreference {
+  String get label {
+    switch (this) {
+      case AppThemePreference.system:
+        return 'System';
+      case AppThemePreference.light:
+        return 'Light';
+      case AppThemePreference.dark:
+        return 'Dark';
+      case AppThemePreference.amoled:
+        return 'AMOLED';
+    }
+  }
+}
+
 class SearchSuggestion {
   const SearchSuggestion({
     required this.type,
@@ -247,6 +264,13 @@ CustomSmartPlaylistSortMode _customSmartPlaylistSortModeFromName(
   );
 }
 
+AppThemePreference _appThemePreferenceFromName(String? value) {
+  return AppThemePreference.values.firstWhere(
+    (preference) => preference.name == value,
+    orElse: () => AppThemePreference.system,
+  );
+}
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
@@ -264,6 +288,7 @@ class LibraryStore extends ChangeNotifier {
   static const _progressKey = 'aethertune.playback_progress.v1';
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
+  static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
   static const _maxHistoryEntries = 500;
   static const _maxSearchQueryHistoryEntries = 20;
@@ -286,6 +311,7 @@ class LibraryStore extends ChangeNotifier {
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
   final DateTime Function() _clock;
   bool _offlineModeEnabled = false;
+  AppThemePreference _themePreference = AppThemePreference.system;
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -307,6 +333,7 @@ class LibraryStore extends ChangeNotifier {
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get offlineModeEnabled => _offlineModeEnabled;
+  AppThemePreference get themePreference => _themePreference;
 
   Future<void> load() async {
     if (_loaded) {
@@ -450,6 +477,9 @@ class LibraryStore extends ChangeNotifier {
         );
     }
     _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
+    _themePreference = _appThemePreferenceFromName(
+      prefs.getString(_themePreferenceKey),
+    );
     final rawOfflineCacheQueue = prefs.getString(_offlineCacheQueueKey);
     if (rawOfflineCacheQueue != null && rawOfflineCacheQueue.isNotEmpty) {
       final decoded = jsonDecode(rawOfflineCacheQueue) as List<dynamic>;
@@ -572,6 +602,16 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _offlineModeEnabled = enabled;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setThemePreference(AppThemePreference preference) async {
+    if (_themePreference == preference) {
+      return;
+    }
+
+    _themePreference = preference;
     await _save();
     notifyListeners();
   }
@@ -1347,6 +1387,7 @@ class LibraryStore extends ChangeNotifier {
       'version': _backupVersion,
       'exportedAt': _clock().toIso8601String(),
       'offlineModeEnabled': _offlineModeEnabled,
+      'themePreference': _themePreference.name,
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
       'customSmartPlaylists':
@@ -1633,12 +1674,16 @@ class LibraryStore extends ChangeNotifier {
     final restoredLyrics = <TrackLyrics>[];
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredOfflineModeEnabled = false;
+    var restoredThemePreference = AppThemePreference.system;
 
     try {
       restoredOfflineModeEnabled = _jsonBool(
         backup,
         'offlineModeEnabled',
         isRequired: false,
+      );
+      restoredThemePreference = _appThemePreferenceFromName(
+        _jsonOptionalString(backup, 'themePreference'),
       );
       restoredTracks.addAll(
         _jsonObjectList(backup, 'tracks').map(Track.fromJson),
@@ -1751,6 +1796,7 @@ class LibraryStore extends ChangeNotifier {
       ..clear()
       ..addAll(_dedupeOfflineCacheQueue(restoredOfflineCacheQueue));
     _offlineModeEnabled = restoredOfflineModeEnabled;
+    _themePreference = restoredThemePreference;
 
     _sortTracks();
     _sortPlaylists();
@@ -3144,6 +3190,18 @@ class LibraryStore extends ChangeNotifier {
     }).toList(growable: false);
   }
 
+  String? _jsonOptionalString(Map<String, Object?> backup, String key) {
+    final rawValue = backup[key];
+    if (rawValue == null) {
+      return null;
+    }
+    if (rawValue is! String) {
+      throw FormatException('Backup field "$key" must be a string.');
+    }
+
+    return rawValue;
+  }
+
   bool _jsonBool(
     Map<String, Object?> backup,
     String key, {
@@ -3370,6 +3428,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
+    await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_offlineCacheQueueKey, encodedOfflineCacheQueue);
   }
 }

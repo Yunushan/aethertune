@@ -5966,6 +5966,37 @@ class _SettingsTab extends StatelessWidget {
             },
           ),
         ),
+        ListTile(
+          leading: const Icon(Icons.palette_outlined),
+          title: const Text('Theme'),
+          subtitle: Text(library.themePreference.label),
+          trailing: DropdownButton<AppThemePreference>(
+            value: library.themePreference,
+            items: const <DropdownMenuItem<AppThemePreference>>[
+              DropdownMenuItem(
+                value: AppThemePreference.system,
+                child: Text('System'),
+              ),
+              DropdownMenuItem(
+                value: AppThemePreference.light,
+                child: Text('Light'),
+              ),
+              DropdownMenuItem(
+                value: AppThemePreference.dark,
+                child: Text('Dark'),
+              ),
+              DropdownMenuItem(
+                value: AppThemePreference.amoled,
+                child: Text('AMOLED'),
+              ),
+            ],
+            onChanged: (preference) {
+              if (preference != null) {
+                unawaited(library.setThemePreference(preference));
+              }
+            },
+          ),
+        ),
         SwitchListTile(
           secondary: const Icon(Icons.cloud_off_outlined),
           title: const Text('Offline mode'),
