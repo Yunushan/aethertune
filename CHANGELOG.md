@@ -11,6 +11,7 @@ Initial GitHub-ready scaffold.
 - Added queue, favorites, search, sleep timer, shuffle, repeat.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
+- Added unified provider search fan-out with ranking and per-provider error reporting.
 - Added Podcast RSS parser/provider foundation for legal audio feeds.
 - Added Radio Browser parser/provider foundation for public internet radio.
 - Added Sources-tab Radio Browser station search with play and save actions.

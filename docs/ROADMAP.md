@@ -65,6 +65,7 @@
 ## 0.5.x: Open providers
 
 - [x] Provider capability and privacy disclosure contract
+- [x] Unified provider search fan-out, ranking, and error reporting
 - [x] Podcast RSS parser/provider foundation
 - [x] Podcast RSS feed subscriptions and episode UI
 - [x] Podcast OPML import/export

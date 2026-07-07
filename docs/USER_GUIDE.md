@@ -79,6 +79,7 @@ The Options tab contains playback settings such as shuffle and repeat mode. Aeth
 
 The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. The current app includes:
 
+- Provider search: search enabled legal adapters together, then play playable results or save any result to the local library.
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
 - Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, or remove feed episodes.

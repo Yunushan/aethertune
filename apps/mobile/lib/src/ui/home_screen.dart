@@ -16,6 +16,7 @@ import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_opml.dart';
 import '../domain/podcast_subscription.dart';
+import '../domain/provider_search.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
@@ -2558,6 +2559,7 @@ class _SourcesTab extends StatefulWidget {
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
   final _archiveProvider = InternetArchiveProvider();
+  final _providerSearchController = TextEditingController();
   final _archiveSearchController = TextEditingController();
   final _archiveCollectionController = TextEditingController();
   final _archiveSubjectController = TextEditingController();
@@ -2575,12 +2577,16 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<Track> _archiveTracks = <Track>[];
   List<Track> _demoTracks = <Track>[];
   List<Track> _podcastEpisodeTracks = <Track>[];
+  List<ProviderSearchResult> _providerSearchResults = <ProviderSearchResult>[];
+  List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
   List<Track> _radioTracks = <Track>[];
   bool _archiveLoading = false;
   String? _archiveError;
   bool _podcastLoading = false;
   String? _podcastError;
   String? _selectedPodcastSubscriptionId;
+  bool _providerSearchLoading = false;
+  String? _providerSearchMessage;
   bool _radioLoading = false;
   String? _radioError;
 
@@ -2596,6 +2602,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   @override
   void dispose() {
+    _providerSearchController.dispose();
     _archiveSearchController.dispose();
     _archiveCollectionController.dispose();
     _archiveSubjectController.dispose();
@@ -2704,6 +2711,103 @@ class _SourcesTabState extends State<_SourcesTab> {
           description: 'No DRM bypass, scraping, or paid-service cloning is included.',
           icon: Icons.verified_user_outlined,
         ),
+        const SizedBox(height: 16),
+        Text(
+          'Provider search',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: _providerSearchController,
+                decoration: const InputDecoration(
+                  labelText: 'Search providers',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _searchProviderCatalogs(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Search providers',
+              onPressed: _providerSearchLoading ? null : _searchProviderCatalogs,
+              icon: const Icon(Icons.search),
+            ),
+          ],
+        ),
+        if (_providerSearchLoading) ...<Widget>[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+        if (_providerSearchMessage != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Provider search'),
+            subtitle: Text(_providerSearchMessage!),
+          ),
+        ],
+        for (final error in _providerSearchErrors) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.warning_amber_outlined),
+            title: Text('${error.providerName} failed'),
+            subtitle: Text(error.message),
+          ),
+        ],
+        if (_providerSearchResults.isEmpty &&
+            !_providerSearchLoading &&
+            _providerSearchMessage == null &&
+            _providerSearchErrors.isEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          const ListTile(
+            leading: Icon(Icons.public),
+            title: Text('No provider results loaded'),
+            subtitle: Text(
+              'Search Demo Provider, Radio Browser, and Internet Archive.',
+            ),
+          ),
+        ],
+        if (_providerSearchResults.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          for (final result in _providerSearchResults)
+            ListTile(
+              leading: Icon(_providerSearchIcon(result.providerId)),
+              title: Text(result.track.title),
+              subtitle: Text(
+                '${result.providerName} / ${result.track.artist} / '
+                '${result.track.album}',
+              ),
+              onTap: _canPlayProviderSearchTrack(result.track)
+                  ? () => _playProviderSearchTrack(context, result.track)
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Save result',
+                    onPressed: () => _saveProviderSearchTrack(
+                      context,
+                      result.track,
+                    ),
+                    icon: const Icon(Icons.library_add_outlined),
+                  ),
+                  IconButton(
+                    tooltip: _canPlayProviderSearchTrack(result.track)
+                        ? 'Play result'
+                        : 'No playable stream',
+                    onPressed: _canPlayProviderSearchTrack(result.track)
+                        ? () => _playProviderSearchTrack(context, result.track)
+                        : null,
+                    icon: const Icon(Icons.play_arrow),
+                  ),
+                ],
+              ),
+            ),
+        ],
         const SizedBox(height: 16),
         Text(
           'Podcast RSS feeds',
@@ -3078,6 +3182,160 @@ class _SourcesTabState extends State<_SourcesTab> {
           ),
       ],
     );
+  }
+
+  List<MusicSourceProvider> get _providerSearchSources {
+    return <MusicSourceProvider>[
+      _provider,
+      _radioProvider,
+      _archiveProvider,
+    ];
+  }
+
+  ProviderSearchCoordinator get _providerSearchCoordinator {
+    return ProviderSearchCoordinator(
+      _providerSearchSources,
+      maxResultsPerProvider: 8,
+    );
+  }
+
+  Future<void> _searchProviderCatalogs() async {
+    final query = _providerSearchController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _providerSearchResults = <ProviderSearchResult>[];
+        _providerSearchErrors = <ProviderSearchError>[];
+        _providerSearchLoading = false;
+        _providerSearchMessage = 'Enter a search term.';
+      });
+      return;
+    }
+
+    setState(() {
+      _providerSearchLoading = true;
+      _providerSearchMessage = null;
+      _providerSearchErrors = <ProviderSearchError>[];
+      _providerSearchResults = <ProviderSearchResult>[];
+    });
+
+    try {
+      final response = await _providerSearchCoordinator.search(query);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _providerSearchResults = response.results;
+        _providerSearchErrors = response.errors;
+        _providerSearchLoading = false;
+        _providerSearchMessage = response.results.isEmpty
+            ? 'No provider results found.'
+            : null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _providerSearchResults = <ProviderSearchResult>[];
+        _providerSearchErrors = <ProviderSearchError>[];
+        _providerSearchLoading = false;
+        _providerSearchMessage = error.toString();
+      });
+    }
+  }
+
+  List<Track> get _providerSearchPlayableQueue {
+    return _providerSearchResults
+        .map((result) => result.track)
+        .where((track) => track.isPlayable)
+        .toList(growable: false);
+  }
+
+  Future<void> _playProviderSearchTrack(
+    BuildContext context,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final player = context.read<PlayerController>();
+
+    try {
+      final playableTrack =
+          await _providerSearchCoordinator.resolvePlayableTrack(track);
+      if (!context.mounted) {
+        return;
+      }
+      if (!playableTrack.isPlayable) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('No playable stream for ${track.title}.')),
+        );
+        return;
+      }
+
+      await player.playTrack(
+        playableTrack,
+        queue: _providerSearchPlayableQueue,
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not play ${track.title}.')),
+      );
+    }
+  }
+
+  Future<void> _saveProviderSearchTrack(
+    BuildContext context,
+    Track track,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final savedTrack =
+          await _providerSearchCoordinator.resolvePlayableTrack(track);
+      if (!context.mounted) {
+        return;
+      }
+
+      await library.addTracks(<Track>[savedTrack]);
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Saved ${savedTrack.title}.')),
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save ${track.title}.')),
+      );
+    }
+  }
+
+  bool _canPlayProviderSearchTrack(Track track) {
+    return _providerSearchCoordinator.canResolve(track);
+  }
+
+  IconData _providerSearchIcon(String providerId) {
+    switch (providerId) {
+      case 'demo':
+        return Icons.code;
+      case 'radio-browser':
+        return Icons.radio_outlined;
+      case 'internet-archive':
+        return Icons.archive_outlined;
+      default:
+        return Icons.public;
+    }
   }
 
   Future<void> _addPodcastFeed(BuildContext context) async {

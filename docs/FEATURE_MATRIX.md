@@ -46,7 +46,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
-| Search | Done | Local title/artist/album/genre filtering. | Global multi-provider search and ranking. |
+| Search | Done | Local title/artist/album/genre filtering plus Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, and richer global ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
@@ -107,7 +107,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Local library search | Done | All music apps | Searches title, artist, album, and genre; advanced filters and typo tolerance remain. |
-| Multi-provider search | Scaffolded | Spotube, Grayjay, Echo Music | Provider registry, query fan-out, ranking, errors. |
+| Multi-provider search | Scaffolded | Spotube, Grayjay, Echo Music | `ProviderSearchCoordinator` fans out to searchable adapters, ranks mixed results, limits per-provider results, resolves metadata-only tracks when supported, captures provider-specific errors, has unit tests, and Sources tab can search Demo Provider, Radio Browser, and Internet Archive together. Needed next: local-library merge, provider pagination, authenticated provider opt-in, and richer provider-specific ranking. |
 | Search suggestions | Roadmap | YouTube Music | Provider suggestions and local history. |
 | Home feed | Roadmap | YouTube Music, InnerTune, RiMusic | Feed sections from legal providers. |
 | Charts / trending | Roadmap | YouTube Music, OpenTune-style clients | Provider-backed chart adapters. |

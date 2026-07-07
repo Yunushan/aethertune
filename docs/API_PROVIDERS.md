@@ -39,6 +39,10 @@ Use `ProviderPrivacyDisclosure` to list:
 - whether media is cached
 - whether downloads are allowed
 
+## Unified provider search
+
+`ProviderSearchCoordinator` fans out a search query to adapters that declare `metadataSearch`, skips non-search providers, ranks mixed `Track` results by playable status and metadata match quality, limits each provider contribution, resolves metadata-only results through `resolveStream` when the adapter supports it, and returns provider-specific failures without dropping successful results. The Sources tab exposes this as provider search across the demo provider, Radio Browser, and Internet Archive. Pagination, authenticated provider opt-in, local-library merging, and richer provider-specific ranking are still roadmap work.
+
 ## Podcast RSS foundation
 
 `PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, and include subscriptions, refresh state, and progress in backups. Offline cache is still separate roadmap work.
