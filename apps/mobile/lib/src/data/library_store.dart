@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/playback_history_entry.dart';
+import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/track.dart';
@@ -59,7 +60,10 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.podcast_subscriptions.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
+  static const _progressKey = 'aethertune.playback_progress.v1';
   static const _maxHistoryEntries = 500;
+  static const _minSavedProgress = Duration(seconds: 5);
+  static const _completedProgressThreshold = Duration(seconds: 20);
   static final _posixPathContext = path.Context(style: path.Style.posix);
   static final _windowsPathContext = path.Context(style: path.Style.windows);
 
@@ -68,6 +72,8 @@ class LibraryStore extends ChangeNotifier {
   final List<PodcastSubscription> _podcastSubscriptions =
       <PodcastSubscription>[];
   final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
+  final Map<String, PlaybackProgressEntry> _progressByTrackId =
+      <String, PlaybackProgressEntry>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final DateTime Function() _clock;
   bool _loaded = false;
@@ -79,6 +85,8 @@ class LibraryStore extends ChangeNotifier {
       List.unmodifiable(_podcastSubscriptions);
   List<PlaybackHistoryEntry> get playbackHistory =>
       List.unmodifiable(_history);
+  List<PlaybackProgressEntry> get playbackProgress =>
+      List.unmodifiable(_progressByTrackId.values);
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
@@ -175,9 +183,33 @@ class LibraryStore extends ChangeNotifier {
         );
     }
 
+    final rawProgress = prefs.getString(_progressKey);
+    if (rawProgress != null && rawProgress.isNotEmpty) {
+      final decoded = jsonDecode(rawProgress) as List<dynamic>;
+      _progressByTrackId
+        ..clear()
+        ..addEntries(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => PlaybackProgressEntry.fromJson(
+                  Map<String, Object?>.from(item),
+                ),
+              )
+              .where((entry) => entry.position >= _minSavedProgress)
+              .map(
+                (entry) => MapEntry<String, PlaybackProgressEntry>(
+                  entry.trackId,
+                  entry,
+                ),
+              ),
+        );
+    }
+
     _removeMissingPlaylistTracks();
     _removeMissingLyrics();
     _removeMissingHistory();
+    _removeMissingProgress();
     _sortHistory();
     _sortPodcastSubscriptions();
     _loaded = true;
@@ -208,6 +240,7 @@ class LibraryStore extends ChangeNotifier {
     _removeTrackFromPlaylists(id);
     _lyricsByTrackId.remove(id);
     _history.removeWhere((entry) => entry.trackId == id);
+    _progressByTrackId.remove(id);
     await _save();
     notifyListeners();
   }
@@ -217,6 +250,7 @@ class LibraryStore extends ChangeNotifier {
     _playlists.clear();
     _podcastSubscriptions.clear();
     _history.clear();
+    _progressByTrackId.clear();
     _lyricsByTrackId.clear();
     await _save();
     notifyListeners();
@@ -359,6 +393,8 @@ class LibraryStore extends ChangeNotifier {
       'podcastSubscriptions':
           _podcastSubscriptions.map((item) => item.toJson()).toList(),
       'history': _history.map((entry) => entry.toJson()).toList(),
+      'progress':
+          _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
           .toList(),
@@ -625,6 +661,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredPlaylists = <Playlist>[];
     final restoredPodcastSubscriptions = <PodcastSubscription>[];
     final restoredHistory = <PlaybackHistoryEntry>[];
+    final restoredProgress = <PlaybackProgressEntry>[];
     final restoredLyrics = <TrackLyrics>[];
 
     try {
@@ -645,6 +682,11 @@ class LibraryStore extends ChangeNotifier {
           'podcastSubscriptions',
           isRequired: false,
         ).map(PodcastSubscription.fromJson),
+      );
+      restoredProgress.addAll(
+        _jsonObjectList(backup, 'progress', isRequired: false).map(
+          PlaybackProgressEntry.fromJson,
+        ),
       );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
@@ -673,6 +715,12 @@ class LibraryStore extends ChangeNotifier {
     final sanitizedHistory = restoredHistory
         .where((entry) => knownTrackIds.contains(entry.trackId))
         .toList(growable: false);
+    final sanitizedProgress = <String, PlaybackProgressEntry>{
+      for (final entry in restoredProgress)
+        if (knownTrackIds.contains(entry.trackId) &&
+            entry.position >= _minSavedProgress)
+          entry.trackId: entry,
+    };
     final sanitizedPodcastSubscriptions = _dedupePodcastSubscriptions(
       restoredPodcastSubscriptions,
     );
@@ -689,6 +737,9 @@ class LibraryStore extends ChangeNotifier {
     _history
       ..clear()
       ..addAll(sanitizedHistory);
+    _progressByTrackId
+      ..clear()
+      ..addAll(sanitizedProgress);
     _lyricsByTrackId
       ..clear()
       ..addAll(sanitizedLyrics);
@@ -869,6 +920,44 @@ class LibraryStore extends ChangeNotifier {
   }
 
   TrackLyrics? lyricsForTrack(String trackId) => _lyricsByTrackId[trackId];
+
+  PlaybackProgressEntry? playbackProgressForTrack(String trackId) {
+    return _progressByTrackId[trackId];
+  }
+
+  Future<void> recordPlaybackProgress(
+    String trackId,
+    Duration position,
+    Duration duration,
+  ) async {
+    if (!_tracks.any((track) => track.id == trackId)) {
+      return;
+    }
+
+    if (_shouldClearProgress(position, duration)) {
+      await clearPlaybackProgress(trackId);
+      return;
+    }
+
+    _progressByTrackId[trackId] = PlaybackProgressEntry(
+      trackId: trackId,
+      position: position,
+      duration: duration,
+      updatedAt: _clock(),
+    );
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> clearPlaybackProgress(String trackId) async {
+    if (!_progressByTrackId.containsKey(trackId)) {
+      return;
+    }
+
+    _progressByTrackId.remove(trackId);
+    await _save();
+    notifyListeners();
+  }
 
   PodcastSubscription? podcastSubscriptionById(String id) {
     final index = _podcastSubscriptions.indexWhere(
@@ -1416,6 +1505,13 @@ class LibraryStore extends ChangeNotifier {
     _history.removeWhere((entry) => !knownTrackIds.contains(entry.trackId));
   }
 
+  void _removeMissingProgress() {
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+    _progressByTrackId.removeWhere(
+      (trackId, _) => !knownTrackIds.contains(trackId),
+    );
+  }
+
   void _sortHistory() {
     _history.sort((a, b) => b.playedAt.compareTo(a.playedAt));
   }
@@ -1426,6 +1522,17 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _history.removeRange(_maxHistoryEntries, _history.length);
+  }
+
+  bool _shouldClearProgress(Duration position, Duration duration) {
+    if (position < _minSavedProgress) {
+      return true;
+    }
+    if (duration == Duration.zero) {
+      return false;
+    }
+
+    return duration - position <= _completedProgressThreshold;
   }
 
   void _removeTrackFromPlaylists(String trackId) {
@@ -1514,6 +1621,9 @@ class LibraryStore extends ChangeNotifier {
     final encodedHistory = jsonEncode(
       _history.map((entry) => entry.toJson()).toList(),
     );
+    final encodedProgress = jsonEncode(
+      _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
+    );
     final encodedLyrics = jsonEncode(
       _lyricsByTrackId.values.map((lyrics) => lyrics.toJson()).toList(),
     );
@@ -1524,6 +1634,7 @@ class LibraryStore extends ChangeNotifier {
       encodedPodcastSubscriptions,
     );
     await prefs.setString(_historyKey, encodedHistory);
+    await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
   }
 }

@@ -60,7 +60,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider` requires capability flags and privacy/network disclosure. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
-| Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, plays/saves episodes, includes backups, and provider parsing has tests. | Episode progress, refresh policy, and offline cache. |
+| Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, plays/saves episodes, resumes saved episode progress, includes backups, and provider parsing/store behavior has tests. | Refresh policy and offline cache. |
 | Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, plays public streams, saves stations to the library, and provider parsing has tests. | Mirror discovery, station click accounting, richer browse filters, stream validation, and cache policy. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
@@ -160,7 +160,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Demo provider | Done | Provider template | Developer docs and test fixture provider. |
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |
-| Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, episode listing, playback, library save, and backup/restore are implemented; episode progress, refresh policy, and cache remain. |
+| Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, episode listing, playback, saved episode progress/resume, library save, and backup/restore are implemented; refresh policy and cache remain. |
 | Radio Browser / internet radio | Scaffolded | Radio apps | Station search, playback, library save, provider parser, and playable station model are implemented; mirror discovery, click accounting, richer browse filters, stream validation, and cache policy remain. |
 | Internet Archive | Roadmap | ArchiveTune | Metadata search, file resolver, collection browse. |
 | Spotify metadata | Blocked / official-only | Spotube | Official API metadata only; playback must be legal/user-authorized. |
@@ -225,7 +225,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Authentication | Roadmap | Sync services | Token model, secure storage, tests. |
 | User profiles | Roadmap | YouTube Music | Optional account model. |
 | Library sync | Roadmap | YouTube Music / multi-device needs | Conflict resolution and encrypted transport. |
-| Playback position sync | Roadmap | Podcasts/video apps | Per-item progress model. |
+| Playback position sync | Scaffolded | Podcasts/video apps | Local podcast episode progress/resume is implemented; server sync APIs, conflict resolution, and cross-device restore remain. |
 | Playlist sync | Roadmap | Music services | Server playlist API. |
 | Provider credential vault | Roadmap | Self-hosted/official APIs | Secure token storage and refresh. |
 | Admin/ops endpoints | Roadmap | Server deployments | Metrics without user tracking, logs, health. |

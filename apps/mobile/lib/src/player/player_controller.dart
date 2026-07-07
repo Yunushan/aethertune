@@ -47,6 +47,7 @@ class PlayerController extends ChangeNotifier {
   bool get shuffleEnabled => _audio.shuffleModeEnabled;
   LoopMode get loopMode => _audio.loopMode;
   Duration get duration => _duration;
+  Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
   Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
@@ -105,7 +106,11 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> playTrack(Track track, {List<Track>? queue}) async {
+  Future<void> playTrack(
+    Track track, {
+    List<Track>? queue,
+    Duration? initialPosition,
+  }) async {
     if (queue != null) {
       _queue
         ..clear()
@@ -119,6 +124,9 @@ class PlayerController extends ChangeNotifier {
     await _saveQueueSnapshot();
 
     await _load(track);
+    if (initialPosition != null && initialPosition > Duration.zero) {
+      await _audio.seek(initialPosition);
+    }
     await _audio.play();
     _playbackStartSerial += 1;
     notifyListeners();

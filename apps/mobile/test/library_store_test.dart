@@ -417,6 +417,56 @@ void main() {
     expect(secondStore.recentlyPlayedTracks().single.id, '1');
   });
 
+  test('records persists and clears playback progress', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 14, 14);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('podcast')]);
+
+    await firstStore.recordPlaybackProgress(
+      'podcast',
+      const Duration(minutes: 3),
+      const Duration(minutes: 30),
+    );
+
+    expect(
+      firstStore.playbackProgressForTrack('podcast')!.position,
+      const Duration(minutes: 3),
+    );
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+
+    expect(
+      secondStore.playbackProgressForTrack('podcast')!.duration,
+      const Duration(minutes: 30),
+    );
+
+    await secondStore.recordPlaybackProgress(
+      'podcast',
+      const Duration(seconds: 2),
+      const Duration(minutes: 30),
+    );
+
+    expect(secondStore.playbackProgressForTrack('podcast'), isNull);
+
+    await secondStore.recordPlaybackProgress(
+      'podcast',
+      const Duration(minutes: 10),
+      const Duration(minutes: 30),
+    );
+
+    expect(secondStore.playbackProgressForTrack('podcast'), isNotNull);
+
+    await secondStore.recordPlaybackProgress(
+      'podcast',
+      const Duration(minutes: 29, seconds: 45),
+      const Duration(minutes: 30),
+    );
+
+    expect(secondStore.playbackProgressForTrack('podcast'), isNull);
+  });
+
   test('saves persists and deletes podcast feed subscriptions', () async {
     DateTime clock() => DateTime.utc(2026, 1, 15);
     final firstStore = LibraryStore(clock: clock);
@@ -707,6 +757,11 @@ void main() {
     );
     await firstStore.setLyrics('1', 'backup lyrics');
     await firstStore.recordPlayback('2');
+    await firstStore.recordPlaybackProgress(
+      '1',
+      const Duration(minutes: 4),
+      const Duration(minutes: 20),
+    );
     final subscription = await firstStore.savePodcastSubscription(
       PodcastSubscription(
         id: 'podcast',
@@ -745,6 +800,10 @@ void main() {
     expect(secondStore.lyricsForTrack('1')!.plainText, 'backup lyrics');
     expect(secondStore.playbackHistory.single.trackId, '2');
     expect(secondStore.recentlyPlayedTracks().single.id, '2');
+    expect(
+      secondStore.playbackProgressForTrack('1')!.position,
+      const Duration(minutes: 4),
+    );
     expect(
       secondStore.podcastSubscriptionById(subscription.id)!.title,
       'Aether Radio',

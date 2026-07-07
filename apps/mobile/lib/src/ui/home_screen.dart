@@ -11,6 +11,7 @@ import '../data/library_store.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
+import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_opml.dart';
 import '../domain/podcast_subscription.dart';
@@ -36,6 +37,9 @@ class _HomeScreenState extends State<HomeScreen> {
   LibrarySortMode _librarySortMode = LibrarySortMode.recentlyAdded;
   PlayerController? _historyPlayer;
   LibraryStore? _historyLibrary;
+  StreamSubscription<Duration>? _progressSub;
+  String? _lastProgressTrackId;
+  Duration _lastRecordedProgressPosition = Duration.zero;
   int _lastRecordedPlaybackSerial = 0;
 
   @override
@@ -45,8 +49,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final player = context.read<PlayerController>();
     if (_historyPlayer != player) {
       _historyPlayer?.removeListener(_recordPlaybackHistory);
+      _progressSub?.cancel();
       _historyPlayer = player;
       player.addListener(_recordPlaybackHistory);
+      _progressSub = player.positionStream.listen(_recordPlaybackProgress);
     }
 
     _historyLibrary = context.read<LibraryStore>();
@@ -55,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _historyPlayer?.removeListener(_recordPlaybackHistory);
+    _progressSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -73,6 +80,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _lastRecordedPlaybackSerial = player.playbackStartSerial;
     unawaited(library.recordPlayback(track.id));
+  }
+
+  void _recordPlaybackProgress(Duration position) {
+    final player = _historyPlayer;
+    final library = _historyLibrary;
+    final track = player?.current;
+    if (player == null ||
+        library == null ||
+        track == null ||
+        !_tracksPodcastProgress(track)) {
+      return;
+    }
+
+    if (_lastProgressTrackId != track.id) {
+      _lastProgressTrackId = track.id;
+      if (position < const Duration(seconds: 5)) {
+        _lastRecordedProgressPosition = position;
+        return;
+      }
+      _lastRecordedProgressPosition = Duration.zero;
+    }
+
+    final delta = position - _lastRecordedProgressPosition;
+    if (delta.inSeconds.abs() < 10 && position.inSeconds >= 10) {
+      return;
+    }
+
+    _lastRecordedProgressPosition = position;
+    unawaited(
+      library.recordPlaybackProgress(track.id, position, player.duration),
+    );
   }
 
   @override
@@ -1233,7 +1271,12 @@ class _LibraryTab extends StatelessWidget {
                 final track = tracks[index];
                 return TrackTile(
                   track: track,
-                  onPlay: () => player.playTrack(track, queue: tracks),
+                  onPlay: () => _playTrackWithResume(
+                    player,
+                    library,
+                    track,
+                    queue: tracks,
+                  ),
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
                   onLyrics: () => onLyrics(track),
@@ -1391,7 +1434,12 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
               final track = tracks[index - 1];
               return TrackTile(
                 track: track,
-                onPlay: () => player.playTrack(track, queue: tracks),
+                onPlay: () => _playTrackWithResume(
+                  player,
+                  library,
+                  track,
+                  queue: tracks,
+                ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
@@ -1928,7 +1976,12 @@ class _SmartPlaylistSheet extends StatelessWidget {
                         ? null
                         : () {
                             Navigator.of(context).pop();
-                            player.playTrack(tracks.first, queue: tracks);
+                            _playTrackWithResume(
+                              player,
+                              library,
+                              tracks.first,
+                              queue: tracks,
+                            );
                           },
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Play'),
@@ -1947,7 +2000,12 @@ class _SmartPlaylistSheet extends StatelessWidget {
               final track = tracks[index - 1];
               return TrackTile(
                 track: track,
-                onPlay: () => player.playTrack(track, queue: tracks),
+                onPlay: () => _playTrackWithResume(
+                  player,
+                  library,
+                  track,
+                  queue: tracks,
+                ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
@@ -2026,7 +2084,12 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
                       ? null
                       : () {
                           Navigator.of(context).pop();
-                          widget.player.playTrack(tracks.first, queue: tracks);
+                          _playTrackWithResume(
+                            widget.player,
+                            library,
+                            tracks.first,
+                            queue: tracks,
+                          );
                         },
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('Play'),
@@ -2335,7 +2398,9 @@ class _HistoryTab extends StatelessWidget {
               trailing: Text(
                 _formatHistoryTime(library.lastPlayedAt(track.id)),
               ),
-              onTap: () => player.playTrack(
+              onTap: () => _playTrackWithResume(
+                player,
+                library,
                 track,
                 queue: recentlyPlayed,
               ),
@@ -2380,6 +2445,39 @@ String _formatHistoryTime(DateTime? value) {
 
   return '${value.year}-${twoDigits(value.month)}-${twoDigits(value.day)} '
       '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
+}
+
+bool _tracksPodcastProgress(Track track) {
+  return track.genre.toLowerCase() == 'podcast' ||
+      track.sourceId.startsWith('podcast-');
+}
+
+Future<void> _playTrackWithResume(
+  PlayerController player,
+  LibraryStore library,
+  Track track, {
+  required List<Track> queue,
+}) {
+  final initialPosition = _tracksPodcastProgress(track)
+      ? library.playbackProgressForTrack(track.id)?.position
+      : null;
+
+  return player.playTrack(
+    track,
+    queue: queue,
+    initialPosition: initialPosition,
+  );
+}
+
+String _formatDurationLabel(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  if (hours > 0) {
+    return '$hours:$minutes:$seconds';
+  }
+
+  return '${duration.inMinutes}:$seconds';
 }
 
 class _EmptyLibrary extends StatelessWidget {
@@ -2656,7 +2754,12 @@ class _SourcesTabState extends State<_SourcesTab> {
               ListTile(
                 leading: const Icon(Icons.podcasts_outlined),
                 title: Text(track.title),
-                subtitle: Text('${track.artist} / ${track.album}'),
+                subtitle: Text(
+                  _podcastEpisodeSubtitle(
+                    track,
+                    library.playbackProgressForTrack(track.id),
+                  ),
+                ),
                 onTap: () => _playPodcastEpisode(context, track),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -2971,11 +3074,18 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _playPodcastEpisode(BuildContext context, Track track) async {
+    final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
     final player = context.read<PlayerController>();
 
     try {
-      await player.playTrack(track, queue: _podcastEpisodeTracks);
+      await library.addTracks(<Track>[track]);
+      await _playTrackWithResume(
+        player,
+        library,
+        track,
+        queue: _podcastEpisodeTracks,
+      );
     } catch (_) {
       if (!context.mounted) {
         return;
@@ -2985,6 +3095,18 @@ class _SourcesTabState extends State<_SourcesTab> {
         SnackBar(content: Text('Could not play ${track.title}.')),
       );
     }
+  }
+
+  String _podcastEpisodeSubtitle(
+    Track track,
+    PlaybackProgressEntry? progress,
+  ) {
+    final base = '${track.artist} / ${track.album}';
+    if (progress == null) {
+      return base;
+    }
+
+    return '$base / Resume ${_formatDurationLabel(progress.position)}';
   }
 
   Future<void> _savePodcastEpisode(BuildContext context, Track track) async {
