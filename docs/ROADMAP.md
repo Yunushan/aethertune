@@ -74,7 +74,8 @@
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
-- [ ] Radio Browser mirror discovery and richer browse filters
+- [x] Radio Browser richer browse filters
+- [ ] Radio Browser mirror discovery, stream validation, and cache policy
 - [ ] Internet Archive provider
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider

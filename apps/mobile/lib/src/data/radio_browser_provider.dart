@@ -7,6 +7,32 @@ import '../domain/track.dart';
 typedef RadioBrowserSearchLoader = Future<String> Function(Uri searchUri);
 typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
 
+final class RadioBrowserSearchFilters {
+  const RadioBrowserSearchFilters({
+    this.countryCode = '',
+    this.language = '',
+    this.tag = '',
+    this.codec = '',
+    this.minBitrateKbps,
+    this.maxBitrateKbps,
+  });
+
+  final String countryCode;
+  final String language;
+  final String tag;
+  final String codec;
+  final int? minBitrateKbps;
+  final int? maxBitrateKbps;
+
+  bool get isEmpty =>
+      countryCode.trim().isEmpty &&
+      language.trim().isEmpty &&
+      tag.trim().isEmpty &&
+      codec.trim().isEmpty &&
+      minBitrateKbps == null &&
+      maxBitrateKbps == null;
+}
+
 class RadioBrowserProvider implements MusicSourceProvider {
   RadioBrowserProvider({
     Uri? baseUri,
@@ -50,13 +76,23 @@ class RadioBrowserProvider implements MusicSourceProvider {
 
   @override
   Future<List<Track>> search(String query) async {
+    return searchStations(query);
+  }
+
+  Future<List<Track>> searchStations(
+    String query, {
+    RadioBrowserSearchFilters filters = const RadioBrowserSearchFilters(),
+  }) async {
     final normalized = query.trim();
     final stations = parseRadioBrowserStations(
-      await _searchLoader(_searchUri(normalized)),
+      await _searchLoader(_searchUri(normalized, filters)),
     );
 
     return stations
-        .where((station) => station.matches(normalized))
+        .where(
+          (station) =>
+              station.matches(normalized) && station.matchesFilters(filters),
+        )
         .map((station) => station.toTrack(sourceId: id))
         .toList(growable: false);
   }
@@ -79,11 +115,26 @@ class RadioBrowserProvider implements MusicSourceProvider {
     await _clickLoader(_clickUri(stationUuid));
   }
 
-  Uri _searchUri(String query) {
+  Uri _searchUri(String query, RadioBrowserSearchFilters filters) {
+    final countryCode = _nonEmpty(filters.countryCode)?.toUpperCase();
+    final language = _nonEmpty(filters.language);
+    final tag = _nonEmpty(filters.tag);
+    final codec = _nonEmpty(filters.codec)?.toUpperCase();
+    final minBitrateKbps = filters.minBitrateKbps;
+    final maxBitrateKbps = filters.maxBitrateKbps;
+
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, '/json/stations/search'),
       queryParameters: <String, String>{
         if (query.isNotEmpty) 'name': query,
+        if (countryCode != null) 'countrycode': countryCode,
+        if (language != null) 'language': language,
+        if (tag != null) 'tag': tag,
+        if (codec != null) 'codec': codec,
+        if (minBitrateKbps != null && minBitrateKbps > 0)
+          'bitrateMin': minBitrateKbps.toString(),
+        if (maxBitrateKbps != null && maxBitrateKbps > 0)
+          'bitrateMax': maxBitrateKbps.toString(),
         'hidebroken': 'true',
         'limit': limit.toString(),
         'order': 'clickcount',
@@ -140,6 +191,44 @@ final class RadioBrowserStation {
         countryCode.toLowerCase().contains(normalized) ||
         language.toLowerCase().contains(normalized) ||
         tags.any((tag) => tag.toLowerCase().contains(normalized));
+  }
+
+  bool matchesFilters(RadioBrowserSearchFilters filters) {
+    final normalizedCountryCode = filters.countryCode.trim().toLowerCase();
+    if (normalizedCountryCode.isNotEmpty &&
+        countryCode.toLowerCase() != normalizedCountryCode) {
+      return false;
+    }
+
+    final normalizedLanguage = filters.language.trim().toLowerCase();
+    if (normalizedLanguage.isNotEmpty &&
+        !language.toLowerCase().contains(normalizedLanguage)) {
+      return false;
+    }
+
+    final normalizedTag = filters.tag.trim().toLowerCase();
+    if (normalizedTag.isNotEmpty &&
+        !tags.any((tag) => tag.toLowerCase().contains(normalizedTag))) {
+      return false;
+    }
+
+    final normalizedCodec = filters.codec.trim().toLowerCase();
+    if (normalizedCodec.isNotEmpty &&
+        codec.toLowerCase() != normalizedCodec) {
+      return false;
+    }
+
+    final minBitrate = filters.minBitrateKbps;
+    if (minBitrate != null && bitrateKbps < minBitrate) {
+      return false;
+    }
+
+    final maxBitrate = filters.maxBitrateKbps;
+    if (maxBitrate != null && bitrateKbps > maxBitrate) {
+      return false;
+    }
+
+    return true;
   }
 
   Track toTrack({required String sourceId}) {
@@ -267,6 +356,11 @@ String _stringValue(Object? value) {
   }
 
   return value.toString().trim();
+}
+
+String? _nonEmpty(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }
 
 int _intValue(Object? value) {

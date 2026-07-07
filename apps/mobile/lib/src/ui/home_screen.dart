@@ -2559,6 +2559,12 @@ class _SourcesTabState extends State<_SourcesTab> {
   final _podcastFeedController = TextEditingController();
   final _radioProvider = RadioBrowserProvider();
   final _radioSearchController = TextEditingController();
+  final _radioCountryCodeController = TextEditingController();
+  final _radioLanguageController = TextEditingController();
+  final _radioTagController = TextEditingController();
+  final _radioCodecController = TextEditingController();
+  final _radioMinBitrateController = TextEditingController();
+  final _radioMaxBitrateController = TextEditingController();
   List<Track> _demoTracks = <Track>[];
   List<Track> _podcastEpisodeTracks = <Track>[];
   List<Track> _radioTracks = <Track>[];
@@ -2582,6 +2588,12 @@ class _SourcesTabState extends State<_SourcesTab> {
   void dispose() {
     _podcastFeedController.dispose();
     _radioSearchController.dispose();
+    _radioCountryCodeController.dispose();
+    _radioLanguageController.dispose();
+    _radioTagController.dispose();
+    _radioCodecController.dispose();
+    _radioMinBitrateController.dispose();
+    _radioMaxBitrateController.dispose();
     super.dispose();
   }
 
@@ -2635,8 +2647,9 @@ class _SourcesTabState extends State<_SourcesTab> {
         ),
         const _ProviderCard(
           title: 'Radio Browser',
-          status: 'Adapter foundation',
-          description: 'Search an open radio directory and resolve public station streams.',
+          status: 'Enabled',
+          description:
+              'Search and filter an open radio directory, then resolve public station streams.',
           icon: Icons.radio_outlined,
           capabilities: <MusicSourceCapability>{
             MusicSourceCapability.metadataSearch,
@@ -2825,6 +2838,53 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            _radioFilterField(
+              controller: _radioCountryCodeController,
+              labelText: 'Country',
+              icon: Icons.flag_outlined,
+              textCapitalization: TextCapitalization.characters,
+            ),
+            _radioFilterField(
+              controller: _radioLanguageController,
+              labelText: 'Language',
+              icon: Icons.translate_outlined,
+            ),
+            _radioFilterField(
+              controller: _radioTagController,
+              labelText: 'Tag',
+              icon: Icons.sell_outlined,
+            ),
+            _radioFilterField(
+              controller: _radioCodecController,
+              labelText: 'Codec',
+              icon: Icons.graphic_eq_outlined,
+              textCapitalization: TextCapitalization.characters,
+            ),
+            _radioFilterField(
+              controller: _radioMinBitrateController,
+              labelText: 'Min kbps',
+              icon: Icons.speed_outlined,
+              keyboardType: TextInputType.number,
+            ),
+            _radioFilterField(
+              controller: _radioMaxBitrateController,
+              labelText: 'Max kbps',
+              icon: Icons.speed,
+              keyboardType: TextInputType.number,
+            ),
+            OutlinedButton.icon(
+              onPressed: _clearRadioFilters,
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              label: const Text('Clear'),
+            ),
+          ],
+        ),
         if (_radioLoading) ...<Widget>[
           const SizedBox(height: 12),
           const LinearProgressIndicator(),
@@ -2842,7 +2902,8 @@ class _SourcesTabState extends State<_SourcesTab> {
             leading: Icon(Icons.radio_outlined),
             title: Text('No stations loaded'),
             subtitle: Text(
-              'Search by station name, tag, country, or language.',
+              'Search by station name, country, language, tag, codec, or '
+              'bitrate.',
             ),
           ),
         ] else ...<Widget>[
@@ -3172,6 +3233,58 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  Widget _radioFilterField({
+    required TextEditingController controller,
+    required String labelText,
+    required IconData icon,
+    TextInputType? keyboardType,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
+    return SizedBox(
+      width: 156,
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: labelText,
+          prefixIcon: Icon(icon),
+        ),
+        keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => _searchRadioStations(),
+      ),
+    );
+  }
+
+  RadioBrowserSearchFilters _radioFilters() {
+    return RadioBrowserSearchFilters(
+      countryCode: _radioCountryCodeController.text,
+      language: _radioLanguageController.text,
+      tag: _radioTagController.text,
+      codec: _radioCodecController.text,
+      minBitrateKbps: _positiveInt(_radioMinBitrateController.text),
+      maxBitrateKbps: _positiveInt(_radioMaxBitrateController.text),
+    );
+  }
+
+  int? _positiveInt(String value) {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  void _clearRadioFilters() {
+    _radioCountryCodeController.clear();
+    _radioLanguageController.clear();
+    _radioTagController.clear();
+    _radioCodecController.clear();
+    _radioMinBitrateController.clear();
+    _radioMaxBitrateController.clear();
+  }
+
   Future<void> _searchRadioStations() async {
     setState(() {
       _radioLoading = true;
@@ -3179,7 +3292,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
 
     try {
-      final tracks = await _radioProvider.search(_radioSearchController.text);
+      final tracks = await _radioProvider.searchStations(
+        _radioSearchController.text,
+        filters: _radioFilters(),
+      );
       if (!mounted) {
         return;
       }

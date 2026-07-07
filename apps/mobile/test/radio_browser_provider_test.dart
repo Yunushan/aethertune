@@ -82,6 +82,38 @@ void main() {
     },
   );
 
+  test('searchStations applies advanced filters to URI and results', () async {
+    Uri? capturedUri;
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (uri) async {
+        capturedUri = uri;
+        return _filteredStationsJson;
+      },
+    );
+
+    final tracks = await provider.searchStations(
+      'aether',
+      filters: const RadioBrowserSearchFilters(
+        countryCode: 'us',
+        language: 'english',
+        tag: 'ambient',
+        codec: 'aac',
+        minBitrateKbps: 64,
+        maxBitrateKbps: 192,
+      ),
+    );
+
+    expect(tracks.map((track) => track.title), <String>['Aether Radio']);
+    expect(capturedUri!.queryParameters['name'], 'aether');
+    expect(capturedUri!.queryParameters['countrycode'], 'US');
+    expect(capturedUri!.queryParameters['language'], 'english');
+    expect(capturedUri!.queryParameters['tag'], 'ambient');
+    expect(capturedUri!.queryParameters['codec'], 'AAC');
+    expect(capturedUri!.queryParameters['bitrateMin'], '64');
+    expect(capturedUri!.queryParameters['bitrateMax'], '192');
+  });
+
   test('ignores click accounting for non-radio tracks', () async {
     var clicked = false;
     final provider = RadioBrowserProvider(
@@ -151,6 +183,44 @@ const _singleStationJson = '''
     "countrycode": "US",
     "language": "english",
     "codec": "AAC",
+    "bitrate": 128,
+    "lastcheckok": 1
+  }
+]
+''';
+
+const _filteredStationsJson = '''
+[
+  {
+    "stationuuid": "station-1",
+    "name": "Aether Radio",
+    "url_resolved": "https://stream.example.test/aac",
+    "tags": "jazz, ambient, open",
+    "countrycode": "US",
+    "language": "english",
+    "codec": "AAC",
+    "bitrate": 128,
+    "lastcheckok": 1
+  },
+  {
+    "stationuuid": "station-low",
+    "name": "Aether Low Bitrate",
+    "url_resolved": "https://stream.example.test/low-aac",
+    "tags": "ambient",
+    "countrycode": "US",
+    "language": "english",
+    "codec": "AAC",
+    "bitrate": 32,
+    "lastcheckok": 1
+  },
+  {
+    "stationuuid": "station-talk",
+    "name": "Aether Talk",
+    "url_resolved": "https://stream.example.test/talk",
+    "tags": "talk",
+    "countrycode": "GB",
+    "language": "english",
+    "codec": "MP3",
     "bitrate": 128,
     "lastcheckok": 1
   }
