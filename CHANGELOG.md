@@ -12,6 +12,7 @@ Initial GitHub-ready scaffold.
 - Added local search suggestions from submitted query history, playback history, and library metadata.
 - Added provider offline cache/download policy gates with Podcast RSS and Internet Archive allow rules plus Radio Browser live-stream denial.
 - Added persisted offline cache/download queue with Sources-tab provider actions and Options-tab queue management.
+- Added user-triggered offline cache storage for provider-approved direct media URLs.
 - Added persisted offline mode to pause network-backed source search, feed refresh, and player-wide saved stream playback actions.
 - Added a local-files-only library filter for offline-ready browsing.
 - Added stored track metadata editing for title, artist, album, and genre.

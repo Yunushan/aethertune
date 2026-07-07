@@ -45,11 +45,11 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Offline cache and download policy
 
-`OfflineMediaPolicy` is the shared gate for cache and download queue actions. It allows local files because they are already offline, allows provider tracks only when the adapter declares the matching `offlineCache` or `downloads` capability and matching disclosure flag, and denies provider tracks when the adapter is unknown, not permitted, not disclosed, or cannot resolve a playable stream. Podcast RSS enclosures and Internet Archive public files declare cache/download support; Radio Browser live streams do not.
+`OfflineMediaPolicy` is the shared gate for cache and download queue actions. It allows local files because they are already offline, allows provider tracks only when the adapter declares the matching `offlineCache` or `downloads` capability and matching disclosure flag, and denies provider tracks when the adapter is unknown, not permitted, not disclosed, or cannot resolve a playable stream. `OfflineCacheManager` then materializes approved direct HTTP(S) media URLs into private app storage and updates the queue entry/local library track with a local path. Podcast RSS enclosures and Internet Archive public files declare cache/download support; Radio Browser live streams do not.
 
 ## Podcast RSS foundation
 
-`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, declares cache/download permission for legal feed enclosures, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, queue cache/download requests, and include subscriptions, refresh state, progress, and queued offline requests in backups. Offline media storage is still separate roadmap work.
+`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, declares cache/download permission for legal feed enclosures, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, queue/cache direct enclosure URLs, and include subscriptions, refresh state, progress, and queued offline requests in backups. Background/resumable downloads and cache eviction are still separate roadmap work.
 
 ## Radio Browser foundation
 
@@ -57,7 +57,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Internet Archive foundation
 
-`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, save tracks, and queue cache/download requests. Collection browsing pages, facet suggestion UI, and offline media storage are still separate roadmap work.
+`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, save tracks, and queue/cache direct public files. Collection browsing pages, facet suggestion UI, resumable downloads, and cache eviction are still separate roadmap work.
 
 ## Minimal provider
 

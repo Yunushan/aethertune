@@ -1275,6 +1275,59 @@ void main() {
     },
   );
 
+  test('marks offline cache entries and upserts cached tracks', () async {
+    var now = DateTime.utc(2026, 1, 16, 14);
+    DateTime clock() => now;
+    final provider = InternetArchiveProvider();
+    final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+    final track = _track(
+      'archive-cache',
+      title: 'Archive Cache',
+      sourceId: provider.id,
+      externalId: 'archive-cache',
+      localPath: '',
+      streamUrl: 'https://archive.org/download/archive-cache/audio.mp3',
+    );
+    final store = LibraryStore(clock: clock);
+    await store.load();
+
+    final queued = await store.queueOfflineCache(
+      track,
+      OfflineMediaAction.cache,
+      policy.evaluate(track, OfflineMediaAction.cache),
+    );
+
+    now = DateTime.utc(2026, 1, 16, 15);
+    final processing = await store.markOfflineCacheEntryProcessing(queued.id);
+
+    expect(processing!.status, OfflineCacheEntryStatus.processing);
+    expect(processing.reason, 'Caching media...');
+
+    now = DateTime.utc(2026, 1, 16, 16);
+    final cachedTrack = track.copyWith(localPath: '/cache/audio.mp3');
+    final cached = await store.markOfflineCacheEntryCached(
+      queued.id,
+      cachedTrack,
+      reason: 'Cached 1.0 MB.',
+    );
+
+    expect(cached!.status, OfflineCacheEntryStatus.cached);
+    expect(cached.track.localPath, '/cache/audio.mp3');
+    expect(store.tracks.single.id, track.id);
+    expect(store.tracks.single.localPath, '/cache/audio.mp3');
+    expect(store.search('', offlineOnly: true).single.id, track.id);
+
+    now = DateTime.utc(2026, 1, 16, 17);
+    final failed = await store.markOfflineCacheEntryFailed(
+      queued.id,
+      reason: 'Network failed.',
+    );
+
+    expect(failed!.status, OfflineCacheEntryStatus.failed);
+    expect(failed.reason, 'Network failed.');
+    expect(await store.markOfflineCacheEntryProcessing('missing'), isNull);
+  });
+
   test('edits persisted track metadata for search browse and suggestions', () async {
     final store = LibraryStore();
     await store.load();

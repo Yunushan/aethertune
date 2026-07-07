@@ -4,11 +4,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/library_store.dart';
+import '../data/offline_cache_manager.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
@@ -5719,6 +5721,45 @@ String _offlineCacheEntrySubtitle(OfflineCacheEntry entry) {
   return parts.join(' · ');
 }
 
+bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
+  return entry.status == OfflineCacheEntryStatus.queued ||
+      entry.status == OfflineCacheEntryStatus.failed;
+}
+
+String _formatByteCount(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes B';
+  }
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String _offlineCacheErrorMessage(Object error) {
+  final message = error.toString();
+  if (message.length <= 120) {
+    return message;
+  }
+
+  return '${message.substring(0, 117)}...';
+}
+
+String _offlineCacheResultMessage({
+  required int cached,
+  required int failed,
+}) {
+  if (cached > 0 && failed == 0) {
+    return 'Cached $cached offline item(s).';
+  }
+  if (cached == 0 && failed > 0) {
+    return 'Could not cache $failed offline item(s).';
+  }
+
+  return 'Cached $cached offline item(s); $failed failed.';
+}
+
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab();
 
@@ -5728,6 +5769,9 @@ class _SettingsTab extends StatelessWidget {
     final library = context.watch<LibraryStore>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
+    final pendingOfflineQueue = offlineQueue
+        .where(_canProcessOfflineCacheEntry)
+        .toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -5776,12 +5820,29 @@ class _SettingsTab extends StatelessWidget {
                 ? 'No queued cache or download requests'
                 : '${offlineQueue.length} queued cache/download request(s)',
           ),
-          trailing: IconButton(
-            tooltip: 'Clear offline queue',
-            onPressed: offlineQueue.isEmpty
-                ? null
-                : () => unawaited(library.clearOfflineCacheQueue()),
-            icon: const Icon(Icons.clear_all),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Cache queued media',
+                onPressed: pendingOfflineQueue.isEmpty
+                    ? null
+                    : () => unawaited(
+                          _processOfflineCacheEntries(
+                            context,
+                            pendingOfflineQueue,
+                          ),
+                        ),
+                icon: const Icon(Icons.cloud_download_outlined),
+              ),
+              IconButton(
+                tooltip: 'Clear offline queue',
+                onPressed: offlineQueue.isEmpty
+                    ? null
+                    : () => unawaited(library.clearOfflineCacheQueue()),
+                icon: const Icon(Icons.clear_all),
+              ),
+            ],
           ),
         ),
         for (final entry in offlineQueue.take(5))
@@ -5798,12 +5859,29 @@ class _SettingsTab extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: IconButton(
-              tooltip: 'Remove from offline queue',
-              onPressed: () => unawaited(
-                library.removeOfflineCacheEntry(entry.id),
-              ),
-              icon: const Icon(Icons.close),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  tooltip: 'Cache media',
+                  onPressed: _canProcessOfflineCacheEntry(entry)
+                      ? () => unawaited(
+                            _processOfflineCacheEntries(
+                              context,
+                              <OfflineCacheEntry>[entry],
+                            ),
+                          )
+                      : null,
+                  icon: const Icon(Icons.cloud_download_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Remove from offline queue',
+                  onPressed: () => unawaited(
+                    library.removeOfflineCacheEntry(entry.id),
+                  ),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
             ),
           ),
         if (offlineQueue.length > 5)
@@ -5848,6 +5926,60 @@ class _SettingsTab extends StatelessWidget {
           subtitle: Text('Provider adapters must use legal, documented, user-owned, or official APIs.'),
         ),
       ],
+    );
+  }
+
+  Future<void> _processOfflineCacheEntries(
+    BuildContext context,
+    List<OfflineCacheEntry> entries,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final cacheRoot = await getApplicationDocumentsDirectory();
+    if (!context.mounted) {
+      return;
+    }
+
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    var cached = 0;
+    var failed = 0;
+
+    for (final queuedEntry in entries) {
+      final entry = library.offlineCacheEntryById(queuedEntry.id);
+      if (entry == null || !_canProcessOfflineCacheEntry(entry)) {
+        continue;
+      }
+
+      await library.markOfflineCacheEntryProcessing(entry.id);
+      final processingEntry = library.offlineCacheEntryById(entry.id) ?? entry;
+
+      try {
+        final materialization = await manager.materialize(processingEntry);
+        await library.markOfflineCacheEntryCached(
+          entry.id,
+          materialization.track,
+          reason: 'Cached ${_formatByteCount(materialization.byteCount)}.',
+        );
+        cached += 1;
+      } on Object catch (error) {
+        await library.markOfflineCacheEntryFailed(
+          entry.id,
+          reason: _offlineCacheErrorMessage(error),
+        );
+        failed += 1;
+      }
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          _offlineCacheResultMessage(cached: cached, failed: failed),
+        ),
+      ),
     );
   }
 

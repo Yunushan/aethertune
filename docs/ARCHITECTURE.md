@@ -25,7 +25,8 @@ Domain layer
 
 Data/provider layer
   Local file import, DemoSourceProvider, PodcastRssProvider,
-  RadioBrowserProvider, future legal provider adapters
+  RadioBrowserProvider, InternetArchiveProvider, OfflineCacheManager,
+  future legal provider adapters
 
 Platform layer
   Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker, audio backend
@@ -59,7 +60,7 @@ abstract interface class MusicSourceProvider {
 }
 ```
 
-Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded.
+Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage; background jobs, eviction, and resumable downloads belong behind the same boundary later.
 
 ## Playback
 

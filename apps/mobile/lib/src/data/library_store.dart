@@ -646,6 +646,48 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  OfflineCacheEntry? offlineCacheEntryById(String id) {
+    final index = _offlineCacheQueue.indexWhere((entry) => entry.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    return _offlineCacheQueue[index];
+  }
+
+  Future<OfflineCacheEntry?> markOfflineCacheEntryProcessing(String id) {
+    return _updateOfflineCacheEntry(
+      id,
+      status: OfflineCacheEntryStatus.processing,
+      reason: 'Caching media...',
+    );
+  }
+
+  Future<OfflineCacheEntry?> markOfflineCacheEntryCached(
+    String id,
+    Track cachedTrack, {
+    required String reason,
+  }) {
+    return _updateOfflineCacheEntry(
+      id,
+      track: cachedTrack,
+      status: OfflineCacheEntryStatus.cached,
+      reason: reason,
+      upsertCachedTrack: true,
+    );
+  }
+
+  Future<OfflineCacheEntry?> markOfflineCacheEntryFailed(
+    String id, {
+    required String reason,
+  }) {
+    return _updateOfflineCacheEntry(
+      id,
+      status: OfflineCacheEntryStatus.failed,
+      reason: reason,
+    );
+  }
+
   Future<void> toggleFavorite(String id) async {
     final index = _tracks.indexWhere((track) => track.id == id);
     if (index == -1) {
@@ -3200,6 +3242,60 @@ class LibraryStore extends ChangeNotifier {
 
       return _compareText(a.track.title, b.track.title);
     });
+  }
+
+  Future<OfflineCacheEntry?> _updateOfflineCacheEntry(
+    String id, {
+    Track? track,
+    OfflineCacheEntryStatus? status,
+    String? reason,
+    bool upsertCachedTrack = false,
+  }) async {
+    final index = _offlineCacheQueue.indexWhere((entry) => entry.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final updated = _offlineCacheQueue[index].copyWith(
+      track: track,
+      status: status,
+      updatedAt: _clock(),
+      reason: reason,
+    );
+    _offlineCacheQueue[index] = updated;
+    if (upsertCachedTrack && track != null) {
+      _upsertOfflineCachedTrack(track);
+    }
+
+    _sortOfflineCacheQueue();
+    await _save();
+    notifyListeners();
+
+    return updated;
+  }
+
+  void _upsertOfflineCachedTrack(Track cachedTrack) {
+    final index = _tracks.indexWhere((track) => track.id == cachedTrack.id);
+    if (index == -1) {
+      _tracks.add(
+        cachedTrack.copyWith(
+          addedAt: cachedTrack.addedAt == DateTime.fromMillisecondsSinceEpoch(0)
+              ? _clock()
+              : cachedTrack.addedAt,
+        ),
+      );
+      _sortTracks();
+      return;
+    }
+
+    final existing = _tracks[index];
+    _tracks[index] = existing.copyWith(
+      localPath: cachedTrack.localPath,
+      streamUrl: cachedTrack.streamUrl,
+      sourceId: cachedTrack.sourceId,
+      externalId: cachedTrack.externalId,
+    );
+    _sortTracks();
   }
 
   Future<void> _save() async {
