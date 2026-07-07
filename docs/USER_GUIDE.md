@@ -74,7 +74,7 @@ Open a track menu in the Library tab and choose **Lyrics**. You can save plain t
 
 ## Backup and restore
 
-Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, offline mode, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
+Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, offline mode, queued offline media requests, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
 
 ## Sleep timer
 
@@ -82,17 +82,17 @@ Tap the moon icon in the top-right corner and choose a preset duration, choose *
 
 ## Options
 
-The Options tab contains playback settings such as shuffle and repeat mode. Turn on **Offline mode** to pause network-backed source searches, feed refreshes, and saved stream playback from every player surface while keeping local file playback available. AetherTune restores those playback settings and offline mode when you reopen the app.
+The Options tab contains playback settings such as shuffle and repeat mode. Turn on **Offline mode** to pause network-backed source searches, feed refreshes, and saved stream playback from every player surface while keeping local file playback available. The Offline queue section shows provider-approved cache/download requests and lets you remove one item or clear the queue. AetherTune restores those playback settings, offline mode, and the offline queue when you reopen the app.
 
 ## Provider plugins
 
-The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. When offline mode is on, network-backed source searches, feed refreshes, and stream playback actions are paused; saved stream-only tracks are also blocked by the player until offline mode is turned off. Cache/download eligibility is gated by each provider's declared capabilities and privacy disclosure before future offline actions can use it. The current app includes:
+The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. When offline mode is on, network-backed source searches, feed refreshes, and stream playback actions are paused; saved stream-only tracks are also blocked by the player until offline mode is turned off. Use the offline-media menu beside source results to queue a cache or download request; eligibility is gated by each provider's declared capabilities and privacy disclosure. The queue records approved requests, while actual media download/storage/eviction is still roadmap work. The current app includes:
 
-- Provider search: search enabled legal adapters together, then play playable results or save any result to the local library.
+- Provider search: search enabled legal adapters together, then play playable results, save any result to the local library, or queue provider-approved cache/download requests.
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
-- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, or remove feed episodes. The adapter declares cache/download eligibility for legal feed enclosures; offline cache storage is roadmap work.
+- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, queue cache/download requests for eligible feed enclosures, or remove feed episodes. Offline media storage is roadmap work.
 - Radio Browser: AetherTune discovers a public Radio Browser API mirror with fallback to the bundled default, searches public internet radio stations in Sources, filters by country/language/tag/codec/bitrate, then plays a station or saves it to the local library; station plays are reported to Radio Browser's click endpoint. Live radio streams do not declare cache/download eligibility.
-- Internet Archive: search public archive audio in Sources, filter by collection/subject/creator/year, then play a resolved audio file or save it to the local library; multi-file archive items appear as separate playable results. Public archive files declare cache/download eligibility; cache storage is roadmap work.
+- Internet Archive: search public archive audio in Sources, filter by collection/subject/creator/year, then play a resolved audio file, save it to the local library, or queue cache/download requests; multi-file archive items appear as separate playable results. Offline media storage is roadmap work.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.

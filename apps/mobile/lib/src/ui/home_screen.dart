@@ -12,6 +12,7 @@ import '../data/library_store.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
+import '../domain/offline_cache_entry.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_opml.dart';
@@ -4197,6 +4198,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                     ),
                     icon: const Icon(Icons.library_add_outlined),
                   ),
+                  _offlineQueueMenu(
+                    context: context,
+                    track: result.track,
+                    decisionFor: (action) =>
+                        _providerSearchCoordinator.offlineDecision(
+                      result.track,
+                      action,
+                    ),
+                  ),
                   IconButton(
                     tooltip: _canPlayProviderSearchTrack(result.track)
                         ? 'Play result'
@@ -4342,6 +4352,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                       onPressed: () => _savePodcastEpisode(context, track),
                       icon: const Icon(Icons.library_add_outlined),
                     ),
+                    _offlineQueueMenu(
+                      context: context,
+                      track: track,
+                      decisionFor: (action) => _podcastOfflineDecision(
+                        context,
+                        track,
+                        action,
+                      ),
+                    ),
                     IconButton(
                       tooltip: 'Play episode',
                       onPressed: () => _playPodcastEpisode(context, track),
@@ -4466,6 +4485,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                     onPressed: () => _saveRadioStation(context, track),
                     icon: const Icon(Icons.library_add_outlined),
                   ),
+                  _offlineQueueMenu(
+                    context: context,
+                    track: track,
+                    decisionFor: (action) =>
+                        _providerSearchCoordinator.offlineDecision(
+                      track,
+                      action,
+                    ),
+                  ),
                   IconButton(
                     tooltip: 'Play station',
                     onPressed: () => _playRadioStation(context, track),
@@ -4576,6 +4604,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                     onPressed: () => _saveArchiveTrack(context, track),
                     icon: const Icon(Icons.library_add_outlined),
                   ),
+                  _offlineQueueMenu(
+                    context: context,
+                    track: track,
+                    decisionFor: (action) =>
+                        _providerSearchCoordinator.offlineDecision(
+                      track,
+                      action,
+                    ),
+                  ),
                   IconButton(
                     tooltip: 'Play archive track',
                     onPressed: () => _playArchiveTrack(context, track),
@@ -4640,6 +4677,115 @@ class _SourcesTabState extends State<_SourcesTab> {
       ),
     );
     return true;
+  }
+
+  Widget _offlineQueueMenu({
+    required BuildContext context,
+    required Track track,
+    required OfflineMediaPolicyDecision Function(OfflineMediaAction action)
+        decisionFor,
+  }) {
+    return PopupMenuButton<OfflineMediaAction>(
+      tooltip: 'Queue offline media',
+      icon: const Icon(Icons.download_for_offline_outlined),
+      onSelected: (action) {
+        unawaited(
+          _queueOfflineTrack(
+            context,
+            track,
+            decisionFor(action),
+          ),
+        );
+      },
+      itemBuilder: (_) => const <PopupMenuEntry<OfflineMediaAction>>[
+        PopupMenuItem<OfflineMediaAction>(
+          value: OfflineMediaAction.cache,
+          child: ListTile(
+            leading: Icon(Icons.offline_pin_outlined),
+            title: Text('Queue cache'),
+          ),
+        ),
+        PopupMenuItem<OfflineMediaAction>(
+          value: OfflineMediaAction.download,
+          child: ListTile(
+            leading: Icon(Icons.download_outlined),
+            title: Text('Queue download'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  OfflineMediaPolicyDecision _podcastOfflineDecision(
+    BuildContext context,
+    Track track,
+    OfflineMediaAction action,
+  ) {
+    final subscriptionId = _selectedPodcastSubscriptionId;
+    if (subscriptionId == null) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: false,
+        reason: 'No podcast feed is selected for this episode.',
+      );
+    }
+
+    final subscription =
+        context.read<LibraryStore>().podcastSubscriptionById(subscriptionId);
+    final feedUri = Uri.tryParse(subscription?.feedUrl ?? '');
+    if (feedUri == null) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: false,
+        reason: 'No valid podcast feed is selected for this episode.',
+      );
+    }
+
+    final provider = PodcastRssProvider(feedUri: feedUri, id: track.sourceId);
+    return OfflineMediaPolicy(
+      <MusicSourceProvider>[provider],
+    ).evaluate(track, action);
+  }
+
+  Future<void> _queueOfflineTrack(
+    BuildContext context,
+    Track track,
+    OfflineMediaPolicyDecision decision,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!decision.isAllowed) {
+      messenger.showSnackBar(SnackBar(content: Text(decision.reason)));
+      return;
+    }
+
+    final library = context.read<LibraryStore>();
+    try {
+      final entry = await library.queueOfflineCache(
+        track,
+        decision.action,
+        decision,
+      );
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Queued ${entry.track.title} for '
+            '${entry.action.label.toLowerCase()}.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not queue ${track.title}: $error')),
+      );
+    }
   }
 
   Future<void> _searchProviderCatalogs() async {
@@ -5552,6 +5698,27 @@ String _duplicateTrackSubtitle(Track track) {
   return parts.join(' · ');
 }
 
+IconData _offlineCacheEntryIcon(OfflineCacheEntry entry) {
+  switch (entry.action) {
+    case OfflineMediaAction.cache:
+      return Icons.offline_pin_outlined;
+    case OfflineMediaAction.download:
+      return Icons.download_outlined;
+  }
+}
+
+String _offlineCacheEntrySubtitle(OfflineCacheEntry entry) {
+  final reason = entry.reason.trim();
+  final parts = <String>[
+    entry.action.label,
+    entry.status.label,
+    entry.track.artist,
+    if (reason.isNotEmpty) reason,
+  ];
+
+  return parts.join(' · ');
+}
+
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab();
 
@@ -5560,6 +5727,7 @@ class _SettingsTab extends StatelessWidget {
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
     final duplicateGroups = library.duplicateTrackGroups();
+    final offlineQueue = library.offlineCacheQueue;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -5600,6 +5768,50 @@ class _SettingsTab extends StatelessWidget {
             unawaited(library.setOfflineModeEnabled(value));
           },
         ),
+        ListTile(
+          leading: const Icon(Icons.download_for_offline_outlined),
+          title: const Text('Offline queue'),
+          subtitle: Text(
+            offlineQueue.isEmpty
+                ? 'No queued cache or download requests'
+                : '${offlineQueue.length} queued cache/download request(s)',
+          ),
+          trailing: IconButton(
+            tooltip: 'Clear offline queue',
+            onPressed: offlineQueue.isEmpty
+                ? null
+                : () => unawaited(library.clearOfflineCacheQueue()),
+            icon: const Icon(Icons.clear_all),
+          ),
+        ),
+        for (final entry in offlineQueue.take(5))
+          ListTile(
+            dense: true,
+            leading: Icon(_offlineCacheEntryIcon(entry)),
+            title: Text(
+              entry.track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              _offlineCacheEntrySubtitle(entry),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              tooltip: 'Remove from offline queue',
+              onPressed: () => unawaited(
+                library.removeOfflineCacheEntry(entry.id),
+              ),
+              icon: const Icon(Icons.close),
+            ),
+          ),
+        if (offlineQueue.length > 5)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.more_horiz),
+            title: Text('${offlineQueue.length - 5} more queued item(s)'),
+          ),
         const Divider(),
         ListTile(
           leading: const Icon(Icons.file_upload_outlined),

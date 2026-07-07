@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/music_source_provider.dart';
+import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
@@ -262,6 +264,7 @@ class LibraryStore extends ChangeNotifier {
   static const _progressKey = 'aethertune.playback_progress.v1';
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
+  static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
   static const _maxHistoryEntries = 500;
   static const _maxSearchQueryHistoryEntries = 20;
   static const _minSavedProgress = Duration(seconds: 5);
@@ -280,6 +283,7 @@ class LibraryStore extends ChangeNotifier {
   final Map<String, PlaybackProgressEntry> _progressByTrackId =
       <String, PlaybackProgressEntry>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
+  final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
   final DateTime Function() _clock;
   bool _offlineModeEnabled = false;
   bool _loaded = false;
@@ -298,6 +302,8 @@ class LibraryStore extends ChangeNotifier {
   List<PlaybackProgressEntry> get playbackProgress =>
       List.unmodifiable(_progressByTrackId.values);
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
+  List<OfflineCacheEntry> get offlineCacheQueue =>
+      List.unmodifiable(_offlineCacheQueue);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get offlineModeEnabled => _offlineModeEnabled;
@@ -444,6 +450,24 @@ class LibraryStore extends ChangeNotifier {
         );
     }
     _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
+    final rawOfflineCacheQueue = prefs.getString(_offlineCacheQueueKey);
+    if (rawOfflineCacheQueue != null && rawOfflineCacheQueue.isNotEmpty) {
+      final decoded = jsonDecode(rawOfflineCacheQueue) as List<dynamic>;
+      _offlineCacheQueue
+        ..clear()
+        ..addAll(
+          _dedupeOfflineCacheQueue(
+            decoded
+                .whereType<Map>()
+                .map(
+                  (item) => OfflineCacheEntry.fromJson(
+                    Map<String, Object?>.from(item),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        );
+    }
 
     _removeMissingPlaylistTracks();
     _removeMissingLyrics();
@@ -453,6 +477,7 @@ class LibraryStore extends ChangeNotifier {
     _trimSearchQueryHistory();
     _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
+    _sortOfflineCacheQueue();
     _loaded = true;
     notifyListeners();
   }
@@ -536,6 +561,7 @@ class LibraryStore extends ChangeNotifier {
     _searchQueryHistory.clear();
     _progressByTrackId.clear();
     _lyricsByTrackId.clear();
+    _offlineCacheQueue.clear();
     await _save();
     notifyListeners();
   }
@@ -546,6 +572,76 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _offlineModeEnabled = enabled;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<OfflineCacheEntry> queueOfflineCache(
+    Track track,
+    OfflineMediaAction action,
+    OfflineMediaPolicyDecision decision,
+  ) async {
+    if (decision.action != action) {
+      throw ArgumentError.value(
+        decision.action,
+        'decision',
+        'Offline policy decision action must match the queued action.',
+      );
+    }
+    if (!decision.isAllowed) {
+      throw StateError(decision.reason);
+    }
+
+    final now = _clock();
+    final id = OfflineCacheEntry.stableIdFor(track, action);
+    final index = _offlineCacheQueue.indexWhere((entry) => entry.id == id);
+    final entry = index == -1
+        ? OfflineCacheEntry(
+            id: id,
+            track: track,
+            action: action,
+            createdAt: now,
+            updatedAt: now,
+            reason: decision.reason,
+          )
+        : _offlineCacheQueue[index].copyWith(
+            track: track,
+            action: action,
+            status: OfflineCacheEntryStatus.queued,
+            updatedAt: now,
+            reason: decision.reason,
+          );
+
+    if (index == -1) {
+      _offlineCacheQueue.add(entry);
+    } else {
+      _offlineCacheQueue[index] = entry;
+    }
+
+    _sortOfflineCacheQueue();
+    await _save();
+    notifyListeners();
+
+    return entry;
+  }
+
+  Future<void> removeOfflineCacheEntry(String id) async {
+    final previousLength = _offlineCacheQueue.length;
+    _offlineCacheQueue.removeWhere((entry) => entry.id == id);
+    if (_offlineCacheQueue.length == previousLength) {
+      return;
+    }
+
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> clearOfflineCacheQueue() async {
+    if (_offlineCacheQueue.isEmpty) {
+      return;
+    }
+
+    _offlineCacheQueue.clear();
     await _save();
     notifyListeners();
   }
@@ -1203,6 +1299,8 @@ class LibraryStore extends ChangeNotifier {
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
           .toList(),
+      'offlineCacheQueue':
+          _offlineCacheQueue.map((entry) => entry.toJson()).toList(),
     });
   }
 
@@ -1472,6 +1570,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredSearchQueryHistory = <String>[];
     final restoredProgress = <PlaybackProgressEntry>[];
     final restoredLyrics = <TrackLyrics>[];
+    final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredOfflineModeEnabled = false;
 
     try {
@@ -1515,6 +1614,13 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
+      );
+      restoredOfflineCacheQueue.addAll(
+        _jsonObjectList(
+          backup,
+          'offlineCacheQueue',
+          isRequired: false,
+        ).map(OfflineCacheEntry.fromJson),
       );
     } on Object catch (error) {
       throw FormatException('Invalid backup data: $error');
@@ -1580,6 +1686,9 @@ class LibraryStore extends ChangeNotifier {
     _lyricsByTrackId
       ..clear()
       ..addAll(sanitizedLyrics);
+    _offlineCacheQueue
+      ..clear()
+      ..addAll(_dedupeOfflineCacheQueue(restoredOfflineCacheQueue));
     _offlineModeEnabled = restoredOfflineModeEnabled;
 
     _sortTracks();
@@ -1587,6 +1696,7 @@ class LibraryStore extends ChangeNotifier {
     _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
     _sortHistory();
+    _sortOfflineCacheQueue();
     _trimHistory();
     _trimSearchQueryHistory();
     await _save();
@@ -3067,6 +3177,31 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  List<OfflineCacheEntry> _dedupeOfflineCacheQueue(
+    Iterable<OfflineCacheEntry> entries,
+  ) {
+    final byId = <String, OfflineCacheEntry>{};
+    for (final entry in entries) {
+      final existing = byId[entry.id];
+      if (existing == null || entry.updatedAt.isAfter(existing.updatedAt)) {
+        byId[entry.id] = entry;
+      }
+    }
+
+    return byId.values.toList(growable: false);
+  }
+
+  void _sortOfflineCacheQueue() {
+    _offlineCacheQueue.sort((a, b) {
+      final updatedComparison = b.updatedAt.compareTo(a.updatedAt);
+      if (updatedComparison != 0) {
+        return updatedComparison;
+      }
+
+      return _compareText(a.track.title, b.track.title);
+    });
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     final encodedTracks = jsonEncode(
@@ -3091,6 +3226,9 @@ class LibraryStore extends ChangeNotifier {
     final encodedLyrics = jsonEncode(
       _lyricsByTrackId.values.map((lyrics) => lyrics.toJson()).toList(),
     );
+    final encodedOfflineCacheQueue = jsonEncode(
+      _offlineCacheQueue.map((entry) => entry.toJson()).toList(),
+    );
     await prefs.setString(_tracksKey, encodedTracks);
     await prefs.setString(_playlistsKey, encodedPlaylists);
     await prefs.setString(
@@ -3106,6 +3244,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
+    await prefs.setString(_offlineCacheQueueKey, encodedOfflineCacheQueue);
   }
 }
 

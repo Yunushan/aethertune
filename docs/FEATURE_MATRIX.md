@@ -45,7 +45,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Local playback | Done | `just_audio` local file playback. | Background service, notification controls, codec matrix. |
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
-| Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
+| Backup/restore | Done | Versioned JSON export/restore UI plus store tests, including offline mode and queued offline media requests. | File-based import/export and migration tooling. |
 | Stored metadata editing | Scaffolded | Track menus edit saved title, artist, album, and genre, with store tests for persistence/search/browse/suggestions. | Audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Scaffolded | Options tab finds duplicate library tracks by normalized local path, provider/external ID, stream URL, or metadata plus known duration, then merges the selected keeper while preserving playlists, favorites, lyrics, history, and progress; store tests cover detection and persistence. | Audio fingerprinting, file hashes, scanner reconciliation, batch review UI, and undo. |
 | Search | Done | Local title/artist/album/genre/source/folder filtering plus submitted-query/playback/metadata suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
@@ -62,10 +62,10 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider` requires capability flags, privacy/network disclosure, and cache/download policy inputs. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
-| Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, tracks refresh status/staleness, plays/saves episodes, resumes saved episode progress, includes backups, declares cache/download policy for legal enclosures, and provider parsing/store behavior has tests. | Offline cache storage and eviction UI. |
+| Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, tracks refresh status/staleness, plays/saves episodes, queues cache/download requests after provider policy approval, resumes saved episode progress, includes backups, declares cache/download policy for legal enclosures, and provider parsing/store behavior has tests. | Offline media downloader, storage, and eviction. |
 | Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, discovers a public API mirror before default searches with fallback to the bundled mirror, filters by country/language/tag/codec/bitrate, plays public streams, sends station click accounting on playback, saves stations to the library, denies cache/download policy for live streams, and provider parsing/filter/mirror/click behavior has tests. | Stream validation. |
-| Internet Archive audio search | Scaffolded | Sources tab searches public Internet Archive audio, filters by collection/subject/creator/year, expands multi-file items into separate playable tracks, resolves file URLs, plays/saves tracks, declares cache/download policy for public files, and provider parsing/search/filter behavior has tests. | Collection browse pages, facet suggestion UI, and cache management. |
-| Offline mode | Done | Options tab has a persisted offline mode that pauses network-backed provider search, feed refresh, Sources playback actions, and player-wide saved URL stream playback; Library has a local-files-only offline-ready filter; backup/restore, source classification, offline playback policy, and library filter tests cover behavior. | Cache/download storage and cache management UI. |
+| Internet Archive audio search | Scaffolded | Sources tab searches public Internet Archive audio, filters by collection/subject/creator/year, expands multi-file items into separate playable tracks, resolves file URLs, plays/saves tracks, queues cache/download requests after provider policy approval, declares cache/download policy for public files, and provider parsing/search/filter behavior has tests. | Collection browse pages, facet suggestion UI, and offline media storage. |
+| Offline mode | Done | Options tab has a persisted offline mode that pauses network-backed provider search, feed refresh, Sources playback actions, and player-wide saved URL stream playback; Library has a local-files-only offline-ready filter; backup/restore, source classification, offline playback policy, and library filter tests cover behavior. | Offline media downloader, cache storage, eviction, and size limits. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
 ## Full Parity Feature Surface
@@ -102,7 +102,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
 | Stats / recap | Scaffolded | YouTube Music, Namida | Store-level stats aggregate local tracks, favorites, play counts, estimated listening duration, and top tracks/artists/albums/genres; History tab filters stats by all time, last 7 days, last 30 days, or last year, and exports the selected range as JSON/CSV. Store tests cover ranking, date filtering, and exports. Needed next: yearly/monthly cards, shareable recap visuals, and richer charts. |
-| Backup/restore | Done | Namida, local-first apps | Includes local library data plus offline mode; file picker integration, cloud targets, migration checks remain. |
+| Backup/restore | Done | Namida, local-first apps | Includes local library data, offline mode, and queued offline media requests; file picker integration, cloud targets, migration checks remain. |
 | Cross-device library sync | Roadmap | YouTube Music, Grayjay-style multi-device needs | Server auth, sync API, conflict handling. |
 
 ### Search, Discovery, And Recommendations
@@ -150,11 +150,11 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Local offline playback | Done | Local music apps | Better file indexing. |
-| Stream cache | Roadmap | InnerTune, RiMusic, YouTube Music | Cache manager backed by `OfflineMediaPolicy`, storage, and eviction. |
-| Download queue | Roadmap | YouTube Music, NewPipe | Queue legal downloads only after `OfflineMediaPolicy` allows them. |
+| Stream cache | Scaffolded | InnerTune, RiMusic, YouTube Music | Provider-approved cache requests can be queued and managed; actual media storage and eviction remain. |
+| Download queue | Scaffolded | YouTube Music, NewPipe | Sources tab queues legal downloads only after `OfflineMediaPolicy` allows them, persists the queue, and exposes remove/clear management in Options. |
 | Cache size limits | Roadmap | All offline clients | Storage settings and eviction policy. |
 | Per-provider offline policy | Done | Spotube, Grayjay | `OfflineMediaPolicy` allows local files, permits Podcast RSS and Internet Archive cache/download only when providers declare capability plus disclosure, denies live Radio Browser streams, and has unit coverage through provider contract/coordinator tests. |
-| Offline mode toggle | Done | YouTube Music | Persisted Options toggle pauses network-backed Sources searches, feed refreshes, Sources stream playback actions, and player-wide saved URL stream playback; backup/restore preserves it, and Library can filter to local offline-ready files. Needed next: cache/download storage and cache management UI. |
+| Offline mode toggle | Done | YouTube Music | Persisted Options toggle pauses network-backed Sources searches, feed refreshes, Sources stream playback actions, and player-wide saved URL stream playback; backup/restore preserves it, Library can filter to local offline-ready files, and Options exposes the offline queue manager. Needed next: downloader, media storage, eviction, and cache size limits. |
 | Partial/resumable downloads | Roadmap | NewPipe-style clients | Downloader with resume and checksum support. |
 
 ### Providers And Sources
@@ -165,9 +165,9 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Demo provider | Done | Provider template | Developer docs and test fixture provider. |
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |
-| Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, refresh status/stale policy, episode listing, playback, saved episode progress/resume, library save, backup/restore, and cache/download policy declarations are implemented; offline cache storage remains. |
+| Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, refresh status/stale policy, episode listing, playback, saved episode progress/resume, library save, backup/restore, cache/download policy declarations, and queued offline requests are implemented; offline media storage remains. |
 | Radio Browser / internet radio | Scaffolded | Radio apps | Station search with country/language/tag/codec/bitrate filters, public API mirror discovery, fallback mirror behavior, playback, station click accounting, library save, provider parser, playable station model, and live-stream cache/download denial are implemented; stream validation remains. |
-| Internet Archive | Scaffolded | ArchiveTune | Public audio metadata search, collection/subject/creator/year filters, playable file resolver, multi-file item results, Sources-tab play/save, cache/download policy declarations, and provider tests are implemented; collection browse pages, facet suggestion UI, and cache management remain. |
+| Internet Archive | Scaffolded | ArchiveTune | Public audio metadata search, collection/subject/creator/year filters, playable file resolver, multi-file item results, Sources-tab play/save/cache/download queue, cache/download policy declarations, and provider tests are implemented; collection browse pages, facet suggestion UI, and offline media storage remain. |
 | Spotify metadata | Blocked / official-only | Spotube | Official API metadata only; playback must be legal/user-authorized. |
 | YouTube / YouTube Music | Blocked / official-only | YouTube Music, InnerTune, NewPipe family | Official API, embeds, or user-provided legal URLs only; no private API scraping. |
 | SoundCloud or similar services | Blocked / official-only | Multi-source clients | Official API or documented public feeds only. |
@@ -324,7 +324,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
 5. Implement legal providers: local folder scanner, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin, Navidrome/Subsonic, Internet Archive.
 6. Add official-only adapters where terms allow: Spotify metadata, YouTube/YouTube Music, SoundCloud, Bandcamp, or others.
-7. Build offline cache/download manager with per-provider legal capability checks.
+7. Replace the current offline queue scaffold with a full cache/download manager, media storage, eviction, size limits, and resumable downloader.
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.
 9. Add discovery: home feed, charts, recommendations, moods, artist/track radio, similar artists.
 10. Add video surfaces only through legal providers: video player, PiP, captions, chapters, subscriptions.

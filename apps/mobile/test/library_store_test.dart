@@ -3,7 +3,11 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/data/radio_browser_provider.dart';
+import 'package:aethertune/src/domain/music_source_provider.dart';
+import 'package:aethertune/src/domain/offline_cache_entry.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -1160,6 +1164,117 @@ void main() {
     expect(secondStore.offlineModeEnabled, isTrue);
   });
 
+  test(
+    'queues policy approved offline cache entries and persists them',
+    () async {
+      var now = DateTime.utc(2026, 1, 16, 12);
+      DateTime clock() => now;
+      final provider = InternetArchiveProvider();
+      final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+      final track = _track(
+        'archive-1',
+        title: 'Archive Field Recording',
+        sourceId: provider.id,
+        externalId: 'archive-item',
+        localPath: '',
+        streamUrl: 'https://archive.org/download/archive-item/audio.mp3',
+      );
+      final firstStore = LibraryStore(clock: clock);
+      await firstStore.load();
+
+      final decision = policy.evaluate(track, OfflineMediaAction.cache);
+      expect(decision.isAllowed, isTrue);
+
+      final entry = await firstStore.queueOfflineCache(
+        track,
+        OfflineMediaAction.cache,
+        decision,
+      );
+
+      expect(entry.status, OfflineCacheEntryStatus.queued);
+      expect(firstStore.offlineCacheQueue.single.id, entry.id);
+      expect(firstStore.offlineCacheQueue.single.track.title, track.title);
+
+      now = DateTime.utc(2026, 1, 16, 13);
+      final updatedTrack = track.copyWith(title: 'Archive Field Recording II');
+      await firstStore.queueOfflineCache(
+        updatedTrack,
+        OfflineMediaAction.cache,
+        policy.evaluate(updatedTrack, OfflineMediaAction.cache),
+      );
+
+      expect(firstStore.offlineCacheQueue, hasLength(1));
+      expect(firstStore.offlineCacheQueue.single.createdAt, entry.createdAt);
+      expect(firstStore.offlineCacheQueue.single.updatedAt, now);
+      expect(
+        firstStore.offlineCacheQueue.single.track.title,
+        'Archive Field Recording II',
+      );
+
+      final secondStore = LibraryStore(clock: clock);
+      await secondStore.load();
+
+      expect(secondStore.offlineCacheQueue.single.id, entry.id);
+      expect(
+        secondStore.offlineCacheQueue.single.action,
+        OfflineMediaAction.cache,
+      );
+
+      final backupJson = secondStore.exportBackupJson();
+      final backup = jsonDecode(backupJson) as Map<String, dynamic>;
+      expect(backup['offlineCacheQueue'], hasLength(1));
+
+      final thirdStore = LibraryStore(clock: clock);
+      await thirdStore.load();
+      await thirdStore.restoreBackupJson(backupJson);
+
+      expect(thirdStore.offlineCacheQueue.single.id, entry.id);
+
+      await thirdStore.removeOfflineCacheEntry(entry.id);
+      expect(thirdStore.offlineCacheQueue, isEmpty);
+
+      await thirdStore.queueOfflineCache(
+        track,
+        OfflineMediaAction.download,
+        policy.evaluate(track, OfflineMediaAction.download),
+      );
+      expect(
+        thirdStore.offlineCacheQueue.single.action,
+        OfflineMediaAction.download,
+      );
+
+      await thirdStore.clearOfflineCacheQueue();
+      expect(thirdStore.offlineCacheQueue, isEmpty);
+    },
+  );
+
+  test(
+    'rejects offline cache queue entries denied by provider policy',
+    () async {
+      final provider = RadioBrowserProvider();
+      final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+      final track = _track(
+        'radio-1',
+        title: 'Live Station',
+        sourceId: provider.id,
+        externalId: 'station-id',
+        localPath: '',
+        streamUrl: 'https://radio.example.test/live.mp3',
+      );
+      final store = LibraryStore();
+      await store.load();
+
+      final decision = policy.evaluate(track, OfflineMediaAction.cache);
+
+      expect(decision.isAllowed, isFalse);
+      expect(
+        store.queueOfflineCache(track, OfflineMediaAction.cache, decision),
+        throwsA(isA<StateError>()),
+      );
+      expect(store.offlineCacheQueue, isEmpty);
+    },
+  );
+
   test('edits persisted track metadata for search browse and suggestions', () async {
     final store = LibraryStore();
     await store.load();
@@ -1545,6 +1660,23 @@ void main() {
       ),
     );
     await firstStore.markPodcastSubscriptionFetched(subscription.id);
+    final archiveProvider = InternetArchiveProvider();
+    final archiveTrack = _track(
+      'archive-backup',
+      title: 'Archive Backup',
+      sourceId: archiveProvider.id,
+      externalId: 'archive-backup',
+      localPath: '',
+      streamUrl: 'https://archive.org/download/archive-backup/audio.mp3',
+    );
+    final archivePolicy = OfflineMediaPolicy(
+      <MusicSourceProvider>[archiveProvider],
+    );
+    final cacheEntry = await firstStore.queueOfflineCache(
+      archiveTrack,
+      OfflineMediaAction.cache,
+      archivePolicy.evaluate(archiveTrack, OfflineMediaAction.cache),
+    );
 
     final backupJson = firstStore.exportBackupJson();
 
@@ -1599,6 +1731,8 @@ void main() {
           .map((track) => track.id),
       <String>['2'],
     );
+    expect(secondStore.offlineCacheQueue.single.id, cacheEntry.id);
+    expect(secondStore.offlineCacheQueue.single.track.title, 'Archive Backup');
   });
 
   test('rejects invalid backup JSON without replacing the library', () async {

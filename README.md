@@ -124,8 +124,8 @@ This scaffold includes real app code, not only a README:
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
 | Local library | Import audio files through the native file picker; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, or folder |
-| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, and offline mode with `shared_preferences` |
-| Backup/restore | Export and restore a versioned JSON backup, including submitted search history and offline mode, from the Options tab |
+| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, offline mode, and the offline cache/download queue with `shared_preferences` |
+| Backup/restore | Export and restore a versioned JSON backup, including submitted search history, offline mode, and queued offline media requests, from the Options tab |
 | Search | Local library filtering by title, artist, album, genre, source, folder, favorites, and local-files-only offline readiness with sortable results and suggestion chips from submitted searches, playback history, and library metadata |
 | Queue | Play current list as a persistent queue with next/previous controls, reorder/remove queue items, and save it as a playlist |
 | History/stats | Recently played tab with local playback history, play counts, listening recap, date ranges, JSON/CSV stats export, top tracks/artists/albums/genres, and clear action |
@@ -134,7 +134,7 @@ This scaffold includes real app code, not only a README:
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track, with optional final-30-second fade-out |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
-| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, offline cache/download policy gates, unified provider search, demo provider, Podcast RSS feeds, Radio Browser mirror discovery/search/filtering, and Internet Archive audio search/filtering |
+| Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, unified provider search, demo provider, Podcast RSS feeds, Radio Browser mirror discovery/search/filtering, and Internet Archive audio search/filtering |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
@@ -149,7 +149,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | History/stats | Recently played, local play counts, estimated listening time, date-range filters, JSON/CSV export, and top track/artist/album/genre recap implemented; richer yearly/monthly cards and visualizations roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, network disclosure, and cache/download policy gates for legal source adapters |
-| Offline | Local-first data model, offline library filter, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, cache/download manager roadmap |
+| Offline | Local-first data model, offline library filter, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, persisted cache/download queue manager, and downloader/storage roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, and cross-device artwork sync roadmap |
@@ -158,7 +158,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
-| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download policy, Radio Browser mirror discovery/search/filter/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download policy with multi-file item results; self-hosted and official API providers remain roadmap |
+| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download queue eligibility, Radio Browser mirror discovery/search/filter/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download queue eligibility with multi-file item results; self-hosted and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 

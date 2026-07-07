@@ -83,7 +83,8 @@
 - [x] Podcast episode progress/resume
 - [x] Podcast refresh policy
 - [x] Podcast RSS cache/download policy declarations
-- [ ] Podcast offline cache
+- [x] Podcast offline cache/download queue
+- [ ] Podcast offline media storage
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
@@ -95,7 +96,8 @@
 - [x] Internet Archive collection, subject, creator, and year search filters
 - [x] Internet Archive multi-file item result expansion
 - [x] Internet Archive offline/download policy declarations
-- [ ] Internet Archive collection browse, facet suggestion UI, and cache management
+- [x] Internet Archive cache/download queue
+- [ ] Internet Archive collection browse, facet suggestion UI, and cache storage
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider
 
@@ -105,8 +107,9 @@
 - [x] Player-wide saved stream blocking while offline mode is enabled
 - [x] Local-files-only library filter for offline-ready browsing
 - [x] Per-provider cache/download policy gate
-- [ ] Cache manager
-- [ ] Download queue
+- [x] Cache/download queue manager
+- [x] Download queue
+- [ ] Offline media downloader and cache storage
 - [ ] Cache size limits
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview
