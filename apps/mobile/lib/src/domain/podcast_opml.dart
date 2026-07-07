@@ -41,7 +41,6 @@ String exportPodcastOpml(
   DateTime? exportedAt,
 }) {
   final builder = XmlBuilder();
-  builder.processing('xml', 'version="1.0" encoding="UTF-8"');
   builder.element(
     'opml',
     attributes: <String, String>{'version': '2.0'},
