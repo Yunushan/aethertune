@@ -73,7 +73,8 @@
 - [ ] Podcast offline cache
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
-- [ ] Radio Browser mirror discovery, click accounting, and richer browse filters
+- [x] Radio Browser station click accounting
+- [ ] Radio Browser mirror discovery and richer browse filters
 - [ ] Internet Archive provider
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider

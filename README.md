@@ -116,7 +116,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
-| Multi-source | Local provider support plus Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume and Radio Browser station search/play/save; self-hosted, open catalog, and official API providers remain roadmap |
+| Multi-source | Local provider support plus Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume and Radio Browser station search/play/save/click accounting; self-hosted, open catalog, and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 

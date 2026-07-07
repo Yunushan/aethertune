@@ -5,18 +5,22 @@ import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
 
 typedef RadioBrowserSearchLoader = Future<String> Function(Uri searchUri);
+typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
 
 class RadioBrowserProvider implements MusicSourceProvider {
   RadioBrowserProvider({
     Uri? baseUri,
     RadioBrowserSearchLoader? searchLoader,
+    RadioBrowserClickLoader? clickLoader,
     this.limit = 20,
   })  : baseUri = baseUri ?? Uri.parse('https://de1.api.radio-browser.info'),
-        _searchLoader = searchLoader ?? _loadRadioBrowserSearch;
+        _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
+        _clickLoader = clickLoader ?? _loadRadioBrowserClick;
 
   final Uri baseUri;
   final int limit;
   final RadioBrowserSearchLoader _searchLoader;
+  final RadioBrowserClickLoader _clickLoader;
 
   @override
   String get id => 'radio-browser';
@@ -41,7 +45,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
         networkDomains: baseUri.host.isEmpty ? const <String>[] : <String>[
           baseUri.host,
         ],
-        dataSent: const <String>['station search query'],
+        dataSent: const <String>['station search query', 'station click UUID'],
       );
 
   @override
@@ -66,6 +70,15 @@ class RadioBrowserProvider implements MusicSourceProvider {
     return Uri.tryParse(track.streamUrl!);
   }
 
+  Future<void> recordStationClick(Track track) async {
+    final stationUuid = track.externalId;
+    if (track.sourceId != id || stationUuid == null || stationUuid.isEmpty) {
+      return;
+    }
+
+    await _clickLoader(_clickUri(stationUuid));
+  }
+
   Uri _searchUri(String query) {
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, '/json/stations/search'),
@@ -76,6 +89,16 @@ class RadioBrowserProvider implements MusicSourceProvider {
         'order': 'clickcount',
         'reverse': 'true',
       },
+    );
+  }
+
+  Uri _clickUri(String stationUuid) {
+    return baseUri.replace(
+      path: _joinUriPath(
+        baseUri.path,
+        '/json/url/${Uri.encodeComponent(stationUuid)}',
+      ),
+      queryParameters: const <String, String>{},
     );
   }
 }
@@ -136,6 +159,7 @@ final class RadioBrowserStation {
       artworkUri: artworkUri,
       streamUrl: streamUri.toString(),
       sourceId: sourceId,
+      externalId: stationUuid,
     );
   }
 }
@@ -190,6 +214,26 @@ Future<String> _loadRadioBrowserSearch(Uri searchUri) async {
       throw HttpException(
         'Radio Browser search failed with HTTP ${response.statusCode}.',
         uri: searchUri,
+      );
+    }
+
+    return utf8.decodeStream(response);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<String> _loadRadioBrowserClick(Uri clickUri) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(clickUri);
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
+    final response = await request.close();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        'Radio Browser click failed with HTTP ${response.statusCode}.',
+        uri: clickUri,
       );
     }
 

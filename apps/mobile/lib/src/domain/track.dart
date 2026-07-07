@@ -16,6 +16,7 @@ class Track {
     this.localPath,
     this.streamUrl,
     this.sourceId = 'local',
+    this.externalId,
     this.isFavorite = false,
     DateTime? addedAt,
   }) : addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -30,6 +31,7 @@ class Track {
   final String? localPath;
   final String? streamUrl;
   final String sourceId;
+  final String? externalId;
   final bool isFavorite;
   final DateTime addedAt;
 
@@ -46,6 +48,7 @@ class Track {
     String? localPath,
     String? streamUrl,
     String? sourceId,
+    String? externalId,
     bool? isFavorite,
     DateTime? addedAt,
   }) {
@@ -60,6 +63,7 @@ class Track {
       localPath: localPath ?? this.localPath,
       streamUrl: streamUrl ?? this.streamUrl,
       sourceId: sourceId ?? this.sourceId,
+      externalId: externalId ?? this.externalId,
       isFavorite: isFavorite ?? this.isFavorite,
       addedAt: addedAt ?? this.addedAt,
     );
@@ -77,6 +81,7 @@ class Track {
       'localPath': localPath,
       'streamUrl': streamUrl,
       'sourceId': sourceId,
+      'externalId': externalId,
       'isFavorite': isFavorite,
       'addedAt': addedAt.toIso8601String(),
     };
@@ -94,6 +99,7 @@ class Track {
       localPath: json['localPath'] as String?,
       streamUrl: json['streamUrl'] as String?,
       sourceId: json['sourceId'] as String? ?? 'local',
+      externalId: json['externalId'] as String?,
       isFavorite: json['isFavorite'] as bool? ?? false,
       addedAt: DateTime.tryParse(json['addedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),

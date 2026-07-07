@@ -24,17 +24,23 @@ void main() {
     expect(track.genre, 'jazz, ambient, open');
     expect(track.isPlayable, isTrue);
     expect(track.streamUrl, 'https://stream.example.test/aac');
+    expect(track.externalId, 'station-1');
   });
 
   test(
     'search builds an official station search URI and resolves streams',
     () async {
       Uri? capturedUri;
+      Uri? capturedClickUri;
       final provider = RadioBrowserProvider(
         baseUri: Uri.parse('https://de1.api.radio-browser.info'),
         searchLoader: (uri) async {
           capturedUri = uri;
           return _sampleStationsJson;
+        },
+        clickLoader: (uri) async {
+          capturedClickUri = uri;
+          return '{"ok":true}';
         },
         limit: 12,
       );
@@ -51,7 +57,10 @@ void main() {
       expect(provider.disclosure.networkDomains, <String>[
         'de1.api.radio-browser.info',
       ]);
-      expect(provider.disclosure.dataSent, <String>['station search query']);
+      expect(provider.disclosure.dataSent, <String>[
+        'station search query',
+        'station click UUID',
+      ]);
 
       final tracks = await provider.search('aether');
 
@@ -66,8 +75,30 @@ void main() {
         await provider.resolveStream(tracks.single),
         Uri.parse('https://stream.example.test/aac'),
       );
+
+      await provider.recordStationClick(tracks.single);
+
+      expect(capturedClickUri!.path, '/json/url/station-1');
     },
   );
+
+  test('ignores click accounting for non-radio tracks', () async {
+    var clicked = false;
+    final provider = RadioBrowserProvider(
+      clickLoader: (_) async {
+        clicked = true;
+        return '{"ok":true}';
+      },
+    );
+
+    await provider.recordStationClick(
+      parseRadioBrowserStations(_singleStationJson)
+          .single
+          .toTrack(sourceId: 'another-provider'),
+    );
+
+    expect(clicked, isFalse);
+  });
 
   test('skips stations without a usable stream URL', () {
     final stations = parseRadioBrowserStations('''

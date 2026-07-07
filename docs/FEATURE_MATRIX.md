@@ -61,7 +61,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Provider plugin contract | Done | `MusicSourceProvider` requires capability flags and privacy/network disclosure. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
 | Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, tracks refresh status/staleness, plays/saves episodes, resumes saved episode progress, includes backups, and provider parsing/store behavior has tests. | Offline cache. |
-| Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, plays public streams, saves stations to the library, and provider parsing has tests. | Mirror discovery, station click accounting, richer browse filters, stream validation, and cache policy. |
+| Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, plays public streams, sends station click accounting on playback, saves stations to the library, and provider parsing/click behavior has tests. | Mirror discovery, richer browse filters, stream validation, and cache policy. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
 ## Full Parity Feature Surface
@@ -161,7 +161,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |
 | Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, refresh status/stale policy, episode listing, playback, saved episode progress/resume, library save, and backup/restore are implemented; offline cache remains. |
-| Radio Browser / internet radio | Scaffolded | Radio apps | Station search, playback, library save, provider parser, and playable station model are implemented; mirror discovery, click accounting, richer browse filters, stream validation, and cache policy remain. |
+| Radio Browser / internet radio | Scaffolded | Radio apps | Station search, playback, station click accounting, library save, provider parser, and playable station model are implemented; mirror discovery, richer browse filters, stream validation, and cache policy remain. |
 | Internet Archive | Roadmap | ArchiveTune | Metadata search, file resolver, collection browse. |
 | Spotify metadata | Blocked / official-only | Spotube | Official API metadata only; playback must be legal/user-authorized. |
 | YouTube / YouTube Music | Blocked / official-only | YouTube Music, InnerTune, NewPipe family | Official API, embeds, or user-provided legal URLs only; no private API scraping. |

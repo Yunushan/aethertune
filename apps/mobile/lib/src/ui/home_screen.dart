@@ -31,6 +31,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
+  final _radioClickProvider = RadioBrowserProvider();
   int _tabIndex = 0;
   bool _favoritesOnly = false;
   String _query = '';
@@ -80,6 +81,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _lastRecordedPlaybackSerial = player.playbackStartSerial;
     unawaited(library.recordPlayback(track.id));
+    unawaited(_recordRadioStationClick(track));
+  }
+
+  Future<void> _recordRadioStationClick(Track track) async {
+    try {
+      await _radioClickProvider.recordStationClick(track);
+    } catch (_) {
+      // Playback should not depend on Radio Browser click accounting.
+    }
   }
 
   void _recordPlaybackProgress(Duration position) {

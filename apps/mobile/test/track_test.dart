@@ -48,12 +48,14 @@ void main() {
       artworkUri: Uri.parse('https://station.example.test/icon.png'),
       streamUrl: 'https://stream.example.test/aac',
       sourceId: 'radio-browser',
+      externalId: 'station-1',
     );
 
     final decoded = Track.fromJson(track.toJson());
 
     expect(decoded.streamUrl, 'https://stream.example.test/aac');
     expect(decoded.sourceId, 'radio-browser');
+    expect(decoded.externalId, 'station-1');
     expect(
       decoded.artworkUri,
       Uri.parse('https://station.example.test/icon.png'),
