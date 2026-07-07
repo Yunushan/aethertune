@@ -2480,6 +2480,20 @@ String _formatDurationLabel(Duration duration) {
   return '${duration.inMinutes}:$seconds';
 }
 
+String _formatRefreshAge(Duration age) {
+  if (age.inMinutes < 1) {
+    return 'just now';
+  }
+  if (age.inHours < 1) {
+    return '${age.inMinutes}m ago';
+  }
+  if (age.inDays < 1) {
+    return '${age.inHours}h ago';
+  }
+
+  return '${age.inDays}d ago';
+}
+
 class _EmptyLibrary extends StatelessWidget {
   const _EmptyLibrary({
     required this.favoritesOnly,
@@ -2712,17 +2726,13 @@ class _SourcesTabState extends State<_SourcesTab> {
               leading: const Icon(Icons.rss_feed),
               selected: subscription.id == _selectedPodcastSubscriptionId,
               title: Text(subscription.title),
-              subtitle: Text(
-                subscription.author.isEmpty
-                    ? subscription.feedUrl
-                    : '${subscription.author} / ${subscription.feedUrl}',
-              ),
+              subtitle: Text(_podcastSubscriptionSubtitle(subscription)),
               onTap: () => _loadPodcastEpisodes(context, subscription),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   IconButton(
-                    tooltip: 'Load episodes',
+                    tooltip: 'Refresh episodes',
                     onPressed: _podcastLoading
                         ? null
                         : () => _loadPodcastEpisodes(context, subscription),
@@ -3020,6 +3030,8 @@ class _SourcesTabState extends State<_SourcesTab> {
           artworkUri: feed.artworkUri,
         ),
       );
+      final refreshed =
+          await library.markPodcastSubscriptionFetched(saved.id) ?? saved;
       final tracks = feed.episodes
           .map((episode) => episode.toTrack(sourceId: provider.id, feed: feed))
           .toList(growable: false);
@@ -3030,7 +3042,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
       setState(() {
         _podcastEpisodeTracks = tracks;
-        _selectedPodcastSubscriptionId = saved.id;
+        _selectedPodcastSubscriptionId = refreshed.id;
         _podcastLoading = false;
       });
 
@@ -3038,6 +3050,10 @@ class _SourcesTabState extends State<_SourcesTab> {
         SnackBar(content: Text('Loaded ${feed.title}.')),
       );
     } catch (error) {
+      await library.markPodcastSubscriptionFetchFailed(
+        stablePodcastSubscriptionId(feedUri.toString()),
+        error,
+      );
       if (!context.mounted) {
         return;
       }
@@ -3048,6 +3064,28 @@ class _SourcesTabState extends State<_SourcesTab> {
         _podcastError = error.toString();
       });
     }
+  }
+
+  String _podcastSubscriptionSubtitle(PodcastSubscription subscription) {
+    final details = subscription.author.isEmpty
+        ? subscription.feedUrl
+        : '${subscription.author} / ${subscription.feedUrl}';
+    return '$details / ${_podcastRefreshStatus(subscription)}';
+  }
+
+  String _podcastRefreshStatus(PodcastSubscription subscription) {
+    if (subscription.lastFetchError.isNotEmpty) {
+      return 'Refresh failed';
+    }
+
+    final fetchedAt = subscription.lastFetchedAt;
+    if (fetchedAt == null) {
+      return 'Never refreshed';
+    }
+
+    final now = DateTime.now();
+    final age = _formatRefreshAge(now.difference(fetchedAt));
+    return subscription.isRefreshDue(now) ? 'Refresh due $age' : 'Fresh $age';
   }
 
   Future<void> _removePodcastFeed(

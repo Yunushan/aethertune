@@ -982,8 +982,13 @@ class LibraryStore extends ChangeNotifier {
       );
     }
 
+    final savedId = stablePodcastSubscriptionId(normalizedFeedUrl);
+    final index = _podcastSubscriptions.indexWhere(
+      (existing) => existing.id == savedId,
+    );
+    final existing = index == -1 ? null : _podcastSubscriptions[index];
     final saved = PodcastSubscription(
-      id: stablePodcastSubscriptionId(normalizedFeedUrl),
+      id: savedId,
       feedUrl: normalizedFeedUrl,
       title: subscription.title.trim().isEmpty
           ? 'Untitled podcast'
@@ -992,11 +997,12 @@ class LibraryStore extends ChangeNotifier {
       author: subscription.author.trim(),
       artworkUri: subscription.artworkUri,
       addedAt: subscription.addedAt == DateTime.fromMillisecondsSinceEpoch(0)
-          ? _clock()
+          ? existing?.addedAt ?? _clock()
           : subscription.addedAt,
-    );
-    final index = _podcastSubscriptions.indexWhere(
-      (existing) => existing.id == saved.id,
+      lastFetchedAt: subscription.lastFetchedAt ?? existing?.lastFetchedAt,
+      lastFetchError: subscription.lastFetchError.trim().isEmpty
+          ? existing?.lastFetchError ?? ''
+          : subscription.lastFetchError.trim(),
     );
     if (index == -1) {
       _podcastSubscriptions.add(saved);
@@ -1009,6 +1015,46 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
 
     return saved;
+  }
+
+  Future<PodcastSubscription?> markPodcastSubscriptionFetched(String id) async {
+    final index = _podcastSubscriptions.indexWhere(
+      (subscription) => subscription.id == id,
+    );
+    if (index == -1) {
+      return null;
+    }
+
+    final updated = _podcastSubscriptions[index].copyWith(
+      lastFetchedAt: _clock(),
+      lastFetchError: '',
+    );
+    _podcastSubscriptions[index] = updated;
+    await _save();
+    notifyListeners();
+
+    return updated;
+  }
+
+  Future<PodcastSubscription?> markPodcastSubscriptionFetchFailed(
+    String id,
+    Object error,
+  ) async {
+    final index = _podcastSubscriptions.indexWhere(
+      (subscription) => subscription.id == id,
+    );
+    if (index == -1) {
+      return null;
+    }
+
+    final updated = _podcastSubscriptions[index].copyWith(
+      lastFetchError: error.toString(),
+    );
+    _podcastSubscriptions[index] = updated;
+    await _save();
+    notifyListeners();
+
+    return updated;
   }
 
   Future<void> deletePodcastSubscription(String id) async {
@@ -1595,6 +1641,8 @@ class LibraryStore extends ChangeNotifier {
         author: subscription.author,
         artworkUri: subscription.artworkUri,
         addedAt: subscription.addedAt,
+        lastFetchedAt: subscription.lastFetchedAt,
+        lastFetchError: subscription.lastFetchError,
       );
     }
 

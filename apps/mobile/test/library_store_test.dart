@@ -468,7 +468,8 @@ void main() {
   });
 
   test('saves persists and deletes podcast feed subscriptions', () async {
-    DateTime clock() => DateTime.utc(2026, 1, 15);
+    var now = DateTime.utc(2026, 1, 15);
+    DateTime clock() => now;
     final firstStore = LibraryStore(clock: clock);
     await firstStore.load();
 
@@ -498,6 +499,40 @@ void main() {
     expect(firstStore.podcastSubscriptions.single.title, 'Aether Radio Updated');
     expect(subscription.addedAt, DateTime.utc(2026, 1, 15));
 
+    now = DateTime.utc(2026, 1, 15, 6);
+    final refreshed = await firstStore.markPodcastSubscriptionFetched(
+      subscription.id,
+    );
+
+    expect(refreshed!.lastFetchedAt, DateTime.utc(2026, 1, 15, 6));
+    expect(
+      refreshed.isRefreshDue(
+        DateTime.utc(2026, 1, 15, 17, 59),
+      ),
+      isFalse,
+    );
+    expect(
+      refreshed.isRefreshDue(
+        DateTime.utc(2026, 1, 15, 18),
+      ),
+      isTrue,
+    );
+
+    final failed = await firstStore.markPodcastSubscriptionFetchFailed(
+      subscription.id,
+      'network down',
+    );
+
+    expect(failed!.lastFetchError, 'network down');
+
+    now = DateTime.utc(2026, 1, 15, 8);
+    final recovered = await firstStore.markPodcastSubscriptionFetched(
+      subscription.id,
+    );
+
+    expect(recovered!.lastFetchedAt, DateTime.utc(2026, 1, 15, 8));
+    expect(recovered.lastFetchError, isEmpty);
+
     final secondStore = LibraryStore(clock: clock);
     await secondStore.load();
 
@@ -505,6 +540,14 @@ void main() {
     expect(
       secondStore.podcastSubscriptionById(subscription.id)!.feedUrl,
       'https://feeds.example.test/aether.xml',
+    );
+    expect(
+      secondStore.podcastSubscriptionById(subscription.id)!.lastFetchedAt,
+      DateTime.utc(2026, 1, 15, 8),
+    );
+    expect(
+      secondStore.podcastSubscriptionById(subscription.id)!.lastFetchError,
+      isEmpty,
     );
 
     await secondStore.deletePodcastSubscription(subscription.id);
@@ -769,6 +812,7 @@ void main() {
         title: 'Aether Radio',
       ),
     );
+    await firstStore.markPodcastSubscriptionFetched(subscription.id);
 
     final backupJson = firstStore.exportBackupJson();
 
@@ -807,6 +851,10 @@ void main() {
     expect(
       secondStore.podcastSubscriptionById(subscription.id)!.title,
       'Aether Radio',
+    );
+    expect(
+      secondStore.podcastSubscriptionById(subscription.id)!.lastFetchedAt,
+      DateTime.utc(2026, 1, 11),
     );
   });
 

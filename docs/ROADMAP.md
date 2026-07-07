@@ -69,7 +69,8 @@
 - [x] Podcast RSS feed subscriptions and episode UI
 - [x] Podcast OPML import/export
 - [x] Podcast episode progress/resume
-- [ ] Podcast refresh policy and cache
+- [x] Podcast refresh policy
+- [ ] Podcast offline cache
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [ ] Radio Browser mirror discovery, click accounting, and richer browse filters

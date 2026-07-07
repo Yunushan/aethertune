@@ -65,7 +65,7 @@ Open a track menu in the Library tab and choose **Lyrics**. You can save plain t
 
 ## Backup and restore
 
-Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, history, podcast feed subscriptions, and podcast episode progress with that backup.
+Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, history, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
 
 ## Sleep timer
 
@@ -81,7 +81,7 @@ The Sources tab explains the provider model and shows capability/privacy disclos
 
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
-- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then load, play, resume, save, or remove feed episodes.
+- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, or remove feed episodes.
 - Radio Browser: search public internet radio stations in Sources, then play a station or save it to the local library.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.
