@@ -34,6 +34,8 @@ class PodcastRssProvider implements MusicSourceProvider {
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
+        MusicSourceCapability.offlineCache,
+        MusicSourceCapability.downloads,
         MusicSourceCapability.subscriptions,
       };
 
@@ -43,6 +45,8 @@ class PodcastRssProvider implements MusicSourceProvider {
           feedUri.host,
         ],
         dataSent: const <String>['feed request'],
+        cachesMedia: true,
+        supportsDownloads: true,
       );
 
   @override

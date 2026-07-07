@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
+import 'package:aethertune/src/domain/track.dart';
 
 void main() {
   test('demo provider declares capabilities and no network access', () {
@@ -38,5 +39,154 @@ void main() {
     expect(MusicSourceCapability.radioDirectory.label, 'Radio directory');
     expect(MusicSourceCapability.offlineCache.label, 'Offline cache');
     expect(MusicSourceCapability.authentication.label, 'Authentication');
+    expect(OfflineMediaAction.cache.label, 'Offline cache');
+    expect(OfflineMediaAction.download.label, 'Download');
   });
+
+  test('offline media policy allows local files without a provider', () {
+    const policy = OfflineMediaPolicy(<MusicSourceProvider>[]);
+    final track = Track(
+      id: 'local-track',
+      title: 'Local Track',
+      localPath: '/music/local.mp3',
+    );
+
+    final cacheDecision = policy.evaluate(track, OfflineMediaAction.cache);
+    final downloadDecision = policy.evaluate(track, OfflineMediaAction.download);
+
+    expect(cacheDecision.isAllowed, isTrue);
+    expect(cacheDecision.reason, contains('already available offline'));
+    expect(downloadDecision.isAllowed, isTrue);
+  });
+
+  test('offline media policy requires provider capability and disclosure', () {
+    final policy = OfflineMediaPolicy(<MusicSourceProvider>[
+      const _PolicyProvider(
+        id: 'archive',
+        name: 'Archive',
+        capabilities: <MusicSourceCapability>{
+          MusicSourceCapability.streamResolution,
+          MusicSourceCapability.offlineCache,
+          MusicSourceCapability.downloads,
+        },
+        disclosure: ProviderPrivacyDisclosure(
+          cachesMedia: true,
+          supportsDownloads: true,
+        ),
+      ),
+      const _PolicyProvider(
+        id: 'radio',
+        name: 'Radio',
+        capabilities: <MusicSourceCapability>{
+          MusicSourceCapability.streamResolution,
+          MusicSourceCapability.directPlayback,
+        },
+      ),
+      const _PolicyProvider(
+        id: 'silent-cache',
+        name: 'Silent Cache',
+        capabilities: <MusicSourceCapability>{
+          MusicSourceCapability.streamResolution,
+          MusicSourceCapability.offlineCache,
+        },
+      ),
+      const _PolicyProvider(
+        id: 'metadata-only',
+        name: 'Metadata Only',
+        capabilities: <MusicSourceCapability>{
+          MusicSourceCapability.offlineCache,
+        },
+        disclosure: ProviderPrivacyDisclosure(cachesMedia: true),
+      ),
+    ]);
+
+    final archiveTrack = Track(
+      id: 'archive-track',
+      title: 'Archive Track',
+      sourceId: 'archive',
+    );
+    final radioTrack = Track(
+      id: 'radio-track',
+      title: 'Radio Track',
+      streamUrl: 'https://stream.example.test/live',
+      sourceId: 'radio',
+    );
+    final silentCacheTrack = Track(
+      id: 'silent-cache-track',
+      title: 'Silent Cache Track',
+      sourceId: 'silent-cache',
+    );
+    final metadataOnlyTrack = Track(
+      id: 'metadata-only-track',
+      title: 'Metadata Only Track',
+      sourceId: 'metadata-only',
+    );
+    final unknownTrack = Track(
+      id: 'unknown-track',
+      title: 'Unknown Track',
+      sourceId: 'missing-provider',
+    );
+
+    expect(policy.canCache(archiveTrack), isTrue);
+    expect(policy.canDownload(archiveTrack), isTrue);
+    expect(
+      policy.evaluate(archiveTrack, OfflineMediaAction.cache).providerId,
+      'archive',
+    );
+
+    final radioDecision = policy.evaluate(radioTrack, OfflineMediaAction.cache);
+    expect(radioDecision.isAllowed, isFalse);
+    expect(radioDecision.reason, contains('does not declare Offline cache'));
+
+    final silentCacheDecision = policy.evaluate(
+      silentCacheTrack,
+      OfflineMediaAction.cache,
+    );
+    expect(silentCacheDecision.isAllowed, isFalse);
+    expect(silentCacheDecision.reason, contains('has not disclosed'));
+
+    final metadataOnlyDecision = policy.evaluate(
+      metadataOnlyTrack,
+      OfflineMediaAction.cache,
+    );
+    expect(metadataOnlyDecision.isAllowed, isFalse);
+    expect(metadataOnlyDecision.reason, contains('cannot resolve'));
+
+    final unknownDecision = policy.evaluate(
+      unknownTrack,
+      OfflineMediaAction.download,
+    );
+    expect(unknownDecision.isAllowed, isFalse);
+    expect(unknownDecision.reason, contains('No provider is registered'));
+  });
+}
+
+final class _PolicyProvider implements MusicSourceProvider {
+  const _PolicyProvider({
+    required this.id,
+    required this.name,
+    required this.capabilities,
+    this.disclosure = const ProviderPrivacyDisclosure(),
+  });
+
+  @override
+  final String id;
+
+  @override
+  final String name;
+
+  @override
+  final Set<MusicSourceCapability> capabilities;
+
+  @override
+  final ProviderPrivacyDisclosure disclosure;
+
+  @override
+  String get description => name;
+
+  @override
+  Future<List<Track>> search(String query) async => const <Track>[];
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
 }

@@ -21,7 +21,7 @@ State layer
   LibraryStore, PlayerController
 
 Domain layer
-  Track, MusicSourceProvider
+  Track, MusicSourceProvider, OfflineMediaPolicy
 
 Data/provider layer
   Local file import, DemoSourceProvider, PodcastRssProvider,
@@ -59,7 +59,7 @@ abstract interface class MusicSourceProvider {
 }
 ```
 
-Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy.
+Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded.
 
 ## Playback
 

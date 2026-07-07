@@ -3984,6 +3984,8 @@ class _SourcesTabState extends State<_SourcesTab> {
             MusicSourceCapability.metadataSearch,
             MusicSourceCapability.streamResolution,
             MusicSourceCapability.directPlayback,
+            MusicSourceCapability.offlineCache,
+            MusicSourceCapability.downloads,
             MusicSourceCapability.subscriptions,
           },
         ),
@@ -4000,17 +4002,14 @@ class _SourcesTabState extends State<_SourcesTab> {
             MusicSourceCapability.directPlayback,
           },
         ),
-        const _ProviderCard(
-          title: 'Internet Archive',
+        _ProviderCard(
+          title: _archiveProvider.name,
           status: 'Adapter foundation',
           description:
               'Search and filter public audio items, then resolve playable archive files.',
           icon: Icons.archive_outlined,
-          capabilities: <MusicSourceCapability>{
-            MusicSourceCapability.metadataSearch,
-            MusicSourceCapability.streamResolution,
-            MusicSourceCapability.directPlayback,
-          },
+          capabilities: _archiveProvider.capabilities,
+          disclosure: _archiveProvider.disclosure,
         ),
         const _ProviderCard(
           title: 'Jellyfin / Navidrome / Subsonic',
@@ -5229,7 +5228,7 @@ String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
     parts.add('Reads selected local files');
   }
   if (disclosure.cachesMedia) {
-    parts.add('Caches media');
+    parts.add('Can cache media');
   }
   if (disclosure.supportsDownloads) {
     parts.add('Downloads allowed');

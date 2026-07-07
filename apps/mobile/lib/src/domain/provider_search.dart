@@ -10,6 +10,8 @@ final class ProviderSearchCoordinator {
   final List<MusicSourceProvider> providers;
   final int maxResultsPerProvider;
 
+  OfflineMediaPolicy get offlinePolicy => OfflineMediaPolicy(providers);
+
   MusicSourceProvider? providerFor(String providerId) {
     for (final provider in providers) {
       if (provider.id == providerId) {
@@ -18,6 +20,21 @@ final class ProviderSearchCoordinator {
     }
 
     return null;
+  }
+
+  OfflineMediaPolicyDecision offlineDecision(
+    Track track,
+    OfflineMediaAction action,
+  ) {
+    return offlinePolicy.evaluate(track, action);
+  }
+
+  bool canCacheOffline(Track track) {
+    return offlinePolicy.canCache(track);
+  }
+
+  bool canDownload(Track track) {
+    return offlinePolicy.canDownload(track);
   }
 
   bool canResolve(Track track) {

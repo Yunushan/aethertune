@@ -42,11 +42,15 @@ void main() {
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
+        MusicSourceCapability.offlineCache,
+        MusicSourceCapability.downloads,
         MusicSourceCapability.subscriptions,
       ]),
     );
     expect(provider.disclosure.networkDomains, <String>['feeds.example.test']);
     expect(provider.disclosure.dataSent, <String>['feed request']);
+    expect(provider.disclosure.cachesMedia, isTrue);
+    expect(provider.disclosure.supportsDownloads, isTrue);
 
     final results = await provider.search('open audio');
 

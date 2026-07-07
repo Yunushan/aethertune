@@ -156,6 +156,55 @@ void main() {
     expect(resolved.streamUrl, 'https://example.test/resolved.mp3');
     expect(resolved.isPlayable, isTrue);
   });
+
+  test('exposes provider offline cache and download policy decisions', () {
+    final archiveTrack = Track(
+      id: 'archive-track',
+      title: 'Archive Track',
+      sourceId: 'archive',
+    );
+    final radioTrack = Track(
+      id: 'radio-track',
+      title: 'Radio Track',
+      streamUrl: 'https://stream.example.test/live',
+      sourceId: 'radio',
+    );
+    final coordinator = ProviderSearchCoordinator(
+      <MusicSourceProvider>[
+        _FakeProvider(
+          id: 'archive',
+          name: 'Archive',
+          capabilities: const <MusicSourceCapability>{
+            MusicSourceCapability.metadataSearch,
+            MusicSourceCapability.streamResolution,
+            MusicSourceCapability.offlineCache,
+            MusicSourceCapability.downloads,
+          },
+          disclosure: const ProviderPrivacyDisclosure(
+            cachesMedia: true,
+            supportsDownloads: true,
+          ),
+        ),
+        _FakeProvider(
+          id: 'radio',
+          name: 'Radio',
+          capabilities: const <MusicSourceCapability>{
+            MusicSourceCapability.metadataSearch,
+            MusicSourceCapability.streamResolution,
+            MusicSourceCapability.directPlayback,
+          },
+        ),
+      ],
+    );
+
+    expect(coordinator.canCacheOffline(archiveTrack), isTrue);
+    expect(coordinator.canDownload(archiveTrack), isTrue);
+    expect(coordinator.canCacheOffline(radioTrack), isFalse);
+    expect(
+      coordinator.offlineDecision(radioTrack, OfflineMediaAction.cache).reason,
+      contains('does not declare Offline cache'),
+    );
+  });
 }
 
 final class _FakeProvider implements MusicSourceProvider {
@@ -168,6 +217,7 @@ final class _FakeProvider implements MusicSourceProvider {
     },
     this.error,
     this.resolvedStreamUri,
+    this.disclosure = const ProviderPrivacyDisclosure(),
   });
 
   @override
@@ -179,6 +229,8 @@ final class _FakeProvider implements MusicSourceProvider {
   final List<Track> tracks;
   final Object? error;
   final Uri? resolvedStreamUri;
+  @override
+  final ProviderPrivacyDisclosure disclosure;
   int searchCount = 0;
 
   @override
@@ -186,9 +238,6 @@ final class _FakeProvider implements MusicSourceProvider {
 
   @override
   String get description => name;
-
-  @override
-  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
 
   @override
   Future<List<Track>> search(String query) async {

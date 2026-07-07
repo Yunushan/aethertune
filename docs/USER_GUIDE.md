@@ -86,13 +86,13 @@ The Options tab contains playback settings such as shuffle and repeat mode. Aeth
 
 ## Provider plugins
 
-The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. The current app includes:
+The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. Cache/download eligibility is gated by each provider's declared capabilities and privacy disclosure before future offline actions can use it. The current app includes:
 
 - Provider search: search enabled legal adapters together, then play playable results or save any result to the local library.
 - Local Files: working.
 - Demo Provider: template with declared search capability and no network access.
-- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, or remove feed episodes.
-- Radio Browser: AetherTune discovers a public Radio Browser API mirror with fallback to the bundled default, searches public internet radio stations in Sources, filters by country/language/tag/codec/bitrate, then plays a station or saves it to the local library; station plays are reported to Radio Browser's click endpoint.
-- Internet Archive: search public archive audio in Sources, filter by collection/subject/creator/year, then play a resolved audio file or save it to the local library; multi-file archive items appear as separate playable results.
+- Podcast RSS: add a legal RSS feed URL in Sources, import/export OPML, then refresh, play, resume, save, or remove feed episodes. The adapter declares cache/download eligibility for legal feed enclosures; offline cache storage is roadmap work.
+- Radio Browser: AetherTune discovers a public Radio Browser API mirror with fallback to the bundled default, searches public internet radio stations in Sources, filters by country/language/tag/codec/bitrate, then plays a station or saves it to the local library; station plays are reported to Radio Browser's click endpoint. Live radio streams do not declare cache/download eligibility.
+- Internet Archive: search public archive audio in Sources, filter by collection/subject/creator/year, then play a resolved audio file or save it to the local library; multi-file archive items appear as separate playable results. Public archive files declare cache/download eligibility; cache storage is roadmap work.
 - Self-hosted/open providers: roadmap.
 - Commercial services: official APIs only.

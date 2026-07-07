@@ -61,6 +61,8 @@ void main() {
         'station search query',
         'station click UUID',
       ]);
+      expect(provider.disclosure.cachesMedia, isFalse);
+      expect(provider.disclosure.supportsDownloads, isFalse);
 
       final tracks = await provider.search('aether');
 

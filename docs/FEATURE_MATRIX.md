@@ -60,11 +60,11 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, end-of-current-track mode, optional final-30-second fade-out, and unit coverage for timer/fade rules. | More fade duration controls and platform media-session integration. |
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
-| Provider plugin contract | Done | `MusicSourceProvider` requires capability flags and privacy/network disclosure. | Stable provider SDK, packaging, sandbox rules. |
+| Provider plugin contract | Done | `MusicSourceProvider` requires capability flags, privacy/network disclosure, and cache/download policy inputs. | Stable provider SDK, packaging, sandbox rules. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
-| Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, tracks refresh status/staleness, plays/saves episodes, resumes saved episode progress, includes backups, and provider parsing/store behavior has tests. | Offline cache. |
-| Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, discovers a public API mirror before default searches with fallback to the bundled mirror, filters by country/language/tag/codec/bitrate, plays public streams, sends station click accounting on playback, saves stations to the library, and provider parsing/filter/mirror/click behavior has tests. | Stream validation and cache policy. |
-| Internet Archive audio search | Scaffolded | Sources tab searches public Internet Archive audio, filters by collection/subject/creator/year, expands multi-file items into separate playable tracks, resolves file URLs, plays/saves tracks, and provider parsing/search/filter behavior has tests. | Collection browse pages, facet suggestion UI, offline/download policy, and cache management. |
+| Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, tracks refresh status/staleness, plays/saves episodes, resumes saved episode progress, includes backups, declares cache/download policy for legal enclosures, and provider parsing/store behavior has tests. | Offline cache storage and eviction UI. |
+| Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, discovers a public API mirror before default searches with fallback to the bundled mirror, filters by country/language/tag/codec/bitrate, plays public streams, sends station click accounting on playback, saves stations to the library, denies cache/download policy for live streams, and provider parsing/filter/mirror/click behavior has tests. | Stream validation. |
+| Internet Archive audio search | Scaffolded | Sources tab searches public Internet Archive audio, filters by collection/subject/creator/year, expands multi-file items into separate playable tracks, resolves file URLs, plays/saves tracks, declares cache/download policy for public files, and provider parsing/search/filter behavior has tests. | Collection browse pages, facet suggestion UI, and cache management. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
 ## Full Parity Feature Surface
@@ -149,10 +149,10 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Local offline playback | Done | Local music apps | Better file indexing. |
-| Stream cache | Roadmap | InnerTune, RiMusic, YouTube Music | Cache manager and source permissions. |
-| Download queue | Roadmap | YouTube Music, NewPipe | Legal download support only. |
+| Stream cache | Roadmap | InnerTune, RiMusic, YouTube Music | Cache manager backed by `OfflineMediaPolicy`, storage, and eviction. |
+| Download queue | Roadmap | YouTube Music, NewPipe | Queue legal downloads only after `OfflineMediaPolicy` allows them. |
 | Cache size limits | Roadmap | All offline clients | Storage settings and eviction policy. |
-| Per-provider offline policy | Scaffolded | Spotube, Grayjay | Provider capability flags and privacy disclosure are implemented; cache/download enforcement still needs implementation. |
+| Per-provider offline policy | Done | Spotube, Grayjay | `OfflineMediaPolicy` allows local files, permits Podcast RSS and Internet Archive cache/download only when providers declare capability plus disclosure, denies live Radio Browser streams, and has unit coverage through provider contract/coordinator tests. |
 | Offline mode toggle | Roadmap | YouTube Music | Network gate and offline-only UI. |
 | Partial/resumable downloads | Roadmap | NewPipe-style clients | Downloader with resume and checksum support. |
 
@@ -164,9 +164,9 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Demo provider | Done | Provider template | Developer docs and test fixture provider. |
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |
-| Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, refresh status/stale policy, episode listing, playback, saved episode progress/resume, library save, and backup/restore are implemented; offline cache remains. |
-| Radio Browser / internet radio | Scaffolded | Radio apps | Station search with country/language/tag/codec/bitrate filters, public API mirror discovery, fallback mirror behavior, playback, station click accounting, library save, provider parser, and playable station model are implemented; stream validation and cache policy remain. |
-| Internet Archive | Scaffolded | ArchiveTune | Public audio metadata search, collection/subject/creator/year filters, playable file resolver, multi-file item results, Sources-tab play/save, and provider tests are implemented; collection browse pages, facet suggestion UI, offline/download policy, and cache management remain. |
+| Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, refresh status/stale policy, episode listing, playback, saved episode progress/resume, library save, backup/restore, and cache/download policy declarations are implemented; offline cache storage remains. |
+| Radio Browser / internet radio | Scaffolded | Radio apps | Station search with country/language/tag/codec/bitrate filters, public API mirror discovery, fallback mirror behavior, playback, station click accounting, library save, provider parser, playable station model, and live-stream cache/download denial are implemented; stream validation remains. |
+| Internet Archive | Scaffolded | ArchiveTune | Public audio metadata search, collection/subject/creator/year filters, playable file resolver, multi-file item results, Sources-tab play/save, cache/download policy declarations, and provider tests are implemented; collection browse pages, facet suggestion UI, and cache management remain. |
 | Spotify metadata | Blocked / official-only | Spotube | Official API metadata only; playback must be legal/user-authorized. |
 | YouTube / YouTube Music | Blocked / official-only | YouTube Music, InnerTune, NewPipe family | Official API, embeds, or user-provided legal URLs only; no private API scraping. |
 | SoundCloud or similar services | Blocked / official-only | Multi-source clients | Official API or documented public feeds only. |
@@ -260,7 +260,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | No credential stealing | Not included | Will not be implemented. |
 | No paid-service cloning | Not included | Will not be implemented. |
 | No private API scraping | Not included | Use official/documented APIs, open feeds, or user-owned servers. |
-| Provider permission model | Done | Providers declare capabilities and privacy-sensitive behaviors through `MusicSourceProvider`; Sources tab displays the disclosure. |
+| Provider permission model | Done | Providers declare capabilities and privacy-sensitive behaviors through `MusicSourceProvider`; Sources tab displays the disclosure and `OfflineMediaPolicy` gates cache/download eligibility. |
 | Network request disclosure | Done | `ProviderPrivacyDisclosure` lists contacted domains and data sent for each adapter. |
 | Secure token storage | Roadmap | Required before account/provider auth. |
 | Content policy/moderation | Roadmap | Required before public profiles, comments, or social surfaces. |

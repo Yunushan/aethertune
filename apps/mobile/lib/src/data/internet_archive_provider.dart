@@ -59,6 +59,8 @@ class InternetArchiveProvider implements MusicSourceProvider {
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
+        MusicSourceCapability.offlineCache,
+        MusicSourceCapability.downloads,
       };
 
   @override
@@ -70,6 +72,8 @@ class InternetArchiveProvider implements MusicSourceProvider {
           'item search query',
           'item metadata identifier',
         ],
+        cachesMedia: true,
+        supportsDownloads: true,
       );
 
   @override

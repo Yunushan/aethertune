@@ -74,6 +74,8 @@ void main() {
           MusicSourceCapability.metadataSearch,
           MusicSourceCapability.streamResolution,
           MusicSourceCapability.directPlayback,
+          MusicSourceCapability.offlineCache,
+          MusicSourceCapability.downloads,
         ]),
       );
       expect(provider.disclosure.networkDomains, <String>['archive.org']);
@@ -81,6 +83,8 @@ void main() {
         'item search query',
         'item metadata identifier',
       ]);
+      expect(provider.disclosure.cachesMedia, isTrue);
+      expect(provider.disclosure.supportsDownloads, isTrue);
 
       final tracks = await provider.searchAudio(
         'aether ambient',

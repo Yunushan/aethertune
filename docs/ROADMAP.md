@@ -75,28 +75,33 @@
 ## 0.5.x: Open providers
 
 - [x] Provider capability and privacy disclosure contract
+- [x] Per-provider cache/download policy gate
 - [x] Unified provider search fan-out, ranking, and error reporting
 - [x] Podcast RSS parser/provider foundation
 - [x] Podcast RSS feed subscriptions and episode UI
 - [x] Podcast OPML import/export
 - [x] Podcast episode progress/resume
 - [x] Podcast refresh policy
+- [x] Podcast RSS cache/download policy declarations
 - [ ] Podcast offline cache
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
 - [x] Radio Browser richer browse filters
 - [x] Radio Browser mirror discovery
-- [ ] Radio Browser stream validation and cache policy
+- [x] Radio Browser live-stream cache/download denial policy
+- [ ] Radio Browser stream validation
 - [x] Internet Archive audio search/provider foundation
 - [x] Internet Archive collection, subject, creator, and year search filters
 - [x] Internet Archive multi-file item result expansion
-- [ ] Internet Archive collection browse, facet suggestion UI, and offline/download policy
+- [x] Internet Archive offline/download policy declarations
+- [ ] Internet Archive collection browse, facet suggestion UI, and cache management
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider
 
 ## 0.6.x: Offline and lyrics
 
+- [x] Per-provider cache/download policy gate
 - [ ] Cache manager
 - [ ] Download queue
 - [ ] Cache size limits

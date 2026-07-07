@@ -8,7 +8,7 @@ AetherTune is designed as free/open-source music software, not as a piracy or ci
 - Connecting to user-owned servers.
 - Connecting to public/open catalogs where streaming/downloading is permitted.
 - Connecting to official APIs according to their terms.
-- Caching/downloading only where the source allows it.
+- Caching/downloading only where the source allows it and `OfflineMediaPolicy` permits it from declared provider capabilities and disclosure.
 
 ## Not allowed in this repository
 

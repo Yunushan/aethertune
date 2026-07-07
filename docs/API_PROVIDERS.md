@@ -26,7 +26,7 @@ A provider must:
 
 ## Capability and privacy disclosure
 
-Each adapter must expose `capabilities` and `disclosure` before it can be trusted by UI, cache, sync, or download code. These fields are user-visible in the Sources tab.
+Each adapter must expose `capabilities` and `disclosure` before it can be trusted by UI, cache, sync, or download code. These fields are user-visible in the Sources tab and are enforced by `OfflineMediaPolicy` before cache/download features may act on a provider track.
 
 Use capabilities to describe what the adapter can do, such as search, playback, playlists, lyrics, offline cache, downloads, subscriptions, recommendations, or authentication.
 
@@ -43,17 +43,21 @@ Use `ProviderPrivacyDisclosure` to list:
 
 `ProviderSearchCoordinator` fans out a search query to adapters that declare `metadataSearch`, skips non-search providers, ranks mixed `Track` results by playable status and metadata match quality, limits each provider contribution, resolves metadata-only results through `resolveStream` when the adapter supports it, and returns provider-specific failures without dropping successful results. The Sources tab exposes this as provider search across the demo provider, Radio Browser, and Internet Archive. Pagination, authenticated provider opt-in, local-library merging, and richer provider-specific ranking are still roadmap work.
 
+## Offline cache and download policy
+
+`OfflineMediaPolicy` is the shared gate for future cache and download code. It allows local files because they are already offline, allows provider tracks only when the adapter declares the matching `offlineCache` or `downloads` capability and matching disclosure flag, and denies provider tracks when the adapter is unknown, not permitted, not disclosed, or cannot resolve a playable stream. Podcast RSS enclosures and Internet Archive public files declare cache/download support; Radio Browser live streams do not.
+
 ## Podcast RSS foundation
 
-`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, and include subscriptions, refresh state, and progress in backups. Offline cache is still separate roadmap work.
+`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, declares cache/download permission for legal feed enclosures, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, and include subscriptions, refresh state, and progress in backups. Offline cache storage is still separate roadmap work.
 
 ## Radio Browser foundation
 
-`RadioBrowserProvider` discovers a public Radio Browser API mirror with fallback to the bundled default, searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the mirror and directory lookup domains in `ProviderPrivacyDisclosure`, resolves public stream URLs for playback, and sends Radio Browser station click accounting on playback. The Sources tab can search, filter by country, language, tag, codec, and bitrate, play stations, and save stations. Stream validation and cache policy are still separate roadmap work.
+`RadioBrowserProvider` discovers a public Radio Browser API mirror with fallback to the bundled default, searches the open Radio Browser station API, maps station JSON to provider-neutral `Track` objects, exposes the mirror and directory lookup domains in `ProviderPrivacyDisclosure`, resolves public stream URLs for playback, and sends Radio Browser station click accounting on playback. The Sources tab can search, filter by country, language, tag, codec, and bitrate, play stations, and save stations. Radio Browser intentionally does not declare cache/download support for live streams; stream validation is still separate roadmap work.
 
 ## Internet Archive foundation
 
-`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, and save tracks. Collection browsing pages, facet suggestion UI, download/offline policy, and cache management are still separate roadmap work.
+`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, and save tracks. Collection browsing pages, facet suggestion UI, and cache management are still separate roadmap work.
 
 ## Minimal provider
 

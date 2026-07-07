@@ -17,6 +17,8 @@ enum MusicSourceCapability {
   authentication,
 }
 
+enum OfflineMediaAction { cache, download }
+
 extension MusicSourceCapabilityLabel on MusicSourceCapability {
   String get label {
     switch (this) {
@@ -46,6 +48,44 @@ extension MusicSourceCapabilityLabel on MusicSourceCapability {
         return 'Recommendations';
       case MusicSourceCapability.authentication:
         return 'Authentication';
+    }
+  }
+}
+
+extension OfflineMediaActionLabel on OfflineMediaAction {
+  String get label {
+    switch (this) {
+      case OfflineMediaAction.cache:
+        return 'Offline cache';
+      case OfflineMediaAction.download:
+        return 'Download';
+    }
+  }
+
+  MusicSourceCapability get requiredCapability {
+    switch (this) {
+      case OfflineMediaAction.cache:
+        return MusicSourceCapability.offlineCache;
+      case OfflineMediaAction.download:
+        return MusicSourceCapability.downloads;
+    }
+  }
+
+  bool isDisclosedBy(ProviderPrivacyDisclosure disclosure) {
+    switch (this) {
+      case OfflineMediaAction.cache:
+        return disclosure.cachesMedia;
+      case OfflineMediaAction.download:
+        return disclosure.supportsDownloads;
+    }
+  }
+
+  String get disclosureRequirement {
+    switch (this) {
+      case OfflineMediaAction.cache:
+        return 'media caching';
+      case OfflineMediaAction.download:
+        return 'downloads';
     }
   }
 }
@@ -81,6 +121,111 @@ final class ProviderPrivacyDisclosure {
     }
 
     return networkDomains.join(', ');
+  }
+}
+
+final class OfflineMediaPolicyDecision {
+  const OfflineMediaPolicyDecision({
+    required this.action,
+    required this.isAllowed,
+    required this.reason,
+    this.providerId,
+    this.providerName,
+  });
+
+  final OfflineMediaAction action;
+  final bool isAllowed;
+  final String reason;
+  final String? providerId;
+  final String? providerName;
+}
+
+final class OfflineMediaPolicy {
+  const OfflineMediaPolicy(this.providers);
+
+  final List<MusicSourceProvider> providers;
+
+  MusicSourceProvider? providerFor(String providerId) {
+    for (final provider in providers) {
+      if (provider.id == providerId) {
+        return provider;
+      }
+    }
+
+    return null;
+  }
+
+  bool canCache(Track track) {
+    return evaluate(track, OfflineMediaAction.cache).isAllowed;
+  }
+
+  bool canDownload(Track track) {
+    return evaluate(track, OfflineMediaAction.download).isAllowed;
+  }
+
+  OfflineMediaPolicyDecision evaluate(
+    Track track,
+    OfflineMediaAction action,
+  ) {
+    if (track.localPath != null && track.localPath!.trim().isNotEmpty) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: true,
+        reason: 'Local files are already available offline.',
+      );
+    }
+
+    final provider = providerFor(track.sourceId);
+    if (provider == null) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: false,
+        reason: 'No provider is registered for ${track.sourceId}.',
+      );
+    }
+
+    if (!provider.capabilities.contains(action.requiredCapability)) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: false,
+        reason:
+            '${provider.name} does not declare ${action.requiredCapability.label}.',
+        providerId: provider.id,
+        providerName: provider.name,
+      );
+    }
+
+    if (!action.isDisclosedBy(provider.disclosure)) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: false,
+        reason:
+            '${provider.name} has not disclosed ${action.disclosureRequirement}.',
+        providerId: provider.id,
+        providerName: provider.name,
+      );
+    }
+
+    if (!track.isPlayable &&
+        !provider.capabilities.contains(
+          MusicSourceCapability.streamResolution,
+        )) {
+      return OfflineMediaPolicyDecision(
+        action: action,
+        isAllowed: false,
+        reason: '${provider.name} cannot resolve a playable stream.',
+        providerId: provider.id,
+        providerName: provider.name,
+      );
+    }
+
+    return OfflineMediaPolicyDecision(
+      action: action,
+      isAllowed: true,
+      reason: '${provider.name} allows ${action.label.toLowerCase()}.',
+      providerId: provider.id,
+      providerName: provider.name,
+    );
   }
 }
 
