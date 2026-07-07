@@ -134,7 +134,6 @@ class InternetArchiveProvider implements MusicSourceProvider {
         baseUri.path,
         '/metadata/${Uri.encodeComponent(identifier)}',
       ),
-      queryParameters: const <String, String>{},
     );
   }
 }
@@ -400,7 +399,6 @@ Uri _downloadUri(Uri baseUri, String identifier, String fileName) {
       baseUri.path,
       '/download/${Uri.encodeComponent(identifier)}/${_encodePath(fileName)}',
     ),
-    queryParameters: const <String, String>{},
   );
 }
 
@@ -410,7 +408,6 @@ Uri _imageUri(Uri baseUri, String identifier) {
       baseUri.path,
       '/services/img/${Uri.encodeComponent(identifier)}',
     ),
-    queryParameters: const <String, String>{},
   );
 }
 
