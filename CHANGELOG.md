@@ -9,6 +9,7 @@ Initial GitHub-ready scaffold.
 - Added local file import.
 - Added local/URL playback controller.
 - Added queue, favorites, search, sleep timer, shuffle, repeat.
+- Added local search suggestions from playback history and library metadata.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
 - Added unified provider search fan-out with ranking and per-provider error reporting.

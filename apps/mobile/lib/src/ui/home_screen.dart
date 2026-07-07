@@ -1200,6 +1200,7 @@ class _LibraryTab extends StatelessWidget {
       favoritesOnly: favoritesOnly,
       sortMode: sortMode,
     );
+    final suggestions = library.searchSuggestions(query);
 
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
@@ -1245,6 +1246,38 @@ class _LibraryTab extends StatelessWidget {
             onChanged: onQueryChanged,
           ),
         ),
+        if (suggestions.isNotEmpty)
+          SizedBox(
+            height: 44,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              children: <Widget>[
+                for (final suggestion in suggestions) ...[
+                  ActionChip(
+                    avatar: Icon(_searchSuggestionIcon(suggestion.type)),
+                    label: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Text(
+                        suggestion.value,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    tooltip: 'Search ${suggestion.value}',
+                    onPressed: () {
+                      searchController
+                        ..text = suggestion.value
+                        ..selection = TextSelection.collapsed(
+                          offset: suggestion.value.length,
+                        );
+                      onQueryChanged(suggestion.value);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
         SizedBox(
           height: 48,
           child: ListView(
@@ -1462,6 +1495,25 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+IconData _searchSuggestionIcon(SearchSuggestionType type) {
+  switch (type) {
+    case SearchSuggestionType.recent:
+      return Icons.history;
+    case SearchSuggestionType.title:
+      return Icons.music_note_outlined;
+    case SearchSuggestionType.artist:
+      return Icons.person_outline;
+    case SearchSuggestionType.album:
+      return Icons.album_outlined;
+    case SearchSuggestionType.genre:
+      return Icons.category_outlined;
+    case SearchSuggestionType.source:
+      return Icons.source_outlined;
+    case SearchSuggestionType.folder:
+      return Icons.folder_outlined;
   }
 }
 

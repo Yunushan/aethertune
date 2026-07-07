@@ -17,7 +17,19 @@ enum PlaylistDocumentFormat { json, m3u, csv }
 
 enum LibraryBrowseType { artist, album, genre, source, folder }
 
+enum SearchSuggestionType { recent, title, artist, album, genre, source, folder }
+
 enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
+
+class SearchSuggestion {
+  const SearchSuggestion({
+    required this.type,
+    required this.value,
+  });
+
+  final SearchSuggestionType type;
+  final String value;
+}
 
 class LibraryBrowseGroup {
   const LibraryBrowseGroup({
@@ -283,6 +295,72 @@ class LibraryStore extends ChangeNotifier {
             .toList(growable: false);
 
     return _sortTrackResults(results, sortMode);
+  }
+
+  List<SearchSuggestion> searchSuggestions(String query, {int limit = 8}) {
+    if (limit <= 0) {
+      return <SearchSuggestion>[];
+    }
+
+    final normalized = _normalizeQuery(query);
+    final suggestions = <SearchSuggestion>[];
+    final seenValues = <String>{};
+
+    void addSuggestion(SearchSuggestionType type, String value) {
+      if (suggestions.length >= limit) {
+        return;
+      }
+
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return;
+      }
+
+      if (normalized.isNotEmpty &&
+          !trimmed.toLowerCase().contains(normalized)) {
+        return;
+      }
+
+      if (!seenValues.add(trimmed.toLowerCase())) {
+        return;
+      }
+
+      suggestions.add(SearchSuggestion(type: type, value: trimmed));
+    }
+
+    for (final track in recentlyPlayedTracks(limit: limit)) {
+      addSuggestion(SearchSuggestionType.recent, track.title);
+    }
+
+    for (final track in _tracks) {
+      if (suggestions.length >= limit) {
+        break;
+      }
+
+      addSuggestion(SearchSuggestionType.title, track.title);
+      addSuggestion(
+        SearchSuggestionType.artist,
+        _browseLabelForTrack(track, LibraryBrowseType.artist),
+      );
+      addSuggestion(
+        SearchSuggestionType.album,
+        _browseLabelForTrack(track, LibraryBrowseType.album),
+      );
+      addSuggestion(
+        SearchSuggestionType.genre,
+        _browseLabelForTrack(track, LibraryBrowseType.genre),
+      );
+      addSuggestion(
+        SearchSuggestionType.source,
+        _browseLabelForTrack(track, LibraryBrowseType.source),
+      );
+      addSuggestion(
+        SearchSuggestionType.folder,
+        _browseLabelForTrack(track, LibraryBrowseType.folder),
+      );
+    }
+
+    return suggestions;
   }
 
   List<LibraryBrowseGroup> browseGroups(
@@ -1471,10 +1549,14 @@ class LibraryStore extends ChangeNotifier {
   String _normalizeQuery(String query) => query.trim().toLowerCase();
 
   bool _trackMatchesQuery(Track track, String normalizedQuery) {
-    return track.title.toLowerCase().contains(normalizedQuery) ||
-        track.artist.toLowerCase().contains(normalizedQuery) ||
-        track.album.toLowerCase().contains(normalizedQuery) ||
-        track.genre.toLowerCase().contains(normalizedQuery);
+    return <String>[
+      track.title,
+      track.artist,
+      track.album,
+      track.genre,
+      _browseLabelForTrack(track, LibraryBrowseType.source),
+      _browseLabelForTrack(track, LibraryBrowseType.folder),
+    ].any((value) => value.toLowerCase().contains(normalizedQuery));
   }
 
   String _browseLabelForTrack(Track track, LibraryBrowseType type) {

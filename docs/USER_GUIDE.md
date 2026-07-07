@@ -40,8 +40,9 @@ Use the search box on the Library tab. Search matches:
 - artist
 - album/folder
 - genre
+- source
 
-Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue.
+Suggestion chips below the search bar come from recently played tracks and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue.
 
 ## Favorites
 

@@ -42,6 +42,7 @@
 - [x] Recently played
 - [x] Local play counts
 - [x] Recently added view
+- [x] Local search suggestions
 - [x] Artist/album/genre/source browse
 
 ## 0.3.x: Platform audio

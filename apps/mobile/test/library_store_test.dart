@@ -614,6 +614,76 @@ void main() {
     expect(store.search('ambient').single.id, 'new');
   });
 
+  test('builds local search suggestions from recent playback and metadata', () async {
+    var now = DateTime.utc(2026, 1, 15, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'ambient',
+        title: 'Ambient Signal',
+        artist: 'Mia Nova',
+        album: 'Dawn Archive',
+        genre: 'Ambient',
+        sourceId: 'archive',
+        localPath: '/music/Mia/Dawn/ambient.mp3',
+        addedAt: DateTime.utc(2026, 1, 3),
+      ),
+      _track(
+        'jazz',
+        title: 'Late Train',
+        artist: 'Ari Vale',
+        album: 'Night Lines',
+        genre: 'Jazz',
+        sourceId: 'radio',
+        localPath: '/music/Ari/Night/train.mp3',
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+    ]);
+
+    await store.recordPlayback('jazz');
+    now = DateTime.utc(2026, 1, 15, 12, 1);
+    await store.recordPlayback('ambient');
+
+    final suggestions = store.searchSuggestions('');
+
+    expect(
+      suggestions.take(2).map((suggestion) => suggestion.type),
+      <SearchSuggestionType>[
+        SearchSuggestionType.recent,
+        SearchSuggestionType.recent,
+      ],
+    );
+    expect(
+      suggestions.take(2).map((suggestion) => suggestion.value),
+      <String>['Ambient Signal', 'Late Train'],
+    );
+    expect(
+      suggestions.map((suggestion) => suggestion.value),
+      containsAll(<String>[
+        'Mia Nova',
+        'Dawn Archive',
+        'Ambient',
+        'archive',
+        '/music/Mia/Dawn',
+      ]),
+    );
+    expect(
+      suggestions.map((suggestion) => suggestion.value).toSet(),
+      hasLength(suggestions.length),
+    );
+
+    expect(
+      store.searchSuggestions('dawn').map((suggestion) => suggestion.value),
+      containsAll(<String>['Dawn Archive', '/music/Mia/Dawn']),
+    );
+    expect(
+      store.search('/music/mia/dawn').map((track) => track.id),
+      <String>['ambient'],
+    );
+    expect(store.searchSuggestions('ambient', limit: 1), hasLength(1));
+  });
+
   test('builds smart playlists from library and playback state', () async {
     var now = DateTime.utc(2026, 1, 14, 12);
     final store = LibraryStore(clock: () => now);
