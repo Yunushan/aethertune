@@ -1062,6 +1062,41 @@ void main() {
     expect(store.searchSuggestions('ambient', limit: 1), hasLength(1));
   });
 
+  test('persists submitted search query history for suggestions', () async {
+    final store = LibraryStore();
+    await store.load();
+
+    for (var index = 0; index < 25; index += 1) {
+      await store.recordSearchQuery('Query $index');
+    }
+    await store.recordSearchQuery(' query 20 ');
+    await store.recordSearchQuery('');
+
+    expect(store.searchQueryHistory, hasLength(20));
+    expect(store.searchQueryHistory.first, 'query 20');
+    expect(store.searchQueryHistory, isNot(contains('Query 4')));
+
+    final suggestions = store.searchSuggestions('20');
+    expect(suggestions.single.type, SearchSuggestionType.query);
+    expect(suggestions.single.value, 'query 20');
+
+    final secondStore = LibraryStore();
+    await secondStore.load();
+
+    expect(secondStore.searchQueryHistory.first, 'query 20');
+    expect(
+      secondStore.searchSuggestions('').first.type,
+      SearchSuggestionType.query,
+    );
+
+    final backupJson = secondStore.exportBackupJson();
+    final thirdStore = LibraryStore();
+    await thirdStore.load();
+    await thirdStore.restoreBackupJson(backupJson);
+
+    expect(thirdStore.searchQueryHistory, secondStore.searchQueryHistory);
+  });
+
   test('edits persisted track metadata for search browse and suggestions', () async {
     final store = LibraryStore();
     await store.load();

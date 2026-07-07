@@ -156,6 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     favoritesOnly: _favoritesOnly,
                     sortMode: _librarySortMode,
                     onQueryChanged: (value) => setState(() => _query = value),
+                    onQuerySubmitted: (value) {
+                      setState(() => _query = value);
+                      unawaited(
+                        context.read<LibraryStore>().recordSearchQuery(value),
+                      );
+                    },
                     onFavoritesOnlyChanged: (value) {
                       setState(() => _favoritesOnly = value);
                     },
@@ -1357,6 +1363,7 @@ class _LibraryTab extends StatelessWidget {
     required this.favoritesOnly,
     required this.sortMode,
     required this.onQueryChanged,
+    required this.onQuerySubmitted,
     required this.onFavoritesOnlyChanged,
     required this.onSortModeChanged,
     required this.onImport,
@@ -1369,6 +1376,7 @@ class _LibraryTab extends StatelessWidget {
   final bool favoritesOnly;
   final LibrarySortMode sortMode;
   final ValueChanged<String> onQueryChanged;
+  final ValueChanged<String> onQuerySubmitted;
   final ValueChanged<bool> onFavoritesOnlyChanged;
   final ValueChanged<LibrarySortMode> onSortModeChanged;
   final VoidCallback onImport;
@@ -1428,6 +1436,7 @@ class _LibraryTab extends StatelessWidget {
               ),
             ],
             onChanged: onQueryChanged,
+            onSubmitted: onQuerySubmitted,
           ),
         ),
         if (suggestions.isNotEmpty)
@@ -1455,6 +1464,7 @@ class _LibraryTab extends StatelessWidget {
                           offset: suggestion.value.length,
                         );
                       onQueryChanged(suggestion.value);
+                      onQuerySubmitted(suggestion.value);
                     },
                   ),
                   const SizedBox(width: 8),
@@ -1690,6 +1700,8 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
 
 IconData _searchSuggestionIcon(SearchSuggestionType type) {
   switch (type) {
+    case SearchSuggestionType.query:
+      return Icons.manage_search_outlined;
     case SearchSuggestionType.recent:
       return Icons.history;
     case SearchSuggestionType.title:

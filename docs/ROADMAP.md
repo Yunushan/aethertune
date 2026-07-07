@@ -51,6 +51,7 @@
 - [ ] Yearly/monthly recap cards and richer visualizations
 - [x] Recently added view
 - [x] Local search suggestions
+- [x] Persisted search query history
 - [x] Artist/album/genre/source browse
 
 ## 0.3.x: Platform audio

@@ -9,7 +9,7 @@ Initial GitHub-ready scaffold.
 - Added local file import.
 - Added local/URL playback controller.
 - Added queue, favorites, search, sleep timer, shuffle, repeat.
-- Added local search suggestions from playback history and library metadata.
+- Added local search suggestions from submitted query history, playback history, and library metadata.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added duplicate track detection and merge handling for local library entries.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.

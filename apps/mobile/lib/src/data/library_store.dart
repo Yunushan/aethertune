@@ -19,7 +19,16 @@ enum LibraryStatsExportFormat { json, csv }
 
 enum LibraryBrowseType { artist, album, genre, source, folder }
 
-enum SearchSuggestionType { recent, title, artist, album, genre, source, folder }
+enum SearchSuggestionType {
+  query,
+  recent,
+  title,
+  artist,
+  album,
+  genre,
+  source,
+  folder,
+}
 
 enum DuplicateMatchType { localPath, sourceExternalId, streamUrl, metadata }
 
@@ -251,7 +260,9 @@ class LibraryStore extends ChangeNotifier {
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _progressKey = 'aethertune.playback_progress.v1';
+  static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _maxHistoryEntries = 500;
+  static const _maxSearchQueryHistoryEntries = 20;
   static const _minSavedProgress = Duration(seconds: 5);
   static const _completedProgressThreshold = Duration(seconds: 20);
   static final _posixPathContext = path.Context(style: path.Style.posix);
@@ -264,6 +275,7 @@ class LibraryStore extends ChangeNotifier {
   final List<PodcastSubscription> _podcastSubscriptions =
       <PodcastSubscription>[];
   final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
+  final List<String> _searchQueryHistory = <String>[];
   final Map<String, PlaybackProgressEntry> _progressByTrackId =
       <String, PlaybackProgressEntry>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
@@ -279,6 +291,8 @@ class LibraryStore extends ChangeNotifier {
       List.unmodifiable(_podcastSubscriptions);
   List<PlaybackHistoryEntry> get playbackHistory =>
       List.unmodifiable(_history);
+  List<String> get searchQueryHistory =>
+      List.unmodifiable(_searchQueryHistory);
   List<PlaybackProgressEntry> get playbackProgress =>
       List.unmodifiable(_progressByTrackId.values);
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
@@ -394,6 +408,16 @@ class LibraryStore extends ChangeNotifier {
         );
     }
 
+    final rawSearchQueryHistory = prefs.getString(_searchQueryHistoryKey);
+    if (rawSearchQueryHistory != null && rawSearchQueryHistory.isNotEmpty) {
+      final decoded = jsonDecode(rawSearchQueryHistory) as List<dynamic>;
+      _searchQueryHistory
+        ..clear()
+        ..addAll(
+          _dedupeSearchQueryHistory(decoded.whereType<String>()),
+        );
+    }
+
     final rawProgress = prefs.getString(_progressKey);
     if (rawProgress != null && rawProgress.isNotEmpty) {
       final decoded = jsonDecode(rawProgress) as List<dynamic>;
@@ -422,6 +446,7 @@ class LibraryStore extends ChangeNotifier {
     _removeMissingHistory();
     _removeMissingProgress();
     _sortHistory();
+    _trimSearchQueryHistory();
     _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
     _loaded = true;
@@ -504,6 +529,7 @@ class LibraryStore extends ChangeNotifier {
     _customSmartPlaylists.clear();
     _podcastSubscriptions.clear();
     _history.clear();
+    _searchQueryHistory.clear();
     _progressByTrackId.clear();
     _lyricsByTrackId.clear();
     await _save();
@@ -610,6 +636,10 @@ class LibraryStore extends ChangeNotifier {
       suggestions.add(SearchSuggestion(type: type, value: trimmed));
     }
 
+    for (final value in _searchQueryHistory) {
+      addSuggestion(SearchSuggestionType.query, value);
+    }
+
     for (final track in recentlyPlayedTracks(limit: limit)) {
       addSuggestion(SearchSuggestionType.recent, track.title);
     }
@@ -643,6 +673,25 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return suggestions;
+  }
+
+  Future<void> recordSearchQuery(String query) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    final existingIndex = _searchQueryHistory.indexWhere(
+      (value) => value.toLowerCase() == normalized.toLowerCase(),
+    );
+    if (existingIndex != -1) {
+      _searchQueryHistory.removeAt(existingIndex);
+    }
+
+    _searchQueryHistory.insert(0, normalized);
+    _trimSearchQueryHistory();
+    await _save();
+    notifyListeners();
   }
 
   List<DuplicateTrackGroup> duplicateTrackGroups() {
@@ -1131,6 +1180,7 @@ class LibraryStore extends ChangeNotifier {
       'podcastSubscriptions':
           _podcastSubscriptions.map((item) => item.toJson()).toList(),
       'history': _history.map((entry) => entry.toJson()).toList(),
+      'searchQueryHistory': _searchQueryHistory,
       'progress':
           _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
       'lyrics': _lyricsByTrackId.values
@@ -1402,6 +1452,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredCustomSmartPlaylists = <CustomSmartPlaylist>[];
     final restoredPodcastSubscriptions = <PodcastSubscription>[];
     final restoredHistory = <PlaybackHistoryEntry>[];
+    final restoredSearchQueryHistory = <String>[];
     final restoredProgress = <PlaybackProgressEntry>[];
     final restoredLyrics = <TrackLyrics>[];
 
@@ -1423,6 +1474,9 @@ class LibraryStore extends ChangeNotifier {
         _jsonObjectList(backup, 'history', isRequired: false).map(
           PlaybackHistoryEntry.fromJson,
         ),
+      );
+      restoredSearchQueryHistory.addAll(
+        _jsonStringList(backup, 'searchQueryHistory', isRequired: false),
       );
       restoredPodcastSubscriptions.addAll(
         _jsonObjectList(
@@ -1469,6 +1523,9 @@ class LibraryStore extends ChangeNotifier {
             entry.position >= _minSavedProgress)
           entry.trackId: entry,
     };
+    final sanitizedSearchQueryHistory = _dedupeSearchQueryHistory(
+      restoredSearchQueryHistory,
+    );
     final sanitizedPodcastSubscriptions = _dedupePodcastSubscriptions(
       restoredPodcastSubscriptions,
     );
@@ -1491,6 +1548,9 @@ class LibraryStore extends ChangeNotifier {
     _history
       ..clear()
       ..addAll(sanitizedHistory);
+    _searchQueryHistory
+      ..clear()
+      ..addAll(sanitizedSearchQueryHistory);
     _progressByTrackId
       ..clear()
       ..addAll(sanitizedProgress);
@@ -1504,6 +1564,7 @@ class LibraryStore extends ChangeNotifier {
     _sortPodcastSubscriptions();
     _sortHistory();
     _trimHistory();
+    _trimSearchQueryHistory();
     await _save();
     notifyListeners();
   }
@@ -2796,6 +2857,17 @@ class LibraryStore extends ChangeNotifier {
     _history.removeRange(_maxHistoryEntries, _history.length);
   }
 
+  void _trimSearchQueryHistory() {
+    if (_searchQueryHistory.length <= _maxSearchQueryHistoryEntries) {
+      return;
+    }
+
+    _searchQueryHistory.removeRange(
+      _maxSearchQueryHistoryEntries,
+      _searchQueryHistory.length,
+    );
+  }
+
   bool _shouldClearProgress(Duration position, Duration duration) {
     if (position < _minSavedProgress) {
       return true;
@@ -2852,6 +2924,51 @@ class LibraryStore extends ChangeNotifier {
 
       return Map<String, Object?>.from(item);
     }).toList(growable: false);
+  }
+
+  List<String> _jsonStringList(
+    Map<String, Object?> backup,
+    String key, {
+    bool isRequired = true,
+  }) {
+    final rawList = backup[key];
+    if (rawList == null && !isRequired) {
+      return <String>[];
+    }
+
+    if (rawList is! List) {
+      throw FormatException('Backup field "$key" must be a list.');
+    }
+
+    return rawList.map((item) {
+      if (item is! String) {
+        throw FormatException('Backup field "$key" contains a non-string.');
+      }
+
+      return item;
+    }).toList(growable: false);
+  }
+
+  List<String> _dedupeSearchQueryHistory(Iterable<String> queries) {
+    final values = <String>[];
+    final seen = <String>{};
+    for (final query in queries) {
+      final normalized = query.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+
+      if (!seen.add(normalized.toLowerCase())) {
+        continue;
+      }
+
+      values.add(normalized);
+      if (values.length >= _maxSearchQueryHistoryEntries) {
+        break;
+      }
+    }
+
+    return values;
   }
 
   List<CustomSmartPlaylist> _dedupeCustomSmartPlaylists(
@@ -2926,6 +3043,7 @@ class LibraryStore extends ChangeNotifier {
     final encodedHistory = jsonEncode(
       _history.map((entry) => entry.toJson()).toList(),
     );
+    final encodedSearchQueryHistory = jsonEncode(_searchQueryHistory);
     final encodedProgress = jsonEncode(
       _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
     );
@@ -2943,6 +3061,7 @@ class LibraryStore extends ChangeNotifier {
       encodedPodcastSubscriptions,
     );
     await prefs.setString(_historyKey, encodedHistory);
+    await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
   }

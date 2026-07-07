@@ -48,7 +48,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
 | Stored metadata editing | Scaffolded | Track menus edit saved title, artist, album, and genre, with store tests for persistence/search/browse/suggestions. | Audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Scaffolded | Options tab finds duplicate library tracks by normalized local path, provider/external ID, stream URL, or metadata plus known duration, then merges the selected keeper while preserving playlists, favorites, lyrics, history, and progress; store tests cover detection and persistence. | Audio fingerprinting, file hashes, scanner reconciliation, batch review UI, and undo. |
-| Search | Done | Local title/artist/album/genre/source/folder filtering plus local suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
+| Search | Done | Local title/artist/album/genre/source/folder filtering plus submitted-query/playback/metadata suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
@@ -110,7 +110,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Local library search | Done | All music apps | Searches title, artist, album, genre, source, and folder; advanced filters and typo tolerance remain. |
 | Multi-provider search | Scaffolded | Spotube, Grayjay, Echo Music | `ProviderSearchCoordinator` fans out to searchable adapters, ranks mixed results, limits per-provider results, resolves metadata-only tracks when supported, captures provider-specific errors, has unit tests, and Sources tab can search Demo Provider, Radio Browser, and Internet Archive together. Needed next: local-library merge, provider pagination, authenticated provider opt-in, and richer provider-specific ranking. |
-| Search suggestions | Scaffolded | YouTube Music | Library tab suggestion chips come from recent playback plus title, artist, album, genre, source, and folder metadata, with store tests. Needed next: provider suggestions, persisted query history, typo-aware ranking, and remote suggestions. |
+| Search suggestions | Scaffolded | YouTube Music | Library tab suggestion chips come from persisted submitted query history, recent playback, title, artist, album, genre, source, and folder metadata; store tests cover history dedupe, persistence, backup restore, and matching. Needed next: provider suggestions, typo-aware ranking, and remote suggestions. |
 | Home feed | Roadmap | YouTube Music, InnerTune, RiMusic | Feed sections from legal providers. |
 | Charts / trending | Roadmap | YouTube Music, OpenTune-style clients | Provider-backed chart adapters. |
 | Mood/activity mixes | Roadmap | YouTube Music | Curated or provider-backed collections. |

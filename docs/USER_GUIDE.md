@@ -42,7 +42,7 @@ Use the search box on the Library tab. Search matches:
 - genre
 - source
 
-Suggestion chips below the search bar come from recently played tracks and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue.
+Suggestion chips below the search bar come from submitted searches, recently played tracks, and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue.
 
 ## Metadata
 
@@ -74,7 +74,7 @@ Open a track menu in the Library tab and choose **Lyrics**. You can save plain t
 
 ## Backup and restore
 
-Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, history, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
+Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
 
 ## Sleep timer
 
