@@ -85,7 +85,8 @@
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
 - [x] Radio Browser richer browse filters
-- [ ] Radio Browser mirror discovery, stream validation, and cache policy
+- [x] Radio Browser mirror discovery
+- [ ] Radio Browser stream validation and cache policy
 - [x] Internet Archive audio search/provider foundation
 - [x] Internet Archive collection, subject, creator, and year search filters
 - [x] Internet Archive multi-file item result expansion

@@ -6,6 +6,17 @@ import '../domain/track.dart';
 
 typedef RadioBrowserSearchLoader = Future<String> Function(Uri searchUri);
 typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
+typedef RadioBrowserMirrorLoader = Future<String> Function(Uri mirrorsUri);
+
+const Uri defaultRadioBrowserBaseUri = Uri(
+  scheme: 'https',
+  host: 'de1.api.radio-browser.info',
+);
+const Uri defaultRadioBrowserMirrorDirectoryUri = Uri(
+  scheme: 'https',
+  host: 'all.api.radio-browser.info',
+  path: '/json/servers',
+);
 
 final class RadioBrowserSearchFilters {
   const RadioBrowserSearchFilters({
@@ -36,17 +47,28 @@ final class RadioBrowserSearchFilters {
 class RadioBrowserProvider implements MusicSourceProvider {
   RadioBrowserProvider({
     Uri? baseUri,
+    Uri mirrorDirectoryUri = defaultRadioBrowserMirrorDirectoryUri,
+    RadioBrowserMirrorLoader? mirrorLoader,
     RadioBrowserSearchLoader? searchLoader,
     RadioBrowserClickLoader? clickLoader,
     this.limit = 20,
-  })  : baseUri = baseUri ?? Uri.parse('https://de1.api.radio-browser.info'),
+  })  : _baseUri = baseUri ?? defaultRadioBrowserBaseUri,
+        _mirrorDirectoryUri = mirrorDirectoryUri,
+        _mirrorLoader = mirrorLoader ?? _loadRadioBrowserMirrors,
         _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
-        _clickLoader = clickLoader ?? _loadRadioBrowserClick;
+        _clickLoader = clickLoader ?? _loadRadioBrowserClick,
+        _discoversMirrors = baseUri == null;
 
-  final Uri baseUri;
+  Uri _baseUri;
+  final Uri _mirrorDirectoryUri;
   final int limit;
+  final RadioBrowserMirrorLoader _mirrorLoader;
   final RadioBrowserSearchLoader _searchLoader;
   final RadioBrowserClickLoader _clickLoader;
+  final bool _discoversMirrors;
+  Future<Uri>? _mirrorDiscovery;
+
+  Uri get baseUri => _baseUri;
 
   @override
   String get id => 'radio-browser';
@@ -68,10 +90,16 @@ class RadioBrowserProvider implements MusicSourceProvider {
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: baseUri.host.isEmpty ? const <String>[] : <String>[
-          baseUri.host,
+        networkDomains: <String>{
+          if (_discoversMirrors && _mirrorDirectoryUri.host.isNotEmpty)
+            _mirrorDirectoryUri.host,
+          if (baseUri.host.isNotEmpty) baseUri.host,
+        }.toList(growable: false),
+        dataSent: <String>[
+          if (_discoversMirrors) 'mirror discovery request',
+          'station search query',
+          'station click UUID',
         ],
-        dataSent: const <String>['station search query', 'station click UUID'],
       );
 
   @override
@@ -84,8 +112,9 @@ class RadioBrowserProvider implements MusicSourceProvider {
     RadioBrowserSearchFilters filters = const RadioBrowserSearchFilters(),
   }) async {
     final normalized = query.trim();
+    final baseUri = await _resolvedBaseUri();
     final stations = parseRadioBrowserStations(
-      await _searchLoader(_searchUri(normalized, filters)),
+      await _searchLoader(_searchUri(baseUri, normalized, filters)),
     );
 
     return stations
@@ -112,10 +141,35 @@ class RadioBrowserProvider implements MusicSourceProvider {
       return;
     }
 
-    await _clickLoader(_clickUri(stationUuid));
+    await _clickLoader(_clickUri(await _resolvedBaseUri(), stationUuid));
   }
 
-  Uri _searchUri(String query, RadioBrowserSearchFilters filters) {
+  Future<Uri> _resolvedBaseUri() {
+    if (!_discoversMirrors) {
+      return Future<Uri>.value(_baseUri);
+    }
+
+    return _mirrorDiscovery ??= _discoverBaseUri();
+  }
+
+  Future<Uri> _discoverBaseUri() async {
+    try {
+      final mirrors = parseRadioBrowserMirrors(
+        await _mirrorLoader(_mirrorDirectoryUri),
+      );
+      _baseUri = selectRadioBrowserMirror(mirrors, fallback: _baseUri);
+    } catch (_) {
+      // Keep the bundled default mirror when discovery is unavailable.
+    }
+
+    return _baseUri;
+  }
+
+  Uri _searchUri(
+    Uri baseUri,
+    String query,
+    RadioBrowserSearchFilters filters,
+  ) {
     final countryCode = _nonEmpty(filters.countryCode)?.toUpperCase();
     final language = _nonEmpty(filters.language);
     final tag = _nonEmpty(filters.tag);
@@ -143,7 +197,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
     );
   }
 
-  Uri _clickUri(String stationUuid) {
+  Uri _clickUri(Uri baseUri, String stationUuid) {
     return baseUri.replace(
       path: _joinUriPath(
         baseUri.path,
@@ -152,6 +206,32 @@ class RadioBrowserProvider implements MusicSourceProvider {
       queryParameters: const <String, String>{},
     );
   }
+}
+
+List<Uri> parseRadioBrowserMirrors(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! List<dynamic>) {
+    throw const FormatException('Radio Browser mirror response must be a list.');
+  }
+
+  return decoded
+      .map(_mirrorUriFromJson)
+      .whereType<Uri>()
+      .toList(growable: false);
+}
+
+Uri selectRadioBrowserMirror(
+  List<Uri> mirrors, {
+  required Uri fallback,
+}) {
+  if (mirrors.isEmpty) {
+    return fallback;
+  }
+
+  return mirrors.firstWhere(
+    (uri) => uri.scheme == 'https',
+    orElse: () => mirrors.first,
+  );
 }
 
 final class RadioBrowserStation {
@@ -330,6 +410,74 @@ Future<String> _loadRadioBrowserClick(Uri clickUri) async {
   } finally {
     client.close(force: true);
   }
+}
+
+Future<String> _loadRadioBrowserMirrors(Uri mirrorsUri) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(mirrorsUri);
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
+    final response = await request.close();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        'Radio Browser mirror discovery failed with HTTP '
+        '${response.statusCode}.',
+        uri: mirrorsUri,
+      );
+    }
+
+    return utf8.decodeStream(response);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Uri? _mirrorUriFromJson(Object? value) {
+  if (value is String) {
+    return _mirrorUriValue(value);
+  }
+
+  if (value is Map<dynamic, dynamic>) {
+    final json = value.cast<String, Object?>();
+    final url = _stringValue(json['url']);
+    final name = _stringValue(json['name']);
+    final host = _stringValue(json['host']);
+    return _mirrorUriValue(url.isNotEmpty
+        ? url
+        : name.isNotEmpty
+            ? name
+            : host);
+  }
+
+  return null;
+}
+
+Uri? _mirrorUriValue(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  if (normalized.contains(RegExp(r'\s'))) {
+    return null;
+  }
+
+  final candidate = normalized.contains('://')
+      ? Uri.tryParse(normalized)
+      : Uri.tryParse('https://$normalized');
+  if (candidate == null || candidate.host.isEmpty) {
+    return null;
+  }
+
+  final scheme = candidate.scheme.isEmpty ? 'https' : candidate.scheme;
+  if (scheme != 'http' && scheme != 'https') {
+    return null;
+  }
+
+  final host = candidate.hasPort
+      ? '${candidate.host}:${candidate.port}'
+      : candidate.host;
+  return Uri.parse('$scheme://$host');
 }
 
 Uri? _firstUri(String primary, String fallback) {

@@ -82,6 +82,105 @@ void main() {
     },
   );
 
+  test('parses and selects radio browser mirrors', () {
+    final mirrors = parseRadioBrowserMirrors('''
+[
+  {"name":"de1.api.radio-browser.info"},
+  {"url":"http://legacy.radio-browser.example"},
+  "https://nl1.api.radio-browser.info/json/servers",
+  {"host":"bad scheme"},
+  42
+]
+''');
+
+    expect(
+      mirrors.map((uri) => uri.toString()),
+      <String>[
+        'https://de1.api.radio-browser.info',
+        'http://legacy.radio-browser.example',
+        'https://nl1.api.radio-browser.info',
+      ],
+    );
+    expect(
+      selectRadioBrowserMirror(
+        mirrors,
+        fallback: Uri.parse('https://fallback.example.test'),
+      ),
+      Uri.parse('https://de1.api.radio-browser.info'),
+    );
+    expect(
+      selectRadioBrowserMirror(
+        <Uri>[Uri.parse('http://legacy.radio-browser.example')],
+        fallback: Uri.parse('https://fallback.example.test'),
+      ),
+      Uri.parse('http://legacy.radio-browser.example'),
+    );
+  });
+
+  test('discovers a radio browser mirror before search and click', () async {
+    Uri? capturedMirrorUri;
+    Uri? capturedSearchUri;
+    Uri? capturedClickUri;
+    final provider = RadioBrowserProvider(
+      mirrorDirectoryUri: Uri.parse('https://mirrors.example.test/json/servers'),
+      mirrorLoader: (uri) async {
+        capturedMirrorUri = uri;
+        return '[{"name":"nl1.api.radio-browser.info"}]';
+      },
+      searchLoader: (uri) async {
+        capturedSearchUri = uri;
+        return _sampleStationsJson;
+      },
+      clickLoader: (uri) async {
+        capturedClickUri = uri;
+        return '{"ok":true}';
+      },
+    );
+
+    expect(provider.disclosure.networkDomains, <String>[
+      'mirrors.example.test',
+      'de1.api.radio-browser.info',
+    ]);
+    expect(
+      provider.disclosure.dataSent,
+      <String>[
+        'mirror discovery request',
+        'station search query',
+        'station click UUID',
+      ],
+    );
+
+    final tracks = await provider.search('aether');
+    await provider.recordStationClick(tracks.single);
+
+    expect(capturedMirrorUri!.host, 'mirrors.example.test');
+    expect(capturedSearchUri!.host, 'nl1.api.radio-browser.info');
+    expect(capturedSearchUri!.path, '/json/stations/search');
+    expect(capturedClickUri!.host, 'nl1.api.radio-browser.info');
+    expect(capturedClickUri!.path, '/json/url/station-1');
+    expect(provider.baseUri, Uri.parse('https://nl1.api.radio-browser.info'));
+    expect(provider.disclosure.networkDomains, <String>[
+      'mirrors.example.test',
+      'nl1.api.radio-browser.info',
+    ]);
+  });
+
+  test('falls back to the bundled radio browser mirror on discovery failure', () async {
+    Uri? capturedSearchUri;
+    final provider = RadioBrowserProvider(
+      mirrorLoader: (_) async => throw const FormatException('offline'),
+      searchLoader: (uri) async {
+        capturedSearchUri = uri;
+        return _sampleStationsJson;
+      },
+    );
+
+    final tracks = await provider.search('aether');
+
+    expect(tracks, hasLength(1));
+    expect(capturedSearchUri!.host, 'de1.api.radio-browser.info');
+  });
+
   test('searchStations applies advanced filters to URI and results', () async {
     Uri? capturedUri;
     final provider = RadioBrowserProvider(
