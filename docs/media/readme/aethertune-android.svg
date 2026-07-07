@@ -1,0 +1,58 @@
+<svg width="420" height="760" viewBox="0 0 420 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune Android preview</title>
+  <desc id="desc">Android phone preview showing AetherTune library search, local tracks, provider search, and a mini player.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0.55" stop-color="#12343b"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#33d6a6"/>
+      <stop offset="1" stop-color="#4f8cff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="420" height="760" rx="34" fill="url(#bg)"/>
+  <rect x="40" y="28" width="340" height="704" rx="46" fill="#0b1220" filter="url(#shadow)"/>
+  <rect x="56" y="48" width="308" height="664" rx="34" fill="#f8fafc"/>
+  <rect x="178" y="60" width="64" height="6" rx="3" fill="#0f172a" opacity="0.35"/>
+  <text x="78" y="104" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="25" font-weight="700" fill="#111827">AetherTune</text>
+  <circle cx="324" cy="94" r="18" fill="#e0f2fe"/>
+  <path d="M316 94h16M324 86v16" stroke="#0369a1" stroke-width="3" stroke-linecap="round"/>
+  <rect x="78" y="126" width="264" height="44" rx="16" fill="#eef2ff"/>
+  <circle cx="101" cy="148" r="8" fill="none" stroke="#4f46e5" stroke-width="3"/>
+  <path d="M107 154l9 9" stroke="#4f46e5" stroke-width="3" stroke-linecap="round"/>
+  <text x="130" y="153" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" fill="#475569">Search library and providers</text>
+  <text x="78" y="205" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Library</text>
+  <g transform="translate(78 224)">
+    <rect width="264" height="70" rx="18" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect x="16" y="14" width="42" height="42" rx="12" fill="url(#accent)"/>
+    <text x="72" y="31" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#111827">Local Mix</text>
+    <text x="72" y="52" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Folder import / queue ready</text>
+    <path d="M235 26l18 9-18 9z" fill="#0f766e"/>
+  </g>
+  <g transform="translate(78 306)">
+    <rect width="264" height="70" rx="18" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect x="16" y="14" width="42" height="42" rx="12" fill="#ffb86b"/>
+    <text x="72" y="31" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#111827">Provider Search</text>
+    <text x="72" y="52" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Radio / Archive / RSS</text>
+    <path d="M235 26l18 9-18 9z" fill="#9a3412"/>
+  </g>
+  <text x="78" y="420" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Now playing</text>
+  <rect x="78" y="438" width="264" height="116" rx="22" fill="#0f172a"/>
+  <rect x="96" y="456" width="80" height="80" rx="18" fill="url(#accent)"/>
+  <text x="192" y="482" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#f8fafc">Open Source Session</text>
+  <text x="192" y="505" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#cbd5e1">AetherTune Library</text>
+  <rect x="192" y="522" width="118" height="5" rx="3" fill="#334155"/>
+  <rect x="192" y="522" width="72" height="5" rx="3" fill="#33d6a6"/>
+  <rect x="78" y="594" width="264" height="58" rx="18" fill="#ecfeff"/>
+  <text x="98" y="628" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#155e75">Android ready</text>
+  <text x="203" y="628" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#0e7490">Touch-first music workspace</text>
+  <rect x="78" y="676" width="264" height="24" rx="12" fill="#e5e7eb"/>
+  <circle cx="112" cy="688" r="5" fill="#0f766e"/>
+  <circle cx="210" cy="688" r="5" fill="#64748b"/>
+  <circle cx="308" cy="688" r="5" fill="#64748b"/>
+</svg>

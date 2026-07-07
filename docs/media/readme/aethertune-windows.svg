@@ -1,0 +1,57 @@
+<svg width="1040" height="620" viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune Windows preview</title>
+  <desc id="desc">Windows desktop preview showing a wide AetherTune layout with library, provider search, queue, and mini player.</desc>
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#e0f2fe"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#020617" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="1040" height="620" rx="32" fill="#0f172a"/>
+  <rect x="70" y="58" width="900" height="504" rx="22" fill="url(#screen)" filter="url(#shadow)"/>
+  <rect x="70" y="58" width="900" height="46" rx="22" fill="#111827"/>
+  <circle cx="104" cy="81" r="7" fill="#ef4444"/>
+  <circle cx="128" cy="81" r="7" fill="#f59e0b"/>
+  <circle cx="152" cy="81" r="7" fill="#22c55e"/>
+  <text x="190" y="87" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#f8fafc">AetherTune for Windows</text>
+  <rect x="92" y="126" width="170" height="390" rx="22" fill="url(#panel)"/>
+  <text x="116" y="164" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#f8fafc">Library</text>
+  <text x="116" y="205" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#bfdbfe">Search</text>
+  <text x="116" y="240" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#bfdbfe">Playlists</text>
+  <text x="116" y="275" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#bfdbfe">Sources</text>
+  <text x="116" y="310" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#bfdbfe">History</text>
+  <rect x="116" y="430" width="114" height="52" rx="16" fill="#2563eb"/>
+  <text x="136" y="462" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">Now playing</text>
+  <text x="294" y="154" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800" fill="#111827">Unified provider search</text>
+  <rect x="294" y="180" width="620" height="48" rx="18" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="328" y="210" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" fill="#64748b">Search local-ready open providers...</text>
+  <rect x="826" y="190" width="66" height="28" rx="14" fill="#0f766e"/>
+  <text x="846" y="210" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">Go</text>
+  <g transform="translate(294 256)">
+    <rect width="300" height="92" rx="22" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect x="22" y="22" width="48" height="48" rx="14" fill="#22c55e"/>
+    <text x="92" y="42" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">Radio Browser</text>
+    <text x="92" y="64" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Public stations, click accounting</text>
+  </g>
+  <g transform="translate(614 256)">
+    <rect width="300" height="92" rx="22" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect x="22" y="22" width="48" height="48" rx="14" fill="#f97316"/>
+    <text x="92" y="42" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">Internet Archive</text>
+    <text x="92" y="64" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Open audio, filters, playable files</text>
+  </g>
+  <rect x="294" y="386" width="620" height="94" rx="24" fill="#111827"/>
+  <rect x="318" y="410" width="54" height="54" rx="15" fill="#38bdf8"/>
+  <text x="396" y="428" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#f8fafc">Desktop queue and mini player</text>
+  <text x="396" y="452" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#cbd5e1">Persistent queue, shuffle, repeat, sleep timer</text>
+  <rect x="722" y="430" width="130" height="8" rx="4" fill="#334155"/>
+  <rect x="722" y="430" width="82" height="8" rx="4" fill="#38bdf8"/>
+  <rect x="400" y="544" width="240" height="16" rx="8" fill="#1f2937"/>
+  <rect x="470" y="560" width="100" height="16" rx="8" fill="#1f2937"/>
+</svg>

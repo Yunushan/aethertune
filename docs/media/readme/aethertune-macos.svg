@@ -1,0 +1,51 @@
+<svg width="1040" height="620" viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune macOS preview</title>
+  <desc id="desc">macOS desktop preview showing AetherTune with artwork, lyrics, playlists, and provider privacy information.</desc>
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171717"/>
+      <stop offset="0.45" stop-color="#581c87"/>
+      <stop offset="1" stop-color="#155e75"/>
+    </linearGradient>
+    <linearGradient id="art" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0abfc"/>
+      <stop offset="0.55" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#bef264"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#020617" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+  <rect width="1040" height="620" rx="32" fill="url(#wall)"/>
+  <rect x="74" y="66" width="892" height="490" rx="26" fill="#f8fafc" filter="url(#shadow)"/>
+  <rect x="74" y="66" width="892" height="46" rx="26" fill="#f3f4f6"/>
+  <circle cx="108" cy="89" r="7" fill="#ff5f57"/>
+  <circle cx="132" cy="89" r="7" fill="#ffbd2e"/>
+  <circle cx="156" cy="89" r="7" fill="#28c840"/>
+  <text x="190" y="95" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">AetherTune on macOS</text>
+  <rect x="108" y="146" width="270" height="352" rx="30" fill="#111827"/>
+  <rect x="138" y="176" width="210" height="210" rx="28" fill="url(#art)"/>
+  <circle cx="244" cy="282" r="58" fill="#111827" opacity="0.3"/>
+  <path d="M226 253v72l58-36z" fill="#ffffff"/>
+  <text x="138" y="428" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="18" font-weight="800" fill="#f8fafc">Artwork-first player</text>
+  <text x="138" y="454" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="13" fill="#cbd5e1">Queue, history, sleep timer</text>
+  <rect x="138" y="474" width="180" height="8" rx="4" fill="#334155"/>
+  <rect x="138" y="474" width="112" height="8" rx="4" fill="#38bdf8"/>
+  <text x="424" y="166" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="26" font-weight="800" fill="#111827">Lyrics and playlists</text>
+  <rect x="424" y="196" width="476" height="132" rx="24" fill="#111827"/>
+  <text x="456" y="238" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="14" fill="#94a3b8">00:18  keep the catalog open</text>
+  <text x="456" y="272" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="18" font-weight="800" fill="#a7f3d0">00:24  every provider declares itself</text>
+  <text x="456" y="304" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="14" fill="#94a3b8">00:31  no hidden telemetry</text>
+  <g transform="translate(424 360)">
+    <rect width="220" height="92" rx="24" fill="#ecfeff" stroke="#a5f3fc"/>
+    <text x="26" y="38" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="15" font-weight="800" fill="#155e75">Smart playlists</text>
+    <text x="26" y="64" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="12" fill="#0e7490">Favorites, history, most played</text>
+  </g>
+  <g transform="translate(680 360)">
+    <rect width="220" height="92" rx="24" fill="#fef3c7" stroke="#fde68a"/>
+    <text x="26" y="38" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="15" font-weight="800" fill="#92400e">Provider privacy</text>
+    <text x="26" y="64" font-family="Inter, SF Pro Display, Arial, sans-serif" font-size="12" fill="#b45309">Network domains disclosed</text>
+  </g>
+  <rect x="420" y="526" width="200" height="15" rx="8" fill="#111827"/>
+  <rect x="470" y="542" width="100" height="15" rx="8" fill="#111827"/>
+</svg>

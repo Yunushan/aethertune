@@ -1,0 +1,46 @@
+<svg width="420" height="760" viewBox="0 0 420 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune iOS preview</title>
+  <desc id="desc">iOS phone preview showing playlists, lyrics, history, and privacy-first source adapters.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="0.52" stop-color="#312e81"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#faf5ff"/>
+      <stop offset="1" stop-color="#ecfeff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="420" height="760" rx="34" fill="url(#bg)"/>
+  <rect x="42" y="28" width="336" height="704" rx="50" fill="#111827" filter="url(#shadow)"/>
+  <rect x="58" y="48" width="304" height="664" rx="38" fill="#f9fafb"/>
+  <rect x="160" y="60" width="100" height="24" rx="12" fill="#111827"/>
+  <text x="78" y="118" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Playlists</text>
+  <text x="78" y="144" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#64748b">Manual, smart, queue-saved</text>
+  <rect x="78" y="170" width="264" height="130" rx="24" fill="url(#card)" stroke="#ddd6fe"/>
+  <circle cx="118" cy="215" r="24" fill="#8b5cf6"/>
+  <path d="M108 215h20M118 205v20" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="158" y="207" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#1f2937">Favorites</text>
+  <text x="158" y="230" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Smart playlist from your library</text>
+  <rect x="96" y="260" width="204" height="8" rx="4" fill="#ddd6fe"/>
+  <rect x="96" y="260" width="126" height="8" rx="4" fill="#8b5cf6"/>
+  <text x="78" y="342" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Synced lyrics</text>
+  <rect x="78" y="360" width="264" height="122" rx="22" fill="#111827"/>
+  <text x="102" y="394" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#94a3b8">00:18  floating through the open air</text>
+  <text x="102" y="426" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#67e8f9">00:24  aether tunes the signal</text>
+  <text x="102" y="458" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#94a3b8">00:31  every source stays clear</text>
+  <text x="78" y="524" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Privacy-first sources</text>
+  <rect x="78" y="544" width="124" height="76" rx="18" fill="#ecfdf5" stroke="#bbf7d0"/>
+  <text x="100" y="576" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#166534">No telemetry</text>
+  <text x="100" y="598" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" fill="#15803d">Declared domains</text>
+  <rect x="218" y="544" width="124" height="76" rx="18" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="240" y="576" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#9a3412">Legal APIs</text>
+  <text x="240" y="598" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" fill="#c2410c">No scraping</text>
+  <rect x="78" y="654" width="264" height="44" rx="18" fill="#111827"/>
+  <circle cx="116" cy="676" r="9" fill="#f472b6"/>
+  <text x="140" y="681" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#f8fafc">iOS and iPadOS-ready Flutter app</text>
+</svg>

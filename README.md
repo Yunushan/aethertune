@@ -19,6 +19,7 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#what-is-aethertune">Overview</a> ·
+  <a href="#platform-preview">Platform Preview</a> ·
   <a href="#implemented-now">Implemented Now</a> ·
   <a href="#feature-goal">Feature Goal</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
@@ -36,6 +37,26 @@
 The app is intentionally **provider-based**: the player, library, queue, cache, favorites, playlists, search, and UI are open-source core features, while source adapters can be added for legal sources such as local files, self-hosted servers, Internet Archive, Radio Browser, Jellyfin, Navidrome/Subsonic, podcasts, or other official APIs.
 
 > Important: this repository does **not** include DRM bypass, paid-service cloning, credential stealing, private API scraping, or any code intended to violate a platform's terms. You can build legal source adapters through the provider interface.
+
+## Platform Preview
+
+<p align="center">
+  <img src="docs/media/readme/aethertune-platform-tour.gif" alt="AetherTune platform tour showing Android, iOS, Windows, macOS, Linux, and server support" width="840">
+</p>
+
+These README previews introduce the supported app surfaces. The actual Flutter client builds for Android, iOS, Linux, macOS, and Windows; CI verifies desktop build targets, and release workflows package Android plus desktop artifacts.
+
+### Mobile
+
+| Android | iOS |
+|---|---|
+| <img src="docs/media/readme/aethertune-android.svg" alt="AetherTune Android preview with library search, provider search, and mini player" width="300"> | <img src="docs/media/readme/aethertune-ios.svg" alt="AetherTune iOS preview with playlists, synced lyrics, and privacy-first providers" width="300"> |
+
+### Desktop
+
+| Windows | macOS | Linux |
+|---|---|---|
+| <img src="docs/media/readme/aethertune-windows.svg" alt="AetherTune Windows desktop preview with unified provider search and queue" width="300"> | <img src="docs/media/readme/aethertune-macos.svg" alt="AetherTune macOS desktop preview with artwork, lyrics, and provider privacy" width="300"> | <img src="docs/media/readme/aethertune-linux.svg" alt="AetherTune Linux desktop preview with local library, folders, providers, and server foundations" width="300"> |
 
 ## Quick Start
 

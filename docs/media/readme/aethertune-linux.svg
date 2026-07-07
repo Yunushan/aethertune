@@ -1,0 +1,52 @@
+<svg width="1040" height="620" viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune Linux preview</title>
+  <desc id="desc">Linux desktop preview showing AetherTune local library, folders, open providers, and server-friendly foundations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#022c22"/>
+      <stop offset="0.5" stop-color="#164e63"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#020617" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+  <rect width="1040" height="620" rx="32" fill="url(#bg)"/>
+  <rect x="76" y="64" width="888" height="492" rx="22" fill="#0b1220" filter="url(#shadow)"/>
+  <rect x="76" y="64" width="888" height="42" rx="22" fill="#111827"/>
+  <text x="112" y="91" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">AetherTune Linux</text>
+  <rect x="104" y="134" width="252" height="360" rx="24" fill="#f8fafc"/>
+  <text x="132" y="174" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="23" font-weight="800" fill="#111827">Local library</text>
+  <rect x="132" y="204" width="196" height="40" rx="14" fill="#e2e8f0"/>
+  <text x="154" y="229" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="13" fill="#475569">Filter title, artist, album</text>
+  <g transform="translate(132 272)">
+    <rect width="196" height="54" rx="16" fill="#ecfdf5" stroke="#bbf7d0"/>
+    <text x="20" y="24" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="14" font-weight="800" fill="#166534">Folders</text>
+    <text x="20" y="42" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="11" fill="#15803d">Imported-track groups</text>
+  </g>
+  <g transform="translate(132 340)">
+    <rect width="196" height="54" rx="16" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="20" y="24" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="14" font-weight="800" fill="#1d4ed8">Backup</text>
+    <text x="20" y="42" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="11" fill="#2563eb">Versioned JSON restore</text>
+  </g>
+  <g transform="translate(132 408)">
+    <rect width="196" height="54" rx="16" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="20" y="24" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="14" font-weight="800" fill="#9a3412">Server</text>
+    <text x="20" y="42" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="11" fill="#c2410c">Health, info, catalog APIs</text>
+  </g>
+  <rect x="392" y="134" width="516" height="360" rx="24" fill="#f8fafc"/>
+  <text x="424" y="174" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="23" font-weight="800" fill="#111827">Open providers</text>
+  <rect x="424" y="202" width="452" height="76" rx="20" fill="#111827"/>
+  <text x="452" y="232" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="15" font-weight="800" fill="#f8fafc">Provider search</text>
+  <text x="452" y="256" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="12" fill="#cbd5e1">Fan-out, ranking, resolver-aware playback</text>
+  <rect x="424" y="308" width="210" height="82" rx="20" fill="#dcfce7" stroke="#bbf7d0"/>
+  <text x="452" y="342" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="15" font-weight="800" fill="#166534">Podcast RSS</text>
+  <text x="452" y="366" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="12" fill="#15803d">OPML, progress, refresh state</text>
+  <rect x="666" y="308" width="210" height="82" rx="20" fill="#e0f2fe" stroke="#bae6fd"/>
+  <text x="694" y="342" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="15" font-weight="800" fill="#0369a1">Radio Browser</text>
+  <text x="694" y="366" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="12" fill="#0284c7">Filters, play, save</text>
+  <rect x="424" y="414" width="452" height="48" rx="18" fill="#fef3c7" stroke="#fde68a"/>
+  <text x="452" y="444" font-family="Inter, Ubuntu, Arial, sans-serif" font-size="14" font-weight="800" fill="#92400e">Linux desktop build verified in CI</text>
+  <rect x="420" y="536" width="200" height="15" rx="8" fill="#020617"/>
+  <rect x="470" y="552" width="100" height="15" rx="8" fill="#020617"/>
+</svg>
