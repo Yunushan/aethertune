@@ -60,8 +60,8 @@ void main() {
   });
 
   test('offline media policy requires provider capability and disclosure', () {
-    final policy = OfflineMediaPolicy(<MusicSourceProvider>[
-      const _PolicyProvider(
+    const policy = OfflineMediaPolicy(<MusicSourceProvider>[
+      _PolicyProvider(
         id: 'archive',
         name: 'Archive',
         capabilities: <MusicSourceCapability>{
@@ -74,7 +74,7 @@ void main() {
           supportsDownloads: true,
         ),
       ),
-      const _PolicyProvider(
+      _PolicyProvider(
         id: 'radio',
         name: 'Radio',
         capabilities: <MusicSourceCapability>{
@@ -82,7 +82,7 @@ void main() {
           MusicSourceCapability.directPlayback,
         },
       ),
-      const _PolicyProvider(
+      _PolicyProvider(
         id: 'silent-cache',
         name: 'Silent Cache',
         capabilities: <MusicSourceCapability>{
@@ -90,7 +90,7 @@ void main() {
           MusicSourceCapability.offlineCache,
         },
       ),
-      const _PolicyProvider(
+      _PolicyProvider(
         id: 'metadata-only',
         name: 'Metadata Only',
         capabilities: <MusicSourceCapability>{
