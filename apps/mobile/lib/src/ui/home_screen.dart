@@ -3300,7 +3300,7 @@ class _HistoryTabState extends State<_HistoryTab> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<_HistoryStatsRange>(
-          value: _statsRange,
+          initialValue: _statsRange,
           decoration: const InputDecoration(
             labelText: 'Stats range',
             prefixIcon: Icon(Icons.date_range),
