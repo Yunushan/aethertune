@@ -41,7 +41,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Server health/info/catalog endpoints | Done | Covered by server tests and CI compile gate. | Real persisted catalog and authenticated APIs. |
 | MIT license | Done | Root `LICENSE`. | Third-party notice automation. |
 | No telemetry | Done | No analytics SDK or tracking dependency. | Privacy tests and network-call audit. |
-| Local audio import | Done | Native file picker. | Folder watch, recursive import, scoped storage UX. |
+| Local audio import | Done | Native file picker plus recursive folder scanner for supported audio extensions, with scanner tests. | Folder watch, scoped storage UX, and richer tag parsing. |
 | Local playback | Done | `just_audio` local file playback. | Background service, notification controls, codec matrix. |
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
@@ -93,9 +93,9 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Local file import | Done | Namida, Musify | Folder and recursive import. |
-| Folder browsing | Scaffolded | Namida, local music players | Imported-track folder groups are implemented; recursive folder tree UI and platform permissions remain. |
-| Metadata scanner | Roadmap | Namida | Tag parser, artwork extraction, background indexing. |
+| Local file import | Done | Namida, Musify | File picker import and recursive folder scanning are implemented; folder watch and scoped-storage polish remain. |
+| Folder browsing | Scaffolded | Namida, local music players | Imported-track folder groups and recursive folder import are implemented; recursive folder tree UI and platform permissions remain. |
+| Metadata scanner | Scaffolded | Namida | Folder import derives title/folder metadata from filenames and parent folders. Needed next: tag parser, artwork extraction, background indexing. |
 | Metadata editing | Scaffolded | Namida | Track menus edit persisted library title, artist, album, and genre; search, browse groups, suggestions, playlists, and backup data update from the edited record, with store tests. Needed next: safe audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Scaffolded | Local library apps | Options duplicate resolver detects path, provider item, stream URL, and metadata plus known-duration matches, then merges the selected keeper with playlists/history/lyrics/progress preserved. Needed next: audio fingerprinting, file hash matching, scanner reconciliation, batch review UI, and undo. |
 | Album/artist/genre/source/folder views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, source, and imported folder; metadata scanner still needs richer tags. |
@@ -161,7 +161,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Source/provider | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Local files | Done | Namida, Musify | Folder scanner and metadata parser. |
+| Local files | Done | Namida, Musify | Recursive folder scanner is implemented; metadata parser and folder watch remain. |
 | Demo provider | Done | Provider template | Developer docs and test fixture provider. |
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |
@@ -319,10 +319,10 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 ## Minimum Build Plan To Reach Real 100% Implemented Parity
 
 1. Replace JSON preferences with a real local database and migrations.
-2. Build full local library: folders, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
+2. Build full local library: recursive folder import, folder watching, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
 3. Add `audio_service` and platform media sessions for background playback, notifications, lock screen, media keys, and Android Auto/CarPlay where allowed.
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
-5. Implement legal providers: local folder scanner, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin, Navidrome/Subsonic, Internet Archive.
+5. Implement legal providers: local folder scanner/folder watch, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin, Navidrome/Subsonic, Internet Archive.
 6. Add official-only adapters where terms allow: Spotify metadata, YouTube/YouTube Music, SoundCloud, Bandcamp, or others.
 7. Expand the current direct-URL offline cache into a full cache/download manager with background/resumable jobs, eviction, size limits, checksum validation, and optional public export where legally allowed.
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.

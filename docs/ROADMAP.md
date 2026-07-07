@@ -39,6 +39,7 @@
 - [ ] Playlist artwork picker, cropper, generated collage, and sync
 - [x] Backup/restore JSON
 - [x] Imported-track folder browse
+- [x] Recursive folder import
 - [ ] Recursive folder browser
 - [ ] Metadata scanner
 - [x] Stored metadata editor

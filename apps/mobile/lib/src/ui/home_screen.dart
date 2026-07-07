@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../data/demo_source_provider.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/library_store.dart';
+import '../data/local_folder_scanner.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
@@ -142,6 +143,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.library_add),
           ),
           IconButton(
+            tooltip: 'Import audio folder',
+            onPressed: () => _importAudioFolder(context),
+            icon: const Icon(Icons.create_new_folder_outlined),
+          ),
+          IconButton(
             tooltip: 'Sleep timer',
             onPressed: () => _showSleepTimer(context),
             icon: const Icon(Icons.bedtime_outlined),
@@ -178,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() => _librarySortMode = value);
                     },
                     onImport: () => _importAudio(context),
+                    onImportFolder: () => _importAudioFolder(context),
                     onAddToPlaylist: (track) => _showAddToPlaylist(
                       context,
                       track,
@@ -578,6 +585,44 @@ class _HomeScreenState extends State<HomeScreen> {
     messenger.showSnackBar(
       SnackBar(content: Text('Imported ${tracks.length} audio file(s).')),
     );
+  }
+
+  Future<void> _importAudioFolder(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final folderPath = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Import audio folder',
+    );
+    if (!context.mounted || folderPath == null) {
+      return;
+    }
+
+    try {
+      final scanResult = await const LocalFolderScanner().scan(
+        folderPath,
+        importedAt: DateTime.now(),
+      );
+      if (scanResult.tracks.isNotEmpty) {
+        await library.addTracks(scanResult.tracks);
+      }
+
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(_folderImportSummary(scanResult))),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(_folderImportErrorMessage(error))),
+      );
+    }
   }
 
   Future<void> _showSleepTimer(BuildContext context) async {
@@ -1379,6 +1424,7 @@ class _LibraryTab extends StatelessWidget {
     required this.onOfflineOnlyChanged,
     required this.onSortModeChanged,
     required this.onImport,
+    required this.onImportFolder,
     required this.onAddToPlaylist,
     required this.onLyrics,
   });
@@ -1394,6 +1440,7 @@ class _LibraryTab extends StatelessWidget {
   final ValueChanged<bool> onOfflineOnlyChanged;
   final ValueChanged<LibrarySortMode> onSortModeChanged;
   final VoidCallback onImport;
+  final VoidCallback onImportFolder;
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
 
@@ -1524,6 +1571,7 @@ class _LibraryTab extends StatelessWidget {
               favoritesOnly: favoritesOnly,
               offlineOnly: offlineOnly,
               onImport: onImport,
+              onImportFolder: onImportFolder,
             ),
           )
         else
@@ -3870,16 +3918,47 @@ String _formatRefreshAge(Duration age) {
   return '${age.inDays}d ago';
 }
 
+String _folderImportSummary(LocalFolderScanResult result) {
+  if (result.tracks.isEmpty) {
+    return 'No supported audio files found in folder.';
+  }
+
+  final details = <String>[
+    'Imported ${result.tracks.length} audio file(s) from folder.',
+  ];
+  if (result.ignoredFileCount > 0) {
+    details.add('Skipped ${result.ignoredFileCount} non-audio file(s).');
+  }
+  if (result.inaccessibleDirectoryCount > 0) {
+    details.add(
+      'Skipped ${result.inaccessibleDirectoryCount} inaccessible folder(s).',
+    );
+  }
+
+  return details.join(' ');
+}
+
+String _folderImportErrorMessage(Object error) {
+  final message = error.toString();
+  if (message.length <= 120) {
+    return message;
+  }
+
+  return '${message.substring(0, 117)}...';
+}
+
 class _EmptyLibrary extends StatelessWidget {
   const _EmptyLibrary({
     required this.favoritesOnly,
     required this.offlineOnly,
     required this.onImport,
+    required this.onImportFolder,
   });
 
   final bool favoritesOnly;
   final bool offlineOnly;
   final VoidCallback onImport;
+  final VoidCallback onImportFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -3901,10 +3980,22 @@ class _EmptyLibrary extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onImport,
-              icon: const Icon(Icons.library_add),
-              label: const Text('Import audio'),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: onImport,
+                  icon: const Icon(Icons.library_add),
+                  label: const Text('Import audio'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onImportFolder,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Import folder'),
+                ),
+              ],
             ),
           ],
         ),
@@ -3933,7 +4024,7 @@ class _EmptyLibrary extends StatelessWidget {
       return 'Favorite a track from your library to see it here.';
     }
 
-    return 'Import local audio files to start using the real player.';
+    return 'Import audio files or scan a folder to start using the real player.';
   }
 }
 

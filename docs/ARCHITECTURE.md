@@ -24,9 +24,9 @@ Domain layer
   Track, MusicSourceProvider, OfflineMediaPolicy
 
 Data/provider layer
-  Local file import, DemoSourceProvider, PodcastRssProvider,
-  RadioBrowserProvider, InternetArchiveProvider, OfflineCacheManager,
-  future legal provider adapters
+  Local file import, LocalFolderScanner, DemoSourceProvider,
+  PodcastRssProvider, RadioBrowserProvider, InternetArchiveProvider,
+  OfflineCacheManager, future legal provider adapters
 
 Platform layer
   Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker, audio backend

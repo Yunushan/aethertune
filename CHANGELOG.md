@@ -15,6 +15,7 @@ Initial GitHub-ready scaffold.
 - Added user-triggered offline cache storage for provider-approved direct media URLs.
 - Added persisted offline mode to pause network-backed source search, feed refresh, and player-wide saved stream playback actions.
 - Added a local-files-only library filter for offline-ready browsing.
+- Added recursive local folder scanning/import for supported audio files.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added duplicate track detection and merge handling for local library entries.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
