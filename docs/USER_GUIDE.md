@@ -74,7 +74,7 @@ Open a track menu in the Library tab and choose **Lyrics**. You can save plain t
 
 ## Backup and restore
 
-Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
+Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, submitted search history, offline mode, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup.
 
 ## Sleep timer
 
@@ -82,11 +82,11 @@ Tap the moon icon in the top-right corner and choose a preset duration, choose *
 
 ## Options
 
-The Options tab contains playback settings such as shuffle and repeat mode. AetherTune restores those playback settings when you reopen the app.
+The Options tab contains playback settings such as shuffle and repeat mode. Turn on **Offline mode** to pause network-backed source searches, feed refreshes, and stream playback actions while keeping local library playback available. AetherTune restores those playback settings and offline mode when you reopen the app.
 
 ## Provider plugins
 
-The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. Cache/download eligibility is gated by each provider's declared capabilities and privacy disclosure before future offline actions can use it. The current app includes:
+The Sources tab explains the provider model and shows capability/privacy disclosure for enabled adapters. When offline mode is on, network-backed source searches, feed refreshes, and stream playback actions are paused. Cache/download eligibility is gated by each provider's declared capabilities and privacy disclosure before future offline actions can use it. The current app includes:
 
 - Provider search: search enabled legal adapters together, then play playable results or save any result to the local library.
 - Local Files: working.

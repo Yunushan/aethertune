@@ -11,6 +11,7 @@ Initial GitHub-ready scaffold.
 - Added queue, favorites, search, sleep timer, shuffle, repeat.
 - Added local search suggestions from submitted query history, playback history, and library metadata.
 - Added provider offline cache/download policy gates with Podcast RSS and Internet Archive allow rules plus Radio Browser live-stream denial.
+- Added persisted offline mode to pause network-backed source search, feed refresh, and stream playback actions.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added duplicate track detection and merge handling for local library entries.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.

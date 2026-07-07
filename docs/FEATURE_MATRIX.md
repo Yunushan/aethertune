@@ -65,6 +65,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, loads playable episodes, tracks refresh status/staleness, plays/saves episodes, resumes saved episode progress, includes backups, declares cache/download policy for legal enclosures, and provider parsing/store behavior has tests. | Offline cache storage and eviction UI. |
 | Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, discovers a public API mirror before default searches with fallback to the bundled mirror, filters by country/language/tag/codec/bitrate, plays public streams, sends station click accounting on playback, saves stations to the library, denies cache/download policy for live streams, and provider parsing/filter/mirror/click behavior has tests. | Stream validation. |
 | Internet Archive audio search | Scaffolded | Sources tab searches public Internet Archive audio, filters by collection/subject/creator/year, expands multi-file items into separate playable tracks, resolves file URLs, plays/saves tracks, declares cache/download policy for public files, and provider parsing/search/filter behavior has tests. | Collection browse pages, facet suggestion UI, and cache management. |
+| Offline mode | Done | Options tab has a persisted offline mode that pauses network-backed provider search, feed refresh, and stream playback actions; backup/restore and store tests cover persistence. | Player-wide enforcement for saved URL streams and cache/download storage. |
 | CI proof gates | Done | Flutter analyze/test, desktop builds, server analyze/test/compile, and tag/manual release artifact workflow. | Integration tests. |
 
 ## Full Parity Feature Surface
@@ -101,7 +102,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
 | Listening history | Done | YouTube Music, Last.fm-style clients | Export filters, privacy controls, and richer history search. |
 | Stats / recap | Scaffolded | YouTube Music, Namida | Store-level stats aggregate local tracks, favorites, play counts, estimated listening duration, and top tracks/artists/albums/genres; History tab filters stats by all time, last 7 days, last 30 days, or last year, and exports the selected range as JSON/CSV. Store tests cover ranking, date filtering, and exports. Needed next: yearly/monthly cards, shareable recap visuals, and richer charts. |
-| Backup/restore | Done | Namida, local-first apps | File picker integration, cloud targets, migration checks. |
+| Backup/restore | Done | Namida, local-first apps | Includes local library data plus offline mode; file picker integration, cloud targets, migration checks remain. |
 | Cross-device library sync | Roadmap | YouTube Music, Grayjay-style multi-device needs | Server auth, sync API, conflict handling. |
 
 ### Search, Discovery, And Recommendations
@@ -153,7 +154,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Download queue | Roadmap | YouTube Music, NewPipe | Queue legal downloads only after `OfflineMediaPolicy` allows them. |
 | Cache size limits | Roadmap | All offline clients | Storage settings and eviction policy. |
 | Per-provider offline policy | Done | Spotube, Grayjay | `OfflineMediaPolicy` allows local files, permits Podcast RSS and Internet Archive cache/download only when providers declare capability plus disclosure, denies live Radio Browser streams, and has unit coverage through provider contract/coordinator tests. |
-| Offline mode toggle | Roadmap | YouTube Music | Network gate and offline-only UI. |
+| Offline mode toggle | Done | YouTube Music | Persisted Options toggle pauses network-backed Sources searches, feed refreshes, and stream playback actions, and backup/restore preserves it. Needed next: player-wide enforcement for saved URL streams and offline-only cache/library views. |
 | Partial/resumable downloads | Roadmap | NewPipe-style clients | Downloader with resume and checksum support. |
 
 ### Providers And Sources

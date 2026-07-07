@@ -101,6 +101,7 @@
 
 ## 0.6.x: Offline and lyrics
 
+- [x] Offline mode toggle
 - [x] Per-provider cache/download policy gate
 - [ ] Cache manager
 - [ ] Download queue

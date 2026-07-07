@@ -3943,6 +3943,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final podcastSubscriptions = library.podcastSubscriptions;
+    final offlineModeEnabled = library.offlineModeEnabled;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3955,6 +3956,18 @@ class _SourcesTabState extends State<_SourcesTab> {
         const Text(
           'AetherTune separates the open-source player from source adapters. Add legal providers for local files, self-hosted music, podcasts, radio, Internet Archive, or official APIs.',
         ),
+        if (offlineModeEnabled) ...<Widget>[
+          const SizedBox(height: 12),
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.cloud_off_outlined),
+              title: Text('Offline mode is on'),
+              subtitle: Text(
+                'Network-backed source searches and feed refreshes are paused.',
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         const _ProviderCard(
           title: 'Local Files',
@@ -4041,18 +4054,23 @@ class _SourcesTabState extends State<_SourcesTab> {
             Expanded(
               child: TextField(
                 controller: _providerSearchController,
+                enabled: !offlineModeEnabled,
                 decoration: const InputDecoration(
                   labelText: 'Search providers',
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _searchProviderCatalogs(),
+                onSubmitted: offlineModeEnabled
+                    ? null
+                    : (_) => _searchProviderCatalogs(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search providers',
-              onPressed: _providerSearchLoading ? null : _searchProviderCatalogs,
+              onPressed: _providerSearchLoading || offlineModeEnabled
+                  ? null
+                  : _searchProviderCatalogs,
               icon: const Icon(Icons.search),
             ),
           ],
@@ -4138,19 +4156,23 @@ class _SourcesTabState extends State<_SourcesTab> {
             Expanded(
               child: TextField(
                 controller: _podcastFeedController,
+                enabled: !offlineModeEnabled,
                 decoration: const InputDecoration(
                   labelText: 'Feed URL',
                   prefixIcon: Icon(Icons.rss_feed),
                 ),
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _addPodcastFeed(context),
+                onSubmitted:
+                    offlineModeEnabled ? null : (_) => _addPodcastFeed(context),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Add podcast feed',
-              onPressed: _podcastLoading ? null : () => _addPodcastFeed(context),
+              onPressed: _podcastLoading || offlineModeEnabled
+                  ? null
+                  : () => _addPodcastFeed(context),
               icon: const Icon(Icons.add),
             ),
           ],
@@ -4201,13 +4223,15 @@ class _SourcesTabState extends State<_SourcesTab> {
               selected: subscription.id == _selectedPodcastSubscriptionId,
               title: Text(subscription.title),
               subtitle: Text(_podcastSubscriptionSubtitle(subscription)),
-              onTap: () => _loadPodcastEpisodes(context, subscription),
+              onTap: offlineModeEnabled
+                  ? null
+                  : () => _loadPodcastEpisodes(context, subscription),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   IconButton(
                     tooltip: 'Refresh episodes',
-                    onPressed: _podcastLoading
+                    onPressed: _podcastLoading || offlineModeEnabled
                         ? null
                         : () => _loadPodcastEpisodes(context, subscription),
                     icon: const Icon(Icons.list_alt_outlined),
@@ -4273,18 +4297,22 @@ class _SourcesTabState extends State<_SourcesTab> {
             Expanded(
               child: TextField(
                 controller: _radioSearchController,
+                enabled: !offlineModeEnabled,
                 decoration: const InputDecoration(
                   labelText: 'Station search',
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _searchRadioStations(),
+                onSubmitted:
+                    offlineModeEnabled ? null : (_) => _searchRadioStations(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search stations',
-              onPressed: _radioLoading ? null : _searchRadioStations,
+              onPressed: _radioLoading || offlineModeEnabled
+                  ? null
+                  : _searchRadioStations,
               icon: const Icon(Icons.search),
             ),
           ],
@@ -4393,18 +4421,22 @@ class _SourcesTabState extends State<_SourcesTab> {
             Expanded(
               child: TextField(
                 controller: _archiveSearchController,
+                enabled: !offlineModeEnabled,
                 decoration: const InputDecoration(
                   labelText: 'Archive search',
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _searchArchiveItems(),
+                onSubmitted:
+                    offlineModeEnabled ? null : (_) => _searchArchiveItems(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search archive audio',
-              onPressed: _archiveLoading ? null : _searchArchiveItems,
+              onPressed: _archiveLoading || offlineModeEnabled
+                  ? null
+                  : _searchArchiveItems,
               icon: const Icon(Icons.search),
             ),
           ],
@@ -4518,7 +4550,44 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  bool _offlineModeBlocksSourceNetwork(BuildContext context) {
+    if (!context.read<LibraryStore>().offlineModeEnabled) {
+      return false;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Offline mode is on. Network sources are paused.'),
+      ),
+    );
+    return true;
+  }
+
+  bool _offlineModeBlocksStream(BuildContext context, Track track) {
+    if (!context.read<LibraryStore>().offlineModeEnabled ||
+        track.localPath?.trim().isNotEmpty == true) {
+      return false;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Offline mode is on. Stream playback is paused.'),
+      ),
+    );
+    return true;
+  }
+
   Future<void> _searchProviderCatalogs() async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() {
+        _providerSearchResults = <ProviderSearchResult>[];
+        _providerSearchErrors = <ProviderSearchError>[];
+        _providerSearchLoading = false;
+        _providerSearchMessage = 'Offline mode is on.';
+      });
+      return;
+    }
+
     final query = _providerSearchController.text.trim();
     if (query.isEmpty) {
       setState(() {
@@ -4576,6 +4645,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     BuildContext context,
     Track track,
   ) async {
+    if (_offlineModeBlocksStream(context, track)) {
+      return;
+    }
+
     final messenger = ScaffoldMessenger.of(context);
     final player = context.read<PlayerController>();
 
@@ -4611,6 +4684,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     BuildContext context,
     Track track,
   ) async {
+    if (!track.isPlayable && _offlineModeBlocksSourceNetwork(context)) {
+      return;
+    }
+
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
@@ -4658,6 +4735,14 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _addPodcastFeed(BuildContext context) async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() {
+        _podcastLoading = false;
+        _podcastError = 'Offline mode is on.';
+      });
+      return;
+    }
+
     final rawUrl = _podcastFeedController.text.trim();
     final feedUri = Uri.tryParse(rawUrl);
     if (feedUri == null || !feedUri.hasScheme || feedUri.host.isEmpty) {
@@ -4776,6 +4861,14 @@ class _SourcesTabState extends State<_SourcesTab> {
     BuildContext context,
     PodcastSubscription subscription,
   ) async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() {
+        _podcastLoading = false;
+        _podcastError = 'Offline mode is on.';
+      });
+      return;
+    }
+
     final feedUri = Uri.tryParse(subscription.feedUrl);
     if (feedUri == null) {
       setState(() {
@@ -4894,6 +4987,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _playPodcastEpisode(BuildContext context, Track track) async {
+    if (_offlineModeBlocksStream(context, track)) {
+      return;
+    }
+
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
     final player = context.read<PlayerController>();
@@ -4945,6 +5042,15 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _searchArchiveItems() async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() {
+        _archiveTracks = <Track>[];
+        _archiveLoading = false;
+        _archiveError = 'Offline mode is on.';
+      });
+      return;
+    }
+
     setState(() {
       _archiveLoading = true;
       _archiveError = null;
@@ -4977,6 +5083,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _playArchiveTrack(BuildContext context, Track track) async {
+    if (_offlineModeBlocksStream(context, track)) {
+      return;
+    }
+
     final messenger = ScaffoldMessenger.of(context);
     final player = context.read<PlayerController>();
 
@@ -5098,6 +5208,15 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _searchRadioStations() async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() {
+        _radioTracks = <Track>[];
+        _radioLoading = false;
+        _radioError = 'Offline mode is on.';
+      });
+      return;
+    }
+
     setState(() {
       _radioLoading = true;
       _radioError = null;
@@ -5130,6 +5249,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _playRadioStation(BuildContext context, Track track) async {
+    if (_offlineModeBlocksStream(context, track)) {
+      return;
+    }
+
     final messenger = ScaffoldMessenger.of(context);
     final player = context.read<PlayerController>();
 
@@ -5394,6 +5517,17 @@ class _SettingsTab extends StatelessWidget {
               }
             },
           ),
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.cloud_off_outlined),
+          title: const Text('Offline mode'),
+          subtitle: const Text(
+            'Pause network-backed source searches, feed refreshes, and stream playback.',
+          ),
+          value: library.offlineModeEnabled,
+          onChanged: (value) {
+            unawaited(library.setOfflineModeEnabled(value));
+          },
         ),
         const Divider(),
         ListTile(

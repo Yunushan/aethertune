@@ -261,6 +261,7 @@ class LibraryStore extends ChangeNotifier {
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _progressKey = 'aethertune.playback_progress.v1';
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
+  static const _offlineModeKey = 'aethertune.offline_mode.v1';
   static const _maxHistoryEntries = 500;
   static const _maxSearchQueryHistoryEntries = 20;
   static const _minSavedProgress = Duration(seconds: 5);
@@ -280,6 +281,7 @@ class LibraryStore extends ChangeNotifier {
       <String, PlaybackProgressEntry>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final DateTime Function() _clock;
+  bool _offlineModeEnabled = false;
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -298,6 +300,7 @@ class LibraryStore extends ChangeNotifier {
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
+  bool get offlineModeEnabled => _offlineModeEnabled;
 
   Future<void> load() async {
     if (_loaded) {
@@ -440,6 +443,7 @@ class LibraryStore extends ChangeNotifier {
               ),
         );
     }
+    _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
 
     _removeMissingPlaylistTracks();
     _removeMissingLyrics();
@@ -532,6 +536,16 @@ class LibraryStore extends ChangeNotifier {
     _searchQueryHistory.clear();
     _progressByTrackId.clear();
     _lyricsByTrackId.clear();
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setOfflineModeEnabled(bool enabled) async {
+    if (_offlineModeEnabled == enabled) {
+      return;
+    }
+
+    _offlineModeEnabled = enabled;
     await _save();
     notifyListeners();
   }
@@ -1173,6 +1187,7 @@ class LibraryStore extends ChangeNotifier {
     return encoder.convert(<String, Object?>{
       'version': _backupVersion,
       'exportedAt': _clock().toIso8601String(),
+      'offlineModeEnabled': _offlineModeEnabled,
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
       'customSmartPlaylists':
@@ -1455,8 +1470,14 @@ class LibraryStore extends ChangeNotifier {
     final restoredSearchQueryHistory = <String>[];
     final restoredProgress = <PlaybackProgressEntry>[];
     final restoredLyrics = <TrackLyrics>[];
+    var restoredOfflineModeEnabled = false;
 
     try {
+      restoredOfflineModeEnabled = _jsonBool(
+        backup,
+        'offlineModeEnabled',
+        isRequired: false,
+      );
       restoredTracks.addAll(
         _jsonObjectList(backup, 'tracks').map(Track.fromJson),
       );
@@ -1557,6 +1578,7 @@ class LibraryStore extends ChangeNotifier {
     _lyricsByTrackId
       ..clear()
       ..addAll(sanitizedLyrics);
+    _offlineModeEnabled = restoredOfflineModeEnabled;
 
     _sortTracks();
     _sortPlaylists();
@@ -2949,6 +2971,23 @@ class LibraryStore extends ChangeNotifier {
     }).toList(growable: false);
   }
 
+  bool _jsonBool(
+    Map<String, Object?> backup,
+    String key, {
+    bool isRequired = true,
+  }) {
+    final rawValue = backup[key];
+    if (rawValue == null && !isRequired) {
+      return false;
+    }
+
+    if (rawValue is! bool) {
+      throw FormatException('Backup field "$key" must be a boolean.');
+    }
+
+    return rawValue;
+  }
+
   List<String> _dedupeSearchQueryHistory(Iterable<String> queries) {
     final values = <String>[];
     final seen = <String>{};
@@ -3064,6 +3103,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
+    await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
   }
 }
 

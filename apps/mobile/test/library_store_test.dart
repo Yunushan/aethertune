@@ -1097,6 +1097,36 @@ void main() {
     expect(thirdStore.searchQueryHistory, secondStore.searchQueryHistory);
   });
 
+  test('persists offline mode and restores it from backups', () async {
+    final firstStore = LibraryStore();
+    await firstStore.load();
+
+    expect(firstStore.offlineModeEnabled, isFalse);
+
+    await firstStore.setOfflineModeEnabled(true);
+
+    expect(firstStore.offlineModeEnabled, isTrue);
+
+    final secondStore = LibraryStore();
+    await secondStore.load();
+
+    expect(secondStore.offlineModeEnabled, isTrue);
+
+    final backupJson = secondStore.exportBackupJson();
+    final backup = jsonDecode(backupJson) as Map<String, dynamic>;
+    expect(backup['offlineModeEnabled'], isTrue);
+
+    final legacyBackup = Map<String, dynamic>.from(backup)
+      ..remove('offlineModeEnabled');
+    await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
+
+    expect(secondStore.offlineModeEnabled, isFalse);
+
+    await secondStore.restoreBackupJson(backupJson);
+
+    expect(secondStore.offlineModeEnabled, isTrue);
+  });
+
   test('edits persisted track metadata for search browse and suggestions', () async {
     final store = LibraryStore();
     await store.load();
