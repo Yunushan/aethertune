@@ -8,11 +8,11 @@ typedef RadioBrowserSearchLoader = Future<String> Function(Uri searchUri);
 typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
 typedef RadioBrowserMirrorLoader = Future<String> Function(Uri mirrorsUri);
 
-const Uri defaultRadioBrowserBaseUri = Uri(
+final Uri defaultRadioBrowserBaseUri = Uri(
   scheme: 'https',
   host: 'de1.api.radio-browser.info',
 );
-const Uri defaultRadioBrowserMirrorDirectoryUri = Uri(
+final Uri defaultRadioBrowserMirrorDirectoryUri = Uri(
   scheme: 'https',
   host: 'all.api.radio-browser.info',
   path: '/json/servers',
@@ -47,13 +47,14 @@ final class RadioBrowserSearchFilters {
 class RadioBrowserProvider implements MusicSourceProvider {
   RadioBrowserProvider({
     Uri? baseUri,
-    Uri mirrorDirectoryUri = defaultRadioBrowserMirrorDirectoryUri,
+    Uri? mirrorDirectoryUri,
     RadioBrowserMirrorLoader? mirrorLoader,
     RadioBrowserSearchLoader? searchLoader,
     RadioBrowserClickLoader? clickLoader,
     this.limit = 20,
   })  : _baseUri = baseUri ?? defaultRadioBrowserBaseUri,
-        _mirrorDirectoryUri = mirrorDirectoryUri,
+        _mirrorDirectoryUri =
+            mirrorDirectoryUri ?? defaultRadioBrowserMirrorDirectoryUri,
         _mirrorLoader = mirrorLoader ?? _loadRadioBrowserMirrors,
         _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
         _clickLoader = clickLoader ?? _loadRadioBrowserClick,
@@ -443,11 +444,13 @@ Uri? _mirrorUriFromJson(Object? value) {
     final url = _stringValue(json['url']);
     final name = _stringValue(json['name']);
     final host = _stringValue(json['host']);
-    return _mirrorUriValue(url.isNotEmpty
-        ? url
-        : name.isNotEmpty
-            ? name
-            : host);
+    return _mirrorUriValue(
+      url.isNotEmpty
+          ? url
+          : name.isNotEmpty
+              ? name
+              : host,
+    );
   }
 
   return null;
