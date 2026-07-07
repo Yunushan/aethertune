@@ -167,6 +167,170 @@ void main() {
     expect(store.playlistById(playlist.id)!.trackIds, <String>['2']);
   });
 
+  test('detects duplicate tracks by path provider stream and metadata', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'path-a',
+        title: 'Path A',
+        localPath: '/music/shared.mp3',
+      ),
+      _track(
+        'path-b',
+        title: 'Path B',
+        localPath: '/music/shared.mp3',
+      ),
+      _track(
+        'provider-a',
+        title: 'Provider A',
+        sourceId: 'archive',
+        externalId: 'item-1',
+        localPath: null,
+      ),
+      _track(
+        'provider-b',
+        title: 'Provider B',
+        sourceId: 'archive',
+        externalId: 'item-1',
+        localPath: null,
+      ),
+      _track(
+        'stream-a',
+        title: 'Stream A',
+        streamUrl: 'https://media.example.test/song.mp3',
+        localPath: null,
+      ),
+      _track(
+        'stream-b',
+        title: 'Stream B',
+        streamUrl: 'https://media.example.test/song.mp3',
+        localPath: null,
+      ),
+      _track(
+        'meta-a',
+        title: 'Same Song',
+        artist: 'Mira',
+        album: 'Dawn',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        'meta-b',
+        title: ' same song ',
+        artist: ' mira ',
+        album: ' dawn ',
+        duration: const Duration(minutes: 3),
+      ),
+    ]);
+
+    final groups = store.duplicateTrackGroups();
+
+    expect(
+      groups.map((group) => group.type),
+      containsAll(<DuplicateMatchType>[
+        DuplicateMatchType.localPath,
+        DuplicateMatchType.sourceExternalId,
+        DuplicateMatchType.streamUrl,
+        DuplicateMatchType.metadata,
+      ]),
+    );
+    expect(
+      groups
+          .firstWhere((group) => group.type == DuplicateMatchType.localPath)
+          .tracks
+          .map((track) => track.id),
+      containsAll(<String>['path-a', 'path-b']),
+    );
+  });
+
+  test('resolves duplicates while preserving attached library state', () async {
+    var now = DateTime.utc(2026, 1, 4, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'keep',
+        title: 'Aether Bloom',
+        artist: 'Mira',
+        album: 'Dawn',
+        duration: const Duration(minutes: 3),
+        addedAt: DateTime.utc(2026, 1, 1),
+      ),
+      _track(
+        'duplicate',
+        title: 'Aether Bloom',
+        artist: 'Mira',
+        album: 'Dawn',
+        duration: const Duration(minutes: 3),
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+      _track(
+        'other',
+        title: 'Other',
+        addedAt: DateTime.utc(2026, 1, 3),
+      ),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Merge',
+      trackIds: <String>['duplicate', 'other', 'keep'],
+    );
+    await store.setLyrics('keep', 'old lyrics');
+    now = DateTime.utc(2026, 1, 4, 12, 1);
+    await store.setLyrics('duplicate', 'new lyrics');
+    await store.recordPlayback('keep');
+    now = DateTime.utc(2026, 1, 4, 12, 2);
+    await store.recordPlayback('duplicate');
+    await store.recordPlaybackProgress(
+      'duplicate',
+      const Duration(minutes: 10),
+      const Duration(minutes: 30),
+    );
+    await store.toggleFavorite('duplicate');
+
+    final removed = await store.resolveDuplicateTracks(
+      keepTrackId: 'keep',
+      duplicateTrackIds: <String>['duplicate'],
+    );
+
+    expect(removed, 1);
+    expect(store.tracks.map((track) => track.id), isNot(contains('duplicate')));
+    expect(
+      store.playlistById(playlist.id)!.trackIds,
+      <String>['keep', 'other'],
+    );
+    expect(
+      store.playbackHistory.map((entry) => entry.trackId),
+      <String>['keep', 'keep'],
+    );
+    expect(store.playCountForTrack('keep'), 2);
+    expect(
+      store.tracks.firstWhere((track) => track.id == 'keep').isFavorite,
+      isTrue,
+    );
+    expect(store.lyricsForTrack('keep')!.plainText, 'new lyrics');
+    expect(store.lyricsForTrack('duplicate'), isNull);
+    expect(
+      store.playbackProgressForTrack('keep')!.position,
+      const Duration(minutes: 10),
+    );
+    expect(store.playbackProgressForTrack('duplicate'), isNull);
+    expect(store.duplicateTrackGroups(), isEmpty);
+
+    final secondStore = LibraryStore(clock: () => now);
+    await secondStore.load();
+
+    expect(
+      secondStore.tracks.map((track) => track.id),
+      isNot(contains('duplicate')),
+    );
+    expect(secondStore.playlistById(playlist.id)!.trackIds, <String>[
+      'keep',
+      'other',
+    ]);
+    expect(secondStore.lyricsForTrack('keep')!.plainText, 'new lyrics');
+    expect(secondStore.playCountForTrack('keep'), 2);
+  });
+
   test('persists playlists across store instances', () async {
     DateTime clock() => DateTime.utc(2026, 1, 4);
     final firstStore = LibraryStore(clock: clock);
@@ -1049,9 +1213,11 @@ Track _track(
   String album = 'Album',
   String genre = 'Unknown Genre',
   String sourceId = 'local',
+  String? externalId,
   Duration duration = Duration.zero,
   DateTime? addedAt,
   String? localPath,
+  String? streamUrl,
 }) {
   return Track(
     id: id,
@@ -1061,7 +1227,9 @@ Track _track(
     genre: genre,
     duration: duration,
     localPath: localPath ?? '/music/$id.mp3',
+    streamUrl: streamUrl,
     sourceId: sourceId,
+    externalId: externalId,
     addedAt: addedAt ?? DateTime.utc(2026),
   );
 }

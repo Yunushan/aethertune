@@ -4145,12 +4145,132 @@ String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
   return parts.join(' · ');
 }
 
+class _DuplicateResolverSheet extends StatelessWidget {
+  const _DuplicateResolverSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final groups = library.duplicateTrackGroups();
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.merge_type_outlined),
+                title: const Text('Duplicate resolver'),
+                subtitle: Text('${groups.length} duplicate group(s)'),
+              ),
+              const Divider(height: 1),
+              if (groups.isEmpty)
+                const ListTile(
+                  leading: Icon(Icons.check_circle_outline),
+                  title: Text('No duplicate groups found'),
+                )
+              else
+                for (final group in groups) ...<Widget>[
+                  ListTile(
+                    leading: const Icon(Icons.merge_type_outlined),
+                    title: Text(_duplicateMatchLabel(group.type)),
+                    subtitle: Text('${group.tracks.length} matching tracks'),
+                  ),
+                  for (final track in group.tracks)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.music_note_outlined),
+                      title: Text(track.title),
+                      subtitle: Text(
+                        _duplicateTrackSubtitle(track),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: TextButton(
+                        onPressed: () {
+                          unawaited(
+                            _keepDuplicateTrack(
+                              context,
+                              library,
+                              group,
+                              track,
+                            ),
+                          );
+                        },
+                        child: const Text('Keep'),
+                      ),
+                    ),
+                  const Divider(height: 1),
+                ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _keepDuplicateTrack(
+    BuildContext context,
+    LibraryStore library,
+    DuplicateTrackGroup group,
+    Track keepTrack,
+  ) async {
+    final removed = await library.resolveDuplicateTracks(
+      keepTrackId: keepTrack.id,
+      duplicateTrackIds: group.tracks
+          .where((track) => track.id != keepTrack.id)
+          .map((track) => track.id),
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Merged $removed duplicate(s) into ${keepTrack.title}.'),
+      ),
+    );
+  }
+}
+
+String _duplicateMatchLabel(DuplicateMatchType type) {
+  switch (type) {
+    case DuplicateMatchType.localPath:
+      return 'Same file path';
+    case DuplicateMatchType.sourceExternalId:
+      return 'Same provider item';
+    case DuplicateMatchType.streamUrl:
+      return 'Same stream URL';
+    case DuplicateMatchType.metadata:
+      return 'Same metadata and duration';
+  }
+}
+
+String _duplicateTrackSubtitle(Track track) {
+  final parts = <String>[
+    track.artist,
+    track.album,
+    if (track.localPath != null) track.localPath!,
+    if (track.streamUrl != null) track.streamUrl!,
+  ].where((part) => part.trim().isNotEmpty).toList(growable: false);
+
+  return parts.join(' · ');
+}
+
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab();
 
   @override
   Widget build(BuildContext context) {
     final player = context.watch<PlayerController>();
+    final library = context.watch<LibraryStore>();
+    final duplicateGroups = library.duplicateTrackGroups();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -4191,6 +4311,19 @@ class _SettingsTab extends StatelessWidget {
           title: const Text('Restore backup'),
           onTap: () => _showBackupRestore(context),
         ),
+        ListTile(
+          leading: const Icon(Icons.merge_type_outlined),
+          title: const Text('Resolve duplicates'),
+          subtitle: Text(
+            duplicateGroups.isEmpty
+                ? 'No duplicate groups found'
+                : '${duplicateGroups.length} duplicate group(s) found',
+          ),
+          enabled: library.loaded && duplicateGroups.isNotEmpty,
+          onTap: library.loaded && duplicateGroups.isNotEmpty
+              ? () => _showDuplicateResolver(context)
+              : null,
+        ),
         const Divider(),
         const ListTile(
           leading: Icon(Icons.privacy_tip_outlined),
@@ -4203,6 +4336,15 @@ class _SettingsTab extends StatelessWidget {
           subtitle: Text('Provider adapters must use legal, documented, user-owned, or official APIs.'),
         ),
       ],
+    );
+  }
+
+  Future<void> _showDuplicateResolver(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => const _DuplicateResolverSheet(),
     );
   }
 

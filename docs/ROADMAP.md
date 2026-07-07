@@ -39,7 +39,8 @@
 - [ ] Recursive folder browser
 - [ ] Metadata scanner
 - [x] Stored metadata editor
-- [ ] Duplicate resolver
+- [x] Duplicate resolver scaffold
+- [ ] Audio fingerprint and file-hash duplicate matching
 - [x] Recently played
 - [x] Local play counts
 - [x] Recently added view

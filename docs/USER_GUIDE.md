@@ -48,6 +48,10 @@ Suggestion chips below the search bar come from recently played tracks and libra
 
 Open a track menu and choose **Edit metadata** to update the saved title, artist, album, or genre. These edits update library search, browse groups, playlists, suggestions, and backups.
 
+## Duplicate resolver
+
+Open the Options tab and choose **Resolve duplicates** when duplicate groups are found. AetherTune can match duplicate library entries by same local path, provider item, stream URL, or metadata plus known duration. Choose **Keep** on the track you want to preserve; playlists, favorites, lyrics, history, and playback progress are merged into that kept track.
+
 ## Favorites
 
 Open a track menu and choose **Favorite**. Use the heart button in the search bar to filter favorites.

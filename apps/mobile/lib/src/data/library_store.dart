@@ -19,6 +19,8 @@ enum LibraryBrowseType { artist, album, genre, source, folder }
 
 enum SearchSuggestionType { recent, title, artist, album, genre, source, folder }
 
+enum DuplicateMatchType { localPath, sourceExternalId, streamUrl, metadata }
+
 enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 
 class SearchSuggestion {
@@ -29,6 +31,18 @@ class SearchSuggestion {
 
   final SearchSuggestionType type;
   final String value;
+}
+
+class DuplicateTrackGroup {
+  const DuplicateTrackGroup({
+    required this.key,
+    required this.type,
+    required this.tracks,
+  });
+
+  final String key;
+  final DuplicateMatchType type;
+  final List<Track> tracks;
 }
 
 class LibraryBrowseGroup {
@@ -257,6 +271,47 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<int> resolveDuplicateTracks({
+    required String keepTrackId,
+    required Iterable<String> duplicateTrackIds,
+  }) async {
+    final keepIndex = _tracks.indexWhere((track) => track.id == keepTrackId);
+    if (keepIndex == -1) {
+      return 0;
+    }
+
+    final removeIds = duplicateTrackIds
+        .where((trackId) => trackId != keepTrackId)
+        .where((trackId) => _tracks.any((track) => track.id == trackId))
+        .toSet();
+    if (removeIds.isEmpty) {
+      return 0;
+    }
+
+    final duplicateIds = <String>{keepTrackId, ...removeIds};
+    final shouldFavorite = _tracks
+        .where((track) => duplicateIds.contains(track.id))
+        .any((track) => track.isFavorite);
+    if (shouldFavorite && !_tracks[keepIndex].isFavorite) {
+      _tracks[keepIndex] = _tracks[keepIndex].copyWith(isFavorite: true);
+    }
+
+    _rewritePlaylistDuplicateReferences(keepTrackId, removeIds);
+    _rewriteHistoryDuplicateReferences(keepTrackId, removeIds);
+    _mergeDuplicateProgress(keepTrackId, removeIds);
+    _mergeDuplicateLyrics(keepTrackId, removeIds);
+    _tracks.removeWhere((track) => removeIds.contains(track.id));
+
+    _sortTracks();
+    _sortPlaylists();
+    _sortHistory();
+    _trimHistory();
+    await _save();
+    notifyListeners();
+
+    return removeIds.length;
+  }
+
   Future<void> clear() async {
     _tracks.clear();
     _playlists.clear();
@@ -401,6 +456,84 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return suggestions;
+  }
+
+  List<DuplicateTrackGroup> duplicateTrackGroups() {
+    final groupsByKey = <String, _MutableDuplicateTrackGroup>{};
+
+    void addGroupTrack(
+      DuplicateMatchType type,
+      String keyPart,
+      Track track,
+    ) {
+      final normalizedKey = _duplicateKeyPart(keyPart);
+      if (normalizedKey.isEmpty) {
+        return;
+      }
+
+      final key = '${type.name}:$normalizedKey';
+      final group = groupsByKey.putIfAbsent(
+        key,
+        () => _MutableDuplicateTrackGroup(
+          key: key,
+          type: type,
+        ),
+      );
+      group.add(track);
+    }
+
+    for (final track in _tracks) {
+      addGroupTrack(
+        DuplicateMatchType.localPath,
+        track.localPath ?? '',
+        track,
+      );
+      final externalId = track.externalId?.trim();
+      if (externalId != null && externalId.isNotEmpty) {
+        addGroupTrack(
+          DuplicateMatchType.sourceExternalId,
+          '${track.sourceId}:$externalId',
+          track,
+        );
+      }
+      addGroupTrack(
+        DuplicateMatchType.streamUrl,
+        track.streamUrl ?? '',
+        track,
+      );
+
+      final metadataKey = _duplicateMetadataKey(track);
+      if (metadataKey != null) {
+        addGroupTrack(DuplicateMatchType.metadata, metadataKey, track);
+      }
+    }
+
+    final groups = groupsByKey.values
+        .where((group) => group.tracks.length > 1)
+        .map((group) => group.toDuplicateTrackGroup())
+        .toList(growable: false);
+    groups.sort((a, b) {
+      final byType = a.type.index.compareTo(b.type.index);
+      if (byType != 0) {
+        return byType;
+      }
+
+      return _compareText(a.tracks.first.title, b.tracks.first.title);
+    });
+
+    final seenTrackSets = <String>{};
+    final uniqueGroups = <DuplicateTrackGroup>[];
+    for (final group in groups) {
+      final trackSetKey = group.tracks.map((track) => track.id).toList()
+        ..sort();
+      if (!seenTrackSets.add(trackSetKey.join('|'))) {
+        continue;
+      }
+
+      uniqueGroups.add(group);
+    }
+
+    return uniqueGroups;
   }
 
   List<LibraryBrowseGroup> browseGroups(
@@ -1551,6 +1684,124 @@ class LibraryStore extends ChangeNotifier {
     return row[index];
   }
 
+  void _rewritePlaylistDuplicateReferences(
+    String keepTrackId,
+    Set<String> removeIds,
+  ) {
+    for (var index = 0; index < _playlists.length; index += 1) {
+      final playlist = _playlists[index];
+      final trackIds = <String>[];
+      for (final trackId in playlist.trackIds) {
+        final mappedTrackId = removeIds.contains(trackId) ? keepTrackId : trackId;
+        if (!trackIds.contains(mappedTrackId)) {
+          trackIds.add(mappedTrackId);
+        }
+      }
+
+      if (!_listEquals(playlist.trackIds, trackIds)) {
+        _playlists[index] = playlist.copyWith(
+          trackIds: trackIds,
+          updatedAt: _clock(),
+        );
+      }
+    }
+  }
+
+  void _rewriteHistoryDuplicateReferences(
+    String keepTrackId,
+    Set<String> removeIds,
+  ) {
+    for (var index = 0; index < _history.length; index += 1) {
+      final entry = _history[index];
+      if (removeIds.contains(entry.trackId)) {
+        _history[index] = PlaybackHistoryEntry(
+          trackId: keepTrackId,
+          playedAt: entry.playedAt,
+        );
+      }
+    }
+  }
+
+  void _mergeDuplicateProgress(String keepTrackId, Set<String> removeIds) {
+    final candidates = <PlaybackProgressEntry>[
+      if (_progressByTrackId[keepTrackId] != null)
+        _progressByTrackId[keepTrackId]!,
+      for (final trackId in removeIds)
+        if (_progressByTrackId[trackId] != null) _progressByTrackId[trackId]!,
+    ];
+
+    for (final trackId in removeIds) {
+      _progressByTrackId.remove(trackId);
+    }
+
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    candidates.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final latest = candidates.first;
+    _progressByTrackId[keepTrackId] = PlaybackProgressEntry(
+      trackId: keepTrackId,
+      position: latest.position,
+      duration: latest.duration,
+      updatedAt: latest.updatedAt,
+    );
+  }
+
+  void _mergeDuplicateLyrics(String keepTrackId, Set<String> removeIds) {
+    final candidates = <TrackLyrics>[
+      if (_lyricsByTrackId[keepTrackId] != null) _lyricsByTrackId[keepTrackId]!,
+      for (final trackId in removeIds)
+        if (_lyricsByTrackId[trackId] != null) _lyricsByTrackId[trackId]!,
+    ].where((lyrics) => !lyrics.isEmpty).toList(growable: false);
+
+    for (final trackId in removeIds) {
+      _lyricsByTrackId.remove(trackId);
+    }
+
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    candidates.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    _lyricsByTrackId[keepTrackId] = candidates.first.copyWith(
+      trackId: keepTrackId,
+    );
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+
+    for (var index = 0; index < a.length; index += 1) {
+      if (a[index] != b[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  String _duplicateKeyPart(String value) {
+    return value.trim().replaceAll('\\', '/').toLowerCase();
+  }
+
+  String? _duplicateMetadataKey(Track track) {
+    final title = _duplicateKeyPart(track.title);
+    if (title.isEmpty) {
+      return null;
+    }
+
+    final artist = _duplicateKeyPart(track.artist);
+    final album = _duplicateKeyPart(track.album);
+    if (track.duration == Duration.zero) {
+      return null;
+    }
+
+    return '$title|$artist|$album|${track.duration.inSeconds}';
+  }
+
   void _sortTracks() {
     _tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
   }
@@ -1834,6 +2085,35 @@ class _MutableBrowseGroup {
       label: label,
       trackCount: trackCount,
       totalDuration: totalDuration,
+    );
+  }
+}
+
+class _MutableDuplicateTrackGroup {
+  _MutableDuplicateTrackGroup({
+    required this.key,
+    required this.type,
+  });
+
+  final String key;
+  final DuplicateMatchType type;
+  final List<Track> tracks = <Track>[];
+
+  void add(Track track) {
+    if (tracks.any((existing) => existing.id == track.id)) {
+      return;
+    }
+
+    tracks.add(track);
+  }
+
+  DuplicateTrackGroup toDuplicateTrackGroup() {
+    tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+
+    return DuplicateTrackGroup(
+      key: key,
+      type: type,
+      tracks: List.unmodifiable(tracks),
     );
   }
 }
