@@ -349,6 +349,58 @@ void main() {
     expect(secondStore.tracksForPlaylist(playlist.id).single.id, '1');
   });
 
+  test('edits persists exports imports and clears playlist artwork', () async {
+    var now = DateTime.utc(2026, 1, 4, 5);
+    DateTime clock() => now;
+    final artworkUri = Uri.parse('https://media.example.test/road.jpg');
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('1'), _track('2')]);
+    final playlist = await firstStore.createPlaylist(
+      'Artwork Mix',
+      trackIds: <String>['1', '2'],
+    );
+
+    now = DateTime.utc(2026, 1, 4, 5, 1);
+    final updated = await firstStore.updatePlaylistArtwork(
+      playlist.id,
+      artworkUri,
+    );
+
+    expect(updated!.artworkUri, artworkUri);
+    expect(updated.updatedAt, now);
+    expect(firstStore.playlistById(playlist.id)!.artworkUri, artworkUri);
+
+    final playlistDocument = firstStore.exportPlaylistJson(playlist.id);
+    final decoded = jsonDecode(playlistDocument) as Map<String, dynamic>;
+
+    expect(
+      (decoded['playlist'] as Map<String, dynamic>)['artworkUri'],
+      artworkUri.toString(),
+    );
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+
+    expect(secondStore.playlistById(playlist.id)!.artworkUri, artworkUri);
+
+    await secondStore.deletePlaylist(playlist.id);
+    final imported = await secondStore.importPlaylistJson(playlistDocument);
+
+    expect(imported.artworkUri, artworkUri);
+
+    now = DateTime.utc(2026, 1, 4, 5, 2);
+    final cleared = await secondStore.updatePlaylistArtwork(imported.id, null);
+
+    expect(cleared!.artworkUri, isNull);
+    expect(cleared.updatedAt, now);
+    expect(secondStore.playlistById(imported.id)!.artworkUri, isNull);
+    expect(
+      await secondStore.updatePlaylistArtwork('missing', artworkUri),
+      isNull,
+    );
+  });
+
   test('exports and imports playlist JSON documents', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 1),
@@ -1275,6 +1327,9 @@ void main() {
       'Backup Mix',
       trackIds: <String>['1', '2'],
     );
+    final playlistArtworkUri =
+        Uri.parse('https://media.example.test/backup-mix.jpg');
+    await firstStore.updatePlaylistArtwork(playlist.id, playlistArtworkUri);
     await firstStore.setLyrics('1', 'backup lyrics');
     await firstStore.recordPlayback('2');
     await firstStore.recordPlaybackProgress(
@@ -1324,6 +1379,10 @@ void main() {
         '1',
         '2',
       ],
+    );
+    expect(
+      secondStore.playlistById(playlist.id)!.artworkUri,
+      playlistArtworkUri,
     );
     expect(secondStore.lyricsForTrack('1')!.plainText, 'backup lyrics');
     expect(secondStore.playbackHistory.single.trackId, '2');

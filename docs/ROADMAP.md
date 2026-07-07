@@ -34,7 +34,8 @@
 - [x] Built-in smart playlists
 - [x] Custom rule smart playlists
 - [ ] Nested smart playlist rule builder
-- [ ] Playlist artwork
+- [x] Playlist artwork URL display/editing
+- [ ] Playlist artwork picker, cropper, generated collage, and sync
 - [x] Backup/restore JSON
 - [x] Imported-track folder browse
 - [ ] Recursive folder browser

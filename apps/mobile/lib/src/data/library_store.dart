@@ -1073,6 +1073,7 @@ class LibraryStore extends ChangeNotifier {
 
     final playlistData = Map<String, Object?>.from(rawPlaylist);
     final name = (playlistData['name'] as String?)?.trim();
+    final artworkUri = _parseOptionalUri(playlistData['artworkUri'] as String?);
     final rawTracks = root['tracks'];
     if (rawTracks is! List) {
       throw const FormatException('Playlist JSON is missing track data.');
@@ -1099,6 +1100,7 @@ class LibraryStore extends ChangeNotifier {
     return createPlaylist(
       name == null || name.isEmpty ? fallbackName : name,
       trackIds: matchedTrackIds,
+      artworkUri: artworkUri,
     );
   }
 
@@ -1741,6 +1743,7 @@ class LibraryStore extends ChangeNotifier {
   Future<Playlist> createPlaylist(
     String name, {
     Iterable<String> trackIds = const <String>[],
+    Uri? artworkUri,
   }) async {
     final normalizedName = name.trim();
     if (normalizedName.isEmpty) {
@@ -1757,6 +1760,7 @@ class LibraryStore extends ChangeNotifier {
       id: _playlistId(normalizedName, now),
       name: normalizedName,
       trackIds: filteredTrackIds,
+      artworkUri: artworkUri,
       createdAt: now,
       updatedAt: now,
     );
@@ -1787,6 +1791,28 @@ class LibraryStore extends ChangeNotifier {
     _sortPlaylists();
     await _save();
     notifyListeners();
+  }
+
+  Future<Playlist?> updatePlaylistArtwork(
+    String playlistId,
+    Uri? artworkUri,
+  ) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return null;
+    }
+
+    final updated = _playlists[index].copyWith(
+      artworkUri: artworkUri,
+      clearArtworkUri: artworkUri == null,
+      updatedAt: _clock(),
+    );
+    _playlists[index] = updated;
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+
+    return updated;
   }
 
   Future<void> deletePlaylist(String playlistId) async {
@@ -1883,6 +1909,19 @@ class LibraryStore extends ChangeNotifier {
 
   String _playlistTrackLocator(Track track) {
     return track.localPath ?? track.streamUrl ?? track.id;
+  }
+
+  Uri? _parseOptionalUri(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || !uri.hasScheme) {
+      return null;
+    }
+
+    return uri;
   }
 
   List<String> _dedupeTrackIds(Iterable<String?> trackIds) {

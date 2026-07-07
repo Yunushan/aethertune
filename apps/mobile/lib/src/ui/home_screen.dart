@@ -1957,6 +1957,7 @@ class _PlaylistsTab extends StatelessWidget {
                 playlist,
                 format,
               ),
+              onArtwork: () => _editPlaylistArtwork(context, playlist),
               onRename: () => _renamePlaylist(context, playlist),
               onDelete: () => _deletePlaylist(context, playlist),
             ),
@@ -2176,6 +2177,51 @@ class _PlaylistsTab extends StatelessWidget {
     await library.renamePlaylist(playlist.id, name);
   }
 
+  Future<void> _editPlaylistArtwork(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final value = await _promptForPlaylistArtwork(
+      context,
+      playlist.artworkUri?.toString() ?? '',
+    );
+    if (!context.mounted || value == null) {
+      return;
+    }
+
+    final normalized = value.trim();
+    Uri? artworkUri;
+    if (normalized.isNotEmpty) {
+      artworkUri = Uri.tryParse(normalized);
+      if (artworkUri == null || !_isNetworkImageUri(artworkUri)) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Enter an http or https image URL.')),
+        );
+        return;
+      }
+    }
+
+    final updated = await library.updatePlaylistArtwork(
+      playlist.id,
+      artworkUri,
+    );
+    if (!context.mounted || updated == null) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          artworkUri == null
+              ? 'Removed artwork for ${updated.name}.'
+              : 'Updated artwork for ${updated.name}.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _deletePlaylist(
     BuildContext context,
     Playlist playlist,
@@ -2323,6 +2369,57 @@ class _PlaylistsTab extends StatelessWidget {
                     Navigator.of(dialogContext).pop(normalized);
                   }
                 },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<String?> _promptForPlaylistArtwork(
+    BuildContext context,
+    String initialValue,
+  ) async {
+    final controller = TextEditingController(text: initialValue);
+
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Playlist artwork'),
+            content: TextField(
+              autofocus: true,
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Image URL',
+                hintText: 'https://example.com/cover.jpg',
+              ),
+              autofillHints: const <String>[AutofillHints.url],
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) {
+                Navigator.of(dialogContext).pop(value);
+              },
+            ),
+            actions: <Widget>[
+              if (initialValue.isNotEmpty)
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(''),
+                  child: const Text('Clear'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
                 child: const Text('Save'),
               ),
             ],
@@ -2711,7 +2808,7 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
             shrinkWrap: true,
             children: <Widget>[
               ListTile(
-                leading: const Icon(Icons.queue_music),
+                leading: _PlaylistArtwork(playlist: playlist),
                 title: Text(playlist.name),
                 subtitle: Text(
                   hasQuery
@@ -2938,6 +3035,7 @@ class _PlaylistCard extends StatelessWidget {
     required this.playlist,
     required this.onOpen,
     required this.onExport,
+    required this.onArtwork,
     required this.onRename,
     required this.onDelete,
   });
@@ -2945,6 +3043,7 @@ class _PlaylistCard extends StatelessWidget {
   final Playlist playlist;
   final VoidCallback onOpen;
   final ValueChanged<PlaylistDocumentFormat> onExport;
+  final VoidCallback onArtwork;
   final VoidCallback onRename;
   final VoidCallback onDelete;
 
@@ -2952,7 +3051,7 @@ class _PlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
-        leading: const Icon(Icons.queue_music),
+        leading: _PlaylistArtwork(playlist: playlist),
         title: Text(playlist.name),
         subtitle: Text('${playlist.trackCount} track(s)'),
         onTap: onOpen,
@@ -2970,6 +3069,9 @@ class _PlaylistCard extends StatelessWidget {
                 break;
               case _PlaylistAction.rename:
                 onRename();
+                break;
+              case _PlaylistAction.artwork:
+                onArtwork();
                 break;
               case _PlaylistAction.delete:
                 onDelete();
@@ -3007,6 +3109,13 @@ class _PlaylistCard extends StatelessWidget {
               ),
             ),
             PopupMenuItem(
+              value: _PlaylistAction.artwork,
+              child: ListTile(
+                leading: Icon(Icons.image_outlined),
+                title: Text('Artwork'),
+              ),
+            ),
+            PopupMenuItem(
               value: _PlaylistAction.delete,
               child: ListTile(
                 leading: Icon(Icons.delete_outline),
@@ -3015,6 +3124,68 @@ class _PlaylistCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PlaylistArtwork extends StatelessWidget {
+  const _PlaylistArtwork({
+    required this.playlist,
+    this.size = 40,
+  });
+
+  final Playlist playlist;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = playlist.artworkUri;
+    final fallback = _PlaylistArtworkFallback(size: size);
+    if (uri == null || !_isNetworkImageUri(uri)) {
+      return fallback;
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.network(
+        uri.toString(),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) {
+            return child;
+          }
+
+          return fallback;
+        },
+      ),
+    );
+  }
+}
+
+class _PlaylistArtworkFallback extends StatelessWidget {
+  const _PlaylistArtworkFallback({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        Icons.queue_music,
+        color: colorScheme.onSecondaryContainer,
+        size: size * 0.55,
       ),
     );
   }
@@ -3054,7 +3225,18 @@ class _EmptyPlaylists extends StatelessWidget {
   }
 }
 
-enum _PlaylistAction { exportJson, exportM3u, exportCsv, rename, delete }
+bool _isNetworkImageUri(Uri uri) {
+  return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https');
+}
+
+enum _PlaylistAction {
+  exportJson,
+  exportM3u,
+  exportCsv,
+  rename,
+  artwork,
+  delete,
+}
 
 enum _CustomSmartPlaylistAction { edit, delete }
 

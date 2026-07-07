@@ -13,6 +13,7 @@ Initial GitHub-ready scaffold.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added duplicate track detection and merge handling for local library entries.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
+- Added playlist artwork URL editing, display, export/import, and backup restore.
 - Added local listening stats recap for tracks, artists, albums, genres, and listening time.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
