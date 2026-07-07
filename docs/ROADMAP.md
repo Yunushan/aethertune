@@ -102,6 +102,7 @@
 ## 0.6.x: Offline and lyrics
 
 - [x] Offline mode toggle
+- [x] Player-wide saved stream blocking while offline mode is enabled
 - [x] Per-provider cache/download policy gate
 - [ ] Cache manager
 - [ ] Download queue

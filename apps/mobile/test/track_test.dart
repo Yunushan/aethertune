@@ -63,6 +63,38 @@ void main() {
     expect(decoded.isPlayable, isTrue);
   });
 
+  test('playable source checks ignore blank paths and URLs', () {
+    final blankLocal = Track(
+      id: 'blank-local',
+      title: 'Blank Local',
+      localPath: '  ',
+    );
+    final blankStream = Track(
+      id: 'blank-stream',
+      title: 'Blank Stream',
+      streamUrl: '',
+    );
+    final localTrack = Track(
+      id: 'local',
+      title: 'Local',
+      localPath: '/music/local.mp3',
+    );
+    final streamTrack = Track(
+      id: 'stream',
+      title: 'Stream',
+      streamUrl: 'https://media.example.test/song.mp3',
+    );
+
+    expect(blankLocal.hasLocalSource, isFalse);
+    expect(blankLocal.isPlayable, isFalse);
+    expect(blankStream.hasStreamSource, isFalse);
+    expect(blankStream.isPlayable, isFalse);
+    expect(localTrack.hasLocalSource, isTrue);
+    expect(localTrack.isPlayable, isTrue);
+    expect(streamTrack.hasStreamSource, isTrue);
+    expect(streamTrack.isPlayable, isTrue);
+  });
+
   test('Stable local id is deterministic', () {
     final a = Track.stableLocalId('/tmp/audio.mp3');
     final b = Track.stableLocalId('/tmp/audio.mp3');

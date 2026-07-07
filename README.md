@@ -147,7 +147,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | History/stats | Recently played, local play counts, estimated listening time, date-range filters, JSON/CSV export, and top track/artist/album/genre recap implemented; richer yearly/monthly cards and visualizations roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, network disclosure, and cache/download policy gates for legal source adapters |
-| Offline | Local-first data model, offline library, persisted offline mode that pauses network-backed source actions, per-provider cache/download policy gate, cache/download manager roadmap |
+| Offline | Local-first data model, offline library, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, cache/download manager roadmap |
 | Music discovery | Home feeds, charts, moods, radio, recommendations through provider plugins |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, and cross-device artwork sync roadmap |
@@ -156,7 +156,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |
-| Multi-source | Local provider support plus offline-mode network pausing, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download policy, Radio Browser mirror discovery/search/filter/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download policy with multi-file item results; self-hosted and official API providers remain roadmap |
+| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across legal adapters, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download policy, Radio Browser mirror discovery/search/filter/play/save/click accounting with live-stream cache/download denial, and Internet Archive audio search/filter/play/save/cache-download policy with multi-file item results; self-hosted and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 

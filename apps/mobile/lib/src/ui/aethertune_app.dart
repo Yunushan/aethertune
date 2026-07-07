@@ -15,10 +15,18 @@ class AetherTuneApp extends StatelessWidget {
         ChangeNotifierProvider<LibraryStore>(
           create: (_) => LibraryStore()..load(),
         ),
-        ChangeNotifierProvider<PlayerController>(
+        ChangeNotifierProxyProvider<LibraryStore, PlayerController>(
           create: (_) => PlayerController()
             ..loadPersistedQueue()
             ..loadPersistedPlaybackSettings(),
+          update: (_, library, player) {
+            final controller = player ??
+                (PlayerController()
+                  ..loadPersistedQueue()
+                  ..loadPersistedPlaybackSettings());
+            controller.setOfflineModeEnabled(library.offlineModeEnabled);
+            return controller;
+          },
         ),
       ],
       child: MaterialApp(

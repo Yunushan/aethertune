@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../player/offline_playback_policy.dart';
 import '../../player/player_controller.dart';
 
 class PlayerBar extends StatelessWidget {
@@ -112,17 +113,26 @@ class PlayerBar extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: 'Previous',
-                    onPressed: player.previous,
+                    onPressed: () => _runPlaybackAction(
+                      context,
+                      player.previous,
+                    ),
                     icon: const Icon(Icons.skip_previous),
                   ),
                   FilledButton.tonalIcon(
-                    onPressed: player.togglePlayPause,
+                    onPressed: () => _runPlaybackAction(
+                      context,
+                      player.togglePlayPause,
+                    ),
                     icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
                     label: Text(player.isPlaying ? 'Pause' : 'Play'),
                   ),
                   IconButton(
                     tooltip: 'Next',
-                    onPressed: player.next,
+                    onPressed: () => _runPlaybackAction(
+                      context,
+                      player.next,
+                    ),
                     icon: const Icon(Icons.skip_next),
                   ),
                 ],
@@ -132,5 +142,22 @@ class PlayerBar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _runPlaybackAction(
+    BuildContext context,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } on OfflinePlaybackBlockedException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
+      );
+    }
   }
 }

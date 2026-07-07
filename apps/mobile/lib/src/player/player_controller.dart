@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
+import 'offline_playback_policy.dart';
 
 class PlayerController extends ChangeNotifier {
   PlayerController() {
@@ -42,6 +43,7 @@ class PlayerController extends ChangeNotifier {
   bool _sleepTimerFadesOut = false;
   bool _queueSnapshotLoaded = false;
   bool _playbackSettingsLoaded = false;
+  bool _offlineModeEnabled = false;
   int _playbackStartSerial = 0;
   double? _sleepFadeStartVolume;
 
@@ -57,6 +59,25 @@ class PlayerController extends ChangeNotifier {
   Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
   bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
+  bool get offlineModeEnabled => _offlineModeEnabled;
+
+  void setOfflineModeEnabled(bool enabled) {
+    if (_offlineModeEnabled == enabled) {
+      return;
+    }
+
+    _offlineModeEnabled = enabled;
+    if (_offlineModeEnabled &&
+        _current != null &&
+        !offlineModeAllowsPlayback(
+          _current!,
+          offlineModeEnabled: _offlineModeEnabled,
+        )) {
+      _loadedTrackId = null;
+      unawaited(_audio.stop());
+    }
+    notifyListeners();
+  }
 
   Future<void> loadPersistedQueue() async {
     if (_queueSnapshotLoaded) {
@@ -117,6 +138,11 @@ class PlayerController extends ChangeNotifier {
     List<Track>? queue,
     Duration? initialPosition,
   }) async {
+    requireOfflineModePlaybackAllowed(
+      track,
+      offlineModeEnabled: _offlineModeEnabled,
+    );
+
     if (queue != null) {
       _queue
         ..clear()
@@ -146,6 +172,11 @@ class PlayerController extends ChangeNotifier {
     if (_audio.playing) {
       await _audio.pause();
     } else {
+      requireOfflineModePlaybackAllowed(
+        _current!,
+        offlineModeEnabled: _offlineModeEnabled,
+      );
+
       final wasLoaded = _loadedTrackId == _current!.id;
       if (!wasLoaded) {
         await _load(_current!);
@@ -181,13 +212,12 @@ class PlayerController extends ChangeNotifier {
       return;
     }
 
-    if (index + 1 < _queue.length) {
-      await playTrack(_queue[index + 1]);
-      return;
-    }
-
-    if (_audio.loopMode == LoopMode.all) {
-      await playTrack(_queue.first);
+    final nextTrack = _nextPlayableTrack(
+      index + 1,
+      wrap: _audio.loopMode == LoopMode.all,
+    );
+    if (nextTrack != null) {
+      await playTrack(nextTrack);
       return;
     }
 
@@ -200,8 +230,9 @@ class PlayerController extends ChangeNotifier {
     }
 
     final index = _queue.indexWhere((track) => track.id == _current!.id);
-    if (index > 0) {
-      await playTrack(_queue[index - 1]);
+    final previousTrack = _previousPlayableTrack(index - 1);
+    if (previousTrack != null) {
+      await playTrack(previousTrack);
     }
   }
 
@@ -357,13 +388,13 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _load(Track track) async {
-    if (track.localPath != null) {
+    if (track.hasLocalSource) {
       await _audio.setFilePath(track.localPath!);
       _loadedTrackId = track.id;
       return;
     }
 
-    if (track.streamUrl != null) {
+    if (track.hasStreamSource) {
       await _audio.setUrl(track.streamUrl!);
       _loadedTrackId = track.id;
       return;
@@ -434,6 +465,50 @@ class PlayerController extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  Track? _nextPlayableTrack(int startIndex, {required bool wrap}) {
+    if (_queue.isEmpty) {
+      return null;
+    }
+
+    var index = startIndex;
+    var checked = 0;
+    while (checked < _queue.length) {
+      if (index >= _queue.length) {
+        if (!wrap) {
+          return null;
+        }
+        index = 0;
+      }
+
+      final track = _queue[index];
+      if (offlineModeAllowsPlayback(
+        track,
+        offlineModeEnabled: _offlineModeEnabled,
+      )) {
+        return track;
+      }
+
+      index += 1;
+      checked += 1;
+    }
+
+    return null;
+  }
+
+  Track? _previousPlayableTrack(int startIndex) {
+    for (var index = startIndex; index >= 0; index -= 1) {
+      final track = _queue[index];
+      if (offlineModeAllowsPlayback(
+        track,
+        offlineModeEnabled: _offlineModeEnabled,
+      )) {
+        return track;
+      }
+    }
+
+    return null;
   }
 
   @override

@@ -35,7 +35,9 @@ class Track {
   final bool isFavorite;
   final DateTime addedAt;
 
-  bool get isPlayable => localPath != null || streamUrl != null;
+  bool get hasLocalSource => localPath?.trim().isNotEmpty == true;
+  bool get hasStreamSource => streamUrl?.trim().isNotEmpty == true;
+  bool get isPlayable => hasLocalSource || hasStreamSource;
 
   Track copyWith({
     String? id,

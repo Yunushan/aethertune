@@ -20,6 +20,7 @@ import '../domain/provider_search.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
+import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
@@ -1511,6 +1512,7 @@ class _LibraryTab extends StatelessWidget {
                 return TrackTile(
                   track: track,
                   onPlay: () => _playTrackWithResume(
+                    context,
                     player,
                     library,
                     track,
@@ -1677,6 +1679,7 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
               return TrackTile(
                 track: track,
                 onPlay: () => _playTrackWithResume(
+                  context,
                   player,
                   library,
                   track,
@@ -2663,6 +2666,7 @@ class _SmartPlaylistSheet extends StatelessWidget {
                         : () {
                             Navigator.of(context).pop();
                             _playTrackWithResume(
+                              context,
                               player,
                               library,
                               tracks.first,
@@ -2687,6 +2691,7 @@ class _SmartPlaylistSheet extends StatelessWidget {
               return TrackTile(
                 track: track,
                 onPlay: () => _playTrackWithResume(
+                  context,
                   player,
                   library,
                   track,
@@ -2756,6 +2761,7 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
                         : () {
                             Navigator.of(context).pop();
                             _playTrackWithResume(
+                              context,
                               player,
                               library,
                               tracks.first,
@@ -2779,6 +2785,7 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
               return TrackTile(
                 track: track,
                 onPlay: () => _playTrackWithResume(
+                  context,
                   player,
                   library,
                   track,
@@ -2866,6 +2873,7 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
                       : () {
                           Navigator.of(context).pop();
                           _playTrackWithResume(
+                            context,
                             widget.player,
                             library,
                             tracks.first,
@@ -3420,6 +3428,7 @@ class _HistoryTabState extends State<_HistoryTab> {
                 ),
               ),
               onTap: () => _playTrackWithResume(
+                context,
                 player,
                 library,
                 track,
@@ -3785,20 +3794,31 @@ bool _tracksPodcastProgress(Track track) {
 }
 
 Future<void> _playTrackWithResume(
+  BuildContext context,
   PlayerController player,
   LibraryStore library,
   Track track, {
   required List<Track> queue,
-}) {
+}) async {
   final initialPosition = _tracksPodcastProgress(track)
       ? library.playbackProgressForTrack(track.id)?.position
       : null;
 
-  return player.playTrack(
-    track,
-    queue: queue,
-    initialPosition: initialPosition,
-  );
+  try {
+    await player.playTrack(
+      track,
+      queue: queue,
+      initialPosition: initialPosition,
+    );
+  } on OfflinePlaybackBlockedException catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
+    );
+  }
 }
 
 String _formatDurationLabel(Duration duration) {
@@ -4565,7 +4585,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   bool _offlineModeBlocksStream(BuildContext context, Track track) {
     if (!context.read<LibraryStore>().offlineModeEnabled ||
-        track.localPath?.trim().isNotEmpty == true) {
+        track.hasLocalSource) {
       return false;
     }
 
@@ -4998,6 +5018,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     try {
       await library.addTracks(<Track>[track]);
       await _playTrackWithResume(
+        context,
         player,
         library,
         track,
