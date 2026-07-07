@@ -684,6 +684,90 @@ void main() {
     expect(store.searchSuggestions('ambient', limit: 1), hasLength(1));
   });
 
+  test('edits persisted track metadata for search browse and suggestions', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'Untitled Import',
+        artist: 'Unknown Artist',
+        album: 'Unknown Album',
+        genre: 'Unknown Genre',
+      ),
+    ]);
+
+    final updated = await store.updateTrackMetadata(
+      '1',
+      title: '  Aether Bloom  ',
+      artist: '  Mira Vale  ',
+      album: '  Dawn Signals  ',
+      genre: '  Synthwave  ',
+    );
+
+    expect(updated, isNotNull);
+    expect(updated!.id, '1');
+    expect(updated.title, 'Aether Bloom');
+    expect(updated.artist, 'Mira Vale');
+    expect(updated.album, 'Dawn Signals');
+    expect(updated.genre, 'Synthwave');
+    expect(store.search('untitled'), isEmpty);
+    expect(store.search('synthwave').single.id, '1');
+    expect(
+      store.browseGroups(LibraryBrowseType.artist).single.label,
+      'Mira Vale',
+    );
+    expect(
+      store.searchSuggestions('dawn').map((suggestion) => suggestion.value),
+      contains('Dawn Signals'),
+    );
+
+    final secondStore = LibraryStore();
+    await secondStore.load();
+
+    expect(secondStore.tracks.single.title, 'Aether Bloom');
+    expect(secondStore.search('mira').single.id, '1');
+  });
+
+  test('track metadata edits require a title and normalize empty fields', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[_track('1', title: 'Original')]);
+
+    expect(
+      store.updateTrackMetadata(
+        '1',
+        title: '   ',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Genre',
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      await store.updateTrackMetadata(
+        'missing',
+        title: 'Missing',
+        artist: '',
+        album: '',
+        genre: '',
+      ),
+      isNull,
+    );
+
+    final updated = await store.updateTrackMetadata(
+      '1',
+      title: 'Original',
+      artist: '',
+      album: '',
+      genre: '',
+    );
+
+    expect(updated!.artist, 'Unknown Artist');
+    expect(updated.album, 'Unknown Album');
+    expect(updated.genre, 'Unknown Genre');
+  });
+
   test('builds smart playlists from library and playback state', () async {
     var now = DateTime.utc(2026, 1, 14, 12);
     final store = LibraryStore(clock: () => now);

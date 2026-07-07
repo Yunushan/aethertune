@@ -715,6 +715,157 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _TrackMetadataDraft {
+  const _TrackMetadataDraft({
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.genre,
+  });
+
+  final String title;
+  final String artist;
+  final String album;
+  final String genre;
+}
+
+Future<void> _showTrackMetadataEditor(
+  BuildContext context,
+  Track track,
+) async {
+  final library = context.read<LibraryStore>();
+  final messenger = ScaffoldMessenger.of(context);
+  final draft = await _promptForTrackMetadata(context, track);
+
+  if (!context.mounted || draft == null) {
+    return;
+  }
+
+  final updated = await library.updateTrackMetadata(
+    track.id,
+    title: draft.title,
+    artist: draft.artist,
+    album: draft.album,
+    genre: draft.genre,
+  );
+
+  if (!context.mounted) {
+    return;
+  }
+
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        updated == null
+            ? 'Track is no longer in the library.'
+            : 'Saved metadata for ${updated.title}.',
+      ),
+    ),
+  );
+}
+
+Future<_TrackMetadataDraft?> _promptForTrackMetadata(
+  BuildContext context,
+  Track track,
+) async {
+  final titleController = TextEditingController(text: track.title);
+  final artistController = TextEditingController(text: track.artist);
+  final albumController = TextEditingController(text: track.album);
+  final genreController = TextEditingController(text: track.genre);
+  String? titleErrorText;
+
+  try {
+    return showDialog<_TrackMetadataDraft>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            void submit() {
+              final title = titleController.text.trim();
+              if (title.isEmpty) {
+                setDialogState(() {
+                  titleErrorText = 'Title is required';
+                });
+                return;
+              }
+
+              Navigator.of(dialogContext).pop(
+                _TrackMetadataDraft(
+                  title: title,
+                  artist: artistController.text,
+                  album: albumController.text,
+                  genre: genreController.text,
+                ),
+              );
+            }
+
+            return AlertDialog(
+              title: const Text('Edit metadata'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      TextField(
+                        autofocus: true,
+                        controller: titleController,
+                        decoration: InputDecoration(
+                          errorText: titleErrorText,
+                          labelText: 'Title',
+                        ),
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (titleErrorText != null) {
+                            setDialogState(() {
+                              titleErrorText = null;
+                            });
+                          }
+                        },
+                      ),
+                      TextField(
+                        controller: artistController,
+                        decoration: const InputDecoration(labelText: 'Artist'),
+                        textInputAction: TextInputAction.next,
+                      ),
+                      TextField(
+                        controller: albumController,
+                        decoration: const InputDecoration(labelText: 'Album'),
+                        textInputAction: TextInputAction.next,
+                      ),
+                      TextField(
+                        controller: genreController,
+                        decoration: const InputDecoration(labelText: 'Genre'),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => submit(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submit,
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    titleController.dispose();
+    artistController.dispose();
+    albumController.dispose();
+    genreController.dispose();
+  }
+}
+
 class _SyncedLyricsPreview extends StatelessWidget {
   const _SyncedLyricsPreview({required this.lines});
 
@@ -1325,6 +1476,9 @@ class _LibraryTab extends StatelessWidget {
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
                   onLyrics: () => onLyrics(track),
+                  onEditMetadata: () => unawaited(
+                    _showTrackMetadataEditor(context, track),
+                  ),
                   onRemove: () => library.removeTrack(track.id),
                 );
               },
@@ -1488,6 +1642,9 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
+                onEditMetadata: () => unawaited(
+                  _showTrackMetadataEditor(context, track),
+                ),
                 onRemove: () => library.removeTrack(track.id),
               );
             },
@@ -2073,6 +2230,9 @@ class _SmartPlaylistSheet extends StatelessWidget {
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
+                onEditMetadata: () => unawaited(
+                  _showTrackMetadataEditor(context, track),
+                ),
                 onRemove: () => library.removeTrack(track.id),
               );
             },
@@ -2218,6 +2378,11 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
                               entry.key + 1,
                             );
                             break;
+                          case _PlaylistTrackAction.editMetadata:
+                            unawaited(
+                              _showTrackMetadataEditor(context, entry.value),
+                            );
+                            break;
                           case _PlaylistTrackAction.remove:
                             library.removeTrackFromPlaylist(
                               playlist.id,
@@ -2242,6 +2407,13 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
                           child: const ListTile(
                             leading: Icon(Icons.arrow_downward),
                             title: Text('Move down'),
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: _PlaylistTrackAction.editMetadata,
+                          child: ListTile(
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Edit metadata'),
                           ),
                         ),
                         const PopupMenuItem(
@@ -2412,7 +2584,7 @@ class _EmptyPlaylists extends StatelessWidget {
 
 enum _PlaylistAction { exportJson, exportM3u, exportCsv, rename, delete }
 
-enum _PlaylistTrackAction { moveUp, moveDown, remove }
+enum _PlaylistTrackAction { moveUp, moveDown, editMetadata, remove }
 
 class _HistoryTab extends StatelessWidget {
   const _HistoryTab();

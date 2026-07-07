@@ -44,6 +44,10 @@ Use the search box on the Library tab. Search matches:
 
 Suggestion chips below the search bar come from recently played tracks and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue.
 
+## Metadata
+
+Open a track menu and choose **Edit metadata** to update the saved title, artist, album, or genre. These edits update library search, browse groups, playlists, suggestions, and backups.
+
 ## Favorites
 
 Open a track menu and choose **Favorite**. Use the heart button in the search bar to filter favorites.

@@ -38,6 +38,7 @@
 - [x] Imported-track folder browse
 - [ ] Recursive folder browser
 - [ ] Metadata scanner
+- [x] Stored metadata editor
 - [ ] Duplicate resolver
 - [x] Recently played
 - [x] Local play counts

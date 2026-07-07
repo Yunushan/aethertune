@@ -280,6 +280,46 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<Track?> updateTrackMetadata(
+    String id, {
+    required String title,
+    required String artist,
+    required String album,
+    required String genre,
+  }) async {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final normalizedTitle = title.trim();
+    if (normalizedTitle.isEmpty) {
+      throw ArgumentError.value(title, 'title', 'Track title cannot be empty.');
+    }
+
+    final current = _tracks[index];
+    final updated = current.copyWith(
+      title: normalizedTitle,
+      artist: _nonEmptyMetadata(artist, 'Unknown Artist'),
+      album: _nonEmptyMetadata(album, 'Unknown Album'),
+      genre: _nonEmptyMetadata(genre, 'Unknown Genre'),
+    );
+
+    if (updated.title == current.title &&
+        updated.artist == current.artist &&
+        updated.album == current.album &&
+        updated.genre == current.genre) {
+      return updated;
+    }
+
+    _tracks[index] = updated;
+    _sortTracks();
+    await _save();
+    notifyListeners();
+
+    return updated;
+  }
+
   List<Track> search(
     String query, {
     bool favoritesOnly = false,

@@ -46,7 +46,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests. | File-based import/export and migration tooling. |
-| Search | Done | Local title/artist/album/genre filtering plus Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, and richer global ranking. |
+| Stored metadata editing | Scaffolded | Track menus edit saved title, artist, album, and genre, with store tests for persistence/search/browse/suggestions. | Audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
+| Search | Done | Local title/artist/album/genre/source/folder filtering plus local suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
@@ -93,7 +94,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Local file import | Done | Namida, Musify | Folder and recursive import. |
 | Folder browsing | Scaffolded | Namida, local music players | Imported-track folder groups are implemented; recursive folder tree UI and platform permissions remain. |
 | Metadata scanner | Roadmap | Namida | Tag parser, artwork extraction, background indexing. |
-| Metadata editing | Roadmap | Namida | Safe tag writer and rollback handling. |
+| Metadata editing | Scaffolded | Namida | Track menus edit persisted library title, artist, album, and genre; search, browse groups, suggestions, playlists, and backup data update from the edited record, with store tests. Needed next: safe audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Roadmap | Local library apps | Fingerprint/path/hash matching. |
 | Album/artist/genre/source/folder views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, source, and imported folder; metadata scanner still needs richer tags. |
 | Recently added / recently played | Done | YouTube Music, Namida | Recently added sorting/API and recently played history are done; richer filters still needed. |
