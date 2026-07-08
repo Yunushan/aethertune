@@ -59,6 +59,7 @@ Initial GitHub-ready scaffold.
 - Added Podcast RSS OPML import/export for feed migration.
 - Added Podcast RSS episode progress/resume persistence.
 - Added Podcast RSS refresh status tracking and stale-feed policy.
+- Added README platform overview picture plus Android, iOS, Windows, macOS, Linux, server, and animated tour media.
 - Added README, docs, CI, issue templates, contribution docs.
 - Added Flutter desktop wrapper generation and desktop CI build gates.
 - Added Dart server package with health, info, catalog endpoints, and tests.

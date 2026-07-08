@@ -1,0 +1,104 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AetherTune platform overview</title>
+  <desc id="desc">Generated overview picture introducing AetherTune on Android, iOS, Windows, macOS, Linux, and the Dart server foundation.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.42" stop-color="#103847"/>
+      <stop offset="0.75" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="phoneA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="phoneB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ec4899"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="desktop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0f2fe"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-12%" width="124%" height="130%">
+      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#020617" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="675" rx="34" fill="url(#background)"/>
+  <circle cx="1045" cy="98" r="95" fill="#38bdf8" opacity="0.14"/>
+  <circle cx="160" cy="592" r="120" fill="#22c55e" opacity="0.12"/>
+
+  <text x="70" y="92" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff">AetherTune</text>
+  <text x="72" y="132" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" fill="#ccfbf1">Open music workspace for mobile, desktop, and server-backed libraries.</text>
+
+  <g transform="translate(72 166)">
+    <rect width="118" height="42" rx="21" fill="#22c55e"/>
+    <text x="59" y="27" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#04111f">Android</text>
+    <rect x="132" width="92" height="42" rx="21" fill="#ec4899"/>
+    <text x="178" y="27" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#ffffff">iOS</text>
+    <rect x="238" width="126" height="42" rx="21" fill="#38bdf8"/>
+    <text x="301" y="27" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#04111f">Windows</text>
+    <rect x="378" width="110" height="42" rx="21" fill="#f59e0b"/>
+    <text x="433" y="27" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#04111f">macOS</text>
+    <rect x="502" width="100" height="42" rx="21" fill="#84cc16"/>
+    <text x="552" y="27" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#04111f">Linux</text>
+    <rect x="616" width="128" height="42" rx="21" fill="#f8fafc"/>
+    <text x="680" y="27" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#0f172a">Dart server</text>
+  </g>
+
+  <g transform="translate(88 268)" filter="url(#shadow)">
+    <rect x="0" y="0" width="176" height="322" rx="34" fill="#020617"/>
+    <rect x="12" y="16" width="152" height="290" rx="25" fill="#f8fafc"/>
+    <rect x="58" y="28" width="60" height="6" rx="3" fill="#94a3b8"/>
+    <text x="30" y="68" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Android</text>
+    <rect x="30" y="88" width="116" height="34" rx="13" fill="#ecfeff"/>
+    <text x="46" y="110" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="10" font-weight="700" fill="#155e75">Library search</text>
+    <rect x="30" y="148" width="116" height="46" rx="15" fill="url(#phoneA)"/>
+    <text x="46" y="176" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" font-weight="800" fill="#04111f">Local files</text>
+    <rect x="30" y="210" width="116" height="46" rx="15" fill="#111827"/>
+    <text x="46" y="238" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" font-weight="800" fill="#f8fafc">Mini player</text>
+  </g>
+
+  <g transform="translate(292 268)" filter="url(#shadow)">
+    <rect x="0" y="0" width="176" height="322" rx="36" fill="#111827"/>
+    <rect x="13" y="17" width="150" height="288" rx="28" fill="#f9fafb"/>
+    <rect x="58" y="28" width="60" height="15" rx="8" fill="#111827"/>
+    <text x="30" y="76" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">iOS</text>
+    <rect x="30" y="104" width="116" height="58" rx="18" fill="url(#phoneB)"/>
+    <text x="48" y="136" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff">Playlists</text>
+    <rect x="30" y="184" width="116" height="48" rx="15" fill="#111827"/>
+    <text x="48" y="214" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" font-weight="800" fill="#67e8f9">Synced lyrics</text>
+    <rect x="30" y="250" width="116" height="30" rx="15" fill="#ecfdf5"/>
+    <text x="48" y="270" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="10" font-weight="800" fill="#166534">No telemetry</text>
+  </g>
+
+  <g transform="translate(520 244)" filter="url(#shadow)">
+    <rect x="0" y="0" width="598" height="356" rx="26" fill="url(#desktop)"/>
+    <rect x="0" y="0" width="598" height="44" rx="26" fill="#111827"/>
+    <circle cx="30" cy="22" r="6" fill="#ef4444"/>
+    <circle cx="52" cy="22" r="6" fill="#f59e0b"/>
+    <circle cx="74" cy="22" r="6" fill="#22c55e"/>
+    <text x="106" y="28" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="800" fill="#f8fafc">Windows - macOS - Linux</text>
+
+    <rect x="28" y="72" width="128" height="232" rx="20" fill="#0f172a"/>
+    <text x="52" y="110" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="800" fill="#ffffff">Library</text>
+    <text x="52" y="148" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#bfdbfe">Sources</text>
+    <text x="52" y="182" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#bfdbfe">Queue</text>
+    <text x="52" y="216" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#bfdbfe">History</text>
+    <rect x="52" y="248" width="78" height="28" rx="14" fill="#38bdf8"/>
+    <text x="91" y="267" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="10" font-weight="800" fill="#04111f">Playing</text>
+
+    <text x="190" y="106" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Unified music surface</text>
+    <rect x="190" y="128" width="348" height="44" rx="16" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="214" y="156" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" fill="#64748b">Search local music and legal providers</text>
+    <rect x="190" y="204" width="158" height="70" rx="20" fill="#ecfdf5" stroke="#bbf7d0"/>
+    <text x="214" y="234" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#166534">Radio Browser</text>
+    <text x="214" y="254" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" fill="#15803d">Search and play stations</text>
+    <rect x="380" y="204" width="158" height="70" rx="20" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="404" y="234" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="800" fill="#9a3412">Internet Archive</text>
+    <text x="404" y="254" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="11" fill="#c2410c">Open audio results</text>
+    <rect x="190" y="296" width="348" height="34" rx="17" fill="#111827"/>
+    <text x="214" y="318" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" font-weight="800" fill="#f8fafc">Offline-aware queue, cache, backup, and server foundation</text>
+  </g>
+</svg>
