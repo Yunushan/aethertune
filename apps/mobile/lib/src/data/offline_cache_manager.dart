@@ -253,8 +253,8 @@ String _mediaExtension(Uri uri) {
 String offlineMediaChecksum(List<int> bytes) {
   var hash = 0xcbf29ce484222325;
   for (final byte in bytes) {
-    hash ^= byte & 0xff;
-    hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
+    hash = (hash ^ (byte & 0xff)).toUnsigned(64);
+    hash = (hash * 0x100000001b3).toUnsigned(64);
   }
 
   return hash.toRadixString(16).padLeft(16, '0');
