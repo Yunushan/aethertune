@@ -3870,17 +3870,18 @@ class LibraryStore extends ChangeNotifier {
     return a.toLowerCase().compareTo(b.toLowerCase());
   }
 
-  String _normalizeQuery(String query) => query.trim().toLowerCase();
-
   bool _trackMatchesQuery(Track track, SearchQuery query) {
-    final metadataMatches = searchFieldsMatch(<String>[
-      track.title,
-      track.artist,
-      track.album,
-      track.genre,
-      _browseLabelForTrack(track, LibraryBrowseType.source),
-      _browseLabelForTrack(track, LibraryBrowseType.folder),
-    ], query);
+    final metadataMatches = searchFieldsMatch(
+      <String>[
+        track.title,
+        track.artist,
+        track.album,
+        track.genre,
+        _browseLabelForTrack(track, LibraryBrowseType.source),
+        _browseLabelForTrack(track, LibraryBrowseType.folder),
+      ],
+      query,
+    );
     if (metadataMatches) {
       return true;
     }

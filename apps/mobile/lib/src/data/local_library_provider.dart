@@ -68,12 +68,15 @@ class LocalLibraryProvider implements MusicSourceProvider {
 }
 
 bool _trackMatchesQuery(Track track, SearchQuery query) {
-  return searchFieldsMatch(<String>[
-    track.title,
-    track.artist,
-    track.album,
-    track.genre,
-    track.sourceId,
-    track.localPath ?? '',
-  ], query);
+  return searchFieldsMatch(
+    <String>[
+      track.title,
+      track.artist,
+      track.album,
+      track.genre,
+      track.sourceId,
+      track.localPath ?? '',
+    ],
+    query,
+  );
 }
