@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added basic FLAC Vorbis comment title, artist, album, and genre parsing during recursive folder scans.
 - Added basic ID3v2 MP3 title, artist, album, and genre text-frame parsing during recursive folder scans.
 - Added paused offline cache/download queue state with Options-tab pause/resume controls, persisted backup support, and batch caching that skips paused requests.
 

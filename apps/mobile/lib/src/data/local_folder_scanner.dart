@@ -220,10 +220,17 @@ final class _LocalFolderScanState {
   }
 
   Future<_LocalFileMetadata?> _embeddedMetadataForFile(String path) async {
-    if (p.extension(path).toLowerCase() != '.mp3') {
-      return null;
+    switch (p.extension(path).toLowerCase()) {
+      case '.mp3':
+        return _mp3MetadataForFile(path);
+      case '.flac':
+        return _flacMetadataForFile(path);
     }
 
+    return null;
+  }
+
+  Future<_LocalFileMetadata?> _mp3MetadataForFile(String path) async {
     try {
       final file = File(path);
       final length = await file.length();
@@ -247,6 +254,61 @@ final class _LocalFolderScanState {
         await access.setPosition(length - 128);
         final bytes = await access.read(128);
         return _id3v1Metadata(bytes);
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Future<_LocalFileMetadata?> _flacMetadataForFile(String path) async {
+    try {
+      final file = File(path);
+      final length = await file.length();
+      if (length < 8) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        final marker = await access.read(4);
+        if (!_matchesAscii(marker, 'fLaC')) {
+          return null;
+        }
+
+        var metadataBytesRead = 0;
+        while (metadataBytesRead < _maxFlacMetadataBytes) {
+          final header = await access.read(4);
+          if (header.length != 4) {
+            return null;
+          }
+
+          final isLastBlock = (header[0] & 0x80) != 0;
+          final blockType = header[0] & 0x7f;
+          final blockLength = _uint24(header, 1);
+          metadataBytesRead += 4 + blockLength;
+
+          if (blockLength < 0 || metadataBytesRead > _maxFlacMetadataBytes) {
+            return null;
+          }
+
+          if (blockType == _flacVorbisCommentBlockType) {
+            final blockBytes = await access.read(blockLength);
+            if (blockBytes.length != blockLength) {
+              return null;
+            }
+
+            return _vorbisCommentMetadata(blockBytes);
+          }
+
+          await access.setPosition(await access.position() + blockLength);
+          if (isLastBlock) {
+            return null;
+          }
+        }
+
+        return null;
       } finally {
         await access.close();
       }
@@ -395,6 +457,74 @@ final class _LocalFolderScanState {
     );
   }
 
+  _LocalFileMetadata? _vorbisCommentMetadata(List<int> bytes) {
+    var offset = 0;
+    final vendorLength = _uint32LittleEndian(bytes, offset);
+    offset += 4;
+    if (vendorLength < 0 || offset + vendorLength > bytes.length) {
+      return null;
+    }
+
+    offset += vendorLength;
+    final commentCount = _uint32LittleEndian(bytes, offset);
+    offset += 4;
+    if (commentCount < 0) {
+      return null;
+    }
+
+    final comments = <String, List<String>>{};
+    for (var index = 0; index < commentCount; index += 1) {
+      if (offset + 4 > bytes.length) {
+        return null;
+      }
+
+      final commentLength = _uint32LittleEndian(bytes, offset);
+      offset += 4;
+      if (commentLength < 0 || offset + commentLength > bytes.length) {
+        return null;
+      }
+
+      final rawComment = utf8.decode(
+        bytes.sublist(offset, offset + commentLength),
+        allowMalformed: true,
+      );
+      offset += commentLength;
+
+      final separatorIndex = rawComment.indexOf('=');
+      if (separatorIndex <= 0) {
+        continue;
+      }
+
+      final key = rawComment.substring(0, separatorIndex).toUpperCase();
+      final value = _normalizeEmbeddedText(
+        rawComment.substring(separatorIndex + 1),
+      );
+      if (value.isEmpty) {
+        continue;
+      }
+
+      comments.putIfAbsent(key, () => <String>[]).add(value);
+    }
+
+    final title = _firstVorbisComment(comments, 'TITLE') ?? '';
+    final artist = _joinedVorbisComment(comments, 'ARTIST') ?? '';
+    final album = _firstVorbisComment(comments, 'ALBUM');
+    final genre = _joinedVorbisComment(comments, 'GENRE');
+    if (title.isEmpty &&
+        artist.isEmpty &&
+        (album == null || album.isEmpty) &&
+        (genre == null || genre.isEmpty)) {
+      return null;
+    }
+
+    return _LocalFileMetadata(
+      title: title,
+      artist: artist,
+      album: album == null || album.isEmpty ? null : album,
+      genre: genre == null || genre.isEmpty ? null : genre,
+    );
+  }
+
   String _id3v1Text(List<int> bytes, int start, int length) {
     final rawBytes = bytes
         .skip(start)
@@ -505,6 +635,44 @@ final class _LocalFolderScanState {
     return RegExp(r'^[A-Z0-9]{3,4}$').hasMatch(frameId);
   }
 
+  bool _matchesAscii(List<int> bytes, String value) {
+    if (bytes.length != value.length) {
+      return false;
+    }
+
+    for (var index = 0; index < value.length; index += 1) {
+      if (bytes[index] != value.codeUnitAt(index)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  String? _firstVorbisComment(
+    Map<String, List<String>> comments,
+    String key,
+  ) {
+    final values = comments[key];
+    if (values == null || values.isEmpty) {
+      return null;
+    }
+
+    return values.first;
+  }
+
+  String? _joinedVorbisComment(
+    Map<String, List<String>> comments,
+    String key,
+  ) {
+    final values = comments[key];
+    if (values == null || values.isEmpty) {
+      return null;
+    }
+
+    return values.join(' / ');
+  }
+
   int _id3v2SynchsafeInt(List<int> bytes, int offset) {
     if (offset + 4 > bytes.length) {
       return 0;
@@ -527,6 +695,17 @@ final class _LocalFolderScanState {
         bytes[offset + 3];
   }
 
+  int _uint32LittleEndian(List<int> bytes, int offset) {
+    if (offset + 4 > bytes.length) {
+      return -1;
+    }
+
+    return bytes[offset] |
+        (bytes[offset + 1] << 8) |
+        (bytes[offset + 2] << 16) |
+        (bytes[offset + 3] << 24);
+  }
+
   int _uint24(List<int> bytes, int offset) {
     if (offset + 3 > bytes.length) {
       return 0;
@@ -539,3 +718,5 @@ final class _LocalFolderScanState {
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;
+const _maxFlacMetadataBytes = 1024 * 1024;
+const _flacVorbisCommentBlockType = 4;

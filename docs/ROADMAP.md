@@ -53,6 +53,7 @@
 - [x] Filename metadata scanner
 - [x] Basic ID3v1 MP3 metadata scanner
 - [x] Basic ID3v2 MP3 text metadata scanner
+- [x] Basic FLAC Vorbis comment metadata scanner
 - [ ] Rich embedded audio tag scanner
 - [x] Stored metadata editor
 - [x] Duplicate resolver scaffold

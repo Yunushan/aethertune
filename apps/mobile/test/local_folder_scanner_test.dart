@@ -160,6 +160,42 @@ void main() {
     expect(result.tracks.single.album, 'UTF16 Album');
   });
 
+  test('prefers FLAC Vorbis comment metadata', () async {
+    await File(p.join(root.path, '07 messy-name.flac')).writeAsBytes(
+      _flacWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['FLAC Title'],
+        'ARTIST': <String>['FLAC Artist', 'Guest Artist'],
+        'ALBUM': <String>['FLAC Album'],
+        'GENRE': <String>['Ambient', 'Drone'],
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'FLAC Title');
+    expect(result.tracks.single.artist, 'FLAC Artist / Guest Artist');
+    expect(result.tracks.single.album, 'FLAC Album');
+    expect(result.tracks.single.genre, 'Ambient / Drone');
+  });
+
+  test('merges partial FLAC Vorbis comments with filename metadata', () async {
+    await File(
+      p.join(root.path, '08 Filename Artist - Filename Title.flac'),
+    ).writeAsBytes(
+      _flacWithVorbisComments(<String, List<String>>{
+        'ALBUM': <String>['FLAC Album Only'],
+        'GENRE': <String>['Modern Classical'],
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Filename Title');
+    expect(result.tracks.single.artist, 'Filename Artist');
+    expect(result.tracks.single.album, 'FLAC Album Only');
+    expect(result.tracks.single.genre, 'Modern Classical');
+  });
+
   test('falls back to filename metadata when ID3v1 tags are empty', () async {
     await File(
       p.join(root.path, '04 Fallback Artist - Fallback Title.mp3'),
@@ -297,3 +333,69 @@ List<int> _uint32Size(int size) {
 
 const _id3v2EncodingUtf8 = 3;
 const _id3v2EncodingUtf16 = 1;
+
+List<int> _flacWithVorbisComments(Map<String, List<String>> comments) {
+  final vorbisComments = _vorbisCommentBlock(comments);
+
+  return <int>[
+    ...'fLaC'.codeUnits,
+    ..._flacMetadataBlockHeader(
+      blockType: _flacStreamInfoBlockType,
+      length: 34,
+      isLast: false,
+    ),
+    ...List<int>.filled(34, 0),
+    ..._flacMetadataBlockHeader(
+      blockType: _flacVorbisCommentBlockType,
+      length: vorbisComments.length,
+      isLast: true,
+    ),
+    ...vorbisComments,
+    0,
+    1,
+    2,
+  ];
+}
+
+List<int> _vorbisCommentBlock(Map<String, List<String>> comments) {
+  final vendor = 'AetherTune Test'.codeUnits;
+  final flattenedComments = <String>[
+    for (final entry in comments.entries)
+      for (final value in entry.value) '${entry.key}=$value',
+  ];
+
+  return <int>[
+    ..._uint32LittleEndianSize(vendor.length),
+    ...vendor,
+    ..._uint32LittleEndianSize(flattenedComments.length),
+    for (final comment in flattenedComments) ...[
+      ..._uint32LittleEndianSize(comment.codeUnits.length),
+      ...comment.codeUnits,
+    ],
+  ];
+}
+
+List<int> _flacMetadataBlockHeader({
+  required int blockType,
+  required int length,
+  required bool isLast,
+}) {
+  return <int>[
+    (isLast ? 0x80 : 0x00) | (blockType & 0x7f),
+    (length >> 16) & 0xff,
+    (length >> 8) & 0xff,
+    length & 0xff,
+  ];
+}
+
+List<int> _uint32LittleEndianSize(int size) {
+  return <int>[
+    size & 0xff,
+    (size >> 8) & 0xff,
+    (size >> 16) & 0xff,
+    (size >> 24) & 0xff,
+  ];
+}
+
+const _flacStreamInfoBlockType = 0;
+const _flacVorbisCommentBlockType = 4;
