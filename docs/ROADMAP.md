@@ -24,6 +24,7 @@
 - [x] Favorites
 - [x] Manual playlists
 - [x] Plain lyrics editor
+- [x] TXT/LRC lyrics file import
 - [x] Local lyrics excerpt share text
 - [x] JSON backup/restore
 - [x] Sleep timer

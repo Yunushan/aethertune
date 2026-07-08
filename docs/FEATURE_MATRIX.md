@@ -143,7 +143,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Lyrics search | Roadmap | YouTube Music | Official/open lyrics provider. |
 | Offline lyrics cache | Roadmap | InnerTune, Namida | Cache store and invalidation. |
 | Lyrics sharing cards | Scaffolded | YouTube Music | Lyrics editor and now-playing lyrics sheets can copy a bounded AetherTune lyrics excerpt from saved or draft plain/LRC lyrics, stripping LRC timestamps and limiting shared lines by default. Needed next: rendered image cards, selected-line ranges, platform share sheets, artwork backgrounds, rights-aware provider permissions, and deep links. |
-| Manual lyrics import/edit | Scaffolded | Local library players | Manual editor is implemented; file import/association still needed. |
+| Manual lyrics import/edit | Scaffolded | Local library players | Manual editor imports UTF-8 `.txt` and `.lrc` files through the platform file picker, previews parsed synced LRC lines, saves/deletes per-track lyrics, and copies bounded share excerpts. Needed next: automatic sidecar association, embedded tag import, batch matching, and provider-backed lyric import where legal. |
 
 ### Offline, Cache, And Downloads
 

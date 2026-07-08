@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../data/offline_cache_manager.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
+import '../domain/lyrics_document.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
@@ -436,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder: (dialogContext) {
           return StatefulBuilder(
-            builder: (context, setDialogState) {
+            builder: (_, setDialogState) {
               final syncedLines = parseSyncedLyricLines(controller.text);
 
               return AlertDialog(
@@ -468,6 +470,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 actions: <Widget>[
+                  TextButton.icon(
+                    onPressed: () async {
+                      final imported = await _importLyricsDocument(context);
+                      if (!dialogContext.mounted || imported == null) {
+                        return;
+                      }
+
+                      controller.text = imported;
+                      controller.selection = TextSelection.collapsed(
+                        offset: controller.text.length,
+                      );
+                      setDialogState(() {});
+                    },
+                    icon: const Icon(Icons.upload_file_outlined),
+                    label: const Text('Import file'),
+                  ),
                   TextButton.icon(
                     onPressed: () => unawaited(
                       _copyLyricsDraftShareText(
@@ -503,6 +521,47 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } finally {
       controller.dispose();
+    }
+  }
+
+  Future<String?> _importLyricsDocument(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await FilePicker.platform.pickFiles(
+      allowedExtensions: supportedLyricsDocumentExtensions,
+      dialogTitle: 'Import lyrics file',
+      type: FileType.custom,
+      withData: true,
+    );
+
+    if (!context.mounted || result == null || result.files.isEmpty) {
+      return null;
+    }
+
+    final file = result.files.single;
+    if (!isSupportedLyricsDocumentName(file.name)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Choose a .txt or .lrc lyrics file.')),
+      );
+      return null;
+    }
+
+    try {
+      final bytes = file.bytes ??
+          (file.path == null ? null : await File(file.path!).readAsBytes());
+      if (bytes == null) {
+        throw const FormatException('Could not read lyrics file.');
+      }
+
+      return decodeLyricsDocumentBytes(bytes, fileName: file.name);
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return null;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not import lyrics: $error')),
+      );
+      return null;
     }
   }
 
