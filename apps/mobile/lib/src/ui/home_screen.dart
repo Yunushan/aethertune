@@ -1508,6 +1508,14 @@ class _HomeTabState extends State<_HomeTab> {
               onStartRadio: () => unawaited(
                 _startTrackRadio(context, player, library, track),
               ),
+              onSimilarTracks: () => unawaited(
+                _showSimilarTracks(
+                  context,
+                  track,
+                  onAddToPlaylist: widget.onAddToPlaylist,
+                  onLyrics: widget.onLyrics,
+                ),
+              ),
               onFavorite: () => library.toggleFavorite(track.id),
               onAddToPlaylist: () => widget.onAddToPlaylist(track),
               onLyrics: () => widget.onLyrics(track),
@@ -1564,6 +1572,14 @@ class _HomeTabState extends State<_HomeTab> {
           ),
           onStartRadio: () => unawaited(
             _startTrackRadio(context, player, library, track),
+          ),
+          onSimilarTracks: () => unawaited(
+            _showSimilarTracks(
+              context,
+              track,
+              onAddToPlaylist: widget.onAddToPlaylist,
+              onLyrics: widget.onLyrics,
+            ),
           ),
           onFavorite: () => library.toggleFavorite(track.id),
           onAddToPlaylist: () => widget.onAddToPlaylist(track),
@@ -1984,6 +2000,14 @@ class _LibraryTab extends StatelessWidget {
                   onStartRadio: () => unawaited(
                     _startTrackRadio(context, player, library, track),
                   ),
+                  onSimilarTracks: () => unawaited(
+                    _showSimilarTracks(
+                      context,
+                      track,
+                      onAddToPlaylist: onAddToPlaylist,
+                      onLyrics: onLyrics,
+                    ),
+                  ),
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
                   onLyrics: () => onLyrics(track),
@@ -2035,6 +2059,29 @@ Future<void> _showLibraryBrowseTracks(
       return _LibraryBrowseTracksSheet(
         type: type,
         group: group,
+        onAddToPlaylist: onAddToPlaylist,
+        onLyrics: onLyrics,
+      );
+    },
+  );
+}
+
+Future<void> _showSimilarTracks(
+  BuildContext context,
+  Track seedTrack, {
+  required ValueChanged<Track> onAddToPlaylist,
+  required ValueChanged<Track> onLyrics,
+}) async {
+  final player = context.read<PlayerController>();
+
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (_) {
+      return _SimilarTracksSheet(
+        seedTrackId: seedTrack.id,
+        player: player,
         onAddToPlaylist: onAddToPlaylist,
         onLyrics: onLyrics,
       );
@@ -2154,6 +2201,14 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                 onStartRadio: () => unawaited(
                   _startTrackRadio(context, player, library, track),
                 ),
+                onSimilarTracks: () => unawaited(
+                  _showSimilarTracks(
+                    context,
+                    track,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
@@ -2167,6 +2222,141 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _SimilarTracksSheet extends StatelessWidget {
+  const _SimilarTracksSheet({
+    required this.seedTrackId,
+    required this.player,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final String seedTrackId;
+  final PlayerController player;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final seedTrack = _trackById(library, seedTrackId);
+    final matches = library.similarTracksForTrack(seedTrackId);
+    final tracks = matches.map((match) => match.track).toList(growable: false);
+    var itemCount = 1;
+    if (seedTrack != null) {
+      itemCount = matches.isEmpty ? 2 : matches.length + 1;
+    }
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView.separated(
+            controller: controller,
+            itemCount: itemCount,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (seedTrack == null) {
+                return const ListTile(
+                  leading: Icon(Icons.hub_outlined),
+                  title: Text('Track is no longer in the library'),
+                );
+              }
+
+              if (index == 0) {
+                return ListTile(
+                  leading: const Icon(Icons.hub_outlined),
+                  title: Text('Similar to ${seedTrack.title}'),
+                  subtitle: Text(
+                    '${seedTrack.artist} · ${seedTrack.album} · '
+                    '${seedTrack.genre}',
+                  ),
+                );
+              }
+
+              if (matches.isEmpty) {
+                return const ListTile(
+                  leading: Icon(Icons.travel_explore_outlined),
+                  title: Text('No similar local tracks yet'),
+                  subtitle: Text('Import or edit metadata to build matches.'),
+                );
+              }
+
+              final match = matches[index - 1];
+              final track = match.track;
+              return TrackTile(
+                track: track,
+                detailText: _similarityReasonText(match.reasons),
+                onPlay: () => _playTrackWithResume(
+                  context,
+                  player,
+                  library,
+                  track,
+                  queue: tracks,
+                ),
+                onStartRadio: () => unawaited(
+                  _startTrackRadio(context, player, library, track),
+                ),
+                onSimilarTracks: () => unawaited(
+                  _showSimilarTracks(
+                    context,
+                    track,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
+                onFavorite: () => library.toggleFavorite(track.id),
+                onAddToPlaylist: () => onAddToPlaylist(track),
+                onLyrics: () => onLyrics(track),
+                onEditMetadata: () => unawaited(
+                  _showTrackMetadataEditor(context, track),
+                ),
+                onRemove: () => library.removeTrack(track.id),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Track? _trackById(LibraryStore library, String id) {
+    for (final track in library.tracks) {
+      if (track.id == id) {
+        return track;
+      }
+    }
+
+    return null;
+  }
+}
+
+String _similarityReasonText(List<LibrarySimilarityReason> reasons) {
+  if (reasons.isEmpty) {
+    return 'Matched local metadata';
+  }
+
+  final labels = reasons.map(_similarityReasonLabel).toList(growable: false);
+  return 'Matches ${labels.join(', ')}';
+}
+
+String _similarityReasonLabel(LibrarySimilarityReason reason) {
+  switch (reason) {
+    case LibrarySimilarityReason.artist:
+      return 'artist';
+    case LibrarySimilarityReason.album:
+      return 'album';
+    case LibrarySimilarityReason.genre:
+      return 'genre';
+    case LibrarySimilarityReason.folder:
+      return 'folder';
+    case LibrarySimilarityReason.source:
+      return 'source';
   }
 }
 
@@ -3169,6 +3359,14 @@ class _SmartPlaylistSheet extends StatelessWidget {
                 onStartRadio: () => unawaited(
                   _startTrackRadio(context, player, library, track),
                 ),
+                onSimilarTracks: () => unawaited(
+                  _showSimilarTracks(
+                    context,
+                    track,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
@@ -3265,6 +3463,14 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
                 ),
                 onStartRadio: () => unawaited(
                   _startTrackRadio(context, player, library, track),
+                ),
+                onSimilarTracks: () => unawaited(
+                  _showSimilarTracks(
+                    context,
+                    track,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
                 ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),

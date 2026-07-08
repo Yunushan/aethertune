@@ -46,7 +46,7 @@ Use the search box on the Library tab. Search matches:
 - genre
 - source
 
-Suggestion chips below the search bar come from submitted searches, recently played tracks, and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the cloud-off button to show only local files that can play while offline mode is enabled. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue.
+Suggestion chips below the search bar come from submitted searches, recently played tracks, and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the cloud-off button to show only local files that can play while offline mode is enabled. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue. Open a track menu and choose **Similar tracks** to find playable local tracks with matching artist, album, or genre metadata; the sheet explains each match and can play the results as a queue.
 
 ## Metadata
 
@@ -62,7 +62,7 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 ## Queue controls
 
-When you play a track from the library, the current filtered list becomes the queue. Open a track menu and choose **Start radio** to build a local seed queue from playable tracks with matching artist, genre, or album, ranked by favorites and play history. AetherTune restores the current queue when you reopen the app. Use previous/next controls in the player bar, the queue button to move tracks up/down or remove upcoming tracks, or the playlist-add button to save the current queue as a playlist.
+When you play a track from the library, the current filtered list becomes the queue. Open a track menu and choose **Start radio** to build a local seed queue from playable tracks with matching artist, genre, or album, ranked by favorites and play history. The **Similar tracks** sheet can also play its matched result list as the queue. AetherTune restores the current queue when you reopen the app. Use previous/next controls in the player bar, the queue button to move tracks up/down or remove upcoming tracks, or the playlist-add button to save the current queue as a playlist.
 
 ## History
 

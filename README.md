@@ -1,7 +1,7 @@
 <h1 align="center">AetherTune</h1>
 
 <p align="center">
-  <strong>Free, open-source music workspace with mobile, desktop, and server foundations; home feed, local recommendations, mood mixes, local playback, provider plugins, queue, favorites, search, sleep timer, offline-first architecture, and privacy-first design.</strong>
+  <strong>Free, open-source music workspace with mobile, desktop, and server foundations; home feed, local recommendations, mood mixes, similar tracks, local playback, provider plugins, queue, favorites, search, sleep timer, offline-first architecture, and privacy-first design.</strong>
 </p>
 
 <p align="center">
@@ -128,7 +128,7 @@ This scaffold includes real app code, not only a README:
 | Backup/restore | Export and restore a versioned JSON backup, including submitted search history, theme preference, offline mode, and queued offline media requests, from the Options tab |
 | Home feed | Local Home tab sections for recommendations, mood/activity mixes, continue listening, recently played, radio seeds, most played, favorites, recently added tracks, and range-filtered local charts |
 | Search | Local library filtering by title, artist, album, genre, source, folder, favorites, and local-files-only offline readiness with sortable results and suggestion chips from submitted searches, playback history, and library metadata |
-| Queue | Play current list as a persistent queue with next/previous controls, start a local track radio queue, reorder/remove queue items, and save it as a playlist |
+| Queue | Play current list as a persistent queue with next/previous controls, start a local track radio queue, open similar local tracks, reorder/remove queue items, and save it as a playlist |
 | History/stats | Recently played tab with local playback history, play counts, listening recap, date ranges, JSON/CSV stats export, top tracks/artists/albums/genres, and clear action |
 | Playlists | Built-in and custom rule smart playlists plus create, rename, artwork URL edit, delete, open, find within, reorder, import/export JSON/M3U/CSV, and play manual playlists |
 | Lyrics | Add, edit, view, and delete plain text or LRC timestamped lyrics, including playback-linked synced highlighting |
@@ -151,7 +151,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, network disclosure, and cache/download policy gates for legal source adapters |
 | Offline | Local-first data model, offline library filter, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, persisted cache/download queue manager, private direct-URL cache storage with usage/trim/clear controls, and resumable/background download plus configurable limits roadmap |
-| Music discovery | Local Home feed sections, range-filtered local charts, local mood/activity mixes, personalized local recommendations, and seed-based track radio queues implemented; provider home feeds, provider charts, provider moods, richer radio, and provider recommendations remain roadmap |
+| Music discovery | Local Home feed sections, range-filtered local charts, local mood/activity mixes, personalized local recommendations, similar local tracks, and seed-based track radio queues implemented; provider home feeds, provider charts, provider moods, richer radio, similar artist/album pages, and provider recommendations remain roadmap |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, and cross-device artwork sync roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |

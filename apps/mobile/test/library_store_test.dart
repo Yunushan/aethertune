@@ -988,6 +988,88 @@ void main() {
     expect(store.personalizedRecommendations(limit: 0), isEmpty);
   });
 
+  test('builds similar local tracks from artist album and genre', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 2, 4, 12),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'seed',
+        title: 'Seed Signal',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        localPath: '/music/Mira/Dawn/seed.mp3',
+      ),
+      _track(
+        'same-artist',
+        title: 'Mira Field',
+        artist: 'Mira',
+        album: 'Elsewhere',
+        genre: 'Folk',
+        localPath: '/music/Mira/Elsewhere/field.mp3',
+      ),
+      _track(
+        'same-album',
+        title: 'Dawn Echo',
+        artist: 'Vera',
+        album: 'Dawn',
+        genre: 'Pop',
+        localPath: '/music/Vera/Dawn/echo.mp3',
+      ),
+      _track(
+        'same-genre',
+        title: 'Soft Current',
+        artist: 'Ari',
+        album: 'Still',
+        genre: 'Ambient',
+        localPath: '/music/Ari/Still/current.mp3',
+      ),
+      _track(
+        'same-folder-only',
+        title: 'Folder Neighbor',
+        artist: 'Orion',
+        album: 'Night',
+        genre: 'Jazz',
+        localPath: '/music/Mira/Dawn/neighbor.mp3',
+      ),
+      _track(
+        'metadata-only',
+        title: 'Mira Preview',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        localPath: '',
+      ),
+    ]);
+    await store.toggleFavorite('same-genre');
+    await store.recordPlayback('same-genre');
+    await store.recordPlayback('same-genre');
+
+    final matches = store.similarTracksForTrack('seed');
+
+    expect(
+      matches.map((match) => match.track.id),
+      <String>['same-artist', 'same-album', 'same-genre'],
+    );
+    expect(
+      matches.first.reasons,
+      contains(LibrarySimilarityReason.artist),
+    );
+    expect(
+      matches.first.reasons,
+      isNot(contains(LibrarySimilarityReason.album)),
+    );
+    final limitedMatches = store.similarTracksForTrack('seed', limit: 2);
+    expect(
+      limitedMatches.map((match) => match.track.id),
+      <String>['same-artist', 'same-album'],
+    );
+    expect(store.similarTracksForTrack('missing'), isEmpty);
+    expect(store.similarTracksForTrack('seed', limit: 0), isEmpty);
+  });
+
   test('removing a library track removes its playback history', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 9),

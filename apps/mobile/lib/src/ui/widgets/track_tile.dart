@@ -6,7 +6,9 @@ class TrackTile extends StatelessWidget {
   const TrackTile({
     required this.track,
     required this.onPlay,
+    this.detailText,
     this.onStartRadio,
+    this.onSimilarTracks,
     required this.onFavorite,
     required this.onAddToPlaylist,
     required this.onLyrics,
@@ -17,7 +19,9 @@ class TrackTile extends StatelessWidget {
 
   final Track track;
   final VoidCallback onPlay;
+  final String? detailText;
   final VoidCallback? onStartRadio;
+  final VoidCallback? onSimilarTracks;
   final VoidCallback onFavorite;
   final VoidCallback onAddToPlaylist;
   final VoidCallback onLyrics;
@@ -26,12 +30,18 @@ class TrackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final baseSubtitle = '${track.artist} · ${track.album} · ${track.genre}';
+    final detail = detailText?.trim();
+    final subtitle = detail == null || detail.isEmpty
+        ? baseSubtitle
+        : '$baseSubtitle\n$detail';
+
     return ListTile(
       leading: const CircleAvatar(child: Icon(Icons.music_note)),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        '${track.artist} · ${track.album} · ${track.genre}',
-        maxLines: 1,
+        subtitle,
+        maxLines: detail == null || detail.isEmpty ? 1 : 2,
         overflow: TextOverflow.ellipsis,
       ),
       onTap: onPlay,
@@ -43,6 +53,9 @@ class TrackTile extends StatelessWidget {
               break;
             case _TrackAction.startRadio:
               onStartRadio?.call();
+              break;
+            case _TrackAction.similarTracks:
+              onSimilarTracks?.call();
               break;
             case _TrackAction.favorite:
               onFavorite();
@@ -75,6 +88,14 @@ class TrackTile extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.radio_outlined),
                 title: Text('Start radio'),
+              ),
+            ),
+          if (onSimilarTracks != null)
+            const PopupMenuItem(
+              value: _TrackAction.similarTracks,
+              child: ListTile(
+                leading: Icon(Icons.hub_outlined),
+                title: Text('Similar tracks'),
               ),
             ),
           PopupMenuItem(
@@ -123,6 +144,7 @@ class TrackTile extends StatelessWidget {
 enum _TrackAction {
   play,
   startRadio,
+  similarTracks,
   favorite,
   addToPlaylist,
   lyrics,

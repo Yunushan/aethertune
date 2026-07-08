@@ -49,6 +49,8 @@ enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
 enum LibraryMoodMixType { focus, energy, chill, workout, sleep }
 
+enum LibrarySimilarityReason { artist, album, genre, folder, source }
+
 enum CustomSmartPlaylistSortMode {
   recentlyAdded,
   title,
@@ -159,6 +161,18 @@ class LibraryMoodMix {
   final String name;
   final String description;
   final List<Track> tracks;
+}
+
+class SimilarTrackMatch {
+  const SimilarTrackMatch({
+    required this.track,
+    required this.reasons,
+    required this.score,
+  });
+
+  final Track track;
+  final List<LibrarySimilarityReason> reasons;
+  final int score;
 }
 
 class CustomSmartPlaylist {
@@ -334,6 +348,22 @@ final class _DiscoveryCandidate {
 
   final Track track;
   final int score;
+  final int playCount;
+  final DateTime? lastPlayedAt;
+}
+
+final class _SimilarityCandidate {
+  const _SimilarityCandidate({
+    required this.track,
+    required this.score,
+    required this.reasons,
+    required this.playCount,
+    this.lastPlayedAt,
+  });
+
+  final Track track;
+  final int score;
+  final List<LibrarySimilarityReason> reasons;
   final int playCount;
   final DateTime? lastPlayedAt;
 }
@@ -1391,6 +1421,56 @@ class LibraryStore extends ChangeNotifier {
 
     return candidates
         .map((candidate) => candidate.track)
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  List<SimilarTrackMatch> similarTracksForTrack(
+    String seedTrackId, {
+    int limit = 25,
+  }) {
+    if (limit <= 0) {
+      return <SimilarTrackMatch>[];
+    }
+
+    final seedIndex = _tracks.indexWhere((track) => track.id == seedTrackId);
+    if (seedIndex == -1) {
+      return <SimilarTrackMatch>[];
+    }
+
+    final seedTrack = _tracks[seedIndex];
+    final candidates = <_SimilarityCandidate>[];
+    for (final track in _tracks) {
+      if (track.id == seedTrack.id || !track.isPlayable) {
+        continue;
+      }
+
+      final reasons = _similarityReasonsForTrack(seedTrack, track);
+      if (!reasons.any(_isCoreSimilarityReason)) {
+        continue;
+      }
+
+      candidates.add(
+        _SimilarityCandidate(
+          track: track,
+          reasons: reasons,
+          score: _similarityScoreForTrack(track, reasons),
+          playCount: playCountForTrack(track.id),
+          lastPlayedAt: lastPlayedAt(track.id),
+        ),
+      );
+    }
+
+    candidates.sort(_compareSimilarityCandidates);
+
+    return candidates
+        .map(
+          (candidate) => SimilarTrackMatch(
+            track: candidate.track,
+            reasons: candidate.reasons,
+            score: candidate.score,
+          ),
+        )
         .take(limit)
         .toList(growable: false);
   }
@@ -3555,6 +3635,107 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return _compareByDateThenTitle(a.track, b.track);
+  }
+
+  int _compareSimilarityCandidates(
+    _SimilarityCandidate a,
+    _SimilarityCandidate b,
+  ) {
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) {
+      return byScore;
+    }
+
+    if (a.track.isFavorite != b.track.isFavorite) {
+      return a.track.isFavorite ? -1 : 1;
+    }
+
+    final byPlayCount = b.playCount.compareTo(a.playCount);
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareByDateThenTitle(a.track, b.track);
+  }
+
+  List<LibrarySimilarityReason> _similarityReasonsForTrack(
+    Track seedTrack,
+    Track track,
+  ) {
+    final reasons = <LibrarySimilarityReason>[];
+    if (_sameKnownMetadata(seedTrack.artist, track.artist)) {
+      reasons.add(LibrarySimilarityReason.artist);
+    }
+    if (_sameKnownMetadata(seedTrack.album, track.album)) {
+      reasons.add(LibrarySimilarityReason.album);
+    }
+    if (_sameKnownMetadata(seedTrack.genre, track.genre)) {
+      reasons.add(LibrarySimilarityReason.genre);
+    }
+    if (_sameKnownMetadata(
+      _folderLabelForTrack(seedTrack),
+      _folderLabelForTrack(track),
+    )) {
+      reasons.add(LibrarySimilarityReason.folder);
+    }
+    if (_sameKnownMetadata(seedTrack.sourceId, track.sourceId)) {
+      reasons.add(LibrarySimilarityReason.source);
+    }
+
+    return reasons;
+  }
+
+  bool _isCoreSimilarityReason(LibrarySimilarityReason reason) {
+    switch (reason) {
+      case LibrarySimilarityReason.artist:
+      case LibrarySimilarityReason.album:
+      case LibrarySimilarityReason.genre:
+        return true;
+      case LibrarySimilarityReason.folder:
+      case LibrarySimilarityReason.source:
+        return false;
+    }
+  }
+
+  int _similarityScoreForTrack(
+    Track track,
+    List<LibrarySimilarityReason> reasons,
+  ) {
+    var score = 0;
+    for (final reason in reasons) {
+      switch (reason) {
+        case LibrarySimilarityReason.artist:
+          score += 100;
+          break;
+        case LibrarySimilarityReason.album:
+          score += 70;
+          break;
+        case LibrarySimilarityReason.genre:
+          score += 35;
+          break;
+        case LibrarySimilarityReason.folder:
+          score += 12;
+          break;
+        case LibrarySimilarityReason.source:
+          score += 8;
+          break;
+      }
+    }
+
+    if (track.isFavorite) {
+      score += 10;
+    }
+    score += playCountForTrack(track.id) * 3;
+
+    return score;
   }
 
   int _radioScoreForTrack(Track seedTrack, Track track) {

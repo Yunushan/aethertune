@@ -12,6 +12,7 @@
 - [x] Local charts by playback range
 - [x] Local mood/activity mixes
 - [x] Personalized local recommendations
+- [x] Similar local tracks
 - [x] Listening history
 - [x] Queue
 - [x] Queue reorder/remove
@@ -60,6 +61,7 @@
 - [x] Local search suggestions
 - [x] Persisted search query history
 - [x] Artist/album/genre/source browse
+- [x] Similar local track browser
 
 ## 0.3.x: Platform audio
 
