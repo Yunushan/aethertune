@@ -488,6 +488,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   TextButton.icon(
                     onPressed: () => unawaited(
+                      _copyLyricsDraftExportDocument(
+                        context,
+                        track,
+                        controller.text,
+                      ),
+                    ),
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: const Text('Copy export'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => unawaited(
                       _copyLyricsDraftShareText(
                         context,
                         library,
@@ -4835,6 +4846,27 @@ Future<void> _copyLyricsDraftShareText(
     library.shareLyricsText(track.id, plainText: plainText),
     copiedMessage: 'Copied lyrics share text for ${track.title}.',
     unavailableMessage: 'Add lyrics before copying share text.',
+  );
+}
+
+Future<void> _copyLyricsDraftExportDocument(
+  BuildContext context,
+  Track track,
+  String plainText,
+) {
+  final export = buildLyricsDocumentExport(
+    title: track.title,
+    artist: track.artist,
+    plainText: plainText,
+  );
+
+  return _copyTextToClipboard(
+    context,
+    export?.text,
+    copiedMessage: export == null
+        ? 'Copied lyrics export text.'
+        : 'Copied ${export.fileName} export text.',
+    unavailableMessage: 'Add lyrics before copying export text.',
   );
 }
 

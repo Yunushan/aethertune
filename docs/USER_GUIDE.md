@@ -77,7 +77,7 @@ Use the Playlists tab to open built-in smart playlists for favorites, recently a
 
 ## Lyrics
 
-Open a track menu in the Library tab and choose **Lyrics**. You can save plain text lyrics for that track, import a UTF-8 `.txt` or `.lrc` file, paste LRC timestamped lyrics to preview timed lines, copy a bounded lyrics share excerpt, edit lyrics later, or delete them from the same dialog. Saved lyrics are included in Library, playlist, and custom smart playlist searches. While a track is playing, use the lyrics button in the player bar to open now-playing lyrics; LRC lines highlight and scroll with playback, and saved lyrics can be copied as timestamp-free share text from the sheet header.
+Open a track menu in the Library tab and choose **Lyrics**. You can save plain text lyrics for that track, import a UTF-8 `.txt` or `.lrc` file, paste LRC timestamped lyrics to preview timed lines, copy the full lyrics export text with a suggested `.txt` or `.lrc` filename, copy a bounded lyrics share excerpt, edit lyrics later, or delete them from the same dialog. Saved lyrics are included in Library, playlist, and custom smart playlist searches. While a track is playing, use the lyrics button in the player bar to open now-playing lyrics; LRC lines highlight and scroll with playback, and saved lyrics can be copied as timestamp-free share text from the sheet header.
 
 ## Backup and restore
 

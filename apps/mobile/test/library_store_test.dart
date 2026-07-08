@@ -685,6 +685,36 @@ void main() {
     expect(store.shareLyricsText('1', plainText: '   '), isNull);
   });
 
+  test('exports saved lyrics as txt or lrc documents', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 7, 2),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'Plain / Song', artist: ''),
+      _track('2', title: 'Synced:Song', artist: 'Mira*Vale'),
+    ]);
+    await store.setLyrics('1', 'First line\r\nSecond line');
+    await store.setLyrics(
+      '2',
+      '[00:01.00]First synced\r\n[00:04.20]Second synced',
+    );
+
+    final plainExport = store.exportLyricsDocument('1')!;
+    final syncedExport = store.exportLyricsDocument('2')!;
+
+    expect(plainExport.fileName, 'Plain Song.txt');
+    expect(plainExport.text, 'First line\nSecond line');
+    expect(syncedExport.fileName, 'Mira Vale - Synced Song.lrc');
+    expect(syncedExport.text, contains('[00:01.00]First synced'));
+    expect(syncedExport.text, contains('[00:04.20]Second synced'));
+    expect(store.exportLyricsDocument('missing'), isNull);
+
+    await store.setLyrics('1', '   ');
+
+    expect(store.exportLyricsDocument('1'), isNull);
+  });
+
   test(
     'records recently played tracks with counts and last played time',
     () async {

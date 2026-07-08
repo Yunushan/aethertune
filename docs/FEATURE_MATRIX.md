@@ -55,7 +55,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Recently played / listening history | Done | Persisted playback history with History tab, play counts, estimated listening time, date-range filters, JSON/CSV stats export, and top track/artist/album/genre recap. | Privacy controls, yearly/monthly cards, and richer visual recaps. |
 | Manual playlists | Done | Persisted user playlists with add/remove/find/reorder/import/export/play UI plus playlist artwork URL display/editing in the list and playlist sheet. Store tests cover artwork persistence, clear, JSON export/import, and backup restore. | Local gallery/file picker, cropper, generated collage artwork, and sync. |
 | Smart playlists | Scaffolded | Playlists tab exposes built-in dynamic Favorites, Recently added, Recently played, and Most played collections plus persisted custom smart playlists with search text, favorites-only, minimum play count, sort mode, and result limit rules. Store tests cover rule matching, persistence, update/delete, and backup restore. | Rich nested rule builder, sync, artwork, and cross-device dynamic queries. |
-| Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing, preview, and playback-linked highlighting/autoscroll. | Provider lyrics, file import/export, and sharing. |
+| Plain/LRC lyrics | Done | Persisted per-track lyrics editor with LRC timestamp parsing, preview, playback-linked highlighting/autoscroll, UTF-8 file import, and copyable TXT/LRC export text with suggested filenames. | Provider lyrics, native file-save export, and richer sharing. |
 | Next/previous | Done | Queue navigation. | Media key and lock-screen integration. |
 | Sleep timer | Done | 5/15/30/60/90 minute presets, custom 1-1440 minute duration, end-of-current-track mode, optional final-30-second fade-out, and unit coverage for timer/fade rules. | More fade duration controls and platform media-session integration. |
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
@@ -138,12 +138,12 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Plain lyrics | Done | YouTube Music, InnerTune, Namida | Provider-backed lyrics, richer display, sharing. |
-| Synced LRC lyrics | Done | InnerTune, RiMusic, Namida | LRC parser, timestamped editor preview, and playback-linked now-playing highlighting/autoscroll are implemented; provider LRC fetching remains separate. |
+| Plain lyrics | Done | YouTube Music, InnerTune, Namida | Manual plain lyrics, UTF-8 `.txt` import, copyable `.txt` export text, local search, and share excerpts are implemented. Needed next: provider-backed lyrics, native file-save export, richer display, and sharing. |
+| Synced LRC lyrics | Done | InnerTune, RiMusic, Namida | LRC parser, timestamped editor preview, playback-linked now-playing highlighting/autoscroll, UTF-8 `.lrc` import, and copyable `.lrc` export text are implemented; provider LRC fetching remains separate. |
 | Lyrics search | Scaffolded | YouTube Music | Library, playlist, and custom smart playlist search match locally saved plain/LRC lyric text and strip LRC timestamps from searchable content, with store coverage. Needed next: official/open lyrics provider search, ranking, provider attribution, and rights-aware caching. |
 | Offline lyrics cache | Roadmap | InnerTune, Namida | Cache store and invalidation. |
 | Lyrics sharing cards | Scaffolded | YouTube Music | Lyrics editor and now-playing lyrics sheets can copy a bounded AetherTune lyrics excerpt from saved or draft plain/LRC lyrics, stripping LRC timestamps and limiting shared lines by default. Needed next: rendered image cards, selected-line ranges, platform share sheets, artwork backgrounds, rights-aware provider permissions, and deep links. |
-| Manual lyrics import/edit | Scaffolded | Local library players | Manual editor imports UTF-8 `.txt` and `.lrc` files through the platform file picker, previews parsed synced LRC lines, saves/deletes per-track lyrics, and copies bounded share excerpts. Needed next: automatic sidecar association, embedded tag import, batch matching, and provider-backed lyric import where legal. |
+| Manual lyrics import/edit | Scaffolded | Local library players | Manual editor imports UTF-8 `.txt` and `.lrc` files through the platform file picker, previews parsed synced LRC lines, saves/deletes per-track lyrics, copies full TXT/LRC export text with suggested filenames, and copies bounded share excerpts. Needed next: native file-save export, automatic sidecar association, embedded tag import, batch matching, and provider-backed lyric import where legal. |
 
 ### Offline, Cache, And Downloads
 

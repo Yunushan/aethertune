@@ -27,4 +27,36 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('builds txt and lrc lyrics export documents', () {
+    final plainExport = buildLyricsDocumentExport(
+      title: 'Plain / Song',
+      artist: '',
+      plainText: '\ufeffFirst line\r\nSecond line\n',
+    )!;
+    final syncedExport = buildLyricsDocumentExport(
+      title: 'Dawn:Signal',
+      artist: 'Mira*Vale',
+      plainText: '[00:01.00]First synced\r\n[00:04.20]Second synced',
+    )!;
+
+    expect(plainExport.fileName, 'Plain Song.txt');
+    expect(plainExport.text, 'First line\nSecond line');
+    expect(utf8.decode(plainExport.bytes), plainExport.text);
+
+    expect(syncedExport.fileName, 'Mira Vale - Dawn Signal.lrc');
+    expect(syncedExport.text, contains('[00:01.00]First synced'));
+    expect(utf8.decode(syncedExport.bytes), syncedExport.text);
+  });
+
+  test('does not build empty lyrics export documents', () {
+    expect(
+      buildLyricsDocumentExport(
+        title: 'Empty',
+        artist: 'Mira',
+        plainText: '   ',
+      ),
+      isNull,
+    );
+  });
 }

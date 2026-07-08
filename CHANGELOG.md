@@ -28,6 +28,7 @@ Initial GitHub-ready scaffold.
 - Added privacy-safe local share text for tracks, library browse groups, and manual playlists.
 - Added bounded lyrics excerpt share text for saved and draft plain/LRC lyrics.
 - Added UTF-8 TXT/LRC lyrics file import in the lyrics editor.
+- Added copyable TXT/LRC lyrics export text with suggested filenames.
 - Added local saved-lyrics search for library, playlist, and smart playlist queries.
 - Added a desktop-width navigation rail for the Flutter app shell.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.

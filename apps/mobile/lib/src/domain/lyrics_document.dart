@@ -1,6 +1,20 @@
 import 'dart:convert';
 
+import 'track_lyrics.dart';
+
 const supportedLyricsDocumentExtensions = <String>['txt', 'lrc'];
+
+class LyricsDocumentExport {
+  const LyricsDocumentExport({
+    required this.fileName,
+    required this.text,
+  });
+
+  final String fileName;
+  final String text;
+
+  List<int> get bytes => utf8.encode(text);
+}
 
 bool isSupportedLyricsDocumentName(String fileName) {
   final dotIndex = fileName.lastIndexOf('.');
@@ -10,6 +24,49 @@ bool isSupportedLyricsDocumentName(String fileName) {
 
   final extension = fileName.substring(dotIndex + 1).toLowerCase();
   return supportedLyricsDocumentExtensions.contains(extension);
+}
+
+LyricsDocumentExport? buildLyricsDocumentExport({
+  required String title,
+  required String artist,
+  required String plainText,
+}) {
+  final text = _normalizeLyricsDocumentText(plainText);
+  if (text.isEmpty) {
+    return null;
+  }
+
+  return LyricsDocumentExport(
+    fileName: lyricsDocumentFileName(
+      title: title,
+      artist: artist,
+      plainText: text,
+    ),
+    text: text,
+  );
+}
+
+String lyricsDocumentFileName({
+  required String title,
+  required String artist,
+  required String plainText,
+}) {
+  final titlePart = _safeLyricsFileNamePart(title, fallback: 'lyrics');
+  final artistPart = _safeLyricsFileNamePart(
+    artist,
+    fallback: 'Unknown Artist',
+  );
+  final extension = lyricsDocumentExtensionForText(plainText);
+
+  if (artistPart == 'Unknown Artist') {
+    return '$titlePart.$extension';
+  }
+
+  return '$artistPart - $titlePart.$extension';
+}
+
+String lyricsDocumentExtensionForText(String plainText) {
+  return parseSyncedLyricLines(plainText).isEmpty ? 'txt' : 'lrc';
 }
 
 String decodeLyricsDocumentBytes(
@@ -29,4 +86,24 @@ String decodeLyricsDocumentBytes(
 String _normalizeLyricsDocumentText(String value) {
   final withoutBom = value.startsWith('\ufeff') ? value.substring(1) : value;
   return withoutBom.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+}
+
+String _safeLyricsFileNamePart(String value, {required String fallback}) {
+  final withoutInvalidCharacters =
+      value.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), ' ');
+  final withoutRepeatedWhitespace = withoutInvalidCharacters
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim()
+      .replaceAll(RegExp(r'^\.+|\.+$'), '')
+      .trim();
+
+  if (withoutRepeatedWhitespace.isEmpty) {
+    return fallback;
+  }
+
+  if (withoutRepeatedWhitespace.length <= 80) {
+    return withoutRepeatedWhitespace;
+  }
+
+  return withoutRepeatedWhitespace.substring(0, 80).trimRight();
 }

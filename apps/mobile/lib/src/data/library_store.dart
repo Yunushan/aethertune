@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
@@ -2017,6 +2018,20 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return buffer.toString().trimRight();
+  }
+
+  LyricsDocumentExport? exportLyricsDocument(String trackId) {
+    final track = _trackById(trackId);
+    final lyrics = _lyricsByTrackId[trackId];
+    if (track == null || lyrics == null || lyrics.isEmpty) {
+      return null;
+    }
+
+    return buildLyricsDocumentExport(
+      title: track.title,
+      artist: track.artist,
+      plainText: lyrics.plainText,
+    );
   }
 
   Future<Playlist> importPlaylistDocument(
