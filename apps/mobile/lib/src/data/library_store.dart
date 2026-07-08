@@ -47,6 +47,8 @@ enum LibraryHomeSectionType {
 
 enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
+enum LibraryMoodMixType { focus, energy, chill, workout, sleep }
+
 enum CustomSmartPlaylistSortMode {
   recentlyAdded,
   title,
@@ -143,6 +145,20 @@ class LibraryChartsSnapshot {
 
   final LibraryChartRange range;
   final LibraryStatsSummary stats;
+}
+
+class LibraryMoodMix {
+  const LibraryMoodMix({
+    required this.type,
+    required this.name,
+    required this.description,
+    required this.tracks,
+  });
+
+  final LibraryMoodMixType type;
+  final String name;
+  final String description;
+  final List<Track> tracks;
 }
 
 class CustomSmartPlaylist {
@@ -305,6 +321,20 @@ final class _TrackRadioCandidate {
 
   final Track track;
   final int score;
+  final DateTime? lastPlayedAt;
+}
+
+final class _DiscoveryCandidate {
+  const _DiscoveryCandidate({
+    required this.track,
+    required this.score,
+    required this.playCount,
+    this.lastPlayedAt,
+  });
+
+  final Track track;
+  final int score;
+  final int playCount;
   final DateTime? lastPlayedAt;
 }
 
@@ -1195,6 +1225,176 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  List<LibraryMoodMix> localMoodMixes({int limit = 8}) {
+    if (limit <= 0) {
+      return <LibraryMoodMix>[];
+    }
+
+    final mixes = <LibraryMoodMix>[];
+    for (final type in LibraryMoodMixType.values) {
+      final tracks = tracksForMoodMix(type, limit: limit);
+      if (tracks.isEmpty) {
+        continue;
+      }
+
+      mixes.add(
+        LibraryMoodMix(
+          type: type,
+          name: _moodMixName(type),
+          description: _moodMixDescription(type),
+          tracks: tracks,
+        ),
+      );
+    }
+
+    return mixes;
+  }
+
+  List<Track> tracksForMoodMix(
+    LibraryMoodMixType type, {
+    int limit = 50,
+  }) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    final candidates = <_DiscoveryCandidate>[];
+    for (final track in _tracks) {
+      if (!track.isPlayable) {
+        continue;
+      }
+
+      final baseScore = _moodScoreForTrack(type, track);
+      if (baseScore <= 0) {
+        continue;
+      }
+
+      candidates.add(
+        _DiscoveryCandidate(
+          track: track,
+          score: _boostedDiscoveryScore(baseScore, track),
+          playCount: playCountForTrack(track.id),
+          lastPlayedAt: lastPlayedAt(track.id),
+        ),
+      );
+    }
+
+    candidates.sort(_compareDiscoveryCandidates);
+
+    return candidates
+        .map((candidate) => candidate.track)
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  List<Track> personalizedRecommendations({int limit = 12}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    final byId = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+    final artistWeights = <String, int>{};
+    final albumWeights = <String, int>{};
+    final genreWeights = <String, int>{};
+
+    void addWeight(Map<String, int> weights, String? key, int amount) {
+      if (key == null || amount <= 0) {
+        return;
+      }
+
+      weights[key] = (weights[key] ?? 0) + amount;
+    }
+
+    void addPreference(
+      Track track, {
+      required int artist,
+      required int album,
+      required int genre,
+    }) {
+      addWeight(artistWeights, _knownMetadataKey(track.artist), artist);
+      addWeight(albumWeights, _knownMetadataKey(track.album), album);
+      addWeight(genreWeights, _knownMetadataKey(track.genre), genre);
+    }
+
+    for (final track in favorites) {
+      addPreference(track, artist: 28, album: 16, genre: 22);
+    }
+
+    final recentHistoryTrackIds = <String>{};
+    for (final entry in _history.take(50)) {
+      final track = byId[entry.trackId];
+      if (track == null) {
+        continue;
+      }
+
+      recentHistoryTrackIds.add(track.id);
+      final firstRecentPlay = recentHistoryTrackIds.length <= 12;
+      addPreference(
+        track,
+        artist: firstRecentPlay ? 18 : 8,
+        album: firstRecentPlay ? 10 : 4,
+        genre: firstRecentPlay ? 16 : 7,
+      );
+    }
+
+    if (artistWeights.isEmpty && albumWeights.isEmpty && genreWeights.isEmpty) {
+      return _recentPlayableTracks(limit: limit);
+    }
+
+    final candidates = <_DiscoveryCandidate>[];
+    for (final track in _tracks) {
+      if (!track.isPlayable) {
+        continue;
+      }
+
+      if (recentHistoryTrackIds.contains(track.id)) {
+        continue;
+      }
+
+      var score = 0;
+      score += artistWeights[_knownMetadataKey(track.artist)] ?? 0;
+      score += albumWeights[_knownMetadataKey(track.album)] ?? 0;
+      score += genreWeights[_knownMetadataKey(track.genre)] ?? 0;
+
+      if (track.isFavorite) {
+        score += 8;
+      }
+
+      final playCount = playCountForTrack(track.id);
+      if (playCount == 0) {
+        score += 12;
+      } else {
+        score -= playCount * 2;
+      }
+
+      if (score <= 0) {
+        continue;
+      }
+
+      candidates.add(
+        _DiscoveryCandidate(
+          track: track,
+          score: score,
+          playCount: playCount,
+          lastPlayedAt: lastPlayedAt(track.id),
+        ),
+      );
+    }
+
+    candidates.sort(_compareRecommendationCandidates);
+
+    if (candidates.isEmpty) {
+      return _recentPlayableTracks(limit: limit);
+    }
+
+    return candidates
+        .map((candidate) => candidate.track)
+        .take(limit)
+        .toList(growable: false);
+  }
+
   CustomSmartPlaylist? customSmartPlaylistById(String id) {
     final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
     if (index == -1) {
@@ -2051,6 +2251,17 @@ class LibraryStore extends ChangeNotifier {
     return tracks.take(limit).toList(growable: false);
   }
 
+  List<Track> _recentPlayableTracks({required int limit}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    return _tracks
+        .where((track) => track.isPlayable)
+        .take(limit)
+        .toList(growable: false);
+  }
+
   List<Track> _continueListeningTracks({required int limit}) {
     if (limit <= 0) {
       return <Track>[];
@@ -2147,6 +2358,163 @@ class LibraryStore extends ChangeNotifier {
         return now.subtract(const Duration(days: 30));
       case LibraryChartRange.year:
         return now.subtract(const Duration(days: 365));
+    }
+  }
+
+  int _moodScoreForTrack(LibraryMoodMixType type, Track track) {
+    final text = _discoveryTextForTrack(track);
+    var score = 0;
+
+    for (final keyword in _moodKeywords(type)) {
+      if (text.contains(keyword)) {
+        score += 24;
+      }
+    }
+
+    final genre = _knownMetadataKey(track.genre);
+    if (genre != null) {
+      for (final keyword in _moodKeywords(type)) {
+        if (genre.contains(keyword)) {
+          score += 18;
+        }
+      }
+    }
+
+    if (score <= 0) {
+      return 0;
+    }
+
+    switch (type) {
+      case LibraryMoodMixType.focus:
+        if (track.duration >= const Duration(minutes: 4)) {
+          score += 4;
+        }
+        break;
+      case LibraryMoodMixType.energy:
+      case LibraryMoodMixType.workout:
+        if (track.duration <= const Duration(minutes: 6)) {
+          score += 4;
+        }
+        break;
+      case LibraryMoodMixType.chill:
+      case LibraryMoodMixType.sleep:
+        if (track.duration >= const Duration(minutes: 3)) {
+          score += 4;
+        }
+        break;
+    }
+
+    return score;
+  }
+
+  int _boostedDiscoveryScore(int baseScore, Track track) {
+    var score = baseScore;
+    if (track.isFavorite) {
+      score += 10;
+    }
+    score += playCountForTrack(track.id) * 3;
+    return score;
+  }
+
+  String _discoveryTextForTrack(Track track) {
+    return <String>[
+      track.title,
+      track.artist,
+      track.album,
+      track.genre,
+    ].join(' ').toLowerCase();
+  }
+
+  List<String> _moodKeywords(LibraryMoodMixType type) {
+    switch (type) {
+      case LibraryMoodMixType.focus:
+        return const <String>[
+          'ambient',
+          'classical',
+          'deep',
+          'focus',
+          'instrumental',
+          'lofi',
+          'lo-fi',
+          'piano',
+          'study',
+        ];
+      case LibraryMoodMixType.energy:
+        return const <String>[
+          'dance',
+          'edm',
+          'electronic',
+          'energy',
+          'party',
+          'pop',
+          'power',
+          'rock',
+          'upbeat',
+        ];
+      case LibraryMoodMixType.chill:
+        return const <String>[
+          'acoustic',
+          'chill',
+          'jazz',
+          'lounge',
+          'mellow',
+          'relax',
+          'r&b',
+          'soul',
+        ];
+      case LibraryMoodMixType.workout:
+        return const <String>[
+          'cardio',
+          'energy',
+          'gym',
+          'hip hop',
+          'metal',
+          'power',
+          'run',
+          'running',
+          'trap',
+          'workout',
+        ];
+      case LibraryMoodMixType.sleep:
+        return const <String>[
+          'ambient',
+          'calm',
+          'drone',
+          'lullaby',
+          'meditation',
+          'night',
+          'sleep',
+        ];
+    }
+  }
+
+  String _moodMixName(LibraryMoodMixType type) {
+    switch (type) {
+      case LibraryMoodMixType.focus:
+        return 'Focus mix';
+      case LibraryMoodMixType.energy:
+        return 'Energy mix';
+      case LibraryMoodMixType.chill:
+        return 'Chill mix';
+      case LibraryMoodMixType.workout:
+        return 'Workout mix';
+      case LibraryMoodMixType.sleep:
+        return 'Sleep mix';
+    }
+  }
+
+  String _moodMixDescription(LibraryMoodMixType type) {
+    switch (type) {
+      case LibraryMoodMixType.focus:
+        return 'Local tracks for deep listening';
+      case LibraryMoodMixType.energy:
+        return 'Upbeat local picks';
+      case LibraryMoodMixType.chill:
+        return 'Relaxed local picks';
+      case LibraryMoodMixType.workout:
+        return 'High-momentum local tracks';
+      case LibraryMoodMixType.sleep:
+        return 'Calm local tracks';
     }
   }
 
@@ -3135,6 +3503,60 @@ class LibraryStore extends ChangeNotifier {
     return _compareByDateThenTitle(a, b);
   }
 
+  int _compareDiscoveryCandidates(
+    _DiscoveryCandidate a,
+    _DiscoveryCandidate b,
+  ) {
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) {
+      return byScore;
+    }
+
+    if (a.track.isFavorite != b.track.isFavorite) {
+      return a.track.isFavorite ? -1 : 1;
+    }
+
+    final byPlayCount = b.playCount.compareTo(a.playCount);
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareByDateThenTitle(a.track, b.track);
+  }
+
+  int _compareRecommendationCandidates(
+    _DiscoveryCandidate a,
+    _DiscoveryCandidate b,
+  ) {
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) {
+      return byScore;
+    }
+
+    final byPlayCount = a.playCount.compareTo(b.playCount);
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareByDateThenTitle(a.track, b.track);
+  }
+
   int _radioScoreForTrack(Track seedTrack, Track track) {
     var score = 0;
     if (_sameKnownMetadata(seedTrack.artist, track.artist)) {
@@ -3159,18 +3581,24 @@ class LibraryStore extends ChangeNotifier {
   }
 
   bool _sameKnownMetadata(String left, String right) {
-    final normalizedLeft = left.trim().toLowerCase();
-    final normalizedRight = right.trim().toLowerCase();
-    if (normalizedLeft.isEmpty ||
-        normalizedRight.isEmpty ||
-        normalizedLeft == 'unknown' ||
-        normalizedRight == 'unknown' ||
-        normalizedLeft.startsWith('unknown ') ||
-        normalizedRight.startsWith('unknown ')) {
+    final normalizedLeft = _knownMetadataKey(left);
+    final normalizedRight = _knownMetadataKey(right);
+    if (normalizedLeft == null || normalizedRight == null) {
       return false;
     }
 
     return normalizedLeft == normalizedRight;
+  }
+
+  String? _knownMetadataKey(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty ||
+        normalized == 'unknown' ||
+        normalized.startsWith('unknown ')) {
+      return null;
+    }
+
+    return normalized;
   }
 
   int _compareTrackRadioCandidates(

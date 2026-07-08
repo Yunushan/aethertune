@@ -23,6 +23,7 @@ Initial GitHub-ready scaffold.
 - Added duplicate track detection and merge handling for local library entries.
 - Added local Home feed sections for continue listening, recent plays, radio seeds, most played, favorites, and recently added tracks.
 - Added local charts for top tracks, artists, albums, and genres by playback range.
+- Added local Home recommendations and mood/activity mixes from library metadata and playback signals.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added local seed-based track radio queues from library metadata, favorites, and play history.
 - Added playlist artwork URL editing, display, export/import, and backup restore.

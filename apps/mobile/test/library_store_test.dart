@@ -829,6 +829,165 @@ void main() {
     );
   });
 
+  test('builds local mood mixes from playable library metadata', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 2, 2, 12),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'focus-favorite',
+        title: 'Piano Focus',
+        artist: 'Mira',
+        album: 'Study Room',
+        genre: 'Classical',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        'focus-long',
+        title: 'Study Drift',
+        artist: 'Ari',
+        album: 'Deep Work',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 5),
+      ),
+      _track(
+        'energy',
+        title: 'Power Run',
+        artist: 'Nova',
+        album: 'Bright',
+        genre: 'Rock',
+      ),
+      _track(
+        'chill',
+        title: 'Mellow Jazz',
+        artist: 'Sol',
+        album: 'Late Lounge',
+        genre: 'Jazz',
+      ),
+      _track(
+        'workout',
+        title: 'Gym Cardio',
+        artist: 'Pulse',
+        album: 'Motion',
+        genre: 'Hip Hop',
+      ),
+      _track(
+        'sleep',
+        title: 'Night Drone',
+        artist: 'Luma',
+        album: 'Rest',
+        genre: 'Meditation',
+      ),
+      _track(
+        'unmatched',
+        title: 'Plain Signal',
+        artist: 'Orion',
+        album: 'Archive',
+        genre: 'Folk',
+      ),
+      _track(
+        'metadata-only',
+        title: 'Ambient Preview',
+        artist: 'Cloud',
+        album: 'Draft',
+        genre: 'Ambient',
+        localPath: '',
+      ),
+    ]);
+    await store.toggleFavorite('focus-favorite');
+    await store.recordPlayback('focus-favorite');
+
+    final mixes = store.localMoodMixes(limit: 2);
+
+    expect(
+      mixes.map((mix) => mix.type),
+      <LibraryMoodMixType>[
+        LibraryMoodMixType.focus,
+        LibraryMoodMixType.energy,
+        LibraryMoodMixType.chill,
+        LibraryMoodMixType.workout,
+        LibraryMoodMixType.sleep,
+      ],
+    );
+    expect(mixes.first.name, 'Focus mix');
+    expect(
+      store
+          .tracksForMoodMix(LibraryMoodMixType.focus, limit: 2)
+          .map((track) => track.id),
+      <String>['focus-favorite', 'focus-long'],
+    );
+    expect(
+      store
+          .tracksForMoodMix(LibraryMoodMixType.energy)
+          .map((track) => track.id),
+      contains('energy'),
+    );
+    expect(
+      store
+          .tracksForMoodMix(LibraryMoodMixType.focus)
+          .map((track) => track.id),
+      isNot(contains('metadata-only')),
+    );
+    expect(store.localMoodMixes(limit: 0), isEmpty);
+  });
+
+  test('builds personalized local recommendations from taste signals', () async {
+    var now = DateTime.utc(2026, 2, 3, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'seed',
+        title: 'Aether Seed',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+      ),
+      _track(
+        'same-artist',
+        title: 'Morning Signal',
+        artist: 'Mira',
+        album: 'Elsewhere',
+        genre: 'Ambient',
+      ),
+      _track(
+        'same-genre',
+        title: 'Soft Current',
+        artist: 'Ari',
+        album: 'Still',
+        genre: 'Ambient',
+      ),
+      _track(
+        'same-album',
+        title: 'Dawn Echo',
+        artist: 'Vera',
+        album: 'Dawn',
+        genre: 'Pop',
+      ),
+      _track(
+        'unrelated',
+        title: 'Late Train',
+        artist: 'Sol',
+        album: 'Lines',
+        genre: 'Jazz',
+      ),
+    ]);
+
+    await store.toggleFavorite('seed');
+    await store.recordPlayback('seed');
+    now = DateTime.utc(2026, 2, 3, 12, 1);
+    await store.recordPlayback('unrelated');
+
+    final recommendations = store.personalizedRecommendations(limit: 3);
+
+    expect(
+      recommendations.map((track) => track.id),
+      <String>['same-artist', 'same-genre', 'same-album'],
+    );
+    expect(store.personalizedRecommendations(limit: 0), isEmpty);
+  });
+
   test('removing a library track removes its playback history', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 9),

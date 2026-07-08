@@ -10,6 +10,8 @@
 - [x] Local playback
 - [x] Local Home feed sections
 - [x] Local charts by playback range
+- [x] Local mood/activity mixes
+- [x] Personalized local recommendations
 - [x] Listening history
 - [x] Queue
 - [x] Queue reorder/remove

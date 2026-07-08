@@ -1459,6 +1459,8 @@ class _HomeTabState extends State<_HomeTab> {
 
     final sections = library.homeFeedSections();
     final charts = library.localCharts(range: _chartRange);
+    final recommendations = library.personalizedRecommendations(limit: 6);
+    final moodMixes = library.localMoodMixes(limit: 5);
     if (sections.isEmpty) {
       return _EmptyHomeFeed(
         onImport: widget.onImport,
@@ -1471,6 +1473,25 @@ class _HomeTabState extends State<_HomeTab> {
       children: <Widget>[
         Text('Home', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
+        ..._homeTrackPreviewWidgets(
+          context: context,
+          player: player,
+          library: library,
+          icon: Icons.auto_awesome,
+          title: 'For you',
+          subtitle: 'Local recommendations',
+          tracks: recommendations,
+        ),
+        for (final mix in moodMixes)
+          ..._homeTrackPreviewWidgets(
+            context: context,
+            player: player,
+            library: library,
+            icon: _moodMixIcon(mix.type),
+            title: mix.name,
+            subtitle: mix.description,
+            tracks: mix.tracks,
+          ),
         for (final section in sections) ...[
           _HomeSectionHeader(section: section),
           const SizedBox(height: 4),
@@ -1507,6 +1528,53 @@ class _HomeTabState extends State<_HomeTab> {
           ),
       ],
     );
+  }
+
+  List<Widget> _homeTrackPreviewWidgets({
+    required BuildContext context,
+    required PlayerController player,
+    required LibraryStore library,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Track> tracks,
+  }) {
+    if (tracks.isEmpty) {
+      return <Widget>[];
+    }
+
+    return <Widget>[
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: Text('${tracks.length}'),
+      ),
+      const SizedBox(height: 4),
+      for (final track in tracks)
+        TrackTile(
+          track: track,
+          onPlay: () => _playTrackWithResume(
+            context,
+            player,
+            library,
+            track,
+            queue: tracks,
+          ),
+          onStartRadio: () => unawaited(
+            _startTrackRadio(context, player, library, track),
+          ),
+          onFavorite: () => library.toggleFavorite(track.id),
+          onAddToPlaylist: () => widget.onAddToPlaylist(track),
+          onLyrics: () => widget.onLyrics(track),
+          onEditMetadata: () => unawaited(
+            _showTrackMetadataEditor(context, track),
+          ),
+          onRemove: () => library.removeTrack(track.id),
+        ),
+      const SizedBox(height: 12),
+    ];
   }
 }
 
@@ -1716,6 +1784,21 @@ String _libraryChartRangeLabel(LibraryChartRange range) {
       return 'Last 30 days';
     case LibraryChartRange.year:
       return 'Last year';
+  }
+}
+
+IconData _moodMixIcon(LibraryMoodMixType type) {
+  switch (type) {
+    case LibraryMoodMixType.focus:
+      return Icons.center_focus_strong;
+    case LibraryMoodMixType.energy:
+      return Icons.bolt_outlined;
+    case LibraryMoodMixType.chill:
+      return Icons.spa_outlined;
+    case LibraryMoodMixType.workout:
+      return Icons.fitness_center;
+    case LibraryMoodMixType.sleep:
+      return Icons.nightlight_round;
   }
 }
 
