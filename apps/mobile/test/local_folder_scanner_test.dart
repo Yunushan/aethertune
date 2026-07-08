@@ -108,6 +108,58 @@ void main() {
     expect(result.tracks.single.album, 'Tagged Album');
   });
 
+  test('prefers ID3v2 title artist album and genre metadata', () async {
+    final albumFolder = Directory(p.join(root.path, 'Filename Album'));
+    await albumFolder.create();
+    final taggedFile = File(p.join(albumFolder.path, '99 messy-name.mp3'));
+    await taggedFile.writeAsBytes(
+      <int>[
+        ..._id3v23Tag(
+          title: 'ID3v2 Title',
+          artist: 'ID3v2 Artist',
+          album: 'ID3v2 Album',
+          genre: 'Dream Pop',
+        ),
+        1,
+        2,
+        3,
+        ..._id3v1Tag(
+          title: 'ID3v1 Title',
+          artist: 'ID3v1 Artist',
+          album: 'ID3v1 Album',
+        ),
+      ],
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'ID3v2 Title');
+    expect(result.tracks.single.artist, 'ID3v2 Artist');
+    expect(result.tracks.single.album, 'ID3v2 Album');
+    expect(result.tracks.single.genre, 'Dream Pop');
+  });
+
+  test('merges partial UTF-16 ID3v2 tags with filename metadata', () async {
+    await File(
+      p.join(root.path, '06 Filename Artist - Filename Title.mp3'),
+    ).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'UTF16 Title',
+        album: 'UTF16 Album',
+        encoding: _id3v2EncodingUtf16,
+      ),
+      1,
+      2,
+      3,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'UTF16 Title');
+    expect(result.tracks.single.artist, 'Filename Artist');
+    expect(result.tracks.single.album, 'UTF16 Album');
+  });
+
   test('falls back to filename metadata when ID3v1 tags are empty', () async {
     await File(
       p.join(root.path, '04 Fallback Artist - Fallback Title.mp3'),
@@ -168,3 +220,80 @@ void _writeFixedAscii(List<int> target, int offset, int length, String value) {
     target[offset + index] = codes[index];
   }
 }
+
+List<int> _id3v23Tag({
+  String title = '',
+  String artist = '',
+  String album = '',
+  String genre = '',
+  int encoding = _id3v2EncodingUtf8,
+}) {
+  final frames = <int>[
+    if (title.isNotEmpty) ..._id3v23TextFrame('TIT2', title, encoding),
+    if (artist.isNotEmpty) ..._id3v23TextFrame('TPE1', artist, encoding),
+    if (album.isNotEmpty) ..._id3v23TextFrame('TALB', album, encoding),
+    if (genre.isNotEmpty) ..._id3v23TextFrame('TCON', genre, encoding),
+  ];
+
+  return <int>[
+    0x49,
+    0x44,
+    0x33,
+    0x03,
+    0x00,
+    0x00,
+    ..._id3v2SynchsafeSize(frames.length),
+    ...frames,
+  ];
+}
+
+List<int> _id3v23TextFrame(String id, String value, int encoding) {
+  final payload = <int>[
+    encoding,
+    ..._id3v2EncodedText(value, encoding),
+  ];
+
+  return <int>[
+    ...id.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
+  ];
+}
+
+List<int> _id3v2EncodedText(String value, int encoding) {
+  if (encoding == _id3v2EncodingUtf16) {
+    final bytes = <int>[0xff, 0xfe];
+    for (final codeUnit in value.codeUnits) {
+      bytes
+        ..add(codeUnit & 0xff)
+        ..add((codeUnit >> 8) & 0xff);
+    }
+
+    return bytes;
+  }
+
+  return value.codeUnits;
+}
+
+List<int> _id3v2SynchsafeSize(int size) {
+  return <int>[
+    (size >> 21) & 0x7f,
+    (size >> 14) & 0x7f,
+    (size >> 7) & 0x7f,
+    size & 0x7f,
+  ];
+}
+
+List<int> _uint32Size(int size) {
+  return <int>[
+    (size >> 24) & 0xff,
+    (size >> 16) & 0xff,
+    (size >> 8) & 0xff,
+    size & 0xff,
+  ];
+}
+
+const _id3v2EncodingUtf8 = 3;
+const _id3v2EncodingUtf16 = 1;
