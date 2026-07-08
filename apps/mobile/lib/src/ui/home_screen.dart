@@ -17,6 +17,7 @@ import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
+import '../data/subsonic_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/offline_cache_entry.dart';
@@ -5185,10 +5186,23 @@ class _SourcesTabState extends State<_SourcesTab> {
           disclosure: _archiveProvider.disclosure,
         ),
         const _ProviderCard(
-          title: 'Jellyfin / Navidrome / Subsonic',
-          status: 'Adapter roadmap',
-          description: 'User-owned/self-hosted music server support belongs here.',
+          title: 'Navidrome / Subsonic',
+          status: 'Adapter foundation',
+          description:
+              'Tested Subsonic REST search and stream resolver for user-owned music servers; settings UI remains roadmap.',
           icon: Icons.dns_outlined,
+          capabilities: SubsonicProvider.defaultCapabilities,
+          disclosure: ProviderPrivacyDisclosure(
+            requiresUserCredentials: true,
+            cachesMedia: true,
+            supportsDownloads: true,
+          ),
+        ),
+        const _ProviderCard(
+          title: 'Jellyfin',
+          status: 'Adapter roadmap',
+          description: 'User-owned Jellyfin music library support belongs here.',
+          icon: Icons.storage_outlined,
         ),
         const _ProviderCard(
           title: 'More open catalogs',

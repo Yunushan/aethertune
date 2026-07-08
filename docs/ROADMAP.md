@@ -115,7 +115,8 @@
 - [x] Internet Archive direct file private cache storage
 - [ ] Internet Archive collection browse and facet suggestion UI
 - [ ] Jellyfin provider
-- [ ] Navidrome/Subsonic provider
+- [x] Navidrome/Subsonic provider foundation
+- [ ] Navidrome/Subsonic settings UI and secure credential storage
 
 ## 0.6.x: Offline and lyrics
 

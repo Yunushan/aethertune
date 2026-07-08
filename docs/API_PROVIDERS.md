@@ -49,7 +49,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Podcast RSS foundation
 
-`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, declares cache/download permission for legal feed enclosures, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, queue/cache direct enclosure URLs with checksum-verified private writes, trim/clear/quota-limit private cached media from Options, and include subscriptions, refresh state, progress, and queued offline requests in backups. Background/resumable downloads are still separate roadmap work.
+`PodcastRssProvider` parses RSS channels and audio enclosures into provider-neutral `Track` objects, exposes the feed host in `ProviderPrivacyDisclosure`, declares cache/download permission for legal feed enclosures, and resolves enclosure URLs for playback. The Sources tab can add/remove persisted feed subscriptions, import/export OPML, load episodes, track refresh status and stale feeds, play them, resume saved episode progress, save them to the local library, queue/cache direct enclosure URLs with checksum-verified private writes and HTTP Range retry resume, trim/clear/quota-limit private cached media from Options, and include subscriptions, refresh state, progress, and queued offline requests in backups. Background download jobs are still separate roadmap work.
 
 ## Radio Browser foundation
 
@@ -57,7 +57,11 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Internet Archive foundation
 
-`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, save tracks, queue/cache checksum-verified direct public files, and quota-limit/trim/clear private cached media from Options. Collection browsing pages, facet suggestion UI, and resumable downloads are still separate roadmap work.
+`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, save tracks, queue/cache checksum-verified direct public files with HTTP Range retry resume, and quota-limit/trim/clear private cached media from Options. Collection browsing pages, facet suggestion UI, and background download jobs are still separate roadmap work.
+
+## Navidrome/Subsonic foundation
+
+`SubsonicProvider` targets user-owned Navidrome or Subsonic-compatible servers through the documented Subsonic REST API. It builds authenticated JSON requests with encoded password credentials, searches songs through `search3.view`, maps song metadata to provider-neutral `Track` objects, discloses the configured server host and credential/search/song-id data sent, declares authentication/cache/download capabilities for user-owned media, and resolves playable streams through `stream.view`. The provider is constructor-configured and tested; settings UI, secure credential storage, library browse pages, playlists, and sync are still roadmap work.
 
 ## Minimal provider
 

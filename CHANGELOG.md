@@ -56,6 +56,7 @@ Initial GitHub-ready scaffold.
 - Added Radio Browser station stream validation before playback/save decisions.
 - Added Internet Archive public audio search with playable file resolution.
 - Added Internet Archive collection, subject, creator, and year filters with multi-file item results.
+- Added Navidrome/Subsonic provider foundation for authenticated Subsonic REST search and stream resolution.
 - Added persisted Podcast RSS feed subscriptions with episode play/save actions.
 - Added Podcast RSS OPML import/export for feed migration.
 - Added Podcast RSS episode progress/resume persistence.
