@@ -34,10 +34,12 @@ final class _LocalFileMetadata {
   const _LocalFileMetadata({
     required this.title,
     required this.artist,
+    this.album,
   });
 
   final String title;
   final String artist;
+  final String? album;
 }
 
 final class LocalFolderScanner {
@@ -115,7 +117,7 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      tracks.add(_trackForFile(entry.path));
+      tracks.add(await _trackForFile(entry.path));
     }
   }
 
@@ -139,14 +141,14 @@ final class _LocalFolderScanState {
     return supportedExtensions.contains(p.extension(path).toLowerCase());
   }
 
-  Track _trackForFile(String path) {
-    final metadata = _metadataForFile(path);
+  Future<Track> _trackForFile(String path) async {
+    final metadata = await _metadataForFile(path);
 
     return Track(
       id: Track.stableLocalId(path),
       title: metadata.title,
       artist: metadata.artist,
-      album: _albumLabelFor(path),
+      album: metadata.album ?? _albumLabelFor(path),
       localPath: path,
       sourceId: 'local',
       addedAt: importedAt,
@@ -163,7 +165,25 @@ final class _LocalFolderScanState {
     return relativeParent;
   }
 
-  _LocalFileMetadata _metadataForFile(String path) {
+  Future<_LocalFileMetadata> _metadataForFile(String path) async {
+    final fallbackMetadata = _filenameMetadataForFile(path);
+    final embeddedMetadata = await _embeddedMetadataForFile(path);
+    if (embeddedMetadata == null) {
+      return fallbackMetadata;
+    }
+
+    return _LocalFileMetadata(
+      title: embeddedMetadata.title.isEmpty
+          ? fallbackMetadata.title
+          : embeddedMetadata.title,
+      artist: embeddedMetadata.artist.isEmpty
+          ? fallbackMetadata.artist
+          : embeddedMetadata.artist,
+      album: embeddedMetadata.album ?? fallbackMetadata.album,
+    );
+  }
+
+  _LocalFileMetadata _filenameMetadataForFile(String path) {
     final fallbackTitle = p.basenameWithoutExtension(path).trim();
     final normalizedName = _withoutLeadingTrackNumber(fallbackTitle);
     final titleParts = normalizedName
@@ -192,5 +212,65 @@ final class _LocalFolderScanState {
     }
 
     return match.group(1)!.trim().replaceFirst(RegExp(r'^[-._\s]+'), '');
+  }
+
+  Future<_LocalFileMetadata?> _embeddedMetadataForFile(String path) async {
+    if (p.extension(path).toLowerCase() != '.mp3') {
+      return null;
+    }
+
+    try {
+      final file = File(path);
+      final length = await file.length();
+      if (length < 128) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        await access.setPosition(length - 128);
+        final bytes = await access.read(128);
+        return _id3v1Metadata(bytes);
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  _LocalFileMetadata? _id3v1Metadata(List<int> bytes) {
+    if (bytes.length != 128 ||
+        bytes[0] != 0x54 ||
+        bytes[1] != 0x41 ||
+        bytes[2] != 0x47) {
+      return null;
+    }
+
+    final title = _id3v1Text(bytes, 3, 30);
+    final artist = _id3v1Text(bytes, 33, 30);
+    final album = _id3v1Text(bytes, 63, 30);
+    if (title.isEmpty && artist.isEmpty && album.isEmpty) {
+      return null;
+    }
+
+    return _LocalFileMetadata(
+      title: title,
+      artist: artist,
+      album: album.isEmpty ? null : album,
+    );
+  }
+
+  String _id3v1Text(List<int> bytes, int start, int length) {
+    final rawBytes = bytes
+        .skip(start)
+        .take(length)
+        .takeWhile((byte) => byte != 0)
+        .toList(growable: false);
+    final text = String.fromCharCodes(rawBytes)
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return text;
   }
 }

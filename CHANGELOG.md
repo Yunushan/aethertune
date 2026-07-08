@@ -25,6 +25,7 @@ Initial GitHub-ready scaffold.
 - Added recursive local folder scanning/import for supported audio files.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added local folder filename metadata parsing for track numbers and artist-title names.
+- Added basic ID3v1 MP3 title, artist, and album metadata parsing during folder scans.
 - Added duplicate track detection and merge handling for local library entries.
 - Added local Home feed sections for continue listening, recent plays, radio seeds, most played, favorites, and recently added tracks.
 - Added local charts for top tracks, artists, albums, and genres by playback range.

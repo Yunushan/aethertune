@@ -84,6 +84,59 @@ void main() {
     expect(result.tracks.single.title, 'Movement - Live');
   });
 
+  test('prefers ID3v1 title artist and album metadata for MP3 files', () async {
+    final albumFolder = Directory(p.join(root.path, 'Filename Album'));
+    await albumFolder.create();
+    final taggedFile = File(p.join(albumFolder.path, '99 messy-name.mp3'));
+    await taggedFile.writeAsBytes(
+      <int>[
+        1,
+        2,
+        3,
+        ..._id3v1Tag(
+          title: 'Tagged Title',
+          artist: 'Tagged Artist',
+          album: 'Tagged Album',
+        ),
+      ],
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Tagged Title');
+    expect(result.tracks.single.artist, 'Tagged Artist');
+    expect(result.tracks.single.album, 'Tagged Album');
+  });
+
+  test('falls back to filename metadata when ID3v1 tags are empty', () async {
+    await File(
+      p.join(root.path, '04 Fallback Artist - Fallback Title.mp3'),
+    ).writeAsBytes(<int>[1, 2, 3, ..._id3v1Tag()]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Fallback Title');
+    expect(result.tracks.single.artist, 'Fallback Artist');
+    expect(result.tracks.single.album, p.basename(root.path));
+  });
+
+  test('merges partial ID3v1 tags with filename metadata', () async {
+    await File(
+      p.join(root.path, '05 Filename Artist - Filename Title.mp3'),
+    ).writeAsBytes(<int>[
+      1,
+      2,
+      3,
+      ..._id3v1Tag(album: 'Tagged Album Only'),
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Filename Title');
+    expect(result.tracks.single.artist, 'Filename Artist');
+    expect(result.tracks.single.album, 'Tagged Album Only');
+  });
+
   test('rejects a missing folder path', () async {
     const scanner = LocalFolderScanner();
 
@@ -92,4 +145,26 @@ void main() {
       throwsA(isA<FileSystemException>()),
     );
   });
+}
+
+List<int> _id3v1Tag({
+  String title = '',
+  String artist = '',
+  String album = '',
+}) {
+  final bytes = List<int>.filled(128, 0);
+  bytes[0] = 0x54;
+  bytes[1] = 0x41;
+  bytes[2] = 0x47;
+  _writeFixedAscii(bytes, 3, 30, title);
+  _writeFixedAscii(bytes, 33, 30, artist);
+  _writeFixedAscii(bytes, 63, 30, album);
+  return bytes;
+}
+
+void _writeFixedAscii(List<int> target, int offset, int length, String value) {
+  final codes = value.codeUnits.take(length).toList(growable: false);
+  for (var index = 0; index < codes.length; index += 1) {
+    target[offset + index] = codes[index];
+  }
 }

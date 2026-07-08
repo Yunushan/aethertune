@@ -51,7 +51,8 @@
 - [x] Recursive folder import
 - [ ] Recursive folder browser
 - [x] Filename metadata scanner
-- [ ] Embedded audio tag scanner
+- [x] Basic ID3v1 MP3 metadata scanner
+- [ ] Rich embedded audio tag scanner
 - [x] Stored metadata editor
 - [x] Duplicate resolver scaffold
 - [ ] Audio fingerprint and file-hash duplicate matching

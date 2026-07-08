@@ -29,7 +29,7 @@ dart run bin/server.dart
 
 1. Open the app.
 2. Tap the library-add icon in the top-right corner to select one or more audio files, or tap the folder icon to scan a folder recursively.
-3. AetherTune imports supported audio files, parses common filename metadata such as leading track numbers and `Artist - Title`, and groups folder-scanned tracks by their parent folders until a richer tag scanner is added.
+3. AetherTune imports supported audio files, reads basic ID3v1 MP3 title/artist/album tags during folder scans, parses common filename metadata such as leading track numbers and `Artist - Title` when tags are missing, and groups folder-scanned tracks by their parent folders until richer tag/artwork scanning is added.
 4. Tap a track to play it.
 
 ## Home

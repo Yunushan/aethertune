@@ -41,7 +41,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Server health/info/catalog endpoints | Done | Covered by server tests and CI compile gate. | Real persisted catalog and authenticated APIs. |
 | MIT license | Done | Root `LICENSE`. | Third-party notice automation. |
 | No telemetry | Done | No analytics SDK or tracking dependency. | Privacy tests and network-call audit. |
-| Local audio import | Done | Native file picker plus recursive folder scanner for supported audio extensions, including filename track-number and artist/title parsing with scanner tests. | Folder watch, scoped storage UX, and embedded tag parsing. |
+| Local audio import | Done | Native file picker plus recursive folder scanner for supported audio extensions, including filename track-number parsing, artist/title parsing, and basic ID3v1 MP3 title/artist/album tag parsing with scanner tests. | Folder watch, scoped storage UX, and richer embedded tag parsing. |
 | Local playback | Done | `just_audio` local file playback. | Background service, notification controls, codec matrix. |
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
@@ -93,9 +93,9 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Local file import | Done | Namida, Musify | File picker import and recursive folder scanning are implemented, including common filename metadata parsing; folder watch and scoped-storage polish remain. |
+| Local file import | Done | Namida, Musify | File picker import and recursive folder scanning are implemented, including common filename metadata parsing and basic ID3v1 MP3 tag parsing; folder watch and scoped-storage polish remain. |
 | Folder browsing | Scaffolded | Namida, local music players | Imported-track folder groups and recursive folder import are implemented; recursive folder tree UI and platform permissions remain. |
-| Metadata scanner | Scaffolded | Namida | Folder import derives album/folder metadata from parent folders and parses common filename patterns such as leading track numbers and `Artist - Title`; scanner tests cover recursive import and dashed titles. Needed next: embedded tag parser, artwork extraction, background indexing. |
+| Metadata scanner | Scaffolded | Namida | Folder import derives album/folder metadata from parent folders, parses common filename patterns such as leading track numbers and `Artist - Title`, and reads basic ID3v1 MP3 title/artist/album tags before falling back to filenames; scanner tests cover recursive import, dashed titles, tag preference, and tag fallback. Needed next: ID3v2/FLAC/M4A tags, artwork extraction, background indexing. |
 | Metadata editing | Scaffolded | Namida | Track menus edit persisted library title, artist, album, and genre; search, browse groups, suggestions, playlists, and backup data update from the edited record, with store tests. Needed next: safe audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Scaffolded | Local library apps | Options duplicate resolver detects path, provider item, stream URL, and metadata plus known-duration matches, then merges the selected keeper with playlists/history/lyrics/progress preserved. Needed next: audio fingerprinting, file hash matching, scanner reconciliation, batch review UI, and undo. |
 | Album/artist/genre/source/folder views | Done | YouTube Music, Namida | Library browse sheets group tracks by artist, album, genre, source, and imported folder; metadata scanner still needs richer tags. |
@@ -161,7 +161,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Source/provider | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Local files | Done | Namida, Musify | Recursive folder scanner and filename metadata parser are implemented; embedded tag parser and folder watch remain. |
+| Local files | Done | Namida, Musify | Recursive folder scanner, filename metadata parser, and basic ID3v1 MP3 title/artist/album tag parser are implemented; richer tag parser, artwork extraction, and folder watch remain. |
 | Demo provider | Done | Provider template | Developer docs and test fixture provider. |
 | Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
 | Navidrome/Subsonic | Roadmap | Self-hosted music users | Subsonic API adapter and sync model. |

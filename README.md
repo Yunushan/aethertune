@@ -125,7 +125,7 @@ This scaffold includes real app code, not only a README:
 | Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI, with a desktop-width navigation rail |
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
-| Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, or folder |
+| Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing plus basic ID3v1 MP3 tag parsing; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, or folder |
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, theme preference, offline mode, app/provider offline cache size limits, and the offline cache/download queue with byte-count/checksum metadata in `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup, including submitted search history, theme preference, offline mode, app/provider offline cache size limits, and queued offline media requests with cache metadata, from the Options tab |
 | Home feed | Local Home tab sections for recommendations, mood/activity mixes, continue listening, recently played, radio seeds, most played, favorites, recently added tracks, and range-filtered local charts |
@@ -148,7 +148,7 @@ AetherTune is designed to support the combined feature categories users expect f
 
 | Feature category | Target support |
 |---|---|
-| Local files | Library import, recursive folder scanner with filename metadata parsing, playback, search, favorites, recently added sorting, imported-folder browsing, stored metadata editing, duplicate resolver scaffold, folder-watch roadmap, and audio tag writer roadmap |
+| Local files | Library import, recursive folder scanner with filename metadata parsing, basic ID3v1 MP3 title/artist/album tags, playback, search, favorites, recently added sorting, imported-folder browsing, stored metadata editing, duplicate resolver scaffold, folder-watch roadmap, and richer tag scanner/writer roadmap |
 | History/stats | Recently played, local play counts, estimated listening time, date-range filters, JSON/CSV export, and top track/artist/album/genre recap implemented; richer yearly/monthly cards and visualizations roadmap |
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, network disclosure, and cache/download policy gates for legal source adapters |
