@@ -47,6 +47,7 @@ Initial GitHub-ready scaffold.
 - Added provider plugin contract.
 - Added provider capability flags and privacy/network disclosure metadata.
 - Added unified provider search fan-out with ranking and per-provider error reporting.
+- Added local library results to unified provider search, including offline-mode local-only search.
 - Added Podcast RSS parser/provider foundation for legal audio feeds.
 - Added Radio Browser parser/provider foundation for public internet radio.
 - Added Sources-tab Radio Browser station search with play and save actions.

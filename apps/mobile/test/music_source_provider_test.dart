@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/jellyfin_provider.dart';
+import 'package:aethertune/src/data/local_library_provider.dart';
 import 'package:aethertune/src/data/podcast_rss_provider.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/data/subsonic_provider.dart';
@@ -50,6 +51,7 @@ void main() {
 
   test('current providers satisfy the shared capability contract', () {
     final providers = <MusicSourceProvider>[
+      const LocalLibraryProvider(),
       const DemoSourceProvider(),
       InternetArchiveProvider(
         baseUri: Uri.parse('https://archive.example.test'),

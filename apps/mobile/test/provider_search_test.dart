@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aethertune/src/data/local_library_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/provider_search.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -54,6 +55,45 @@ void main() {
       'first',
     ]);
     expect(response.results.first.track.title, 'Aether Tune');
+  });
+
+  test('merges local library results with provider catalog results', () async {
+    final localTrack = Track(
+      id: 'local-hit',
+      title: 'Aether Tune',
+      artist: 'Saved Artist',
+      album: 'Saved Album',
+      localPath: '/music/aether-tune.mp3',
+    );
+    final coordinator = ProviderSearchCoordinator(
+      <MusicSourceProvider>[
+        LocalLibraryProvider(tracks: <Track>[localTrack]),
+        _FakeProvider(
+          id: 'remote',
+          name: 'Remote',
+          tracks: <Track>[
+            Track(
+              id: 'remote-hit',
+              title: 'Aether Tune Live',
+              artist: 'Remote Artist',
+              sourceId: 'remote',
+              streamUrl: 'https://stream.example.test/aether-live.mp3',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final response = await coordinator.search('aether tune');
+
+    expect(response.errors, isEmpty);
+    expect(response.results.map((result) => result.providerId), <String>[
+      LocalLibraryProvider.providerId,
+      'remote',
+    ]);
+    expect(response.results.first.providerName, 'Local Library');
+    expect(response.results.first.track.id, localTrack.id);
+    expect(response.results.first.track.isPlayable, isTrue);
   });
 
   test('captures provider failures without dropping successful results', () async {

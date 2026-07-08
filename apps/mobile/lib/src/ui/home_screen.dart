@@ -13,6 +13,7 @@ import '../data/demo_source_provider.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
+import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
@@ -5236,23 +5237,19 @@ class _SourcesTabState extends State<_SourcesTab> {
             Expanded(
               child: TextField(
                 controller: _providerSearchController,
-                enabled: !offlineModeEnabled,
                 decoration: const InputDecoration(
-                  labelText: 'Search providers',
+                  labelText: 'Search library and providers',
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: offlineModeEnabled
-                    ? null
-                    : (_) => _searchProviderCatalogs(),
+                onSubmitted: (_) => _searchProviderCatalogs(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              tooltip: 'Search providers',
-              onPressed: _providerSearchLoading || offlineModeEnabled
-                  ? null
-                  : _searchProviderCatalogs,
+              tooltip: 'Search library and providers',
+              onPressed:
+                  _providerSearchLoading ? null : _searchProviderCatalogs,
               icon: const Icon(Icons.search),
             ),
           ],
@@ -5284,9 +5281,9 @@ class _SourcesTabState extends State<_SourcesTab> {
           const SizedBox(height: 8),
           const ListTile(
             leading: Icon(Icons.public),
-            title: Text('No provider results loaded'),
+            title: Text('No search results loaded'),
             subtitle: Text(
-              'Search Demo Provider, Radio Browser, and Internet Archive.',
+              'Search Local Library, Demo Provider, Radio Browser, and Internet Archive.',
             ),
           ),
         ],
@@ -5766,8 +5763,17 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
-  List<MusicSourceProvider> get _providerSearchSources {
+  List<MusicSourceProvider> _providerSearchSources({bool localOnly = false}) {
+    final library = context.read<LibraryStore>();
+    final localLibraryProvider = LocalLibraryProvider(
+      searchTracks: (query) => library.search(query),
+    );
+    if (localOnly) {
+      return <MusicSourceProvider>[localLibraryProvider];
+    }
+
     return <MusicSourceProvider>[
+      localLibraryProvider,
       _provider,
       _radioProvider,
       _archiveProvider,
@@ -5775,8 +5781,14 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   ProviderSearchCoordinator get _providerSearchCoordinator {
+    return _providerSearchCoordinatorFor();
+  }
+
+  ProviderSearchCoordinator _providerSearchCoordinatorFor({
+    bool localOnly = false,
+  }) {
     return ProviderSearchCoordinator(
-      _providerSearchSources,
+      _providerSearchSources(localOnly: localOnly),
       maxResultsPerProvider: 8,
     );
   }
@@ -5918,16 +5930,6 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _searchProviderCatalogs() async {
-    if (_offlineModeBlocksSourceNetwork(context)) {
-      setState(() {
-        _providerSearchResults = <ProviderSearchResult>[];
-        _providerSearchErrors = <ProviderSearchError>[];
-        _providerSearchLoading = false;
-        _providerSearchMessage = 'Offline mode is on.';
-      });
-      return;
-    }
-
     final query = _providerSearchController.text.trim();
     if (query.isEmpty) {
       setState(() {
@@ -5947,7 +5949,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
 
     try {
-      final response = await _providerSearchCoordinator.search(query);
+      final localOnly = context.read<LibraryStore>().offlineModeEnabled;
+      final response = await _providerSearchCoordinatorFor(
+        localOnly: localOnly,
+      ).search(query);
       if (!mounted) {
         return;
       }
@@ -5956,9 +5961,10 @@ class _SourcesTabState extends State<_SourcesTab> {
         _providerSearchResults = response.results;
         _providerSearchErrors = response.errors;
         _providerSearchLoading = false;
-        _providerSearchMessage = response.results.isEmpty
-            ? 'No provider results found.'
-            : null;
+        _providerSearchMessage = _providerSearchCompletionMessage(
+          hasResults: response.results.isNotEmpty,
+          localOnly: localOnly,
+        );
       });
     } catch (error) {
       if (!mounted) {
@@ -6061,8 +6067,27 @@ class _SourcesTabState extends State<_SourcesTab> {
     return _providerSearchCoordinator.canResolve(track);
   }
 
+  String? _providerSearchCompletionMessage({
+    required bool hasResults,
+    required bool localOnly,
+  }) {
+    if (!hasResults) {
+      return localOnly
+          ? 'No local library results found while offline.'
+          : 'No provider results found.';
+    }
+
+    if (localOnly) {
+      return 'Offline mode: showing local library results only.';
+    }
+
+    return null;
+  }
+
   IconData _providerSearchIcon(String providerId) {
     switch (providerId) {
+      case LocalLibraryProvider.providerId:
+        return Icons.library_music_outlined;
       case 'demo':
         return Icons.code;
       case 'radio-browser':
