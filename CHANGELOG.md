@@ -27,6 +27,7 @@ Initial GitHub-ready scaffold.
 - Added similar local tracks from shared artist, album, genre, and library activity signals.
 - Added privacy-safe local share text for tracks, library browse groups, and manual playlists.
 - Added bounded lyrics excerpt share text for saved and draft plain/LRC lyrics.
+- Added a desktop-width navigation rail for the Flutter app shell.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added local seed-based track radio queues from library metadata, favorites, and play history.
 - Added playlist artwork URL editing, display, export/import, and backup restore.

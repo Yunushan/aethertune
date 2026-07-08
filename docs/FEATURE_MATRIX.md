@@ -242,7 +242,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Material 3 shell | Done | Music You, modern Android apps | Full design system. |
 | Mini player / full player | Scaffolded | All music apps | Full-screen now-playing view and gestures. |
-| Desktop responsive layout | Roadmap | Desktop players | Split panes, resizable sidebars, keyboard focus. |
+| Desktop responsive layout | Scaffolded | Desktop players | The Flutter shell switches from bottom navigation to a labeled, scrollable `NavigationRail` at desktop widths while preserving the player bar and tab state across Linux, macOS, and Windows builds; breakpoint behavior has unit coverage. Needed next: split panes, resizable sidebars, richer keyboard focus traversal, and desktop-specific density tuning. |
 | Themes | Scaffolded | Music You, RiMusic | Options exposes persisted System, Light, Dark, and AMOLED choices; the app shell switches `ThemeMode`, backups preserve the preference, and store tests cover persistence/restore. Needed next: Material You dynamic color, custom accents, and per-platform polish. |
 | AMOLED theme | Scaffolded | Android music apps | AMOLED preference forces dark mode and uses black scaffold/canvas/navigation surfaces. Needed next: full component contrast audit and per-screen black-surface tuning. |
 | Artwork-dominant player | Roadmap | Namida, YouTube Music | Player redesign and animated transitions. |

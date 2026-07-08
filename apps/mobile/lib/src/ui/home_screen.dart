@@ -27,8 +27,74 @@ import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
+import 'responsive_layout.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
+
+class _AetherTuneNavigationDestination {
+  const _AetherTuneNavigationDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+}
+
+const _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
+  _AetherTuneNavigationDestination(
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home,
+    label: 'Home',
+  ),
+  _AetherTuneNavigationDestination(
+    icon: Icons.my_library_music_outlined,
+    selectedIcon: Icons.my_library_music,
+    label: 'Library',
+  ),
+  _AetherTuneNavigationDestination(
+    icon: Icons.playlist_play_outlined,
+    selectedIcon: Icons.playlist_play,
+    label: 'Playlists',
+  ),
+  _AetherTuneNavigationDestination(
+    icon: Icons.history_outlined,
+    selectedIcon: Icons.history,
+    label: 'History',
+  ),
+  _AetherTuneNavigationDestination(
+    icon: Icons.extension_outlined,
+    selectedIcon: Icons.extension,
+    label: 'Sources',
+  ),
+  _AetherTuneNavigationDestination(
+    icon: Icons.tune_outlined,
+    selectedIcon: Icons.tune,
+    label: 'Options',
+  ),
+];
+
+List<NavigationDestination> _navigationBarDestinations() {
+  return _aetherTuneNavigationDestinations.map((destination) {
+    return NavigationDestination(
+      icon: Icon(destination.icon),
+      selectedIcon: Icon(destination.selectedIcon),
+      label: destination.label,
+    );
+  }).toList(growable: false);
+}
+
+List<NavigationRailDestination> _navigationRailDestinations() {
+  return _aetherTuneNavigationDestinations.map((destination) {
+    return NavigationRailDestination(
+      icon: Icon(destination.icon),
+      selectedIcon: Icon(destination.selectedIcon),
+      label: Text(destination.label),
+    );
+  }).toList(growable: false);
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -134,6 +200,84 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final useNavigationRail = usesDesktopNavigationRail(
+      MediaQuery.of(context).size.width,
+    );
+    final tabContent = Column(
+      children: <Widget>[
+        Expanded(
+          child: IndexedStack(
+            index: _tabIndex,
+            children: <Widget>[
+              _HomeTab(
+                onImport: () => _importAudio(context),
+                onImportFolder: () => _importAudioFolder(context),
+                onAddToPlaylist: (track) => _showAddToPlaylist(
+                  context,
+                  track,
+                ),
+                onLyrics: (track) => _showLyricsEditor(
+                  context,
+                  track,
+                ),
+              ),
+              _LibraryTab(
+                searchController: _searchController,
+                query: _query,
+                favoritesOnly: _favoritesOnly,
+                offlineOnly: _offlineLibraryOnly,
+                sortMode: _librarySortMode,
+                onQueryChanged: (value) => setState(() => _query = value),
+                onQuerySubmitted: (value) {
+                  setState(() => _query = value);
+                  unawaited(
+                    context.read<LibraryStore>().recordSearchQuery(value),
+                  );
+                },
+                onFavoritesOnlyChanged: (value) {
+                  setState(() => _favoritesOnly = value);
+                },
+                onOfflineOnlyChanged: (value) {
+                  setState(() => _offlineLibraryOnly = value);
+                },
+                onSortModeChanged: (value) {
+                  setState(() => _librarySortMode = value);
+                },
+                onImport: () => _importAudio(context),
+                onImportFolder: () => _importAudioFolder(context),
+                onAddToPlaylist: (track) => _showAddToPlaylist(
+                  context,
+                  track,
+                ),
+                onLyrics: (track) => _showLyricsEditor(
+                  context,
+                  track,
+                ),
+              ),
+              _PlaylistsTab(
+                onAddToPlaylist: (track) => _showAddToPlaylist(
+                  context,
+                  track,
+                ),
+                onLyrics: (track) => _showLyricsEditor(
+                  context,
+                  track,
+                ),
+              ),
+              const _HistoryTab(),
+              const _SourcesTab(),
+              const _SettingsTab(),
+            ],
+          ),
+        ),
+        PlayerBar(
+          onOpenQueue: () => _showQueue(context),
+          onSaveQueue: () => _saveQueueAsPlaylist(context),
+          onOpenLyrics: () => _showNowPlayingLyrics(context),
+        ),
+      ],
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('AetherTune'),
@@ -156,118 +300,36 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: IndexedStack(
-                index: _tabIndex,
+        child: useNavigationRail
+            ? Row(
                 children: <Widget>[
-                  _HomeTab(
-                    onImport: () => _importAudio(context),
-                    onImportFolder: () => _importAudioFolder(context),
-                    onAddToPlaylist: (track) => _showAddToPlaylist(
-                      context,
-                      track,
-                    ),
-                    onLyrics: (track) => _showLyricsEditor(
-                      context,
-                      track,
-                    ),
+                  NavigationRail(
+                    selectedIndex: _tabIndex,
+                    onDestinationSelected: _selectTab,
+                    labelType: NavigationRailLabelType.all,
+                    minWidth: 88,
+                    groupAlignment: -0.85,
+                    scrollable: true,
+                    destinations: _navigationRailDestinations(),
                   ),
-                  _LibraryTab(
-                    searchController: _searchController,
-                    query: _query,
-                    favoritesOnly: _favoritesOnly,
-                    offlineOnly: _offlineLibraryOnly,
-                    sortMode: _librarySortMode,
-                    onQueryChanged: (value) => setState(() => _query = value),
-                    onQuerySubmitted: (value) {
-                      setState(() => _query = value);
-                      unawaited(
-                        context.read<LibraryStore>().recordSearchQuery(value),
-                      );
-                    },
-                    onFavoritesOnlyChanged: (value) {
-                      setState(() => _favoritesOnly = value);
-                    },
-                    onOfflineOnlyChanged: (value) {
-                      setState(() => _offlineLibraryOnly = value);
-                    },
-                    onSortModeChanged: (value) {
-                      setState(() => _librarySortMode = value);
-                    },
-                    onImport: () => _importAudio(context),
-                    onImportFolder: () => _importAudioFolder(context),
-                    onAddToPlaylist: (track) => _showAddToPlaylist(
-                      context,
-                      track,
-                    ),
-                    onLyrics: (track) => _showLyricsEditor(
-                      context,
-                      track,
-                    ),
-                  ),
-                  _PlaylistsTab(
-                    onAddToPlaylist: (track) => _showAddToPlaylist(
-                      context,
-                      track,
-                    ),
-                    onLyrics: (track) => _showLyricsEditor(
-                      context,
-                      track,
-                    ),
-                  ),
-                  const _HistoryTab(),
-                  const _SourcesTab(),
-                  const _SettingsTab(),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: tabContent),
                 ],
-              ),
-            ),
-            PlayerBar(
-              onOpenQueue: () => _showQueue(context),
-              onSaveQueue: () => _saveQueueAsPlaylist(context),
-              onOpenLyrics: () => _showNowPlayingLyrics(context),
-            ),
-          ],
-        ),
+              )
+            : tabContent,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabIndex,
-        onDestinationSelected: (index) => setState(() => _tabIndex = index),
-        destinations: const <NavigationDestination>[
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.my_library_music_outlined),
-            selectedIcon: Icon(Icons.my_library_music),
-            label: 'Library',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.playlist_play_outlined),
-            selectedIcon: Icon(Icons.playlist_play),
-            label: 'Playlists',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'History',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.extension_outlined),
-            selectedIcon: Icon(Icons.extension),
-            label: 'Sources',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
-            label: 'Options',
-          ),
-        ],
-      ),
+      bottomNavigationBar: useNavigationRail
+          ? null
+          : NavigationBar(
+              selectedIndex: _tabIndex,
+              onDestinationSelected: _selectTab,
+              destinations: _navigationBarDestinations(),
+            ),
     );
+  }
+
+  void _selectTab(int index) {
+    setState(() => _tabIndex = index);
   }
 
   Future<void> _showAddToPlaylist(BuildContext context, Track track) async {

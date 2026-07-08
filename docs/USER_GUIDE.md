@@ -36,6 +36,8 @@ dart run bin/server.dart
 
 The Home tab shows local feed sections for recommendations, mood/activity mixes, in-progress tracks, recently played tracks, radio seeds with local matches, most played tracks, favorites, recently added tracks, and local charts. The "For you" section uses favorites and recent playback as local taste signals while skipping just-played tracks. Focus, Energy, Chill, Workout, and Sleep mixes are generated from playable library metadata. The chart range selector can show all-time, last-7-days, last-30-days, or last-year top tracks, artists, albums, and genres from playback history. Tap a track to play that section as the queue, or open its menu for lyrics, playlists, metadata edits, favorites, removal, radio, and **Copy share text**.
 
+On desktop-width windows, AetherTune uses a labeled left navigation rail instead of bottom navigation so Home, Library, Playlists, History, Sources, and Options stay visible beside the content and player bar.
+
 ## Search
 
 Use the search box on the Library tab. Search matches:

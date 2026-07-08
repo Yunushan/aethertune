@@ -120,7 +120,7 @@ This scaffold includes real app code, not only a README:
 | Area | Implemented in this project |
 |---|---|
 | Mobile app | Flutter app shell for Android and iOS |
-| Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI |
+| Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI, with a desktop-width navigation rail |
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | `just_audio` playback controller for local files and URL-based streams |
 | Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, or folder |
@@ -156,7 +156,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, copyable share text, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, native share sheets, and cross-device artwork sync roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
 | iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |
-| Desktop | Linux/macOS/Windows build support, desktop-specific UX polish roadmap |
+| Desktop | Linux/macOS/Windows build support with a responsive navigation rail at desktop widths; split panes, global hotkeys, tray/menu bar, and installer polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | UI customization | Material 3 shell with persisted system/light/dark/AMOLED theme preference; dynamic color and custom accents roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account |

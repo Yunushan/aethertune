@@ -72,7 +72,8 @@
 - [ ] iOS lock screen controls
 - [ ] iOS background audio session
 - [ ] Desktop media key support
-- [ ] Desktop layout polish
+- [x] Desktop navigation rail at wide widths
+- [ ] Split-pane desktop layout polish
 
 ## 0.4.x: Server foundation
 
