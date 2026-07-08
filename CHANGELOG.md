@@ -19,6 +19,7 @@ Initial GitHub-ready scaffold.
 - Added automatic private cache pressure eviction after successful cache writes.
 - Added per-provider private cache quotas for provider-approved offline media.
 - Added cached media byte-count/checksum metadata with post-write checksum verification.
+- Added user-chosen folder export for verified private cached media.
 - Added persisted offline mode to pause network-backed source search, feed refresh, and player-wide saved stream playback actions.
 - Added a local-files-only library filter for offline-ready browsing.
 - Added recursive local folder scanning/import for supported audio files.

@@ -6881,6 +6881,9 @@ String _offlineCacheEntrySubtitle(OfflineCacheEntry entry) {
     entry.action.label,
     entry.status.label,
     entry.track.artist,
+    if (entry.cachedByteCount > 0) _formatByteCount(entry.cachedByteCount),
+    if (entry.cachedMediaChecksum.isNotEmpty)
+      'checksum ${entry.cachedMediaChecksum}',
     if (reason.isNotEmpty) reason,
   ];
 
@@ -6890,6 +6893,12 @@ String _offlineCacheEntrySubtitle(OfflineCacheEntry entry) {
 bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
   return entry.status == OfflineCacheEntryStatus.queued ||
       entry.status == OfflineCacheEntryStatus.failed;
+}
+
+bool _canExportOfflineCacheEntry(OfflineCacheEntry entry) {
+  return entry.status == OfflineCacheEntryStatus.cached &&
+      entry.track.hasLocalSource &&
+      entry.cachedByteCount > 0;
 }
 
 List<String> _offlineCacheProviderIds(List<OfflineCacheEntry> entries) {
@@ -7177,6 +7186,15 @@ class _SettingsTab extends StatelessWidget {
                   icon: const Icon(Icons.cloud_download_outlined),
                 ),
                 IconButton(
+                  tooltip: 'Export cached media',
+                  onPressed: _canExportOfflineCacheEntry(entry)
+                      ? () => unawaited(
+                            _exportOfflineCacheEntry(context, entry),
+                          )
+                      : null,
+                  icon: const Icon(Icons.file_download_outlined),
+                ),
+                IconButton(
                   tooltip: 'Remove from offline queue',
                   onPressed: () => unawaited(
                     library.removeOfflineCacheEntry(entry.id),
@@ -7418,6 +7436,57 @@ class _SettingsTab extends StatelessWidget {
         : 'Cleared ${_formatByteCount(result.evictedBytes)} from '
             '${result.evictedEntryIds.length} cached item(s).';
     messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _exportOfflineCacheEntry(
+    BuildContext context,
+    OfflineCacheEntry queuedEntry,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final entry = library.offlineCacheEntryById(queuedEntry.id) ?? queuedEntry;
+    if (!_canExportOfflineCacheEntry(entry)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Cache this media before exporting it.')),
+      );
+      return;
+    }
+
+    final destinationPath = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Export cached media',
+    );
+    if (!context.mounted || destinationPath == null) {
+      return;
+    }
+
+    final cacheRoot = await getApplicationDocumentsDirectory();
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    try {
+      final export = await manager.exportCachedMedia(
+        entry: entry,
+        destinationDirectory: Directory(destinationPath),
+      );
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exported ${p.basename(export.file.path)} '
+            '(${_formatByteCount(export.byteCount)}).',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(_offlineCacheErrorMessage(error))),
+      );
+    }
   }
 
   Future<void> _processOfflineCacheEntries(

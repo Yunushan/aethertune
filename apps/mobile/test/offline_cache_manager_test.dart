@@ -132,6 +132,84 @@ void main() {
     expect((await manager.usage(entries)).byteCount, 5);
   });
 
+  test('exports private cached media with a safe unique filename', () async {
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    await manager.mediaDirectory.create(recursive: true);
+    final cachedFile = File(p.join(manager.mediaDirectory.path, 'entry.ogg'));
+    final bytes = <int>[10, 20, 30, 40];
+    final checksum = offlineMediaChecksum(bytes);
+    await cachedFile.writeAsBytes(bytes);
+    final exportDirectory = Directory(p.join(cacheRoot.path, 'exports'));
+    await exportDirectory.create(recursive: true);
+    await File(
+      p.join(exportDirectory.path, 'Archive Artist - Unsafe Song.ogg'),
+    ).writeAsBytes(<int>[1]);
+    final entry = OfflineCacheEntry(
+      id: 'entry-export',
+      track: Track(
+        id: 'entry-export-track',
+        title: 'Unsafe:/ Song?',
+        artist: 'Archive* Artist',
+        sourceId: 'internet-archive',
+        streamUrl: 'https://archive.org/download/item/audio.ogg',
+        localPath: cachedFile.path,
+      ),
+      action: OfflineMediaAction.download,
+      status: OfflineCacheEntryStatus.cached,
+      createdAt: DateTime.utc(2026, 1, 17),
+      cachedByteCount: bytes.length,
+      cachedMediaChecksum: checksum,
+    );
+
+    final export = await manager.exportCachedMedia(
+      entry: entry,
+      destinationDirectory: exportDirectory,
+    );
+
+    expect(p.basename(export.file.path), 'Archive Artist - Unsafe Song (2).ogg');
+    expect(export.byteCount, bytes.length);
+    expect(export.checksum, checksum);
+    expect(await export.file.readAsBytes(), bytes);
+    expect(await cachedFile.exists(), isTrue);
+  });
+
+  test('rejects public export for non-private or changed cache files', () async {
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    await manager.mediaDirectory.create(recursive: true);
+    final privateFile = File(p.join(manager.mediaDirectory.path, 'private.mp3'));
+    final externalFile = File(p.join(cacheRoot.path, 'external.mp3'));
+    await privateFile.writeAsBytes(<int>[1, 2, 3]);
+    await externalFile.writeAsBytes(<int>[1, 2, 3]);
+    final exportDirectory = Directory(p.join(cacheRoot.path, 'exports'));
+
+    expect(
+      manager.exportCachedMedia(
+        entry: _cachedEntry(
+          'external',
+          'External cache',
+          externalFile.path,
+          updatedAt: DateTime.utc(2026, 1, 17),
+        ),
+        destinationDirectory: exportDirectory,
+      ),
+      throwsA(isA<StateError>()),
+    );
+    expect(
+      manager.exportCachedMedia(
+        entry: _cachedEntry(
+          'changed',
+          'Changed cache',
+          privateFile.path,
+          updatedAt: DateTime.utc(2026, 1, 17),
+          cachedByteCount: 3,
+          cachedMediaChecksum: 'wrong-checksum',
+        ),
+        destinationDirectory: exportDirectory,
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test('enforces configured cache limit and marks evicted entries', () async {
     final manager = OfflineCacheManager(cacheRoot: cacheRoot);
     await manager.mediaDirectory.create(recursive: true);
@@ -330,6 +408,8 @@ OfflineCacheEntry _cachedEntry(
   String title,
   String localPath, {
   required DateTime updatedAt,
+  int cachedByteCount = 0,
+  String cachedMediaChecksum = '',
 }) {
   return OfflineCacheEntry(
     id: id,
@@ -344,5 +424,7 @@ OfflineCacheEntry _cachedEntry(
     status: OfflineCacheEntryStatus.cached,
     createdAt: DateTime.utc(2026, 1, 17),
     updatedAt: updatedAt,
+    cachedByteCount: cachedByteCount,
+    cachedMediaChecksum: cachedMediaChecksum,
   );
 }
