@@ -225,6 +225,8 @@ final class _LocalFolderScanState {
         return _mp3MetadataForFile(path);
       case '.flac':
         return _flacMetadataForFile(path);
+      case '.m4a':
+        return _m4aMetadataForFile(path);
     }
 
     return null;
@@ -306,6 +308,72 @@ final class _LocalFolderScanState {
           if (isLastBlock) {
             return null;
           }
+        }
+
+        return null;
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Future<_LocalFileMetadata?> _m4aMetadataForFile(String path) async {
+    try {
+      final file = File(path);
+      final length = await file.length();
+      if (length < 8) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        var atomCount = 0;
+        while (atomCount < _maxMp4TopLevelAtoms) {
+          final atomStart = await access.position();
+          if (atomStart + 8 > length) {
+            break;
+          }
+
+          atomCount += 1;
+          final header = await access.read(8);
+          if (header.length != 8) {
+            return null;
+          }
+
+          var atomSize = _uint32(header, 0);
+          var headerSize = 8;
+          if (atomSize == 1) {
+            final extendedSize = await access.read(8);
+            if (extendedSize.length != 8) {
+              return null;
+            }
+            atomSize = _uint64(extendedSize, 0);
+            headerSize = 16;
+          } else if (atomSize == 0) {
+            atomSize = length - atomStart;
+          }
+
+          if (atomSize < headerSize || atomStart + atomSize > length) {
+            return null;
+          }
+
+          if (_matchesAscii(header.sublist(4, 8), 'moov')) {
+            final payloadLength = atomSize - headerSize;
+            if (payloadLength > _maxM4aMetadataBytes) {
+              return null;
+            }
+
+            final payload = await access.read(payloadLength);
+            if (payload.length != payloadLength) {
+              return null;
+            }
+
+            return _m4aMetadata(payload);
+          }
+
+          await access.setPosition(atomStart + atomSize);
         }
 
         return null;
@@ -525,6 +593,56 @@ final class _LocalFolderScanState {
     );
   }
 
+  _LocalFileMetadata? _m4aMetadata(List<int> moovPayload) {
+    final udta = _mp4ChildPayload(moovPayload, 'udta');
+    if (udta == null) {
+      return null;
+    }
+
+    final meta = _mp4ChildPayload(udta, 'meta');
+    if (meta == null || meta.length <= 4) {
+      return null;
+    }
+
+    final ilst = _mp4ChildPayload(meta, 'ilst', startOffset: 4);
+    if (ilst == null) {
+      return null;
+    }
+
+    final fields = <String, List<String>>{};
+    for (final atom in _mp4Atoms(ilst)) {
+      final key = _m4aFieldKey(atom.typeBytes);
+      if (key == null) {
+        continue;
+      }
+
+      final value = _m4aDataAtomText(ilst, atom.payloadOffset, atom.payloadEnd);
+      if (value == null || value.isEmpty) {
+        continue;
+      }
+
+      fields.putIfAbsent(key, () => <String>[]).add(value);
+    }
+
+    final title = _firstVorbisComment(fields, 'title') ?? '';
+    final artist = _joinedVorbisComment(fields, 'artist') ?? '';
+    final album = _firstVorbisComment(fields, 'album');
+    final genre = _joinedVorbisComment(fields, 'genre');
+    if (title.isEmpty &&
+        artist.isEmpty &&
+        (album == null || album.isEmpty) &&
+        (genre == null || genre.isEmpty)) {
+      return null;
+    }
+
+    return _LocalFileMetadata(
+      title: title,
+      artist: artist,
+      album: album == null || album.isEmpty ? null : album,
+      genre: genre == null || genre.isEmpty ? null : genre,
+    );
+  }
+
   String _id3v1Text(List<int> bytes, int start, int length) {
     final rawBytes = bytes
         .skip(start)
@@ -673,6 +791,106 @@ final class _LocalFolderScanState {
     return values.join(' / ');
   }
 
+  List<_Mp4Atom> _mp4Atoms(List<int> bytes, {int startOffset = 0}) {
+    final atoms = <_Mp4Atom>[];
+    var offset = startOffset;
+    while (offset + 8 <= bytes.length && atoms.length < _maxMp4ChildAtoms) {
+      var atomSize = _uint32(bytes, offset);
+      var headerSize = 8;
+      if (atomSize == 1) {
+        if (offset + 16 > bytes.length) {
+          break;
+        }
+        atomSize = _uint64(bytes, offset + 8);
+        headerSize = 16;
+      } else if (atomSize == 0) {
+        atomSize = bytes.length - offset;
+      }
+
+      if (atomSize < headerSize || offset + atomSize > bytes.length) {
+        break;
+      }
+
+      atoms.add(
+        _Mp4Atom(
+          typeBytes: bytes.sublist(offset + 4, offset + 8),
+          payloadOffset: offset + headerSize,
+          payloadEnd: offset + atomSize,
+        ),
+      );
+
+      offset += atomSize;
+    }
+
+    return atoms;
+  }
+
+  List<int>? _mp4ChildPayload(
+    List<int> bytes,
+    String type, {
+    int startOffset = 0,
+  }) {
+    for (final atom in _mp4Atoms(bytes, startOffset: startOffset)) {
+      if (_matchesAscii(atom.typeBytes, type)) {
+        return bytes.sublist(atom.payloadOffset, atom.payloadEnd);
+      }
+    }
+
+    return null;
+  }
+
+  String? _m4aDataAtomText(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+  ) {
+    for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
+      if (!_matchesAscii(atom.typeBytes, 'data')) {
+        continue;
+      }
+
+      final payload = bytes.sublist(
+        startOffset + atom.payloadOffset,
+        startOffset + atom.payloadEnd,
+      );
+      if (payload.length <= 8) {
+        return null;
+      }
+
+      final dataType = _uint32(payload, 0);
+      if (dataType != 0 && dataType != 1) {
+        return null;
+      }
+
+      final rawText = utf8.decode(
+        payload.sublist(8),
+        allowMalformed: true,
+      );
+
+      return _normalizeEmbeddedText(rawText);
+    }
+
+    return null;
+  }
+
+  String? _m4aFieldKey(List<int> typeBytes) {
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x6e, 0x61, 0x6d])) {
+      return 'title';
+    }
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x41, 0x52, 0x54]) ||
+        _matchesAscii(typeBytes, 'aART')) {
+      return 'artist';
+    }
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x61, 0x6c, 0x62])) {
+      return 'album';
+    }
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x67, 0x65, 0x6e])) {
+      return 'genre';
+    }
+
+    return null;
+  }
+
   int _id3v2SynchsafeInt(List<int> bytes, int offset) {
     if (offset + 4 > bytes.length) {
       return 0;
@@ -695,6 +913,21 @@ final class _LocalFolderScanState {
         bytes[offset + 3];
   }
 
+  int _uint64(List<int> bytes, int offset) {
+    if (offset + 8 > bytes.length) {
+      return 0;
+    }
+
+    return (bytes[offset] << 56) |
+        (bytes[offset + 1] << 48) |
+        (bytes[offset + 2] << 40) |
+        (bytes[offset + 3] << 32) |
+        (bytes[offset + 4] << 24) |
+        (bytes[offset + 5] << 16) |
+        (bytes[offset + 6] << 8) |
+        bytes[offset + 7];
+  }
+
   int _uint32LittleEndian(List<int> bytes, int offset) {
     if (offset + 4 > bytes.length) {
       return -1;
@@ -715,8 +948,37 @@ final class _LocalFolderScanState {
         (bytes[offset + 1] << 8) |
         bytes[offset + 2];
   }
+
+  bool _matchesBytes(List<int> bytes, List<int> expected) {
+    if (bytes.length != expected.length) {
+      return false;
+    }
+
+    for (var index = 0; index < expected.length; index += 1) {
+      if (bytes[index] != expected[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+}
+
+final class _Mp4Atom {
+  const _Mp4Atom({
+    required this.typeBytes,
+    required this.payloadOffset,
+    required this.payloadEnd,
+  });
+
+  final List<int> typeBytes;
+  final int payloadOffset;
+  final int payloadEnd;
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;
 const _maxFlacMetadataBytes = 1024 * 1024;
+const _maxM4aMetadataBytes = 1024 * 1024;
+const _maxMp4TopLevelAtoms = 512;
+const _maxMp4ChildAtoms = 1024;
 const _flacVorbisCommentBlockType = 4;

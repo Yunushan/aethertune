@@ -196,6 +196,42 @@ void main() {
     expect(result.tracks.single.genre, 'Modern Classical');
   });
 
+  test('prefers M4A metadata atoms', () async {
+    await File(p.join(root.path, '09 messy-name.m4a')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'M4A Title',
+        artist: 'M4A Artist',
+        album: 'M4A Album',
+        genre: 'Electropop',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'M4A Title');
+    expect(result.tracks.single.artist, 'M4A Artist');
+    expect(result.tracks.single.album, 'M4A Album');
+    expect(result.tracks.single.genre, 'Electropop');
+  });
+
+  test('merges partial M4A metadata atoms with filename metadata', () async {
+    await File(
+      p.join(root.path, '10 Filename Artist - Filename Title.m4a'),
+    ).writeAsBytes(
+      _m4aWithMetadata(
+        album: 'M4A Album Only',
+        genre: 'Alternative',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Filename Title');
+    expect(result.tracks.single.artist, 'Filename Artist');
+    expect(result.tracks.single.album, 'M4A Album Only');
+    expect(result.tracks.single.genre, 'Alternative');
+  });
+
   test('falls back to filename metadata when ID3v1 tags are empty', () async {
     await File(
       p.join(root.path, '04 Fallback Artist - Fallback Title.mp3'),
@@ -399,3 +435,62 @@ List<int> _uint32LittleEndianSize(int size) {
 
 const _flacStreamInfoBlockType = 0;
 const _flacVorbisCommentBlockType = 4;
+
+List<int> _m4aWithMetadata({
+  String title = '',
+  String artist = '',
+  String album = '',
+  String genre = '',
+}) {
+  final items = <int>[
+    if (title.isNotEmpty) ..._m4aTextItem(_m4aTitleAtomType, title),
+    if (artist.isNotEmpty) ..._m4aTextItem(_m4aArtistAtomType, artist),
+    if (album.isNotEmpty) ..._m4aTextItem(_m4aAlbumAtomType, album),
+    if (genre.isNotEmpty) ..._m4aTextItem(_m4aGenreAtomType, genre),
+  ];
+  final ilst = _mp4Atom('ilst', items);
+  final meta = _mp4Atom('meta', <int>[0, 0, 0, 0, ...ilst]);
+  final udta = _mp4Atom('udta', meta);
+  final moov = _mp4Atom('moov', udta);
+  final ftyp = _mp4Atom('ftyp', 'M4A '.codeUnits);
+
+  return <int>[
+    ...ftyp,
+    ...moov,
+    ..._mp4Atom('mdat', <int>[0, 1, 2]),
+  ];
+}
+
+List<int> _m4aTextItem(List<int> atomType, String value) {
+  return _mp4AtomBytes(
+    atomType,
+    _mp4Atom(
+      'data',
+      <int>[
+        ..._uint32Size(1),
+        0,
+        0,
+        0,
+        0,
+        ...value.codeUnits,
+      ],
+    ),
+  );
+}
+
+List<int> _mp4Atom(String type, List<int> payload) {
+  return _mp4AtomBytes(type.codeUnits, payload);
+}
+
+List<int> _mp4AtomBytes(List<int> type, List<int> payload) {
+  return <int>[
+    ..._uint32Size(payload.length + 8),
+    ...type,
+    ...payload,
+  ];
+}
+
+const _m4aTitleAtomType = <int>[0xa9, 0x6e, 0x61, 0x6d];
+const _m4aArtistAtomType = <int>[0xa9, 0x41, 0x52, 0x54];
+const _m4aAlbumAtomType = <int>[0xa9, 0x61, 0x6c, 0x62];
+const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
