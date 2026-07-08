@@ -1977,6 +1977,48 @@ class LibraryStore extends ChangeNotifier {
     return buffer.toString().trimRight();
   }
 
+  String? shareLyricsText(
+    String trackId, {
+    String? plainText,
+    int maxLines = 8,
+  }) {
+    final track = _trackById(trackId);
+    if (track == null) {
+      return null;
+    }
+
+    final lyrics = plainText == null
+        ? _lyricsByTrackId[trackId]
+        : TrackLyrics(trackId: trackId, plainText: plainText);
+    if (lyrics == null || lyrics.isEmpty) {
+      return null;
+    }
+
+    final lines = _shareLyricsLines(lyrics);
+    if (lines.isEmpty) {
+      return null;
+    }
+
+    final limit = maxLines <= 0 ? 8 : maxLines;
+    final visibleLines = lines.take(limit).toList(growable: false);
+    final buffer = StringBuffer()
+      ..writeln('AetherTune lyrics')
+      ..writeln('Track: ${_shareTextValue(track.title, 'Untitled')}')
+      ..writeln('Artist: ${_shareTextValue(track.artist, 'Unknown Artist')}')
+      ..writeln('Album: ${_shareTextValue(track.album, 'Unknown Album')}')
+      ..writeln('Format: ${lyrics.hasSyncedLines ? 'Synced LRC' : 'Plain text'}')
+      ..writeln('Lines: ${visibleLines.length} of ${lines.length}')
+      ..writeln();
+    for (final line in visibleLines) {
+      buffer.writeln(line);
+    }
+    if (lines.length > visibleLines.length) {
+      buffer.writeln('...');
+    }
+
+    return buffer.toString().trimRight();
+  }
+
   Future<Playlist> importPlaylistDocument(
     String document, {
     required PlaylistDocumentFormat format,
@@ -3243,6 +3285,22 @@ class LibraryStore extends ChangeNotifier {
       case LibraryBrowseType.folder:
         return 'folder';
     }
+  }
+
+  List<String> _shareLyricsLines(TrackLyrics lyrics) {
+    final syncedLines = lyrics.syncedLines;
+    if (syncedLines.isNotEmpty) {
+      return syncedLines
+          .map((line) => line.text.trim())
+          .where((line) => line.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    return lyrics.plainText
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
   }
 
   Duration _totalDuration(Iterable<Track> tracks) {

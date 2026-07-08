@@ -638,6 +638,53 @@ void main() {
     expect(secondStore.lyricsForTrack('1')!.plainText, 'saved lyrics');
   });
 
+  test('builds limited lyrics share text from plain and synced lyrics', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 7, 1),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'Plain Song', artist: 'Mira', album: 'Dawn'),
+      _track('2', title: 'Synced Song', artist: 'Ari', album: 'Night'),
+    ]);
+    await store.setLyrics(
+      '1',
+      'first line\n\nsecond line\nthird line\nfourth line',
+    );
+    await store.setLyrics(
+      '2',
+      '[00:01.00]First synced\n[00:04.20]Second synced\nuntimed note',
+    );
+
+    final plainShare = store.shareLyricsText('1', maxLines: 3)!;
+    expect(plainShare, contains('AetherTune lyrics'));
+    expect(plainShare, contains('Track: Plain Song'));
+    expect(plainShare, contains('Artist: Mira'));
+    expect(plainShare, contains('Format: Plain text'));
+    expect(plainShare, contains('Lines: 3 of 4'));
+    expect(plainShare, contains('first line'));
+    expect(plainShare, contains('third line'));
+    expect(plainShare, contains('...'));
+    expect(plainShare, isNot(contains('fourth line')));
+
+    final syncedShare = store.shareLyricsText('2')!;
+    expect(syncedShare, contains('Format: Synced LRC'));
+    expect(syncedShare, contains('First synced'));
+    expect(syncedShare, contains('Second synced'));
+    expect(syncedShare, isNot(contains('[00:01.00]')));
+    expect(syncedShare, isNot(contains('untimed note')));
+
+    final draftShare = store.shareLyricsText(
+      '1',
+      plainText: '[00:02.00]Draft synced',
+    )!;
+    expect(draftShare, contains('Draft synced'));
+    expect(draftShare, contains('Format: Synced LRC'));
+
+    expect(store.shareLyricsText('missing'), isNull);
+    expect(store.shareLyricsText('1', plainText: '   '), isNull);
+  });
+
   test(
     'records recently played tracks with counts and last played time',
     () async {

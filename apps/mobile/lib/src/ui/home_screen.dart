@@ -337,6 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final plainText = await _promptForLyrics(
       context,
       track: track,
+      library: library,
       initialValue: existingLyrics,
     );
 
@@ -363,6 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<String?> _promptForLyrics(
     BuildContext context, {
     required Track track,
+    required LibraryStore library,
     required String initialValue,
   }) async {
     final controller = TextEditingController(text: initialValue);
@@ -404,6 +406,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 actions: <Widget>[
+                  TextButton.icon(
+                    onPressed: () => unawaited(
+                      _copyLyricsDraftShareText(
+                        context,
+                        library,
+                        track,
+                        controller.text,
+                      ),
+                    ),
+                    icon: const Icon(Icons.ios_share),
+                    label: const Text('Copy share text'),
+                  ),
                   if (initialValue.isNotEmpty)
                     TextButton(
                       onPressed: () => Navigator.of(dialogContext).pop(''),
@@ -515,6 +529,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Navigator.of(sheetContext).pop();
             unawaited(_showLyricsEditor(context, track));
           },
+          onShare: () => unawaited(
+            _copyLyricsShareText(context, library, track),
+          ),
         );
       },
     );
@@ -1034,12 +1051,14 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
     required this.lyrics,
     required this.player,
     required this.onEdit,
+    required this.onShare,
   });
 
   final Track track;
   final TrackLyrics? lyrics;
   final PlayerController player;
   final VoidCallback onEdit;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -1054,6 +1073,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
         track: track,
         lyrics: currentLyrics.plainText,
         onEdit: onEdit,
+        onShare: onShare,
       );
     }
 
@@ -1062,6 +1082,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
       lines: syncedLines,
       player: player,
       onEdit: onEdit,
+      onShare: onShare,
     );
   }
 }
@@ -1103,11 +1124,13 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
     required this.track,
     required this.lyrics,
     required this.onEdit,
+    required this.onShare,
   });
 
   final Track track;
   final String lyrics;
   final VoidCallback onEdit;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -1125,6 +1148,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
                 track: track,
                 subtitle: 'Plain lyrics',
                 onEdit: onEdit,
+                onShare: onShare,
               ),
               const Divider(height: 1),
               Padding(
@@ -1145,12 +1169,14 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
     required this.lines,
     required this.player,
     required this.onEdit,
+    required this.onShare,
   });
 
   final Track track;
   final List<SyncedLyricLine> lines;
   final PlayerController player;
   final VoidCallback onEdit;
+  final VoidCallback onShare;
 
   @override
   State<_SyncedNowPlayingLyrics> createState() =>
@@ -1192,6 +1218,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                           ? 'Synced lyrics'
                           : 'Line ${activeIndex + 1} of ${widget.lines.length}',
                       onEdit: widget.onEdit,
+                      onShare: widget.onShare,
                     );
                   }
 
@@ -1239,11 +1266,13 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
     required this.track,
     required this.subtitle,
     required this.onEdit,
+    this.onShare,
   });
 
   final Track track;
   final String subtitle;
   final VoidCallback onEdit;
+  final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -1251,10 +1280,21 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
       leading: const Icon(Icons.subtitles_outlined),
       title: Text(track.title),
       subtitle: Text('${track.artist} · $subtitle'),
-      trailing: IconButton(
-        tooltip: 'Edit lyrics',
-        onPressed: onEdit,
-        icon: const Icon(Icons.edit_outlined),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (onShare != null)
+            IconButton(
+              tooltip: 'Copy share text',
+              onPressed: onShare,
+              icon: const Icon(Icons.ios_share),
+            ),
+          IconButton(
+            tooltip: 'Edit lyrics',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        ],
       ),
     );
   }
@@ -4647,6 +4687,33 @@ Future<void> _copyPlaylistShareText(
     library.sharePlaylistText(playlist.id),
     copiedMessage: 'Copied share text for ${playlist.name}.',
     unavailableMessage: 'Share text is unavailable for ${playlist.name}.',
+  );
+}
+
+Future<void> _copyLyricsShareText(
+  BuildContext context,
+  LibraryStore library,
+  Track track,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.shareLyricsText(track.id),
+    copiedMessage: 'Copied lyrics share text for ${track.title}.',
+    unavailableMessage: 'Lyrics share text is unavailable for ${track.title}.',
+  );
+}
+
+Future<void> _copyLyricsDraftShareText(
+  BuildContext context,
+  LibraryStore library,
+  Track track,
+  String plainText,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.shareLyricsText(track.id, plainText: plainText),
+    copiedMessage: 'Copied lyrics share text for ${track.title}.',
+    unavailableMessage: 'Add lyrics before copying share text.',
   );
 }
 
