@@ -15,6 +15,7 @@ Initial GitHub-ready scaffold.
 - Added persisted offline cache/download queue with Sources-tab provider actions and Options-tab queue management.
 - Added user-triggered offline cache storage for provider-approved direct media URLs.
 - Added private offline cache usage reporting plus trim/clear eviction controls.
+- Added configurable private offline cache size limits with backup/restore persistence.
 - Added persisted offline mode to pause network-backed source search, feed refresh, and player-wide saved stream playback actions.
 - Added a local-files-only library filter for offline-ready browsing.
 - Added recursive local folder scanning/import for supported audio files.

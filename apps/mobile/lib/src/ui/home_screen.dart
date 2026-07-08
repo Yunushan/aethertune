@@ -6891,8 +6891,6 @@ bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
       entry.status == OfflineCacheEntryStatus.failed;
 }
 
-const int _offlineCacheTrimLimitBytes = 500 * 1024 * 1024;
-
 String _formatByteCount(int bytes) {
   if (bytes < 1024) {
     return '$bytes B';
@@ -6936,6 +6934,7 @@ class _SettingsTab extends StatelessWidget {
     final library = context.watch<LibraryStore>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
+    final offlineCacheLimitBytes = library.offlineCacheLimitBytes;
     final pendingOfflineQueue = offlineQueue
         .where(_canProcessOfflineCacheEntry)
         .toList(growable: false);
@@ -7047,15 +7046,18 @@ class _SettingsTab extends StatelessWidget {
           future: _offlineCacheUsage(offlineQueue),
           builder: (context, snapshot) {
             final usage = snapshot.data;
+            final offlineCacheLimitLabel =
+                _formatByteCount(offlineCacheLimitBytes);
             final canTrim =
-                usage != null && usage.byteCount > _offlineCacheTrimLimitBytes;
+                usage != null && usage.byteCount > offlineCacheLimitBytes;
             final canClear = usage != null && usage.byteCount > 0;
             final subtitle = snapshot.hasError
                 ? 'Could not read cache usage.'
                 : usage == null
                     ? 'Calculating private cache usage...'
                     : '${_formatByteCount(usage.byteCount)} across '
-                        '${usage.cachedEntryCount} cached item(s)';
+                        '${usage.cachedEntryCount} cached item(s) · '
+                        'Limit: $offlineCacheLimitLabel';
 
             return ListTile(
               leading: const Icon(Icons.storage_outlined),
@@ -7065,13 +7067,19 @@ class _SettingsTab extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   IconButton(
-                    tooltip: 'Trim cache to '
-                        '${_formatByteCount(_offlineCacheTrimLimitBytes)}',
+                    tooltip: 'Set cache limit',
+                    onPressed: () => unawaited(
+                      _showOfflineCacheLimitDialog(context),
+                    ),
+                    icon: const Icon(Icons.tune_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Trim cache to $offlineCacheLimitLabel',
                     onPressed: canTrim
                         ? () => unawaited(
                               _trimOfflineCache(
                                 context,
-                                _offlineCacheTrimLimitBytes,
+                                offlineCacheLimitBytes,
                               ),
                             )
                         : null,
@@ -7178,6 +7186,76 @@ class _SettingsTab extends StatelessWidget {
   ) async {
     final cacheRoot = await getApplicationDocumentsDirectory();
     return OfflineCacheManager(cacheRoot: cacheRoot).usage(entries);
+  }
+
+  Future<void> _showOfflineCacheLimitDialog(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = TextEditingController(
+      text: library.offlineCacheLimitMegabytes.toString(),
+    );
+
+    int? parseLimit() {
+      return int.tryParse(controller.text.trim());
+    }
+
+    try {
+      final selectedLimit = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Offline cache limit'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Limit in MB',
+                helperText: 'Allowed range: 50-51200 MB',
+              ),
+              onSubmitted: (_) {
+                Navigator.of(dialogContext).pop(parseLimit());
+              },
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(parseLimit());
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!context.mounted || selectedLimit == null) {
+        return;
+      }
+
+      await library.setOfflineCacheLimitMegabytes(selectedLimit);
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Offline cache limit set to '
+            '${_formatByteCount(library.offlineCacheLimitBytes)}.',
+          ),
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _trimOfflineCache(

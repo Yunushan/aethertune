@@ -404,6 +404,11 @@ class LibraryStore extends ChangeNotifier {
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
+  static const _offlineCacheLimitMegabytesKey =
+      'aethertune.offline_cache_limit_mb.v1';
+  static const defaultOfflineCacheLimitMegabytes = 500;
+  static const minOfflineCacheLimitMegabytes = 50;
+  static const maxOfflineCacheLimitMegabytes = 51200;
   static const _maxHistoryEntries = 500;
   static const _maxSearchQueryHistoryEntries = 20;
   static const _minSavedProgress = Duration(seconds: 5);
@@ -426,6 +431,7 @@ class LibraryStore extends ChangeNotifier {
   final DateTime Function() _clock;
   bool _offlineModeEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
+  int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -448,6 +454,8 @@ class LibraryStore extends ChangeNotifier {
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get offlineModeEnabled => _offlineModeEnabled;
   AppThemePreference get themePreference => _themePreference;
+  int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
+  int get offlineCacheLimitBytes => _offlineCacheLimitMegabytes * 1024 * 1024;
 
   Future<void> load() async {
     if (_loaded) {
@@ -594,6 +602,10 @@ class LibraryStore extends ChangeNotifier {
     _themePreference = _appThemePreferenceFromName(
       prefs.getString(_themePreferenceKey),
     );
+    _offlineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
+      prefs.getInt(_offlineCacheLimitMegabytesKey) ??
+          defaultOfflineCacheLimitMegabytes,
+    );
     final rawOfflineCacheQueue = prefs.getString(_offlineCacheQueueKey);
     if (rawOfflineCacheQueue != null && rawOfflineCacheQueue.isNotEmpty) {
       final decoded = jsonDecode(rawOfflineCacheQueue) as List<dynamic>;
@@ -726,6 +738,17 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _themePreference = preference;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setOfflineCacheLimitMegabytes(int megabytes) async {
+    final sanitized = _sanitizeOfflineCacheLimitMegabytes(megabytes);
+    if (_offlineCacheLimitMegabytes == sanitized) {
+      return;
+    }
+
+    _offlineCacheLimitMegabytes = sanitized;
     await _save();
     notifyListeners();
   }
@@ -1830,6 +1853,7 @@ class LibraryStore extends ChangeNotifier {
       'exportedAt': _clock().toIso8601String(),
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
+      'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
       'customSmartPlaylists':
@@ -2223,6 +2247,8 @@ class LibraryStore extends ChangeNotifier {
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
+    var restoredOfflineCacheLimitMegabytes =
+        defaultOfflineCacheLimitMegabytes;
 
     try {
       restoredOfflineModeEnabled = _jsonBool(
@@ -2232,6 +2258,14 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredThemePreference = _appThemePreferenceFromName(
         _jsonOptionalString(backup, 'themePreference'),
+      );
+      restoredOfflineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
+        _jsonInt(
+          backup,
+          'offlineCacheLimitMegabytes',
+          isRequired: false,
+          defaultValue: defaultOfflineCacheLimitMegabytes,
+        ),
       );
       restoredTracks.addAll(
         _jsonObjectList(backup, 'tracks').map(Track.fromJson),
@@ -2345,6 +2379,7 @@ class LibraryStore extends ChangeNotifier {
       ..addAll(_dedupeOfflineCacheQueue(restoredOfflineCacheQueue));
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
+    _offlineCacheLimitMegabytes = restoredOfflineCacheLimitMegabytes;
 
     _sortTracks();
     _sortPlaylists();
@@ -4398,6 +4433,35 @@ class LibraryStore extends ChangeNotifier {
     return rawValue;
   }
 
+  int _jsonInt(
+    Map<String, Object?> backup,
+    String key, {
+    bool isRequired = true,
+    int defaultValue = 0,
+  }) {
+    final rawValue = backup[key];
+    if (rawValue == null && !isRequired) {
+      return defaultValue;
+    }
+
+    if (rawValue is! int) {
+      throw FormatException('Backup field "$key" must be an integer.');
+    }
+
+    return rawValue;
+  }
+
+  int _sanitizeOfflineCacheLimitMegabytes(int megabytes) {
+    if (megabytes < minOfflineCacheLimitMegabytes) {
+      return minOfflineCacheLimitMegabytes;
+    }
+    if (megabytes > maxOfflineCacheLimitMegabytes) {
+      return maxOfflineCacheLimitMegabytes;
+    }
+
+    return megabytes;
+  }
+
   List<String> _dedupeSearchQueryHistory(Iterable<String> queries) {
     final values = <String>[];
     final seen = <String>{};
@@ -4608,6 +4672,10 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
     await prefs.setString(_themePreferenceKey, _themePreference.name);
+    await prefs.setInt(
+      _offlineCacheLimitMegabytesKey,
+      _offlineCacheLimitMegabytes,
+    );
     await prefs.setString(_offlineCacheQueueKey, encodedOfflineCacheQueue);
   }
 }

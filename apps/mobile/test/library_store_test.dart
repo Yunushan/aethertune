@@ -1654,36 +1654,95 @@ void main() {
 
     expect(firstStore.offlineModeEnabled, isFalse);
     expect(firstStore.themePreference, AppThemePreference.system);
+    expect(
+      firstStore.offlineCacheLimitMegabytes,
+      LibraryStore.defaultOfflineCacheLimitMegabytes,
+    );
 
     await firstStore.setOfflineModeEnabled(true);
     await firstStore.setThemePreference(AppThemePreference.amoled);
+    await firstStore.setOfflineCacheLimitMegabytes(2048);
 
     expect(firstStore.offlineModeEnabled, isTrue);
     expect(firstStore.themePreference, AppThemePreference.amoled);
+    expect(firstStore.offlineCacheLimitMegabytes, 2048);
+    expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
 
     final secondStore = LibraryStore();
     await secondStore.load();
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
+    expect(secondStore.offlineCacheLimitMegabytes, 2048);
 
     final backupJson = secondStore.exportBackupJson();
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
+    expect(backup['offlineCacheLimitMegabytes'], 2048);
 
     final legacyBackup = Map<String, dynamic>.from(backup)
       ..remove('offlineModeEnabled')
-      ..remove('themePreference');
+      ..remove('themePreference')
+      ..remove('offlineCacheLimitMegabytes');
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
 
     expect(secondStore.offlineModeEnabled, isFalse);
     expect(secondStore.themePreference, AppThemePreference.system);
+    expect(
+      secondStore.offlineCacheLimitMegabytes,
+      LibraryStore.defaultOfflineCacheLimitMegabytes,
+    );
 
     await secondStore.restoreBackupJson(backupJson);
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
+    expect(secondStore.offlineCacheLimitMegabytes, 2048);
+  });
+
+  test('clamps offline cache limit setting and restored backups', () async {
+    final store = LibraryStore();
+    await store.load();
+
+    await store.setOfflineCacheLimitMegabytes(1);
+    expect(
+      store.offlineCacheLimitMegabytes,
+      LibraryStore.minOfflineCacheLimitMegabytes,
+    );
+
+    final persistedStore = LibraryStore();
+    await persistedStore.load();
+    expect(
+      persistedStore.offlineCacheLimitMegabytes,
+      LibraryStore.minOfflineCacheLimitMegabytes,
+    );
+
+    await persistedStore.setOfflineCacheLimitMegabytes(
+      LibraryStore.maxOfflineCacheLimitMegabytes + 1,
+    );
+    expect(
+      persistedStore.offlineCacheLimitMegabytes,
+      LibraryStore.maxOfflineCacheLimitMegabytes,
+    );
+
+    final backup = jsonDecode(
+      persistedStore.exportBackupJson(),
+    ) as Map<String, dynamic>;
+    backup['offlineCacheLimitMegabytes'] = 1;
+    await persistedStore.restoreBackupJson(jsonEncode(backup));
+    expect(
+      persistedStore.offlineCacheLimitMegabytes,
+      LibraryStore.minOfflineCacheLimitMegabytes,
+    );
+
+    backup['offlineCacheLimitMegabytes'] =
+        LibraryStore.maxOfflineCacheLimitMegabytes + 1;
+    await persistedStore.restoreBackupJson(jsonEncode(backup));
+    expect(
+      persistedStore.offlineCacheLimitMegabytes,
+      LibraryStore.maxOfflineCacheLimitMegabytes,
+    );
   });
 
   test(
