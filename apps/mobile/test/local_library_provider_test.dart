@@ -58,6 +58,38 @@ void main() {
     );
   });
 
+  test('matches local library fallback searches with small typos', () async {
+    final provider = LocalLibraryProvider(
+      tracks: <Track>[
+        Track(
+          id: 'ambient',
+          title: 'Ambient Signal',
+          artist: 'Mira Vale',
+          album: 'Dawn Archive',
+          genre: 'Ambient',
+          localPath: '/music/ambient-signal.mp3',
+        ),
+        Track(
+          id: 'other',
+          title: 'Night Drive',
+          artist: 'Ari Vale',
+          album: 'Road Mix',
+          genre: 'Electronic',
+          localPath: '/music/night-drive.mp3',
+        ),
+      ],
+    );
+
+    expect(
+      (await provider.search('ambent')).map((track) => track.id),
+      <String>['ambient'],
+    );
+    expect(
+      (await provider.search('mria')).map((track) => track.id),
+      <String>['ambient'],
+    );
+  });
+
   test('can delegate search to the library store search surface', () async {
     final searchedQueries = <String>[];
     final provider = LocalLibraryProvider(

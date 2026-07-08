@@ -11,6 +11,7 @@ import '../domain/playback_history_entry.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_subscription.dart';
+import '../domain/search_matcher.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
 
@@ -1005,14 +1006,14 @@ class LibraryStore extends ChangeNotifier {
     bool offlineOnly = false,
     LibrarySortMode sortMode = LibrarySortMode.recentlyAdded,
   }) {
-    final normalized = _normalizeQuery(query);
+    final searchQuery = SearchQuery.parse(query);
     final source = (favoritesOnly ? favorites : tracks)
         .where((track) => !offlineOnly || track.hasLocalSource);
 
-    final results = normalized.isEmpty
+    final results = searchQuery.isEmpty
         ? source.toList(growable: false)
         : source
-            .where((track) => _trackMatchesQuery(track, normalized))
+            .where((track) => _trackMatchesQuery(track, searchQuery))
             .toList(growable: false);
 
     return _sortTrackResults(results, sortMode);
@@ -1023,7 +1024,7 @@ class LibraryStore extends ChangeNotifier {
       return <SearchSuggestion>[];
     }
 
-    final normalized = _normalizeQuery(query);
+    final searchQuery = SearchQuery.parse(query);
     final suggestions = <SearchSuggestion>[];
     final seenValues = <String>{};
 
@@ -1037,8 +1038,7 @@ class LibraryStore extends ChangeNotifier {
         return;
       }
 
-      if (normalized.isNotEmpty &&
-          !trimmed.toLowerCase().contains(normalized)) {
+      if (!searchTextMatches(trimmed, searchQuery)) {
         return;
       }
 
@@ -1205,12 +1205,11 @@ class LibraryStore extends ChangeNotifier {
       group.add(track);
     }
 
-    final normalized = _normalizeQuery(query);
+    final searchQuery = SearchQuery.parse(query);
     final groups = groupsByKey.values
         .where(
-          (group) =>
-              normalized.isEmpty ||
-              group.label.toLowerCase().contains(normalized),
+          (group) => searchQuery.isEmpty ||
+              searchTextMatches(group.label, searchQuery),
         )
         .map((group) => group.toBrowseGroup())
         .toList(growable: false);
@@ -1577,7 +1576,7 @@ class LibraryStore extends ChangeNotifier {
       return <Track>[];
     }
 
-    final normalizedQuery = _normalizeQuery(rule.query);
+    final searchQuery = SearchQuery.parse(rule.query);
     final tracks = _tracks.where((track) {
       if (rule.favoritesOnly && !track.isFavorite) {
         return false;
@@ -1588,8 +1587,7 @@ class LibraryStore extends ChangeNotifier {
         return false;
       }
 
-      return normalizedQuery.isEmpty ||
-          _trackMatchesQuery(track, normalizedQuery);
+      return searchQuery.isEmpty || _trackMatchesQuery(track, searchQuery);
     }).toList(growable: false);
 
     _sortCustomSmartPlaylistTracks(tracks, rule.sortMode);
@@ -2509,13 +2507,13 @@ class LibraryStore extends ChangeNotifier {
         .map((trackId) => byId[trackId])
         .whereType<Track>()
         .toList(growable: false);
-    final normalized = _normalizeQuery(query);
-    if (normalized.isEmpty) {
+    final searchQuery = SearchQuery.parse(query);
+    if (searchQuery.isEmpty) {
       return tracks;
     }
 
     return tracks
-        .where((track) => _trackMatchesQuery(track, normalized))
+        .where((track) => _trackMatchesQuery(track, searchQuery))
         .toList(growable: false);
   }
 
@@ -3874,15 +3872,15 @@ class LibraryStore extends ChangeNotifier {
 
   String _normalizeQuery(String query) => query.trim().toLowerCase();
 
-  bool _trackMatchesQuery(Track track, String normalizedQuery) {
-    final metadataMatches = <String>[
+  bool _trackMatchesQuery(Track track, SearchQuery query) {
+    final metadataMatches = searchFieldsMatch(<String>[
       track.title,
       track.artist,
       track.album,
       track.genre,
       _browseLabelForTrack(track, LibraryBrowseType.source),
       _browseLabelForTrack(track, LibraryBrowseType.folder),
-    ].any((value) => value.toLowerCase().contains(normalizedQuery));
+    ], query);
     if (metadataMatches) {
       return true;
     }
@@ -3892,8 +3890,7 @@ class LibraryStore extends ChangeNotifier {
       return false;
     }
 
-    return _shareLyricsLines(lyrics)
-        .any((line) => line.toLowerCase().contains(normalizedQuery));
+    return searchFieldsMatch(_shareLyricsLines(lyrics), query);
   }
 
   void _sortCustomSmartPlaylistTracks(

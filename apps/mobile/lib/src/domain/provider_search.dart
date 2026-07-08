@@ -1,4 +1,5 @@
 import 'music_source_provider.dart';
+import 'search_matcher.dart';
 import 'track.dart';
 
 final class ProviderSearchCoordinator {
@@ -63,7 +64,8 @@ final class ProviderSearchCoordinator {
 
   Future<ProviderSearchResponse> search(String query) async {
     final normalizedQuery = query.trim();
-    if (normalizedQuery.isEmpty) {
+    final searchQuery = SearchQuery.parse(normalizedQuery);
+    if (searchQuery.isEmpty) {
       return const ProviderSearchResponse(
         query: '',
         results: <ProviderSearchResult>[],
@@ -84,6 +86,7 @@ final class ProviderSearchCoordinator {
           _searchProvider(
             searchableProviders[index],
             normalizedQuery,
+            searchQuery,
             index,
           ),
       ],
@@ -112,6 +115,7 @@ final class ProviderSearchCoordinator {
   Future<_ProviderSearchOutcome> _searchProvider(
     MusicSourceProvider provider,
     String query,
+    SearchQuery searchQuery,
     int providerIndex,
   ) async {
     try {
@@ -125,7 +129,7 @@ final class ProviderSearchCoordinator {
                 providerName: provider.name,
                 providerIndex: providerIndex,
                 track: track,
-                score: _scoreTrack(track, query),
+                score: _scoreTrack(track, searchQuery),
               ),
             )
             .toList(growable: false),
@@ -214,46 +218,19 @@ int _compareProviderSearchResults(
       );
 }
 
-int _scoreTrack(Track track, String query) {
-  final normalizedQuery = query.toLowerCase();
-  final terms = normalizedQuery
-      .split(RegExp(r'\s+'))
-      .where((term) => term.isNotEmpty)
-      .toList(growable: false);
-
+int _scoreTrack(Track track, SearchQuery query) {
   var score = track.isPlayable ? 20 : 0;
-  score += _fieldScore(track.title, normalizedQuery, terms, exact: 100);
-  score += _fieldScore(track.artist, normalizedQuery, terms, exact: 55);
-  score += _fieldScore(track.album, normalizedQuery, terms, exact: 35);
-  score += _fieldScore(track.genre, normalizedQuery, terms, exact: 25);
+  score += _fieldScore(track.title, query, exact: 100);
+  score += _fieldScore(track.artist, query, exact: 55);
+  score += _fieldScore(track.album, query, exact: 35);
+  score += _fieldScore(track.genre, query, exact: 25);
   return score;
 }
 
 int _fieldScore(
   String value,
-  String query,
-  List<String> terms, {
+  SearchQuery query, {
   required int exact,
 }) {
-  final normalized = value.toLowerCase();
-  if (normalized.isEmpty) {
-    return 0;
-  }
-
-  if (normalized == query) {
-    return exact;
-  }
-  if (normalized.startsWith(query)) {
-    return (exact * 0.8).round();
-  }
-  if (normalized.contains(query)) {
-    return (exact * 0.6).round();
-  }
-
-  final matchedTerms = terms.where((term) => normalized.contains(term)).length;
-  if (matchedTerms == 0) {
-    return 0;
-  }
-
-  return ((exact * 0.25) * matchedTerms / terms.length).round();
+  return searchTextScore(value, query, exact: exact);
 }

@@ -1543,6 +1543,47 @@ void main() {
     );
   });
 
+  test(
+    'matches local searches suggestions playlists and lyrics with typos',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'ambient',
+          title: 'Ambient Signal',
+          artist: 'Mira Vale',
+          album: 'Dawn Archive',
+          genre: 'Ambient',
+        ),
+        _track(
+          'other',
+          title: 'Night Drive',
+          artist: 'Ari Vale',
+          album: 'Road Mix',
+          genre: 'Electronic',
+        ),
+      ]);
+      await store.setLyrics('other', 'silver chorus on the open road');
+      final playlist = await store.createPlaylist(
+        'Typo Mix',
+        trackIds: <String>['ambient', 'other'],
+      );
+
+      expect(store.search('ambent').single.id, 'ambient');
+      expect(store.search('mria').single.id, 'ambient');
+      expect(store.search('silvr choruz').single.id, 'other');
+      expect(
+        store.searchSuggestions('ambent').map((suggestion) => suggestion.value),
+        contains('Ambient Signal'),
+      );
+      expect(
+        store.tracksForPlaylist(playlist.id, query: 'ambent').single.id,
+        'ambient',
+      );
+    },
+  );
+
   test('builds local search suggestions from recent playback and metadata', () async {
     var now = DateTime.utc(2026, 1, 15, 12);
     final store = LibraryStore(clock: () => now);

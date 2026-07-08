@@ -96,6 +96,45 @@ void main() {
     expect(response.results.first.track.isPlayable, isTrue);
   });
 
+  test(
+    'scores typo-tolerant provider matches above unrelated results',
+    () async {
+      final coordinator = ProviderSearchCoordinator(
+        <MusicSourceProvider>[
+          _FakeProvider(
+            id: 'provider',
+            name: 'Provider',
+            tracks: <Track>[
+              Track(
+                id: 'typo-hit',
+                title: 'Ambient Signal',
+                artist: 'Mira Vale',
+                streamUrl: 'https://example.test/ambient.mp3',
+                sourceId: 'provider',
+              ),
+              Track(
+                id: 'unrelated',
+                title: 'Night Drive',
+                artist: 'Ari Vale',
+                streamUrl: 'https://example.test/night.mp3',
+                sourceId: 'provider',
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final response = await coordinator.search('ambent signla');
+
+      expect(response.errors, isEmpty);
+      expect(response.results.first.track.id, 'typo-hit');
+      expect(
+        response.results.first.score,
+        greaterThan(response.results.last.score),
+      );
+    },
+  );
+
   test('captures provider failures without dropping successful results', () async {
     final coordinator = ProviderSearchCoordinator(
       <MusicSourceProvider>[

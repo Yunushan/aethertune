@@ -1,4 +1,5 @@
 import '../domain/music_source_provider.dart';
+import '../domain/search_matcher.dart';
 import '../domain/track.dart';
 
 typedef LocalLibraryTrackSearch = List<Track> Function(String query);
@@ -40,13 +41,13 @@ class LocalLibraryProvider implements MusicSourceProvider {
       return searchTracks(query);
     }
 
-    final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final searchQuery = SearchQuery.parse(query);
+    if (searchQuery.isEmpty) {
       return tracks;
     }
 
     return tracks
-        .where((track) => _trackMatchesQuery(track, normalized))
+        .where((track) => _trackMatchesQuery(track, searchQuery))
         .toList(growable: false);
   }
 
@@ -66,11 +67,13 @@ class LocalLibraryProvider implements MusicSourceProvider {
   }
 }
 
-bool _trackMatchesQuery(Track track, String normalizedQuery) {
-  return track.title.toLowerCase().contains(normalizedQuery) ||
-      track.artist.toLowerCase().contains(normalizedQuery) ||
-      track.album.toLowerCase().contains(normalizedQuery) ||
-      track.genre.toLowerCase().contains(normalizedQuery) ||
-      track.sourceId.toLowerCase().contains(normalizedQuery) ||
-      (track.localPath?.toLowerCase().contains(normalizedQuery) ?? false);
+bool _trackMatchesQuery(Track track, SearchQuery query) {
+  return searchFieldsMatch(<String>[
+    track.title,
+    track.artist,
+    track.album,
+    track.genre,
+    track.sourceId,
+    track.localPath ?? '',
+  ], query);
 }

@@ -41,7 +41,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Unified provider search
 
-`ProviderSearchCoordinator` fans out a search query to adapters that declare `metadataSearch`, skips non-search providers, ranks mixed `Track` results by playable status and metadata match quality, limits each provider contribution, resolves metadata-only results through `resolveStream` when the adapter supports it, and returns provider-specific failures without dropping successful results. The Sources tab exposes this as provider search across the local library, demo provider, Radio Browser, and Internet Archive. When offline mode is enabled, unified search uses the local library adapter only so it does not contact network providers. Pagination, authenticated provider opt-in, and richer provider-specific ranking are still roadmap work.
+`ProviderSearchCoordinator` fans out a search query to adapters that declare `metadataSearch`, skips non-search providers, ranks mixed `Track` results by playable status and typo-tolerant metadata match quality, limits each provider contribution, resolves metadata-only results through `resolveStream` when the adapter supports it, and returns provider-specific failures without dropping successful results. The Sources tab exposes this as provider search across the local library, demo provider, Radio Browser, and Internet Archive. When offline mode is enabled, unified search uses the local library adapter only so it does not contact network providers. Pagination, authenticated provider opt-in, and richer provider-specific ranking are still roadmap work.
 
 ## Offline cache and download policy
 
