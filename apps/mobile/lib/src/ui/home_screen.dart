@@ -7448,10 +7448,15 @@ class _SettingsTab extends StatelessWidget {
 
       try {
         final materialization = await manager.materialize(processingEntry);
+        final cacheReason = materialization.checksum.isEmpty
+            ? 'Cached ${_formatByteCount(materialization.byteCount)}.'
+            : 'Cached ${_formatByteCount(materialization.byteCount)}; checksum verified.';
         await library.markOfflineCacheEntryCached(
           entry.id,
           materialization.track,
-          reason: 'Cached ${_formatByteCount(materialization.byteCount)}.',
+          reason: cacheReason,
+          byteCount: materialization.byteCount,
+          checksum: materialization.checksum,
         );
         final evictionResult = await enforceOfflineCacheLimit(
           library: library,

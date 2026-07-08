@@ -1870,6 +1870,19 @@ void main() {
 
       expect(thirdStore.offlineCacheQueue.single.id, entry.id);
 
+      final legacyBackup = Map<String, dynamic>.from(backup);
+      final legacyQueue =
+          (legacyBackup['offlineCacheQueue'] as List<dynamic>)
+              .cast<Map<String, dynamic>>();
+      legacyQueue.single
+        ..remove('cachedByteCount')
+        ..remove('cachedMediaChecksum');
+      final legacyStore = LibraryStore(clock: clock);
+      await legacyStore.load();
+      await legacyStore.restoreBackupJson(jsonEncode(legacyBackup));
+      expect(legacyStore.offlineCacheQueue.single.cachedByteCount, 0);
+      expect(legacyStore.offlineCacheQueue.single.cachedMediaChecksum, '');
+
       await thirdStore.removeOfflineCacheEntry(entry.id);
       expect(thirdStore.offlineCacheQueue, isEmpty);
 
@@ -1949,13 +1962,23 @@ void main() {
       queued.id,
       cachedTrack,
       reason: 'Cached 1.0 MB.',
+      byteCount: 1024 * 1024,
+      checksum: 'cache-checksum',
     );
 
     expect(cached!.status, OfflineCacheEntryStatus.cached);
     expect(cached.track.localPath, '/cache/audio.mp3');
+    expect(cached.cachedByteCount, 1024 * 1024);
+    expect(cached.cachedMediaChecksum, 'cache-checksum');
     expect(store.tracks.single.id, track.id);
     expect(store.tracks.single.localPath, '/cache/audio.mp3');
     expect(store.search('', offlineOnly: true).single.id, track.id);
+
+    final persistedStore = LibraryStore(clock: clock);
+    await persistedStore.load();
+    final persistedCached = persistedStore.offlineCacheEntryById(queued.id)!;
+    expect(persistedCached.cachedByteCount, 1024 * 1024);
+    expect(persistedCached.cachedMediaChecksum, 'cache-checksum');
 
     now = DateTime.utc(2026, 1, 16, 16, 30);
     final evicted = await store.markOfflineCacheEntryEvicted(
@@ -1966,6 +1989,8 @@ void main() {
     expect(evicted!.status, OfflineCacheEntryStatus.queued);
     expect(evicted.reason, 'Evicted to keep cache under 500.0 MB.');
     expect(evicted.track.localPath, '');
+    expect(evicted.cachedByteCount, 0);
+    expect(evicted.cachedMediaChecksum, '');
     expect(store.tracks.single.localPath, '');
     expect(store.search('', offlineOnly: true), isEmpty);
 

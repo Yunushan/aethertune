@@ -27,6 +27,8 @@ final class OfflineCacheEntry {
     required this.createdAt,
     DateTime? updatedAt,
     this.reason = '',
+    this.cachedByteCount = 0,
+    this.cachedMediaChecksum = '',
   }) : updatedAt = updatedAt ?? createdAt;
 
   final String id;
@@ -36,6 +38,8 @@ final class OfflineCacheEntry {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String reason;
+  final int cachedByteCount;
+  final String cachedMediaChecksum;
 
   OfflineCacheEntry copyWith({
     Track? track,
@@ -44,6 +48,8 @@ final class OfflineCacheEntry {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? reason,
+    int? cachedByteCount,
+    String? cachedMediaChecksum,
   }) {
     return OfflineCacheEntry(
       id: id,
@@ -53,6 +59,8 @@ final class OfflineCacheEntry {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       reason: reason ?? this.reason,
+      cachedByteCount: cachedByteCount ?? this.cachedByteCount,
+      cachedMediaChecksum: cachedMediaChecksum ?? this.cachedMediaChecksum,
     );
   }
 
@@ -65,6 +73,8 @@ final class OfflineCacheEntry {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'reason': reason,
+      'cachedByteCount': cachedByteCount,
+      'cachedMediaChecksum': cachedMediaChecksum,
     };
   }
 
@@ -84,6 +94,8 @@ final class OfflineCacheEntry {
       createdAt: _jsonDateTime(json, 'createdAt'),
       updatedAt: _jsonDateTime(json, 'updatedAt'),
       reason: json['reason'] as String? ?? '',
+      cachedByteCount: _jsonInt(json, 'cachedByteCount'),
+      cachedMediaChecksum: json['cachedMediaChecksum'] as String? ?? '',
     );
   }
 
@@ -114,6 +126,18 @@ DateTime _jsonDateTime(Map<String, Object?> json, String key) {
   }
 
   return value;
+}
+
+int _jsonInt(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return 0;
+  }
+  if (value is int) {
+    return value < 0 ? 0 : value;
+  }
+
+  return 0;
 }
 
 OfflineMediaAction _offlineMediaActionFromName(String value) {

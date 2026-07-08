@@ -11,10 +11,12 @@ final class OfflineCacheMaterialization {
   const OfflineCacheMaterialization({
     required this.track,
     required this.byteCount,
+    required this.checksum,
   });
 
   final Track track;
   final int byteCount;
+  final String checksum;
 }
 
 final class OfflineCacheUsage {
@@ -75,6 +77,7 @@ final class OfflineCacheManager {
       return OfflineCacheMaterialization(
         track: entry.track,
         byteCount: 0,
+        checksum: '',
       );
     }
 
@@ -100,10 +103,19 @@ final class OfflineCacheManager {
       p.join(mediaDirectory.path, '${entry.id}${_mediaExtension(streamUri)}'),
     );
     await file.writeAsBytes(bytes, flush: true);
+    final checksum = offlineMediaChecksum(bytes);
+    final savedBytes = await file.readAsBytes();
+    if (savedBytes.length != bytes.length ||
+        offlineMediaChecksum(savedBytes) != checksum) {
+      throw StateError(
+        'Cached media checksum verification failed for ${entry.track.title}.',
+      );
+    }
 
     return OfflineCacheMaterialization(
       track: entry.track.copyWith(localPath: file.path),
       byteCount: bytes.length,
+      checksum: checksum,
     );
   }
 
@@ -236,4 +248,14 @@ String _mediaExtension(Uri uri) {
   final extension = p.extension(uri.path).toLowerCase();
   final isSafeExtension = RegExp(r'^\.[a-z0-9]{1,8}$').hasMatch(extension);
   return isSafeExtension ? extension : '.mp3';
+}
+
+String offlineMediaChecksum(List<int> bytes) {
+  var hash = 0xcbf29ce484222325;
+  for (final byte in bytes) {
+    hash ^= byte & 0xff;
+    hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
+  }
+
+  return hash.toRadixString(16).padLeft(16, '0');
 }

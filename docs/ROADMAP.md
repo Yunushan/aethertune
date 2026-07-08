@@ -125,6 +125,8 @@
 - [x] Cache/download queue manager
 - [x] Download queue
 - [x] User-triggered direct URL offline cache storage
+- [x] Cached media byte-count/checksum metadata
+- [x] Post-write checksum verification for private cached media
 - [x] Private cache usage and eviction controls
 - [x] Manual private cache trim/clear controls
 - [x] Configurable cache size limits

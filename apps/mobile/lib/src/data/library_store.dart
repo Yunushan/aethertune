@@ -901,12 +901,16 @@ class LibraryStore extends ChangeNotifier {
     String id,
     Track cachedTrack, {
     required String reason,
+    int byteCount = 0,
+    String checksum = '',
   }) {
     return _updateOfflineCacheEntry(
       id,
       track: cachedTrack,
       status: OfflineCacheEntryStatus.cached,
       reason: reason,
+      cachedByteCount: byteCount,
+      cachedMediaChecksum: checksum,
       upsertCachedTrack: true,
     );
   }
@@ -936,6 +940,8 @@ class LibraryStore extends ChangeNotifier {
       track: entry.track.copyWith(localPath: ''),
       status: OfflineCacheEntryStatus.queued,
       reason: reason,
+      cachedByteCount: 0,
+      cachedMediaChecksum: '',
       upsertCachedTrack: true,
       addCachedTrackIfMissing: false,
     );
@@ -4721,6 +4727,8 @@ class LibraryStore extends ChangeNotifier {
     Track? track,
     OfflineCacheEntryStatus? status,
     String? reason,
+    int? cachedByteCount,
+    String? cachedMediaChecksum,
     bool upsertCachedTrack = false,
     bool addCachedTrackIfMissing = true,
   }) async {
@@ -4734,6 +4742,8 @@ class LibraryStore extends ChangeNotifier {
       status: status,
       updatedAt: _clock(),
       reason: reason,
+      cachedByteCount: cachedByteCount,
+      cachedMediaChecksum: cachedMediaChecksum,
     );
     _offlineCacheQueue[index] = updated;
     if (upsertCachedTrack && track != null) {

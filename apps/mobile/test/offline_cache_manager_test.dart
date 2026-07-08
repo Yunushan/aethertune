@@ -50,6 +50,8 @@ void main() {
     final materialization = await manager.materialize(entry);
 
     expect(materialization.byteCount, 4);
+    expect(materialization.checksum, offlineMediaChecksum(<int>[1, 2, 3, 4]));
+    expect(materialization.checksum, hasLength(16));
     expect(materialization.track.localPath, isNotNull);
     expect(materialization.track.hasLocalSource, isTrue);
     expect(materialization.track.streamUrl, entry.track.streamUrl);
@@ -169,12 +171,16 @@ void main() {
       oldEntry.id,
       oldTrack.copyWith(localPath: oldFile.path),
       reason: 'Cached old media.',
+      byteCount: 40 * 1024 * 1024,
+      checksum: 'old-checksum',
     );
     now = DateTime.utc(2026, 1, 18);
     await store.markOfflineCacheEntryCached(
       newestEntry.id,
       newestTrack.copyWith(localPath: newestFile.path),
       reason: 'Cached newest media.',
+      byteCount: 20 * 1024 * 1024,
+      checksum: 'newest-checksum',
     );
 
     final result = await enforceOfflineCacheLimit(
@@ -192,12 +198,16 @@ void main() {
     final keptEntry = store.offlineCacheEntryById(newestEntry.id)!;
     expect(evictedEntry.status, OfflineCacheEntryStatus.queued);
     expect(evictedEntry.track.localPath, '');
+    expect(evictedEntry.cachedByteCount, 0);
+    expect(evictedEntry.cachedMediaChecksum, '');
     expect(
       evictedEntry.reason,
       'Evicted automatically to keep cache under 50 MB.',
     );
     expect(keptEntry.status, OfflineCacheEntryStatus.cached);
     expect(keptEntry.track.localPath, newestFile.path);
+    expect(keptEntry.cachedByteCount, 20 * 1024 * 1024);
+    expect(keptEntry.cachedMediaChecksum, 'newest-checksum');
     expect(store.search('', offlineOnly: true).single.id, newestTrack.id);
   });
 
@@ -238,12 +248,16 @@ void main() {
       oldEntry.id,
       oldTrack.copyWith(localPath: oldFile.path),
       reason: 'Cached old media.',
+      byteCount: 2 * 1024 * 1024,
+      checksum: 'old-provider-checksum',
     );
     now = DateTime.utc(2026, 1, 18);
     await store.markOfflineCacheEntryCached(
       newestEntry.id,
       newestTrack.copyWith(localPath: newestFile.path),
       reason: 'Cached newest media.',
+      byteCount: 1024 * 1024,
+      checksum: 'newest-provider-checksum',
     );
 
     final result = await enforceOfflineCacheLimit(
@@ -259,6 +273,8 @@ void main() {
     expect(await newestFile.exists(), isTrue);
     final evictedEntry = store.offlineCacheEntryById(oldEntry.id)!;
     expect(evictedEntry.status, OfflineCacheEntryStatus.queued);
+    expect(evictedEntry.cachedByteCount, 0);
+    expect(evictedEntry.cachedMediaChecksum, '');
     expect(
       evictedEntry.reason,
       'Evicted automatically to keep internet-archive cache under 1 MB.',
