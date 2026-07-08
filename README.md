@@ -1,7 +1,7 @@
 <h1 align="center">AetherTune</h1>
 
 <p align="center">
-  <strong>Free, open-source music workspace with mobile, desktop, and server foundations; local playback, provider plugins, queue, favorites, search, sleep timer, offline-first architecture, and privacy-first design.</strong>
+  <strong>Free, open-source music workspace with mobile, desktop, and server foundations; home feed, local playback, provider plugins, queue, favorites, search, sleep timer, offline-first architecture, and privacy-first design.</strong>
 </p>
 
 <p align="center">
@@ -126,6 +126,7 @@ This scaffold includes real app code, not only a README:
 | Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, or folder |
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, theme preference, offline mode, and the offline cache/download queue with `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup, including submitted search history, theme preference, offline mode, and queued offline media requests, from the Options tab |
+| Home feed | Local Home tab sections for continue listening, recently played, radio seeds, most played, favorites, and recently added tracks |
 | Search | Local library filtering by title, artist, album, genre, source, folder, favorites, and local-files-only offline readiness with sortable results and suggestion chips from submitted searches, playback history, and library metadata |
 | Queue | Play current list as a persistent queue with next/previous controls, start a local track radio queue, reorder/remove queue items, and save it as a playlist |
 | History/stats | Recently played tab with local playback history, play counts, listening recap, date ranges, JSON/CSV stats export, top tracks/artists/albums/genres, and clear action |
@@ -150,7 +151,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Backup/restore | JSON library backup implemented; file-based import/export polish roadmap |
 | Streaming providers | Pluggable provider interface with declared capabilities, permissions, network disclosure, and cache/download policy gates for legal source adapters |
 | Offline | Local-first data model, offline library filter, persisted offline mode that pauses network-backed source actions and player-wide saved stream playback, per-provider cache/download policy gate, persisted cache/download queue manager, private direct-URL cache storage with usage/trim/clear controls, and resumable/background download plus configurable limits roadmap |
-| Music discovery | Local seed-based track radio queues implemented; home feeds, charts, moods, richer radio, and recommendations through provider plugins remain roadmap |
+| Music discovery | Local Home feed sections and seed-based track radio queues implemented; provider home feeds, charts, moods, richer radio, and recommendations remain roadmap |
 | Lyrics | Plain text lyrics, LRC timestamp parsing/preview, and playback-linked synced highlighting implemented; search and provider lyrics roadmap |
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, and cross-device artwork sync roadmap |
 | Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |

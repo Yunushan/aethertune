@@ -21,6 +21,7 @@ Initial GitHub-ready scaffold.
 - Added stored track metadata editing for title, artist, album, and genre.
 - Added local folder filename metadata parsing for track numbers and artist-title names.
 - Added duplicate track detection and merge handling for local library entries.
+- Added local Home feed sections for continue listening, recent plays, radio seeds, most played, favorites, and recently added tracks.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added local seed-based track radio queues from library metadata, favorites, and play history.
 - Added playlist artwork URL editing, display, export/import, and backup restore.

@@ -32,6 +32,10 @@ dart run bin/server.dart
 3. AetherTune imports supported audio files, parses common filename metadata such as leading track numbers and `Artist - Title`, and groups folder-scanned tracks by their parent folders until a richer tag scanner is added.
 4. Tap a track to play it.
 
+## Home
+
+The Home tab shows local feed sections for in-progress tracks, recently played tracks, radio seeds with local matches, most played tracks, favorites, and recently added tracks. Tap a track to play that section as the queue, or open its menu for lyrics, playlists, metadata edits, favorites, removal, and radio.
+
 ## Search
 
 Use the search box on the Library tab. Search matches:

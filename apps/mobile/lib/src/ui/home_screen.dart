@@ -161,6 +161,18 @@ class _HomeScreenState extends State<HomeScreen> {
               child: IndexedStack(
                 index: _tabIndex,
                 children: <Widget>[
+                  _HomeTab(
+                    onImport: () => _importAudio(context),
+                    onImportFolder: () => _importAudioFolder(context),
+                    onAddToPlaylist: (track) => _showAddToPlaylist(
+                      context,
+                      track,
+                    ),
+                    onLyrics: (track) => _showLyricsEditor(
+                      context,
+                      track,
+                    ),
+                  ),
                   _LibraryTab(
                     searchController: _searchController,
                     query: _query,
@@ -222,6 +234,11 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) => setState(() => _tabIndex = index),
         destinations: const <NavigationDestination>[
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
           NavigationDestination(
             icon: Icon(Icons.my_library_music_outlined),
             selectedIcon: Icon(Icons.my_library_music),
@@ -1410,6 +1427,190 @@ class _QueueTrackTile extends StatelessWidget {
 }
 
 enum _QueueTrackAction { moveUp, moveDown, remove }
+
+class _HomeTab extends StatelessWidget {
+  const _HomeTab({
+    required this.onImport,
+    required this.onImportFolder,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final VoidCallback onImport;
+  final VoidCallback onImportFolder;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final player = context.read<PlayerController>();
+
+    if (!library.loaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final sections = library.homeFeedSections();
+    if (sections.isEmpty) {
+      return _EmptyHomeFeed(
+        onImport: onImport,
+        onImportFolder: onImportFolder,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: <Widget>[
+        Text('Home', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        for (final section in sections) ...[
+          _HomeSectionHeader(section: section),
+          const SizedBox(height: 4),
+          for (final track in section.tracks)
+            TrackTile(
+              track: track,
+              onPlay: () => _playTrackWithResume(
+                context,
+                player,
+                library,
+                track,
+                queue: section.tracks,
+              ),
+              onStartRadio: () => unawaited(
+                _startTrackRadio(context, player, library, track),
+              ),
+              onFavorite: () => library.toggleFavorite(track.id),
+              onAddToPlaylist: () => onAddToPlaylist(track),
+              onLyrics: () => onLyrics(track),
+              onEditMetadata: () => unawaited(
+                _showTrackMetadataEditor(context, track),
+              ),
+              onRemove: () => library.removeTrack(track.id),
+            ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
+class _HomeSectionHeader extends StatelessWidget {
+  const _HomeSectionHeader({required this.section});
+
+  final LibraryHomeSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(_homeSectionIcon(section.type)),
+      title: Text(_homeSectionTitle(section.type)),
+      subtitle: Text(_homeSectionSubtitle(section.type)),
+      trailing: Text('${section.tracks.length}'),
+    );
+  }
+}
+
+class _EmptyHomeFeed extends StatelessWidget {
+  const _EmptyHomeFeed({
+    required this.onImport,
+    required this.onImportFolder,
+  });
+
+  final VoidCallback onImport;
+  final VoidCallback onImportFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(Icons.home_outlined, size: 56),
+            const SizedBox(height: 16),
+            Text('Home is empty', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            const Text(
+              'Import music to build your local feed.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: onImport,
+                  icon: const Icon(Icons.library_add),
+                  label: const Text('Import audio'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onImportFolder,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Import folder'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _homeSectionIcon(LibraryHomeSectionType type) {
+  switch (type) {
+    case LibraryHomeSectionType.continueListening:
+      return Icons.play_circle_outline;
+    case LibraryHomeSectionType.recentlyPlayed:
+      return Icons.history_outlined;
+    case LibraryHomeSectionType.radioSeeds:
+      return Icons.radio_outlined;
+    case LibraryHomeSectionType.mostPlayed:
+      return Icons.trending_up;
+    case LibraryHomeSectionType.favorites:
+      return Icons.favorite_border;
+    case LibraryHomeSectionType.recentlyAdded:
+      return Icons.new_releases_outlined;
+  }
+}
+
+String _homeSectionTitle(LibraryHomeSectionType type) {
+  switch (type) {
+    case LibraryHomeSectionType.continueListening:
+      return 'Continue listening';
+    case LibraryHomeSectionType.recentlyPlayed:
+      return 'Recently played';
+    case LibraryHomeSectionType.radioSeeds:
+      return 'Start radio';
+    case LibraryHomeSectionType.mostPlayed:
+      return 'Most played';
+    case LibraryHomeSectionType.favorites:
+      return 'Favorites';
+    case LibraryHomeSectionType.recentlyAdded:
+      return 'Recently added';
+  }
+}
+
+String _homeSectionSubtitle(LibraryHomeSectionType type) {
+  switch (type) {
+    case LibraryHomeSectionType.continueListening:
+      return 'Saved playback progress';
+    case LibraryHomeSectionType.recentlyPlayed:
+      return 'Latest library plays';
+    case LibraryHomeSectionType.radioSeeds:
+      return 'Seeds with local matches';
+    case LibraryHomeSectionType.mostPlayed:
+      return 'Highest play counts';
+    case LibraryHomeSectionType.favorites:
+      return 'Hearted tracks';
+    case LibraryHomeSectionType.recentlyAdded:
+      return 'Newest imports';
+  }
+}
 
 class _LibraryTab extends StatelessWidget {
   const _LibraryTab({

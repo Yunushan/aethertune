@@ -36,6 +36,15 @@ enum DuplicateMatchType { localPath, sourceExternalId, streamUrl, metadata }
 
 enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 
+enum LibraryHomeSectionType {
+  continueListening,
+  recentlyPlayed,
+  radioSeeds,
+  mostPlayed,
+  favorites,
+  recentlyAdded,
+}
+
 enum CustomSmartPlaylistSortMode {
   recentlyAdded,
   title,
@@ -112,6 +121,16 @@ class SmartPlaylist {
   final String name;
   final String description;
   final int trackCount;
+}
+
+class LibraryHomeSection {
+  const LibraryHomeSection({
+    required this.type,
+    required this.tracks,
+  });
+
+  final LibraryHomeSectionType type;
+  final List<Track> tracks;
 }
 
 class CustomSmartPlaylist {
@@ -1104,6 +1123,52 @@ class LibraryStore extends ChangeNotifier {
     }
   }
 
+  List<LibraryHomeSection> homeFeedSections({int limit = 8}) {
+    if (limit <= 0) {
+      return <LibraryHomeSection>[];
+    }
+
+    final sections = <LibraryHomeSection>[];
+
+    void addSection(LibraryHomeSectionType type, List<Track> tracks) {
+      final sectionTracks = _uniqueTracks(tracks).take(limit).toList(
+            growable: false,
+          );
+      if (sectionTracks.isEmpty) {
+        return;
+      }
+
+      sections.add(LibraryHomeSection(type: type, tracks: sectionTracks));
+    }
+
+    addSection(
+      LibraryHomeSectionType.continueListening,
+      _continueListeningTracks(limit: limit),
+    );
+    addSection(
+      LibraryHomeSectionType.recentlyPlayed,
+      recentlyPlayedTracks(limit: limit),
+    );
+    addSection(
+      LibraryHomeSectionType.radioSeeds,
+      _homeRadioSeedTracks(limit: limit),
+    );
+    addSection(
+      LibraryHomeSectionType.mostPlayed,
+      _mostPlayedTracks(limit: limit),
+    );
+    addSection(
+      LibraryHomeSectionType.favorites,
+      tracksForSmartPlaylist(SmartPlaylistType.favorites, limit: limit),
+    );
+    addSection(
+      LibraryHomeSectionType.recentlyAdded,
+      recentlyAddedTracks(limit: limit),
+    );
+
+    return sections;
+  }
+
   CustomSmartPlaylist? customSmartPlaylistById(String id) {
     final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
     if (index == -1) {
@@ -1958,6 +2023,55 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return tracks.take(limit).toList(growable: false);
+  }
+
+  List<Track> _continueListeningTracks({required int limit}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    final byId = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+    final entries = _progressByTrackId.values.toList(growable: false)
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    return entries
+        .map((entry) => byId[entry.trackId])
+        .whereType<Track>()
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  List<Track> _homeRadioSeedTracks({required int limit}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    final candidates = _tracks.where((track) {
+      if (!track.isPlayable) {
+        return false;
+      }
+
+      final queue = radioQueueForTrack(track.id, limit: 2);
+      return queue != null && queue.tracks.length > 1;
+    }).toList(growable: false);
+
+    candidates.sort(_compareHomeRadioSeedTracks);
+
+    return candidates.take(limit).toList(growable: false);
+  }
+
+  List<Track> _uniqueTracks(Iterable<Track> tracks) {
+    final seen = <String>{};
+    final unique = <Track>[];
+    for (final track in tracks) {
+      if (seen.add(track.id)) {
+        unique.add(track);
+      }
+    }
+
+    return unique;
   }
 
   int playCountForTrack(String trackId, {DateTime? from, DateTime? to}) {
@@ -2958,6 +3072,28 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return _compareByLastPlayedThenTitle(a, b);
+  }
+
+  int _compareHomeRadioSeedTracks(Track a, Track b) {
+    if (a.isFavorite != b.isFavorite) {
+      return a.isFavorite ? -1 : 1;
+    }
+
+    final byPlayCount =
+        playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      lastPlayedAt(a.id),
+      lastPlayedAt(b.id),
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareByDateThenTitle(a, b);
   }
 
   int _radioScoreForTrack(Track seedTrack, Track track) {

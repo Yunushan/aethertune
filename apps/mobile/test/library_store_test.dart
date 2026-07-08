@@ -1592,6 +1592,111 @@ void main() {
     },
   );
 
+  test('builds local home feed sections from library activity', () async {
+    var now = DateTime.utc(2026, 1, 14, 14);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'continue',
+        title: 'Long Signal',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 30),
+        addedAt: DateTime.utc(2026, 1, 1),
+      ),
+      _track(
+        'same-artist',
+        title: 'Mira Field',
+        artist: 'Mira',
+        album: 'Clouds',
+        genre: 'Folk',
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+      _track(
+        'favorite',
+        title: 'Favorite Drift',
+        artist: 'Ari',
+        album: 'Night',
+        genre: 'Jazz',
+        addedAt: DateTime.utc(2026, 1, 3),
+      ),
+      _track(
+        'new',
+        title: 'Newest',
+        artist: 'Zed',
+        album: 'Fresh',
+        genre: 'Pop',
+        addedAt: DateTime.utc(2026, 1, 4),
+      ),
+    ]);
+
+    await store.recordPlaybackProgress(
+      'continue',
+      const Duration(minutes: 5),
+      const Duration(minutes: 30),
+    );
+    await store.toggleFavorite('favorite');
+    await store.recordPlayback('favorite');
+    now = DateTime.utc(2026, 1, 14, 14, 1);
+    await store.recordPlayback('continue');
+    now = DateTime.utc(2026, 1, 14, 14, 2);
+    await store.recordPlayback('continue');
+
+    final sections = store.homeFeedSections(limit: 2);
+
+    expect(
+      sections.map((section) => section.type),
+      <LibraryHomeSectionType>[
+        LibraryHomeSectionType.continueListening,
+        LibraryHomeSectionType.recentlyPlayed,
+        LibraryHomeSectionType.radioSeeds,
+        LibraryHomeSectionType.mostPlayed,
+        LibraryHomeSectionType.favorites,
+        LibraryHomeSectionType.recentlyAdded,
+      ],
+    );
+    expect(
+      sections
+          .firstWhere(
+            (section) =>
+                section.type == LibraryHomeSectionType.continueListening,
+          )
+          .tracks
+          .map((track) => track.id),
+      <String>['continue'],
+    );
+    expect(
+      sections
+          .firstWhere(
+            (section) => section.type == LibraryHomeSectionType.recentlyPlayed,
+          )
+          .tracks
+          .map((track) => track.id),
+      <String>['continue', 'favorite'],
+    );
+    expect(
+      sections
+          .firstWhere(
+            (section) => section.type == LibraryHomeSectionType.radioSeeds,
+          )
+          .tracks
+          .map((track) => track.id),
+      <String>['continue', 'same-artist'],
+    );
+    expect(
+      sections
+          .firstWhere(
+            (section) => section.type == LibraryHomeSectionType.recentlyAdded,
+          )
+          .tracks
+          .map((track) => track.id),
+      <String>['new', 'favorite'],
+    );
+    expect(store.homeFeedSections(limit: 0), isEmpty);
+  });
+
   test('creates updates and persists custom smart playlist rules', () async {
     var now = DateTime.utc(2026, 1, 15, 12);
     final store = LibraryStore(clock: () => now);

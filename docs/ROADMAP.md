@@ -8,6 +8,7 @@
 - [x] MIT license
 - [x] Local import
 - [x] Local playback
+- [x] Local Home feed sections
 - [x] Listening history
 - [x] Queue
 - [x] Queue reorder/remove
