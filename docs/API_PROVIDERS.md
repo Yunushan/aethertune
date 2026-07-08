@@ -59,6 +59,10 @@ Use `ProviderPrivacyDisclosure` to list:
 
 `InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, save tracks, queue/cache checksum-verified direct public files with HTTP Range retry resume, and quota-limit/trim/clear private cached media from Options. Collection browsing pages, facet suggestion UI, and background download jobs are still separate roadmap work.
 
+## Jellyfin foundation
+
+`JellyfinProvider` targets user-owned Jellyfin servers. It builds API-key authenticated audio searches against a configured user's library, maps Jellyfin audio item metadata into provider-neutral `Track` objects, generates authenticated stream and primary artwork URLs when requested, discloses the configured server host and credential/search/item-id data sent, declares authentication/cache/download capabilities for user-owned media, and is covered by provider-specific tests plus the shared provider contract test. The provider is constructor-configured; settings UI, secure credential storage, library browse pages, playlists, and sync are still roadmap work.
+
 ## Navidrome/Subsonic foundation
 
 `SubsonicProvider` targets user-owned Navidrome or Subsonic-compatible servers through the documented Subsonic REST API. It builds authenticated JSON requests with encoded password credentials, searches songs through `search3.view`, maps song metadata to provider-neutral `Track` objects, discloses the configured server host and credential/search/song-id data sent, declares authentication/cache/download capabilities for user-owned media, and resolves playable streams through `stream.view`. The provider is constructor-configured and tested; settings UI, secure credential storage, library browse pages, playlists, and sync are still roadmap work.

@@ -1,6 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/demo_source_provider.dart';
+import 'package:aethertune/src/data/internet_archive_provider.dart';
+import 'package:aethertune/src/data/jellyfin_provider.dart';
+import 'package:aethertune/src/data/podcast_rss_provider.dart';
+import 'package:aethertune/src/data/radio_browser_provider.dart';
+import 'package:aethertune/src/data/subsonic_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -41,6 +46,78 @@ void main() {
     expect(MusicSourceCapability.authentication.label, 'Authentication');
     expect(OfflineMediaAction.cache.label, 'Offline cache');
     expect(OfflineMediaAction.download.label, 'Download');
+  });
+
+  test('current providers satisfy the shared capability contract', () {
+    final providers = <MusicSourceProvider>[
+      const DemoSourceProvider(),
+      InternetArchiveProvider(
+        baseUri: Uri.parse('https://archive.example.test'),
+      ),
+      JellyfinProvider(
+        baseUri: Uri.parse('https://jellyfin.example.test'),
+        userId: 'user-1',
+        apiKey: 'secret',
+        requestLoader: (_) async => '{"Items":[]}',
+      ),
+      PodcastRssProvider(
+        feedUri: Uri.parse('https://podcasts.example.test/feed.xml'),
+      ),
+      RadioBrowserProvider(
+        baseUri: Uri.parse('https://radio.example.test'),
+      ),
+      SubsonicProvider(
+        baseUri: Uri.parse('https://music.example.test'),
+        username: 'user',
+        password: 'secret',
+        requestLoader: (_) async =>
+            '{"subsonic-response":{"status":"ok","searchResult3":{}}}',
+      ),
+    ];
+    final ids = <String>{};
+
+    for (final provider in providers) {
+      expect(provider.id.trim(), isNotEmpty);
+      expect(provider.name.trim(), isNotEmpty);
+      expect(provider.description.trim(), isNotEmpty);
+      expect(provider.capabilities, isNotEmpty);
+      expect(ids.add(provider.id), isTrue);
+
+      final disclosure = provider.disclosure;
+      expect(
+        disclosure.networkDomains.every((domain) => domain.trim().isNotEmpty),
+        isTrue,
+      );
+      expect(
+        disclosure.dataSent.every((item) => item.trim().isNotEmpty),
+        isTrue,
+      );
+
+      if (disclosure.requiresUserCredentials) {
+        expect(
+          provider.capabilities,
+          contains(MusicSourceCapability.authentication),
+        );
+      }
+      if (disclosure.cachesMedia) {
+        expect(
+          provider.capabilities,
+          contains(MusicSourceCapability.offlineCache),
+        );
+      }
+      if (disclosure.supportsDownloads) {
+        expect(
+          provider.capabilities,
+          contains(MusicSourceCapability.downloads),
+        );
+      }
+      if (provider.capabilities.contains(MusicSourceCapability.offlineCache)) {
+        expect(disclosure.cachesMedia, isTrue);
+      }
+      if (provider.capabilities.contains(MusicSourceCapability.downloads)) {
+        expect(disclosure.supportsDownloads, isTrue);
+      }
+    }
   });
 
   test('offline media policy allows local files without a provider', () {

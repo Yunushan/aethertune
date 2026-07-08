@@ -163,7 +163,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Local files | Done | Namida, Musify | Recursive folder scanner, filename metadata parser, and basic ID3v1 MP3 title/artist/album tag parser are implemented; richer tag parser, artwork extraction, and folder watch remain. |
 | Demo provider | Done | Provider template | Developer docs and test fixture provider. |
-| Jellyfin | Roadmap | Self-hosted music users | Auth, library browse, stream resolver, tests. |
+| Jellyfin | Scaffolded | Self-hosted music users | API-key authenticated audio search and stream resolver are implemented with Jellyfin item parsing, authenticated request generation, artwork URL generation, provider disclosure, cache/download capability declarations, and tests. Needed next: settings UI, secure credential storage, library browse pages, playlist sync, and cross-device sync model. |
 | Navidrome/Subsonic | Scaffolded | Self-hosted music users | Subsonic REST search and stream resolver are implemented with authenticated request generation, metadata parsing, provider disclosure, cache/download capability declarations, and tests. Needed next: settings UI, secure credential storage, library browse pages, playlist sync, and cross-device sync model. |
 | Podcast RSS | Scaffolded | YouTube Music podcasts, NewPipe | RSS parser/provider, persisted feed subscriptions, OPML import/export, refresh status/stale policy, episode listing, playback, saved episode progress/resume, library save, backup/restore, cache/download policy declarations, queued offline requests, checksum-verified private direct-enclosure caching with HTTP Range retry resume, and app/provider quota private cache eviction are implemented; background download jobs remain. |
 | Radio Browser / internet radio | Scaffolded | Radio apps | Station search with country/language/tag/codec/bitrate filters, public API mirror discovery, fallback mirror behavior, selected stream validation, playback, station click accounting, library save, provider parser, playable station model, and live-stream cache/download denial are implemented; deeper codec probing and retry/backoff policy remain. |
@@ -277,7 +277,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Signed releases | Roadmap | Android signing, macOS notarization, Windows signing. |
 | SBOM / dependency audit | Roadmap | License and vulnerability scanning. |
 | Golden UI tests | Roadmap | Stable screenshots for key views. |
-| Provider contract test suite | Roadmap | Shared tests each provider must pass. |
+| Provider contract test suite | Scaffolded | Shared capability/disclosure tests cover current adapters, including Demo, Podcast RSS, Radio Browser, Internet Archive, Jellyfin, and Navidrome/Subsonic. Needed next: reusable fixture package, provider-specific offline/playback contract cases, and CI reporting per adapter. |
 | E2E smoke test | Roadmap | Launch app, import fixture, play fixture where possible. |
 | Crash/error reporting | Roadmap | Local logs first; any remote reporting must be opt-in. |
 
@@ -322,7 +322,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 2. Build full local library: recursive folder import, folder watching, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
 3. Add `audio_service` and platform media sessions for background playback, notifications, lock screen, media keys, and Android Auto/CarPlay where allowed.
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
-5. Implement legal providers: local folder scanner/folder watch, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin, Navidrome/Subsonic settings UI, Internet Archive.
+5. Implement legal providers: local folder scanner/folder watch, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin settings UI, Navidrome/Subsonic settings UI, Internet Archive.
 6. Add official-only adapters where terms allow: Spotify metadata, YouTube/YouTube Music, SoundCloud, Bandcamp, or others.
 7. Expand the current checksum-verified direct-URL offline cache with HTTP Range retry resume and user-chosen folder export into a full cache/download manager with background jobs, pause/resume controls, provider checksum manifests where available, and deeper system Downloads integration where legally allowed.
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.

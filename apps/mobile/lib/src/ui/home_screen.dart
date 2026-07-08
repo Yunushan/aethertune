@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
 import '../data/internet_archive_provider.dart';
+import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/offline_cache_manager.dart';
@@ -5186,6 +5187,19 @@ class _SourcesTabState extends State<_SourcesTab> {
           disclosure: _archiveProvider.disclosure,
         ),
         const _ProviderCard(
+          title: 'Jellyfin',
+          status: 'Adapter foundation',
+          description:
+              'Tested Jellyfin audio search and stream resolver for user-owned music libraries; settings UI remains roadmap.',
+          icon: Icons.storage_outlined,
+          capabilities: JellyfinProvider.defaultCapabilities,
+          disclosure: ProviderPrivacyDisclosure(
+            requiresUserCredentials: true,
+            cachesMedia: true,
+            supportsDownloads: true,
+          ),
+        ),
+        const _ProviderCard(
           title: 'Navidrome / Subsonic',
           status: 'Adapter foundation',
           description:
@@ -5197,12 +5211,6 @@ class _SourcesTabState extends State<_SourcesTab> {
             cachesMedia: true,
             supportsDownloads: true,
           ),
-        ),
-        const _ProviderCard(
-          title: 'Jellyfin',
-          status: 'Adapter roadmap',
-          description: 'User-owned Jellyfin music library support belongs here.',
-          icon: Icons.storage_outlined,
         ),
         const _ProviderCard(
           title: 'More open catalogs',
