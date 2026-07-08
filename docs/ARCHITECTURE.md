@@ -60,7 +60,7 @@ abstract interface class MusicSourceProvider {
 }
 ```
 
-Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage plus private-cache usage/eviction to the persisted app-level cache size limit; background jobs, per-provider quotas, and resumable downloads belong behind the same boundary later.
+Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage plus private-cache usage/manual eviction and automatic post-cache pressure eviction to the persisted app-level cache size limit; background jobs, per-provider quotas, and resumable downloads belong behind the same boundary later.
 
 ## Playback
 

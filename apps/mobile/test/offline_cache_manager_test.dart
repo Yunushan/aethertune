@@ -2,8 +2,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:aethertune/src/data/internet_archive_provider.dart';
+import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/offline_cache_manager.dart';
+import 'package:aethertune/src/data/offline_cache_pressure_enforcer.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/offline_cache_entry.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -12,6 +16,7 @@ void main() {
   late Directory cacheRoot;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     cacheRoot = await Directory.systemTemp.createTemp('aethertune-cache-test-');
   });
 
@@ -125,6 +130,77 @@ void main() {
     expect((await manager.usage(entries)).byteCount, 5);
   });
 
+  test('enforces configured cache limit and marks evicted entries', () async {
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    await manager.mediaDirectory.create(recursive: true);
+    final oldFile = File(p.join(manager.mediaDirectory.path, 'old.mp3'));
+    final newestFile = File(p.join(manager.mediaDirectory.path, 'newest.mp3'));
+    await _writeSizedFile(oldFile, 40 * 1024 * 1024);
+    await _writeSizedFile(newestFile, 20 * 1024 * 1024);
+    final provider = InternetArchiveProvider();
+    final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+    var now = DateTime.utc(2026, 1, 17);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.setOfflineCacheLimitMegabytes(
+      LibraryStore.minOfflineCacheLimitMegabytes,
+    );
+    final oldTrack = _providerTrack(
+      'old-track',
+      'Old archive cache',
+      provider.id,
+    );
+    final newestTrack = _providerTrack(
+      'newest-track',
+      'Newest archive cache',
+      provider.id,
+    );
+    final oldEntry = await store.queueOfflineCache(
+      oldTrack,
+      OfflineMediaAction.cache,
+      policy.evaluate(oldTrack, OfflineMediaAction.cache),
+    );
+    final newestEntry = await store.queueOfflineCache(
+      newestTrack,
+      OfflineMediaAction.cache,
+      policy.evaluate(newestTrack, OfflineMediaAction.cache),
+    );
+    await store.markOfflineCacheEntryCached(
+      oldEntry.id,
+      oldTrack.copyWith(localPath: oldFile.path),
+      reason: 'Cached old media.',
+    );
+    now = DateTime.utc(2026, 1, 18);
+    await store.markOfflineCacheEntryCached(
+      newestEntry.id,
+      newestTrack.copyWith(localPath: newestFile.path),
+      reason: 'Cached newest media.',
+    );
+
+    final result = await enforceOfflineCacheLimit(
+      library: store,
+      manager: manager,
+    );
+
+    expect(result.bytesBefore, 60 * 1024 * 1024);
+    expect(result.bytesAfter, 20 * 1024 * 1024);
+    expect(result.evictedBytes, 40 * 1024 * 1024);
+    expect(result.evictedEntryIds, <String>[oldEntry.id]);
+    expect(await oldFile.exists(), isFalse);
+    expect(await newestFile.exists(), isTrue);
+    final evictedEntry = store.offlineCacheEntryById(oldEntry.id)!;
+    final keptEntry = store.offlineCacheEntryById(newestEntry.id)!;
+    expect(evictedEntry.status, OfflineCacheEntryStatus.queued);
+    expect(evictedEntry.track.localPath, '');
+    expect(
+      evictedEntry.reason,
+      'Evicted automatically to keep cache under 50 MB.',
+    );
+    expect(keptEntry.status, OfflineCacheEntryStatus.cached);
+    expect(keptEntry.track.localPath, newestFile.path);
+    expect(store.search('', offlineOnly: true).single.id, newestTrack.id);
+  });
+
   test('rejects entries without downloadable http URLs', () async {
     final entry = OfflineCacheEntry(
       id: 'entry-two',
@@ -143,6 +219,26 @@ void main() {
 
     expect(manager.materialize(entry), throwsA(isA<StateError>()));
   });
+}
+
+Future<void> _writeSizedFile(File file, int length) async {
+  final access = await file.open(mode: FileMode.write);
+  try {
+    await access.truncate(length);
+  } finally {
+    await access.close();
+  }
+}
+
+Track _providerTrack(String id, String title, String providerId) {
+  return Track(
+    id: id,
+    title: title,
+    artist: 'Archive',
+    sourceId: providerId,
+    externalId: id,
+    streamUrl: 'https://archive.org/download/$id/audio.mp3',
+  );
 }
 
 OfflineCacheEntry _cachedEntry(

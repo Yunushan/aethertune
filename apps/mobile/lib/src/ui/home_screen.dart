@@ -14,6 +14,7 @@ import '../data/internet_archive_provider.dart';
 import '../data/library_store.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/offline_cache_manager.dart';
+import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../domain/music_source_provider.dart';
@@ -6914,15 +6915,27 @@ String _offlineCacheErrorMessage(Object error) {
 String _offlineCacheResultMessage({
   required int cached,
   required int failed,
+  required int evicted,
+  required int evictedBytes,
 }) {
-  if (cached > 0 && failed == 0) {
-    return 'Cached $cached offline item(s).';
+  final parts = <String>[];
+  if (cached > 0) {
+    parts.add('Cached $cached offline item(s)');
   }
-  if (cached == 0 && failed > 0) {
-    return 'Could not cache $failed offline item(s).';
+  if (failed > 0) {
+    parts.add('could not cache $failed offline item(s)');
+  }
+  if (evicted > 0) {
+    parts.add(
+      'auto-evicted ${_formatByteCount(evictedBytes)} from '
+      '$evicted cached item(s)',
+    );
+  }
+  if (parts.isEmpty) {
+    return 'No offline items were cached.';
   }
 
-  return 'Cached $cached offline item(s); $failed failed.';
+  return '${parts.join('; ')}.';
 }
 
 class _SettingsTab extends StatelessWidget {
@@ -7305,6 +7318,8 @@ class _SettingsTab extends StatelessWidget {
     final manager = OfflineCacheManager(cacheRoot: cacheRoot);
     var cached = 0;
     var failed = 0;
+    var evicted = 0;
+    var evictedBytes = 0;
 
     for (final queuedEntry in entries) {
       final entry = library.offlineCacheEntryById(queuedEntry.id);
@@ -7322,6 +7337,12 @@ class _SettingsTab extends StatelessWidget {
           materialization.track,
           reason: 'Cached ${_formatByteCount(materialization.byteCount)}.',
         );
+        final evictionResult = await enforceOfflineCacheLimit(
+          library: library,
+          manager: manager,
+        );
+        evicted += evictionResult.evictedEntryIds.length;
+        evictedBytes += evictionResult.evictedBytes;
         cached += 1;
       } on Object catch (error) {
         await library.markOfflineCacheEntryFailed(
@@ -7339,7 +7360,12 @@ class _SettingsTab extends StatelessWidget {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          _offlineCacheResultMessage(cached: cached, failed: failed),
+          _offlineCacheResultMessage(
+            cached: cached,
+            failed: failed,
+            evicted: evicted,
+            evictedBytes: evictedBytes,
+          ),
         ),
       ),
     );

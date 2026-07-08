@@ -126,9 +126,10 @@
 - [x] Download queue
 - [x] User-triggered direct URL offline cache storage
 - [x] Private cache usage and eviction controls
-- [x] Fixed 500 MB cache trim action
-- [ ] Background/resumable offline downloader
+- [x] Manual private cache trim/clear controls
 - [x] Configurable cache size limits
+- [x] Automatic private cache pressure eviction
+- [ ] Background/resumable offline downloader
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview
 - [x] Playback-synced lyric highlighting
