@@ -927,6 +927,34 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  Future<OfflineCacheEntry?> pauseOfflineCacheEntry(String id) {
+    final entry = offlineCacheEntryById(id);
+    if (entry == null ||
+        (entry.status != OfflineCacheEntryStatus.queued &&
+            entry.status != OfflineCacheEntryStatus.failed)) {
+      return Future<OfflineCacheEntry?>.value(entry);
+    }
+
+    return _updateOfflineCacheEntry(
+      id,
+      status: OfflineCacheEntryStatus.paused,
+      reason: 'Paused by user.',
+    );
+  }
+
+  Future<OfflineCacheEntry?> resumeOfflineCacheEntry(String id) {
+    final entry = offlineCacheEntryById(id);
+    if (entry == null || entry.status != OfflineCacheEntryStatus.paused) {
+      return Future<OfflineCacheEntry?>.value(entry);
+    }
+
+    return _updateOfflineCacheEntry(
+      id,
+      status: OfflineCacheEntryStatus.queued,
+      reason: 'Ready to cache media.',
+    );
+  }
+
   Future<OfflineCacheEntry?> markOfflineCacheEntryEvicted(
     String id, {
     required String reason,

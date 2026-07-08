@@ -1997,6 +1997,9 @@ void main() {
     expect(processing!.status, OfflineCacheEntryStatus.processing);
     expect(processing.reason, 'Caching media...');
 
+    final processingPause = await store.pauseOfflineCacheEntry(queued.id);
+    expect(processingPause!.status, OfflineCacheEntryStatus.processing);
+
     now = DateTime.utc(2026, 1, 16, 16);
     final cachedTrack = track.copyWith(localPath: '/cache/audio.mp3');
     final cached = await store.markOfflineCacheEntryCached(
@@ -2036,6 +2039,29 @@ void main() {
     expect(store.search('', offlineOnly: true), isEmpty);
 
     now = DateTime.utc(2026, 1, 16, 17);
+    final paused = await store.pauseOfflineCacheEntry(queued.id);
+    expect(paused!.status, OfflineCacheEntryStatus.paused);
+    expect(paused.reason, 'Paused by user.');
+
+    final persistedPausedStore = LibraryStore(clock: clock);
+    await persistedPausedStore.load();
+    expect(
+      persistedPausedStore.offlineCacheEntryById(queued.id)!.status,
+      OfflineCacheEntryStatus.paused,
+    );
+
+    final pausedAgain = await store.pauseOfflineCacheEntry(queued.id);
+    expect(pausedAgain!.status, OfflineCacheEntryStatus.paused);
+
+    now = DateTime.utc(2026, 1, 16, 17, 30);
+    final resumed = await store.resumeOfflineCacheEntry(queued.id);
+    expect(resumed!.status, OfflineCacheEntryStatus.queued);
+    expect(resumed.reason, 'Ready to cache media.');
+
+    final resumedAgain = await store.resumeOfflineCacheEntry(queued.id);
+    expect(resumedAgain!.status, OfflineCacheEntryStatus.queued);
+
+    now = DateTime.utc(2026, 1, 16, 18);
     final failed = await store.markOfflineCacheEntryFailed(
       queued.id,
       reason: 'Network failed.',
@@ -2043,6 +2069,13 @@ void main() {
 
     expect(failed!.status, OfflineCacheEntryStatus.failed);
     expect(failed.reason, 'Network failed.');
+
+    final failedPause = await store.pauseOfflineCacheEntry(queued.id);
+    expect(failedPause!.status, OfflineCacheEntryStatus.paused);
+
+    final failedResume = await store.resumeOfflineCacheEntry(queued.id);
+    expect(failedResume!.status, OfflineCacheEntryStatus.queued);
+
     expect(await store.markOfflineCacheEntryProcessing('missing'), isNull);
     expect(
       await store.markOfflineCacheEntryEvicted('missing', reason: 'Missing.'),

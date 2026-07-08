@@ -7040,6 +7040,15 @@ bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
       entry.status == OfflineCacheEntryStatus.failed;
 }
 
+bool _canPauseOfflineCacheEntry(OfflineCacheEntry entry) {
+  return entry.status == OfflineCacheEntryStatus.queued ||
+      entry.status == OfflineCacheEntryStatus.failed;
+}
+
+bool _canResumeOfflineCacheEntry(OfflineCacheEntry entry) {
+  return entry.status == OfflineCacheEntryStatus.paused;
+}
+
 bool _canExportOfflineCacheEntry(OfflineCacheEntry entry) {
   return entry.status == OfflineCacheEntryStatus.cached &&
       entry.track.hasLocalSource &&
@@ -7129,6 +7138,9 @@ class _SettingsTab extends StatelessWidget {
     final pendingOfflineQueue = offlineQueue
         .where(_canProcessOfflineCacheEntry)
         .toList(growable: false);
+    final pausedOfflineQueueCount = offlineQueue
+        .where((entry) => entry.status == OfflineCacheEntryStatus.paused)
+        .length;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -7206,7 +7218,9 @@ class _SettingsTab extends StatelessWidget {
           subtitle: Text(
             offlineQueue.isEmpty
                 ? 'No queued cache or download requests'
-                : '${offlineQueue.length} queued cache/download request(s)',
+                : '${offlineQueue.length} queued cache/download request(s), '
+                    '${pendingOfflineQueue.length} ready, '
+                    '$pausedOfflineQueueCount paused',
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -7329,6 +7343,25 @@ class _SettingsTab extends StatelessWidget {
                           )
                       : null,
                   icon: const Icon(Icons.cloud_download_outlined),
+                ),
+                IconButton(
+                  tooltip: _canResumeOfflineCacheEntry(entry)
+                      ? 'Resume offline request'
+                      : 'Pause offline request',
+                  onPressed: _canResumeOfflineCacheEntry(entry)
+                      ? () => unawaited(
+                            library.resumeOfflineCacheEntry(entry.id),
+                          )
+                      : _canPauseOfflineCacheEntry(entry)
+                          ? () => unawaited(
+                                library.pauseOfflineCacheEntry(entry.id),
+                              )
+                          : null,
+                  icon: Icon(
+                    _canResumeOfflineCacheEntry(entry)
+                        ? Icons.play_arrow_outlined
+                        : Icons.pause_outlined,
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Export cached media',

@@ -128,6 +128,7 @@
 - [x] Per-provider cache/download policy gate
 - [x] Cache/download queue manager
 - [x] Download queue
+- [x] Offline queue pause/resume controls
 - [x] User-triggered direct URL offline cache storage
 - [x] Cached media byte-count/checksum metadata
 - [x] Post-write checksum verification for private cached media

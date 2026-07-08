@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added paused offline cache/download queue state with Options-tab pause/resume controls, persisted backup support, and batch caching that skips paused requests.
+
 ## 0.1.0
 
 Initial GitHub-ready scaffold.

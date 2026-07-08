@@ -1,13 +1,15 @@
 import 'music_source_provider.dart';
 import 'track.dart';
 
-enum OfflineCacheEntryStatus { queued, processing, cached, failed }
+enum OfflineCacheEntryStatus { queued, paused, processing, cached, failed }
 
 extension OfflineCacheEntryStatusLabel on OfflineCacheEntryStatus {
   String get label {
     switch (this) {
       case OfflineCacheEntryStatus.queued:
         return 'Queued';
+      case OfflineCacheEntryStatus.paused:
+        return 'Paused';
       case OfflineCacheEntryStatus.processing:
         return 'Processing';
       case OfflineCacheEntryStatus.cached:
