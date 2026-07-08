@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -1516,6 +1517,9 @@ class _HomeTabState extends State<_HomeTab> {
                   onLyrics: widget.onLyrics,
                 ),
               ),
+              onShare: () => unawaited(
+                _copyTrackShareText(context, library, track),
+              ),
               onFavorite: () => library.toggleFavorite(track.id),
               onAddToPlaylist: () => widget.onAddToPlaylist(track),
               onLyrics: () => widget.onLyrics(track),
@@ -1580,6 +1584,9 @@ class _HomeTabState extends State<_HomeTab> {
               onAddToPlaylist: widget.onAddToPlaylist,
               onLyrics: widget.onLyrics,
             ),
+          ),
+          onShare: () => unawaited(
+            _copyTrackShareText(context, library, track),
           ),
           onFavorite: () => library.toggleFavorite(track.id),
           onAddToPlaylist: () => widget.onAddToPlaylist(track),
@@ -2008,6 +2015,9 @@ class _LibraryTab extends StatelessWidget {
                       onLyrics: onLyrics,
                     ),
                   ),
+                  onShare: () => unawaited(
+                    _copyTrackShareText(context, library, track),
+                  ),
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
                   onLyrics: () => onLyrics(track),
@@ -2185,6 +2195,18 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                   leading: Icon(_libraryBrowseTypeIcon(type)),
                   title: Text(group.label),
                   subtitle: Text(_libraryBrowseGroupSubtitle(group)),
+                  trailing: IconButton(
+                    tooltip: 'Copy share text',
+                    onPressed: () => unawaited(
+                      _copyBrowseGroupShareText(
+                        context,
+                        library,
+                        type,
+                        group,
+                      ),
+                    ),
+                    icon: const Icon(Icons.ios_share),
+                  ),
                 );
               }
 
@@ -2208,6 +2230,9 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                     onAddToPlaylist: onAddToPlaylist,
                     onLyrics: onLyrics,
                   ),
+                ),
+                onShare: () => unawaited(
+                  _copyTrackShareText(context, library, track),
                 ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
@@ -2309,6 +2334,9 @@ class _SimilarTracksSheet extends StatelessWidget {
                     onAddToPlaylist: onAddToPlaylist,
                     onLyrics: onLyrics,
                   ),
+                ),
+                onShare: () => unawaited(
+                  _copyTrackShareText(context, library, track),
                 ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
@@ -2663,6 +2691,9 @@ class _PlaylistsTab extends StatelessWidget {
                 context,
                 playlist,
                 format,
+              ),
+              onShare: () => unawaited(
+                _copyPlaylistShareText(context, library, playlist),
               ),
               onArtwork: () => _editPlaylistArtwork(context, playlist),
               onRename: () => _renamePlaylist(context, playlist),
@@ -3367,6 +3398,9 @@ class _SmartPlaylistSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
+                onShare: () => unawaited(
+                  _copyTrackShareText(context, library, track),
+                ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
@@ -3471,6 +3505,9 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
                     onAddToPlaylist: onAddToPlaylist,
                     onLyrics: onLyrics,
                   ),
+                ),
+                onShare: () => unawaited(
+                  _copyTrackShareText(context, library, track),
                 ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
@@ -3769,6 +3806,7 @@ class _PlaylistCard extends StatelessWidget {
     required this.playlist,
     required this.onOpen,
     required this.onExport,
+    required this.onShare,
     required this.onArtwork,
     required this.onRename,
     required this.onDelete,
@@ -3777,6 +3815,7 @@ class _PlaylistCard extends StatelessWidget {
   final Playlist playlist;
   final VoidCallback onOpen;
   final ValueChanged<PlaylistDocumentFormat> onExport;
+  final VoidCallback onShare;
   final VoidCallback onArtwork;
   final VoidCallback onRename;
   final VoidCallback onDelete;
@@ -3800,6 +3839,9 @@ class _PlaylistCard extends StatelessWidget {
                 break;
               case _PlaylistAction.exportCsv:
                 onExport(PlaylistDocumentFormat.csv);
+                break;
+              case _PlaylistAction.share:
+                onShare();
                 break;
               case _PlaylistAction.rename:
                 onRename();
@@ -3832,6 +3874,13 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.table_chart_outlined),
                 title: Text('Export CSV'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.share,
+              child: ListTile(
+                leading: Icon(Icons.ios_share),
+                title: Text('Copy share text'),
               ),
             ),
             PopupMenuDivider(),
@@ -3967,6 +4016,7 @@ enum _PlaylistAction {
   exportJson,
   exportM3u,
   exportCsv,
+  share,
   rename,
   artwork,
   delete,
@@ -4556,6 +4606,72 @@ Future<void> _startTrackRadio(
         '${seedTrack.title}.',
       ),
     ),
+  );
+}
+
+Future<void> _copyTrackShareText(
+  BuildContext context,
+  LibraryStore library,
+  Track track,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.shareTrackText(track.id),
+    copiedMessage: 'Copied share text for ${track.title}.',
+    unavailableMessage: 'Share text is unavailable for ${track.title}.',
+  );
+}
+
+Future<void> _copyBrowseGroupShareText(
+  BuildContext context,
+  LibraryStore library,
+  LibraryBrowseType type,
+  LibraryBrowseGroup group,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.shareBrowseGroupText(type, group.key),
+    copiedMessage: 'Copied share text for ${group.label}.',
+    unavailableMessage:
+        'Share text is unavailable for ${_libraryBrowseTypeLabel(type)}.',
+  );
+}
+
+Future<void> _copyPlaylistShareText(
+  BuildContext context,
+  LibraryStore library,
+  Playlist playlist,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.sharePlaylistText(playlist.id),
+    copiedMessage: 'Copied share text for ${playlist.name}.',
+    unavailableMessage: 'Share text is unavailable for ${playlist.name}.',
+  );
+}
+
+Future<void> _copyTextToClipboard(
+  BuildContext context,
+  String? value, {
+  required String copiedMessage,
+  required String unavailableMessage,
+}) async {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(unavailableMessage)),
+    );
+    return;
+  }
+
+  await Clipboard.setData(ClipboardData(text: text));
+
+  if (!context.mounted) {
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(copiedMessage)),
   );
 }
 

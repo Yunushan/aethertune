@@ -1927,6 +1927,56 @@ class LibraryStore extends ChangeNotifier {
     return buffer.toString();
   }
 
+  String? shareTrackText(String trackId) {
+    final track = _trackById(trackId);
+    if (track == null) {
+      return null;
+    }
+
+    return _shareTrackText(track);
+  }
+
+  String? shareBrowseGroupText(LibraryBrowseType type, String key) {
+    final tracks = tracksForBrowseGroup(type, key);
+    if (tracks.isEmpty) {
+      return null;
+    }
+
+    final buffer = StringBuffer()
+      ..writeln('AetherTune ${_shareBrowseTypeName(type)}')
+      ..writeln('Name: ${_shareBrowseGroupLabel(type, tracks.first)}')
+      ..writeln('Tracks: ${tracks.length}')
+      ..writeln('Duration: ${_shareDuration(_totalDuration(tracks))}')
+      ..writeln();
+    _writeShareTrackList(buffer, tracks);
+
+    return buffer.toString().trimRight();
+  }
+
+  String? sharePlaylistText(String playlistId) {
+    final playlist = playlistById(playlistId);
+    if (playlist == null) {
+      return null;
+    }
+
+    final tracks = tracksForPlaylist(playlist.id);
+    final buffer = StringBuffer()
+      ..writeln('AetherTune playlist')
+      ..writeln('Name: ${playlist.name}')
+      ..writeln('Tracks: ${tracks.length}')
+      ..writeln('Duration: ${_shareDuration(_totalDuration(tracks))}');
+    final artworkUrl = _shareableWebUrl(playlist.artworkUri?.toString());
+    if (artworkUrl != null) {
+      buffer.writeln('Artwork: $artworkUrl');
+    }
+    if (tracks.isNotEmpty) {
+      buffer.writeln();
+      _writeShareTrackList(buffer, tracks);
+    }
+
+    return buffer.toString().trimRight();
+  }
+
   Future<Playlist> importPlaylistDocument(
     String document, {
     required PlaylistDocumentFormat format,
@@ -2258,6 +2308,15 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return _playlists[index];
+  }
+
+  Track? _trackById(String id) {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    return _tracks[index];
   }
 
   List<Track> tracksForPlaylist(String playlistId, {String query = ''}) {
@@ -3101,6 +3160,130 @@ class LibraryStore extends ChangeNotifier {
 
   String _playlistTrackLocator(Track track) {
     return track.localPath ?? track.streamUrl ?? track.id;
+  }
+
+  String _shareTrackText(Track track) {
+    final buffer = StringBuffer()
+      ..writeln('AetherTune track')
+      ..writeln('Title: ${_shareTextValue(track.title, 'Untitled')}')
+      ..writeln('Artist: ${_shareTextValue(track.artist, 'Unknown Artist')}')
+      ..writeln('Album: ${_shareTextValue(track.album, 'Unknown Album')}')
+      ..writeln('Genre: ${_shareTextValue(track.genre, 'Unknown Genre')}')
+      ..writeln('Duration: ${_shareDuration(track.duration)}')
+      ..writeln('Source: ${_shareTextValue(track.sourceId, 'local')}');
+
+    final link = _shareableWebUrl(track.streamUrl);
+    final artworkUrl = _shareableWebUrl(track.artworkUri?.toString());
+    if (link != null) {
+      buffer.writeln('Link: $link');
+    } else if (track.hasLocalSource) {
+      buffer.writeln('Availability: Local file');
+    } else if (track.hasStreamSource) {
+      buffer.writeln('Availability: Stream');
+    } else {
+      buffer.writeln('Availability: Metadata only');
+    }
+    if (artworkUrl != null) {
+      buffer.writeln('Artwork: $artworkUrl');
+    }
+
+    return buffer.toString().trimRight();
+  }
+
+  void _writeShareTrackList(StringBuffer buffer, List<Track> tracks) {
+    for (final entry in tracks.asMap().entries) {
+      buffer.writeln('${entry.key + 1}. ${_shareTrackSummary(entry.value)}');
+    }
+  }
+
+  String _shareTrackSummary(Track track) {
+    final title = _shareTextValue(track.title, 'Untitled');
+    final artist = _shareTextValue(track.artist, 'Unknown Artist');
+    final album = _shareTextValue(track.album, 'Unknown Album');
+
+    return '$artist - $title ($album)';
+  }
+
+  String _shareBrowseGroupLabel(LibraryBrowseType type, Track firstTrack) {
+    final label = _browseLabelForTrack(firstTrack, type);
+    if (type == LibraryBrowseType.folder) {
+      return _shareFolderName(label);
+    }
+
+    return _shareTextValue(label, 'Unknown ${_shareBrowseTypeName(type)}');
+  }
+
+  String _shareFolderName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == 'Remote Streams') {
+      return trimmed.isEmpty ? 'Unknown Folder' : trimmed;
+    }
+
+    final context = _looksLikeWindowsPath(trimmed)
+        ? _windowsPathContext
+        : _posixPathContext;
+    final basename = context.basename(trimmed).trim();
+    if (basename.isEmpty || basename == '.' || basename == trimmed) {
+      return 'Local folder';
+    }
+
+    return basename;
+  }
+
+  String _shareBrowseTypeName(LibraryBrowseType type) {
+    switch (type) {
+      case LibraryBrowseType.artist:
+        return 'artist';
+      case LibraryBrowseType.album:
+        return 'album';
+      case LibraryBrowseType.genre:
+        return 'genre';
+      case LibraryBrowseType.source:
+        return 'source';
+      case LibraryBrowseType.folder:
+        return 'folder';
+    }
+  }
+
+  Duration _totalDuration(Iterable<Track> tracks) {
+    return tracks.fold<Duration>(
+      Duration.zero,
+      (total, track) => total + track.duration,
+    );
+  }
+
+  String _shareDuration(Duration duration) {
+    if (duration <= Duration.zero) {
+      return 'Unknown';
+    }
+
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (hours > 0) {
+      return '$hours:$minutes:$seconds';
+    }
+
+    return '${duration.inMinutes}:$seconds';
+  }
+
+  String _shareTextValue(String value, String fallback) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  String? _shareableWebUrl(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+
+    return trimmed;
   }
 
   Uri? _parseOptionalUri(String? value) {

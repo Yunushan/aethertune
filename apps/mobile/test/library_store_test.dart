@@ -509,6 +509,75 @@ void main() {
     expect(imported.trackIds, <String>['1', '2']);
   });
 
+  test('builds privacy-safe local share text', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 4),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'Local Signal',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3, seconds: 5),
+        localPath: r'C:\Users\Yunus\Music\Dawn\local-signal.mp3',
+      ),
+      _track(
+        '2',
+        title: 'Web Current',
+        artist: 'Ari',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 4, seconds: 10),
+        localPath: '',
+        streamUrl: 'https://example.com/web-current.mp3',
+      ),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road Share',
+      trackIds: <String>['2', '1'],
+    );
+
+    final trackShare = store.shareTrackText('1')!;
+    expect(trackShare, contains('AetherTune track'));
+    expect(trackShare, contains('Title: Local Signal'));
+    expect(trackShare, contains('Duration: 3:05'));
+    expect(trackShare, contains('Availability: Local file'));
+    expect(trackShare, isNot(contains(r'C:\Users')));
+    expect(store.shareTrackText('missing'), isNull);
+
+    final streamShare = store.shareTrackText('2')!;
+    expect(streamShare, contains('Link: https://example.com/web-current.mp3'));
+
+    final groupShare = store.shareBrowseGroupText(
+      LibraryBrowseType.album,
+      'Dawn',
+    )!;
+    expect(groupShare, contains('AetherTune album'));
+    expect(groupShare, contains('Name: Dawn'));
+    expect(groupShare, contains('Tracks: 2'));
+    expect(groupShare, contains('Duration: 7:15'));
+    expect(groupShare, contains('1. Mira - Local Signal (Dawn)'));
+
+    final folderShare = store.shareBrowseGroupText(
+      LibraryBrowseType.folder,
+      r'C:\Users\Yunus\Music\Dawn',
+    )!;
+    expect(folderShare, contains('Name: Dawn'));
+    expect(folderShare, isNot(contains(r'C:\Users')));
+
+    final playlistShare = store.sharePlaylistText(playlist.id)!;
+    expect(playlistShare, contains('AetherTune playlist'));
+    expect(playlistShare, contains('Name: Road Share'));
+    expect(playlistShare, contains('Tracks: 2'));
+    expect(playlistShare, contains('Duration: 7:15'));
+    expect(playlistShare, contains('1. Ari - Web Current (Dawn)'));
+    expect(playlistShare, contains('2. Mira - Local Signal (Dawn)'));
+    expect(store.sharePlaylistText('missing'), isNull);
+  });
+
   test('rejects playlist imports that do not match library tracks', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 4),

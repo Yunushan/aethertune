@@ -25,6 +25,7 @@ Initial GitHub-ready scaffold.
 - Added local charts for top tracks, artists, albums, and genres by playback range.
 - Added local Home recommendations and mood/activity mixes from library metadata and playback signals.
 - Added similar local tracks from shared artist, album, genre, and library activity signals.
+- Added privacy-safe local share text for tracks, library browse groups, and manual playlists.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added local seed-based track radio queues from library metadata, favorites, and play history.
 - Added playlist artwork URL editing, display, export/import, and backup restore.

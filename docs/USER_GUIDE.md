@@ -34,7 +34,7 @@ dart run bin/server.dart
 
 ## Home
 
-The Home tab shows local feed sections for recommendations, mood/activity mixes, in-progress tracks, recently played tracks, radio seeds with local matches, most played tracks, favorites, recently added tracks, and local charts. The "For you" section uses favorites and recent playback as local taste signals while skipping just-played tracks. Focus, Energy, Chill, Workout, and Sleep mixes are generated from playable library metadata. The chart range selector can show all-time, last-7-days, last-30-days, or last-year top tracks, artists, albums, and genres from playback history. Tap a track to play that section as the queue, or open its menu for lyrics, playlists, metadata edits, favorites, removal, and radio.
+The Home tab shows local feed sections for recommendations, mood/activity mixes, in-progress tracks, recently played tracks, radio seeds with local matches, most played tracks, favorites, recently added tracks, and local charts. The "For you" section uses favorites and recent playback as local taste signals while skipping just-played tracks. Focus, Energy, Chill, Workout, and Sleep mixes are generated from playable library metadata. The chart range selector can show all-time, last-7-days, last-30-days, or last-year top tracks, artists, albums, and genres from playback history. Tap a track to play that section as the queue, or open its menu for lyrics, playlists, metadata edits, favorites, removal, radio, and **Copy share text**.
 
 ## Search
 
@@ -46,7 +46,7 @@ Use the search box on the Library tab. Search matches:
 - genre
 - source
 
-Suggestion chips below the search bar come from submitted searches, recently played tracks, and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the cloud-off button to show only local files that can play while offline mode is enabled. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue. Open a track menu and choose **Similar tracks** to find playable local tracks with matching artist, album, or genre metadata; the sheet explains each match and can play the results as a queue.
+Suggestion chips below the search bar come from submitted searches, recently played tracks, and library metadata. Use the sort button in the search bar to order the library by recently added, title, artist, or album. Use the cloud-off button to show only local files that can play while offline mode is enabled. Use the Artists, Albums, Genres, Sources, and Folders chips below the search bar to browse grouped library views and play a group as a queue. Open a browse group and use the share icon to copy privacy-safe group share text; local file paths are not included. Open a track menu and choose **Similar tracks** to find playable local tracks with matching artist, album, or genre metadata; the sheet explains each match and can play the results as a queue.
 
 ## Metadata
 
@@ -62,7 +62,7 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 ## Queue controls
 
-When you play a track from the library, the current filtered list becomes the queue. Open a track menu and choose **Start radio** to build a local seed queue from playable tracks with matching artist, genre, or album, ranked by favorites and play history. The **Similar tracks** sheet can also play its matched result list as the queue. AetherTune restores the current queue when you reopen the app. Use previous/next controls in the player bar, the queue button to move tracks up/down or remove upcoming tracks, or the playlist-add button to save the current queue as a playlist.
+When you play a track from the library, the current filtered list becomes the queue. Open a track menu and choose **Start radio** to build a local seed queue from playable tracks with matching artist, genre, or album, ranked by favorites and play history. Use **Copy share text** from a track menu to copy track metadata and a web link when one exists; local paths are redacted. The **Similar tracks** sheet can also play its matched result list as the queue. AetherTune restores the current queue when you reopen the app. Use previous/next controls in the player bar, the queue button to move tracks up/down or remove upcoming tracks, or the playlist-add button to save the current queue as a playlist.
 
 ## History
 
@@ -70,7 +70,7 @@ The History tab shows a local listening recap with library totals, favorites, pl
 
 ## Playlists
 
-Use the Playlists tab to open built-in smart playlists for favorites, recently added tracks, recently played tracks, and most played tracks. Create custom smart playlists with search text, favorites-only, minimum play count, sort mode, and result limit rules; AetherTune updates their tracks dynamically as the library changes. You can also create, rename, edit artwork URLs, delete, open, search within, reorder, import, export, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**. Use the import button to paste JSON, M3U, or CSV playlist content; imports link tracks that already exist in your local library and preserve AetherTune playlist artwork URLs from JSON exports. Use a playlist menu to export JSON/M3U/CSV or set/clear an http or https artwork image URL. Open a playlist and use the search box to find tracks by title, artist, or album; use a track menu to move a track up, move it down, or remove it.
+Use the Playlists tab to open built-in smart playlists for favorites, recently added tracks, recently played tracks, and most played tracks. Create custom smart playlists with search text, favorites-only, minimum play count, sort mode, and result limit rules; AetherTune updates their tracks dynamically as the library changes. You can also create, rename, edit artwork URLs, delete, open, search within, reorder, import, export, and play manual playlists. Add tracks from the Library tab by opening a track menu and choosing **Add to playlist**. Use the import button to paste JSON, M3U, or CSV playlist content; imports link tracks that already exist in your local library and preserve AetherTune playlist artwork URLs from JSON exports. Use a playlist menu to export JSON/M3U/CSV, choose **Copy share text**, or set/clear an http or https artwork image URL. Open a playlist and use the search box to find tracks by title, artist, or album; use a track menu to move a track up, move it down, or remove it.
 
 ## Lyrics
 

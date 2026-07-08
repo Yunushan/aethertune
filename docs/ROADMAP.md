@@ -19,6 +19,7 @@
 - [x] Persistent queue
 - [x] Save queue as playlist
 - [x] Local seed-based track radio queues
+- [x] Local share text for tracks, browse groups, and playlists
 - [x] Persist shuffle/repeat settings
 - [x] Favorites
 - [x] Manual playlists

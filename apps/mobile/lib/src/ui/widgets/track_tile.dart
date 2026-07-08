@@ -9,6 +9,7 @@ class TrackTile extends StatelessWidget {
     this.detailText,
     this.onStartRadio,
     this.onSimilarTracks,
+    this.onShare,
     required this.onFavorite,
     required this.onAddToPlaylist,
     required this.onLyrics,
@@ -22,6 +23,7 @@ class TrackTile extends StatelessWidget {
   final String? detailText;
   final VoidCallback? onStartRadio;
   final VoidCallback? onSimilarTracks;
+  final VoidCallback? onShare;
   final VoidCallback onFavorite;
   final VoidCallback onAddToPlaylist;
   final VoidCallback onLyrics;
@@ -56,6 +58,9 @@ class TrackTile extends StatelessWidget {
               break;
             case _TrackAction.similarTracks:
               onSimilarTracks?.call();
+              break;
+            case _TrackAction.share:
+              onShare?.call();
               break;
             case _TrackAction.favorite:
               onFavorite();
@@ -96,6 +101,14 @@ class TrackTile extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.hub_outlined),
                 title: Text('Similar tracks'),
+              ),
+            ),
+          if (onShare != null)
+            const PopupMenuItem(
+              value: _TrackAction.share,
+              child: ListTile(
+                leading: Icon(Icons.ios_share),
+                title: Text('Copy share text'),
               ),
             ),
           PopupMenuItem(
@@ -145,6 +158,7 @@ enum _TrackAction {
   play,
   startRadio,
   similarTracks,
+  share,
   favorite,
   addToPlaylist,
   lyrics,
