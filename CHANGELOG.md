@@ -58,6 +58,7 @@ Initial GitHub-ready scaffold.
 - Added Radio Browser station stream validation before playback/save decisions.
 - Added Internet Archive public audio search with playable file resolution.
 - Added Internet Archive collection, subject, creator, and year filters with multi-file item results.
+- Added Internet Archive collection, subject, creator, and year facet suggestion chips.
 - Added Jellyfin provider foundation for API-key audio search and stream resolution against user-owned libraries.
 - Added Navidrome/Subsonic provider foundation for authenticated Subsonic REST search and stream resolution.
 - Added shared provider contract tests for current source adapters.

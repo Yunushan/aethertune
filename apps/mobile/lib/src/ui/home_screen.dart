@@ -5068,6 +5068,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   final Map<String, RadioBrowserStreamValidation> _radioValidationByTrackId =
       <String, RadioBrowserStreamValidation>{};
   final Set<String> _radioValidatingTrackIds = <String>{};
+  List<InternetArchiveFacet> _archiveFacets = <InternetArchiveFacet>[];
   bool _archiveLoading = false;
   String? _archiveError;
   bool _podcastLoading = false;
@@ -5694,6 +5695,16 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
           ],
         ),
+        if (_archiveFacets.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _archiveFacetChips(
+              offlineModeEnabled: offlineModeEnabled,
+            ),
+          ),
+        ],
         if (_archiveLoading) ...<Widget>[
           const SizedBox(height: 12),
           const LinearProgressIndicator(),
@@ -6415,6 +6426,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
         _archiveTracks = <Track>[];
+        _archiveFacets = <InternetArchiveFacet>[];
         _archiveLoading = false;
         _archiveError = 'Offline mode is on.';
       });
@@ -6427,7 +6439,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
 
     try {
-      final tracks = await _archiveProvider.searchAudio(
+      final page = await _archiveProvider.searchAudioPage(
         _archiveSearchController.text,
         filters: _archiveFilters(),
       );
@@ -6436,7 +6448,8 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
 
       setState(() {
-        _archiveTracks = tracks;
+        _archiveTracks = page.tracks;
+        _archiveFacets = page.facets;
         _archiveLoading = false;
       });
     } catch (error) {
@@ -6446,6 +6459,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
       setState(() {
         _archiveTracks = <Track>[];
+        _archiveFacets = <InternetArchiveFacet>[];
         _archiveLoading = false;
         _archiveError = error.toString();
       });
@@ -6509,6 +6523,87 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  List<Widget> _archiveFacetChips({required bool offlineModeEnabled}) {
+    final chips = <Widget>[];
+    for (final field in <String>['collection', 'subject', 'creator', 'year']) {
+      chips.addAll(
+        _archiveFacets
+            .where((facet) => facet.field == field)
+            .take(4)
+            .map(
+              (facet) => ActionChip(
+                avatar: Icon(_archiveFacetIcon(facet.field), size: 18),
+                label: Text(
+                  '${_archiveFacetLabel(facet.field)}: ${facet.value} '
+                  '(${facet.count})',
+                ),
+                tooltip: 'Filter ${_archiveFacetLabel(facet.field)}',
+                onPressed: offlineModeEnabled || _archiveLoading
+                    ? null
+                    : () => _applyArchiveFacet(facet),
+              ),
+            ),
+      );
+    }
+
+    return chips;
+  }
+
+  TextEditingController? _archiveFacetController(String field) {
+    switch (field) {
+      case 'collection':
+        return _archiveCollectionController;
+      case 'subject':
+        return _archiveSubjectController;
+      case 'creator':
+        return _archiveCreatorController;
+      case 'year':
+        return _archiveYearController;
+    }
+
+    return null;
+  }
+
+  IconData _archiveFacetIcon(String field) {
+    switch (field) {
+      case 'collection':
+        return Icons.collections_bookmark_outlined;
+      case 'subject':
+        return Icons.sell_outlined;
+      case 'creator':
+        return Icons.person_search_outlined;
+      case 'year':
+        return Icons.calendar_month_outlined;
+    }
+
+    return Icons.filter_alt_outlined;
+  }
+
+  String _archiveFacetLabel(String field) {
+    switch (field) {
+      case 'collection':
+        return 'Collection';
+      case 'subject':
+        return 'Subject';
+      case 'creator':
+        return 'Creator';
+      case 'year':
+        return 'Year';
+    }
+
+    return 'Facet';
+  }
+
+  void _applyArchiveFacet(InternetArchiveFacet facet) {
+    final controller = _archiveFacetController(facet.field);
+    if (controller == null) {
+      return;
+    }
+
+    controller.text = facet.value;
+    unawaited(_searchArchiveItems());
+  }
+
   InternetArchiveSearchFilters _archiveFilters() {
     return InternetArchiveSearchFilters(
       collection: _archiveCollectionController.text,
@@ -6519,10 +6614,13 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   void _clearArchiveFilters() {
-    _archiveCollectionController.clear();
-    _archiveSubjectController.clear();
-    _archiveCreatorController.clear();
-    _archiveYearController.clear();
+    setState(() {
+      _archiveCollectionController.clear();
+      _archiveSubjectController.clear();
+      _archiveCreatorController.clear();
+      _archiveYearController.clear();
+      _archiveFacets = <InternetArchiveFacet>[];
+    });
   }
 
   Widget _radioFilterField({

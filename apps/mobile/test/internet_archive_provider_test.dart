@@ -134,6 +134,44 @@ void main() {
     },
   );
 
+  test('search page requests and exposes archive facet suggestions', () async {
+    Uri? capturedSearchUri;
+    final provider = InternetArchiveProvider(
+      baseUri: Uri.parse('https://archive.org'),
+      searchLoader: (uri) async {
+        capturedSearchUri = uri;
+        return _searchResultsJson;
+      },
+      metadataLoader: (uri) async {
+        if (uri.path.endsWith('/no_audio_item')) {
+          return _noAudioMetadataJson;
+        }
+        return _itemMetadataJson;
+      },
+      limit: 5,
+    );
+
+    final page = await provider.searchAudioPage(
+      'aether ambient',
+      filters: const InternetArchiveSearchFilters(
+        collection: 'opensource_audio',
+      ),
+    );
+
+    expect(capturedSearchUri!.queryParametersAll['facet[]'], <String>[
+      'collection',
+      'subject',
+      'creator',
+      'year',
+    ]);
+    expect(page.tracks.map((track) => track.title), <String>[
+      'Aether Public Session - aether-session-vbr',
+      'Aether Public Session - aether-session',
+    ]);
+    expect(page.facetsFor('collection').single.value, 'opensource_audio');
+    expect(page.facetsFor('subject').single.count, 7);
+  });
+
   test('parses search facets', () {
     final page = parseInternetArchiveSearchPage(_searchResultsJson);
 

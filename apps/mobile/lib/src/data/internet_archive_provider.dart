@@ -29,6 +29,22 @@ final class InternetArchiveSearchFilters {
       year.trim().isEmpty;
 }
 
+final class InternetArchiveAudioSearchPage {
+  const InternetArchiveAudioSearchPage({
+    required this.tracks,
+    required this.facets,
+  });
+
+  final List<Track> tracks;
+  final List<InternetArchiveFacet> facets;
+
+  List<InternetArchiveFacet> facetsFor(String field) {
+    return facets
+        .where((facet) => facet.field == field)
+        .toList(growable: false);
+  }
+}
+
 class InternetArchiveProvider implements MusicSourceProvider {
   InternetArchiveProvider({
     Uri? baseUri,
@@ -85,8 +101,24 @@ class InternetArchiveProvider implements MusicSourceProvider {
     String query, {
     InternetArchiveSearchFilters filters = const InternetArchiveSearchFilters(),
   }) async {
+    final page = await searchAudioPage(
+      query,
+      filters: filters,
+      includeFacets: false,
+    );
+
+    return page.tracks;
+  }
+
+  Future<InternetArchiveAudioSearchPage> searchAudioPage(
+    String query, {
+    InternetArchiveSearchFilters filters = const InternetArchiveSearchFilters(),
+    bool includeFacets = true,
+  }) async {
     final results = parseInternetArchiveSearchPage(
-      await _searchLoader(_searchUri(query.trim(), filters)),
+      await _searchLoader(
+        _searchUri(query.trim(), filters, includeFacets: includeFacets),
+      ),
     );
     final tracks = <Track>[];
 
@@ -95,7 +127,10 @@ class InternetArchiveProvider implements MusicSourceProvider {
       tracks.addAll(item.toTracks(sourceId: id, baseUri: baseUri));
     }
 
-    return tracks;
+    return InternetArchiveAudioSearchPage(
+      tracks: tracks,
+      facets: results.facets,
+    );
   }
 
   Future<InternetArchiveItem> fetchItem(String identifier) {
@@ -128,29 +163,42 @@ class InternetArchiveProvider implements MusicSourceProvider {
     );
   }
 
-  Uri _searchUri(String query, InternetArchiveSearchFilters filters) {
+  Uri _searchUri(
+    String query,
+    InternetArchiveSearchFilters filters, {
+    required bool includeFacets,
+  }) {
     final archiveQuery = _searchQuery(query, filters);
+    final queryParameters = <String, dynamic>{
+      'q': archiveQuery,
+      'fl[]': const <String>[
+        'identifier',
+        'title',
+        'creator',
+        'subject',
+        'collection',
+        'description',
+        'year',
+        'licenseurl',
+        'downloads',
+      ],
+      'sort[]': const <String>['downloads desc'],
+      'rows': limit.toString(),
+      'page': '1',
+      'output': 'json',
+    };
+    if (includeFacets) {
+      queryParameters['facet[]'] = const <String>[
+        'collection',
+        'subject',
+        'creator',
+        'year',
+      ];
+    }
 
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, '/advancedsearch.php'),
-      queryParameters: <String, dynamic>{
-        'q': archiveQuery,
-        'fl[]': const <String>[
-          'identifier',
-          'title',
-          'creator',
-          'subject',
-          'collection',
-          'description',
-          'year',
-          'licenseurl',
-          'downloads',
-        ],
-        'sort[]': const <String>['downloads desc'],
-        'rows': limit.toString(),
-        'page': '1',
-        'output': 'json',
-      },
+      queryParameters: queryParameters,
     );
   }
 

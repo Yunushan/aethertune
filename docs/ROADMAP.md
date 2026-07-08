@@ -113,7 +113,8 @@
 - [x] Internet Archive offline/download policy declarations
 - [x] Internet Archive cache/download queue
 - [x] Internet Archive direct file private cache storage
-- [ ] Internet Archive collection browse and facet suggestion UI
+- [x] Internet Archive facet suggestion UI and collection filter chips
+- [ ] Internet Archive dedicated collection detail pages
 - [x] Jellyfin provider foundation
 - [ ] Jellyfin settings UI and secure credential storage
 - [x] Navidrome/Subsonic provider foundation

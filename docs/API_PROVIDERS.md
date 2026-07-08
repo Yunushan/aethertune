@@ -57,7 +57,7 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Internet Archive foundation
 
-`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, play results, save tracks, queue/cache checksum-verified direct public files with HTTP Range retry resume, and quota-limit/trim/clear private cached media from Options. Collection browsing pages, facet suggestion UI, and background download jobs are still separate roadmap work.
+`InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, returns collection/subject/creator/year facets for dedicated Archive searches, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, apply returned facet chips, play results, save tracks, queue/cache checksum-verified direct public files with HTTP Range retry resume, and quota-limit/trim/clear private cached media from Options. Dedicated collection detail pages and background download jobs are still separate roadmap work.
 
 ## Jellyfin foundation
 
