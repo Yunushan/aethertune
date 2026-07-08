@@ -37,12 +37,14 @@ final class _LocalFileMetadata {
     required this.artist,
     this.album,
     this.genre,
+    this.artworkUri,
   });
 
   final String title;
   final String artist;
   final String? album;
   final String? genre;
+  final Uri? artworkUri;
 }
 
 final class LocalFolderScanner {
@@ -153,6 +155,7 @@ final class _LocalFolderScanState {
       artist: metadata.artist,
       album: metadata.album ?? _albumLabelFor(path),
       genre: metadata.genre ?? 'Unknown Genre',
+      artworkUri: metadata.artworkUri,
       localPath: path,
       sourceId: 'local',
       addedAt: importedAt,
@@ -185,6 +188,7 @@ final class _LocalFolderScanState {
           : embeddedMetadata.artist,
       album: embeddedMetadata.album ?? fallbackMetadata.album,
       genre: embeddedMetadata.genre ?? fallbackMetadata.genre,
+      artworkUri: embeddedMetadata.artworkUri ?? fallbackMetadata.artworkUri,
     );
   }
 
@@ -279,6 +283,8 @@ final class _LocalFolderScanState {
           return null;
         }
 
+        _LocalFileMetadata? metadata;
+        Uri? artworkUri;
         var metadataBytesRead = 0;
         while (metadataBytesRead < _maxFlacMetadataBytes) {
           final header = await access.read(4);
@@ -295,22 +301,38 @@ final class _LocalFolderScanState {
             return null;
           }
 
-          if (blockType == _flacVorbisCommentBlockType) {
+          if (blockType == _flacVorbisCommentBlockType ||
+              blockType == _flacPictureBlockType) {
             final blockBytes = await access.read(blockLength);
             if (blockBytes.length != blockLength) {
               return null;
             }
 
-            return _vorbisCommentMetadata(blockBytes);
+            if (blockType == _flacVorbisCommentBlockType) {
+              metadata = _vorbisCommentMetadata(blockBytes) ?? metadata;
+            } else {
+              artworkUri = _flacPictureArtworkUri(blockBytes) ?? artworkUri;
+            }
+          } else {
+            await access.setPosition(await access.position() + blockLength);
           }
 
-          await access.setPosition(await access.position() + blockLength);
           if (isLastBlock) {
-            return null;
+            break;
           }
         }
 
-        return null;
+        if (metadata == null && artworkUri == null) {
+          return null;
+        }
+
+        return _LocalFileMetadata(
+          title: metadata?.title ?? '',
+          artist: metadata?.artist ?? '',
+          album: metadata?.album,
+          genre: metadata?.genre,
+          artworkUri: artworkUri,
+        );
       } finally {
         await access.close();
       }
@@ -410,21 +432,22 @@ final class _LocalFolderScanState {
         ? _maxId3v2TagBytes
         : tagSize;
     final tagBytes = await access.read(bytesToRead);
-    final textFrames = majorVersion == 2
-        ? _id3v22TextFrames(tagBytes)
-        : _id3v23Or24TextFrames(tagBytes, majorVersion);
-    if (textFrames.isEmpty) {
+    final tagData = majorVersion == 2
+        ? _id3v22TagData(tagBytes)
+        : _id3v23Or24TagData(tagBytes, majorVersion);
+    if (tagData.textFrames.isEmpty && tagData.artworkUri == null) {
       return null;
     }
 
-    final title = textFrames['title'] ?? '';
-    final artist = textFrames['artist'] ?? '';
-    final album = textFrames['album'];
-    final genre = textFrames['genre'];
+    final title = tagData.textFrames['title'] ?? '';
+    final artist = tagData.textFrames['artist'] ?? '';
+    final album = tagData.textFrames['album'];
+    final genre = tagData.textFrames['genre'];
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
-        (genre == null || genre.isEmpty)) {
+        (genre == null || genre.isEmpty) &&
+        tagData.artworkUri == null) {
       return null;
     }
 
@@ -433,14 +456,16 @@ final class _LocalFolderScanState {
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
+      artworkUri: tagData.artworkUri,
     );
   }
 
-  Map<String, String> _id3v23Or24TextFrames(
+  _Id3v2TagData _id3v23Or24TagData(
     List<int> bytes,
     int majorVersion,
   ) {
     final textFrames = <String, String>{};
+    Uri? artworkUri;
     var offset = 0;
     while (offset + 10 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
@@ -464,16 +489,21 @@ final class _LocalFolderScanState {
         if (value.isNotEmpty) {
           textFrames[key] = value;
         }
+      } else if (frameId == 'APIC' && artworkUri == null) {
+        artworkUri = _id3v23PictureArtworkUri(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
     }
 
-    return textFrames;
+    return _Id3v2TagData(textFrames: textFrames, artworkUri: artworkUri);
   }
 
-  Map<String, String> _id3v22TextFrames(List<int> bytes) {
+  _Id3v2TagData _id3v22TagData(List<int> bytes) {
     final textFrames = <String, String>{};
+    Uri? artworkUri;
     var offset = 0;
     while (offset + 6 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(3));
@@ -495,12 +525,16 @@ final class _LocalFolderScanState {
         if (value.isNotEmpty) {
           textFrames[key] = value;
         }
+      } else if (frameId == 'PIC' && artworkUri == null) {
+        artworkUri = _id3v22PictureArtworkUri(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
     }
 
-    return textFrames;
+    return _Id3v2TagData(textFrames: textFrames, artworkUri: artworkUri);
   }
 
   _LocalFileMetadata? _id3v1Metadata(List<int> bytes) {
@@ -610,7 +644,17 @@ final class _LocalFolderScanState {
     }
 
     final fields = <String, List<String>>{};
+    Uri? artworkUri;
     for (final atom in _mp4Atoms(ilst)) {
+      if (_matchesAscii(atom.typeBytes, 'covr') && artworkUri == null) {
+        artworkUri = _m4aDataAtomArtworkUri(
+          ilst,
+          atom.payloadOffset,
+          atom.payloadEnd,
+        );
+        continue;
+      }
+
       final key = _m4aFieldKey(atom.typeBytes);
       if (key == null) {
         continue;
@@ -631,7 +675,8 @@ final class _LocalFolderScanState {
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
-        (genre == null || genre.isEmpty)) {
+        (genre == null || genre.isEmpty) &&
+        artworkUri == null) {
       return null;
     }
 
@@ -640,6 +685,7 @@ final class _LocalFolderScanState {
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
+      artworkUri: artworkUri,
     );
   }
 
@@ -678,6 +724,220 @@ final class _LocalFolderScanState {
     };
 
     return _normalizeEmbeddedText(decoded);
+  }
+
+  Uri? _id3v23PictureArtworkUri(List<int> bytes) {
+    if (bytes.length < 4) {
+      return null;
+    }
+
+    final encoding = bytes[0];
+    final mimeEnd = bytes.indexOf(0, 1);
+    if (mimeEnd <= 1 || mimeEnd + 2 >= bytes.length) {
+      return null;
+    }
+
+    final mimeType = _normalizeArtworkMimeType(
+      latin1.decode(bytes.sublist(1, mimeEnd), allowInvalid: true),
+    );
+    var imageStart = mimeEnd + 2;
+    final descriptionTerminator = _id3v2TerminatorLength(encoding);
+    while (imageStart < bytes.length) {
+      if (_hasZeroTerminator(bytes, imageStart, descriptionTerminator)) {
+        imageStart += descriptionTerminator;
+        break;
+      }
+      imageStart += descriptionTerminator;
+    }
+
+    if (imageStart >= bytes.length) {
+      return null;
+    }
+
+    final imageBytes = bytes.sublist(imageStart);
+    return _artworkDataUri(
+      imageBytes,
+      mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
+    );
+  }
+
+  Uri? _id3v22PictureArtworkUri(List<int> bytes) {
+    if (bytes.length < 6) {
+      return null;
+    }
+
+    final encoding = bytes[0];
+    final imageFormat = latin1.decode(
+      bytes.sublist(1, 4),
+      allowInvalid: true,
+    );
+    final mimeType = switch (imageFormat.toUpperCase()) {
+      'PNG' => 'image/png',
+      'JPG' || 'JPEG' => 'image/jpeg',
+      _ => null,
+    };
+    var imageStart = 5;
+    final descriptionTerminator = _id3v2TerminatorLength(encoding);
+    while (imageStart < bytes.length) {
+      if (_hasZeroTerminator(bytes, imageStart, descriptionTerminator)) {
+        imageStart += descriptionTerminator;
+        break;
+      }
+      imageStart += descriptionTerminator;
+    }
+
+    if (imageStart >= bytes.length) {
+      return null;
+    }
+
+    final imageBytes = bytes.sublist(imageStart);
+    return _artworkDataUri(
+      imageBytes,
+      mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
+    );
+  }
+
+  Uri? _flacPictureArtworkUri(List<int> bytes) {
+    var offset = 0;
+    if (offset + 8 > bytes.length) {
+      return null;
+    }
+
+    offset += 4; // Picture type.
+    final mimeLength = _uint32(bytes, offset);
+    offset += 4;
+    if (mimeLength < 0 || offset + mimeLength > bytes.length) {
+      return null;
+    }
+
+    final mimeType = _normalizeArtworkMimeType(
+      latin1.decode(bytes.sublist(offset, offset + mimeLength)),
+    );
+    offset += mimeLength;
+    if (offset + 4 > bytes.length) {
+      return null;
+    }
+
+    final descriptionLength = _uint32(bytes, offset);
+    offset += 4;
+    if (descriptionLength < 0 || offset + descriptionLength > bytes.length) {
+      return null;
+    }
+
+    offset += descriptionLength;
+    if (offset + 20 > bytes.length) {
+      return null;
+    }
+
+    offset += 16; // Width, height, color depth, and indexed colors.
+    final dataLength = _uint32(bytes, offset);
+    offset += 4;
+    if (dataLength <= 0 || offset + dataLength > bytes.length) {
+      return null;
+    }
+
+    final imageBytes = bytes.sublist(offset, offset + dataLength);
+    return _artworkDataUri(
+      imageBytes,
+      mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
+    );
+  }
+
+  Uri? _m4aDataAtomArtworkUri(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+  ) {
+    for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
+      if (!_matchesAscii(atom.typeBytes, 'data')) {
+        continue;
+      }
+
+      final payload = bytes.sublist(
+        startOffset + atom.payloadOffset,
+        startOffset + atom.payloadEnd,
+      );
+      if (payload.length <= 8) {
+        return null;
+      }
+
+      final dataType = _uint32(payload, 0) & 0xffffff;
+      final mimeType = switch (dataType) {
+        13 => 'image/jpeg',
+        14 => 'image/png',
+        _ => _inferArtworkMimeType(payload.sublist(8)),
+      };
+
+      return _artworkDataUri(payload.sublist(8), mimeType: mimeType);
+    }
+
+    return null;
+  }
+
+  int _id3v2TerminatorLength(int encoding) {
+    return encoding == 1 || encoding == 2 ? 2 : 1;
+  }
+
+  bool _hasZeroTerminator(List<int> bytes, int offset, int length) {
+    if (offset + length > bytes.length) {
+      return false;
+    }
+
+    for (var index = 0; index < length; index += 1) {
+      if (bytes[offset + index] != 0) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  Uri? _artworkDataUri(List<int> bytes, {String? mimeType}) {
+    if (bytes.isEmpty || bytes.length > _maxEmbeddedArtworkBytes) {
+      return null;
+    }
+
+    final normalizedMimeType =
+        _normalizeArtworkMimeType(mimeType) ?? _inferArtworkMimeType(bytes);
+    if (normalizedMimeType == null) {
+      return null;
+    }
+
+    return Uri.parse(
+      'data:$normalizedMimeType;base64,${base64Encode(bytes)}',
+    );
+  }
+
+  String? _inferArtworkMimeType(List<int> bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4e &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0d &&
+        bytes[5] == 0x0a &&
+        bytes[6] == 0x1a &&
+        bytes[7] == 0x0a) {
+      return 'image/png';
+    }
+
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xff &&
+        bytes[1] == 0xd8 &&
+        bytes[2] == 0xff) {
+      return 'image/jpeg';
+    }
+
+    return null;
+  }
+
+  String? _normalizeArtworkMimeType(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    return switch (normalized) {
+      'image/jpeg' || 'image/jpg' || 'jpg' || 'jpeg' => 'image/jpeg',
+      'image/png' || 'png' => 'image/png',
+      _ => null,
+    };
   }
 
   String _decodeUtf16(
@@ -976,9 +1236,21 @@ final class _Mp4Atom {
   final int payloadEnd;
 }
 
+final class _Id3v2TagData {
+  const _Id3v2TagData({
+    required this.textFrames,
+    this.artworkUri,
+  });
+
+  final Map<String, String> textFrames;
+  final Uri? artworkUri;
+}
+
 const _maxId3v2TagBytes = 1024 * 1024;
 const _maxFlacMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
+const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
 const _flacVorbisCommentBlockType = 4;
+const _flacPictureBlockType = 6;

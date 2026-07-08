@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -139,6 +140,29 @@ void main() {
     expect(result.tracks.single.genre, 'Dream Pop');
   });
 
+  test('extracts ID3v2 embedded artwork for MP3 files', () async {
+    await File(p.join(root.path, 'cover-track.mp3')).writeAsBytes(
+      <int>[
+        ..._id3v23Tag(
+          title: 'Artwork Title',
+          artist: 'Artwork Artist',
+          artworkBytes: _tinyPngBytes,
+        ),
+        1,
+        2,
+        3,
+      ],
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Artwork Title');
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+  });
+
   test('merges partial UTF-16 ID3v2 tags with filename metadata', () async {
     await File(
       p.join(root.path, '06 Filename Artist - Filename Title.mp3'),
@@ -178,6 +202,25 @@ void main() {
     expect(result.tracks.single.genre, 'Ambient / Drone');
   });
 
+  test('extracts FLAC picture block artwork', () async {
+    await File(p.join(root.path, 'picture.flac')).writeAsBytes(
+      _flacWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Picture Title'],
+        },
+        artworkBytes: _tinyPngBytes,
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Picture Title');
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+  });
+
   test('merges partial FLAC Vorbis comments with filename metadata', () async {
     await File(
       p.join(root.path, '08 Filename Artist - Filename Title.flac'),
@@ -212,6 +255,23 @@ void main() {
     expect(result.tracks.single.artist, 'M4A Artist');
     expect(result.tracks.single.album, 'M4A Album');
     expect(result.tracks.single.genre, 'Electropop');
+  });
+
+  test('extracts M4A cover artwork atoms', () async {
+    await File(p.join(root.path, 'cover.m4a')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'Cover Atom',
+        artworkBytes: _tinyPngBytes,
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Cover Atom');
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
   });
 
   test('merges partial M4A metadata atoms with filename metadata', () async {
@@ -298,6 +358,7 @@ List<int> _id3v23Tag({
   String artist = '',
   String album = '',
   String genre = '',
+  List<int>? artworkBytes,
   int encoding = _id3v2EncodingUtf8,
 }) {
   final frames = <int>[
@@ -305,6 +366,7 @@ List<int> _id3v23Tag({
     if (artist.isNotEmpty) ..._id3v23TextFrame('TPE1', artist, encoding),
     if (album.isNotEmpty) ..._id3v23TextFrame('TALB', album, encoding),
     if (genre.isNotEmpty) ..._id3v23TextFrame('TCON', genre, encoding),
+    if (artworkBytes != null) ..._id3v23PictureFrame(artworkBytes),
   ];
 
   return <int>[
@@ -316,6 +378,25 @@ List<int> _id3v23Tag({
     0x00,
     ..._id3v2SynchsafeSize(frames.length),
     ...frames,
+  ];
+}
+
+List<int> _id3v23PictureFrame(List<int> artworkBytes) {
+  final payload = <int>[
+    _id3v2EncodingUtf8,
+    ...'image/png'.codeUnits,
+    0,
+    3,
+    0,
+    ...artworkBytes,
+  ];
+
+  return <int>[
+    ...'APIC'.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
   ];
 }
 
@@ -370,8 +451,13 @@ List<int> _uint32Size(int size) {
 const _id3v2EncodingUtf8 = 3;
 const _id3v2EncodingUtf16 = 1;
 
-List<int> _flacWithVorbisComments(Map<String, List<String>> comments) {
+List<int> _flacWithVorbisComments(
+  Map<String, List<String>> comments, {
+  List<int>? artworkBytes,
+}) {
   final vorbisComments = _vorbisCommentBlock(comments);
+  final pictureBlock =
+      artworkBytes == null ? null : _flacPictureBlock(artworkBytes);
 
   return <int>[
     ...'fLaC'.codeUnits,
@@ -384,12 +470,35 @@ List<int> _flacWithVorbisComments(Map<String, List<String>> comments) {
     ..._flacMetadataBlockHeader(
       blockType: _flacVorbisCommentBlockType,
       length: vorbisComments.length,
-      isLast: true,
+      isLast: pictureBlock == null,
     ),
     ...vorbisComments,
+    if (pictureBlock != null) ...[
+      ..._flacMetadataBlockHeader(
+        blockType: _flacPictureBlockType,
+        length: pictureBlock.length,
+        isLast: true,
+      ),
+      ...pictureBlock,
+    ],
     0,
     1,
     2,
+  ];
+}
+
+List<int> _flacPictureBlock(List<int> artworkBytes) {
+  return <int>[
+    ..._uint32Size(3),
+    ..._uint32Size('image/png'.codeUnits.length),
+    ...'image/png'.codeUnits,
+    ..._uint32Size(0),
+    ..._uint32Size(1),
+    ..._uint32Size(1),
+    ..._uint32Size(24),
+    ..._uint32Size(0),
+    ..._uint32Size(artworkBytes.length),
+    ...artworkBytes,
   ];
 }
 
@@ -435,18 +544,21 @@ List<int> _uint32LittleEndianSize(int size) {
 
 const _flacStreamInfoBlockType = 0;
 const _flacVorbisCommentBlockType = 4;
+const _flacPictureBlockType = 6;
 
 List<int> _m4aWithMetadata({
   String title = '',
   String artist = '',
   String album = '',
   String genre = '',
+  List<int>? artworkBytes,
 }) {
   final items = <int>[
     if (title.isNotEmpty) ..._m4aTextItem(_m4aTitleAtomType, title),
     if (artist.isNotEmpty) ..._m4aTextItem(_m4aArtistAtomType, artist),
     if (album.isNotEmpty) ..._m4aTextItem(_m4aAlbumAtomType, album),
     if (genre.isNotEmpty) ..._m4aTextItem(_m4aGenreAtomType, genre),
+    if (artworkBytes != null) ..._m4aArtworkItem(artworkBytes),
   ];
   final ilst = _mp4Atom('ilst', items);
   final meta = _mp4Atom('meta', <int>[0, 0, 0, 0, ...ilst]);
@@ -478,6 +590,23 @@ List<int> _m4aTextItem(List<int> atomType, String value) {
   );
 }
 
+List<int> _m4aArtworkItem(List<int> artworkBytes) {
+  return _mp4Atom(
+    'covr',
+    _mp4Atom(
+      'data',
+      <int>[
+        ..._uint32Size(14),
+        0,
+        0,
+        0,
+        0,
+        ...artworkBytes,
+      ],
+    ),
+  );
+}
+
 List<int> _mp4Atom(String type, List<int> payload) {
   return _mp4AtomBytes(type.codeUnits, payload);
 }
@@ -494,3 +623,73 @@ const _m4aTitleAtomType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _m4aArtistAtomType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _m4aAlbumAtomType = <int>[0xa9, 0x61, 0x6c, 0x62];
 const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
+
+const _tinyPngBytes = <int>[
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a,
+  0x00,
+  0x00,
+  0x00,
+  0x0d,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1f,
+  0x15,
+  0xc4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0a,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9c,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0d,
+  0x0a,
+  0x2d,
+  0xb4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4e,
+  0x44,
+  0xae,
+  0x42,
+  0x60,
+  0x82,
+];

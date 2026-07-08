@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../player/offline_playback_policy.dart';
 import '../../player/player_controller.dart';
+import 'track_artwork.dart';
 
 class PlayerBar extends StatelessWidget {
   const PlayerBar({
@@ -75,7 +76,11 @@ class PlayerBar extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Row(
                 children: <Widget>[
-                  const CircleAvatar(child: Icon(Icons.music_note)),
+                  TrackArtwork(
+                    artworkUri: current.artworkUri,
+                    size: 40,
+                    borderRadius: 20,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

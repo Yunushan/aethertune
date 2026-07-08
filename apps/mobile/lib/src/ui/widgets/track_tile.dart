@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/track.dart';
+import 'track_artwork.dart';
 
 class TrackTile extends StatelessWidget {
   const TrackTile({
@@ -39,7 +40,10 @@ class TrackTile extends StatelessWidget {
         : '$baseSubtitle\n$detail';
 
     return ListTile(
-      leading: const CircleAvatar(child: Icon(Icons.music_note)),
+      leading: TrackArtwork(
+        artworkUri: track.artworkUri,
+        borderRadius: 22,
+      ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         subtitle,
