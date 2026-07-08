@@ -48,7 +48,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests, including theme preference, offline mode, and queued offline media requests. | File-based import/export and migration tooling. |
 | Stored metadata editing | Scaffolded | Track menus edit saved title, artist, album, and genre, with store tests for persistence/search/browse/suggestions. | Audio tag writer, artwork editing, scanner reconciliation, and rollback handling. |
 | Duplicate resolver | Scaffolded | Options tab finds duplicate library tracks by normalized local path, provider/external ID, stream URL, or metadata plus known duration, then merges the selected keeper while preserving playlists, favorites, lyrics, history, and progress; store tests cover detection and persistence. | Audio fingerprinting, file hashes, scanner reconciliation, batch review UI, and undo. |
-| Search | Done | Local title/artist/album/genre/source/folder filtering plus submitted-query/playback/metadata suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
+| Search | Done | Local title/artist/album/genre/source/folder/saved-lyrics filtering plus submitted-query/playback/metadata suggestion chips and Sources-tab provider search fan-out/ranking. | Main-library provider merge, pagination, typo tolerance, and richer global ranking. |
 | Recently added / library sort | Done | Store sort modes, Library sort menu, and unit coverage. | More smart filters and saved views. |
 | Favorites | Done | Toggle and filter favorites. | Sync, smart filters, import/export. |
 | Queue | Done | Current list can be played, restored across app launches, reordered, trimmed, and saved as a playlist. | Cross-device queue sync. |
@@ -109,7 +109,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Local library search | Done | All music apps | Searches title, artist, album, genre, source, and folder; advanced filters and typo tolerance remain. |
+| Local library search | Done | All music apps | Searches title, artist, album, genre, source, folder, and locally saved plain/LRC lyric text; advanced filters, provider merge, and typo tolerance remain. |
 | Multi-provider search | Scaffolded | Spotube, Grayjay, Echo Music | `ProviderSearchCoordinator` fans out to searchable adapters, ranks mixed results, limits per-provider results, resolves metadata-only tracks when supported, captures provider-specific errors, has unit tests, and Sources tab can search Demo Provider, Radio Browser, and Internet Archive together. Needed next: local-library merge, provider pagination, authenticated provider opt-in, and richer provider-specific ranking. |
 | Search suggestions | Scaffolded | YouTube Music | Library tab suggestion chips come from persisted submitted query history, recent playback, title, artist, album, genre, source, and folder metadata; store tests cover history dedupe, persistence, backup restore, and matching. Needed next: provider suggestions, typo-aware ranking, and remote suggestions. |
 | Home feed | Scaffolded | YouTube Music, InnerTune, RiMusic | Local Home tab builds local recommendations, mood/activity mixes, continue-listening, recently played, radio seed, most played, favorites, recently added, and local charts sections from the on-device library. Needed next: provider-backed feed sections, pagination, refresh controls, and account/provider personalization where legal. |
@@ -126,11 +126,11 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Current queue playback | Done | All music apps | Cross-device queue sync and richer queue actions. |
 | Manual playlists | Done | All music apps | Local artwork picker/cropper, generated artwork collages, and sync. |
-| Smart playlists | Scaffolded | Namida, desktop players | Built-in dynamic playlists plus persisted user-created smart rules are implemented for search text, favorites-only, minimum play count, sort mode, and result limit. Needed next: nested rule builder, artwork, sync, and shared dynamic queries. |
+| Smart playlists | Scaffolded | Namida, desktop players | Built-in dynamic playlists plus persisted user-created smart rules are implemented for metadata/lyrics search text, favorites-only, minimum play count, sort mode, and result limit. Needed next: nested rule builder, artwork, sync, and shared dynamic queries. |
 | Playlist artwork | Scaffolded | YouTube Music, Namida, RiMusic | Manual playlist menu accepts or clears http/https artwork URLs; playlist cards and sheets render artwork with a stable fallback; AetherTune JSON exports/imports and full backups preserve the artwork URI. Needed next: local picker/cropper, generated collages from tracks, image cache policy, and cross-device sync. |
 | Collaborative/shared playlists | Roadmap | YouTube Music | Server sync and permissions. |
 | Playlist import/export | Done | Spotube, YouTube Music migration needs | JSON, M3U, and CSV import/export are implemented for tracks already in the local library. |
-| Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, or album while preserving playlist order. |
+| Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, album, or locally saved lyrics while preserving playlist order. |
 | Save queue as playlist | Done | Common player feature | Bulk queue actions and sync. |
 | Radio queue generation | Scaffolded | YouTube Music, RiMusic | Local seed-based queue builder is implemented for playable library tracks and starts playback with the seed first. Needed next: provider recommendation adapters, richer ranking, and saved/generated radio playlists. |
 
@@ -140,7 +140,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Plain lyrics | Done | YouTube Music, InnerTune, Namida | Provider-backed lyrics, richer display, sharing. |
 | Synced LRC lyrics | Done | InnerTune, RiMusic, Namida | LRC parser, timestamped editor preview, and playback-linked now-playing highlighting/autoscroll are implemented; provider LRC fetching remains separate. |
-| Lyrics search | Roadmap | YouTube Music | Official/open lyrics provider. |
+| Lyrics search | Scaffolded | YouTube Music | Library, playlist, and custom smart playlist search match locally saved plain/LRC lyric text and strip LRC timestamps from searchable content, with store coverage. Needed next: official/open lyrics provider search, ranking, provider attribution, and rights-aware caching. |
 | Offline lyrics cache | Roadmap | InnerTune, Namida | Cache store and invalidation. |
 | Lyrics sharing cards | Scaffolded | YouTube Music | Lyrics editor and now-playing lyrics sheets can copy a bounded AetherTune lyrics excerpt from saved or draft plain/LRC lyrics, stripping LRC timestamps and limiting shared lines by default. Needed next: rendered image cards, selected-line ranges, platform share sheets, artwork backgrounds, rights-aware provider permissions, and deep links. |
 | Manual lyrics import/edit | Scaffolded | Local library players | Manual editor imports UTF-8 `.txt` and `.lrc` files through the platform file picker, previews parsed synced LRC lines, saves/deletes per-track lyrics, and copies bounded share excerpts. Needed next: automatic sidecar association, embedded tag import, batch matching, and provider-backed lyric import where legal. |

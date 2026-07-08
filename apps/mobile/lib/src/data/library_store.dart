@@ -3741,7 +3741,7 @@ class LibraryStore extends ChangeNotifier {
   String _normalizeQuery(String query) => query.trim().toLowerCase();
 
   bool _trackMatchesQuery(Track track, String normalizedQuery) {
-    return <String>[
+    final metadataMatches = <String>[
       track.title,
       track.artist,
       track.album,
@@ -3749,6 +3749,17 @@ class LibraryStore extends ChangeNotifier {
       _browseLabelForTrack(track, LibraryBrowseType.source),
       _browseLabelForTrack(track, LibraryBrowseType.folder),
     ].any((value) => value.toLowerCase().contains(normalizedQuery));
+    if (metadataMatches) {
+      return true;
+    }
+
+    final lyrics = _lyricsByTrackId[track.id];
+    if (lyrics == null) {
+      return false;
+    }
+
+    return _shareLyricsLines(lyrics)
+        .any((line) => line.toLowerCase().contains(normalizedQuery));
   }
 
   void _sortCustomSmartPlaylistTracks(

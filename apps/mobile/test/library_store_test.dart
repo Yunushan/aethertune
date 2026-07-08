@@ -1414,6 +1414,72 @@ void main() {
     expect(store.search('ambient').single.id, 'new');
   });
 
+  test(
+    'searches saved plain and synced lyrics without timestamp matches',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'plain',
+          title: 'Plain Song',
+          artist: 'Mira',
+          addedAt: DateTime.utc(2026, 1, 1),
+        ),
+        _track(
+          'synced',
+          title: 'Synced Song',
+          artist: 'Ari',
+          addedAt: DateTime.utc(2026, 1, 2),
+        ),
+        _track(
+          'other',
+          title: 'Quiet Song',
+          artist: 'Orion',
+          addedAt: DateTime.utc(2026, 1, 3),
+        ),
+      ]);
+      await store.setLyrics('plain', 'Hidden aurora line\nsecond line');
+      await store.setLyrics(
+        'synced',
+        '[00:01.00]Silver chorus\n[00:05.25]Midnight bridge',
+      );
+      await store.setLyrics('other', 'different words');
+      final playlist = await store.createPlaylist(
+        'Lyric Search',
+        trackIds: <String>['other', 'plain', 'synced'],
+      );
+      final smartRule = await store.createCustomSmartPlaylist(
+        name: 'Aurora lyrics',
+        query: 'aurora',
+        sortMode: CustomSmartPlaylistSortMode.title,
+        limit: 10,
+      );
+
+      expect(
+        store.search('aurora').map((track) => track.id),
+        <String>['plain'],
+      );
+      expect(
+        store.search('silver chorus').map((track) => track.id),
+        <String>['synced'],
+      );
+      expect(store.search('00:01'), isEmpty);
+      expect(
+        store.tracksForPlaylist(playlist.id, query: 'midnight').map(
+              (track) => track.id,
+            ),
+        <String>['synced'],
+      );
+      expect(
+        store.tracksForCustomSmartPlaylist(smartRule.id).map(
+              (track) => track.id,
+            ),
+        <String>['plain'],
+      );
+    },
+  );
+
   test('filters library searches to local offline-playable tracks', () async {
     final store = LibraryStore();
     await store.load();
