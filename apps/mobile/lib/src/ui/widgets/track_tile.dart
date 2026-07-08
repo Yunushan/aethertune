@@ -6,6 +6,7 @@ class TrackTile extends StatelessWidget {
   const TrackTile({
     required this.track,
     required this.onPlay,
+    this.onStartRadio,
     required this.onFavorite,
     required this.onAddToPlaylist,
     required this.onLyrics,
@@ -16,6 +17,7 @@ class TrackTile extends StatelessWidget {
 
   final Track track;
   final VoidCallback onPlay;
+  final VoidCallback? onStartRadio;
   final VoidCallback onFavorite;
   final VoidCallback onAddToPlaylist;
   final VoidCallback onLyrics;
@@ -38,6 +40,9 @@ class TrackTile extends StatelessWidget {
           switch (action) {
             case _TrackAction.play:
               onPlay();
+              break;
+            case _TrackAction.startRadio:
+              onStartRadio?.call();
               break;
             case _TrackAction.favorite:
               onFavorite();
@@ -64,6 +69,14 @@ class TrackTile extends StatelessWidget {
               title: Text('Play'),
             ),
           ),
+          if (onStartRadio != null)
+            const PopupMenuItem(
+              value: _TrackAction.startRadio,
+              child: ListTile(
+                leading: Icon(Icons.radio_outlined),
+                title: Text('Start radio'),
+              ),
+            ),
           PopupMenuItem(
             value: _TrackAction.favorite,
             child: ListTile(
@@ -109,6 +122,7 @@ class TrackTile extends StatelessWidget {
 
 enum _TrackAction {
   play,
+  startRadio,
   favorite,
   addToPlaylist,
   lyrics,

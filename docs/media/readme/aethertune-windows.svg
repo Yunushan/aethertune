@@ -1,6 +1,6 @@
 <svg width="1040" height="620" viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">AetherTune Windows preview</title>
-  <desc id="desc">Windows desktop preview showing a wide AetherTune layout with library, provider search, queue, and mini player.</desc>
+  <desc id="desc">Windows desktop preview showing a wide AetherTune layout with library, provider search, radio queues, and mini player.</desc>
   <defs>
     <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#f8fafc"/>
@@ -49,7 +49,7 @@
   <rect x="294" y="386" width="620" height="94" rx="24" fill="#111827"/>
   <rect x="318" y="410" width="54" height="54" rx="15" fill="#38bdf8"/>
   <text x="396" y="428" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#f8fafc">Desktop queue and mini player</text>
-  <text x="396" y="452" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#cbd5e1">Persistent queue, shuffle, repeat, sleep timer</text>
+  <text x="396" y="452" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#cbd5e1">Persistent queue, start radio, shuffle, repeat</text>
   <rect x="722" y="430" width="130" height="8" rx="4" fill="#334155"/>
   <rect x="722" y="430" width="82" height="8" rx="4" fill="#38bdf8"/>
   <rect x="400" y="544" width="240" height="16" rx="8" fill="#1f2937"/>

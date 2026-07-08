@@ -255,6 +255,28 @@ class LibraryStatsGroup {
   final DateTime? lastPlayedAt;
 }
 
+class TrackRadioSeedQueue {
+  const TrackRadioSeedQueue({
+    required this.seedTrack,
+    required this.tracks,
+  });
+
+  final Track seedTrack;
+  final List<Track> tracks;
+}
+
+final class _TrackRadioCandidate {
+  const _TrackRadioCandidate({
+    required this.track,
+    required this.score,
+    this.lastPlayedAt,
+  });
+
+  final Track track;
+  final int score;
+  final DateTime? lastPlayedAt;
+}
+
 CustomSmartPlaylistSortMode _customSmartPlaylistSortModeFromName(
   String? value,
 ) {
@@ -1115,6 +1137,54 @@ class LibraryStore extends ChangeNotifier {
     _sortCustomSmartPlaylistTracks(tracks, rule.sortMode);
 
     return tracks.take(rule.limit).toList(growable: false);
+  }
+
+  TrackRadioSeedQueue? radioQueueForTrack(String seedTrackId, {int limit = 50}) {
+    if (limit <= 0) {
+      return null;
+    }
+
+    final seedIndex = _tracks.indexWhere((track) => track.id == seedTrackId);
+    if (seedIndex == -1) {
+      return null;
+    }
+
+    final seedTrack = _tracks[seedIndex];
+    if (!seedTrack.isPlayable) {
+      return null;
+    }
+
+    final candidates = <_TrackRadioCandidate>[];
+    for (final track in _tracks) {
+      if (track.id == seedTrack.id || !track.isPlayable) {
+        continue;
+      }
+
+      final score = _radioScoreForTrack(seedTrack, track);
+      if (score <= 0) {
+        continue;
+      }
+
+      candidates.add(
+        _TrackRadioCandidate(
+          track: track,
+          score: score,
+          lastPlayedAt: lastPlayedAt(track.id),
+        ),
+      );
+    }
+
+    candidates.sort(_compareTrackRadioCandidates);
+
+    return TrackRadioSeedQueue(
+      seedTrack: seedTrack,
+      tracks: <Track>[
+        seedTrack,
+        ...candidates
+            .map((candidate) => candidate.track)
+            .take(limit - 1),
+      ],
+    );
   }
 
   LibraryStatsSummary libraryStats({
@@ -2888,6 +2958,64 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return _compareByLastPlayedThenTitle(a, b);
+  }
+
+  int _radioScoreForTrack(Track seedTrack, Track track) {
+    var score = 0;
+    if (_sameKnownMetadata(seedTrack.artist, track.artist)) {
+      score += 100;
+    }
+    if (_sameKnownMetadata(seedTrack.genre, track.genre)) {
+      score += 40;
+    }
+    if (_sameKnownMetadata(seedTrack.album, track.album)) {
+      score += 20;
+    }
+    if (score == 0) {
+      return 0;
+    }
+
+    if (track.isFavorite) {
+      score += 10;
+    }
+    score += playCountForTrack(track.id) * 3;
+
+    return score;
+  }
+
+  bool _sameKnownMetadata(String left, String right) {
+    final normalizedLeft = left.trim().toLowerCase();
+    final normalizedRight = right.trim().toLowerCase();
+    if (normalizedLeft.isEmpty ||
+        normalizedRight.isEmpty ||
+        normalizedLeft == 'unknown' ||
+        normalizedRight == 'unknown' ||
+        normalizedLeft.startsWith('unknown ') ||
+        normalizedRight.startsWith('unknown ')) {
+      return false;
+    }
+
+    return normalizedLeft == normalizedRight;
+  }
+
+  int _compareTrackRadioCandidates(
+    _TrackRadioCandidate a,
+    _TrackRadioCandidate b,
+  ) {
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) {
+      return byScore;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareText(a.track.title, b.track.title);
   }
 
   int _compareLibraryStatsTrack(

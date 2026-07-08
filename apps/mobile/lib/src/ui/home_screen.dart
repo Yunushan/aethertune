@@ -1590,6 +1590,9 @@ class _LibraryTab extends StatelessWidget {
                     track,
                     queue: tracks,
                   ),
+                  onStartRadio: () => unawaited(
+                    _startTrackRadio(context, player, library, track),
+                  ),
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
                   onLyrics: () => onLyrics(track),
@@ -1756,6 +1759,9 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                   library,
                   track,
                   queue: tracks,
+                ),
+                onStartRadio: () => unawaited(
+                  _startTrackRadio(context, player, library, track),
                 ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
@@ -2769,6 +2775,9 @@ class _SmartPlaylistSheet extends StatelessWidget {
                   track,
                   queue: tracks,
                 ),
+                onStartRadio: () => unawaited(
+                  _startTrackRadio(context, player, library, track),
+                ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
@@ -2862,6 +2871,9 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
                   library,
                   track,
                   queue: tracks,
+                ),
+                onStartRadio: () => unawaited(
+                  _startTrackRadio(context, player, library, track),
                 ),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
@@ -3872,6 +3884,22 @@ Future<void> _playTrackWithResume(
   Track track, {
   required List<Track> queue,
 }) async {
+  await _tryPlayTrackWithResume(
+    context,
+    player,
+    library,
+    track,
+    queue: queue,
+  );
+}
+
+Future<bool> _tryPlayTrackWithResume(
+  BuildContext context,
+  PlayerController player,
+  LibraryStore library,
+  Track track, {
+  required List<Track> queue,
+}) async {
   final initialPosition = _tracksPodcastProgress(track)
       ? library.playbackProgressForTrack(track.id)?.position
       : null;
@@ -3884,13 +3912,54 @@ Future<void> _playTrackWithResume(
     );
   } on OfflinePlaybackBlockedException catch (error) {
     if (!context.mounted) {
-      return;
+      return false;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
     );
+    return false;
   }
+
+  return true;
+}
+
+Future<void> _startTrackRadio(
+  BuildContext context,
+  PlayerController player,
+  LibraryStore library,
+  Track seedTrack,
+) async {
+  final radioQueue = library.radioQueueForTrack(seedTrack.id);
+  if (radioQueue == null || radioQueue.tracks.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('No playable radio queue for ${seedTrack.title}.'),
+      ),
+    );
+    return;
+  }
+
+  final started = await _tryPlayTrackWithResume(
+    context,
+    player,
+    library,
+    radioQueue.seedTrack,
+    queue: radioQueue.tracks,
+  );
+
+  if (!started || !context.mounted) {
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'Started ${radioQueue.tracks.length}-track radio from '
+        '${seedTrack.title}.',
+      ),
+    ),
+  );
 }
 
 String _formatDurationLabel(Duration duration) {

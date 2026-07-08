@@ -1523,6 +1523,75 @@ void main() {
     );
   });
 
+  test(
+    'builds local track radio queues from seed metadata and history',
+    () async {
+      var now = DateTime.utc(2026, 1, 14, 13);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'seed',
+          title: 'Seed Signal',
+          artist: 'Mira',
+          album: 'Dawn',
+          genre: 'Ambient',
+        ),
+        _track(
+          'same-artist',
+          title: 'Mira Echo',
+          artist: 'Mira',
+          album: 'Elsewhere',
+          genre: 'Folk',
+        ),
+        _track(
+          'same-genre',
+          title: 'Ambient Field',
+          artist: 'Ari',
+          album: 'Clouds',
+          genre: 'Ambient',
+        ),
+        _track(
+          'same-album',
+          title: 'Dawn Interlude',
+          artist: 'Nova',
+          album: 'Dawn',
+          genre: 'Jazz',
+        ),
+        _track(
+          'unplayable',
+          title: 'Metadata Only',
+          artist: 'Mira',
+          album: 'Dawn',
+          genre: 'Ambient',
+          localPath: '',
+        ),
+        _track(
+          'unrelated',
+          title: 'Elsewhere',
+          artist: 'Orion',
+          album: 'Night',
+          genre: 'Jazz',
+        ),
+      ]);
+      await store.toggleFavorite('same-genre');
+      await store.recordPlayback('same-album');
+      now = DateTime.utc(2026, 1, 14, 13, 1);
+      await store.recordPlayback('same-artist');
+
+      final radioQueue = store.radioQueueForTrack('seed')!;
+
+      expect(radioQueue.seedTrack.id, 'seed');
+      expect(
+        radioQueue.tracks.map((track) => track.id),
+        <String>['seed', 'same-artist', 'same-genre', 'same-album'],
+      );
+      expect(store.radioQueueForTrack('seed', limit: 2)!.tracks, hasLength(2));
+      expect(store.radioQueueForTrack('missing'), isNull);
+      expect(store.radioQueueForTrack('unplayable'), isNull);
+    },
+  );
+
   test('creates updates and persists custom smart playlist rules', () async {
     var now = DateTime.utc(2026, 1, 15, 12);
     final store = LibraryStore(clock: () => now);

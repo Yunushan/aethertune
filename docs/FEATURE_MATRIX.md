@@ -115,7 +115,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Home feed | Roadmap | YouTube Music, InnerTune, RiMusic | Feed sections from legal providers. |
 | Charts / trending | Roadmap | YouTube Music, OpenTune-style clients | Provider-backed chart adapters. |
 | Mood/activity mixes | Roadmap | YouTube Music | Curated or provider-backed collections. |
-| Artist radio / track radio | Roadmap | YouTube Music, InnerTune | Recommendation provider and queue generator. |
+| Artist radio / track radio | Scaffolded | YouTube Music, InnerTune | Local seed track radio queues match playable library tracks by artist, genre, or album, then rank them with favorites and play history from every track menu. Needed next: provider-backed recommendations, artist pages, and remote radio seeds. |
 | Personalized recommendations | Roadmap | YouTube Music | Local preference model or official provider APIs. |
 | Similar artists/albums | Roadmap | YouTube Music | Metadata provider and browse UI. |
 | Concert alerts / artist updates | Roadmap | YouTube Music | Official/event provider integration. |
@@ -132,7 +132,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Playlist import/export | Done | Spotube, YouTube Music migration needs | JSON, M3U, and CSV import/export are implemented for tracks already in the local library. |
 | Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, or album while preserving playlist order. |
 | Save queue as playlist | Done | Common player feature | Bulk queue actions and sync. |
-| Radio queue generation | Roadmap | YouTube Music, RiMusic | Seed-based queue builder. |
+| Radio queue generation | Scaffolded | YouTube Music, RiMusic | Local seed-based queue builder is implemented for playable library tracks and starts playback with the seed first. Needed next: provider recommendation adapters, richer ranking, and saved/generated radio playlists. |
 
 ### Lyrics
 

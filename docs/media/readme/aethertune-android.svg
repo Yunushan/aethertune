@@ -1,6 +1,6 @@
 <svg width="420" height="760" viewBox="0 0 420 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">AetherTune Android preview</title>
-  <desc id="desc">Android phone preview showing AetherTune library search, local tracks, provider search, and a mini player.</desc>
+  <desc id="desc">Android phone preview showing AetherTune library search, local tracks, provider search, start radio, and a mini player.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0f172a"/>
@@ -31,7 +31,7 @@
     <rect width="264" height="70" rx="18" fill="#ffffff" stroke="#e5e7eb"/>
     <rect x="16" y="14" width="42" height="42" rx="12" fill="url(#accent)"/>
     <text x="72" y="31" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#111827">Local Mix</text>
-    <text x="72" y="52" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Folder import / queue ready</text>
+    <text x="72" y="52" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="12" fill="#64748b">Folder import / start radio</text>
     <path d="M235 26l18 9-18 9z" fill="#0f766e"/>
   </g>
   <g transform="translate(78 306)">

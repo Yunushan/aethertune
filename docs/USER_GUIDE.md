@@ -58,7 +58,7 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 ## Queue controls
 
-When you play a track from the library, the current filtered list becomes the queue. AetherTune restores that queue when you reopen the app. Use previous/next controls in the player bar, the queue button to move tracks up/down or remove upcoming tracks, or the playlist-add button to save the current queue as a playlist.
+When you play a track from the library, the current filtered list becomes the queue. Open a track menu and choose **Start radio** to build a local seed queue from playable tracks with matching artist, genre, or album, ranked by favorites and play history. AetherTune restores the current queue when you reopen the app. Use previous/next controls in the player bar, the queue button to move tracks up/down or remove upcoming tracks, or the playlist-add button to save the current queue as a playlist.
 
 ## History
 
