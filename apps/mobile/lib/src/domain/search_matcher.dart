@@ -169,7 +169,7 @@ double _termMatchQuality(
 }
 
 int _maxTypoDistance(String term) {
-  if (term.length <= 2) {
+  if (term.length <= 3) {
     return 0;
   }
   if (term.length <= 5) {
