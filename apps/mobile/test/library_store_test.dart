@@ -768,6 +768,67 @@ void main() {
     expect(csvDocument, contains(to.toIso8601String()));
   });
 
+  test('builds local chart snapshots for selected ranges', () async {
+    var now = DateTime.utc(2026, 2, 1, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'old',
+        title: 'Old Signal',
+        artist: 'Ari',
+        album: 'Archive',
+        genre: 'Folk',
+        duration: const Duration(minutes: 5),
+      ),
+      _track(
+        'recent',
+        title: 'Recent Signal',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        'newer',
+        title: 'Newer Signal',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 4),
+      ),
+    ]);
+
+    now = DateTime.utc(2025, 12, 1, 12);
+    await store.recordPlayback('old');
+    now = DateTime.utc(2026, 1, 20, 12);
+    await store.recordPlayback('recent');
+    now = DateTime.utc(2026, 1, 30, 12);
+    await store.recordPlayback('newer');
+    now = DateTime.utc(2026, 2, 1, 12);
+
+    final monthly = store.localCharts(
+      range: LibraryChartRange.thirtyDays,
+      limit: 2,
+    );
+    final allTime = store.localCharts(range: LibraryChartRange.allTime);
+
+    expect(monthly.range, LibraryChartRange.thirtyDays);
+    expect(monthly.stats.from, DateTime.utc(2026, 1, 2, 12));
+    expect(monthly.stats.to, now);
+    expect(monthly.stats.playbackCount, 2);
+    expect(
+      monthly.stats.topTracks.map((trackStats) => trackStats.track.id),
+      <String>['newer', 'recent'],
+    );
+    expect(monthly.stats.topArtists.single.label, 'Mira');
+    expect(allTime.stats.playbackCount, 3);
+    expect(
+      allTime.stats.topTracks.map((trackStats) => trackStats.track.id),
+      contains('old'),
+    );
+  });
+
   test('removing a library track removes its playback history', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 9),

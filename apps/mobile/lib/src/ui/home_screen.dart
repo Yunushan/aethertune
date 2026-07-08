@@ -1428,7 +1428,7 @@ class _QueueTrackTile extends StatelessWidget {
 
 enum _QueueTrackAction { moveUp, moveDown, remove }
 
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.onImport,
     required this.onImportFolder,
@@ -1442,6 +1442,13 @@ class _HomeTab extends StatelessWidget {
   final ValueChanged<Track> onLyrics;
 
   @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
+
+  @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final player = context.read<PlayerController>();
@@ -1451,10 +1458,11 @@ class _HomeTab extends StatelessWidget {
     }
 
     final sections = library.homeFeedSections();
+    final charts = library.localCharts(range: _chartRange);
     if (sections.isEmpty) {
       return _EmptyHomeFeed(
-        onImport: onImport,
-        onImportFolder: onImportFolder,
+        onImport: widget.onImport,
+        onImportFolder: widget.onImportFolder,
       );
     }
 
@@ -1480,8 +1488,8 @@ class _HomeTab extends StatelessWidget {
                 _startTrackRadio(context, player, library, track),
               ),
               onFavorite: () => library.toggleFavorite(track.id),
-              onAddToPlaylist: () => onAddToPlaylist(track),
-              onLyrics: () => onLyrics(track),
+              onAddToPlaylist: () => widget.onAddToPlaylist(track),
+              onLyrics: () => widget.onLyrics(track),
               onEditMetadata: () => unawaited(
                 _showTrackMetadataEditor(context, track),
               ),
@@ -1489,6 +1497,14 @@ class _HomeTab extends StatelessWidget {
             ),
           const SizedBox(height: 12),
         ],
+        if (charts.stats.playbackCount > 0)
+          _LocalChartsPreview(
+            snapshot: charts,
+            selectedRange: _chartRange,
+            onRangeChanged: (range) {
+              setState(() => _chartRange = range);
+            },
+          ),
       ],
     );
   }
@@ -1507,6 +1523,84 @@ class _HomeSectionHeader extends StatelessWidget {
       title: Text(_homeSectionTitle(section.type)),
       subtitle: Text(_homeSectionSubtitle(section.type)),
       trailing: Text('${section.tracks.length}'),
+    );
+  }
+}
+
+class _LocalChartsPreview extends StatelessWidget {
+  const _LocalChartsPreview({
+    required this.snapshot,
+    required this.selectedRange,
+    required this.onRangeChanged,
+  });
+
+  final LibraryChartsSnapshot snapshot;
+  final LibraryChartRange selectedRange;
+  final ValueChanged<LibraryChartRange> onRangeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = snapshot.stats;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const SizedBox(height: 4),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Local charts',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: DropdownButtonFormField<LibraryChartRange>(
+                initialValue: selectedRange,
+                decoration: const InputDecoration(
+                  labelText: 'Range',
+                  prefixIcon: Icon(Icons.bar_chart),
+                ),
+                items: <DropdownMenuItem<LibraryChartRange>>[
+                  for (final range in LibraryChartRange.values)
+                    DropdownMenuItem<LibraryChartRange>(
+                      value: range,
+                      child: Text(_libraryChartRangeLabel(range)),
+                    ),
+                ],
+                onChanged: (range) {
+                  if (range != null) {
+                    onRangeChanged(range);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _LibraryStatsOverview(stats: stats),
+        const SizedBox(height: 16),
+        _LibraryStatsTrackSection(stats: stats),
+        const SizedBox(height: 12),
+        _LibraryStatsGroupSection(
+          title: 'Top artists',
+          icon: Icons.person_outline,
+          groups: stats.topArtists,
+        ),
+        const SizedBox(height: 12),
+        _LibraryStatsGroupSection(
+          title: 'Top albums',
+          icon: Icons.album_outlined,
+          groups: stats.topAlbums,
+        ),
+        const SizedBox(height: 12),
+        _LibraryStatsGroupSection(
+          title: 'Top genres',
+          icon: Icons.category_outlined,
+          groups: stats.topGenres,
+        ),
+      ],
     );
   }
 }
@@ -1609,6 +1703,19 @@ String _homeSectionSubtitle(LibraryHomeSectionType type) {
       return 'Hearted tracks';
     case LibraryHomeSectionType.recentlyAdded:
       return 'Newest imports';
+  }
+}
+
+String _libraryChartRangeLabel(LibraryChartRange range) {
+  switch (range) {
+    case LibraryChartRange.allTime:
+      return 'All time';
+    case LibraryChartRange.sevenDays:
+      return 'Last 7 days';
+    case LibraryChartRange.thirtyDays:
+      return 'Last 30 days';
+    case LibraryChartRange.year:
+      return 'Last year';
   }
 }
 

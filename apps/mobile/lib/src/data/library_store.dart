@@ -45,6 +45,8 @@ enum LibraryHomeSectionType {
   recentlyAdded,
 }
 
+enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
+
 enum CustomSmartPlaylistSortMode {
   recentlyAdded,
   title,
@@ -131,6 +133,16 @@ class LibraryHomeSection {
 
   final LibraryHomeSectionType type;
   final List<Track> tracks;
+}
+
+class LibraryChartsSnapshot {
+  const LibraryChartsSnapshot({
+    required this.range,
+    required this.stats,
+  });
+
+  final LibraryChartRange range;
+  final LibraryStatsSummary stats;
 }
 
 class CustomSmartPlaylist {
@@ -1169,6 +1181,20 @@ class LibraryStore extends ChangeNotifier {
     return sections;
   }
 
+  LibraryChartsSnapshot localCharts({
+    LibraryChartRange range = LibraryChartRange.thirtyDays,
+    int limit = 5,
+  }) {
+    final now = _clock();
+    final from = _libraryChartRangeStart(range, now);
+    final to = range == LibraryChartRange.allTime ? null : now;
+
+    return LibraryChartsSnapshot(
+      range: range,
+      stats: libraryStats(limit: limit, from: from, to: to),
+    );
+  }
+
   CustomSmartPlaylist? customSmartPlaylistById(String id) {
     final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
     if (index == -1) {
@@ -2109,6 +2135,19 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  DateTime? _libraryChartRangeStart(LibraryChartRange range, DateTime now) {
+    switch (range) {
+      case LibraryChartRange.allTime:
+        return null;
+      case LibraryChartRange.sevenDays:
+        return now.subtract(const Duration(days: 7));
+      case LibraryChartRange.thirtyDays:
+        return now.subtract(const Duration(days: 30));
+      case LibraryChartRange.year:
+        return now.subtract(const Duration(days: 365));
+    }
   }
 
   List<Track> _mostPlayedTracks({required int limit}) {

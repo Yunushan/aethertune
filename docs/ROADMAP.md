@@ -9,6 +9,7 @@
 - [x] Local import
 - [x] Local playback
 - [x] Local Home feed sections
+- [x] Local charts by playback range
 - [x] Listening history
 - [x] Queue
 - [x] Queue reorder/remove

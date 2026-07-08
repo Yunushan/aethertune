@@ -34,7 +34,7 @@ dart run bin/server.dart
 
 ## Home
 
-The Home tab shows local feed sections for in-progress tracks, recently played tracks, radio seeds with local matches, most played tracks, favorites, and recently added tracks. Tap a track to play that section as the queue, or open its menu for lyrics, playlists, metadata edits, favorites, removal, and radio.
+The Home tab shows local feed sections for in-progress tracks, recently played tracks, radio seeds with local matches, most played tracks, favorites, recently added tracks, and local charts. The chart range selector can show all-time, last-7-days, last-30-days, or last-year top tracks, artists, albums, and genres from playback history. Tap a track to play that section as the queue, or open its menu for lyrics, playlists, metadata edits, favorites, removal, and radio.
 
 ## Search
 
