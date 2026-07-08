@@ -19,6 +19,7 @@ Initial GitHub-ready scaffold.
 - Added a local-files-only library filter for offline-ready browsing.
 - Added recursive local folder scanning/import for supported audio files.
 - Added stored track metadata editing for title, artist, album, and genre.
+- Added local folder filename metadata parsing for track numbers and artist-title names.
 - Added duplicate track detection and merge handling for local library entries.
 - Added custom smart playlists with search, favorite, play-count, sort, and limit rules.
 - Added playlist artwork URL editing, display, export/import, and backup restore.

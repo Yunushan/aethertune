@@ -27,8 +27,12 @@ void main() {
     await discOne.create(recursive: true);
     await Directory(p.join(root.path, 'Artwork')).create();
     await File(p.join(albumOne.path, '01 Alpha.MP3')).writeAsBytes(<int>[1]);
-    await File(p.join(discOne.path, '02 Beta.flac')).writeAsBytes(<int>[2]);
-    await File(p.join(root.path, 'Loose Track.m4a')).writeAsBytes(<int>[3]);
+    await File(
+      p.join(discOne.path, '02 Local Artist - Beta.flac'),
+    ).writeAsBytes(<int>[2]);
+    await File(
+      p.join(root.path, 'Loose Artist - Loose Track.m4a'),
+    ).writeAsBytes(<int>[3]);
     await File(p.join(root.path, 'cover.jpg')).writeAsBytes(<int>[4]);
     await File(p.join(root.path, 'notes.txt')).writeAsString('not audio');
 
@@ -41,7 +45,7 @@ void main() {
     expect(result.inaccessibleDirectoryCount, 0);
     expect(
       result.tracks.map((track) => track.title),
-      <String>['01 Alpha', '02 Beta', 'Loose Track'],
+      <String>['Alpha', 'Beta', 'Loose Track'],
     );
     expect(
       result.tracks.map((track) => track.album),
@@ -52,8 +56,8 @@ void main() {
       ],
     );
     expect(
-      result.tracks.map((track) => track.artist).toSet(),
-      <String>{'Local Folder'},
+      result.tracks.map((track) => track.artist),
+      <String>['Local Folder', 'Local Artist', 'Loose Artist'],
     );
     expect(
       result.tracks.map((track) => track.addedAt).toSet(),
@@ -67,6 +71,17 @@ void main() {
       result.tracks.first.id,
       Track.stableLocalId(p.join(albumOne.path, '01 Alpha.MP3')),
     );
+  });
+
+  test('keeps dashed song titles after parsed local artists', () async {
+    await File(
+      p.join(root.path, '03. Aether Artist - Movement - Live.opus'),
+    ).writeAsBytes(<int>[1]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.artist, 'Aether Artist');
+    expect(result.tracks.single.title, 'Movement - Live');
   });
 
   test('rejects a missing folder path', () async {

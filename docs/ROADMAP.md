@@ -41,7 +41,8 @@
 - [x] Imported-track folder browse
 - [x] Recursive folder import
 - [ ] Recursive folder browser
-- [ ] Metadata scanner
+- [x] Filename metadata scanner
+- [ ] Embedded audio tag scanner
 - [x] Stored metadata editor
 - [x] Duplicate resolver scaffold
 - [ ] Audio fingerprint and file-hash duplicate matching

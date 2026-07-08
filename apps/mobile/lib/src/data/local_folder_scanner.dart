@@ -30,6 +30,16 @@ final class LocalFolderScanResult {
   final int inaccessibleDirectoryCount;
 }
 
+final class _LocalFileMetadata {
+  const _LocalFileMetadata({
+    required this.title,
+    required this.artist,
+  });
+
+  final String title;
+  final String artist;
+}
+
 final class LocalFolderScanner {
   const LocalFolderScanner({
     this.supportedExtensions = supportedLocalAudioExtensions,
@@ -130,10 +140,12 @@ final class _LocalFolderScanState {
   }
 
   Track _trackForFile(String path) {
+    final metadata = _metadataForFile(path);
+
     return Track(
       id: Track.stableLocalId(path),
-      title: p.basenameWithoutExtension(path),
-      artist: 'Local Folder',
+      title: metadata.title,
+      artist: metadata.artist,
       album: _albumLabelFor(path),
       localPath: path,
       sourceId: 'local',
@@ -149,5 +161,36 @@ final class _LocalFolderScanState {
     }
 
     return relativeParent;
+  }
+
+  _LocalFileMetadata _metadataForFile(String path) {
+    final fallbackTitle = p.basenameWithoutExtension(path).trim();
+    final normalizedName = _withoutLeadingTrackNumber(fallbackTitle);
+    final titleParts = normalizedName
+        .split(RegExp(r'\s+-\s+'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+
+    if (titleParts.length >= 2) {
+      return _LocalFileMetadata(
+        artist: titleParts.first,
+        title: titleParts.skip(1).join(' - '),
+      );
+    }
+
+    return _LocalFileMetadata(
+      title: normalizedName.isEmpty ? fallbackTitle : normalizedName,
+      artist: 'Local Folder',
+    );
+  }
+
+  String _withoutLeadingTrackNumber(String value) {
+    final match = RegExp(r'^\s*\d{1,3}[\s._-]+(.+)$').firstMatch(value);
+    if (match == null) {
+      return value.trim();
+    }
+
+    return match.group(1)!.trim().replaceFirst(RegExp(r'^[-._\s]+'), '');
   }
 }
