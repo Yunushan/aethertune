@@ -98,7 +98,7 @@
 - [x] Podcast RSS cache/download policy declarations
 - [x] Podcast offline cache/download queue
 - [x] Podcast direct enclosure private cache storage
-- [ ] Podcast background/resumable downloads and per-provider cache policy
+- [ ] Podcast background/resumable downloads
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
@@ -112,7 +112,7 @@
 - [x] Internet Archive offline/download policy declarations
 - [x] Internet Archive cache/download queue
 - [x] Internet Archive direct file private cache storage
-- [ ] Internet Archive collection browse, facet suggestion UI, and per-provider cache policy
+- [ ] Internet Archive collection browse and facet suggestion UI
 - [ ] Jellyfin provider
 - [ ] Navidrome/Subsonic provider
 
@@ -129,6 +129,7 @@
 - [x] Manual private cache trim/clear controls
 - [x] Configurable cache size limits
 - [x] Automatic private cache pressure eviction
+- [x] Per-provider private cache quotas
 - [ ] Background/resumable offline downloader
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview

@@ -406,8 +406,11 @@ class LibraryStore extends ChangeNotifier {
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
   static const _offlineCacheLimitMegabytesKey =
       'aethertune.offline_cache_limit_mb.v1';
+  static const _offlineCacheProviderLimitMegabytesKey =
+      'aethertune.offline_cache_provider_limit_mb.v1';
   static const defaultOfflineCacheLimitMegabytes = 500;
   static const minOfflineCacheLimitMegabytes = 50;
+  static const minOfflineCacheProviderLimitMegabytes = 1;
   static const maxOfflineCacheLimitMegabytes = 51200;
   static const _maxHistoryEntries = 500;
   static const _maxSearchQueryHistoryEntries = 20;
@@ -432,6 +435,7 @@ class LibraryStore extends ChangeNotifier {
   bool _offlineModeEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
+  final Map<String, int> _offlineCacheProviderLimitMegabytes = <String, int>{};
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -456,6 +460,8 @@ class LibraryStore extends ChangeNotifier {
   AppThemePreference get themePreference => _themePreference;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
   int get offlineCacheLimitBytes => _offlineCacheLimitMegabytes * 1024 * 1024;
+  Map<String, int> get offlineCacheProviderLimitMegabytes =>
+      Map.unmodifiable(_offlineCacheProviderLimitMegabytes);
 
   Future<void> load() async {
     if (_loaded) {
@@ -606,6 +612,13 @@ class LibraryStore extends ChangeNotifier {
       prefs.getInt(_offlineCacheLimitMegabytesKey) ??
           defaultOfflineCacheLimitMegabytes,
     );
+    _offlineCacheProviderLimitMegabytes
+      ..clear()
+      ..addAll(
+        _decodeOfflineCacheProviderLimits(
+          prefs.getString(_offlineCacheProviderLimitMegabytesKey),
+        ),
+      );
     final rawOfflineCacheQueue = prefs.getString(_offlineCacheQueueKey);
     if (rawOfflineCacheQueue != null && rawOfflineCacheQueue.isNotEmpty) {
       final decoded = jsonDecode(rawOfflineCacheQueue) as List<dynamic>;
@@ -749,6 +762,50 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _offlineCacheLimitMegabytes = sanitized;
+    await _save();
+    notifyListeners();
+  }
+
+  int? offlineCacheProviderLimitMegabytesFor(String sourceId) {
+    final normalized = _normalizeProviderLimitSourceId(sourceId);
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return _offlineCacheProviderLimitMegabytes[normalized];
+  }
+
+  int? offlineCacheProviderLimitBytesFor(String sourceId) {
+    final megabytes = offlineCacheProviderLimitMegabytesFor(sourceId);
+    return megabytes == null ? null : megabytes * 1024 * 1024;
+  }
+
+  Future<void> setOfflineCacheProviderLimitMegabytes(
+    String sourceId,
+    int? megabytes,
+  ) async {
+    final normalized = _normalizeProviderLimitSourceId(sourceId);
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    if (megabytes == null || megabytes <= 0) {
+      if (!_offlineCacheProviderLimitMegabytes.containsKey(normalized)) {
+        return;
+      }
+
+      _offlineCacheProviderLimitMegabytes.remove(normalized);
+      await _save();
+      notifyListeners();
+      return;
+    }
+
+    final sanitized = _sanitizeOfflineCacheProviderLimitMegabytes(megabytes);
+    if (_offlineCacheProviderLimitMegabytes[normalized] == sanitized) {
+      return;
+    }
+
+    _offlineCacheProviderLimitMegabytes[normalized] = sanitized;
     await _save();
     notifyListeners();
   }
@@ -1854,6 +1911,8 @@ class LibraryStore extends ChangeNotifier {
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
       'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
+      'offlineCacheProviderLimitMegabytes':
+          Map<String, int>.from(_offlineCacheProviderLimitMegabytes),
       'tracks': _tracks.map((track) => track.toJson()).toList(),
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
       'customSmartPlaylists':
@@ -2249,6 +2308,7 @@ class LibraryStore extends ChangeNotifier {
     var restoredThemePreference = AppThemePreference.system;
     var restoredOfflineCacheLimitMegabytes =
         defaultOfflineCacheLimitMegabytes;
+    var restoredOfflineCacheProviderLimitMegabytes = <String, int>{};
 
     try {
       restoredOfflineModeEnabled = _jsonBool(
@@ -2267,6 +2327,21 @@ class LibraryStore extends ChangeNotifier {
           defaultValue: defaultOfflineCacheLimitMegabytes,
         ),
       );
+      final restoredProviderLimits = _jsonIntMap(
+        backup,
+        'offlineCacheProviderLimitMegabytes',
+        isRequired: false,
+      );
+      restoredOfflineCacheProviderLimitMegabytes = <String, int>{};
+      for (final entry in restoredProviderLimits.entries) {
+        final sourceId = _normalizeProviderLimitSourceId(entry.key);
+        if (sourceId.isEmpty) {
+          continue;
+        }
+
+        restoredOfflineCacheProviderLimitMegabytes[sourceId] =
+            _sanitizeOfflineCacheProviderLimitMegabytes(entry.value);
+      }
       restoredTracks.addAll(
         _jsonObjectList(backup, 'tracks').map(Track.fromJson),
       );
@@ -2380,6 +2455,9 @@ class LibraryStore extends ChangeNotifier {
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
     _offlineCacheLimitMegabytes = restoredOfflineCacheLimitMegabytes;
+    _offlineCacheProviderLimitMegabytes
+      ..clear()
+      ..addAll(restoredOfflineCacheProviderLimitMegabytes);
 
     _sortTracks();
     _sortPlaylists();
@@ -4451,6 +4529,35 @@ class LibraryStore extends ChangeNotifier {
     return rawValue;
   }
 
+  Map<String, int> _jsonIntMap(
+    Map<String, Object?> backup,
+    String key, {
+    bool isRequired = true,
+  }) {
+    final rawValue = backup[key];
+    if (rawValue == null && !isRequired) {
+      return <String, int>{};
+    }
+    if (rawValue is! Map) {
+      throw FormatException('Backup field "$key" must be an object.');
+    }
+
+    final values = <String, int>{};
+    for (final entry in rawValue.entries) {
+      final sourceId = entry.key;
+      final megabytes = entry.value;
+      if (sourceId is! String || megabytes is! int) {
+        throw FormatException(
+          'Backup field "$key" must map strings to integers.',
+        );
+      }
+
+      values[sourceId] = megabytes;
+    }
+
+    return values;
+  }
+
   int _sanitizeOfflineCacheLimitMegabytes(int megabytes) {
     if (megabytes < minOfflineCacheLimitMegabytes) {
       return minOfflineCacheLimitMegabytes;
@@ -4460,6 +4567,51 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return megabytes;
+  }
+
+  int _sanitizeOfflineCacheProviderLimitMegabytes(int megabytes) {
+    if (megabytes < minOfflineCacheProviderLimitMegabytes) {
+      return minOfflineCacheProviderLimitMegabytes;
+    }
+    if (megabytes > maxOfflineCacheLimitMegabytes) {
+      return maxOfflineCacheLimitMegabytes;
+    }
+
+    return megabytes;
+  }
+
+  String _normalizeProviderLimitSourceId(String sourceId) {
+    return sourceId.trim().toLowerCase();
+  }
+
+  Map<String, int> _decodeOfflineCacheProviderLimits(String? rawJson) {
+    if (rawJson == null || rawJson.isEmpty) {
+      return <String, int>{};
+    }
+
+    final decoded = jsonDecode(rawJson);
+    if (decoded is! Map) {
+      return <String, int>{};
+    }
+
+    final limits = <String, int>{};
+    for (final entry in decoded.entries) {
+      final sourceId = entry.key;
+      final megabytes = entry.value;
+      if (sourceId is! String || megabytes is! int) {
+        continue;
+      }
+
+      final normalized = _normalizeProviderLimitSourceId(sourceId);
+      if (normalized.isEmpty) {
+        continue;
+      }
+
+      limits[normalized] =
+          _sanitizeOfflineCacheProviderLimitMegabytes(megabytes);
+    }
+
+    return limits;
   }
 
   List<String> _dedupeSearchQueryHistory(Iterable<String> queries) {
@@ -4675,6 +4827,10 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setInt(
       _offlineCacheLimitMegabytesKey,
       _offlineCacheLimitMegabytes,
+    );
+    await prefs.setString(
+      _offlineCacheProviderLimitMegabytesKey,
+      jsonEncode(_offlineCacheProviderLimitMegabytes),
     );
     await prefs.setString(_offlineCacheQueueKey, encodedOfflineCacheQueue);
   }

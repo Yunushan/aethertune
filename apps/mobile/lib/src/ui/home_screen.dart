@@ -6892,6 +6892,18 @@ bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
       entry.status == OfflineCacheEntryStatus.failed;
 }
 
+List<String> _offlineCacheProviderIds(List<OfflineCacheEntry> entries) {
+  final sourceIds = <String>{};
+  for (final entry in entries) {
+    final sourceId = entry.track.sourceId.trim().toLowerCase();
+    if (sourceId.isNotEmpty) {
+      sourceIds.add(sourceId);
+    }
+  }
+
+  return sourceIds.toList(growable: false)..sort();
+}
+
 String _formatByteCount(int bytes) {
   if (bytes < 1024) {
     return '$bytes B';
@@ -6901,6 +6913,18 @@ String _formatByteCount(int bytes) {
   }
 
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String _offlineCacheProviderLimitLabel(
+  LibraryStore library,
+  String sourceId,
+) {
+  final limitBytes = library.offlineCacheProviderLimitBytesFor(sourceId);
+  if (limitBytes == null) {
+    return 'No provider quota';
+  }
+
+  return _formatByteCount(limitBytes);
 }
 
 String _offlineCacheErrorMessage(Object error) {
@@ -7110,6 +7134,19 @@ class _SettingsTab extends StatelessWidget {
             );
           },
         ),
+        for (final sourceId in _offlineCacheProviderIds(offlineQueue))
+          ListTile(
+            leading: const Icon(Icons.account_tree_outlined),
+            title: Text('Provider cache limit: $sourceId'),
+            subtitle: Text(_offlineCacheProviderLimitLabel(library, sourceId)),
+            trailing: IconButton(
+              tooltip: 'Set $sourceId cache limit',
+              onPressed: () => unawaited(
+                _showOfflineCacheProviderLimitDialog(context, sourceId),
+              ),
+              icon: const Icon(Icons.tune_outlined),
+            ),
+          ),
         for (final entry in offlineQueue.take(5))
           ListTile(
             dense: true,
@@ -7263,6 +7300,85 @@ class _SettingsTab extends StatelessWidget {
           content: Text(
             'Offline cache limit set to '
             '${_formatByteCount(library.offlineCacheLimitBytes)}.',
+          ),
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _showOfflineCacheProviderLimitDialog(
+    BuildContext context,
+    String sourceId,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final currentLimit = library.offlineCacheProviderLimitMegabytesFor(
+      sourceId,
+    );
+    final controller = TextEditingController(
+      text: currentLimit?.toString() ?? '0',
+    );
+
+    int? parseLimit() {
+      return int.tryParse(controller.text.trim());
+    }
+
+    try {
+      final selectedLimit = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('$sourceId cache limit'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Limit in MB',
+                helperText: '0 clears quota. Allowed range: 1-51200 MB',
+              ),
+              onSubmitted: (_) {
+                Navigator.of(dialogContext).pop(parseLimit());
+              },
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(parseLimit());
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!context.mounted || selectedLimit == null) {
+        return;
+      }
+
+      await library.setOfflineCacheProviderLimitMegabytes(
+        sourceId,
+        selectedLimit <= 0 ? null : selectedLimit,
+      );
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '$sourceId cache limit: '
+            '${_offlineCacheProviderLimitLabel(library, sourceId)}.',
           ),
         ),
       );

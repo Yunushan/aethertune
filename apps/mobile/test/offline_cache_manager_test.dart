@@ -201,6 +201,74 @@ void main() {
     expect(store.search('', offlineOnly: true).single.id, newestTrack.id);
   });
 
+  test('enforces provider cache quota before app-wide limit', () async {
+    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+    await manager.mediaDirectory.create(recursive: true);
+    final oldFile = File(p.join(manager.mediaDirectory.path, 'old.mp3'));
+    final newestFile = File(p.join(manager.mediaDirectory.path, 'newest.mp3'));
+    await _writeSizedFile(oldFile, 2 * 1024 * 1024);
+    await _writeSizedFile(newestFile, 1024 * 1024);
+    final provider = InternetArchiveProvider();
+    final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+    var now = DateTime.utc(2026, 1, 17);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.setOfflineCacheProviderLimitMegabytes(provider.id, 1);
+    final oldTrack = _providerTrack(
+      'provider-old-track',
+      'Old provider cache',
+      provider.id,
+    );
+    final newestTrack = _providerTrack(
+      'provider-newest-track',
+      'Newest provider cache',
+      provider.id,
+    );
+    final oldEntry = await store.queueOfflineCache(
+      oldTrack,
+      OfflineMediaAction.cache,
+      policy.evaluate(oldTrack, OfflineMediaAction.cache),
+    );
+    final newestEntry = await store.queueOfflineCache(
+      newestTrack,
+      OfflineMediaAction.cache,
+      policy.evaluate(newestTrack, OfflineMediaAction.cache),
+    );
+    await store.markOfflineCacheEntryCached(
+      oldEntry.id,
+      oldTrack.copyWith(localPath: oldFile.path),
+      reason: 'Cached old media.',
+    );
+    now = DateTime.utc(2026, 1, 18);
+    await store.markOfflineCacheEntryCached(
+      newestEntry.id,
+      newestTrack.copyWith(localPath: newestFile.path),
+      reason: 'Cached newest media.',
+    );
+
+    final result = await enforceOfflineCacheLimit(
+      library: store,
+      manager: manager,
+    );
+
+    expect(result.bytesBefore, 3 * 1024 * 1024);
+    expect(result.bytesAfter, 1024 * 1024);
+    expect(result.evictedBytes, 2 * 1024 * 1024);
+    expect(result.evictedEntryIds, <String>[oldEntry.id]);
+    expect(await oldFile.exists(), isFalse);
+    expect(await newestFile.exists(), isTrue);
+    final evictedEntry = store.offlineCacheEntryById(oldEntry.id)!;
+    expect(evictedEntry.status, OfflineCacheEntryStatus.queued);
+    expect(
+      evictedEntry.reason,
+      'Evicted automatically to keep internet-archive cache under 1 MB.',
+    );
+    expect(
+      store.offlineCacheEntryById(newestEntry.id)!.status,
+      OfflineCacheEntryStatus.cached,
+    );
+  });
+
   test('rejects entries without downloadable http URLs', () async {
     final entry = OfflineCacheEntry(
       id: 'entry-two',

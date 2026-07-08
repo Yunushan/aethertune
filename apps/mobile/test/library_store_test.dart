@@ -1658,15 +1658,28 @@ void main() {
       firstStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
     );
+    expect(firstStore.offlineCacheProviderLimitMegabytes, isEmpty);
 
     await firstStore.setOfflineModeEnabled(true);
     await firstStore.setThemePreference(AppThemePreference.amoled);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
+    await firstStore.setOfflineCacheProviderLimitMegabytes(
+      ' Internet-Archive ',
+      256,
+    );
 
     expect(firstStore.offlineModeEnabled, isTrue);
     expect(firstStore.themePreference, AppThemePreference.amoled);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
+    expect(
+      firstStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
+      256,
+    );
+    expect(
+      firstStore.offlineCacheProviderLimitBytesFor('internet-archive'),
+      256 * 1024 * 1024,
+    );
 
     final secondStore = LibraryStore();
     await secondStore.load();
@@ -1674,17 +1687,26 @@ void main() {
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
+    expect(
+      secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
+      256,
+    );
 
     final backupJson = secondStore.exportBackupJson();
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
     expect(backup['offlineCacheLimitMegabytes'], 2048);
+    expect(
+      backup['offlineCacheProviderLimitMegabytes'],
+      <String, dynamic>{'internet-archive': 256},
+    );
 
     final legacyBackup = Map<String, dynamic>.from(backup)
       ..remove('offlineModeEnabled')
       ..remove('themePreference')
-      ..remove('offlineCacheLimitMegabytes');
+      ..remove('offlineCacheLimitMegabytes')
+      ..remove('offlineCacheProviderLimitMegabytes');
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
 
     expect(secondStore.offlineModeEnabled, isFalse);
@@ -1693,12 +1715,17 @@ void main() {
       secondStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
     );
+    expect(secondStore.offlineCacheProviderLimitMegabytes, isEmpty);
 
     await secondStore.restoreBackupJson(backupJson);
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
+    expect(
+      secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
+      256,
+    );
   });
 
   test('clamps offline cache limit setting and restored backups', () async {
@@ -1724,6 +1751,38 @@ void main() {
     expect(
       persistedStore.offlineCacheLimitMegabytes,
       LibraryStore.maxOfflineCacheLimitMegabytes,
+    );
+    await persistedStore.setOfflineCacheProviderLimitMegabytes(
+      'podcast-rss',
+      0,
+    );
+    expect(
+      persistedStore.offlineCacheProviderLimitMegabytesFor('podcast-rss'),
+      isNull,
+    );
+    await persistedStore.setOfflineCacheProviderLimitMegabytes(
+      'podcast-rss',
+      -5,
+    );
+    expect(
+      persistedStore.offlineCacheProviderLimitMegabytesFor('podcast-rss'),
+      isNull,
+    );
+    await persistedStore.setOfflineCacheProviderLimitMegabytes(
+      'podcast-rss',
+      LibraryStore.maxOfflineCacheLimitMegabytes + 1,
+    );
+    expect(
+      persistedStore.offlineCacheProviderLimitMegabytesFor('podcast-rss'),
+      LibraryStore.maxOfflineCacheLimitMegabytes,
+    );
+    await persistedStore.setOfflineCacheProviderLimitMegabytes(
+      'podcast-rss',
+      null,
+    );
+    expect(
+      persistedStore.offlineCacheProviderLimitMegabytesFor('podcast-rss'),
+      isNull,
     );
 
     final backup = jsonDecode(
