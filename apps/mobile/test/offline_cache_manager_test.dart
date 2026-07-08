@@ -51,7 +51,7 @@ void main() {
 
     expect(materialization.byteCount, 4);
     expect(materialization.checksum, offlineMediaChecksum(<int>[1, 2, 3, 4]));
-    expect(materialization.checksum, hasLength(16));
+    expect(materialization.checksum, hasLength(8));
     expect(materialization.track.localPath, isNotNull);
     expect(materialization.track.hasLocalSource, isTrue);
     expect(materialization.track.streamUrl, entry.track.streamUrl);
