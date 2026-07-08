@@ -71,10 +71,10 @@ final class OfflineCacheManager {
   OfflineCacheManager({
     required this.cacheRoot,
     OfflineMediaDownloader? downloader,
-  }) : _downloader = downloader ?? _downloadWithHttpClient;
+  }) : _downloader = downloader;
 
   final Directory cacheRoot;
-  final OfflineMediaDownloader _downloader;
+  final OfflineMediaDownloader? _downloader;
 
   Directory get mediaDirectory {
     return Directory(
@@ -104,21 +104,32 @@ final class OfflineCacheManager {
       );
     }
 
-    final bytes = await _downloader(streamUri);
-    if (bytes.isEmpty) {
-      throw StateError('Downloaded media is empty for ${entry.track.title}.');
-    }
-
     await mediaDirectory.create(recursive: true);
 
     final file = File(
       p.join(mediaDirectory.path, '${entry.id}${_mediaExtension(streamUri)}'),
     );
-    await file.writeAsBytes(bytes, flush: true);
-    final checksum = offlineMediaChecksum(bytes);
+    final partialFile = File('${file.path}.part');
+    final downloader = _downloader;
+    if (downloader == null) {
+      await _downloadWithHttpClient(streamUri, file, partialFile);
+    } else {
+      final bytes = await downloader(streamUri);
+      if (bytes.isEmpty) {
+        throw StateError('Downloaded media is empty for ${entry.track.title}.');
+      }
+      await _deleteIfExists(partialFile);
+      await file.writeAsBytes(bytes, flush: true);
+    }
+
     final savedBytes = await file.readAsBytes();
-    if (savedBytes.length != bytes.length ||
-        offlineMediaChecksum(savedBytes) != checksum) {
+    if (savedBytes.isEmpty) {
+      throw StateError('Downloaded media is empty for ${entry.track.title}.');
+    }
+    final checksum = offlineMediaChecksum(savedBytes);
+    final savedBytesAfterChecksum = await file.readAsBytes();
+    if (savedBytesAfterChecksum.length != savedBytes.length ||
+        offlineMediaChecksum(savedBytesAfterChecksum) != checksum) {
       throw StateError(
         'Cached media checksum verification failed for ${entry.track.title}.',
       );
@@ -126,7 +137,7 @@ final class OfflineCacheManager {
 
     return OfflineCacheMaterialization(
       track: entry.track.copyWith(localPath: file.path),
-      byteCount: bytes.length,
+      byteCount: savedBytes.length,
       checksum: checksum,
     );
   }
@@ -285,27 +296,108 @@ final class OfflineCacheManager {
     return File(path);
   }
 
-  static Future<List<int>> _downloadWithHttpClient(Uri uri) async {
+  static Future<void> _downloadWithHttpClient(
+    Uri uri,
+    File targetFile,
+    File partialFile,
+  ) async {
     final client = HttpClient();
     try {
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      if (response.statusCode < HttpStatus.ok ||
-          response.statusCode >= HttpStatus.multipleChoices) {
-        throw HttpException(
-          'HTTP ${response.statusCode} while downloading media.',
-          uri: uri,
-        );
-      }
+      var resumeStart = await _fileLength(partialFile);
+      var restartedAfterInvalidRange = false;
+      while (true) {
+        final request = await client.getUrl(uri);
+        if (resumeStart > 0) {
+          request.headers.set(
+            HttpHeaders.rangeHeader,
+            'bytes=$resumeStart-',
+          );
+        }
+        final response = await request.close();
 
-      final bytes = <int>[];
-      await for (final chunk in response) {
-        bytes.addAll(chunk);
+        if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable &&
+            resumeStart > 0 &&
+            !restartedAfterInvalidRange) {
+          await _drainResponse(response);
+          await _deleteIfExists(partialFile);
+          resumeStart = 0;
+          restartedAfterInvalidRange = true;
+          continue;
+        }
+
+        final shouldAppend = resumeStart > 0 &&
+            response.statusCode == HttpStatus.partialContent;
+        final isFreshDownload = response.statusCode == HttpStatus.ok;
+        if (!shouldAppend && !isFreshDownload) {
+          throw HttpException(
+            'HTTP ${response.statusCode} while downloading media.',
+            uri: uri,
+          );
+        }
+
+        if (resumeStart > 0 && !shouldAppend) {
+          await _deleteIfExists(partialFile);
+          resumeStart = 0;
+        }
+
+        final expectedResponseBytes = response.contentLength;
+        var receivedBytes = 0;
+        final sink = partialFile.openWrite(
+          mode: shouldAppend ? FileMode.append : FileMode.write,
+        );
+        try {
+          await for (final chunk in response) {
+            receivedBytes += chunk.length;
+            sink.add(chunk);
+          }
+        } finally {
+          await sink.flush();
+          await sink.close();
+        }
+
+        if (expectedResponseBytes >= 0 &&
+            receivedBytes != expectedResponseBytes) {
+          throw HttpException(
+            'Downloaded $receivedBytes of $expectedResponseBytes bytes.',
+            uri: uri,
+          );
+        }
+
+        if (await partialFile.length() == 0) {
+          throw StateError('Downloaded media is empty.');
+        }
+
+        await _deleteIfExists(targetFile);
+        await partialFile.rename(targetFile.path);
+        return;
       }
-      return bytes;
     } finally {
       client.close(force: true);
     }
+  }
+}
+
+Future<int> _fileLength(File file) async {
+  try {
+    return await file.length();
+  } on FileSystemException {
+    return 0;
+  }
+}
+
+Future<void> _deleteIfExists(File file) async {
+  try {
+    if (await file.exists()) {
+      await file.delete();
+    }
+  } on FileSystemException {
+    // A missing or locked temp file should not mask the real cache operation.
+  }
+}
+
+Future<void> _drainResponse(HttpClientResponse response) async {
+  await for (final _ in response) {
+    // Drain so the client can reuse/close the connection cleanly.
   }
 }
 

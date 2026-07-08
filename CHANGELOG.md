@@ -14,6 +14,7 @@ Initial GitHub-ready scaffold.
 - Added provider offline cache/download policy gates with Podcast RSS and Internet Archive allow rules plus Radio Browser live-stream denial.
 - Added persisted offline cache/download queue with Sources-tab provider actions and Options-tab queue management.
 - Added user-triggered offline cache storage for provider-approved direct media URLs.
+- Added resumable HTTP Range retries for direct-URL offline cache writes using private `.part` files.
 - Added private offline cache usage reporting plus trim/clear eviction controls.
 - Added configurable private offline cache size limits with backup/restore persistence.
 - Added automatic private cache pressure eviction after successful cache writes.

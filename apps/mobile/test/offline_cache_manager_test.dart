@@ -62,6 +62,64 @@ void main() {
     );
   });
 
+  test('resumes an existing partial HTTP cache file', () async {
+    final mediaBytes = List<int>.generate(12, (index) => index + 1);
+    final requestedRanges = <String?>[];
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      requestedRanges.add(request.headers.value(HttpHeaders.rangeHeader));
+      final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+      final startByte = rangeHeader == 'bytes=4-' ? 4 : 0;
+      final responseBytes = mediaBytes.skip(startByte).toList();
+
+      request.response.headers.contentType = ContentType('audio', 'mpeg');
+      request.response.contentLength = responseBytes.length;
+      if (startByte > 0) {
+        request.response.statusCode = HttpStatus.partialContent;
+        request.response.headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $startByte-${mediaBytes.length - 1}/${mediaBytes.length}',
+        );
+      }
+      request.response.add(responseBytes);
+      await request.response.close();
+    });
+
+    try {
+      final entry = OfflineCacheEntry(
+        id: 'entry-resume',
+        track: Track(
+          id: 'track-resume',
+          title: 'Resumable Archive',
+          artist: 'Archive',
+          sourceId: 'internet-archive',
+          streamUrl: 'http://127.0.0.1:${server.port}/media/song.mp3',
+        ),
+        action: OfflineMediaAction.cache,
+        createdAt: DateTime.utc(2026, 1, 17),
+      );
+      final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+      await manager.mediaDirectory.create(recursive: true);
+      final partialFile = File(
+        p.join(manager.mediaDirectory.path, '${entry.id}.mp3.part'),
+      );
+      await partialFile.writeAsBytes(mediaBytes.take(4).toList());
+
+      final materialization = await manager.materialize(entry);
+
+      expect(requestedRanges, <String?>['bytes=4-']);
+      expect(materialization.byteCount, mediaBytes.length);
+      expect(materialization.checksum, offlineMediaChecksum(mediaBytes));
+      expect(
+        await File(materialization.track.localPath!).readAsBytes(),
+        mediaBytes,
+      );
+      expect(await partialFile.exists(), isFalse);
+    } finally {
+      await server.close(force: true);
+    }
+  });
+
   test('measures and evicts only private cached media', () async {
     final manager = OfflineCacheManager(cacheRoot: cacheRoot);
     await manager.mediaDirectory.create(recursive: true);
