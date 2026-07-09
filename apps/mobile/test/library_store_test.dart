@@ -1375,8 +1375,8 @@ void main() {
   });
 
   test('pauses playback history and resume progress recording', () async {
-    DateTime clock() => DateTime.utc(2026, 1, 10, 12);
-    final store = LibraryStore(clock: clock);
+    var now = DateTime.utc(2026, 1, 10, 12);
+    final store = LibraryStore(clock: () => now);
     await store.load();
     await store.addTracks(<Track>[_track('private')]);
 
@@ -1394,7 +1394,7 @@ void main() {
     expect(store.playCountForTrack('private'), 0);
     expect(store.playbackProgressForTrack('private'), isNull);
 
-    clock = DateTime.utc(2026, 1, 10, 12, 1);
+    now = DateTime.utc(2026, 1, 10, 12, 1);
     await store.setPauseListeningHistory(false);
     await store.recordPlayback('private');
     await store.recordPlaybackProgress(
