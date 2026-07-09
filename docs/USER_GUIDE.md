@@ -69,7 +69,7 @@ When you play a track from the library, the current filtered list becomes the qu
 
 ## History
 
-The History tab shows a local listening recap with library totals, favorites, play count, estimated listening time, monthly and yearly calendar recap cards, top tracks, top artists, top albums, top genres, recently played library tracks, and last played times. Use **Pause listening history** to stop saving new plays and resume progress while keeping existing history until you clear it. Use the range selector to view all-time, last 7 days, last 30 days, or last-year stats; use the export button to copy the selected range as JSON or CSV. Tap a track to play it again or use the clear button to remove local listening history.
+The History tab shows a local listening recap with library totals, favorites, play count, estimated listening time, monthly and yearly calendar recap cards, top tracks, top artists, top albums, top genres, recently played library tracks, individual play history entries, and last played times. Use **Pause listening history** to stop saving new plays and resume progress while keeping existing history until you clear it. Use the range selector to view all-time, last 7 days, last 30 days, or last-year stats; use the export button to copy the selected range as JSON or CSV. Tap a track to play it again, use the delete icon beside a play history entry to remove only that play, or use the clear button to remove all local listening history.
 
 ## Playlists
 

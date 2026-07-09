@@ -1374,6 +1374,49 @@ void main() {
     expect(secondStore.recentlyPlayedTracks().single.id, '1');
   });
 
+  test('removes individual playback history entries', () async {
+    var now = DateTime.utc(2026, 1, 10, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[_track('1'), _track('2')]);
+
+    await store.recordPlayback('1');
+    final olderPlay = store.playbackHistory.single;
+    now = DateTime.utc(2026, 1, 10, 12, 1);
+    await store.recordPlayback('1');
+    final newerPlay = store.playbackHistory.first;
+    now = DateTime.utc(2026, 1, 10, 12, 2);
+    await store.recordPlayback('2');
+
+    expect(
+      store.playbackHistoryEntries(limit: 2).map((entry) => entry.trackId),
+      <String>['2', '1'],
+    );
+    expect(
+      store
+          .playbackHistoryEntries(from: DateTime.utc(2026, 1, 10, 12, 1))
+          .map((entry) => entry.trackId),
+      <String>['2', '1'],
+    );
+
+    await store.removePlaybackHistoryEntry(newerPlay);
+
+    expect(store.playCountForTrack('1'), 1);
+    expect(store.lastPlayedAt('1'), olderPlay.playedAt);
+    expect(
+      store.playbackHistory.map((entry) => entry.trackId),
+      <String>['2', '1'],
+    );
+
+    await store.removePlaybackHistoryEntry(newerPlay);
+    expect(store.playbackHistory, hasLength(2));
+
+    final secondStore = LibraryStore(clock: () => now);
+    await secondStore.load();
+    expect(secondStore.playbackHistory, hasLength(2));
+    expect(secondStore.playCountForTrack('1'), 1);
+  });
+
   test('pauses playback history and resume progress recording', () async {
     var now = DateTime.utc(2026, 1, 10, 12);
     final store = LibraryStore(clock: () => now);

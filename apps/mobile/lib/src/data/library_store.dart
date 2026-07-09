@@ -2834,6 +2834,36 @@ class LibraryStore extends ChangeNotifier {
     return recentTracks;
   }
 
+  List<PlaybackHistoryEntry> playbackHistoryEntries({
+    int limit = 50,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    if (limit <= 0) {
+      return <PlaybackHistoryEntry>[];
+    }
+
+    return _history
+        .where((entry) => _historyEntryInRange(entry, from: from, to: to))
+        .take(limit)
+        .toList(growable: false);
+  }
+
+  Future<void> removePlaybackHistoryEntry(
+    PlaybackHistoryEntry entryToRemove,
+  ) async {
+    final index = _history.indexWhere(
+      (entry) => _samePlaybackHistoryEntry(entry, entryToRemove),
+    );
+    if (index == -1) {
+      return;
+    }
+
+    _history.removeAt(index);
+    await _save();
+    notifyListeners();
+  }
+
   List<Track> recentlyAddedTracks({int limit = 25}) {
     if (limit <= 0) {
       return <Track>[];
@@ -2937,6 +2967,14 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  bool _samePlaybackHistoryEntry(
+    PlaybackHistoryEntry left,
+    PlaybackHistoryEntry right,
+  ) {
+    return left.trackId == right.trackId &&
+        left.playedAt.isAtSameMomentAs(right.playedAt);
   }
 
   DateTime? _libraryChartRangeStart(LibraryChartRange range, DateTime now) {

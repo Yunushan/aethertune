@@ -23,6 +23,7 @@ import '../data/subsonic_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/offline_cache_entry.dart';
+import '../domain/playback_history_entry.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_opml.dart';
@@ -4461,6 +4462,13 @@ class _HistoryTabState extends State<_HistoryTab> {
       from: statsFrom,
       to: statsTo,
     );
+    final historyEntries = library.playbackHistoryEntries(
+      from: statsFrom,
+      to: statsTo,
+    );
+    final historyTracksById = <String, Track>{
+      for (final track in library.tracks) track.id: track,
+    };
     final stats = library.libraryStats(from: statsFrom, to: statsTo);
     final monthlyRecaps = library.listeningRecaps(
       period: LibraryRecapPeriod.month,
@@ -4574,6 +4582,21 @@ class _HistoryTabState extends State<_HistoryTab> {
             title: 'Top genres',
             icon: Icons.category_outlined,
             groups: stats.topGenres,
+          ),
+          const SizedBox(height: 12),
+          _PlaybackHistoryEntrySection(
+            entries: historyEntries,
+            tracksById: historyTracksById,
+            onPlay: (track) => _playTrackWithResume(
+              context,
+              player,
+              library,
+              track,
+              queue: recentlyPlayed.isEmpty ? <Track>[track] : recentlyPlayed,
+            ),
+            onRemove: (entry) {
+              unawaited(library.removePlaybackHistoryEntry(entry));
+            },
           ),
         ],
         const SizedBox(height: 16),
@@ -5027,6 +5050,52 @@ class _StatsSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PlaybackHistoryEntrySection extends StatelessWidget {
+  const _PlaybackHistoryEntrySection({
+    required this.entries,
+    required this.tracksById,
+    required this.onPlay,
+    required this.onRemove,
+  });
+
+  final List<PlaybackHistoryEntry> entries;
+  final Map<String, Track> tracksById;
+  final ValueChanged<Track> onPlay;
+  final ValueChanged<PlaybackHistoryEntry> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final tiles = <Widget>[];
+    for (final entry in entries) {
+      final track = tracksById[entry.trackId];
+      if (track == null) {
+        continue;
+      }
+
+      tiles.add(
+        ListTile(
+          leading: const Icon(Icons.history),
+          title: Text(track.title),
+          subtitle: Text(
+            '${track.artist} · ${_formatHistoryTime(entry.playedAt)}',
+          ),
+          trailing: IconButton(
+            tooltip: 'Remove this play',
+            onPressed: () => onRemove(entry),
+            icon: const Icon(Icons.close),
+          ),
+          onTap: () => onPlay(track),
+        ),
+      );
+    }
+
+    return _StatsSection(
+      title: 'Play history entries',
+      children: tiles,
     );
   }
 }

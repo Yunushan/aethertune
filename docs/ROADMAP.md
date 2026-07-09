@@ -15,6 +15,7 @@
 - [x] Similar local tracks
 - [x] Listening history
 - [x] Pause listening history privacy control
+- [x] Delete individual listening-history entries
 - [x] Queue
 - [x] Queue reorder/remove
 - [x] Persistent queue
