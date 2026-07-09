@@ -474,6 +474,8 @@ class LibraryStore extends ChangeNotifier {
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _progressKey = 'aethertune.playback_progress.v1';
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
+  static const _pauseListeningHistoryKey =
+      'aethertune.pause_listening_history.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
@@ -506,6 +508,7 @@ class LibraryStore extends ChangeNotifier {
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
   final DateTime Function() _clock;
+  bool _pauseListeningHistory = false;
   bool _offlineModeEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.indigo;
@@ -531,6 +534,7 @@ class LibraryStore extends ChangeNotifier {
       List.unmodifiable(_offlineCacheQueue);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
+  bool get pauseListeningHistory => _pauseListeningHistory;
   bool get offlineModeEnabled => _offlineModeEnabled;
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
@@ -680,6 +684,8 @@ class LibraryStore extends ChangeNotifier {
               ),
         );
     }
+    _pauseListeningHistory =
+        prefs.getBool(_pauseListeningHistoryKey) ?? false;
     _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
     _themePreference = _appThemePreferenceFromName(
       prefs.getString(_themePreferenceKey),
@@ -820,6 +826,16 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _offlineModeEnabled = enabled;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setPauseListeningHistory(bool paused) async {
+    if (_pauseListeningHistory == paused) {
+      return;
+    }
+
+    _pauseListeningHistory = paused;
     await _save();
     notifyListeners();
   }
@@ -2141,6 +2157,7 @@ class LibraryStore extends ChangeNotifier {
     return encoder.convert(<String, Object?>{
       'version': _backupVersion,
       'exportedAt': _clock().toIso8601String(),
+      'pauseListeningHistory': _pauseListeningHistory,
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
       'accentColor': _accentColor.name,
@@ -2557,6 +2574,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredProgress = <PlaybackProgressEntry>[];
     final restoredLyrics = <TrackLyrics>[];
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
+    var restoredPauseListeningHistory = false;
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
     var restoredAccentColor = AppAccentColor.indigo;
@@ -2565,6 +2583,11 @@ class LibraryStore extends ChangeNotifier {
     var restoredOfflineCacheProviderLimitMegabytes = <String, int>{};
 
     try {
+      restoredPauseListeningHistory = _jsonBool(
+        backup,
+        'pauseListeningHistory',
+        isRequired: false,
+      );
       restoredOfflineModeEnabled = _jsonBool(
         backup,
         'offlineModeEnabled',
@@ -2709,6 +2732,7 @@ class LibraryStore extends ChangeNotifier {
     _offlineCacheQueue
       ..clear()
       ..addAll(_dedupeOfflineCacheQueue(restoredOfflineCacheQueue));
+    _pauseListeningHistory = restoredPauseListeningHistory;
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
     _accentColor = restoredAccentColor;
@@ -3163,6 +3187,10 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<void> recordPlayback(String trackId) async {
+    if (_pauseListeningHistory) {
+      return;
+    }
+
     if (!_tracks.any((track) => track.id == trackId)) {
       return;
     }
@@ -3200,6 +3228,10 @@ class LibraryStore extends ChangeNotifier {
     Duration position,
     Duration duration,
   ) async {
+    if (_pauseListeningHistory) {
+      return;
+    }
+
     if (!_tracks.any((track) => track.id == trackId)) {
       return;
     }
@@ -5150,6 +5182,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
+    await prefs.setBool(_pauseListeningHistoryKey, _pauseListeningHistory);
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);

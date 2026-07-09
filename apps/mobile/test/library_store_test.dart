@@ -1374,6 +1374,44 @@ void main() {
     expect(secondStore.recentlyPlayedTracks().single.id, '1');
   });
 
+  test('pauses playback history and resume progress recording', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 10, 12);
+    final store = LibraryStore(clock: clock);
+    await store.load();
+    await store.addTracks(<Track>[_track('private')]);
+
+    await store.setPauseListeningHistory(true);
+    await store.recordPlayback('private');
+    await store.recordPlaybackProgress(
+      'private',
+      const Duration(minutes: 2),
+      const Duration(minutes: 5),
+    );
+
+    expect(store.pauseListeningHistory, isTrue);
+    expect(store.playbackHistory, isEmpty);
+    expect(store.recentlyPlayedTracks(), isEmpty);
+    expect(store.playCountForTrack('private'), 0);
+    expect(store.playbackProgressForTrack('private'), isNull);
+
+    clock = DateTime.utc(2026, 1, 10, 12, 1);
+    await store.setPauseListeningHistory(false);
+    await store.recordPlayback('private');
+    await store.recordPlaybackProgress(
+      'private',
+      const Duration(minutes: 3),
+      const Duration(minutes: 5),
+    );
+
+    expect(store.pauseListeningHistory, isFalse);
+    expect(store.playbackHistory.single.trackId, 'private');
+    expect(store.playCountForTrack('private'), 1);
+    expect(
+      store.playbackProgressForTrack('private')!.position,
+      const Duration(minutes: 3),
+    );
+  });
+
   test('records persists and clears playback progress', () async {
     DateTime clock() => DateTime.utc(2026, 1, 14, 14);
     final firstStore = LibraryStore(clock: clock);
@@ -1821,6 +1859,7 @@ void main() {
     await firstStore.load();
 
     expect(firstStore.offlineModeEnabled, isFalse);
+    expect(firstStore.pauseListeningHistory, isFalse);
     expect(firstStore.themePreference, AppThemePreference.system);
     expect(firstStore.accentColor, AppAccentColor.indigo);
     expect(
@@ -1830,6 +1869,7 @@ void main() {
     expect(firstStore.offlineCacheProviderLimitMegabytes, isEmpty);
 
     await firstStore.setOfflineModeEnabled(true);
+    await firstStore.setPauseListeningHistory(true);
     await firstStore.setThemePreference(AppThemePreference.amoled);
     await firstStore.setAccentColor(AppAccentColor.rose);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
@@ -1839,6 +1879,7 @@ void main() {
     );
 
     expect(firstStore.offlineModeEnabled, isTrue);
+    expect(firstStore.pauseListeningHistory, isTrue);
     expect(firstStore.themePreference, AppThemePreference.amoled);
     expect(firstStore.accentColor, AppAccentColor.rose);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
@@ -1856,6 +1897,7 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.offlineModeEnabled, isTrue);
+    expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
@@ -1867,6 +1909,7 @@ void main() {
     final backupJson = secondStore.exportBackupJson();
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
+    expect(backup['pauseListeningHistory'], isTrue);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
     expect(backup['accentColor'], AppAccentColor.rose.name);
     expect(backup['offlineCacheLimitMegabytes'], 2048);
@@ -1877,6 +1920,7 @@ void main() {
 
     final legacyBackup = Map<String, dynamic>.from(backup)
       ..remove('offlineModeEnabled')
+      ..remove('pauseListeningHistory')
       ..remove('themePreference')
       ..remove('accentColor')
       ..remove('offlineCacheLimitMegabytes')
@@ -1884,6 +1928,7 @@ void main() {
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
 
     expect(secondStore.offlineModeEnabled, isFalse);
+    expect(secondStore.pauseListeningHistory, isFalse);
     expect(secondStore.themePreference, AppThemePreference.system);
     expect(secondStore.accentColor, AppAccentColor.indigo);
     expect(
@@ -1895,6 +1940,7 @@ void main() {
     await secondStore.restoreBackupJson(backupJson);
 
     expect(secondStore.offlineModeEnabled, isTrue);
+    expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
@@ -2827,6 +2873,7 @@ void main() {
       const Duration(minutes: 4),
       const Duration(minutes: 20),
     );
+    await firstStore.setPauseListeningHistory(true);
     final smartRule = await firstStore.createCustomSmartPlaylist(
       name: 'Favorite plays',
       favoritesOnly: true,
@@ -2893,6 +2940,7 @@ void main() {
     );
     expect(secondStore.lyricsForTrack('1')!.plainText, 'backup lyrics');
     expect(secondStore.playbackHistory.single.trackId, '2');
+    expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.recentlyPlayedTracks().single.id, '2');
     expect(
       secondStore.playbackProgressForTrack('1')!.position,

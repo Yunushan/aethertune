@@ -14,6 +14,7 @@
 - [x] Personalized local recommendations
 - [x] Similar local tracks
 - [x] Listening history
+- [x] Pause listening history privacy control
 - [x] Queue
 - [x] Queue reorder/remove
 - [x] Persistent queue

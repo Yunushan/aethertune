@@ -4507,6 +4507,18 @@ class _HistoryTabState extends State<_HistoryTab> {
           ],
         ),
         const SizedBox(height: 8),
+        SwitchListTile(
+          secondary: const Icon(Icons.pause_circle_outline),
+          title: const Text('Pause listening history'),
+          subtitle: const Text(
+            'Stop saving new plays and resume progress. Existing history stays until cleared.',
+          ),
+          value: library.pauseListeningHistory,
+          onChanged: (value) {
+            unawaited(library.setPauseListeningHistory(value));
+          },
+        ),
+        const SizedBox(height: 8),
         DropdownButtonFormField<_HistoryStatsRange>(
           initialValue: _statsRange,
           decoration: const InputDecoration(
@@ -7642,6 +7654,17 @@ class _SettingsTab extends StatelessWidget {
               }
             },
           ),
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.pause_circle_outline),
+          title: const Text('Pause listening history'),
+          subtitle: const Text(
+            'Stop saving new plays and resume progress until this is turned off.',
+          ),
+          value: library.pauseListeningHistory,
+          onChanged: (value) {
+            unawaited(library.setPauseListeningHistory(value));
+          },
         ),
         SwitchListTile(
           secondary: const Icon(Icons.cloud_off_outlined),
