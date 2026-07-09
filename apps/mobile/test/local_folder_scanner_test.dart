@@ -314,6 +314,59 @@ void main() {
     expect(result.tracks.single.genre, 'Alternative');
   });
 
+  test('prefers WAV RIFF INFO metadata', () async {
+    await File(p.join(root.path, '11 messy-name.wav')).writeAsBytes(
+      _wavWithInfoTags(<String, String>{
+        'INAM': 'WAV Title',
+        'IART': 'WAV Artist',
+        'IPRD': 'WAV Album',
+        'IGNR': 'Jazz Fusion',
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'WAV Title');
+    expect(result.tracks.single.artist, 'WAV Artist');
+    expect(result.tracks.single.album, 'WAV Album');
+    expect(result.tracks.single.genre, 'Jazz Fusion');
+  });
+
+  test('reads WAV RIFF INFO metadata after a data chunk', () async {
+    await File(p.join(root.path, '11 data-before-info.wav')).writeAsBytes(
+      _wavWithInfoTags(
+        <String, String>{
+          'INAM': 'Late WAV Title',
+          'IART': 'Late WAV Artist',
+        },
+        leadingDataBytes: 17,
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Late WAV Title');
+    expect(result.tracks.single.artist, 'Late WAV Artist');
+  });
+
+  test('merges partial WAV RIFF INFO metadata with filename metadata', () async {
+    await File(
+      p.join(root.path, '12 Filename Artist - Filename Title.wav'),
+    ).writeAsBytes(
+      _wavWithInfoTags(<String, String>{
+        'IPRD': 'WAV Album Only',
+        'IGNR': 'Downtempo',
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Filename Title');
+    expect(result.tracks.single.artist, 'Filename Artist');
+    expect(result.tracks.single.album, 'WAV Album Only');
+    expect(result.tracks.single.genre, 'Downtempo');
+  });
+
   test('falls back to filename metadata when ID3v1 tags are empty', () async {
     await File(
       p.join(root.path, '04 Fallback Artist - Fallback Title.mp3'),
@@ -561,6 +614,52 @@ List<int> _uint32LittleEndianSize(int size) {
     (size >> 8) & 0xff,
     (size >> 16) & 0xff,
     (size >> 24) & 0xff,
+  ];
+}
+
+List<int> _wavWithInfoTags(
+  Map<String, String> tags, {
+  int leadingDataBytes = 0,
+}) {
+  final infoPayload = <int>[...'INFO'.codeUnits];
+  for (final entry in tags.entries) {
+    final valueBytes = <int>[...latin1.encode(entry.value), 0];
+    infoPayload
+      ..addAll(entry.key.codeUnits)
+      ..addAll(_uint32LittleEndianSize(valueBytes.length))
+      ..addAll(valueBytes);
+    if (valueBytes.length.isOdd) {
+      infoPayload.add(0);
+    }
+  }
+
+  final listChunk = <int>[
+    ...'LIST'.codeUnits,
+    ..._uint32LittleEndianSize(infoPayload.length),
+    ...infoPayload,
+  ];
+  if (listChunk.length.isOdd) {
+    listChunk.add(0);
+  }
+
+  final chunks = <int>[];
+  if (leadingDataBytes > 0) {
+    final dataBytes = List<int>.filled(leadingDataBytes, 0);
+    chunks
+      ..addAll('data'.codeUnits)
+      ..addAll(_uint32LittleEndianSize(dataBytes.length))
+      ..addAll(dataBytes);
+    if (dataBytes.length.isOdd) {
+      chunks.add(0);
+    }
+  }
+
+  chunks.addAll(listChunk);
+  final riffPayload = <int>[...'WAVE'.codeUnits, ...chunks];
+  return <int>[
+    ...'RIFF'.codeUnits,
+    ..._uint32LittleEndianSize(riffPayload.length),
+    ...riffPayload,
   ];
 }
 

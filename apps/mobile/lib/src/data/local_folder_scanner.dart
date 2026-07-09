@@ -241,6 +241,8 @@ final class _LocalFolderScanState {
         return _flacMetadataForFile(path);
       case '.m4a':
         return _m4aMetadataForFile(path);
+      case '.wav':
+        return _wavMetadataForFile(path);
     }
 
     return null;
@@ -343,6 +345,76 @@ final class _LocalFolderScanState {
           genre: metadata?.genre,
           artworkUri: artworkUri,
         );
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Future<_LocalFileMetadata?> _wavMetadataForFile(String path) async {
+    try {
+      final file = File(path);
+      final length = await file.length();
+      if (length < 12) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        final header = await access.read(12);
+        if (header.length != 12 ||
+            !_matchesAscii(header.sublist(0, 4), 'RIFF') ||
+            !_matchesAscii(header.sublist(8, 12), 'WAVE')) {
+          return null;
+        }
+
+        final infoTags = <String, String>{};
+        var chunkCount = 0;
+        while (chunkCount < _maxWavChunks) {
+          final chunkStart = await access.position();
+          if (chunkStart + 8 > length) {
+            break;
+          }
+
+          chunkCount += 1;
+          final chunkHeader = await access.read(8);
+          if (chunkHeader.length != 8) {
+            break;
+          }
+
+          final chunkId = String.fromCharCodes(chunkHeader.sublist(0, 4));
+          final chunkLength = _uint32LittleEndian(chunkHeader, 4);
+          final payloadStart = await access.position();
+          final payloadEnd = payloadStart + chunkLength;
+          if (chunkLength < 0 || payloadEnd > length) {
+            break;
+          }
+
+          if (chunkId == 'LIST' &&
+              chunkLength >= 4 &&
+              chunkLength <= _maxWavInfoBytes) {
+            final payload = await access.read(chunkLength);
+            if (payload.length != chunkLength) {
+              break;
+            }
+
+            if (_matchesAscii(payload.sublist(0, 4), 'INFO')) {
+              _readWavInfoList(payload, 4, payload.length, infoTags);
+              if (_wavInfoComplete(infoTags)) {
+                break;
+              }
+            }
+          } else {
+            await access.setPosition(payloadEnd);
+          }
+
+          final nextOffset = payloadEnd + (chunkLength.isOdd ? 1 : 0);
+          await access.setPosition(nextOffset > length ? length : nextOffset);
+        }
+
+        return _wavMetadataFromInfoTags(infoTags);
       } finally {
         await access.close();
       }
@@ -697,6 +769,76 @@ final class _LocalFolderScanState {
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: artworkUri,
     );
+  }
+
+  _LocalFileMetadata? _wavMetadataFromInfoTags(Map<String, String> infoTags) {
+    final title = infoTags['title'] ?? '';
+    final artist = infoTags['artist'] ?? '';
+    final album = infoTags['album'];
+    final genre = infoTags['genre'];
+    if (title.isEmpty &&
+        artist.isEmpty &&
+        (album == null || album.isEmpty) &&
+        (genre == null || genre.isEmpty)) {
+      return null;
+    }
+
+    return _LocalFileMetadata(
+      title: title,
+      artist: artist,
+      album: album == null || album.isEmpty ? null : album,
+      genre: genre == null || genre.isEmpty ? null : genre,
+    );
+  }
+
+  bool _wavInfoComplete(Map<String, String> tags) {
+    return tags.containsKey('title') &&
+        tags.containsKey('artist') &&
+        tags.containsKey('album') &&
+        tags.containsKey('genre');
+  }
+
+  void _readWavInfoList(
+    List<int> bytes,
+    int start,
+    int end,
+    Map<String, String> tags,
+  ) {
+    var offset = start;
+    while (offset + 8 <= end) {
+      final tagId = String.fromCharCodes(bytes.sublist(offset, offset + 4));
+      final valueLength = _uint32LittleEndian(bytes, offset + 4);
+      final valueStart = offset + 8;
+      final valueEnd = valueStart + valueLength;
+      if (valueLength < 0 || valueEnd > end) {
+        break;
+      }
+
+      final fieldKey = _wavInfoFieldKey(tagId);
+      if (fieldKey != null) {
+        final value = _normalizeEmbeddedText(
+          latin1.decode(
+            bytes.sublist(valueStart, valueEnd),
+            allowInvalid: true,
+          ),
+        );
+        if (value.isNotEmpty) {
+          tags.putIfAbsent(fieldKey, () => value);
+        }
+      }
+
+      offset = valueEnd + (valueLength.isOdd ? 1 : 0);
+    }
+  }
+
+  String? _wavInfoFieldKey(String tagId) {
+    return switch (tagId) {
+      'INAM' => 'title',
+      'IART' => 'artist',
+      'IPRD' => 'album',
+      'IGNR' => 'genre',
+      _ => null,
+    };
   }
 
   String _id3v1Text(List<int> bytes, int start, int length) {
@@ -1269,8 +1411,10 @@ final class _Id3v2TagData {
 const _maxId3v2TagBytes = 1024 * 1024;
 const _maxFlacMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
+const _maxWavInfoBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
+const _maxWavChunks = 2048;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
