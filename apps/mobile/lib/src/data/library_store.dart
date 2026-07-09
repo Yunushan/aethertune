@@ -64,6 +64,8 @@ enum CustomSmartPlaylistSortMode {
 
 enum AppThemePreference { system, light, dark, amoled }
 
+enum AppAccentColor { indigo, teal, rose, amber, violet, green }
+
 extension AppThemePreferenceLabel on AppThemePreference {
   String get label {
     switch (this) {
@@ -75,6 +77,25 @@ extension AppThemePreferenceLabel on AppThemePreference {
         return 'Dark';
       case AppThemePreference.amoled:
         return 'AMOLED';
+    }
+  }
+}
+
+extension AppAccentColorLabel on AppAccentColor {
+  String get label {
+    switch (this) {
+      case AppAccentColor.indigo:
+        return 'Indigo';
+      case AppAccentColor.teal:
+        return 'Teal';
+      case AppAccentColor.rose:
+        return 'Rose';
+      case AppAccentColor.amber:
+        return 'Amber';
+      case AppAccentColor.violet:
+        return 'Violet';
+      case AppAccentColor.green:
+        return 'Green';
     }
   }
 }
@@ -386,6 +407,13 @@ AppThemePreference _appThemePreferenceFromName(String? value) {
   );
 }
 
+AppAccentColor _appAccentColorFromName(String? value) {
+  return AppAccentColor.values.firstWhere(
+    (accent) => accent.name == value,
+    orElse: () => AppAccentColor.indigo,
+  );
+}
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
@@ -404,6 +432,7 @@ class LibraryStore extends ChangeNotifier {
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
+  static const _accentColorKey = 'aethertune.accent_color.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
   static const _offlineCacheLimitMegabytesKey =
       'aethertune.offline_cache_limit_mb.v1';
@@ -435,6 +464,7 @@ class LibraryStore extends ChangeNotifier {
   final DateTime Function() _clock;
   bool _offlineModeEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
+  AppAccentColor _accentColor = AppAccentColor.indigo;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
   final Map<String, int> _offlineCacheProviderLimitMegabytes = <String, int>{};
   bool _loaded = false;
@@ -459,6 +489,7 @@ class LibraryStore extends ChangeNotifier {
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get offlineModeEnabled => _offlineModeEnabled;
   AppThemePreference get themePreference => _themePreference;
+  AppAccentColor get accentColor => _accentColor;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
   int get offlineCacheLimitBytes => _offlineCacheLimitMegabytes * 1024 * 1024;
   Map<String, int> get offlineCacheProviderLimitMegabytes =>
@@ -609,6 +640,9 @@ class LibraryStore extends ChangeNotifier {
     _themePreference = _appThemePreferenceFromName(
       prefs.getString(_themePreferenceKey),
     );
+    _accentColor = _appAccentColorFromName(
+      prefs.getString(_accentColorKey),
+    );
     _offlineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
       prefs.getInt(_offlineCacheLimitMegabytesKey) ??
           defaultOfflineCacheLimitMegabytes,
@@ -752,6 +786,16 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _themePreference = preference;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setAccentColor(AppAccentColor accentColor) async {
+    if (_accentColor == accentColor) {
+      return;
+    }
+
+    _accentColor = accentColor;
     await _save();
     notifyListeners();
   }
@@ -1942,6 +1986,7 @@ class LibraryStore extends ChangeNotifier {
       'exportedAt': _clock().toIso8601String(),
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
+      'accentColor': _accentColor.name,
       'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
       'offlineCacheProviderLimitMegabytes':
           Map<String, int>.from(_offlineCacheProviderLimitMegabytes),
@@ -2338,6 +2383,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
+    var restoredAccentColor = AppAccentColor.indigo;
     var restoredOfflineCacheLimitMegabytes =
         defaultOfflineCacheLimitMegabytes;
     var restoredOfflineCacheProviderLimitMegabytes = <String, int>{};
@@ -2350,6 +2396,9 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredThemePreference = _appThemePreferenceFromName(
         _jsonOptionalString(backup, 'themePreference'),
+      );
+      restoredAccentColor = _appAccentColorFromName(
+        _jsonOptionalString(backup, 'accentColor'),
       );
       restoredOfflineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
         _jsonInt(
@@ -2486,6 +2535,7 @@ class LibraryStore extends ChangeNotifier {
       ..addAll(_dedupeOfflineCacheQueue(restoredOfflineCacheQueue));
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
+    _accentColor = restoredAccentColor;
     _offlineCacheLimitMegabytes = restoredOfflineCacheLimitMegabytes;
     _offlineCacheProviderLimitMegabytes
       ..clear()
@@ -4860,6 +4910,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
     await prefs.setString(_themePreferenceKey, _themePreference.name);
+    await prefs.setString(_accentColorKey, _accentColor.name);
     await prefs.setInt(
       _offlineCacheLimitMegabytesKey,
       _offlineCacheLimitMegabytes,

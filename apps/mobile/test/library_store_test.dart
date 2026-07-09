@@ -1695,6 +1695,7 @@ void main() {
 
     expect(firstStore.offlineModeEnabled, isFalse);
     expect(firstStore.themePreference, AppThemePreference.system);
+    expect(firstStore.accentColor, AppAccentColor.indigo);
     expect(
       firstStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
@@ -1703,6 +1704,7 @@ void main() {
 
     await firstStore.setOfflineModeEnabled(true);
     await firstStore.setThemePreference(AppThemePreference.amoled);
+    await firstStore.setAccentColor(AppAccentColor.rose);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
       ' Internet-Archive ',
@@ -1711,6 +1713,7 @@ void main() {
 
     expect(firstStore.offlineModeEnabled, isTrue);
     expect(firstStore.themePreference, AppThemePreference.amoled);
+    expect(firstStore.accentColor, AppAccentColor.rose);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
     expect(
@@ -1727,6 +1730,7 @@ void main() {
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
+    expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -1737,6 +1741,7 @@ void main() {
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
+    expect(backup['accentColor'], AppAccentColor.rose.name);
     expect(backup['offlineCacheLimitMegabytes'], 2048);
     expect(
       backup['offlineCacheProviderLimitMegabytes'],
@@ -1746,12 +1751,14 @@ void main() {
     final legacyBackup = Map<String, dynamic>.from(backup)
       ..remove('offlineModeEnabled')
       ..remove('themePreference')
+      ..remove('accentColor')
       ..remove('offlineCacheLimitMegabytes')
       ..remove('offlineCacheProviderLimitMegabytes');
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
 
     expect(secondStore.offlineModeEnabled, isFalse);
     expect(secondStore.themePreference, AppThemePreference.system);
+    expect(secondStore.accentColor, AppAccentColor.indigo);
     expect(
       secondStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
@@ -1762,6 +1769,7 @@ void main() {
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
+    expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),

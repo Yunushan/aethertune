@@ -154,6 +154,7 @@
 - [x] Release artifact workflow
 - [ ] Fully signed/notarized release process
 - [x] Persisted system/light/dark/AMOLED theme preference
-- [ ] Material You dynamic color and custom accent picker
+- [x] Custom accent color picker
+- [ ] Material You dynamic platform color
 - [ ] Accessibility pass
 - [ ] Localization setup

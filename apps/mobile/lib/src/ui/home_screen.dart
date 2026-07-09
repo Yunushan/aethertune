@@ -34,6 +34,7 @@ import '../domain/track_lyrics.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'responsive_layout.dart';
+import 'theme_colors.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
 
@@ -7125,6 +7126,31 @@ String _offlineCacheResultMessage({
   return '${parts.join('; ')}.';
 }
 
+class _AccentColorDropdownLabel extends StatelessWidget {
+  const _AccentColorDropdownLabel({required this.accentColor});
+
+  final AppAccentColor accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: seedColorForAccent(accentColor),
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: const SizedBox.square(dimension: 16),
+        ),
+        const SizedBox(width: 8),
+        Text(accentColor.label),
+      ],
+    );
+  }
+}
+
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab();
 
@@ -7197,6 +7223,26 @@ class _SettingsTab extends StatelessWidget {
             onChanged: (preference) {
               if (preference != null) {
                 unawaited(library.setThemePreference(preference));
+              }
+            },
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.color_lens_outlined),
+          title: const Text('Accent color'),
+          subtitle: Text(library.accentColor.label),
+          trailing: DropdownButton<AppAccentColor>(
+            value: library.accentColor,
+            items: <DropdownMenuItem<AppAccentColor>>[
+              for (final accentColor in AppAccentColor.values)
+                DropdownMenuItem<AppAccentColor>(
+                  value: accentColor,
+                  child: _AccentColorDropdownLabel(accentColor: accentColor),
+                ),
+            ],
+            onChanged: (accentColor) {
+              if (accentColor != null) {
+                unawaited(library.setAccentColor(accentColor));
               }
             },
           ),
