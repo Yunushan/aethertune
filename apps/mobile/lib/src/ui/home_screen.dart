@@ -4462,6 +4462,16 @@ class _HistoryTabState extends State<_HistoryTab> {
       to: statsTo,
     );
     final stats = library.libraryStats(from: statsFrom, to: statsTo);
+    final monthlyRecaps = library.listeningRecaps(
+      period: LibraryRecapPeriod.month,
+      limit: 6,
+      statsLimit: 1,
+    );
+    final yearlyRecaps = library.listeningRecaps(
+      period: LibraryRecapPeriod.year,
+      limit: 3,
+      statsLimit: 1,
+    );
 
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
@@ -4522,6 +4532,18 @@ class _HistoryTabState extends State<_HistoryTab> {
         _LibraryStatsOverview(stats: stats),
         if (stats.playbackCount > 0) ...<Widget>[
           const SizedBox(height: 16),
+          _ListeningRecapSection(
+            title: 'Monthly recaps',
+            icon: Icons.calendar_month_outlined,
+            recaps: monthlyRecaps,
+          ),
+          const SizedBox(height: 12),
+          _ListeningRecapSection(
+            title: 'Yearly recaps',
+            icon: Icons.event_note_outlined,
+            recaps: yearlyRecaps,
+          ),
+          const SizedBox(height: 12),
           _LibraryStatsTrackSection(stats: stats),
           const SizedBox(height: 12),
           _LibraryStatsGroupSection(
@@ -4847,6 +4869,124 @@ class _LibraryStatsGroupSection extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ListeningRecapSection extends StatelessWidget {
+  const _ListeningRecapSection({
+    required this.title,
+    required this.icon,
+    required this.recaps,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<LibraryListeningRecap> recaps;
+
+  @override
+  Widget build(BuildContext context) {
+    if (recaps.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final recap in recaps)
+              SizedBox(
+                width: 220,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Icon(icon),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _listeningRecapLabel(recap),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _listeningRecapSummary(recap.stats),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${recap.stats.uniquePlayedTrackCount} track(s)',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+String _listeningRecapLabel(LibraryListeningRecap recap) {
+  switch (recap.period) {
+    case LibraryRecapPeriod.month:
+      return '${_monthName(recap.start.month)} ${recap.start.year}';
+    case LibraryRecapPeriod.year:
+      return recap.start.year.toString();
+  }
+}
+
+String _listeningRecapSummary(LibraryStatsSummary stats) {
+  final parts = <String>[
+    '${stats.playbackCount} play(s)',
+    _formatStatsDuration(stats.estimatedListeningDuration),
+  ];
+  if (stats.topTracks.isNotEmpty) {
+    parts.add('Top track: ${stats.topTracks.first.track.title}');
+  } else if (stats.topArtists.isNotEmpty) {
+    parts.add('Top artist: ${stats.topArtists.first.label}');
+  }
+
+  return parts.join(' · ');
+}
+
+String _monthName(int month) {
+  const names = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  if (month < 1 || month > names.length) {
+    return 'Unknown month';
+  }
+
+  return names[month - 1];
 }
 
 class _StatsSection extends StatelessWidget {

@@ -67,7 +67,8 @@
 - [x] Local play counts
 - [x] Local stats recap
 - [x] Stats date ranges and export
-- [ ] Yearly/monthly recap cards and richer visualizations
+- [x] Yearly/monthly calendar recap cards
+- [ ] Richer recap visualizations and share cards
 - [x] Recently added view
 - [x] Local search suggestions
 - [x] Persisted search query history

@@ -55,6 +55,8 @@ enum LibraryHomeSectionType {
 
 enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
+enum LibraryRecapPeriod { month, year }
+
 enum LibraryMoodMixType { focus, energy, chill, workout, sleep }
 
 enum LibrarySimilarityReason { artist, album, genre, folder, source }
@@ -365,6 +367,20 @@ class LibraryStatsGroup {
   final int trackCount;
   final Duration estimatedListeningDuration;
   final DateTime? lastPlayedAt;
+}
+
+class LibraryListeningRecap {
+  const LibraryListeningRecap({
+    required this.period,
+    required this.start,
+    required this.end,
+    required this.stats,
+  });
+
+  final LibraryRecapPeriod period;
+  final DateTime start;
+  final DateTime end;
+  final LibraryStatsSummary stats;
 }
 
 class TrackRadioSeedQueue {
@@ -1515,6 +1531,43 @@ class LibraryStore extends ChangeNotifier {
       range: range,
       stats: libraryStats(limit: limit, from: from, to: to),
     );
+  }
+
+  List<LibraryListeningRecap> listeningRecaps({
+    LibraryRecapPeriod period = LibraryRecapPeriod.month,
+    int limit = 6,
+    int statsLimit = 3,
+  }) {
+    if (limit <= 0 || statsLimit < 0) {
+      return <LibraryListeningRecap>[];
+    }
+
+    final starts = <DateTime>{};
+    for (final entry in _history) {
+      starts.add(_listeningRecapStart(entry.playedAt, period));
+    }
+
+    final sortedStarts = starts.toList(growable: false)
+      ..sort((left, right) => right.compareTo(left));
+    final recaps = <LibraryListeningRecap>[];
+    for (final start in sortedStarts.take(limit)) {
+      final end = _listeningRecapEnd(start, period);
+      final stats = libraryStats(limit: statsLimit, from: start, to: end);
+      if (stats.playbackCount == 0) {
+        continue;
+      }
+
+      recaps.add(
+        LibraryListeningRecap(
+          period: period,
+          start: start,
+          end: end,
+          stats: stats,
+        ),
+      );
+    }
+
+    return recaps;
   }
 
   List<LibraryMoodMix> localMoodMixes({int limit = 8}) {
@@ -2872,6 +2925,30 @@ class LibraryStore extends ChangeNotifier {
         return now.subtract(const Duration(days: 30));
       case LibraryChartRange.year:
         return now.subtract(const Duration(days: 365));
+    }
+  }
+
+  DateTime _listeningRecapStart(DateTime value, LibraryRecapPeriod period) {
+    switch (period) {
+      case LibraryRecapPeriod.month:
+        return value.isUtc
+            ? DateTime.utc(value.year, value.month)
+            : DateTime(value.year, value.month);
+      case LibraryRecapPeriod.year:
+        return value.isUtc ? DateTime.utc(value.year) : DateTime(value.year);
+    }
+  }
+
+  DateTime _listeningRecapEnd(DateTime start, LibraryRecapPeriod period) {
+    switch (period) {
+      case LibraryRecapPeriod.month:
+        return start.isUtc
+            ? DateTime.utc(start.year, start.month + 1)
+            : DateTime(start.year, start.month + 1);
+      case LibraryRecapPeriod.year:
+        return start.isUtc
+            ? DateTime.utc(start.year + 1)
+            : DateTime(start.year + 1);
     }
   }
 

@@ -1012,6 +1012,96 @@ void main() {
     );
   });
 
+  test('builds calendar monthly and yearly listening recaps', () async {
+    var now = DateTime.utc(2026, 1, 1, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'jan',
+        title: 'January Song',
+        artist: 'Mira',
+        album: 'Winter',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        'feb',
+        title: 'February Song',
+        artist: 'Orion',
+        album: 'Signals',
+        genre: 'Electronic',
+        duration: const Duration(minutes: 4),
+      ),
+      _track(
+        'mar',
+        title: 'March Song',
+        artist: 'Mira',
+        album: 'Spring',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 5),
+      ),
+    ]);
+
+    now = DateTime.utc(2025, 12, 31, 20);
+    await store.recordPlayback('jan');
+    now = DateTime.utc(2026, 1, 5, 9);
+    await store.recordPlayback('jan');
+    now = DateTime.utc(2026, 1, 7, 10);
+    await store.recordPlayback('feb');
+    now = DateTime.utc(2026, 2, 1, 8);
+    await store.recordPlayback('feb');
+    now = DateTime.utc(2026, 2, 15, 8);
+    await store.recordPlayback('feb');
+    now = DateTime.utc(2026, 3, 2, 8);
+    await store.recordPlayback('mar');
+
+    final monthly = store.listeningRecaps(
+      period: LibraryRecapPeriod.month,
+      limit: 2,
+      statsLimit: 2,
+    );
+
+    expect(
+      monthly.map((recap) => recap.start),
+      <DateTime>[
+        DateTime.utc(2026, 3),
+        DateTime.utc(2026, 2),
+      ],
+    );
+    expect(monthly.first.period, LibraryRecapPeriod.month);
+    expect(monthly.first.end, DateTime.utc(2026, 4));
+    expect(monthly.first.stats.playbackCount, 1);
+    expect(monthly.first.stats.topTracks.single.track.id, 'mar');
+    expect(monthly.last.stats.playbackCount, 2);
+    expect(monthly.last.stats.topTracks.single.track.id, 'feb');
+    expect(monthly.last.stats.topTracks.single.playCount, 2);
+    expect(
+      monthly.last.stats.estimatedListeningDuration,
+      const Duration(minutes: 8),
+    );
+
+    final yearly = store.listeningRecaps(
+      period: LibraryRecapPeriod.year,
+      limit: 3,
+      statsLimit: 1,
+    );
+
+    expect(
+      yearly.map((recap) => recap.start),
+      <DateTime>[
+        DateTime.utc(2026),
+        DateTime.utc(2025),
+      ],
+    );
+    expect(yearly.first.period, LibraryRecapPeriod.year);
+    expect(yearly.first.end, DateTime.utc(2027));
+    expect(yearly.first.stats.playbackCount, 5);
+    expect(yearly.first.stats.topTracks.single.track.id, 'feb');
+    expect(yearly.last.stats.playbackCount, 1);
+    expect(store.listeningRecaps(limit: 0), isEmpty);
+  });
+
   test('builds local mood mixes from playable library metadata', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 2, 2, 12),
