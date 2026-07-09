@@ -57,7 +57,7 @@ Open a track menu and choose **Edit metadata** to update the saved title, artist
 
 ## Duplicate resolver
 
-Open the Options tab and choose **Resolve duplicates** when duplicate groups are found. AetherTune can match duplicate library entries by same local path, provider item, stream URL, or metadata plus known duration. Choose **Keep** on the track you want to preserve; playlists, favorites, lyrics, history, and playback progress are merged into that kept track.
+Open the Options tab and choose **Resolve duplicates** when duplicate groups are found. AetherTune can match duplicate library entries by same local path, scanner content hash, provider item, stream URL, or metadata plus known duration. Choose **Keep** on the track you want to preserve; playlists, favorites, lyrics, history, and playback progress are merged into that kept track.
 
 ## Favorites
 

@@ -171,7 +171,9 @@ void main() {
     expect(store.playlistById(playlist.id)!.trackIds, <String>['2']);
   });
 
-  test('detects duplicate tracks by path provider stream and metadata', () async {
+  test(
+    'detects duplicate tracks by path hash provider stream and metadata',
+    () async {
     final store = LibraryStore();
     await store.load();
     await store.addTracks(<Track>[
@@ -184,6 +186,18 @@ void main() {
         'path-b',
         title: 'Path B',
         localPath: '/music/shared.mp3',
+      ),
+      _track(
+        'hash-a',
+        title: 'Hash A',
+        localPath: '/music/hash-a.mp3',
+        contentHash: 'fnv64-1111222233334444',
+      ),
+      _track(
+        'hash-b',
+        title: 'Hash B',
+        localPath: '/music/hash-b.mp3',
+        contentHash: 'fnv64-1111222233334444',
       ),
       _track(
         'provider-a',
@@ -233,6 +247,7 @@ void main() {
       groups.map((group) => group.type),
       containsAll(<DuplicateMatchType>[
         DuplicateMatchType.localPath,
+        DuplicateMatchType.contentHash,
         DuplicateMatchType.sourceExternalId,
         DuplicateMatchType.streamUrl,
         DuplicateMatchType.metadata,
@@ -244,6 +259,13 @@ void main() {
           .tracks
           .map((track) => track.id),
       containsAll(<String>['path-a', 'path-b']),
+    );
+    expect(
+      groups
+          .firstWhere((group) => group.type == DuplicateMatchType.contentHash)
+          .tracks
+          .map((track) => track.id),
+      containsAll(<String>['hash-a', 'hash-b']),
     );
   });
 
@@ -2766,6 +2788,7 @@ Track _track(
   Duration duration = Duration.zero,
   DateTime? addedAt,
   String? localPath,
+  String? contentHash,
   String? streamUrl,
 }) {
   return Track(
@@ -2776,6 +2799,7 @@ Track _track(
     genre: genre,
     duration: duration,
     localPath: localPath ?? '/music/$id.mp3',
+    contentHash: contentHash,
     streamUrl: streamUrl,
     sourceId: sourceId,
     externalId: externalId,

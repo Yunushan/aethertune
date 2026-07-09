@@ -69,9 +69,31 @@ void main() {
       <String>{'local'},
     );
     expect(
+      result.tracks.map((track) => track.contentHash),
+      everyElement(isNotEmpty),
+    );
+    expect(
       result.tracks.first.id,
       Track.stableLocalId(p.join(albumOne.path, '01 Alpha.MP3')),
     );
+  });
+
+  test('assigns matching content hashes to identical file bytes', () async {
+    final first = File(p.join(root.path, 'First.mp3'));
+    final second = File(p.join(root.path, 'Second.mp3'));
+    final third = File(p.join(root.path, 'Third.mp3'));
+    await first.writeAsBytes(<int>[1, 2, 3, 4]);
+    await second.writeAsBytes(<int>[1, 2, 3, 4]);
+    await third.writeAsBytes(<int>[4, 3, 2, 1]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final hashesByTitle = <String, String?>{
+      for (final track in result.tracks) track.title: track.contentHash,
+    };
+
+    expect(hashesByTitle['First'], hashesByTitle['Second']);
+    expect(hashesByTitle['First'], isNot(hashesByTitle['Third']));
+    expect(localFileContentHash(<int>[1, 2, 3, 4]), hashesByTitle['First']);
   });
 
   test('keeps dashed song titles after parsed local artists', () async {

@@ -14,6 +14,7 @@ class Track {
     this.duration = Duration.zero,
     this.artworkUri,
     this.localPath,
+    this.contentHash,
     this.streamUrl,
     this.sourceId = 'local',
     this.externalId,
@@ -29,6 +30,7 @@ class Track {
   final Duration duration;
   final Uri? artworkUri;
   final String? localPath;
+  final String? contentHash;
   final String? streamUrl;
   final String sourceId;
   final String? externalId;
@@ -48,6 +50,7 @@ class Track {
     Duration? duration,
     Uri? artworkUri,
     String? localPath,
+    String? contentHash,
     String? streamUrl,
     String? sourceId,
     String? externalId,
@@ -63,6 +66,7 @@ class Track {
       duration: duration ?? this.duration,
       artworkUri: artworkUri ?? this.artworkUri,
       localPath: localPath ?? this.localPath,
+      contentHash: contentHash ?? this.contentHash,
       streamUrl: streamUrl ?? this.streamUrl,
       sourceId: sourceId ?? this.sourceId,
       externalId: externalId ?? this.externalId,
@@ -81,6 +85,7 @@ class Track {
       'durationMs': duration.inMilliseconds,
       'artworkUri': artworkUri?.toString(),
       'localPath': localPath,
+      'contentHash': contentHash,
       'streamUrl': streamUrl,
       'sourceId': sourceId,
       'externalId': externalId,
@@ -99,6 +104,7 @@ class Track {
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
       artworkUri: _parseUri(json['artworkUri'] as String?),
       localPath: json['localPath'] as String?,
+      contentHash: json['contentHash'] as String?,
       streamUrl: json['streamUrl'] as String?,
       sourceId: json['sourceId'] as String? ?? 'local',
       externalId: json['externalId'] as String?,

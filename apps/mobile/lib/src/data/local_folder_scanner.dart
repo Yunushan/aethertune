@@ -148,6 +148,7 @@ final class _LocalFolderScanState {
 
   Future<Track> _trackForFile(String path) async {
     final metadata = await _metadataForFile(path);
+    final contentHash = await _contentHashForFile(path);
 
     return Track(
       id: Track.stableLocalId(path),
@@ -157,9 +158,18 @@ final class _LocalFolderScanState {
       genre: metadata.genre ?? 'Unknown Genre',
       artworkUri: metadata.artworkUri,
       localPath: path,
+      contentHash: contentHash,
       sourceId: 'local',
       addedAt: importedAt,
     );
+  }
+
+  Future<String?> _contentHashForFile(String path) async {
+    try {
+      return localFileContentHash(await File(path).readAsBytes());
+    } on FileSystemException {
+      return null;
+    }
   }
 
   String _albumLabelFor(String filePath) {
@@ -1222,6 +1232,16 @@ final class _LocalFolderScanState {
 
     return true;
   }
+}
+
+String localFileContentHash(List<int> bytes) {
+  var hash = 0xcbf29ce484222325;
+  for (final byte in bytes) {
+    hash = (hash ^ (byte & 0xff)).toUnsigned(64);
+    hash = (hash * 0x100000001b3).toUnsigned(64);
+  }
+
+  return 'fnv64-${hash.toRadixString(16).padLeft(16, '0')}';
 }
 
 final class _Mp4Atom {

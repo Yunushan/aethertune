@@ -59,7 +59,8 @@
 - [ ] Rich embedded audio tag scanner
 - [x] Stored metadata editor
 - [x] Duplicate resolver scaffold
-- [ ] Audio fingerprint and file-hash duplicate matching
+- [x] File-hash duplicate matching
+- [ ] Audio fingerprint duplicate matching
 - [x] Recently played
 - [x] Local play counts
 - [x] Local stats recap

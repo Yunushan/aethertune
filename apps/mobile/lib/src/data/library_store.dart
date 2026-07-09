@@ -34,7 +34,13 @@ enum SearchSuggestionType {
   folder,
 }
 
-enum DuplicateMatchType { localPath, sourceExternalId, streamUrl, metadata }
+enum DuplicateMatchType {
+  localPath,
+  contentHash,
+  sourceExternalId,
+  streamUrl,
+  metadata,
+}
 
 enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 
@@ -1207,6 +1213,11 @@ class LibraryStore extends ChangeNotifier {
       addGroupTrack(
         DuplicateMatchType.localPath,
         track.localPath ?? '',
+        track,
+      );
+      addGroupTrack(
+        DuplicateMatchType.contentHash,
+        track.contentHash ?? '',
         track,
       );
       final externalId = track.externalId?.trim();

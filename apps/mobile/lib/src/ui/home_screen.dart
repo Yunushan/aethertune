@@ -7032,6 +7032,8 @@ String _duplicateMatchLabel(DuplicateMatchType type) {
   switch (type) {
     case DuplicateMatchType.localPath:
       return 'Same file path';
+    case DuplicateMatchType.contentHash:
+      return 'Same file content';
     case DuplicateMatchType.sourceExternalId:
       return 'Same provider item';
     case DuplicateMatchType.streamUrl:
@@ -7045,6 +7047,7 @@ String _duplicateTrackSubtitle(Track track) {
   final parts = <String>[
     track.artist,
     track.album,
+    if (track.contentHash != null) 'hash ${track.contentHash!}',
     if (track.localPath != null) track.localPath!,
     if (track.streamUrl != null) track.streamUrl!,
   ].where((part) => part.trim().isNotEmpty).toList(growable: false);

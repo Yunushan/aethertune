@@ -12,6 +12,7 @@ void main() {
       genre: 'Jazz',
       duration: const Duration(seconds: 42),
       localPath: '/music/song.mp3',
+      contentHash: 'fnv64-0011223344556677',
       sourceId: 'local',
       isFavorite: true,
       addedAt: DateTime.utc(2026),
@@ -26,6 +27,7 @@ void main() {
     expect(decoded.genre, track.genre);
     expect(decoded.duration, track.duration);
     expect(decoded.localPath, track.localPath);
+    expect(decoded.contentHash, track.contentHash);
     expect(decoded.isFavorite, isTrue);
   });
 
