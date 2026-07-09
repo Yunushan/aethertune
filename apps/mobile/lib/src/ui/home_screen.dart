@@ -801,6 +801,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final player = context.read<PlayerController>();
     final durations = <int>[5, 15, 30, 60, 90];
     var fadeOut = player.sleepTimerFadeOutEnabled;
+    var fadeDuration =
+        sleepTimerFadeDurationOptions.contains(player.sleepTimerFadeDuration)
+            ? player.sleepTimerFadeDuration
+            : defaultSleepTimerFadeDuration;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -815,8 +819,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   SwitchListTile(
                     secondary: const Icon(Icons.volume_down_outlined),
                     title: const Text('Fade out before stopping'),
-                    subtitle: const Text(
-                      'Lower volume during the final 30 seconds.',
+                    subtitle: Text(
+                      'Lower volume during the final '
+                      '${sleepTimerFadeDurationLabel(fadeDuration)}.',
                     ),
                     value: fadeOut,
                     onChanged: (value) {
@@ -825,6 +830,31 @@ class _HomeScreenState extends State<HomeScreen> {
                       });
                     },
                   ),
+                  if (fadeOut)
+                    ListTile(
+                      leading: const Icon(Icons.timelapse_outlined),
+                      title: const Text('Fade duration'),
+                      subtitle: Text(sleepTimerFadeDurationLabel(fadeDuration)),
+                      trailing: DropdownButton<Duration>(
+                        value: fadeDuration,
+                        items: <DropdownMenuItem<Duration>>[
+                          for (final option in sleepTimerFadeDurationOptions)
+                            DropdownMenuItem<Duration>(
+                              value: option,
+                              child: Text(sleepTimerFadeDurationLabel(option)),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+
+                          setSheetState(() {
+                            fadeDuration = value;
+                          });
+                        },
+                      ),
+                    ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.timer_off_outlined),
@@ -846,6 +876,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         context,
                         player,
                         fadeOut: fadeOut,
+                        fadeDuration: fadeDuration,
                       );
                     },
                   ),
@@ -868,12 +899,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       leading: const Icon(Icons.bedtime_outlined),
                       title: Text('Stop playback in $minutes minutes'),
                       subtitle: fadeOut
-                          ? const Text('Fade out in the final 30 seconds.')
+                          ? Text(
+                              'Fade out in the final '
+                              '${sleepTimerFadeDurationLabel(fadeDuration)}.',
+                            )
                           : null,
                       onTap: () {
                         player.startSleepTimer(
                           Duration(minutes: minutes),
                           fadeOut: fadeOut,
+                          fadeDuration: fadeDuration,
                         );
                         Navigator.of(sheetContext).pop();
                       },
@@ -891,6 +926,7 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     PlayerController player, {
     required bool fadeOut,
+    required Duration fadeDuration,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final duration = await _promptForCustomSleepTimerDuration(context);
@@ -898,7 +934,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    player.startSleepTimer(duration, fadeOut: fadeOut);
+    player.startSleepTimer(
+      duration,
+      fadeOut: fadeOut,
+      fadeDuration: fadeDuration,
+    );
 
     if (!context.mounted) {
       return;
@@ -909,7 +949,7 @@ class _HomeScreenState extends State<HomeScreen> {
         content: Text(
           fadeOut
               ? 'Sleep timer set for ${duration.inMinutes} minute(s) '
-                  'with fade-out.'
+                  'with ${sleepTimerFadeDurationLabel(fadeDuration)} fade-out.'
               : 'Sleep timer set for ${duration.inMinutes} minute(s).',
         ),
       ),

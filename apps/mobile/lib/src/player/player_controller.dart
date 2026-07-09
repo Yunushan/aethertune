@@ -41,6 +41,7 @@ class PlayerController extends ChangeNotifier {
   String? _loadedTrackId;
   bool _stopAtEndOfTrack = false;
   bool _sleepTimerFadesOut = false;
+  Duration _sleepTimerFadeDuration = defaultSleepTimerFadeDuration;
   bool _queueSnapshotLoaded = false;
   bool _playbackSettingsLoaded = false;
   bool _offlineModeEnabled = false;
@@ -59,6 +60,7 @@ class PlayerController extends ChangeNotifier {
   Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
   bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
+  Duration get sleepTimerFadeDuration => _sleepTimerFadeDuration;
   bool get offlineModeEnabled => _offlineModeEnabled;
 
   void setOfflineModeEnabled(bool enabled) {
@@ -286,6 +288,7 @@ class PlayerController extends ChangeNotifier {
     _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = false;
     _sleepTimerFadesOut = fadeOut;
+    _sleepTimerFadeDuration = fadeDuration;
     _sleepTimer = Timer(duration, () async {
       _sleepTimer = null;
       _sleepTimerFadesOut = false;

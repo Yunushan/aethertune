@@ -1,6 +1,12 @@
 const int minCustomSleepTimerMinutes = 1;
 const int maxCustomSleepTimerMinutes = 24 * 60;
 const Duration defaultSleepTimerFadeDuration = Duration(seconds: 30);
+const List<Duration> sleepTimerFadeDurationOptions = <Duration>[
+  Duration(seconds: 10),
+  defaultSleepTimerFadeDuration,
+  Duration(minutes: 1),
+  Duration(minutes: 2),
+];
 const int sleepTimerFadeSteps = 10;
 
 Duration? parseCustomSleepTimerDuration(String input) {
@@ -12,6 +18,15 @@ Duration? parseCustomSleepTimerDuration(String input) {
   }
 
   return Duration(minutes: minutes);
+}
+
+String sleepTimerFadeDurationLabel(Duration duration) {
+  if (duration.inSeconds < 60) {
+    return '${duration.inSeconds} seconds';
+  }
+
+  final minutes = duration.inMinutes;
+  return minutes == 1 ? '1 minute' : '$minutes minutes';
 }
 
 Duration sleepTimerFadeStartDelay(

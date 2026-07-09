@@ -31,6 +31,7 @@
 - [x] Custom sleep timer duration
 - [x] End-of-track sleep timer
 - [x] Optional sleep timer fade-out
+- [x] Adjustable sleep timer fade duration
 - [x] Provider interface
 - [ ] More unit tests
 - [ ] UI polish

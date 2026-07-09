@@ -139,7 +139,7 @@ This scaffold includes real app code, not only a README:
 | Playlists | Built-in and custom rule smart playlists plus create, rename, artwork URL edit, delete, open, find within, reorder, import/export JSON/M3U/CSV, copy playlist share text, and play manual playlists |
 | Lyrics | Add, import, export, edit, view, search, and delete plain text or LRC timestamped lyrics, including playback-linked synced highlighting and copyable lyrics excerpt share text |
 | Favorites | Toggle favorites per track |
-| Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track, with optional final-30-second fade-out |
+| Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track, with optional 10-second, 30-second, 1-minute, or 2-minute fade-out |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
 | Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered checksum-verified private cache storage with HTTP Range retry resume plus user-chosen folder export and automatic app/provider quota eviction for direct media URLs, unified provider search with local library merge, demo provider, Podcast RSS feeds, Radio Browser mirror discovery/search/filtering/stream validation, Internet Archive audio search/filtering/facet suggestions, Jellyfin adapter foundation, and Navidrome/Subsonic adapter foundation |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
