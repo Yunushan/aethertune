@@ -50,7 +50,7 @@
 - [x] Backup/restore JSON
 - [x] Imported-track folder browse
 - [x] Recursive folder import
-- [ ] Recursive folder browser
+- [x] Recursive folder browser
 - [x] Filename metadata scanner
 - [x] Basic ID3v1 MP3 metadata scanner
 - [x] Basic ID3v2 MP3 text metadata scanner

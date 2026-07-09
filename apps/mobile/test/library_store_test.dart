@@ -2637,6 +2637,71 @@ void main() {
     );
   });
 
+  test('builds recursive folder tree and opens descendant tracks', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        title: 'First',
+        album: 'Dawn',
+        duration: const Duration(minutes: 2),
+        localPath: '/music/Ari/Dawn/first.mp3',
+      ),
+      _track(
+        '2',
+        title: 'Second',
+        album: 'Dusk',
+        duration: const Duration(minutes: 3),
+        localPath: '/music/Ari/Dusk/second.mp3',
+      ),
+      _track(
+        '3',
+        title: 'Third',
+        album: 'Dawn',
+        duration: const Duration(minutes: 4),
+        localPath: r'C:\Music\Mia\Dawn\third.mp3',
+      ),
+      _track(
+        'stream',
+        title: 'Remote',
+        localPath: '',
+        streamUrl: 'https://media.example.test/remote.mp3',
+      ),
+    ]);
+
+    final tree = store.folderTree();
+    final ariNode = tree.firstWhere((node) => node.label == 'Ari');
+    final ariDawnNode = tree.firstWhere(
+      (node) => node.label == 'Dawn' && node.path.contains('Ari'),
+    );
+    final windowsDawnNode = tree.firstWhere(
+      (node) => node.label == 'Dawn' && node.path.contains('Mia'),
+    );
+
+    expect(ariNode.trackCount, 2);
+    expect(ariNode.directTrackCount, 0);
+    expect(ariNode.childCount, 2);
+    expect(ariNode.totalDuration, const Duration(minutes: 5));
+    expect(ariDawnNode.trackCount, 1);
+    expect(windowsDawnNode.trackCount, 1);
+    expect(tree.map((node) => node.label), isNot(contains('Remote Streams')));
+    expect(
+      store.tracksForFolderNode(ariNode.key).map((track) => track.id),
+      <String>['1', '2'],
+    );
+    expect(
+      store.tracksForFolderNode(ariDawnNode.key).map((track) => track.id),
+      <String>['1'],
+    );
+
+    final shareText = store.shareFolderNodeText(ariNode.key)!;
+    expect(shareText, contains('AetherTune folder'));
+    expect(shareText, contains('Name: Ari'));
+    expect(shareText, contains('Tracks: 2'));
+    expect(shareText, isNot(contains('/music')));
+  });
+
   test('exports and restores a full library backup', () async {
     DateTime clock() => DateTime.utc(2026, 1, 11);
     final firstStore = LibraryStore(clock: clock);

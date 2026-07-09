@@ -144,6 +144,28 @@ class LibraryBrowseGroup {
   final Duration totalDuration;
 }
 
+class LibraryFolderNode {
+  const LibraryFolderNode({
+    required this.key,
+    required this.path,
+    required this.label,
+    required this.depth,
+    required this.trackCount,
+    required this.directTrackCount,
+    required this.totalDuration,
+    required this.childCount,
+  });
+
+  final String key;
+  final String path;
+  final String label;
+  final int depth;
+  final int trackCount;
+  final int directTrackCount;
+  final Duration totalDuration;
+  final int childCount;
+}
+
 class SmartPlaylist {
   const SmartPlaylist({
     required this.type,
@@ -1324,6 +1346,77 @@ class LibraryStore extends ChangeNotifier {
     return _sortTrackResults(tracks, sortMode);
   }
 
+  List<LibraryFolderNode> folderTree({String query = ''}) {
+    final nodesByKey = <String, _MutableFolderNode>{};
+
+    for (final track in _tracks) {
+      final localPath = track.localPath?.trim();
+      if (localPath == null || localPath.isEmpty) {
+        continue;
+      }
+
+      final context = _pathContextFor(localPath);
+      final folderPath = _folderLabelForTrack(track);
+      final ancestors = _folderAncestors(folderPath, context);
+      String? parentKey;
+      for (var index = 0; index < ancestors.length; index += 1) {
+        final ancestorPath = ancestors[index];
+        final key = _folderTreeKey(ancestorPath);
+        final node = nodesByKey.putIfAbsent(
+          key,
+          () => _MutableFolderNode(
+            key: key,
+            path: ancestorPath,
+            label: _folderTreeLabel(ancestorPath, context),
+            depth: index,
+          ),
+        );
+
+        if (parentKey != null) {
+          nodesByKey[parentKey]?.addChild(key);
+        }
+
+        node.addTrack(track, direct: index == ancestors.length - 1);
+        parentKey = key;
+      }
+    }
+
+    final searchQuery = SearchQuery.parse(query);
+    final nodes = nodesByKey.values
+        .where(
+          (node) => searchQuery.isEmpty ||
+              searchFieldsMatch(<String>[node.label, node.path], searchQuery),
+        )
+        .map((node) => node.toFolderNode())
+        .toList(growable: false);
+
+    nodes.sort((a, b) => _compareText(a.key, b.key));
+    return nodes;
+  }
+
+  List<Track> tracksForFolderNode(
+    String key, {
+    LibrarySortMode sortMode = LibrarySortMode.album,
+  }) {
+    final normalizedKey = _folderTreeKey(key);
+    if (normalizedKey.isEmpty) {
+      return <Track>[];
+    }
+
+    final tracks = _tracks.where((track) {
+      final localPath = track.localPath?.trim();
+      if (localPath == null || localPath.isEmpty) {
+        return false;
+      }
+
+      final folderKey = _folderTreeKey(_folderLabelForTrack(track));
+      return folderKey == normalizedKey ||
+          folderKey.startsWith('$normalizedKey/');
+    }).toList(growable: false);
+
+    return _sortTrackResults(tracks, sortMode);
+  }
+
   List<SmartPlaylist> smartPlaylists() {
     return SmartPlaylistType.values.map((type) {
       final trackCount = tracksForSmartPlaylist(
@@ -2117,6 +2210,25 @@ class LibraryStore extends ChangeNotifier {
     final buffer = StringBuffer()
       ..writeln('AetherTune ${_shareBrowseTypeName(type)}')
       ..writeln('Name: ${_shareBrowseGroupLabel(type, tracks.first)}')
+      ..writeln('Tracks: ${tracks.length}')
+      ..writeln('Duration: ${_shareDuration(_totalDuration(tracks))}')
+      ..writeln();
+    _writeShareTrackList(buffer, tracks);
+
+    return buffer.toString().trimRight();
+  }
+
+  String? shareFolderNodeText(String key) {
+    final tracks = tracksForFolderNode(key);
+    if (tracks.isEmpty) {
+      return null;
+    }
+
+    final node = folderTree().where((node) => node.key == _folderTreeKey(key));
+    final label = node.isEmpty ? key : node.first.path;
+    final buffer = StringBuffer()
+      ..writeln('AetherTune folder')
+      ..writeln('Name: ${_shareFolderName(label)}')
       ..writeln('Tracks: ${tracks.length}')
       ..writeln('Duration: ${_shareDuration(_totalDuration(tracks))}')
       ..writeln();
@@ -4372,15 +4484,49 @@ class LibraryStore extends ChangeNotifier {
       return 'Remote Streams';
     }
 
-    final context = _looksLikeWindowsPath(localPath)
-        ? _windowsPathContext
-        : _posixPathContext;
+    final context = _pathContextFor(localPath);
     final directory = context.dirname(localPath);
     if (directory == '.' || directory == localPath) {
       return 'Unknown Folder';
     }
 
     return _nonEmptyMetadata(directory, 'Unknown Folder');
+  }
+
+  path.Context _pathContextFor(String value) {
+    return _looksLikeWindowsPath(value)
+        ? _windowsPathContext
+        : _posixPathContext;
+  }
+
+  List<String> _folderAncestors(String folderPath, path.Context context) {
+    final parts = context.split(folderPath);
+    final ancestors = <String>[];
+    var current = '';
+
+    for (final part in parts) {
+      if (part.trim().isEmpty) {
+        continue;
+      }
+
+      current = current.isEmpty ? part : context.join(current, part);
+      if (current == context.dirname(current)) {
+        continue;
+      }
+
+      ancestors.add(current);
+    }
+
+    return ancestors;
+  }
+
+  String _folderTreeLabel(String folderPath, path.Context context) {
+    final label = context.basename(folderPath).trim();
+    return label.isEmpty ? folderPath : label;
+  }
+
+  String _folderTreeKey(String value) {
+    return _nonEmptyMetadata(value, '').replaceAll('\\', '/').toLowerCase();
   }
 
   bool _looksLikeWindowsPath(String value) {
@@ -4959,6 +5105,50 @@ class _MutableBrowseGroup {
       label: label,
       trackCount: trackCount,
       totalDuration: totalDuration,
+    );
+  }
+}
+
+class _MutableFolderNode {
+  _MutableFolderNode({
+    required this.key,
+    required this.path,
+    required this.label,
+    required this.depth,
+  });
+
+  final String key;
+  final String path;
+  final String label;
+  final int depth;
+  final Set<String> trackIds = <String>{};
+  final Set<String> directTrackIds = <String>{};
+  final Set<String> childKeys = <String>{};
+  Duration totalDuration = Duration.zero;
+
+  void addChild(String key) {
+    childKeys.add(key);
+  }
+
+  void addTrack(Track track, {required bool direct}) {
+    if (trackIds.add(track.id)) {
+      totalDuration += track.duration;
+    }
+    if (direct) {
+      directTrackIds.add(track.id);
+    }
+  }
+
+  LibraryFolderNode toFolderNode() {
+    return LibraryFolderNode(
+      key: key,
+      path: path,
+      label: label,
+      depth: depth,
+      trackCount: trackIds.length,
+      directTrackCount: directTrackIds.length,
+      totalDuration: totalDuration,
+      childCount: childKeys.length,
     );
   }
 }

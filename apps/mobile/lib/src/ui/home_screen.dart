@@ -2293,6 +2293,26 @@ Future<void> _showLibraryBrowseTracks(
   );
 }
 
+Future<void> _showLibraryFolderNodeTracks(
+  BuildContext context, {
+  required LibraryFolderNode node,
+  required ValueChanged<Track> onAddToPlaylist,
+  required ValueChanged<Track> onLyrics,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (_) {
+      return _LibraryFolderNodeTracksSheet(
+        node: node,
+        onAddToPlaylist: onAddToPlaylist,
+        onLyrics: onLyrics,
+      );
+    },
+  );
+}
+
 Future<void> _showSimilarTracks(
   BuildContext context,
   Track seedTrack, {
@@ -2332,8 +2352,40 @@ class _LibraryBrowseGroupsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
-    final groups = library.browseGroups(type);
+    if (type == LibraryBrowseType.folder) {
+      final folderNodes = library.folderTree();
+      return SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            ListTile(
+              leading: Icon(_libraryBrowseTypeIcon(type)),
+              title: Text(_libraryBrowseTypeLabel(type)),
+              subtitle: Text('${folderNodes.length} folder node(s)'),
+            ),
+            const Divider(height: 1),
+            if (folderNodes.isEmpty)
+              ListTile(
+                leading: Icon(_libraryBrowseTypeIcon(type)),
+                title: const Text('Nothing to browse yet'),
+                subtitle: const Text(
+                  'Import a local audio folder to build the tree.',
+                ),
+              )
+            else
+              for (final node in folderNodes)
+                _LibraryFolderNodeTile(
+                  rootContext: rootContext,
+                  node: node,
+                  onAddToPlaylist: onAddToPlaylist,
+                  onLyrics: onLyrics,
+                ),
+          ],
+        ),
+      );
+    }
 
+    final groups = library.browseGroups(type);
     return SafeArea(
       child: ListView(
         shrinkWrap: true,
@@ -2371,6 +2423,49 @@ class _LibraryBrowseGroupsSheet extends StatelessWidget {
                 },
               ),
         ],
+      ),
+    );
+  }
+}
+
+class _LibraryFolderNodeTile extends StatelessWidget {
+  const _LibraryFolderNodeTile({
+    required this.rootContext,
+    required this.node,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final BuildContext rootContext;
+  final LibraryFolderNode node;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final indent = node.depth > 6 ? 72.0 : 12.0 * node.depth;
+    return Padding(
+      padding: EdgeInsetsDirectional.only(start: indent),
+      child: ListTile(
+        leading: Icon(
+          node.childCount > 0
+              ? Icons.folder_open_outlined
+              : Icons.folder_outlined,
+        ),
+        title: Text(node.label),
+        subtitle: Text(_libraryFolderNodeSubtitle(node)),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          Navigator.of(context).pop();
+          unawaited(
+            _showLibraryFolderNodeTracks(
+              rootContext,
+              node: node,
+              onAddToPlaylist: onAddToPlaylist,
+              onLyrics: onLyrics,
+            ),
+          );
+        },
       ),
     );
   }
@@ -2421,6 +2516,90 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                         type,
                         group,
                       ),
+                    ),
+                    icon: const Icon(Icons.ios_share),
+                  ),
+                );
+              }
+
+              final track = tracks[index - 1];
+              return TrackTile(
+                track: track,
+                onPlay: () => _playTrackWithResume(
+                  context,
+                  player,
+                  library,
+                  track,
+                  queue: tracks,
+                ),
+                onStartRadio: () => unawaited(
+                  _startTrackRadio(context, player, library, track),
+                ),
+                onSimilarTracks: () => unawaited(
+                  _showSimilarTracks(
+                    context,
+                    track,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
+                onShare: () => unawaited(
+                  _copyTrackShareText(context, library, track),
+                ),
+                onFavorite: () => library.toggleFavorite(track.id),
+                onAddToPlaylist: () => onAddToPlaylist(track),
+                onLyrics: () => onLyrics(track),
+                onEditMetadata: () => unawaited(
+                  _showTrackMetadataEditor(context, track),
+                ),
+                onRemove: () => library.removeTrack(track.id),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LibraryFolderNodeTracksSheet extends StatelessWidget {
+  const _LibraryFolderNodeTracksSheet({
+    required this.node,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final LibraryFolderNode node;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final tracks = library.tracksForFolderNode(node.key);
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView.separated(
+            controller: controller,
+            itemCount: tracks.length + 1,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  leading: const Icon(Icons.folder_open_outlined),
+                  title: Text(node.path),
+                  subtitle: Text(_libraryFolderNodeSubtitle(node)),
+                  trailing: IconButton(
+                    tooltip: 'Copy share text',
+                    onPressed: () => unawaited(
+                      _copyFolderNodeShareText(context, library, node),
                     ),
                     icon: const Icon(Icons.ios_share),
                   ),
@@ -2661,6 +2840,21 @@ String _libraryBrowseGroupSubtitle(LibraryBrowseGroup group) {
   final parts = <String>['${group.trackCount} track(s)'];
   if (duration > Duration.zero) {
     parts.add(_formatBrowseDuration(duration));
+  }
+
+  return parts.join(' · ');
+}
+
+String _libraryFolderNodeSubtitle(LibraryFolderNode node) {
+  final parts = <String>['${node.trackCount} track(s)'];
+  if (node.childCount > 0) {
+    parts.add('${node.childCount} folder(s)');
+  }
+  if (node.directTrackCount > 0) {
+    parts.add('${node.directTrackCount} here');
+  }
+  if (node.totalDuration > Duration.zero) {
+    parts.add(_formatBrowseDuration(node.totalDuration));
   }
 
   return parts.join(' · ');
@@ -4851,6 +5045,19 @@ Future<void> _copyBrowseGroupShareText(
     copiedMessage: 'Copied share text for ${group.label}.',
     unavailableMessage:
         'Share text is unavailable for ${_libraryBrowseTypeLabel(type)}.',
+  );
+}
+
+Future<void> _copyFolderNodeShareText(
+  BuildContext context,
+  LibraryStore library,
+  LibraryFolderNode node,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.shareFolderNodeText(node.key),
+    copiedMessage: 'Copied share text for ${node.label}.',
+    unavailableMessage: 'Share text is unavailable for ${node.label}.',
   );
 }
 
