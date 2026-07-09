@@ -2799,11 +2799,13 @@ class LibraryStore extends ChangeNotifier {
     int limit = 25,
     DateTime? from,
     DateTime? to,
+    String query = '',
   }) {
     if (limit <= 0) {
       return <Track>[];
     }
 
+    final searchQuery = SearchQuery.parse(query);
     final byId = <String, Track>{
       for (final track in _tracks) track.id: track,
     };
@@ -2824,6 +2826,10 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
 
+      if (!searchQuery.isEmpty && !_trackMatchesQuery(track, searchQuery)) {
+        continue;
+      }
+
       seen.add(entry.trackId);
       recentTracks.add(track);
       if (recentTracks.length >= limit) {
@@ -2838,15 +2844,37 @@ class LibraryStore extends ChangeNotifier {
     int limit = 50,
     DateTime? from,
     DateTime? to,
+    String query = '',
   }) {
     if (limit <= 0) {
       return <PlaybackHistoryEntry>[];
     }
 
-    return _history
-        .where((entry) => _historyEntryInRange(entry, from: from, to: to))
-        .take(limit)
-        .toList(growable: false);
+    final searchQuery = SearchQuery.parse(query);
+    final byId = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+    final entries = <PlaybackHistoryEntry>[];
+
+    for (final entry in _history) {
+      if (!_historyEntryInRange(entry, from: from, to: to)) {
+        continue;
+      }
+
+      if (!searchQuery.isEmpty) {
+        final track = byId[entry.trackId];
+        if (track == null || !_trackMatchesQuery(track, searchQuery)) {
+          continue;
+        }
+      }
+
+      entries.add(entry);
+      if (entries.length >= limit) {
+        break;
+      }
+    }
+
+    return entries;
   }
 
   Future<void> removePlaybackHistoryEntry(

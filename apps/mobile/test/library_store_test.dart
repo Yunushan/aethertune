@@ -1417,6 +1417,57 @@ void main() {
     expect(secondStore.playCountForTrack('1'), 1);
   });
 
+  test('searches playback history by played track metadata', () async {
+    var now = DateTime.utc(2026, 1, 10, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'ambient',
+        title: 'Aether Drift',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+      ),
+      _track(
+        'rock',
+        title: 'Night Spark',
+        artist: 'Orion',
+        album: 'Voltage',
+        genre: 'Rock',
+      ),
+    ]);
+
+    await store.recordPlayback('ambient');
+    now = DateTime.utc(2026, 1, 10, 12, 1);
+    await store.recordPlayback('rock');
+    now = DateTime.utc(2026, 1, 10, 12, 2);
+    await store.recordPlayback('ambient');
+
+    expect(
+      store.recentlyPlayedTracks(query: 'mira').map((track) => track.id),
+      <String>['ambient'],
+    );
+    expect(
+      store.playbackHistoryEntries(query: 'mira').map((entry) => entry.trackId),
+      <String>['ambient', 'ambient'],
+    );
+    expect(
+      store
+          .playbackHistoryEntries(limit: 1, query: 'ambient')
+          .map((entry) => entry.trackId),
+      <String>['ambient'],
+    );
+    expect(
+      store.playbackHistoryEntries(query: 'voltage').map(
+            (entry) => entry.trackId,
+          ),
+      <String>['rock'],
+    );
+    expect(store.recentlyPlayedTracks(query: 'missing'), isEmpty);
+    expect(store.playbackHistoryEntries(query: 'missing'), isEmpty);
+  });
+
   test('pauses playback history and resume progress recording', () async {
     var now = DateTime.utc(2026, 1, 10, 12);
     final store = LibraryStore(clock: () => now);

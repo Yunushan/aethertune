@@ -4449,7 +4449,16 @@ class _HistoryTab extends StatefulWidget {
 }
 
 class _HistoryTabState extends State<_HistoryTab> {
+  final _historySearchController = TextEditingController();
+
   _HistoryStatsRange _statsRange = _HistoryStatsRange.all;
+  String _historyQuery = '';
+
+  @override
+  void dispose() {
+    _historySearchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4458,13 +4467,17 @@ class _HistoryTabState extends State<_HistoryTab> {
     final now = DateTime.now();
     final statsFrom = _historyStatsRangeStart(_statsRange, now);
     final statsTo = _statsRange == _HistoryStatsRange.all ? null : now;
+    final historyQuery = _historyQuery.trim();
+    final hasHistorySearch = historyQuery.isNotEmpty;
     final recentlyPlayed = library.recentlyPlayedTracks(
       from: statsFrom,
       to: statsTo,
+      query: historyQuery,
     );
     final historyEntries = library.playbackHistoryEntries(
       from: statsFrom,
       to: statsTo,
+      query: historyQuery,
     );
     final historyTracksById = <String, Track>{
       for (final track in library.tracks) track.id: track,
@@ -4524,6 +4537,28 @@ class _HistoryTabState extends State<_HistoryTab> {
           value: library.pauseListeningHistory,
           onChanged: (value) {
             unawaited(library.setPauseListeningHistory(value));
+          },
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _historySearchController,
+          decoration: InputDecoration(
+            labelText: 'Search listening history',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: hasHistorySearch
+                ? IconButton(
+                    tooltip: 'Clear history search',
+                    onPressed: () {
+                      _historySearchController.clear();
+                      setState(() => _historyQuery = '');
+                    },
+                    icon: const Icon(Icons.close),
+                  )
+                : null,
+          ),
+          textInputAction: TextInputAction.search,
+          onChanged: (value) {
+            setState(() => _historyQuery = value);
           },
         ),
         const SizedBox(height: 8),
@@ -4606,7 +4641,14 @@ class _HistoryTabState extends State<_HistoryTab> {
         ),
         const SizedBox(height: 8),
         if (recentlyPlayed.isEmpty)
-          const _EmptyHistory()
+          _EmptyHistory(
+            title: hasHistorySearch
+                ? 'No matching history'
+                : 'No listening history yet',
+            message: hasHistorySearch
+                ? 'Try a different title, artist, album, genre, source, folder, or saved lyric.'
+                : 'Played library tracks will appear here.',
+          )
         else
           for (final track in recentlyPlayed)
             ListTile(
@@ -5101,7 +5143,13 @@ class _PlaybackHistoryEntrySection extends StatelessWidget {
 }
 
 class _EmptyHistory extends StatelessWidget {
-  const _EmptyHistory();
+  const _EmptyHistory({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -5112,12 +5160,12 @@ class _EmptyHistory extends StatelessWidget {
           const Icon(Icons.history, size: 56),
           const SizedBox(height: 16),
           Text(
-            'No listening history yet',
+            title,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Played library tracks will appear here.',
+          Text(
+            message,
             textAlign: TextAlign.center,
           ),
         ],
