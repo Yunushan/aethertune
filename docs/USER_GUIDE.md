@@ -29,7 +29,7 @@ dart run bin/server.dart
 
 1. Open the app.
 2. Tap the library-add icon in the top-right corner to select one or more audio files, or tap the folder icon to scan a folder recursively.
-3. AetherTune imports supported audio files, reads basic ID3v1 MP3 title/artist/album tags, ID3v2 MP3 title/artist/album/genre text tags plus APIC/PIC artwork, FLAC Vorbis comment title/artist/album/genre tags plus picture artwork, M4A title/artist/album/genre metadata atoms plus `covr` artwork, and WAV RIFF INFO title/artist/album/genre tags during folder scans, parses common filename metadata such as leading track numbers and `Artist - Title` when tags are missing, and groups folder-scanned tracks by their parent folders.
+3. AetherTune imports supported audio files, reads basic ID3v1 MP3 title/artist/album tags, ID3v2 MP3 title/artist/album/genre text tags plus APIC/PIC artwork, FLAC Vorbis comment title/artist/album/genre tags plus picture artwork, M4A title/artist/album/genre metadata atoms plus `covr` artwork, and WAV RIFF INFO title/artist/album/genre tags during folder scans, attaches matching basename `.lrc` or `.txt` lyric sidecars without replacing lyrics you already saved, parses common filename metadata such as leading track numbers and `Artist - Title` when tags are missing, and groups folder-scanned tracks by their parent folders.
 4. Tap a track to play it.
 
 ## Home
@@ -77,7 +77,7 @@ Use the Playlists tab to open built-in smart playlists for favorites, recently a
 
 ## Lyrics
 
-Open a track menu in the Library tab and choose **Lyrics**. You can save plain text lyrics for that track, import a UTF-8 `.txt` or `.lrc` file, paste LRC timestamped lyrics to preview timed lines, copy the full lyrics export text with a suggested `.txt` or `.lrc` filename, copy a bounded lyrics share excerpt, edit lyrics later, or delete them from the same dialog. Saved lyrics are included in Library, playlist, and custom smart playlist searches. While a track is playing, use the lyrics button in the player bar to open now-playing lyrics; LRC lines highlight and scroll with playback, and saved lyrics can be copied as timestamp-free share text from the sheet header.
+Open a track menu in the Library tab and choose **Lyrics**. You can save plain text lyrics for that track, import a UTF-8 `.txt` or `.lrc` file, paste LRC timestamped lyrics to preview timed lines, copy the full lyrics export text with a suggested `.txt` or `.lrc` filename, copy a bounded lyrics share excerpt, edit lyrics later, or delete them from the same dialog. Folder import also attaches matching sidecar lyrics such as `Song.lrc` or `Song.txt` beside `Song.mp3`, preferring LRC when both exist. Saved lyrics are included in Library, playlist, and custom smart playlist searches. While a track is playing, use the lyrics button in the player bar to open now-playing lyrics; LRC lines highlight and scroll with playback, and saved lyrics can be copied as timestamp-free share text from the sheet header.
 
 ## Backup and restore
 

@@ -777,6 +777,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (scanResult.tracks.isNotEmpty) {
         await library.addTracks(scanResult.tracks);
+        for (final entry in scanResult.sidecarLyricsByTrackId.entries) {
+          await library.setLyricsIfAbsent(entry.key, entry.value);
+        }
       }
 
       if (!context.mounted) {
@@ -5180,6 +5183,9 @@ String _folderImportSummary(LocalFolderScanResult result) {
   final details = <String>[
     'Imported ${result.tracks.length} audio file(s) from folder.',
   ];
+  if (result.sidecarLyricsCount > 0) {
+    details.add('Imported lyrics for ${result.sidecarLyricsCount} track(s).');
+  }
   if (result.ignoredFileCount > 0) {
     details.add('Skipped ${result.ignoredFileCount} non-audio file(s).');
   }

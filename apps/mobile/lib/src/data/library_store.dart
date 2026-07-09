@@ -3283,6 +3283,14 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setLyricsIfAbsent(String trackId, String plainText) async {
+    if (_lyricsByTrackId.containsKey(trackId)) {
+      return;
+    }
+
+    await setLyrics(trackId, plainText);
+  }
+
   Future<void> deleteLyrics(String trackId) async {
     if (!_lyricsByTrackId.containsKey(trackId)) {
       return;

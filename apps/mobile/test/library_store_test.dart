@@ -634,6 +634,21 @@ void main() {
     expect(store.lyricsForTrack('1'), isNull);
   });
 
+  test('sets sidecar lyrics only when a track has no saved lyrics', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 6),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1'), _track('2')]);
+    await store.setLyrics('1', 'user edited lyrics');
+
+    await store.setLyricsIfAbsent('1', 'sidecar lyrics');
+    await store.setLyricsIfAbsent('2', 'new sidecar lyrics');
+
+    expect(store.lyricsForTrack('1')!.plainText, 'user edited lyrics');
+    expect(store.lyricsForTrack('2')!.plainText, 'new sidecar lyrics');
+  });
+
   test('removing a library track removes its lyrics', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 6),

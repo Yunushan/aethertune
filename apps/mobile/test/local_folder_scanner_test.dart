@@ -78,6 +78,62 @@ void main() {
     );
   });
 
+  test('associates matching LRC sidecar lyrics during folder scans', () async {
+    final audioPath = p.join(root.path, 'Sidecar Artist - Sidecar Title.MP3');
+    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+    await File('${p.withoutExtension(audioPath)}.LRC').writeAsString(
+      '\ufeff[00:01.00]First line\r\n[00:02.50]Second line\r\n',
+    );
+    await File(p.join(root.path, 'notes.txt')).writeAsString('not sidecar');
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.ignoredFileCount, 1);
+    expect(result.sidecarLyricsCount, 1);
+    expect(
+      result.sidecarLyricsByTrackId,
+      <String, String>{
+        Track.stableLocalId(audioPath):
+            '[00:01.00]First line\n[00:02.50]Second line',
+      },
+    );
+  });
+
+  test('prefers LRC sidecar lyrics over matching TXT lyrics', () async {
+    final audioPath = p.join(root.path, 'Sidecar Artist - Sidecar Title.flac');
+    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+    await File(p.setExtension(audioPath, '.txt')).writeAsString(
+      'Plain sidecar lyrics',
+    );
+    await File(p.setExtension(audioPath, '.lrc')).writeAsString(
+      '[00:03.00]Synced sidecar lyrics',
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.ignoredFileCount, 0);
+    expect(
+      result.sidecarLyricsByTrackId[Track.stableLocalId(audioPath)],
+      '[00:03.00]Synced sidecar lyrics',
+    );
+  });
+
+  test('falls back to matching TXT sidecar lyrics', () async {
+    final audioPath = p.join(root.path, 'Plain Artist - Plain Title.wav');
+    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+    await File(p.setExtension(audioPath, '.txt')).writeAsString(
+      'First plain line\r\nSecond plain line',
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.sidecarLyricsCount, 1);
+    expect(
+      result.sidecarLyricsByTrackId[Track.stableLocalId(audioPath)],
+      'First plain line\nSecond plain line',
+    );
+  });
+
   test('assigns matching content hashes to identical file bytes', () async {
     final first = File(p.join(root.path, 'First.mp3'));
     final second = File(p.join(root.path, 'Second.mp3'));

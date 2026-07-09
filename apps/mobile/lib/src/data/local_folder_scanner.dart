@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../domain/lyrics_document.dart';
 import '../domain/track.dart';
 
 const supportedLocalAudioExtensions = <String>{
@@ -24,11 +25,15 @@ final class LocalFolderScanResult {
     required this.tracks,
     required this.ignoredFileCount,
     required this.inaccessibleDirectoryCount,
+    required this.sidecarLyricsByTrackId,
   });
 
   final List<Track> tracks;
   final int ignoredFileCount;
   final int inaccessibleDirectoryCount;
+  final Map<String, String> sidecarLyricsByTrackId;
+
+  int get sidecarLyricsCount => sidecarLyricsByTrackId.length;
 }
 
 final class _LocalFileMetadata {
@@ -74,6 +79,9 @@ final class LocalFolderScanner {
       tracks: List.unmodifiable(scanState.tracks),
       ignoredFileCount: scanState.ignoredFileCount,
       inaccessibleDirectoryCount: scanState.inaccessibleDirectoryCount,
+      sidecarLyricsByTrackId: Map.unmodifiable(
+        scanState.sidecarLyricsByTrackId,
+      ),
     );
   }
 }
@@ -89,6 +97,7 @@ final class _LocalFolderScanState {
   final DateTime importedAt;
   final Set<String> supportedExtensions;
   final List<Track> tracks = <Track>[];
+  final Map<String, String> sidecarLyricsByTrackId = <String, String>{};
   int ignoredFileCount = 0;
   int inaccessibleDirectoryCount = 0;
 
@@ -118,11 +127,19 @@ final class _LocalFolderScanState {
         continue;
       }
       if (!_isSupportedAudioPath(entry.path)) {
+        if (await _isMatchedSidecarLyricsPath(entry.path)) {
+          continue;
+        }
         ignoredFileCount += 1;
         continue;
       }
 
-      tracks.add(await _trackForFile(entry.path));
+      final track = await _trackForFile(entry.path);
+      tracks.add(track);
+      final sidecarLyrics = await _sidecarLyricsForFile(entry.path);
+      if (sidecarLyrics != null) {
+        sidecarLyricsByTrackId[track.id] = sidecarLyrics;
+      }
     }
   }
 
@@ -144,6 +161,19 @@ final class _LocalFolderScanState {
 
   bool _isSupportedAudioPath(String path) {
     return supportedExtensions.contains(p.extension(path).toLowerCase());
+  }
+
+  Future<bool> _isMatchedSidecarLyricsPath(String path) async {
+    if (!isSupportedLyricsDocumentName(p.basename(path))) {
+      return false;
+    }
+
+    final siblings = await _siblingFilePathsWithSameStem(path);
+    return siblings.any(
+      (siblingPath) =>
+          siblingPath.toLowerCase() != path.toLowerCase() &&
+          supportedExtensions.contains(p.extension(siblingPath).toLowerCase()),
+    );
   }
 
   Future<Track> _trackForFile(String path) async {
@@ -170,6 +200,59 @@ final class _LocalFolderScanState {
     } on FileSystemException {
       return null;
     }
+  }
+
+  Future<String?> _sidecarLyricsForFile(String path) async {
+    final sidecarPathsByExtension = <String, String>{};
+    for (final siblingPath in await _siblingFilePathsWithSameStem(path)) {
+      final extension = p.extension(siblingPath).toLowerCase();
+      if (_sidecarLyricsExtensionsByPreference.contains(extension)) {
+        sidecarPathsByExtension.putIfAbsent(extension, () => siblingPath);
+      }
+    }
+
+    for (final extension in _sidecarLyricsExtensionsByPreference) {
+      final sidecarPath = sidecarPathsByExtension[extension];
+      if (sidecarPath == null) {
+        continue;
+      }
+
+      try {
+        final lyrics = decodeLyricsDocumentBytes(
+          await File(sidecarPath).readAsBytes(),
+          fileName: p.basename(sidecarPath),
+        );
+        if (lyrics.isNotEmpty) {
+          return lyrics;
+        }
+      } on FileSystemException {
+        continue;
+      } on FormatException {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  Future<List<String>> _siblingFilePathsWithSameStem(String path) async {
+    final entries = await _listDirectory(Directory(p.dirname(path)));
+    if (entries == null) {
+      return const <String>[];
+    }
+
+    final stem = p.basenameWithoutExtension(path).toLowerCase();
+    final siblings = <String>[];
+    for (final entry in entries) {
+      if (p.basenameWithoutExtension(entry.path).toLowerCase() != stem) {
+        continue;
+      }
+      if (await _entityType(entry) == FileSystemEntityType.file) {
+        siblings.add(entry.path);
+      }
+    }
+
+    return siblings;
   }
 
   String _albumLabelFor(String filePath) {
@@ -1418,3 +1501,4 @@ const _maxMp4ChildAtoms = 1024;
 const _maxWavChunks = 2048;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
+const _sidecarLyricsExtensionsByPreference = <String>['.lrc', '.txt'];
