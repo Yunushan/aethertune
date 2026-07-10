@@ -42,7 +42,7 @@ class TrackArtwork extends StatelessWidget {
         : null;
     final maxWidth = (size * MediaQuery.devicePixelRatioOf(context))
         .ceil()
-        .clamp(64, 1024) as int;
+        .clamp(64, 1024);
     final availableStore = store?.loaded == true &&
             store!.hasCredentialForProvider(normalizedProviderId)
         ? store

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -109,7 +108,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     }
 
     final normalizedVersion = version?.trim() ?? '';
-    final normalizedWidth = maxWidth.clamp(32, 2048) as int;
+    final normalizedWidth = maxWidth.clamp(32, 2048);
     final cacheKey = '${account.id}|$normalizedArtworkId|'
         '$normalizedVersion|$normalizedWidth';
     final cached = _artworkRequests[cacheKey];
