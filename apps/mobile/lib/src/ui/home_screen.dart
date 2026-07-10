@@ -39,6 +39,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
 import 'responsive_layout.dart';
+import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/listening_stats_bar_chart.dart';
@@ -6047,7 +6048,7 @@ class _EmptyLibrary extends StatelessWidget {
   }
 }
 
-enum _SelfHostedAccountAction { edit, remove }
+enum _SelfHostedAccountAction { browse, edit, remove }
 
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab();
@@ -6276,17 +6277,22 @@ class _SourcesTabState extends State<_SourcesTab> {
                   ? JellyfinProvider.defaultCapabilities
                   : SubsonicProvider.defaultCapabilities,
               disclosure: _selfHostedDisclosure(account),
-              onTap: selfHostedActionsEnabled
-                  ? () => _editSelfHostedAccount(
-                        context,
-                        account.kind,
-                        account: account,
-                      )
+              onTap: selfHostedActionsEnabled &&
+                      selfHosted.hasCredential(account.id)
+                  ? () => _browseSelfHostedAccount(context, account)
                   : null,
               actions: PopupMenuButton<_SelfHostedAccountAction>(
                 tooltip: 'Manage ${account.name}',
                 onSelected: (action) {
                   switch (action) {
+                    case _SelfHostedAccountAction.browse:
+                      if (selfHostedActionsEnabled &&
+                          selfHosted.hasCredential(account.id)) {
+                        unawaited(
+                          _browseSelfHostedAccount(context, account),
+                        );
+                      }
+                      break;
                     case _SelfHostedAccountAction.edit:
                       if (selfHostedActionsEnabled) {
                         unawaited(
@@ -6304,6 +6310,16 @@ class _SourcesTabState extends State<_SourcesTab> {
                   }
                 },
                 itemBuilder: (_) => <PopupMenuEntry<_SelfHostedAccountAction>>[
+                  PopupMenuItem<_SelfHostedAccountAction>(
+                    value: _SelfHostedAccountAction.browse,
+                    enabled: selfHostedActionsEnabled &&
+                        selfHosted.hasCredential(account.id),
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.library_music_outlined),
+                      title: Text('Browse library'),
+                    ),
+                  ),
                   PopupMenuItem<_SelfHostedAccountAction>(
                     value: _SelfHostedAccountAction.edit,
                     enabled: selfHostedActionsEnabled,
@@ -6881,6 +6897,28 @@ class _SourcesTabState extends State<_SourcesTab> {
             subtitle: Text('${track.artist} · ${track.album}'),
           ),
       ],
+    );
+  }
+
+  Future<void> _browseSelfHostedAccount(
+    BuildContext context,
+    SelfHostedProviderAccount account,
+  ) async {
+    final provider = context
+        .read<SelfHostedProviderStore>()
+        .catalogProviderFor(account.id);
+    if (provider == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This account has no available credential.'),
+        ),
+      );
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SelfHostedBrowseScreen(provider: provider),
+      ),
     );
   }
 

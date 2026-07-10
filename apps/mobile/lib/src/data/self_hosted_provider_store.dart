@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/self_hosted_provider_account.dart';
 import '../domain/track.dart';
@@ -48,6 +49,21 @@ final class SelfHostedProviderStore extends ChangeNotifier {
 
   bool hasCredential(String accountId) =>
       (_secrets[accountId] ?? '').isNotEmpty;
+
+  MusicCatalogProvider? catalogProviderFor(String accountId) {
+    SelfHostedProviderAccount? account;
+    for (final candidate in _accounts) {
+      if (candidate.id == accountId) {
+        account = candidate;
+        break;
+      }
+    }
+    final secret = _secrets[accountId];
+    if (account == null || secret == null || secret.isEmpty) {
+      return null;
+    }
+    return _providerFor(account, secret);
+  }
 
   Future<void> load() async {
     if (_loaded) {
@@ -211,7 +227,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     }
   }
 
-  static MusicSourceProvider _providerFor(
+  static MusicCatalogProvider _providerFor(
     SelfHostedProviderAccount account,
     String secret,
   ) {

@@ -143,10 +143,14 @@
 - [ ] Internet Archive dedicated collection detail pages
 - [x] Jellyfin provider foundation
 - [x] Jellyfin settings UI and secure credential storage
-- [ ] Jellyfin library browse pages, authenticated artwork, and remote playlists
+- [x] Jellyfin artist, album, track, and playlist browse pages
+- [ ] Jellyfin authenticated artwork
+- [ ] Jellyfin remote playlist create/edit/delete/reorder
 - [x] Navidrome/Subsonic provider foundation
 - [x] Navidrome/Subsonic settings UI and secure credential storage
-- [ ] Navidrome/Subsonic browse pages, authenticated artwork, and remote playlists
+- [x] Navidrome/Subsonic artist, album, track, and playlist browse pages
+- [ ] Navidrome/Subsonic authenticated artwork
+- [ ] Navidrome/Subsonic remote playlist create/edit/delete/reorder
 
 ## 0.6.x: Offline and lyrics
 

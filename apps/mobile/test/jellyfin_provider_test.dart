@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/jellyfin_provider.dart';
+import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -34,6 +35,7 @@ void main() {
     expect(capturedUri!.queryParameters['IncludeItemTypes'], 'Audio');
     expect(capturedUri!.queryParameters['SearchTerm'], 'aether');
     expect(capturedUri!.queryParameters['Fields'], contains('Genres'));
+    expect(capturedUri!.queryParameters['Fields'], isNot(contains('ImageTags')));
     expect(capturedUri!.queryParameters['Limit'], '3');
 
     expect(tracks, hasLength(1));
@@ -74,6 +76,125 @@ void main() {
         }),
       ),
     );
+  });
+
+  test('browses Jellyfin artists, albums, and playlists', () async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        if (uri.path.endsWith('/Artists')) {
+          return _jellyfinArtistsJson;
+        }
+        return switch (uri.queryParameters['IncludeItemTypes']) {
+          'MusicAlbum' => _jellyfinAlbumsJson,
+          'Playlist' => _jellyfinPlaylistsJson,
+          _ => throw StateError('Unexpected request: $uri'),
+        };
+      },
+    );
+
+    final artists = await provider.browseCollections(
+      MusicCatalogCollectionKind.artist,
+    );
+    final albums = await provider.browseCollections(
+      MusicCatalogCollectionKind.album,
+    );
+    final playlists = await provider.browseCollections(
+      MusicCatalogCollectionKind.playlist,
+    );
+
+    expect(artists.single.id, 'artist-1');
+    expect(artists.single.title, 'Mira Sol');
+    expect(artists.single.subtitle, '12 track(s)');
+    expect(albums.single.id, 'album-1');
+    expect(albums.single.subtitle, 'Mira Sol · 2025 · 8 item(s)');
+    expect(playlists.single.id, 'playlist-1');
+    expect(playlists.single.itemCount, 4);
+    expect(requests[0].path, '/jellyfin/Artists');
+    expect(requests[0].queryParameters['UserId'], 'user-1');
+    expect(requests[0].queryParameters['IncludeItemTypes'], 'Audio');
+    expect(requests[0].queryParameters.containsKey('Recursive'), isFalse);
+    expect(requests[1].path, '/jellyfin/Users/user-1/Items');
+    expect(requests[1].queryParameters['IncludeItemTypes'], 'MusicAlbum');
+    expect(requests[2].queryParameters['IncludeItemTypes'], 'Playlist');
+    expect(
+      requests.every(
+        (request) =>
+            !(request.queryParameters['Fields'] ?? '').contains('ImageTags'),
+      ),
+      isTrue,
+    );
+    expect(
+      requests.every(
+        (request) => request.queryParameters['api_key'] == 'api-secret',
+      ),
+      isTrue,
+    );
+  });
+
+  test('loads Jellyfin artist albums, album tracks, and playlist tracks',
+      () async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        if (uri.path.endsWith('/Playlists/playlist-1/Items')) {
+          return _jellyfinItemsJson;
+        }
+        if (uri.queryParameters['ArtistIds'] == 'artist-1') {
+          return _jellyfinAlbumsJson;
+        }
+        if (uri.queryParameters['ParentId'] == 'album-1') {
+          return _jellyfinItemsJson;
+        }
+        throw StateError('Unexpected request: $uri');
+      },
+    );
+
+    final artist = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'artist-1',
+        title: 'Mira Sol',
+        kind: MusicCatalogCollectionKind.artist,
+      ),
+    );
+    final album = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'album-1',
+        title: 'Blue Rooms',
+        kind: MusicCatalogCollectionKind.album,
+      ),
+    );
+    final playlist = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'playlist-1',
+        title: 'Night Focus',
+        kind: MusicCatalogCollectionKind.playlist,
+      ),
+    );
+
+    expect(artist.collections.single.title, 'Blue Rooms');
+    expect(artist.tracks, isEmpty);
+    expect(album.tracks.single.title, 'Sea Glass');
+    expect(album.tracks.single.streamUrl, isNull);
+    expect(album.tracks.single.artworkUri, isNull);
+    expect(playlist.tracks.single.externalId, 'song-1');
+    expect(requests[0].queryParameters['ArtistIds'], 'artist-1');
+    expect(requests[0].queryParameters['IncludeItemTypes'], 'MusicAlbum');
+    expect(requests[1].queryParameters['ParentId'], 'album-1');
+    expect(requests[1].queryParameters['IncludeItemTypes'], 'Audio');
+    expect(
+      requests[2].path,
+      '/jellyfin/Playlists/playlist-1/Items',
+    );
+    expect(requests[2].queryParameters['UserId'], 'user-1');
   });
 
   test('handles empty responses and offline policy for user-owned media', () {
@@ -137,5 +258,43 @@ const _jellyfinItemsJson = '''
     }
   ],
   "TotalRecordCount": 1
+}
+''';
+
+const _jellyfinArtistsJson = '''
+{
+  "Items": [
+    {
+      "Id": "artist-1",
+      "Name": "Mira Sol",
+      "RecursiveItemCount": 12
+    }
+  ]
+}
+''';
+
+const _jellyfinAlbumsJson = '''
+{
+  "Items": [
+    {
+      "Id": "album-1",
+      "Name": "Blue Rooms",
+      "AlbumArtist": "Mira Sol",
+      "ProductionYear": 2025,
+      "ChildCount": 8
+    }
+  ]
+}
+''';
+
+const _jellyfinPlaylistsJson = '''
+{
+  "Items": [
+    {
+      "Id": "playlist-1",
+      "Name": "Night Focus",
+      "ChildCount": 4
+    }
+  ]
 }
 ''';

@@ -16,13 +16,14 @@ AetherTune is a local-first Flutter client with a provider-based source layer pl
 ```text
 UI layer
   HomeScreen, Library tab, Sources tab, Options tab, responsive PlayerBar,
-  NowPlayingScreen, TrackTile
+  NowPlayingScreen, SelfHostedBrowseScreen, TrackTile
 
 State layer
   LibraryStore, SelfHostedProviderStore, PlayerController
 
 Domain layer
-  Track, MusicSourceProvider, LyricsProvider, OfflineMediaPolicy
+  Track, MusicSourceProvider, MusicCatalogProvider, LyricsProvider,
+  OfflineMediaPolicy
 
 Data/provider layer
   Local file import, LocalFolderScanner, DemoSourceProvider,
@@ -64,6 +65,15 @@ abstract interface class MusicSourceProvider {
   Future<List<Track>> search(String query);
   Future<Uri?> resolveStream(Track track);
 }
+
+abstract interface class MusicCatalogProvider implements MusicSourceProvider {
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  );
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  );
+}
 ```
 
 Lyrics adapters implement the smaller `LyricsProvider` contract and return
@@ -76,7 +86,7 @@ record ID, and source URI; manual edits clear provider attribution.
 
 Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage plus private-cache usage/manual eviction and automatic post-cache pressure eviction to persisted app-level and provider-level cache limits; background jobs and resumable downloads belong behind the same boundary later.
 
-Credentialed self-hosted adapters are assembled by `SelfHostedProviderStore`. Non-secret server/account metadata uses preferences, while `ProviderCredentialVault` stores only the API key or password through the operating system secure-storage backend. Search results remain metadata-only. `PlayerController` asks the store to resolve them immediately before native queue loading; resolved authenticated URLs are marked ephemeral and omitted by `Track.toJson`, so queue snapshots, library JSON, and backups cannot retain them. Connection/search errors redact raw, URI-encoded, and reversible hex credential forms.
+Credentialed self-hosted adapters are assembled by `SelfHostedProviderStore`. Non-secret server/account metadata uses preferences, while `ProviderCredentialVault` stores only the API key or password through the operating system secure-storage backend. `MusicCatalogProvider` gives Jellyfin and Navidrome/Subsonic one neutral artist/album/playlist collection model and detail contract, so the responsive browser does not contain protocol-specific JSON or endpoint logic. Search and browse tracks remain metadata-only. `PlayerController` asks the store to resolve them immediately before native queue loading; resolved authenticated URLs are marked ephemeral and omitted by `Track.toJson`, so queue snapshots, library JSON, and backups cannot retain them. Connection/search/browse errors redact raw, URI-encoded, and reversible hex credential forms, while offline mode prevents catalog requests at the screen boundary.
 
 ## Playback
 

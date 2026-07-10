@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
+import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/self_hosted_provider_account.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -78,6 +79,11 @@ void main() {
     expect(vault.values[account.id], 'super-secret');
     expect(tested.single, '${account.providerId}:super-secret');
     expect(store.musicProviders.single.id, account.providerId);
+    expect(
+      store.catalogProviderFor(account.id),
+      isA<MusicCatalogProvider>(),
+    );
+    expect(store.catalogProviderFor('missing-account'), isNull);
 
     final secondStore = SelfHostedProviderStore(
       credentialVault: vault,
@@ -86,6 +92,7 @@ void main() {
     await secondStore.load();
     expect(secondStore.accounts.single.name, 'Home music');
     expect(secondStore.hasCredential(account.id), isTrue);
+    expect(secondStore.catalogProviderFor(account.id)!.id, account.providerId);
 
     final resolved = await secondStore.resolveTrack(
       Track(
@@ -105,6 +112,7 @@ void main() {
     await secondStore.remove(account.id);
     expect(secondStore.accounts, isEmpty);
     expect(secondStore.musicProviders, isEmpty);
+    expect(secondStore.catalogProviderFor(account.id), isNull);
     expect(vault.values.containsKey(account.id), isFalse);
   });
 

@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
 import 'provider_error.dart';
 
 typedef SubsonicRequestLoader = Future<String> Function(Uri requestUri);
 
-class SubsonicProvider implements MusicSourceProvider {
+class SubsonicProvider implements MusicCatalogProvider {
   SubsonicProvider({
     required this.baseUri,
     required this.username,
@@ -26,6 +27,7 @@ class SubsonicProvider implements MusicSourceProvider {
     MusicSourceCapability.metadataSearch,
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
+    MusicSourceCapability.playlists,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
     MusicSourceCapability.downloads,
@@ -62,10 +64,12 @@ class SubsonicProvider implements MusicSourceProvider {
           'username credential',
           'encoded password credential',
           'song search query',
+          'artist, album, and playlist browse identifiers',
           'song stream identifier',
           'cover art identifier',
         ],
         requiresUserCredentials: true,
+        cachesMetadata: true,
         cachesMedia: true,
         supportsDownloads: true,
       );
@@ -99,6 +103,98 @@ class SubsonicProvider implements MusicSourceProvider {
           _requestUri('/rest/ping.view', const <String, String>{}),
         ),
       );
+    });
+  }
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) {
+    return _guardRequest(() async {
+      switch (kind) {
+        case MusicCatalogCollectionKind.artist:
+          return parseSubsonicArtistsResponse(
+            await _requestLoader(
+              _requestUri(
+                '/rest/getArtists.view',
+                const <String, String>{},
+              ),
+            ),
+          );
+        case MusicCatalogCollectionKind.album:
+          return parseSubsonicAlbumListResponse(
+            await _requestLoader(
+              _requestUri(
+                '/rest/getAlbumList2.view',
+                const <String, String>{
+                  'type': 'alphabeticalByName',
+                  'size': '500',
+                  'offset': '0',
+                },
+              ),
+            ),
+          );
+        case MusicCatalogCollectionKind.playlist:
+          return parseSubsonicPlaylistsResponse(
+            await _requestLoader(
+              _requestUri(
+                '/rest/getPlaylists.view',
+                const <String, String>{},
+              ),
+            ),
+          );
+      }
+    });
+  }
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) {
+    return _guardRequest(() async {
+      switch (collection.kind) {
+        case MusicCatalogCollectionKind.artist:
+          final albums = parseSubsonicArtistAlbumsResponse(
+            await _requestLoader(
+              _requestUri(
+                '/rest/getArtist.view',
+                <String, String>{'id': collection.id},
+              ),
+            ),
+          );
+          return MusicCatalogDetail(
+            collection: collection,
+            collections: albums,
+          );
+        case MusicCatalogCollectionKind.album:
+          final tracks = parseSubsonicAlbumTracksResponse(
+            await _requestLoader(
+              _requestUri(
+                '/rest/getAlbum.view',
+                <String, String>{'id': collection.id},
+              ),
+            ),
+            sourceId: id,
+          );
+          return MusicCatalogDetail(
+            collection: collection,
+            tracks: tracks,
+          );
+        case MusicCatalogCollectionKind.playlist:
+          final tracks = parseSubsonicPlaylistTracksResponse(
+            await _requestLoader(
+              _requestUri(
+                '/rest/getPlaylist.view',
+                <String, String>{'id': collection.id},
+              ),
+            ),
+            sourceId: id,
+          );
+          return MusicCatalogDetail(
+            collection: collection,
+            tracks: tracks,
+          );
+      }
     });
   }
 
@@ -238,6 +334,141 @@ List<SubsonicSong> parseSubsonicSearchResponse(String jsonText) {
       .whereType<Map<dynamic, dynamic>>()
       .map((song) => _songFromJson(song.cast<String, Object?>()))
       .whereType<SubsonicSong>()
+      .toList(growable: false);
+}
+
+List<MusicCatalogCollection> parseSubsonicArtistsResponse(String jsonText) {
+  final response = _subsonicResponse(jsonText);
+  final artists = response['artists'];
+  if (artists is! Map<dynamic, dynamic>) {
+    return const <MusicCatalogCollection>[];
+  }
+  return _jsonList(artists['index'])
+      .whereType<Map<dynamic, dynamic>>()
+      .expand((index) => _jsonList(index['artist']))
+      .whereType<Map<dynamic, dynamic>>()
+      .map((artist) => _subsonicCollection(
+            artist.cast<String, Object?>(),
+            MusicCatalogCollectionKind.artist,
+          ))
+      .whereType<MusicCatalogCollection>()
+      .toList(growable: false);
+}
+
+List<MusicCatalogCollection> parseSubsonicAlbumListResponse(String jsonText) {
+  final response = _subsonicResponse(jsonText);
+  final list = response['albumList2'];
+  if (list is! Map<dynamic, dynamic>) {
+    return const <MusicCatalogCollection>[];
+  }
+  return _subsonicCollections(
+    list['album'],
+    MusicCatalogCollectionKind.album,
+  );
+}
+
+List<MusicCatalogCollection> parseSubsonicPlaylistsResponse(String jsonText) {
+  final response = _subsonicResponse(jsonText);
+  final playlists = response['playlists'];
+  if (playlists is! Map<dynamic, dynamic>) {
+    return const <MusicCatalogCollection>[];
+  }
+  return _subsonicCollections(
+    playlists['playlist'],
+    MusicCatalogCollectionKind.playlist,
+  );
+}
+
+List<MusicCatalogCollection> parseSubsonicArtistAlbumsResponse(
+  String jsonText,
+) {
+  final response = _subsonicResponse(jsonText);
+  final artist = response['artist'];
+  if (artist is! Map<dynamic, dynamic>) {
+    return const <MusicCatalogCollection>[];
+  }
+  return _subsonicCollections(
+    artist['album'],
+    MusicCatalogCollectionKind.album,
+  );
+}
+
+List<Track> parseSubsonicAlbumTracksResponse(
+  String jsonText, {
+  required String sourceId,
+}) {
+  final response = _subsonicResponse(jsonText);
+  final album = response['album'];
+  if (album is! Map<dynamic, dynamic>) {
+    return const <Track>[];
+  }
+  return _subsonicTracks(album['song'], sourceId: sourceId);
+}
+
+List<Track> parseSubsonicPlaylistTracksResponse(
+  String jsonText, {
+  required String sourceId,
+}) {
+  final response = _subsonicResponse(jsonText);
+  final playlist = response['playlist'];
+  if (playlist is! Map<dynamic, dynamic>) {
+    return const <Track>[];
+  }
+  return _subsonicTracks(playlist['entry'], sourceId: sourceId);
+}
+
+List<MusicCatalogCollection> _subsonicCollections(
+  Object? value,
+  MusicCatalogCollectionKind kind,
+) {
+  return _jsonList(value)
+      .whereType<Map<dynamic, dynamic>>()
+      .map((item) => _subsonicCollection(item.cast<String, Object?>(), kind))
+      .whereType<MusicCatalogCollection>()
+      .toList(growable: false);
+}
+
+MusicCatalogCollection? _subsonicCollection(
+  Map<String, Object?> json,
+  MusicCatalogCollectionKind kind,
+) {
+  final id = _stringValue(json['id']);
+  if (id.isEmpty) {
+    return null;
+  }
+  final title = _stringValue(json['name']);
+  final artist = _stringValue(json['artist']);
+  final owner = _stringValue(json['owner']);
+  final year = _intValue(json['year']);
+  final itemCount = _intValue(
+    kind == MusicCatalogCollectionKind.artist
+        ? json['albumCount']
+        : json['songCount'],
+  );
+  final subtitleParts = <String>[
+    if (kind == MusicCatalogCollectionKind.album && artist.isNotEmpty) artist,
+    if (kind == MusicCatalogCollectionKind.album && year > 0) year.toString(),
+    if (kind == MusicCatalogCollectionKind.playlist && owner.isNotEmpty) owner,
+    if (itemCount > 0)
+      kind == MusicCatalogCollectionKind.artist
+          ? '$itemCount album(s)'
+          : '$itemCount track(s)',
+  ];
+  return MusicCatalogCollection(
+    id: id,
+    title: title.isEmpty ? id : title,
+    kind: kind,
+    subtitle: subtitleParts.join(' · '),
+    itemCount: itemCount,
+  );
+}
+
+List<Track> _subsonicTracks(Object? value, {required String sourceId}) {
+  return _jsonList(value)
+      .whereType<Map<dynamic, dynamic>>()
+      .map((song) => _songFromJson(song.cast<String, Object?>()))
+      .whereType<SubsonicSong>()
+      .map((song) => song.toTrack(sourceId: sourceId))
       .toList(growable: false);
 }
 

@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
 import 'provider_error.dart';
 
 typedef JellyfinRequestLoader = Future<String> Function(Uri requestUri);
 
-class JellyfinProvider implements MusicSourceProvider {
+class JellyfinProvider implements MusicCatalogProvider {
   JellyfinProvider({
     required this.baseUri,
     required this.userId,
@@ -24,6 +25,7 @@ class JellyfinProvider implements MusicSourceProvider {
     MusicSourceCapability.metadataSearch,
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
+    MusicSourceCapability.playlists,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
     MusicSourceCapability.downloads,
@@ -58,10 +60,12 @@ class JellyfinProvider implements MusicSourceProvider {
           'API key credential',
           'Jellyfin user identifier',
           'audio search query',
+          'artist, album, and playlist browse identifiers',
           'audio item stream identifier',
           'cover art item identifier',
         ],
         requiresUserCredentials: true,
+        cachesMetadata: true,
         cachesMedia: true,
         supportsDownloads: true,
       );
@@ -103,6 +107,91 @@ class JellyfinProvider implements MusicSourceProvider {
           ),
         ),
       );
+    });
+  }
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) {
+    return _guardRequest(() async {
+      final uri = switch (kind) {
+        MusicCatalogCollectionKind.artist => _requestUri(
+            '/Artists',
+            <String, String>{
+              'UserId': userId,
+              'IncludeItemTypes': 'Audio',
+              'SortBy': 'SortName',
+              'SortOrder': 'Ascending',
+              'Fields': 'Genres,RecursiveItemCount',
+              'Limit': '500',
+            },
+          ),
+        MusicCatalogCollectionKind.album => _itemsUri(
+            itemType: 'MusicAlbum',
+          ),
+        MusicCatalogCollectionKind.playlist => _itemsUri(
+            itemType: 'Playlist',
+          ),
+      };
+      return parseJellyfinCollectionsResponse(
+        await _requestLoader(uri),
+        kind,
+      );
+    });
+  }
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) {
+    return _guardRequest(() async {
+      switch (collection.kind) {
+        case MusicCatalogCollectionKind.artist:
+          final albums = parseJellyfinCollectionsResponse(
+            await _requestLoader(
+              _itemsUri(
+                itemType: 'MusicAlbum',
+                extra: <String, String>{'ArtistIds': collection.id},
+              ),
+            ),
+            MusicCatalogCollectionKind.album,
+          );
+          return MusicCatalogDetail(
+            collection: collection,
+            collections: albums,
+          );
+        case MusicCatalogCollectionKind.album:
+          final tracks = parseJellyfinItemsResponse(
+            await _requestLoader(
+              _itemsUri(
+                itemType: 'Audio',
+                extra: <String, String>{'ParentId': collection.id},
+              ),
+            ),
+          ).map((item) => item.toTrack(sourceId: id)).toList(growable: false);
+          return MusicCatalogDetail(
+            collection: collection,
+            tracks: tracks,
+          );
+        case MusicCatalogCollectionKind.playlist:
+          final tracks = parseJellyfinItemsResponse(
+            await _requestLoader(
+              _requestUri(
+                '/Playlists/${collection.id}/Items',
+                <String, String>{
+                  'UserId': userId,
+                  'Fields': 'Genres,MediaSources',
+                  'Limit': '500',
+                },
+              ),
+            ),
+          ).map((item) => item.toTrack(sourceId: id)).toList(growable: false);
+          return MusicCatalogDetail(
+            collection: collection,
+            tracks: tracks,
+          );
+      }
     });
   }
 
@@ -150,8 +239,28 @@ class JellyfinProvider implements MusicSourceProvider {
         'Recursive': 'true',
         'IncludeItemTypes': 'Audio',
         'SearchTerm': query,
-        'Fields': 'Genres,ImageTags,MediaSources',
+        'Fields': 'Genres,MediaSources',
         'Limit': limit.toString(),
+      },
+    );
+  }
+
+  Uri _itemsUri({
+    required String itemType,
+    Map<String, String> extra = const <String, String>{},
+  }) {
+    return _requestUri(
+      '/Users/$userId/Items',
+      <String, String>{
+        'Recursive': 'true',
+        'IncludeItemTypes': itemType,
+        'SortBy': itemType == 'Audio'
+            ? 'ParentIndexNumber,IndexNumber,SortName'
+            : 'SortName',
+        'SortOrder': 'Ascending',
+        'Fields': 'Genres,RecursiveItemCount,ChildCount',
+        'Limit': '500',
+        ...extra,
       },
     );
   }
@@ -234,6 +343,54 @@ List<JellyfinAudioItem> parseJellyfinItemsResponse(String jsonText) {
       .map((item) => _audioItemFromJson(item.cast<String, Object?>()))
       .whereType<JellyfinAudioItem>()
       .toList(growable: false);
+}
+
+List<MusicCatalogCollection> parseJellyfinCollectionsResponse(
+  String jsonText,
+  MusicCatalogCollectionKind kind,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('Jellyfin response must be a JSON object.');
+  }
+
+  return _jsonList(decoded['Items'])
+      .whereType<Map<dynamic, dynamic>>()
+      .map((item) => item.cast<String, Object?>())
+      .map((item) => _jellyfinCollection(item, kind))
+      .whereType<MusicCatalogCollection>()
+      .toList(growable: false);
+}
+
+MusicCatalogCollection? _jellyfinCollection(
+  Map<String, Object?> json,
+  MusicCatalogCollectionKind kind,
+) {
+  final id = _stringValue(json['Id']);
+  if (id.isEmpty) {
+    return null;
+  }
+  final title = _stringValue(json['Name']);
+  final artist = _artistName(json);
+  final year = _intValue(json['ProductionYear']);
+  final itemCount = _intValue(
+    json['RecursiveItemCount'] ?? json['ChildCount'],
+  );
+  final subtitleParts = <String>[
+    if (kind == MusicCatalogCollectionKind.album && artist.isNotEmpty) artist,
+    if (kind == MusicCatalogCollectionKind.album && year > 0) year.toString(),
+    if (itemCount > 0)
+      kind == MusicCatalogCollectionKind.artist
+          ? '$itemCount track(s)'
+          : '$itemCount item(s)',
+  ];
+  return MusicCatalogCollection(
+    id: id,
+    title: title.isEmpty ? id : title,
+    kind: kind,
+    subtitle: subtitleParts.join(' · '),
+    itemCount: itemCount,
+  );
 }
 
 JellyfinAudioItem? _audioItemFromJson(Map<String, Object?> json) {

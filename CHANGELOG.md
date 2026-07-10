@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added responsive Jellyfin and Navidrome/Subsonic Artists, Albums, Tracks, and Playlists browsing with filtering, drill-down, play/save/offline-queue actions, retry/empty states, endpoint fixtures, phone/desktop widget coverage, and offline zero-request enforcement.
 - Added Sources-tab Jellyfin and Navidrome/Subsonic account setup with connection testing, HTTPS-by-default validation, platform-secure credential storage, redacted failures, provider-search activation, runtime-only authenticated playback URLs, restart reconstruction, and account removal cleanup.
 - Added basic M4A title, artist, album, and genre metadata atom parsing during recursive folder scans.
 - Added basic FLAC Vorbis comment title, artist, album, and genre parsing during recursive folder scans.

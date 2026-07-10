@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/subsonic_provider.dart';
+import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 
 void main() {
@@ -100,6 +101,105 @@ void main() {
     );
   });
 
+  test('browses Subsonic artists, albums, and playlists', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return switch (uri.path.split('/').last) {
+          'getArtists.view' => _artistsResponseJson,
+          'getAlbumList2.view' => _albumListResponseJson,
+          'getPlaylists.view' => _playlistsResponseJson,
+          _ => throw StateError('Unexpected request: $uri'),
+        };
+      },
+    );
+
+    final artists = await provider.browseCollections(
+      MusicCatalogCollectionKind.artist,
+    );
+    final albums = await provider.browseCollections(
+      MusicCatalogCollectionKind.album,
+    );
+    final playlists = await provider.browseCollections(
+      MusicCatalogCollectionKind.playlist,
+    );
+
+    expect(artists.single.title, 'Open Artist');
+    expect(artists.single.subtitle, '2 album(s)');
+    expect(albums.single.title, 'Self Hosted Album');
+    expect(albums.single.subtitle, 'Open Artist · 2024 · 2 track(s)');
+    expect(playlists.single.title, 'Late Night');
+    expect(playlists.single.subtitle, 'yunus · 2 track(s)');
+    expect(requests[0].path, '/navidrome/rest/getArtists.view');
+    expect(requests[1].path, '/navidrome/rest/getAlbumList2.view');
+    expect(requests[1].queryParameters['type'], 'alphabeticalByName');
+    expect(requests[1].queryParameters['size'], '500');
+    expect(requests[2].path, '/navidrome/rest/getPlaylists.view');
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters['u'] == 'yunus' &&
+            request.queryParameters['p'] == 'enc:736563726574',
+      ),
+      isTrue,
+    );
+  });
+
+  test('loads Subsonic artist albums, album tracks, and playlist entries',
+      () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return switch (uri.path.split('/').last) {
+          'getArtist.view' => _artistResponseJson,
+          'getAlbum.view' => _albumResponseJson,
+          'getPlaylist.view' => _playlistResponseJson,
+          _ => throw StateError('Unexpected request: $uri'),
+        };
+      },
+    );
+
+    final artist = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'artist-1',
+        title: 'Open Artist',
+        kind: MusicCatalogCollectionKind.artist,
+      ),
+    );
+    final album = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'album-1',
+        title: 'Self Hosted Album',
+        kind: MusicCatalogCollectionKind.album,
+      ),
+    );
+    final playlist = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'playlist-1',
+        title: 'Late Night',
+        kind: MusicCatalogCollectionKind.playlist,
+      ),
+    );
+
+    expect(artist.collections.single.id, 'album-1');
+    expect(album.tracks, hasLength(2));
+    expect(album.tracks.first.title, 'Aether Session');
+    expect(album.tracks.first.streamUrl, isNull);
+    expect(playlist.tracks.single.title, 'Playlist Cut');
+    expect(playlist.tracks.single.sourceId, provider.id);
+    expect(requests[0].queryParameters['id'], 'artist-1');
+    expect(requests[1].queryParameters['id'], 'album-1');
+    expect(requests[2].queryParameters['id'], 'playlist-1');
+  });
+
   test('handles failed responses and offline policy for user-owned media', () {
     expect(
       () => parseSubsonicSearchResponse(_failedResponseJson),
@@ -189,6 +289,132 @@ const _failedResponseJson = '''
     "error": {
       "code": 40,
       "message": "Wrong username or password."
+    }
+  }
+}
+''';
+
+const _artistsResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "artists": {
+      "index": [
+        {
+          "name": "O",
+          "artist": [
+            {"id": "artist-1", "name": "Open Artist", "albumCount": 2}
+          ]
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _albumListResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "albumList2": {
+      "album": [
+        {
+          "id": "album-1",
+          "name": "Self Hosted Album",
+          "artist": "Open Artist",
+          "year": 2024,
+          "songCount": 2
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _playlistsResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "playlists": {
+      "playlist": [
+        {
+          "id": "playlist-1",
+          "name": "Late Night",
+          "owner": "yunus",
+          "songCount": 2
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _artistResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "artist": {
+      "id": "artist-1",
+      "name": "Open Artist",
+      "album": [
+        {
+          "id": "album-1",
+          "name": "Self Hosted Album",
+          "artist": "Open Artist",
+          "year": 2024,
+          "songCount": 2
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _albumResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "album": {
+      "id": "album-1",
+      "name": "Self Hosted Album",
+      "song": [
+        {
+          "id": "song-1",
+          "title": "Aether Session",
+          "artist": "Open Artist",
+          "album": "Self Hosted Album",
+          "genre": "Ambient",
+          "duration": 245
+        },
+        {
+          "id": "song-2",
+          "title": "Local Cloud",
+          "artist": "Server Artist",
+          "album": "Self Hosted Album",
+          "duration": 125
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _playlistResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "playlist": {
+      "id": "playlist-1",
+      "name": "Late Night",
+      "entry": [
+        {
+          "id": "song-3",
+          "title": "Playlist Cut",
+          "artist": "Open Artist",
+          "album": "Self Hosted Album",
+          "duration": 180
+        }
+      ]
     }
   }
 }
