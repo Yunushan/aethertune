@@ -146,6 +146,7 @@ void main() {
       find.byKey(const Key('remote-playlist-name')),
       'Morning Focus',
     );
+    await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 
@@ -162,6 +163,7 @@ void main() {
       find.byKey(const Key('remote-playlist-name')),
       'Morning Drive',
     );
+    await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
 
@@ -285,6 +287,7 @@ void main() {
       find.byKey(const Key('remote-playlist-name')),
       'Rejected Mix',
     );
+    await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 
