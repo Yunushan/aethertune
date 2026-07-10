@@ -73,7 +73,10 @@ queue, current metadata/artwork, duration, position, buffering, repeat, and
 shuffle state to the operating system and routes system transport commands
 back to the same player. Android and iOS wrapper settings are applied and
 validated by `scripts/configure_audio_service_platforms.py` whenever the
-generated Flutter wrappers are bootstrapped. The player provides:
+generated Flutter wrappers are bootstrapped. That configurator also applies
+Flutter's documented temporary AGP 9 legacy-Kotlin compatibility flags while
+the stable file-picker plugin completes its built-in Kotlin migration. The
+player provides:
 
 - local file playback
 - stream URL playback
