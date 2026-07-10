@@ -1,0 +1,321 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../domain/library_sync_account.dart';
+import 'library_store.dart';
+import 'library_sync_client.dart';
+import 'library_sync_credential_vault.dart';
+import 'provider_error.dart';
+
+typedef LibrarySyncClientFactory = LibrarySyncGateway Function(
+  LibrarySyncAccount account,
+  String token,
+);
+
+class LibrarySyncStore extends ChangeNotifier {
+  LibrarySyncStore({
+    LibrarySyncCredentialVault? credentialVault,
+    LibrarySyncClientFactory? clientFactory,
+    DateTime Function()? clock,
+  })  : _credentialVault =
+            credentialVault ?? SecureLibrarySyncCredentialVault(),
+        _clientFactory = clientFactory ??
+            ((account, token) => LibrarySyncClient(
+                  account: account,
+                  token: token,
+                )),
+        _clock = clock ?? DateTime.now;
+
+  static const _metadataKey = 'aethertune.library_sync.metadata.v1';
+
+  final LibrarySyncCredentialVault _credentialVault;
+  final LibrarySyncClientFactory _clientFactory;
+  final DateTime Function() _clock;
+
+  LibrarySyncAccount? _account;
+  String? _token;
+  int _lastKnownRevision = 0;
+  int _remoteRevision = 0;
+  DateTime? _lastSyncAt;
+  DateTime? _remoteUpdatedAt;
+  String? _remoteUpdatedByDevice;
+  LibrarySyncConflictException? _conflict;
+  String? _lastError;
+  bool _loaded = false;
+  bool _busy = false;
+
+  LibrarySyncAccount? get account => _account;
+  int get lastKnownRevision => _lastKnownRevision;
+  int get remoteRevision => _remoteRevision;
+  DateTime? get lastSyncAt => _lastSyncAt;
+  DateTime? get remoteUpdatedAt => _remoteUpdatedAt;
+  String? get remoteUpdatedByDevice => _remoteUpdatedByDevice;
+  LibrarySyncConflictException? get conflict => _conflict;
+  String? get lastError => _lastError;
+  bool get loaded => _loaded;
+  bool get busy => _busy;
+  bool get isConfigured => _account != null && (_token ?? '').isNotEmpty;
+
+  Future<void> load() async {
+    if (_loaded) {
+      return;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_metadataKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) {
+          throw const FormatException('Sync metadata must be an object.');
+        }
+        final metadata = Map<String, Object?>.from(decoded);
+        final rawAccount = metadata['account'];
+        if (rawAccount is! Map) {
+          throw const FormatException('Sync account metadata is missing.');
+        }
+        _account = LibrarySyncAccount.fromJson(
+          Map<String, Object?>.from(rawAccount),
+        );
+        _lastKnownRevision = _nonNegativeInt(
+          metadata['lastKnownRevision'],
+        );
+        _remoteRevision = _nonNegativeInt(metadata['remoteRevision']);
+        _lastSyncAt = _optionalDate(metadata['lastSyncAt']);
+        _remoteUpdatedAt = _optionalDate(metadata['remoteUpdatedAt']);
+        _remoteUpdatedByDevice = _optionalString(
+          metadata['remoteUpdatedByDevice'],
+        );
+        _token = await _credentialVault.read();
+      }
+      _lastError = null;
+    } on Object catch (error) {
+      _lastError = 'Could not load library sync settings: $error';
+    } finally {
+      _loaded = true;
+      notifyListeners();
+    }
+  }
+
+  Future<LibrarySyncRemoteSnapshot> testAndSave(
+    LibrarySyncAccount account,
+    String token,
+  ) async {
+    final normalizedToken = token.trim();
+    if (normalizedToken.isEmpty) {
+      throw const FormatException('Sync token is required.');
+    }
+    return _runBusy(() async {
+      LibrarySyncRemoteSnapshot remote;
+      try {
+        remote = await _clientFactory(account, normalizedToken).fetch();
+      } on Object catch (error) {
+        throw ProviderRequestException(
+          safeProviderErrorMessage(
+            error,
+            providerName: 'Library sync',
+            secrets: <String>[normalizedToken],
+          ),
+        );
+      }
+
+      final oldAccount = _account;
+      final oldToken = _token;
+      final oldKnownRevision = _lastKnownRevision;
+      final oldRemoteRevision = _remoteRevision;
+      final oldRemoteUpdatedAt = _remoteUpdatedAt;
+      final oldRemoteUpdatedByDevice = _remoteUpdatedByDevice;
+      try {
+        await _credentialVault.write(normalizedToken);
+        final sameServer = oldAccount?.baseUri == account.baseUri;
+        _account = account;
+        _token = normalizedToken;
+        _lastKnownRevision = sameServer ? oldKnownRevision : 0;
+        _applyRemoteMetadata(remote);
+        _conflict = null;
+        await _saveMetadata();
+      } on Object catch (error) {
+        _account = oldAccount;
+        _token = oldToken;
+        _lastKnownRevision = oldKnownRevision;
+        _remoteRevision = oldRemoteRevision;
+        _remoteUpdatedAt = oldRemoteUpdatedAt;
+        _remoteUpdatedByDevice = oldRemoteUpdatedByDevice;
+        try {
+          if (oldToken == null || oldToken.isEmpty) {
+            await _credentialVault.delete();
+          } else {
+            await _credentialVault.write(oldToken);
+          }
+        } on Object {
+          throw const ProviderRequestException(
+            'Library sync settings failed and the previous secure token could not be restored.',
+          );
+        }
+        throw ProviderRequestException(
+          safeProviderErrorMessage(
+            error,
+            providerName: 'Library sync',
+            secrets: <String>[normalizedToken, if (oldToken != null) oldToken],
+          ),
+        );
+      }
+      return remote;
+    });
+  }
+
+  Future<LibrarySyncRemoteSnapshot> push(
+    LibraryStore library, {
+    int? baseRevision,
+  }) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      final decoded = jsonDecode(library.exportSyncSnapshotJson());
+      if (decoded is! Map) {
+        throw const FormatException('Portable library snapshot is invalid.');
+      }
+      try {
+        final result = await client.push(
+          baseRevision: baseRevision ?? _lastKnownRevision,
+          snapshot: Map<String, Object?>.from(decoded),
+        );
+        _lastKnownRevision = result.revision;
+        _applyRemoteMetadata(result);
+        _lastSyncAt = _clock().toUtc();
+        _conflict = null;
+        await _saveMetadata();
+        return result;
+      } on LibrarySyncConflictException catch (error) {
+        _conflict = error;
+        _remoteRevision = error.currentRevision;
+        _remoteUpdatedAt = error.updatedAt;
+        _remoteUpdatedByDevice = error.updatedByDevice;
+        await _saveMetadata();
+        rethrow;
+      }
+    });
+  }
+
+  Future<LibrarySyncRemoteSnapshot> pull(LibraryStore library) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final remote = await _requireClient().fetch();
+      if (!remote.hasSnapshot) {
+        throw StateError('The sync server does not have a library snapshot yet.');
+      }
+      await library.restoreSyncSnapshotJson(jsonEncode(remote.snapshot));
+      _lastKnownRevision = remote.revision;
+      _applyRemoteMetadata(remote);
+      _lastSyncAt = _clock().toUtc();
+      _conflict = null;
+      await _saveMetadata();
+      return remote;
+    });
+  }
+
+  Future<void> remove() async {
+    await _runBusy(() async {
+      final oldToken = _token;
+      try {
+        await _credentialVault.delete();
+        final prefs = await SharedPreferences.getInstance();
+        final removed = await prefs.remove(_metadataKey);
+        if (!removed && prefs.containsKey(_metadataKey)) {
+          throw StateError('Could not remove library sync metadata.');
+        }
+      } on Object {
+        if (oldToken != null && oldToken.isNotEmpty) {
+          await _credentialVault.write(oldToken);
+        }
+        rethrow;
+      }
+      _account = null;
+      _token = null;
+      _lastKnownRevision = 0;
+      _remoteRevision = 0;
+      _lastSyncAt = null;
+      _remoteUpdatedAt = null;
+      _remoteUpdatedByDevice = null;
+      _conflict = null;
+    });
+  }
+
+  LibrarySyncGateway _requireClient() {
+    final account = _account;
+    final token = _token;
+    if (account == null || token == null || token.isEmpty) {
+      throw StateError('Configure a library sync server first.');
+    }
+    return _clientFactory(account, token);
+  }
+
+  void _requireOnline(LibraryStore library) {
+    if (library.offlineModeEnabled) {
+      throw StateError('Turn off offline mode before syncing the library.');
+    }
+  }
+
+  void _applyRemoteMetadata(LibrarySyncRemoteSnapshot remote) {
+    _remoteRevision = remote.revision;
+    _remoteUpdatedAt = remote.updatedAt;
+    _remoteUpdatedByDevice = remote.updatedByDevice;
+  }
+
+  Future<T> _runBusy<T>(Future<T> Function() action) async {
+    if (_busy) {
+      throw StateError('A library sync operation is already running.');
+    }
+    _busy = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      return await action();
+    } on Object catch (error) {
+      _lastError = error.toString();
+      rethrow;
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveMetadata() async {
+    final account = _account;
+    if (account == null) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final saved = await prefs.setString(
+      _metadataKey,
+      jsonEncode(<String, Object?>{
+        'account': account.toJson(),
+        'lastKnownRevision': _lastKnownRevision,
+        'remoteRevision': _remoteRevision,
+        'lastSyncAt': _lastSyncAt?.toIso8601String(),
+        'remoteUpdatedAt': _remoteUpdatedAt?.toIso8601String(),
+        'remoteUpdatedByDevice': _remoteUpdatedByDevice,
+      }),
+    );
+    if (!saved) {
+      throw StateError('Could not save library sync metadata.');
+    }
+  }
+}
+
+int _nonNegativeInt(Object? value) {
+  return value is int && value >= 0 ? value : 0;
+}
+
+String? _optionalString(Object? value) {
+  if (value is! String || value.trim().isEmpty) {
+    return null;
+  }
+  return value.trim();
+}
+
+DateTime? _optionalDate(Object? value) {
+  final raw = _optionalString(value);
+  return raw == null ? null : DateTime.tryParse(raw)?.toUtc();
+}

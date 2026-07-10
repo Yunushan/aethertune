@@ -532,6 +532,7 @@ class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   static const _backupVersion = 1;
+  static const _syncSnapshotVersion = 1;
   static const _playlistDocumentVersion = 1;
   static const _libraryStatsDocumentVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
@@ -2276,6 +2277,32 @@ class LibraryStore extends ChangeNotifier {
     });
   }
 
+  String exportSyncSnapshotJson() {
+    final backup = Map<String, Object?>.from(
+      jsonDecode(exportBackupJson()) as Map,
+    );
+    backup
+      ..['syncVersion'] = _syncSnapshotVersion
+      ..remove('offlineModeEnabled')
+      ..remove('offlineCacheLimitMegabytes')
+      ..remove('offlineCacheProviderLimitMegabytes')
+      ..['offlineCacheQueue'] = <Object?>[]
+      ..['tracks'] = _tracks
+          .map(_portableSyncTrackJson)
+          .toList(growable: false)
+      ..['playlists'] = _playlists.map((playlist) {
+        final json = playlist.toJson();
+        json['artworkUri'] = _portableSyncUri(
+          json['artworkUri'] as String?,
+          allowData: false,
+        );
+        return json;
+      }).toList(growable: false);
+
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(backup);
+  }
+
   String exportPlaylistDocument(
     String playlistId, {
     required PlaylistDocumentFormat format,
@@ -2870,6 +2897,83 @@ class LibraryStore extends ChangeNotifier {
     _trimSearchQueryHistory();
     await _save();
     notifyListeners();
+  }
+
+  Future<void> restoreSyncSnapshotJson(String snapshotJson) async {
+    final decoded = jsonDecode(snapshotJson);
+    if (decoded is! Map) {
+      throw const FormatException('Sync snapshot must be a JSON object.');
+    }
+    final snapshot = Map<String, Object?>.from(decoded);
+    if (snapshot['syncVersion'] != _syncSnapshotVersion) {
+      throw FormatException(
+        'Unsupported sync snapshot version: ${snapshot['syncVersion']}.',
+      );
+    }
+
+    final rawTracks = snapshot['tracks'];
+    if (rawTracks is! List) {
+      throw const FormatException('Sync snapshot tracks must be a list.');
+    }
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
+    final byContentHash = _uniqueSyncTrackIndex(
+      _tracks,
+      (track) => track.contentHash,
+    );
+    final byProviderIdentity = _uniqueSyncTrackIndex(
+      _tracks,
+      (track) {
+        final externalId = track.externalId?.trim() ?? '';
+        final sourceId = track.sourceId.trim();
+        if (sourceId.isEmpty || externalId.isEmpty) {
+          return null;
+        }
+        return '$sourceId|$externalId';
+      },
+    );
+    final restoredTracks = <Map<String, Object?>>[];
+    for (final item in rawTracks) {
+      if (item is! Map) {
+        throw const FormatException('Sync snapshot contains an invalid track.');
+      }
+      final trackJson = Map<String, Object?>.from(item);
+      final remoteLocalPath = trackJson['localPath'];
+      if (remoteLocalPath is String && remoteLocalPath.trim().isNotEmpty) {
+        throw const FormatException(
+          'Sync snapshot contains a device-local file path.',
+        );
+      }
+      final id = _syncString(trackJson['id']);
+      final contentHash = _syncString(trackJson['contentHash']);
+      final sourceId = _syncString(trackJson['sourceId']);
+      final externalId = _syncString(trackJson['externalId']);
+      final providerKey = sourceId == null || externalId == null
+          ? null
+          : '$sourceId|$externalId';
+      final localTrack = (id == null ? null : byId[id]) ??
+          (contentHash == null ? null : byContentHash[contentHash]) ??
+          (providerKey == null ? null : byProviderIdentity[providerKey]);
+      final localPath = localTrack?.localPath?.trim() ?? '';
+      trackJson['localPath'] = localPath.isEmpty ? null : localPath;
+      if (contentHash == null && localTrack?.contentHash != null) {
+        trackJson['contentHash'] = localTrack!.contentHash;
+      }
+      if (trackJson['artworkUri'] == null && localTrack?.artworkUri != null) {
+        trackJson['artworkUri'] = localTrack!.artworkUri.toString();
+      }
+      restoredTracks.add(trackJson);
+    }
+
+    snapshot
+      ..['tracks'] = restoredTracks
+      ..['offlineModeEnabled'] = _offlineModeEnabled
+      ..['offlineCacheLimitMegabytes'] = _offlineCacheLimitMegabytes
+      ..['offlineCacheProviderLimitMegabytes'] =
+          Map<String, int>.from(_offlineCacheProviderLimitMegabytes)
+      ..['offlineCacheQueue'] = _offlineCacheQueue
+          .map((entry) => entry.toJson())
+          .toList(growable: false);
+    await restoreBackupJson(jsonEncode(snapshot));
   }
 
   Playlist? playlistById(String id) {
@@ -4061,6 +4165,84 @@ class LibraryStore extends ChangeNotifier {
 
     return trimmed;
   }
+
+  Map<String, Object?> _portableSyncTrackJson(Track track) {
+    final json = track.toJson();
+    json
+      ..['localPath'] = null
+      ..['artworkUri'] = _portableSyncUri(
+        json['artworkUri'] as String?,
+        allowData: true,
+      )
+      ..['streamUrl'] = _portableSyncUri(
+        json['streamUrl'] as String?,
+        allowData: false,
+      );
+    return json;
+  }
+
+  String? _portableSyncUri(
+    String? value, {
+    required bool allowData,
+  }) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) {
+      return null;
+    }
+    if (allowData && uri.scheme == 'data') {
+      return trimmed;
+    }
+    if ((uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.userInfo.isNotEmpty) {
+      return null;
+    }
+    const sensitiveKeys = <String>{
+      'api_key',
+      'apikey',
+      'p',
+      'password',
+      't',
+      'token',
+      'access_token',
+      'authorization',
+      'auth',
+      'signature',
+      'sig',
+    };
+    if (uri.queryParameters.keys.any(
+      (key) => sensitiveKeys.contains(key.toLowerCase()),
+    )) {
+      return null;
+    }
+    return uri.toString();
+  }
+
+  Map<String, Track> _uniqueSyncTrackIndex(
+    Iterable<Track> tracks,
+    String? Function(Track track) keyFor,
+  ) {
+    final result = <String, Track>{};
+    final duplicates = <String>{};
+    for (final track in tracks) {
+      final key = keyFor(track)?.trim();
+      if (key == null || key.isEmpty || duplicates.contains(key)) {
+        continue;
+      }
+      if (result.containsKey(key)) {
+        result.remove(key);
+        duplicates.add(key);
+      } else {
+        result[key] = track;
+      }
+    }
+    return result;
+  }
+
+  String? _syncString(Object? value) => _stringValue(value);
 
   Uri? _parseOptionalUri(String? value) {
     if (value == null || value.trim().isEmpty) {
