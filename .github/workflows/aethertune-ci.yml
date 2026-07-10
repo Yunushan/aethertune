@@ -31,6 +31,9 @@ jobs:
       - name: Test
         run: cd apps/mobile && flutter test
 
+      - name: Build Android debug app
+        run: cd apps/mobile && flutter build apk --debug
+
   desktop:
     name: Desktop build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
@@ -67,6 +70,10 @@ jobs:
 
       - name: Build desktop app
         run: cd apps/mobile && flutter build ${{ matrix.target }} --debug
+
+      - name: Build iOS app without signing
+        if: matrix.target == 'macos'
+        run: cd apps/mobile && flutter build ios --debug --no-codesign
 
   server:
     name: Server analyze and test

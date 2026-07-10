@@ -86,11 +86,15 @@
 
 ## 0.3.x: Platform audio
 
-- [ ] Android notification controls
+- [x] Android notification controls and media-button receiver
+- [x] Queue metadata, artwork, position, repeat, and shuffle media-session state
+- [x] Android foreground media playback service configuration
 - [ ] Android Auto
-- [ ] iOS lock screen controls
-- [ ] iOS background audio session
-- [ ] Desktop media key support
+- [x] iOS Control Center and lock-screen controls
+- [x] iOS background music audio session and wrapper mode
+- [x] macOS Control Center media session
+- [ ] Physical Android/iOS interruption, route, battery, and background lifecycle fixtures
+- [ ] Windows/Linux global media key support
 - [x] Desktop navigation rail at wide widths
 - [ ] Split-pane desktop layout polish
 

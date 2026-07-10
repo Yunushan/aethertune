@@ -30,7 +30,8 @@ Data/provider layer
 
 Platform layer
   Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker,
-  native just_audio playlist backend plus MediaKit Linux/Windows audio backends
+  native just_audio playlist backend plus MediaKit Linux/Windows audio backends,
+  audio_service system media session on Android/iOS/macOS
 
 Server layer
   Dart Shelf handler, health endpoint, app info endpoint, catalog endpoint
@@ -65,7 +66,14 @@ Adapters should not leak service-specific logic into the player or UI. They shou
 
 ## Playback
 
-`PlayerController` wraps `just_audio` and provides:
+`PlayerController` drives a `PlaybackAudioEngine`. The production engine uses a
+lazy `just_audio` playlist. On Android, iOS, and macOS it is wrapped by
+`SystemMediaPlaybackEngine`, an `audio_service` handler that publishes the
+queue, current metadata/artwork, duration, position, buffering, repeat, and
+shuffle state to the operating system and routes system transport commands
+back to the same player. Android and iOS wrapper settings are applied and
+validated by `scripts/configure_audio_service_platforms.py` whenever the
+generated Flutter wrappers are bootstrapped. The player provides:
 
 - local file playback
 - stream URL playback
@@ -77,6 +85,9 @@ Adapters should not leak service-specific logic into the player or UI. They shou
 - shuffle
 - repeat mode
 - sleep timer with optional fade-out
+- Android media notification and headset controls
+- iOS/macOS Control Center and lock-screen controls
+- Android/iOS background music audio-session configuration
 
 ## Persistence
 

@@ -42,7 +42,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | MIT license | Done | Root `LICENSE`. | Third-party notice automation. |
 | No telemetry | Done | No analytics SDK or tracking dependency. | Privacy tests and network-call audit. |
 | Local audio import | Done | Native file picker plus recursive folder scanner for supported audio extensions, including filename track-number parsing, artist/title parsing, basic ID3v1 MP3 title/artist/album tag parsing, basic ID3v2 MP3 title/artist/album/genre text-frame and APIC/PIC artwork parsing, basic FLAC Vorbis comment title/artist/album/genre and picture artwork parsing, basic M4A title/artist/album/genre atom plus `covr` artwork parsing, basic WAV RIFF INFO title/artist/album/genre parsing, and matching `.lrc`/`.txt` lyric sidecar import with scanner tests. Track rows and the player bar render local/provider artwork with a fallback icon. | Folder watch, scoped storage UX, richer embedded tag parsing, tag writing, and artwork editing. |
-| Local playback | Done | `just_audio` local file playback uses one lazy native playlist; Android/iOS/macOS use the native plugin backends while Linux/Windows bundle initialized MediaKit audio backends. | Background service, notification controls, physical-device codec matrix. |
+| Local playback | Done | `just_audio` local file playback uses one lazy native playlist; Android/iOS/macOS use native plugin backends, Linux/Windows bundle initialized MediaKit audio backends, and Android/iOS/macOS wrap playback in a queue-aware system media session. | Physical-device codec and lifecycle matrix. |
 | Stream URL playback | Done | Player accepts legal direct stream URLs. | Provider resolver UI, retries, caching, auth headers. |
 | Library persistence | Done | `shared_preferences` JSON store. | SQLite/Drift schema and migrations. |
 | Backup/restore | Done | Versioned JSON export/restore UI plus store tests, including theme/accent preferences, pause-listening-history preference, offline mode, and queued offline media requests. | File-based import/export and migration tooling. |
@@ -74,10 +74,10 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Background audio | Roadmap | YouTube Music, InnerTune, RiMusic, NewPipe, YMusic | `audio_service`, platform permissions, integration tests. |
-| Notification controls | Roadmap | YouTube Music, Namida, MetroList | Android media notification and metadata updates. |
-| Lock-screen controls | Roadmap | YouTube Music, Namida | iOS/Android Now Playing metadata. |
-| Media keys | Roadmap | Desktop players, Namida | Desktop keyboard/media session support. |
+| Background audio | Scaffolded | YouTube Music, InnerTune, RiMusic, NewPipe, YMusic | Android/iOS/macOS initialize a music `AudioSession` and `audio_service` handler around the same native queue engine; generated Android/iOS wrappers receive validated foreground-service/background-audio settings, and CI compiles Android plus unsigned iOS apps. Needed next: physical-device interruption, route, battery, and process-lifecycle fixtures. |
+| Notification controls | Scaffolded | YouTube Music, Namida, MetroList | Android declares the foreground media service and media-button receiver; the handler publishes queue/current item metadata, artwork, duration, position, buffering state, repeat/shuffle state, and previous/play-pause/next/stop actions. Unit tests prove state publication and command routing; physical notification/device tests remain. |
+| Lock-screen controls | Scaffolded | YouTube Music, Namida | Android/iOS/macOS receive the current queue item, artwork, playback state, position, seek, repeat, shuffle, and transport callbacks through `audio_service`. Needed next: physical Android/iOS lock-screen and Control Center fixtures. |
+| Media keys | Scaffolded | Desktop players, Namida | macOS receives `audio_service` system transport callbacks; Android/iOS headset/media buttons use the same handler. Windows/Linux global media-key integration and physical-host tests remain. |
 | Gapless playback | Scaffolded | Namida, YouTube Music | Queue playback now uses a lazy `ConcatenatingAudioSource` instead of per-track reloads; automatic native index transitions update app state without replacing the source, repeat stays in the engine, controller tests prove the no-reload contract, and MediaKit playlist prefetch is enabled for bundled Linux/Windows backends. Needed next: acoustic transition fixtures on physical Android/iOS/macOS devices and Windows/Linux audio hosts before a universal zero-gap claim. |
 | Crossfade | Roadmap | Namida, YouTube Music | Multi-player overlap or backend crossfade support. |
 | ReplayGain / loudness normalization | Roadmap | Namida, local music players | Metadata scanner and gain application. |
@@ -203,13 +203,13 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Android notification controls | Roadmap | YouTube Music, InnerTune, Namida | `audio_service`, manifest, notification tests. |
+| Android notification controls | Scaffolded | YouTube Music, InnerTune, Namida | `SystemMediaPlaybackEngine` publishes queue metadata/artwork/playback state and handles transport, seek, repeat, and shuffle; bootstrap adds and validates wake-lock/foreground-media permissions, `AudioService`, and `MediaButtonReceiver`; CI compiles an APK and unit-tests the handler contract. Needed next: emulator/physical notification lifecycle tests. |
 | Android Auto | Roadmap | YouTube Music, local music players | Media browser service and car emulator/device tests. |
 | Android widgets / shortcuts | Roadmap | Music apps | Home screen widgets and shortcuts. |
 | Android scoped storage polish | Roadmap | Local library apps | Permissions flow and folder grants. |
-| iOS Control Center | Roadmap | YouTube Music | Now Playing integration. |
-| iOS lock screen metadata | Roadmap | YouTube Music | Media item metadata and artwork. |
-| iOS background audio | Roadmap | YouTube Music | Audio session config and App Store review notes. |
+| iOS Control Center | Scaffolded | YouTube Music | `audio_service` receives queue metadata/artwork/playback state and transport/seek/repeat/shuffle callbacks; CI compiles an unsigned iOS app. Needed next: physical Control Center fixtures. |
+| iOS lock screen metadata | Scaffolded | YouTube Music | Current title, artist, album, artwork, duration, position, queue index, and playback state are published as `MediaItem`/`PlaybackState`; physical lock-screen verification remains. |
+| iOS background audio | Scaffolded | YouTube Music | Startup configures a music `AudioSession`, bootstrap adds `UIBackgroundModes: audio`, and the unsigned iOS CI build validates native integration. Needed next: physical interruption/route/background lifecycle tests and App Store review notes. |
 | CarPlay | Roadmap | YouTube Music | Apple entitlement and CarPlay UI. |
 | Linux desktop packaging | Roadmap | Desktop players | AppImage/Flatpak/deb workflow. |
 | Windows packaging | Roadmap | Desktop players | MSIX/zip installer and signing. |
@@ -322,7 +322,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 
 1. Replace JSON preferences with a real local database and migrations.
 2. Build full local library: recursive folder import, folder watching, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
-3. Add `audio_service` and platform media sessions for background playback, notifications, lock screen, media keys, and Android Auto/CarPlay where allowed.
+3. Extend the implemented Android/iOS/macOS `audio_service` media session with physical-device lifecycle fixtures, Windows/Linux global media keys, and Android Auto/CarPlay browsing where allowed.
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
 5. Implement legal providers: local folder scanner/folder watch, feed-managed Podcast RSS, full Radio Browser UX, Jellyfin settings UI, Navidrome/Subsonic settings UI, Internet Archive.
 6. Add official-only adapters where terms allow: Spotify metadata, YouTube/YouTube Music, SoundCloud, Bandcamp, or others.

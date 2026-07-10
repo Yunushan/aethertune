@@ -23,6 +23,17 @@ if [ ! -d "$APP_DIR/android" ] ||
     --platforms android,ios,linux,macos,windows
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  echo "Python 3 is required to configure generated Android and iOS wrappers."
+  exit 1
+fi
+
+"$PYTHON_BIN" "$ROOT_DIR/scripts/configure_audio_service_platforms.py" "$APP_DIR"
+
 DEFAULT_WIDGET_TEST="$APP_DIR/test/widget_test.dart"
 if [ -f "$DEFAULT_WIDGET_TEST" ] &&
   grep -q "Counter increments smoke test" "$DEFAULT_WIDGET_TEST" &&

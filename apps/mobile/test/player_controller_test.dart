@@ -216,6 +216,12 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration get position => positionValue;
 
   @override
+  Duration get bufferedPosition => positionValue;
+
+  @override
+  double get speed => 1;
+
+  @override
   double get volume => volumeValue;
 
   @override

@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
+import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
 import 'home_screen.dart';
 import 'theme_colors.dart';
 
 class AetherTuneApp extends StatelessWidget {
-  const AetherTuneApp({super.key});
+  const AetherTuneApp({super.key, this.audioEngine});
+
+  final PlaybackAudioEngine? audioEngine;
 
   @override
   Widget build(BuildContext context) {
@@ -17,12 +20,12 @@ class AetherTuneApp extends StatelessWidget {
           create: (_) => LibraryStore()..load(),
         ),
         ChangeNotifierProxyProvider<LibraryStore, PlayerController>(
-          create: (_) => PlayerController()
+          create: (_) => PlayerController(audioEngine: audioEngine)
             ..loadPersistedQueue()
             ..loadPersistedPlaybackSettings(),
           update: (_, library, player) {
             final controller = player ??
-                (PlayerController()
+                (PlayerController(audioEngine: audioEngine)
                   ..loadPersistedQueue()
                   ..loadPersistedPlaybackSettings());
             controller.setOfflineModeEnabled(library.offlineModeEnabled);

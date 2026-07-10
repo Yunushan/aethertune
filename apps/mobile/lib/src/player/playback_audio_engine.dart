@@ -13,6 +13,8 @@ abstract interface class PlaybackAudioEngine {
   bool get shuffleModeEnabled;
   LoopMode get loopMode;
   Duration get position;
+  Duration get bufferedPosition;
+  double get speed;
   double get volume;
   bool get hasNext;
   bool get hasPrevious;
@@ -68,6 +70,12 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
 
   @override
   Duration get position => _player.position;
+
+  @override
+  Duration get bufferedPosition => _player.bufferedPosition;
+
+  @override
+  double get speed => _player.speed;
 
   @override
   double get volume => _player.volume;

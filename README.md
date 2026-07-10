@@ -87,6 +87,10 @@ The server preview covers the Dart service that ships with the repo: health chec
 
 ## Quick Start
 
+The bootstrap requires Flutter and Python 3. Python is used only to apply and
+validate `audio_service` settings in Flutter's generated Android and iOS XML
+property files.
+
 ```bash
 git clone https://github.com/YOUR_NAME/aethertune.git
 cd aethertune
@@ -128,7 +132,7 @@ This scaffold includes real app code, not only a README:
 | Mobile app | Flutter app shell for Android and iOS |
 | Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI, with a desktop-width navigation rail |
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
-| Playback | Native playlist-backed `just_audio` controller for gapless local/URL queues, with Android/iOS/macOS native backends and bundled MediaKit audio backends for Linux/Windows |
+| Playback | Native playlist-backed `just_audio` controller for gapless local/URL queues, Android notification controls, iOS/macOS Control Center metadata and transport controls, a configured mobile music audio session, Android/iOS background-audio wrappers, native Android/iOS/macOS playback backends, and bundled MediaKit audio backends for Linux/Windows |
 | Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing plus basic ID3v1/ID3v2 MP3, FLAC Vorbis comment, M4A metadata atom, and WAV RIFF INFO parsing, matching `.lrc`/`.txt` lyric sidecars, plus embedded MP3/FLAC/M4A artwork display; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, flat folder groups, or recursive folder tree |
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and the offline cache/download queue with byte-count/checksum metadata in `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup, including submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and queued offline media requests with cache metadata, from the Options tab |
@@ -144,7 +148,7 @@ This scaffold includes real app code, not only a README:
 | Provider architecture | `MusicSourceProvider` interface with capability flags, privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered checksum-verified private cache storage with HTTP Range retry resume plus user-chosen folder export and automatic app/provider quota eviction for direct media URLs, unified provider search with local library merge, demo provider, Podcast RSS feeds, Radio Browser mirror discovery/search/filtering/stream validation, Internet Archive audio search/filtering/facet suggestions, Jellyfin adapter foundation, and Navidrome/Subsonic adapter foundation |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
-| Proof gates | CI analyzes/tests Flutter, runs provider contract tests, builds desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
+| Proof gates | CI analyzes/tests Flutter, runs provider and system-media contract tests, compiles an Android APK and unsigned iOS app, builds all desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
 
 ## Feature Goal
 
@@ -160,8 +164,8 @@ AetherTune is designed to support the combined feature categories users expect f
 | Music discovery | Local Home feed sections, range-filtered local charts, local mood/activity mixes, personalized local recommendations, similar local tracks, and seed-based track radio queues implemented; provider home feeds, provider charts, provider moods, richer radio, similar artist/album pages, and provider recommendations remain roadmap |
 | Lyrics | Plain text lyrics, UTF-8 `.txt`/`.lrc` file import and matching sidecar import during folder scans, copyable `.txt`/`.lrc` export text with suggested filenames, LRC timestamp parsing/preview, local saved-lyrics search, playback-linked synced highlighting, and bounded copyable lyrics excerpt share text implemented; native save dialogs, provider lyrics, rendered lyric cards, and platform share sheets roadmap |
 | Playlists | Manual playlists, artwork URL display/editing, built-in smart playlists, custom smart rules, in-playlist search, track reordering, JSON/M3U/CSV import/export, copyable share text, and save-queue-as-playlist implemented; synced rules, gallery picker, generated collages, native share sheets, and cross-device artwork sync roadmap |
-| Android integrations | Notification controls, Android Auto roadmap, MediaSession roadmap |
-| iOS integrations | Control Center, lock screen, background audio, CarPlay roadmap |
+| Android integrations | Queue-aware media notification, artwork/metadata, play/pause/seek/previous/next/stop, repeat/shuffle, media-button receiver, foreground media service, and background playback configuration implemented; physical-device lifecycle tests and Android Auto browsing remain roadmap |
+| iOS integrations | Control Center and lock-screen queue metadata/artwork/transport controls plus music-session background audio configuration implemented; physical-device interruption/lifecycle tests and CarPlay browsing remain roadmap |
 | Desktop | Linux/macOS/Windows build support with a responsive navigation rail at desktop widths; split panes, global hotkeys, tray/menu bar, and installer polish roadmap |
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | UI customization | Material 3 shell with persisted system/light/dark/AMOLED theme preference and persisted accent color swatches; dynamic platform color roadmap |
