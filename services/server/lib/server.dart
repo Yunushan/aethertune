@@ -1,10 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 
 const _jsonHeaders = <String, String>{
   'content-type': 'application/json; charset=utf-8',
+  'cache-control': 'no-store',
 };
+const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 
 const _tracks = <CatalogTrack>[
   CatalogTrack(
@@ -30,22 +37,21 @@ const _tracks = <CatalogTrack>[
   ),
 ];
 
-Handler createServerHandler({DateTime Function()? clock}) {
+Handler createServerHandler({
+  DateTime Function()? clock,
+  SyncAuthenticator? syncAuthenticator,
+  LibrarySyncSnapshotStore? syncStore,
+}) {
   final now = clock ?? DateTime.now;
+  final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
+  final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
 
   return (Request request) async {
-    if (request.method != 'GET') {
-      return _jsonResponse(
-        405,
-        <String, Object?>{
-          'error': 'method_not_allowed',
-          'method': request.method,
-        },
-      );
-    }
-
     switch (request.url.path) {
       case 'health':
+        if (request.method != 'GET') {
+          return _methodNotAllowed(request);
+        }
         return _jsonResponse(
           200,
           <String, Object?>{
@@ -55,12 +61,16 @@ Handler createServerHandler({DateTime Function()? clock}) {
           },
         );
       case 'api/v1/info':
+        if (request.method != 'GET') {
+          return _methodNotAllowed(request);
+        }
         return _jsonResponse(
           200,
           <String, Object?>{
             'name': 'AetherTune',
             'service': 'aethertune-server',
-            'version': '0.1.0',
+            'version': '0.2.0',
+            'librarySync': authenticator.isConfigured,
             'supportedClients': <String>[
               'android',
               'ios',
@@ -71,6 +81,9 @@ Handler createServerHandler({DateTime Function()? clock}) {
           },
         );
       case 'api/v1/tracks':
+        if (request.method != 'GET') {
+          return _methodNotAllowed(request);
+        }
         final query = request.url.queryParameters['q'] ?? '';
         return _jsonResponse(
           200,
@@ -79,6 +92,13 @@ Handler createServerHandler({DateTime Function()? clock}) {
                 .map((track) => track.toJson())
                 .toList(growable: false),
           },
+        );
+      case 'api/v1/sync/library':
+        return _handleLibrarySync(
+          request,
+          authenticator: authenticator,
+          snapshots: snapshots,
+          now: now,
         );
       default:
         return _jsonResponse(
@@ -92,6 +112,166 @@ Handler createServerHandler({DateTime Function()? clock}) {
   };
 }
 
+Future<Response> _handleLibrarySync(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required LibrarySyncSnapshotStore snapshots,
+  required DateTime Function() now,
+}) async {
+  if (!authenticator.isConfigured) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'sync_not_configured'},
+    );
+  }
+
+  final authorization = request.headers['authorization'] ?? '';
+  final token = _bearerToken(authorization);
+  final userId = token == null ? null : authenticator.authenticate(token);
+  if (userId == null) {
+    return _jsonResponse(
+      401,
+      <String, Object?>{'error': 'unauthorized'},
+      headers: const <String, String>{'www-authenticate': 'Bearer'},
+    );
+  }
+
+  switch (request.method) {
+    case 'GET':
+      final snapshot = await snapshots.read(userId);
+      return _jsonResponse(
+        200,
+        snapshot?.toResponseJson() ??
+            <String, Object?>{
+              'revision': 0,
+              'updatedAt': null,
+              'updatedByDevice': null,
+              'checksum': null,
+              'snapshot': null,
+            },
+      );
+    case 'PUT':
+      try {
+        final body = await _readBoundedJson(request);
+        final baseRevision = body['baseRevision'];
+        final rawDeviceId = body['deviceId'];
+        final rawSnapshot = body['snapshot'];
+        if (baseRevision is! int || baseRevision < 0) {
+          throw const FormatException(
+            'baseRevision must be a non-negative integer.',
+          );
+        }
+        if (rawDeviceId is! String || rawDeviceId.trim().isEmpty) {
+          throw const FormatException('deviceId is required.');
+        }
+        final deviceId = rawDeviceId.trim();
+        if (deviceId.length > 128) {
+          throw const FormatException('deviceId is too long.');
+        }
+        if (rawSnapshot is! Map) {
+          throw const FormatException('snapshot must be an object.');
+        }
+        final snapshot = Map<String, Object?>.from(rawSnapshot);
+        _validateSyncSnapshot(snapshot);
+        final canonicalSnapshot = jsonEncode(snapshot);
+        final checksum = sha256.convert(utf8.encode(canonicalSnapshot)).toString();
+        final result = await snapshots.write(
+          userId: userId,
+          baseRevision: baseRevision,
+          deviceId: deviceId,
+          snapshot: snapshot,
+          checksum: checksum,
+          updatedAt: now().toUtc(),
+        );
+        if (result.isConflict) {
+          final current = result.snapshot;
+          return _jsonResponse(
+            409,
+            <String, Object?>{
+              'error': 'sync_conflict',
+              'currentRevision': current?.revision ?? 0,
+              'updatedAt': current?.updatedAt.toIso8601String(),
+              'updatedByDevice': current?.updatedByDevice,
+              'checksum': current?.checksum,
+            },
+          );
+        }
+        return _jsonResponse(200, result.snapshot!.toMetadataJson());
+      } on _PayloadTooLarge {
+        return _jsonResponse(
+          413,
+          <String, Object?>{
+            'error': 'payload_too_large',
+            'maxBytes': maxSyncSnapshotBytes,
+          },
+        );
+      } on FormatException catch (error) {
+        return _jsonResponse(
+          400,
+          <String, Object?>{
+            'error': 'invalid_sync_snapshot',
+            'message': error.message,
+          },
+        );
+      }
+    default:
+      return _methodNotAllowed(request);
+  }
+}
+
+Future<Map<String, Object?>> _readBoundedJson(Request request) async {
+  final builder = BytesBuilder(copy: false);
+  var byteCount = 0;
+  await for (final chunk in request.read()) {
+    byteCount += chunk.length;
+    if (byteCount > maxSyncSnapshotBytes) {
+      throw const _PayloadTooLarge();
+    }
+    builder.add(chunk);
+  }
+
+  final decoded = jsonDecode(utf8.decode(builder.takeBytes()));
+  if (decoded is! Map) {
+    throw const FormatException('Request body must be an object.');
+  }
+  return Map<String, Object?>.from(decoded);
+}
+
+void _validateSyncSnapshot(Map<String, Object?> snapshot) {
+  if (snapshot['syncVersion'] != 1 || snapshot['version'] != 1) {
+    throw const FormatException('Unsupported sync snapshot version.');
+  }
+  final tracks = snapshot['tracks'];
+  if (tracks is! List) {
+    throw const FormatException('Snapshot tracks must be a list.');
+  }
+  for (final item in tracks) {
+    if (item is! Map) {
+      throw const FormatException('Snapshot contains an invalid track.');
+    }
+    final track = Map<String, Object?>.from(item);
+    final localPath = track['localPath'];
+    if (localPath is String && localPath.trim().isNotEmpty) {
+      throw const FormatException(
+        'Portable sync snapshots cannot contain local file paths.',
+      );
+    }
+  }
+  final offlineQueue = snapshot['offlineCacheQueue'];
+  if (offlineQueue is List && offlineQueue.isNotEmpty) {
+    throw const FormatException(
+      'Portable sync snapshots cannot contain device cache jobs.',
+    );
+  }
+}
+
+String? _bearerToken(String authorization) {
+  final match = RegExp(r'^Bearer\s+([^\s]+)$', caseSensitive: false).firstMatch(
+    authorization.trim(),
+  );
+  return match?.group(1);
+}
+
 List<CatalogTrack> searchCatalog(String query) {
   final normalized = query.trim().toLowerCase();
   if (normalized.isEmpty) {
@@ -101,12 +281,332 @@ List<CatalogTrack> searchCatalog(String query) {
   return _tracks.where((track) => track.matches(normalized)).toList();
 }
 
-Response _jsonResponse(int statusCode, Map<String, Object?> body) {
+Response _methodNotAllowed(Request request) {
+  return _jsonResponse(
+    405,
+    <String, Object?>{
+      'error': 'method_not_allowed',
+      'method': request.method,
+    },
+  );
+}
+
+Response _jsonResponse(
+  int statusCode,
+  Map<String, Object?> body, {
+  Map<String, String> headers = const <String, String>{},
+}) {
   return Response(
     statusCode,
     body: jsonEncode(body),
-    headers: _jsonHeaders,
+    headers: <String, String>{..._jsonHeaders, ...headers},
   );
+}
+
+abstract interface class SyncAuthenticator {
+  bool get isConfigured;
+  String? authenticate(String token);
+}
+
+class DisabledSyncAuthenticator implements SyncAuthenticator {
+  const DisabledSyncAuthenticator();
+
+  @override
+  bool get isConfigured => false;
+
+  @override
+  String? authenticate(String token) => null;
+}
+
+class StaticSyncAuthenticator implements SyncAuthenticator {
+  StaticSyncAuthenticator(Map<String, String> users)
+      : _userTokenHashes = <String, List<int>>{
+          for (final entry in users.entries)
+            if (entry.key.trim().isNotEmpty && entry.value.isNotEmpty)
+              entry.key.trim(): sha256.convert(utf8.encode(entry.value)).bytes,
+        };
+
+  factory StaticSyncAuthenticator.fromJson(String? rawUsers) {
+    if (rawUsers == null || rawUsers.trim().isEmpty) {
+      return StaticSyncAuthenticator(const <String, String>{});
+    }
+    final decoded = jsonDecode(rawUsers);
+    if (decoded is! Map) {
+      throw const FormatException('AETHERTUNE_SYNC_USERS must be a JSON object.');
+    }
+    return StaticSyncAuthenticator(
+      decoded.map(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      ),
+    );
+  }
+
+  final Map<String, List<int>> _userTokenHashes;
+
+  @override
+  bool get isConfigured => _userTokenHashes.isNotEmpty;
+
+  @override
+  String? authenticate(String token) {
+    final candidate = sha256.convert(utf8.encode(token)).bytes;
+    for (final entry in _userTokenHashes.entries) {
+      if (_constantTimeEquals(candidate, entry.value)) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+}
+
+bool _constantTimeEquals(List<int> left, List<int> right) {
+  var difference = left.length ^ right.length;
+  final length = left.length > right.length ? left.length : right.length;
+  for (var index = 0; index < length; index += 1) {
+    final leftByte = index < left.length ? left[index] : 0;
+    final rightByte = index < right.length ? right[index] : 0;
+    difference |= leftByte ^ rightByte;
+  }
+  return difference == 0;
+}
+
+class LibrarySyncSnapshot {
+  const LibrarySyncSnapshot({
+    required this.revision,
+    required this.updatedAt,
+    required this.updatedByDevice,
+    required this.checksum,
+    required this.snapshot,
+  });
+
+  final int revision;
+  final DateTime updatedAt;
+  final String updatedByDevice;
+  final String checksum;
+  final Map<String, Object?> snapshot;
+
+  Map<String, Object?> toMetadataJson() {
+    return <String, Object?>{
+      'revision': revision,
+      'updatedAt': updatedAt.toIso8601String(),
+      'updatedByDevice': updatedByDevice,
+      'checksum': checksum,
+    };
+  }
+
+  Map<String, Object?> toResponseJson() {
+    return <String, Object?>{
+      ...toMetadataJson(),
+      'snapshot': snapshot,
+    };
+  }
+
+  Map<String, Object?> toStorageJson() => toResponseJson();
+
+  factory LibrarySyncSnapshot.fromStorageJson(Map<String, Object?> json) {
+    final revision = json['revision'];
+    final updatedAt = DateTime.tryParse(json['updatedAt'] as String? ?? '');
+    final updatedByDevice = json['updatedByDevice'];
+    final checksum = json['checksum'];
+    final rawSnapshot = json['snapshot'];
+    if (revision is! int ||
+        revision <= 0 ||
+        updatedAt == null ||
+        updatedByDevice is! String ||
+        checksum is! String ||
+        rawSnapshot is! Map) {
+      throw const FormatException('Stored sync snapshot is invalid.');
+    }
+    final snapshot = Map<String, Object?>.from(rawSnapshot);
+    final actualChecksum = sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
+    if (actualChecksum != checksum) {
+      throw const FormatException('Stored sync snapshot checksum does not match.');
+    }
+    return LibrarySyncSnapshot(
+      revision: revision,
+      updatedAt: updatedAt.toUtc(),
+      updatedByDevice: updatedByDevice,
+      checksum: checksum,
+      snapshot: snapshot,
+    );
+  }
+}
+
+class LibrarySyncWriteResult {
+  const LibrarySyncWriteResult._({
+    required this.isConflict,
+    required this.snapshot,
+  });
+
+  factory LibrarySyncWriteResult.saved(LibrarySyncSnapshot snapshot) {
+    return LibrarySyncWriteResult._(isConflict: false, snapshot: snapshot);
+  }
+
+  factory LibrarySyncWriteResult.conflict(LibrarySyncSnapshot? snapshot) {
+    return LibrarySyncWriteResult._(isConflict: true, snapshot: snapshot);
+  }
+
+  final bool isConflict;
+  final LibrarySyncSnapshot? snapshot;
+}
+
+abstract interface class LibrarySyncSnapshotStore {
+  Future<LibrarySyncSnapshot?> read(String userId);
+
+  Future<LibrarySyncWriteResult> write({
+    required String userId,
+    required int baseRevision,
+    required String deviceId,
+    required Map<String, Object?> snapshot,
+    required String checksum,
+    required DateTime updatedAt,
+  });
+}
+
+class MemoryLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
+  final Map<String, LibrarySyncSnapshot> _snapshots =
+      <String, LibrarySyncSnapshot>{};
+
+  @override
+  Future<LibrarySyncSnapshot?> read(String userId) async => _snapshots[userId];
+
+  @override
+  Future<LibrarySyncWriteResult> write({
+    required String userId,
+    required int baseRevision,
+    required String deviceId,
+    required Map<String, Object?> snapshot,
+    required String checksum,
+    required DateTime updatedAt,
+  }) async {
+    final current = _snapshots[userId];
+    if ((current?.revision ?? 0) != baseRevision) {
+      return LibrarySyncWriteResult.conflict(current);
+    }
+    final saved = LibrarySyncSnapshot(
+      revision: baseRevision + 1,
+      updatedAt: updatedAt.toUtc(),
+      updatedByDevice: deviceId,
+      checksum: checksum,
+      snapshot: Map<String, Object?>.from(snapshot),
+    );
+    _snapshots[userId] = saved;
+    return LibrarySyncWriteResult.saved(saved);
+  }
+}
+
+class FileLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
+  FileLibrarySyncSnapshotStore(this.rootDirectory);
+
+  final Directory rootDirectory;
+  final Map<String, Future<void>> _writeTails = <String, Future<void>>{};
+
+  @override
+  Future<LibrarySyncSnapshot?> read(String userId) {
+    return _serialized(userId, () => _readUnlocked(userId));
+  }
+
+  @override
+  Future<LibrarySyncWriteResult> write({
+    required String userId,
+    required int baseRevision,
+    required String deviceId,
+    required Map<String, Object?> snapshot,
+    required String checksum,
+    required DateTime updatedAt,
+  }) {
+    return _serialized(userId, () async {
+      final current = await _readUnlocked(userId);
+      if ((current?.revision ?? 0) != baseRevision) {
+        return LibrarySyncWriteResult.conflict(current);
+      }
+
+      final saved = LibrarySyncSnapshot(
+        revision: baseRevision + 1,
+        updatedAt: updatedAt.toUtc(),
+        updatedByDevice: deviceId,
+        checksum: checksum,
+        snapshot: Map<String, Object?>.from(snapshot),
+      );
+      final directory = _userDirectory(userId);
+      await directory.create(recursive: true);
+      final finalFile = File(
+        p.join(directory.path, 'snapshot-${saved.revision}.json'),
+      );
+      final temporaryFile = File(
+        p.join(
+          directory.path,
+          '.snapshot-${saved.revision}-${DateTime.now().microsecondsSinceEpoch}.tmp',
+        ),
+      );
+      await temporaryFile.writeAsString(
+        jsonEncode(saved.toStorageJson()),
+        flush: true,
+      );
+      await temporaryFile.rename(finalFile.path);
+
+      await for (final entity in directory.list()) {
+        if (entity is File &&
+            entity.path != finalFile.path &&
+            p.basename(entity.path).startsWith('snapshot-') &&
+            p.extension(entity.path) == '.json') {
+          try {
+            await entity.delete();
+          } on FileSystemException {
+            // The newest complete revision is already durable.
+          }
+        }
+      }
+      return LibrarySyncWriteResult.saved(saved);
+    });
+  }
+
+  Future<LibrarySyncSnapshot?> _readUnlocked(String userId) async {
+    final directory = _userDirectory(userId);
+    if (!await directory.exists()) {
+      return null;
+    }
+    final candidates = <({int revision, File file})>[];
+    await for (final entity in directory.list()) {
+      if (entity is! File) {
+        continue;
+      }
+      final match = RegExp(r'^snapshot-(\d+)\.json$').firstMatch(
+        p.basename(entity.path),
+      );
+      final revision = int.tryParse(match?.group(1) ?? '');
+      if (revision != null) {
+        candidates.add((revision: revision, file: entity));
+      }
+    }
+    if (candidates.isEmpty) {
+      return null;
+    }
+    candidates.sort((left, right) => right.revision.compareTo(left.revision));
+    final decoded = jsonDecode(await candidates.first.file.readAsString());
+    if (decoded is! Map) {
+      throw const FormatException('Stored sync snapshot must be an object.');
+    }
+    return LibrarySyncSnapshot.fromStorageJson(
+      Map<String, Object?>.from(decoded),
+    );
+  }
+
+  Directory _userDirectory(String userId) {
+    final userHash = sha256.convert(utf8.encode(userId)).toString();
+    return Directory(p.join(rootDirectory.path, userHash));
+  }
+
+  Future<T> _serialized<T>(String userId, Future<T> Function() action) {
+    final previous = _writeTails[userId] ?? Future<void>.value();
+    final completer = Completer<void>();
+    _writeTails[userId] = completer.future;
+    return previous.then((_) => action()).whenComplete(() {
+      completer.complete();
+      if (identical(_writeTails[userId], completer.future)) {
+        _writeTails.remove(userId);
+      }
+    });
+  }
 }
 
 class CatalogTrack {
@@ -140,4 +640,8 @@ class CatalogTrack {
       'sourceId': sourceId,
     };
   }
+}
+
+class _PayloadTooLarge implements Exception {
+  const _PayloadTooLarge();
 }

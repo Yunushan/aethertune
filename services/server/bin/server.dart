@@ -5,8 +5,18 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 
 Future<void> main() async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
+  final dataDirectory = Directory(
+    Platform.environment['AETHERTUNE_DATA_DIR'] ??
+        '${Directory.current.path}${Platform.pathSeparator}data',
+  );
+  final syncAuthenticator = StaticSyncAuthenticator.fromJson(
+    Platform.environment['AETHERTUNE_SYNC_USERS'],
+  );
   final server = await shelf_io.serve(
-    createServerHandler(),
+    createServerHandler(
+      syncAuthenticator: syncAuthenticator,
+      syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
+    ),
     InternetAddress.anyIPv4,
     port,
   );
