@@ -13,6 +13,8 @@ class Track {
     this.genre = 'Unknown Genre',
     this.duration = Duration.zero,
     this.artworkUri,
+    this.providerArtworkId,
+    this.providerArtworkVersion,
     this.localPath,
     this.contentHash,
     this.streamUrl,
@@ -30,6 +32,8 @@ class Track {
   final String genre;
   final Duration duration;
   final Uri? artworkUri;
+  final String? providerArtworkId;
+  final String? providerArtworkVersion;
   final String? localPath;
   final String? contentHash;
   final String? streamUrl;
@@ -51,6 +55,8 @@ class Track {
     String? genre,
     Duration? duration,
     Uri? artworkUri,
+    String? providerArtworkId,
+    String? providerArtworkVersion,
     String? localPath,
     String? contentHash,
     String? streamUrl,
@@ -68,6 +74,9 @@ class Track {
       genre: genre ?? this.genre,
       duration: duration ?? this.duration,
       artworkUri: artworkUri ?? this.artworkUri,
+      providerArtworkId: providerArtworkId ?? this.providerArtworkId,
+      providerArtworkVersion:
+          providerArtworkVersion ?? this.providerArtworkVersion,
       localPath: localPath ?? this.localPath,
       contentHash: contentHash ?? this.contentHash,
       streamUrl: streamUrl ?? this.streamUrl,
@@ -89,6 +98,8 @@ class Track {
       'genre': genre,
       'durationMs': duration.inMilliseconds,
       'artworkUri': artworkUri?.toString(),
+      'providerArtworkId': providerArtworkId,
+      'providerArtworkVersion': providerArtworkVersion,
       'localPath': localPath,
       'contentHash': contentHash,
       'streamUrl': streamUrlIsEphemeral ? null : streamUrl,
@@ -108,6 +119,8 @@ class Track {
       genre: json['genre'] as String? ?? 'Unknown Genre',
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
       artworkUri: _parseUri(json['artworkUri'] as String?),
+      providerArtworkId: json['providerArtworkId'] as String?,
+      providerArtworkVersion: json['providerArtworkVersion'] as String?,
       localPath: json['localPath'] as String?,
       contentHash: json['contentHash'] as String?,
       streamUrl: json['streamUrl'] as String?,

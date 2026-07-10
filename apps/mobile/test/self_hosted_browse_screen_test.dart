@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -48,6 +51,7 @@ void main() {
     expect(find.text('Albums'), findsOneWidget);
     expect(find.text('Playlists'), findsOneWidget);
     expect(find.text('Open Artist'), findsOneWidget);
+    expect(provider.artworkCalls, isNotEmpty);
 
     await tester.enterText(
       find.byKey(const Key('catalog-filter-artist')),
@@ -220,6 +224,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
   final List<MusicCatalogCollectionKind> browseCalls =
       <MusicCatalogCollectionKind>[];
   final List<MusicCatalogCollection> loadCalls = <MusicCatalogCollection>[];
+  final List<String> artworkCalls = <String>[];
 
   @override
   String get id => 'test-self-hosted';
@@ -237,6 +242,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.libraryBrowse,
         MusicSourceCapability.playlists,
+        MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
         MusicSourceCapability.authentication,
@@ -269,6 +275,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
             title: 'Open Artist',
             kind: MusicCatalogCollectionKind.artist,
             subtitle: '2 albums',
+            artworkId: 'artist-cover-1',
           ),
           MusicCatalogCollection(
             id: 'artist-2',
@@ -283,6 +290,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
             title: 'Blue Rooms',
             kind: MusicCatalogCollectionKind.album,
             subtitle: 'Open Artist',
+            artworkId: 'album-cover-1',
           ),
         ],
       MusicCatalogCollectionKind.playlist => const <MusicCatalogCollection>[
@@ -291,6 +299,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
             title: 'Late Night',
             kind: MusicCatalogCollectionKind.playlist,
             subtitle: '2 tracks',
+            artworkId: 'playlist-cover-1',
           ),
         ],
     };
@@ -315,6 +324,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
             title: 'Blue Rooms',
             kind: MusicCatalogCollectionKind.album,
             subtitle: 'Open Artist · 2024',
+            artworkId: 'album-cover-1',
           ),
         ],
       );
@@ -334,6 +344,16 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
   Future<List<Track>> search(String query) async => const <Track>[];
 
   @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) async {
+    artworkCalls.add('$artworkId@$maxWidth');
+    return base64Decode(_tinyPngBase64);
+  }
+
+  @override
   Future<Uri?> resolveStream(Track track) async {
     return Uri.parse(
       'https://music.example.test/stream/${track.externalId}',
@@ -349,9 +369,14 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
       duration: const Duration(minutes: 3),
       sourceId: id,
       externalId: externalId,
+      providerArtworkId: 'album-cover-1',
     );
   }
 }
+
+const _tinyPngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAA'
+    'CklEQVR4nGMAAQAABQABDQotxAAAAABJRU5ErkJggg==';
 
 class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   List<Track> queue = <Track>[];

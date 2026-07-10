@@ -48,6 +48,8 @@ void main() {
       album: 'Internet Radio',
       genre: 'Jazz',
       artworkUri: Uri.parse('https://station.example.test/icon.png'),
+      providerArtworkId: 'station-art-1',
+      providerArtworkVersion: 'etag-1',
       streamUrl: 'https://stream.example.test/aac',
       sourceId: 'radio-browser',
       externalId: 'station-1',
@@ -58,6 +60,8 @@ void main() {
     expect(decoded.streamUrl, 'https://stream.example.test/aac');
     expect(decoded.sourceId, 'radio-browser');
     expect(decoded.externalId, 'station-1');
+    expect(decoded.providerArtworkId, 'station-art-1');
+    expect(decoded.providerArtworkVersion, 'etag-1');
     expect(
       decoded.artworkUri,
       Uri.parse('https://station.example.test/icon.png'),

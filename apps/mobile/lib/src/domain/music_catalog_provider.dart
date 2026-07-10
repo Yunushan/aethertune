@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'music_source_provider.dart';
 import 'track.dart';
 
@@ -10,6 +12,8 @@ final class MusicCatalogCollection {
     required this.kind,
     this.subtitle = '',
     this.itemCount = 0,
+    this.artworkId,
+    this.artworkVersion,
   });
 
   final String id;
@@ -17,6 +21,8 @@ final class MusicCatalogCollection {
   final MusicCatalogCollectionKind kind;
   final String subtitle;
   final int itemCount;
+  final String? artworkId;
+  final String? artworkVersion;
 }
 
 final class MusicCatalogDetail {
@@ -39,4 +45,10 @@ abstract interface class MusicCatalogProvider implements MusicSourceProvider {
   Future<MusicCatalogDetail> loadCollection(
     MusicCatalogCollection collection,
   );
+
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  });
 }

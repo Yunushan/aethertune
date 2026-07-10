@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/jellyfin_provider.dart';
@@ -49,6 +51,8 @@ void main() {
     expect(track.externalId, 'song-1');
     expect(track.streamUrl, isNull);
     expect(track.artworkUri, isNull);
+    expect(track.providerArtworkId, 'song-1');
+    expect(track.providerArtworkVersion, 'image-tag');
 
     final streamUri = await provider.resolveStream(track);
     expect(streamUri!.path, '/jellyfin/Audio/song-1/stream');
@@ -114,6 +118,10 @@ void main() {
     expect(albums.single.subtitle, 'Mira Sol · 2025 · 8 item(s)');
     expect(playlists.single.id, 'playlist-1');
     expect(playlists.single.itemCount, 4);
+    expect(artists.single.artworkId, 'artist-1');
+    expect(artists.single.artworkVersion, 'artist-image-tag');
+    expect(albums.single.artworkId, 'album-1');
+    expect(playlists.single.artworkId, 'playlist-1');
     expect(requests[0].path, '/jellyfin/Artists');
     expect(requests[0].queryParameters['UserId'], 'user-1');
     expect(requests[0].queryParameters['IncludeItemTypes'], 'Audio');
@@ -185,6 +193,7 @@ void main() {
     expect(album.tracks.single.title, 'Sea Glass');
     expect(album.tracks.single.streamUrl, isNull);
     expect(album.tracks.single.artworkUri, isNull);
+    expect(album.tracks.single.providerArtworkId, 'song-1');
     expect(playlist.tracks.single.externalId, 'song-1');
     expect(requests[0].queryParameters['ArtistIds'], 'artist-1');
     expect(requests[0].queryParameters['IncludeItemTypes'], 'MusicAlbum');
@@ -195,6 +204,40 @@ void main() {
       '/jellyfin/Playlists/playlist-1/Items',
     );
     expect(requests[2].queryParameters['UserId'], 'user-1');
+  });
+
+  test('loads Jellyfin artwork with header auth and a credential-free URI',
+      () async {
+    Uri? capturedUri;
+    Map<String, String>? capturedHeaders;
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (_) async => '{"Items":[]}',
+      artworkLoader: (uri, headers) async {
+        capturedUri = uri;
+        capturedHeaders = headers;
+        return Uint8List.fromList(<int>[1, 2, 3]);
+      },
+    );
+
+    final bytes = await provider.loadArtwork(
+      'album-1',
+      version: 'image-tag',
+      maxWidth: 320,
+    );
+
+    expect(bytes, <int>[1, 2, 3]);
+    expect(capturedUri!.path, '/jellyfin/Items/album-1/Images/Primary');
+    expect(capturedUri!.queryParameters['maxWidth'], '320');
+    expect(capturedUri!.queryParameters['quality'], '90');
+    expect(capturedUri!.queryParameters['tag'], 'image-tag');
+    expect(capturedUri!.queryParameters.containsKey('api_key'), isFalse);
+    expect(capturedUri.toString(), isNot(contains('api-secret')));
+    expect(capturedHeaders, <String, String>{
+      'X-Emby-Token': 'api-secret',
+    });
   });
 
   test('handles empty responses and offline policy for user-owned media', () {
@@ -267,7 +310,8 @@ const _jellyfinArtistsJson = '''
     {
       "Id": "artist-1",
       "Name": "Mira Sol",
-      "RecursiveItemCount": 12
+      "RecursiveItemCount": 12,
+      "ImageTags": {"Primary": "artist-image-tag"}
     }
   ]
 }
@@ -281,7 +325,8 @@ const _jellyfinAlbumsJson = '''
       "Name": "Blue Rooms",
       "AlbumArtist": "Mira Sol",
       "ProductionYear": 2025,
-      "ChildCount": 8
+      "ChildCount": 8,
+      "ImageTags": {"Primary": "album-image-tag"}
     }
   ]
 }
@@ -293,7 +338,8 @@ const _jellyfinPlaylistsJson = '''
     {
       "Id": "playlist-1",
       "Name": "Night Focus",
-      "ChildCount": 4
+      "ChildCount": 4,
+      "ImageTags": {"Primary": "playlist-image-tag"}
     }
   ]
 }

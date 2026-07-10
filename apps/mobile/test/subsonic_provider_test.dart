@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/subsonic_provider.dart';
@@ -11,6 +13,7 @@ void main() {
       baseUri: Uri.parse('https://music.example.test/navidrome'),
       username: 'yunus',
       password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async {
         capturedUri = uri;
         return _searchResponseJson;
@@ -26,6 +29,7 @@ void main() {
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.libraryBrowse,
+        MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
         MusicSourceCapability.authentication,
@@ -43,7 +47,9 @@ void main() {
     expect(capturedUri, isNotNull);
     expect(capturedUri!.path, '/navidrome/rest/search3.view');
     expect(capturedUri!.queryParameters['u'], 'yunus');
-    expect(capturedUri!.queryParameters['p'], 'enc:736563726574');
+    expect(capturedUri!.queryParameters['t'], _secretToken);
+    expect(capturedUri!.queryParameters['s'], _fixedSalt);
+    expect(capturedUri!.queryParameters.containsKey('p'), isFalse);
     expect(capturedUri!.queryParameters['v'], '1.16.1');
     expect(capturedUri!.queryParameters['c'], 'AetherTune');
     expect(capturedUri!.queryParameters['f'], 'json');
@@ -61,6 +67,7 @@ void main() {
     expect(tracks.first.externalId, 'song-1');
     expect(tracks.first.streamUrl, isNull);
     expect(tracks.first.artworkUri, isNull);
+    expect(tracks.first.providerArtworkId, 'cover-1');
     expect(
       await provider.resolveStream(tracks.first),
       Uri(
@@ -69,7 +76,8 @@ void main() {
         path: '/navidrome/rest/stream.view',
         queryParameters: const <String, String>{
           'u': 'yunus',
-          'p': 'enc:736563726574',
+          't': _secretToken,
+          's': _fixedSalt,
           'v': '1.16.1',
           'c': 'AetherTune',
           'f': 'json',
@@ -79,11 +87,12 @@ void main() {
     );
   });
 
-  test('redacts reversible password encoding from provider errors', () async {
+  test('redacts salted authentication tokens from provider errors', () async {
     final provider = SubsonicProvider(
       baseUri: Uri.parse('https://music.example.test'),
       username: 'demo',
       password: 'pw',
+      saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async => throw StateError('Request failed: $uri'),
     );
 
@@ -94,8 +103,8 @@ void main() {
           final message = error.toString();
           return message.contains('Navidrome / Subsonic request failed') &&
               message.contains('[redacted]') &&
-              !message.contains('7077') &&
-              !message.contains('p=enc%3A7077');
+              !message.contains(_pwToken) &&
+              !message.contains('t=$_pwToken');
         }),
       ),
     );
@@ -107,6 +116,7 @@ void main() {
       baseUri: Uri.parse('https://music.example.test/navidrome'),
       username: 'yunus',
       password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async {
         requests.add(uri);
         return switch (uri.path.split('/').last) {
@@ -134,6 +144,9 @@ void main() {
     expect(albums.single.subtitle, 'Open Artist · 2024 · 2 track(s)');
     expect(playlists.single.title, 'Late Night');
     expect(playlists.single.subtitle, 'yunus · 2 track(s)');
+    expect(artists.single.artworkId, 'artist-cover-1');
+    expect(albums.single.artworkId, 'album-cover-1');
+    expect(playlists.single.artworkId, 'playlist-cover-1');
     expect(requests[0].path, '/navidrome/rest/getArtists.view');
     expect(requests[1].path, '/navidrome/rest/getAlbumList2.view');
     expect(requests[1].queryParameters['type'], 'alphabeticalByName');
@@ -143,7 +156,9 @@ void main() {
       requests.every(
         (request) =>
             request.queryParameters['u'] == 'yunus' &&
-            request.queryParameters['p'] == 'enc:736563726574',
+            request.queryParameters['t'] == _secretToken &&
+            request.queryParameters['s'] == _fixedSalt &&
+            !request.queryParameters.containsKey('p'),
       ),
       isTrue,
     );
@@ -156,6 +171,7 @@ void main() {
       baseUri: Uri.parse('https://music.example.test/navidrome'),
       username: 'yunus',
       password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async {
         requests.add(uri);
         return switch (uri.path.split('/').last) {
@@ -193,11 +209,44 @@ void main() {
     expect(album.tracks, hasLength(2));
     expect(album.tracks.first.title, 'Aether Session');
     expect(album.tracks.first.streamUrl, isNull);
+    expect(album.tracks.first.providerArtworkId, 'cover-1');
     expect(playlist.tracks.single.title, 'Playlist Cut');
+    expect(playlist.tracks.single.providerArtworkId, 'playlist-cover-1');
     expect(playlist.tracks.single.sourceId, provider.id);
     expect(requests[0].queryParameters['id'], 'artist-1');
     expect(requests[1].queryParameters['id'], 'album-1');
     expect(requests[2].queryParameters['id'], 'playlist-1');
+  });
+
+  test('loads Subsonic cover art through a salted credential request',
+      () async {
+    Uri? capturedUri;
+    Map<String, String>? capturedHeaders;
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (_) async =>
+          '{"subsonic-response":{"status":"ok"}}',
+      artworkLoader: (uri, headers) async {
+        capturedUri = uri;
+        capturedHeaders = headers;
+        return Uint8List.fromList(<int>[4, 5, 6]);
+      },
+    );
+
+    final bytes = await provider.loadArtwork('cover-1', maxWidth: 256);
+
+    expect(bytes, <int>[4, 5, 6]);
+    expect(capturedUri!.path, '/navidrome/rest/getCoverArt.view');
+    expect(capturedUri!.queryParameters['id'], 'cover-1');
+    expect(capturedUri!.queryParameters['size'], '256');
+    expect(capturedUri!.queryParameters['t'], _secretToken);
+    expect(capturedUri!.queryParameters['s'], _fixedSalt);
+    expect(capturedUri!.queryParameters.containsKey('p'), isFalse);
+    expect(capturedUri.toString(), isNot(contains('secret')));
+    expect(capturedHeaders, isEmpty);
   });
 
   test('handles failed responses and offline policy for user-owned media', () {
@@ -210,6 +259,7 @@ void main() {
       baseUri: Uri.parse('https://music.example.test'),
       username: 'demo',
       password: 'pw',
+      saltGenerator: _fixedSaltGenerator,
       requestLoader: (_) async => _searchResponseJson,
     );
     final decision = OfflineMediaPolicy(<MusicSourceProvider>[
@@ -238,6 +288,7 @@ void main() {
       baseUri: Uri.parse('https://music.example.test'),
       username: 'yunus',
       password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async {
         capturedUri = uri;
         return '{"subsonic-response":{"status":"ok"}}';
@@ -248,7 +299,9 @@ void main() {
 
     expect(capturedUri!.path, '/rest/ping.view');
     expect(capturedUri!.queryParameters['u'], 'yunus');
-    expect(capturedUri!.queryParameters['p'], 'enc:736563726574');
+    expect(capturedUri!.queryParameters['t'], _secretToken);
+    expect(capturedUri!.queryParameters['s'], _fixedSalt);
+    expect(capturedUri!.queryParameters.containsKey('p'), isFalse);
   });
 }
 
@@ -303,7 +356,12 @@ const _artistsResponseJson = '''
         {
           "name": "O",
           "artist": [
-            {"id": "artist-1", "name": "Open Artist", "albumCount": 2}
+            {
+              "id": "artist-1",
+              "name": "Open Artist",
+              "albumCount": 2,
+              "coverArt": "artist-cover-1"
+            }
           ]
         }
       ]
@@ -323,7 +381,8 @@ const _albumListResponseJson = '''
           "name": "Self Hosted Album",
           "artist": "Open Artist",
           "year": 2024,
-          "songCount": 2
+          "songCount": 2,
+          "coverArt": "album-cover-1"
         }
       ]
     }
@@ -341,7 +400,8 @@ const _playlistsResponseJson = '''
           "id": "playlist-1",
           "name": "Late Night",
           "owner": "yunus",
-          "songCount": 2
+          "songCount": 2,
+          "coverArt": "playlist-cover-1"
         }
       ]
     }
@@ -362,7 +422,8 @@ const _artistResponseJson = '''
           "name": "Self Hosted Album",
           "artist": "Open Artist",
           "year": 2024,
-          "songCount": 2
+          "songCount": 2,
+          "coverArt": "album-cover-1"
         }
       ]
     }
@@ -384,7 +445,8 @@ const _albumResponseJson = '''
           "artist": "Open Artist",
           "album": "Self Hosted Album",
           "genre": "Ambient",
-          "duration": 245
+          "duration": 245,
+          "coverArt": "cover-1"
         },
         {
           "id": "song-2",
@@ -412,10 +474,17 @@ const _playlistResponseJson = '''
           "title": "Playlist Cut",
           "artist": "Open Artist",
           "album": "Self Hosted Album",
-          "duration": 180
+          "duration": 180,
+          "coverArt": "playlist-cover-1"
         }
       ]
     }
   }
 }
 ''';
+
+const _fixedSalt = 'fixed-salt';
+const _secretToken = '9fe6f34cac87f84c765c85e8263b63bb';
+const _pwToken = 'cacf412bf59dc50063eab9ca54d52975';
+
+String _fixedSaltGenerator() => _fixedSalt;

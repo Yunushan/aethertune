@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import 'provider_binary_loader.dart';
 import 'provider_error.dart';
 
 typedef JellyfinRequestLoader = Future<String> Function(Uri requestUri);
@@ -16,16 +18,19 @@ class JellyfinProvider implements MusicCatalogProvider {
     String? id,
     String? name,
     JellyfinRequestLoader? requestLoader,
+    ProviderBinaryRequestLoader? artworkLoader,
     this.limit = 20,
   })  : id = id ?? 'jellyfin-${Track.stableLocalId(baseUri.toString())}',
         name = name ?? 'Jellyfin',
-        _requestLoader = requestLoader ?? _loadJellyfinJson;
+        _requestLoader = requestLoader ?? _loadJellyfinJson,
+        _artworkLoader = artworkLoader ?? loadProviderImageBytes;
 
   static const defaultCapabilities = <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
+    MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
     MusicSourceCapability.downloads,
@@ -37,6 +42,7 @@ class JellyfinProvider implements MusicCatalogProvider {
   final String apiKey;
   final int limit;
   final JellyfinRequestLoader _requestLoader;
+  final ProviderBinaryRequestLoader _artworkLoader;
 
   @override
   final String id;
@@ -124,6 +130,9 @@ class JellyfinProvider implements MusicCatalogProvider {
               'SortBy': 'SortName',
               'SortOrder': 'Ascending',
               'Fields': 'Genres,RecursiveItemCount',
+              'EnableImages': 'true',
+              'EnableImageTypes': 'Primary',
+              'ImageTypeLimit': '1',
               'Limit': '500',
             },
           ),
@@ -182,6 +191,9 @@ class JellyfinProvider implements MusicCatalogProvider {
                 <String, String>{
                   'UserId': userId,
                   'Fields': 'Genres,MediaSources',
+                  'EnableImages': 'true',
+                  'EnableImageTypes': 'Primary',
+                  'ImageTypeLimit': '1',
                   'Limit': '500',
                 },
               ),
@@ -193,6 +205,28 @@ class JellyfinProvider implements MusicCatalogProvider {
           );
       }
     });
+  }
+
+  @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) {
+    final normalizedId = artworkId.trim();
+    if (normalizedId.isEmpty) {
+      return Future<Uint8List?>.value(null);
+    }
+    return _guardRequest(
+      () => _artworkLoader(
+        _artworkUri(
+          normalizedId,
+          version: version,
+          maxWidth: maxWidth,
+        ),
+        <String, String>{'X-Emby-Token': apiKey},
+      ),
+    );
   }
 
   @override
@@ -224,14 +258,6 @@ class JellyfinProvider implements MusicCatalogProvider {
     );
   }
 
-  Uri? primaryImageUriFor(String itemId, {required bool hasImage}) {
-    if (!hasImage || itemId.trim().isEmpty) {
-      return null;
-    }
-
-    return _requestUri('/Items/$itemId/Images/Primary');
-  }
-
   Uri _searchUri(String query) {
     return _requestUri(
       '/Users/$userId/Items',
@@ -240,6 +266,9 @@ class JellyfinProvider implements MusicCatalogProvider {
         'IncludeItemTypes': 'Audio',
         'SearchTerm': query,
         'Fields': 'Genres,MediaSources',
+        'EnableImages': 'true',
+        'EnableImageTypes': 'Primary',
+        'ImageTypeLimit': '1',
         'Limit': limit.toString(),
       },
     );
@@ -259,8 +288,36 @@ class JellyfinProvider implements MusicCatalogProvider {
             : 'SortName',
         'SortOrder': 'Ascending',
         'Fields': 'Genres,RecursiveItemCount,ChildCount',
+        'EnableImages': 'true',
+        'EnableImageTypes': 'Primary',
+        'ImageTypeLimit': '1',
         'Limit': '500',
         ...extra,
+      },
+    );
+  }
+
+  Uri _artworkUri(
+    String artworkId, {
+    required String? version,
+    required int maxWidth,
+  }) {
+    final baseSegments = baseUri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    final normalizedVersion = version?.trim() ?? '';
+    return baseUri.replace(
+      pathSegments: <String>[
+        ...baseSegments,
+        'Items',
+        artworkId,
+        'Images',
+        'Primary',
+      ],
+      queryParameters: <String, String>{
+        'maxWidth': maxWidth.clamp(32, 2048).toString(),
+        'quality': '90',
+        if (normalizedVersion.isNotEmpty) 'tag': normalizedVersion,
       },
     );
   }
@@ -301,7 +358,7 @@ final class JellyfinAudioItem {
     required this.album,
     required this.genre,
     required this.duration,
-    required this.hasPrimaryImage,
+    required this.primaryImageTag,
   });
 
   final String id;
@@ -310,7 +367,9 @@ final class JellyfinAudioItem {
   final String album;
   final String genre;
   final Duration duration;
-  final bool hasPrimaryImage;
+  final String primaryImageTag;
+
+  bool get hasPrimaryImage => primaryImageTag.isNotEmpty;
 
   Track toTrack({
     required String sourceId,
@@ -325,6 +384,9 @@ final class JellyfinAudioItem {
       genre: genre.isEmpty ? 'Self-hosted Music' : genre,
       duration: duration,
       artworkUri: artworkUri,
+      providerArtworkId: hasPrimaryImage ? id : null,
+      providerArtworkVersion:
+          hasPrimaryImage ? primaryImageTag : null,
       streamUrl: streamUri?.toString(),
       sourceId: sourceId,
       externalId: id,
@@ -376,6 +438,7 @@ MusicCatalogCollection? _jellyfinCollection(
   final itemCount = _intValue(
     json['RecursiveItemCount'] ?? json['ChildCount'],
   );
+  final primaryImageTag = _primaryImageTag(json);
   final subtitleParts = <String>[
     if (kind == MusicCatalogCollectionKind.album && artist.isNotEmpty) artist,
     if (kind == MusicCatalogCollectionKind.album && year > 0) year.toString(),
@@ -390,6 +453,8 @@ MusicCatalogCollection? _jellyfinCollection(
     kind: kind,
     subtitle: subtitleParts.join(' · '),
     itemCount: itemCount,
+    artworkId: primaryImageTag.isEmpty ? null : id,
+    artworkVersion: primaryImageTag.isEmpty ? null : primaryImageTag,
   );
 }
 
@@ -406,7 +471,7 @@ JellyfinAudioItem? _audioItemFromJson(Map<String, Object?> json) {
     album: _stringValue(json['Album']),
     genre: _firstString(json['Genres']),
     duration: _durationFromTicks(json['RunTimeTicks']),
-    hasPrimaryImage: _hasPrimaryImage(json),
+    primaryImageTag: _primaryImageTag(json),
   );
 }
 
@@ -447,13 +512,13 @@ String _artistName(Map<String, Object?> json) {
   return _stringValue(json['AlbumArtist']);
 }
 
-bool _hasPrimaryImage(Map<String, Object?> json) {
+String _primaryImageTag(Map<String, Object?> json) {
   final imageTags = json['ImageTags'];
   if (imageTags is Map<dynamic, dynamic>) {
-    return _stringValue(imageTags['Primary']).isNotEmpty;
+    return _stringValue(imageTags['Primary']);
   }
 
-  return false;
+  return '';
 }
 
 Duration _durationFromTicks(Object? value) {

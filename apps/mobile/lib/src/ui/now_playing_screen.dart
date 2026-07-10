@@ -199,6 +199,9 @@ class _NowPlayingArtwork extends StatelessWidget {
               child: TrackArtwork(
                 key: const Key('now-playing-artwork'),
                 artworkUri: track.artworkUri,
+                providerId: track.sourceId,
+                providerArtworkId: track.providerArtworkId,
+                providerArtworkVersion: track.providerArtworkVersion,
                 size: size,
                 borderRadius: 8,
               ),

@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
+import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/self_hosted_provider_account.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -103,9 +106,11 @@ void main() {
       ),
     );
     expect(resolved.streamUrl, contains('/rest/stream.view'));
-    expect(resolved.streamUrl, contains('super-secret'.codeUnits
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join()));
+    final resolvedUri = Uri.parse(resolved.streamUrl!);
+    expect(resolvedUri.queryParameters['t'], hasLength(32));
+    expect(resolvedUri.queryParameters['s'], isNotEmpty);
+    expect(resolvedUri.queryParameters.containsKey('p'), isFalse);
+    expect(resolved.streamUrl, isNot(contains('super-secret')));
     expect(resolved.streamUrlIsEphemeral, isTrue);
     expect(resolved.toJson()['streamUrl'], isNull);
 
@@ -177,6 +182,60 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('aethertune.self_hosted_accounts.v1'), isNull);
   });
+
+  test('caches safe artwork bytes and invalidates them with the account',
+      () async {
+    final vault = _MemoryCredentialVault();
+    final provider = _ArtworkCatalogProvider('self-hosted-artwork');
+    final factorySecrets = <String>[];
+    final store = SelfHostedProviderStore(
+      credentialVault: vault,
+      connectionTester: (account, secret) async {},
+      providerFactory: (account, secret) {
+        factorySecrets.add(secret);
+        return provider;
+      },
+    );
+    await store.load();
+    final account = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.jellyfin,
+      name: 'Artwork server',
+      baseUrl: 'https://media.example.test',
+      identity: 'user-1',
+      allowInsecureHttp: false,
+    );
+    provider.providerId = account.providerId;
+    await store.testAndSave(account, 'api-secret');
+
+    final first = await store.loadArtwork(
+      sourceId: account.providerId,
+      artworkId: 'cover-1',
+      version: 'v1',
+      maxWidth: 300,
+    );
+    final second = await store.loadArtwork(
+      sourceId: account.providerId,
+      artworkId: 'cover-1',
+      version: 'v1',
+      maxWidth: 300,
+    );
+
+    expect(first, <int>[7, 8, 9]);
+    expect(second, <int>[7, 8, 9]);
+    expect(provider.artworkCalls, <String>['cover-1|v1|300']);
+    expect(factorySecrets, <String>['api-secret']);
+    expect(store.hasCredentialForProvider(account.providerId), isTrue);
+
+    await store.remove(account.id);
+    expect(
+      await store.loadArtwork(
+        sourceId: account.providerId,
+        artworkId: 'cover-1',
+      ),
+      isNull,
+    );
+    expect(store.hasCredentialForProvider(account.providerId), isFalse);
+  });
 }
 
 class _MemoryCredentialVault implements ProviderCredentialVault {
@@ -194,4 +253,59 @@ class _MemoryCredentialVault implements ProviderCredentialVault {
   Future<void> delete(String accountId) async {
     values.remove(accountId);
   }
+}
+
+class _ArtworkCatalogProvider implements MusicCatalogProvider {
+  _ArtworkCatalogProvider(this.providerId);
+
+  String providerId;
+  final List<String> artworkCalls = <String>[];
+
+  @override
+  String get id => providerId;
+
+  @override
+  String get name => 'Artwork provider';
+
+  @override
+  String get description => 'Artwork provider fixture';
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{MusicSourceCapability.artwork};
+
+  @override
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
+        networkDomains: <String>['media.example.test'],
+        requiresUserCredentials: true,
+        cachesMetadata: true,
+      );
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) async =>
+      const <MusicCatalogCollection>[];
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) async =>
+      MusicCatalogDetail(collection: collection);
+
+  @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) async {
+    artworkCalls.add('$artworkId|${version ?? ''}|$maxWidth');
+    return Uint8List.fromList(<int>[7, 8, 9]);
+  }
+
+  @override
+  Future<List<Track>> search(String query) async => const <Track>[];
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
 }

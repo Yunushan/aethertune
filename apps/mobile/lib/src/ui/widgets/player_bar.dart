@@ -97,6 +97,11 @@ class PlayerBar extends StatelessWidget {
                                   children: <Widget>[
                                     TrackArtwork(
                                       artworkUri: current.artworkUri,
+                                      providerId: current.sourceId,
+                                      providerArtworkId:
+                                          current.providerArtworkId,
+                                      providerArtworkVersion:
+                                          current.providerArtworkVersion,
                                       size: 40,
                                       borderRadius: 8,
                                     ),

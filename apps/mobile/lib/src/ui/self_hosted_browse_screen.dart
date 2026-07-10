@@ -9,6 +9,7 @@ import '../domain/music_source_provider.dart';
 import '../domain/provider_search.dart';
 import '../domain/track.dart';
 import '../player/player_controller.dart';
+import 'widgets/track_artwork.dart';
 
 class SelfHostedBrowseScreen extends StatefulWidget {
   const SelfHostedBrowseScreen({
@@ -64,6 +65,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
                   for (final kind in MusicCatalogCollectionKind.values)
                     _CatalogCollectionList(
                       key: ValueKey<MusicCatalogCollectionKind>(kind),
+                      provider: widget.provider,
                       kind: kind,
                       request: _requests[kind]!,
                       onRefresh: () => _refresh(kind),
@@ -101,6 +103,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
 
 class _CatalogCollectionList extends StatefulWidget {
   const _CatalogCollectionList({
+    required this.provider,
     required this.kind,
     required this.request,
     required this.onRefresh,
@@ -108,6 +111,7 @@ class _CatalogCollectionList extends StatefulWidget {
     super.key,
   });
 
+  final MusicCatalogProvider provider;
   final MusicCatalogCollectionKind kind;
   final Future<List<MusicCatalogCollection>> request;
   final Future<void> Function() onRefresh;
@@ -200,7 +204,24 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                 key: ValueKey<String>(
                   'catalog-${collection.kind.name}-${collection.id}',
                 ),
-                leading: Icon(_collectionIcon(collection.kind)),
+                leading: TrackArtwork(
+                  artworkUri: null,
+                  providerId: widget.provider.id,
+                  providerArtworkId: collection.artworkId,
+                  providerArtworkVersion: collection.artworkVersion,
+                  loadProviderArtwork: collection.artworkId == null
+                      ? null
+                      : (maxWidth) => widget.provider.loadArtwork(
+                            collection.artworkId!,
+                            version: collection.artworkVersion,
+                            maxWidth: maxWidth,
+                          ),
+                  fallbackIcon: _collectionIcon(collection.kind),
+                  borderRadius: collection.kind ==
+                          MusicCatalogCollectionKind.artist
+                      ? 22
+                      : 8,
+                ),
                 title: Text(
                   collection.title,
                   maxLines: 1,
@@ -311,7 +332,20 @@ class _SelfHostedCollectionScreenState
         final collection = visible[index - 1];
         return ListTile(
           key: ValueKey<String>('catalog-detail-${collection.id}'),
-          leading: Icon(_collectionIcon(collection.kind)),
+          leading: TrackArtwork(
+            artworkUri: null,
+            providerId: widget.provider.id,
+            providerArtworkId: collection.artworkId,
+            providerArtworkVersion: collection.artworkVersion,
+            loadProviderArtwork: collection.artworkId == null
+                ? null
+                : (maxWidth) => widget.provider.loadArtwork(
+                      collection.artworkId!,
+                      version: collection.artworkVersion,
+                      maxWidth: maxWidth,
+                    ),
+            fallbackIcon: _collectionIcon(collection.kind),
+          ),
           title: Text(collection.title),
           subtitle:
               collection.subtitle.isEmpty ? null : Text(collection.subtitle),
@@ -381,7 +415,19 @@ class _SelfHostedCollectionScreenState
         final track = visible[index - 1];
         return ListTile(
           key: ValueKey<String>('catalog-track-${track.id}'),
-          leading: const Icon(Icons.music_note),
+          leading: TrackArtwork(
+            artworkUri: track.artworkUri,
+            providerId: track.sourceId,
+            providerArtworkId: track.providerArtworkId,
+            providerArtworkVersion: track.providerArtworkVersion,
+            loadProviderArtwork: track.providerArtworkId == null
+                ? null
+                : (maxWidth) => widget.provider.loadArtwork(
+                      track.providerArtworkId!,
+                      version: track.providerArtworkVersion,
+                      maxWidth: maxWidth,
+                    ),
+          ),
           title: Text(
             track.title,
             maxLines: 1,

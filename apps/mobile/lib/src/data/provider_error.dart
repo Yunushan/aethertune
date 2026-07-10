@@ -31,7 +31,7 @@ String safeProviderErrorMessage(
   }
   message = message.replaceAllMapped(
     RegExp(
-      r'([?&](?:api_key|p|password|token|access_token)=)[^&\s]+',
+      r'([?&](?:api_key|p|t|password|token|access_token)=)[^&\s]+',
       caseSensitive: false,
     ),
     (match) => '${match.group(1)}[redacted]',

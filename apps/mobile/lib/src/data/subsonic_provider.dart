@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
 
 import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import 'provider_binary_loader.dart';
 import 'provider_error.dart';
 
 typedef SubsonicRequestLoader = Future<String> Function(Uri requestUri);
+typedef SubsonicSaltGenerator = String Function();
 
 class SubsonicProvider implements MusicCatalogProvider {
   SubsonicProvider({
@@ -16,18 +22,23 @@ class SubsonicProvider implements MusicCatalogProvider {
     String? id,
     String? name,
     SubsonicRequestLoader? requestLoader,
+    ProviderBinaryRequestLoader? artworkLoader,
+    SubsonicSaltGenerator? saltGenerator,
     this.limit = 20,
     this.apiVersion = '1.16.1',
     this.clientName = 'AetherTune',
   })  : id = id ?? 'subsonic-${Track.stableLocalId(baseUri.toString())}',
         name = name ?? 'Navidrome / Subsonic',
-        _requestLoader = requestLoader ?? _loadSubsonicJson;
+        _requestLoader = requestLoader ?? _loadSubsonicJson,
+        _artworkLoader = artworkLoader ?? loadProviderImageBytes,
+        _saltGenerator = saltGenerator ?? _randomSalt;
 
   static const defaultCapabilities = <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
+    MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
     MusicSourceCapability.downloads,
@@ -41,6 +52,8 @@ class SubsonicProvider implements MusicCatalogProvider {
   final String apiVersion;
   final String clientName;
   final SubsonicRequestLoader _requestLoader;
+  final ProviderBinaryRequestLoader _artworkLoader;
+  final SubsonicSaltGenerator _saltGenerator;
 
   @override
   final String id;
@@ -62,7 +75,7 @@ class SubsonicProvider implements MusicCatalogProvider {
         ],
         dataSent: const <String>[
           'username credential',
-          'encoded password credential',
+          'salted authentication token',
           'song search query',
           'artist, album, and playlist browse identifiers',
           'song stream identifier',
@@ -148,6 +161,30 @@ class SubsonicProvider implements MusicCatalogProvider {
   }
 
   @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) {
+    final normalizedId = artworkId.trim();
+    if (normalizedId.isEmpty) {
+      return Future<Uint8List?>.value(null);
+    }
+    return _guardRequest(
+      () => _artworkLoader(
+        _requestUri(
+          '/rest/getCoverArt.view',
+          <String, String>{
+            'id': normalizedId,
+            'size': maxWidth.clamp(32, 2048).toString(),
+          },
+        ),
+        const <String, String>{},
+      ),
+    );
+  }
+
+  @override
   Future<MusicCatalogDetail> loadCollection(
     MusicCatalogCollection collection,
   ) {
@@ -224,17 +261,6 @@ class SubsonicProvider implements MusicCatalogProvider {
     );
   }
 
-  Uri? coverArtUriFor(String coverArtId) {
-    if (coverArtId.trim().isEmpty) {
-      return null;
-    }
-
-    return _requestUri(
-      '/rest/getCoverArt.view',
-      <String, String>{'id': coverArtId},
-    );
-  }
-
   Uri _searchUri(String query) {
     return _requestUri(
       '/rest/search3.view',
@@ -258,9 +284,15 @@ class SubsonicProvider implements MusicCatalogProvider {
   }
 
   Map<String, String> get _authenticationParameters {
+    final salt = _saltGenerator().trim();
+    if (salt.isEmpty) {
+      throw StateError('Subsonic authentication salt cannot be empty.');
+    }
+    final token = md5.convert(utf8.encode('$password$salt')).toString();
     return <String, String>{
       'u': username,
-      'p': 'enc:${_hexEncode(utf8.encode(password))}',
+      't': token,
+      's': salt,
       'v': apiVersion,
       'c': clientName,
       'f': 'json',
@@ -316,6 +348,7 @@ final class SubsonicSong {
       genre: genre.isEmpty ? 'Self-hosted Music' : genre,
       duration: duration,
       artworkUri: artworkUri,
+      providerArtworkId: coverArt.isEmpty ? null : coverArt,
       streamUrl: streamUri?.toString(),
       sourceId: sourceId,
       externalId: id,
@@ -445,6 +478,7 @@ MusicCatalogCollection? _subsonicCollection(
         ? json['albumCount']
         : json['songCount'],
   );
+  final artworkId = _stringValue(json['coverArt']);
   final subtitleParts = <String>[
     if (kind == MusicCatalogCollectionKind.album && artist.isNotEmpty) artist,
     if (kind == MusicCatalogCollectionKind.album && year > 0) year.toString(),
@@ -460,6 +494,7 @@ MusicCatalogCollection? _subsonicCollection(
     kind: kind,
     subtitle: subtitleParts.join(' · '),
     itemCount: itemCount,
+    artworkId: artworkId.isEmpty ? null : artworkId,
   );
 }
 
@@ -553,6 +588,13 @@ String _hexEncode(List<int> bytes) {
   return bytes
       .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
       .join();
+}
+
+String _randomSalt() {
+  final random = Random.secure();
+  return _hexEncode(
+    List<int>.generate(12, (_) => random.nextInt(256), growable: false),
+  );
 }
 
 String _joinUriPath(String basePath, String childPath) {

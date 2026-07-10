@@ -8132,8 +8132,8 @@ ProviderPrivacyDisclosure _selfHostedDisclosure(
     networkDomains: <String>[account.baseUri.host],
     dataSent: <String>[
       account.kind == SelfHostedProviderKind.jellyfin
-          ? 'API key, user ID, search query, and media item IDs'
-          : 'username, encoded password, search query, and media item IDs',
+          ? 'API key, user ID, search query, media item IDs, and artwork IDs'
+          : 'username, salted token, search query, media item IDs, and artwork IDs',
     ],
     requiresUserCredentials: true,
     cachesMetadata: true,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,39 +17,59 @@ typedef SelfHostedConnectionTester = Future<void> Function(
   SelfHostedProviderAccount account,
   String secret,
 );
+typedef SelfHostedProviderFactory = MusicCatalogProvider Function(
+  SelfHostedProviderAccount account,
+  String secret,
+);
 
 final class SelfHostedProviderStore extends ChangeNotifier {
   SelfHostedProviderStore({
     ProviderCredentialVault? credentialVault,
     SelfHostedConnectionTester? connectionTester,
+    SelfHostedProviderFactory? providerFactory,
   })  : _credentialVault =
             credentialVault ?? SecureProviderCredentialVault(),
-        _connectionTester = connectionTester ?? _testConnection;
+        _connectionTester = connectionTester ?? _testConnection,
+        _providerFactory = providerFactory ?? _createProvider;
 
   static const _accountsKey = 'aethertune.self_hosted_accounts.v1';
 
   final ProviderCredentialVault _credentialVault;
   final SelfHostedConnectionTester _connectionTester;
+  final SelfHostedProviderFactory _providerFactory;
   final List<SelfHostedProviderAccount> _accounts =
       <SelfHostedProviderAccount>[];
   final Map<String, String> _secrets = <String, String>{};
+  final Map<String, Future<Uint8List?>> _artworkRequests =
+      <String, Future<Uint8List?>>{};
   bool _loaded = false;
   String? _loadError;
+  int _artworkRevision = 0;
 
   List<SelfHostedProviderAccount> get accounts => List.unmodifiable(_accounts);
   bool get loaded => _loaded;
   String? get loadError => _loadError;
+  int get artworkRevision => _artworkRevision;
 
   List<MusicSourceProvider> get musicProviders {
     return <MusicSourceProvider>[
       for (final account in _accounts)
         if ((_secrets[account.id] ?? '').isNotEmpty)
-          _providerFor(account, _secrets[account.id]!),
+          _providerFactory(account, _secrets[account.id]!),
     ];
   }
 
   bool hasCredential(String accountId) =>
       (_secrets[accountId] ?? '').isNotEmpty;
+
+  bool hasCredentialForProvider(String providerId) {
+    for (final account in _accounts) {
+      if (account.providerId == providerId) {
+        return hasCredential(account.id);
+      }
+    }
+    return false;
+  }
 
   MusicCatalogProvider? catalogProviderFor(String accountId) {
     SelfHostedProviderAccount? account;
@@ -62,7 +83,60 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     if (account == null || secret == null || secret.isEmpty) {
       return null;
     }
-    return _providerFor(account, secret);
+    return _providerFactory(account, secret);
+  }
+
+  Future<Uint8List?> loadArtwork({
+    required String sourceId,
+    required String artworkId,
+    String? version,
+    int maxWidth = 512,
+  }) {
+    final normalizedArtworkId = artworkId.trim();
+    if (normalizedArtworkId.isEmpty) {
+      return Future<Uint8List?>.value(null);
+    }
+    SelfHostedProviderAccount? account;
+    for (final candidate in _accounts) {
+      if (candidate.providerId == sourceId) {
+        account = candidate;
+        break;
+      }
+    }
+    final secret = account == null ? null : _secrets[account.id];
+    if (account == null || secret == null || secret.isEmpty) {
+      return Future<Uint8List?>.value(null);
+    }
+
+    final normalizedVersion = version?.trim() ?? '';
+    final normalizedWidth = maxWidth.clamp(32, 2048) as int;
+    final cacheKey = '${account.id}|$normalizedArtworkId|'
+        '$normalizedVersion|$normalizedWidth';
+    final cached = _artworkRequests[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+    if (_artworkRequests.length >= 128) {
+      _artworkRequests.remove(_artworkRequests.keys.first);
+    }
+
+    late final Future<Uint8List?> request;
+    request = () async {
+      try {
+        return await _providerFactory(account!, secret).loadArtwork(
+          normalizedArtworkId,
+          version: normalizedVersion,
+          maxWidth: normalizedWidth,
+        );
+      } on Object {
+        if (identical(_artworkRequests[cacheKey], request)) {
+          _artworkRequests.remove(cacheKey);
+        }
+        rethrow;
+      }
+    }();
+    _artworkRequests[cacheKey] = request;
+    return request;
   }
 
   Future<void> load() async {
@@ -159,6 +233,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       }
       rethrow;
     }
+    _clearArtworkRequests(validated.id);
     notifyListeners();
   }
 
@@ -183,6 +258,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       }
       rethrow;
     }
+    _clearArtworkRequests(accountId);
     notifyListeners();
   }
 
@@ -213,6 +289,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
   @override
   void dispose() {
     _secrets.clear();
+    _artworkRequests.clear();
     super.dispose();
   }
 
@@ -227,7 +304,14 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     }
   }
 
-  static MusicCatalogProvider _providerFor(
+  void _clearArtworkRequests(String accountId) {
+    _artworkRequests.removeWhere(
+      (key, _) => key.startsWith('$accountId|'),
+    );
+    _artworkRevision += 1;
+  }
+
+  static MusicCatalogProvider _createProvider(
     SelfHostedProviderAccount account,
     String secret,
   ) {
@@ -255,7 +339,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     SelfHostedProviderAccount account,
     String secret,
   ) async {
-    final provider = _providerFor(account, secret);
+    final provider = _createProvider(account, secret);
     switch (provider) {
       case JellyfinProvider jellyfin:
         await jellyfin.testConnection();

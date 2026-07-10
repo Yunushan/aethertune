@@ -8,6 +8,7 @@ enum MusicSourceCapability {
   directPlayback,
   libraryBrowse,
   playlists,
+  artwork,
   lyrics,
   syncedLyrics,
   offlineCache,
@@ -34,6 +35,8 @@ extension MusicSourceCapabilityLabel on MusicSourceCapability {
         return 'Library browse';
       case MusicSourceCapability.playlists:
         return 'Playlists';
+      case MusicSourceCapability.artwork:
+        return 'Artwork';
       case MusicSourceCapability.lyrics:
         return 'Lyrics';
       case MusicSourceCapability.syncedLyrics:
