@@ -14,7 +14,8 @@ import 'provider_error.dart';
 typedef SubsonicRequestLoader = Future<String> Function(Uri requestUri);
 typedef SubsonicSaltGenerator = String Function();
 
-class SubsonicProvider implements MusicCatalogProvider {
+class SubsonicProvider
+    implements MusicCatalogProvider, MusicPlaylistMutationProvider {
   SubsonicProvider({
     required this.baseUri,
     required this.username,
@@ -38,6 +39,7 @@ class SubsonicProvider implements MusicCatalogProvider {
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
+    MusicSourceCapability.playlistMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -78,6 +80,7 @@ class SubsonicProvider implements MusicCatalogProvider {
           'salted authentication token',
           'song search query',
           'artist, album, and playlist browse identifiers',
+          'playlist names, membership, and track order changes',
           'song stream identifier',
           'cover art identifier',
         ],
@@ -236,6 +239,109 @@ class SubsonicProvider implements MusicCatalogProvider {
   }
 
   @override
+  Future<void> createPlaylist(
+    String name, {
+    List<String> trackIds = const <String>[],
+  }) {
+    final normalizedName = _requiredPlaylistName(name);
+    final normalizedTrackIds = _playlistTrackIds(trackIds);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/createPlaylist.view',
+            <String, Object?>{
+              'name': normalizedName,
+              if (normalizedTrackIds.isNotEmpty) 'songId': normalizedTrackIds,
+            },
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> renamePlaylist(String playlistId, String name) {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    final normalizedName = _requiredPlaylistName(name);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/updatePlaylist.view',
+            <String, Object?>{
+              'playlistId': normalizedPlaylistId,
+              'name': normalizedName,
+            },
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> deletePlaylist(String playlistId) {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/deletePlaylist.view',
+            <String, Object?>{'id': normalizedPlaylistId},
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> addPlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  ) async {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    final normalizedTrackIds = _playlistTrackIds(trackIds);
+    if (normalizedTrackIds.isEmpty) {
+      return;
+    }
+    await _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/updatePlaylist.view',
+            <String, Object?>{
+              'playlistId': normalizedPlaylistId,
+              'songIdToAdd': normalizedTrackIds,
+            },
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> replacePlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  ) {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    final normalizedTrackIds = _playlistTrackIds(trackIds);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/createPlaylist.view',
+            <String, Object?>{
+              'playlistId': normalizedPlaylistId,
+              if (normalizedTrackIds.isNotEmpty) 'songId': normalizedTrackIds,
+            },
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
   Future<Uri?> resolveStream(Track track) async {
     if (track.sourceId != id) {
       return null;
@@ -273,10 +379,10 @@ class SubsonicProvider implements MusicCatalogProvider {
     );
   }
 
-  Uri _requestUri(String endpointPath, Map<String, String> parameters) {
+  Uri _requestUri(String endpointPath, Map<String, Object?> parameters) {
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, endpointPath),
-      queryParameters: <String, String>{
+      queryParameters: <String, Object?>{
         ..._authenticationParameters,
         ...parameters,
       },
@@ -571,6 +677,40 @@ Future<String> _loadSubsonicJson(Uri uri) async {
   } finally {
     client.close(force: true);
   }
+}
+
+String _requiredPlaylistName(String name) {
+  final normalized = name.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(name, 'name', 'Playlist name cannot be empty.');
+  }
+  return normalized;
+}
+
+String _requiredPlaylistId(String playlistId) {
+  final normalized = playlistId.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(
+      playlistId,
+      'playlistId',
+      'Playlist ID cannot be empty.',
+    );
+  }
+  return normalized;
+}
+
+List<String> _playlistTrackIds(List<String> trackIds) {
+  return trackIds.map((trackId) {
+    final normalized = trackId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        trackIds,
+        'trackIds',
+        'Playlist track IDs cannot be empty.',
+      );
+    }
+    return normalized;
+  }).toList(growable: false);
 }
 
 List<Object?> _jsonList(Object? value) {

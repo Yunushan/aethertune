@@ -206,6 +206,85 @@ void main() {
     expect(requests[2].queryParameters['UserId'], 'user-1');
   });
 
+  test('creates edits and deletes Jellyfin playlists through documented APIs',
+      () async {
+    final requests = <Uri>[];
+    final methods = <String>[];
+    final bodies = <Map<String, Object?>?>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (_) async => '{"Items":[]}',
+      mutationLoader: (uri, method, body) async {
+        requests.add(uri);
+        methods.add(method);
+        bodies.add(body);
+      },
+    );
+
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.playlistMutation),
+    );
+
+    await provider.createPlaylist(
+      '  Morning Focus  ',
+      trackIds: const <String>['song-1', 'song-2'],
+    );
+    await provider.renamePlaylist('playlist-1', 'Deep Focus');
+    await provider.addPlaylistTracks(
+      'playlist-1',
+      const <String>['song-3', 'song-4'],
+    );
+    await provider.replacePlaylistTracks(
+      'playlist-1',
+      const <String>['song-2', 'song-1', 'song-2'],
+    );
+    await provider.deletePlaylist('playlist-1');
+    await provider.addPlaylistTracks('playlist-1', const <String>[]);
+
+    expect(methods, <String>['POST', 'POST', 'POST', 'POST', 'DELETE']);
+    expect(requests.map((request) => request.path), <String>[
+      '/jellyfin/Playlists',
+      '/jellyfin/Playlists/playlist-1',
+      '/jellyfin/Playlists/playlist-1/Items',
+      '/jellyfin/Playlists/playlist-1',
+      '/jellyfin/Items/playlist-1',
+    ]);
+    expect(bodies[0], <String, Object?>{
+      'Name': 'Morning Focus',
+      'Ids': <String>['song-1', 'song-2'],
+      'UserId': 'user-1',
+      'MediaType': 'Audio',
+    });
+    expect(bodies[1], <String, Object?>{'Name': 'Deep Focus'});
+    expect(bodies[2], isNull);
+    expect(requests[2].queryParameters['ids'], 'song-3,song-4');
+    expect(requests[2].queryParameters['userId'], 'user-1');
+    expect(bodies[3], <String, Object?>{
+      'Ids': <String>['song-2', 'song-1', 'song-2'],
+    });
+    expect(bodies[4], isNull);
+    expect(
+      requests.every(
+        (request) => request.queryParameters['api_key'] == 'api-secret',
+      ),
+      isTrue,
+    );
+    expect(
+      () => provider.createPlaylist('   '),
+      throwsArgumentError,
+    );
+    expect(
+      () => provider.replacePlaylistTracks(
+        'playlist-1',
+        const <String>[''],
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('loads Jellyfin artwork with header auth and a credential-free URI',
       () async {
     Uri? capturedUri;

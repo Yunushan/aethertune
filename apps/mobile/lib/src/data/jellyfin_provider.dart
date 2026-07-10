@@ -9,8 +9,14 @@ import 'provider_binary_loader.dart';
 import 'provider_error.dart';
 
 typedef JellyfinRequestLoader = Future<String> Function(Uri requestUri);
+typedef JellyfinMutationLoader = Future<void> Function(
+  Uri requestUri,
+  String method,
+  Map<String, Object?>? jsonBody,
+);
 
-class JellyfinProvider implements MusicCatalogProvider {
+class JellyfinProvider
+    implements MusicCatalogProvider, MusicPlaylistMutationProvider {
   JellyfinProvider({
     required this.baseUri,
     required this.userId,
@@ -18,11 +24,13 @@ class JellyfinProvider implements MusicCatalogProvider {
     String? id,
     String? name,
     JellyfinRequestLoader? requestLoader,
+    JellyfinMutationLoader? mutationLoader,
     ProviderBinaryRequestLoader? artworkLoader,
     this.limit = 20,
   })  : id = id ?? 'jellyfin-${Track.stableLocalId(baseUri.toString())}',
         name = name ?? 'Jellyfin',
         _requestLoader = requestLoader ?? _loadJellyfinJson,
+        _mutationLoader = mutationLoader ?? _loadJellyfinMutation,
         _artworkLoader = artworkLoader ?? loadProviderImageBytes;
 
   static const defaultCapabilities = <MusicSourceCapability>{
@@ -30,6 +38,7 @@ class JellyfinProvider implements MusicCatalogProvider {
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
+    MusicSourceCapability.playlistMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -42,6 +51,7 @@ class JellyfinProvider implements MusicCatalogProvider {
   final String apiKey;
   final int limit;
   final JellyfinRequestLoader _requestLoader;
+  final JellyfinMutationLoader _mutationLoader;
   final ProviderBinaryRequestLoader _artworkLoader;
 
   @override
@@ -67,6 +77,7 @@ class JellyfinProvider implements MusicCatalogProvider {
           'Jellyfin user identifier',
           'audio search query',
           'artist, album, and playlist browse identifiers',
+          'playlist names, membership, and track order changes',
           'audio item stream identifier',
           'cover art item identifier',
         ],
@@ -225,6 +236,93 @@ class JellyfinProvider implements MusicCatalogProvider {
           maxWidth: maxWidth,
         ),
         <String, String>{'X-Emby-Token': apiKey},
+      ),
+    );
+  }
+
+  @override
+  Future<void> createPlaylist(
+    String name, {
+    List<String> trackIds = const <String>[],
+  }) {
+    final normalizedName = _requiredPlaylistName(name);
+    final normalizedTrackIds = _playlistTrackIds(trackIds);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Playlists'),
+        'POST',
+        <String, Object?>{
+          'Name': normalizedName,
+          'Ids': normalizedTrackIds,
+          'UserId': userId,
+          'MediaType': 'Audio',
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<void> renamePlaylist(String playlistId, String name) {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    final normalizedName = _requiredPlaylistName(name);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Playlists/$normalizedPlaylistId'),
+        'POST',
+        <String, Object?>{'Name': normalizedName},
+      ),
+    );
+  }
+
+  @override
+  Future<void> deletePlaylist(String playlistId) {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Items/$normalizedPlaylistId'),
+        'DELETE',
+        null,
+      ),
+    );
+  }
+
+  @override
+  Future<void> addPlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  ) async {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    final normalizedTrackIds = _playlistTrackIds(trackIds);
+    if (normalizedTrackIds.isEmpty) {
+      return;
+    }
+    await _guardRequest(
+      () => _mutationLoader(
+        _requestUri(
+          '/Playlists/$normalizedPlaylistId/Items',
+          <String, String>{
+            'ids': normalizedTrackIds.join(','),
+            'userId': userId,
+          },
+        ),
+        'POST',
+        null,
+      ),
+    );
+  }
+
+  @override
+  Future<void> replacePlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  ) {
+    final normalizedPlaylistId = _requiredPlaylistId(playlistId);
+    final normalizedTrackIds = _playlistTrackIds(trackIds);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Playlists/$normalizedPlaylistId'),
+        'POST',
+        <String, Object?>{'Ids': normalizedTrackIds},
       ),
     );
   }
@@ -492,6 +590,67 @@ Future<String> _loadJellyfinJson(Uri uri) async {
   } finally {
     client.close(force: true);
   }
+}
+
+Future<void> _loadJellyfinMutation(
+  Uri uri,
+  String method,
+  Map<String, Object?>? jsonBody,
+) async {
+  final client = HttpClient();
+  try {
+    final request = await client.openUrl(method, uri);
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
+    if (jsonBody != null) {
+      request.headers.contentType = ContentType.json;
+      request.add(utf8.encode(jsonEncode(jsonBody)));
+    }
+    final response = await request.close();
+    final statusCode = response.statusCode;
+    await response.drain<void>();
+    if (statusCode < 200 || statusCode >= 300) {
+      throw ProviderRequestException(
+        'Jellyfin request failed with HTTP $statusCode.',
+      );
+    }
+  } finally {
+    client.close(force: true);
+  }
+}
+
+String _requiredPlaylistName(String name) {
+  final normalized = name.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(name, 'name', 'Playlist name cannot be empty.');
+  }
+  return normalized;
+}
+
+String _requiredPlaylistId(String playlistId) {
+  final normalized = playlistId.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(
+      playlistId,
+      'playlistId',
+      'Playlist ID cannot be empty.',
+    );
+  }
+  return normalized;
+}
+
+List<String> _playlistTrackIds(List<String> trackIds) {
+  return trackIds.map((trackId) {
+    final normalized = trackId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        trackIds,
+        'trackIds',
+        'Playlist track IDs cannot be empty.',
+      );
+    }
+    return normalized;
+  }).toList(growable: false);
 }
 
 String _artistName(Map<String, Object?> json) {

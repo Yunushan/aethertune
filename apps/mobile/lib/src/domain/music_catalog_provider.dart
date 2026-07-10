@@ -52,3 +52,24 @@ abstract interface class MusicCatalogProvider implements MusicSourceProvider {
     int maxWidth = 512,
   });
 }
+
+abstract interface class MusicPlaylistMutationProvider {
+  Future<void> createPlaylist(
+    String name, {
+    List<String> trackIds = const <String>[],
+  });
+
+  Future<void> renamePlaylist(String playlistId, String name);
+
+  Future<void> deletePlaylist(String playlistId);
+
+  Future<void> addPlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  );
+
+  Future<void> replacePlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  );
+}

@@ -125,6 +125,7 @@ class _CatalogCollectionList extends StatefulWidget {
 class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   final TextEditingController _filterController = TextEditingController();
   String _query = '';
+  bool _playlistMutationInProgress = false;
 
   @override
   void dispose() {
@@ -147,6 +148,15 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
           );
         }
         final collections = snapshot.data ?? const <MusicCatalogCollection>[];
+        final playlistMutator = widget.provider.capabilities.contains(
+                  MusicSourceCapability.playlistMutation,
+                ) &&
+                widget.provider is MusicPlaylistMutationProvider
+            ? widget.provider as MusicPlaylistMutationProvider
+            : null;
+        final canMutatePlaylists =
+            widget.kind == MusicCatalogCollectionKind.playlist &&
+                playlistMutator != null;
         final normalizedQuery = _query.trim().toLowerCase();
         final visible = normalizedQuery.isEmpty
             ? collections
@@ -172,24 +182,43 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                 : const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return TextField(
-                  key: Key('catalog-filter-${widget.kind.name}'),
-                  controller: _filterController,
-                  decoration: InputDecoration(
-                    labelText: 'Filter ${_kindPlural(widget.kind)}',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear filter',
-                            onPressed: () {
-                              _filterController.clear();
-                              setState(() => _query = '');
-                            },
-                            icon: const Icon(Icons.clear),
-                          ),
-                  ),
-                  onChanged: (value) => setState(() => _query = value),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (canMutatePlaylists) ...<Widget>[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: const Key('catalog-create-playlist'),
+                          onPressed: _playlistMutationInProgress
+                              ? null
+                              : () => _createPlaylist(playlistMutator!),
+                          icon: const Icon(Icons.playlist_add),
+                          label: const Text('Create playlist'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    TextField(
+                      key: Key('catalog-filter-${widget.kind.name}'),
+                      controller: _filterController,
+                      decoration: InputDecoration(
+                        labelText: 'Filter ${_kindPlural(widget.kind)}',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _query.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear filter',
+                                onPressed: () {
+                                  _filterController.clear();
+                                  setState(() => _query = '');
+                                },
+                                icon: const Icon(Icons.clear),
+                              ),
+                      ),
+                      onChanged: (value) => setState(() => _query = value),
+                    ),
+                  ],
                 );
               }
               if (index == 1 && visible.isEmpty) {
@@ -234,7 +263,39 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: canMutatePlaylists
+                    ? PopupMenuButton<_CatalogPlaylistAction>(
+                        key: ValueKey<String>(
+                          'catalog-playlist-actions-${collection.id}',
+                        ),
+                        enabled: !_playlistMutationInProgress,
+                        tooltip: 'Actions for ${collection.title}',
+                        onSelected: (action) => _handlePlaylistAction(
+                          action,
+                          playlistMutator!,
+                          collection,
+                        ),
+                        itemBuilder: (_) => const <
+                            PopupMenuEntry<_CatalogPlaylistAction>>[
+                          PopupMenuItem<_CatalogPlaylistAction>(
+                            value: _CatalogPlaylistAction.rename,
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.edit_outlined),
+                              title: Text('Rename'),
+                            ),
+                          ),
+                          PopupMenuItem<_CatalogPlaylistAction>(
+                            value: _CatalogPlaylistAction.delete,
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.delete_outline),
+                              title: Text('Delete'),
+                            ),
+                          ),
+                        ],
+                      )
+                    : const Icon(Icons.chevron_right),
                 onTap: () => widget.onOpen(collection),
               );
             },
@@ -243,7 +304,121 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       },
     );
   }
+
+  Future<void> _createPlaylist(
+    MusicPlaylistMutationProvider playlistMutator,
+  ) async {
+    final name = await _promptForRemotePlaylistName(
+      context,
+      title: 'Create remote playlist',
+      actionLabel: 'Create',
+    );
+    if (name == null) {
+      return;
+    }
+    await _runPlaylistMutation(
+      () => playlistMutator.createPlaylist(name),
+      'Created $name.',
+    );
+  }
+
+  void _handlePlaylistAction(
+    _CatalogPlaylistAction action,
+    MusicPlaylistMutationProvider playlistMutator,
+    MusicCatalogCollection playlist,
+  ) {
+    switch (action) {
+      case _CatalogPlaylistAction.rename:
+        unawaited(_renamePlaylist(playlistMutator, playlist));
+      case _CatalogPlaylistAction.delete:
+        unawaited(_deletePlaylist(playlistMutator, playlist));
+    }
+  }
+
+  Future<void> _renamePlaylist(
+    MusicPlaylistMutationProvider playlistMutator,
+    MusicCatalogCollection playlist,
+  ) async {
+    final name = await _promptForRemotePlaylistName(
+      context,
+      title: 'Rename remote playlist',
+      actionLabel: 'Rename',
+      initialValue: playlist.title,
+    );
+    if (name == null || name == playlist.title) {
+      return;
+    }
+    await _runPlaylistMutation(
+      () => playlistMutator.renamePlaylist(playlist.id, name),
+      'Renamed playlist to $name.',
+    );
+  }
+
+  Future<void> _deletePlaylist(
+    MusicPlaylistMutationProvider playlistMutator,
+    MusicCatalogCollection playlist,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete remote playlist?'),
+        content: Text(
+          'Delete ${playlist.title} from ${widget.provider.name}?',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _runPlaylistMutation(
+      () => playlistMutator.deletePlaylist(playlist.id),
+      'Deleted ${playlist.title}.',
+    );
+  }
+
+  Future<void> _runPlaylistMutation(
+    Future<void> Function() mutation,
+    String successMessage,
+  ) async {
+    if (_playlistMutationInProgress) {
+      return;
+    }
+    setState(() => _playlistMutationInProgress = true);
+    try {
+      await mutation();
+      await widget.onRefresh();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(successMessage)),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _playlistMutationInProgress = false);
+      }
+    }
+  }
 }
+
+enum _CatalogPlaylistAction { rename, delete }
 
 class SelfHostedCollectionScreen extends StatefulWidget {
   const SelfHostedCollectionScreen({
@@ -265,6 +440,7 @@ class _SelfHostedCollectionScreenState
   late Future<MusicCatalogDetail> _request;
   final TextEditingController _filterController = TextEditingController();
   String _query = '';
+  bool _playlistMutationInProgress = false;
 
   @override
   void initState() {
@@ -364,6 +540,15 @@ class _SelfHostedCollectionScreenState
   }
 
   Widget _buildTracks(List<Track> tracks) {
+    final playlistMutator = widget.provider.capabilities.contains(
+              MusicSourceCapability.playlistMutation,
+            ) &&
+            widget.provider is MusicPlaylistMutationProvider
+        ? widget.provider as MusicPlaylistMutationProvider
+        : null;
+    final isMutablePlaylist =
+        widget.collection.kind == MusicCatalogCollectionKind.playlist &&
+            playlistMutator != null;
     final normalizedQuery = _query.trim().toLowerCase();
     final visible = normalizedQuery.isEmpty
         ? tracks
@@ -413,6 +598,9 @@ class _SelfHostedCollectionScreenState
           );
         }
         final track = visible[index - 1];
+        final playlistIndex = tracks.indexWhere(
+          (candidate) => candidate.id == track.id,
+        );
         return ListTile(
           key: ValueKey<String>('catalog-track-${track.id}'),
           leading: TrackArtwork(
@@ -440,10 +628,18 @@ class _SelfHostedCollectionScreenState
           ),
           onTap: () => _play(track, tracks),
           trailing: PopupMenuButton<_CatalogTrackAction>(
+            key: ValueKey<String>('catalog-track-actions-${track.id}'),
+            enabled: !_playlistMutationInProgress,
             tooltip: 'Actions for ${track.title}',
-            onSelected: (action) => _handleTrackAction(action, track, tracks),
-            itemBuilder: (_) => const <PopupMenuEntry<_CatalogTrackAction>>[
-              PopupMenuItem<_CatalogTrackAction>(
+            onSelected: (action) => _handleTrackAction(
+              action,
+              track,
+              tracks,
+              playlistIndex,
+              playlistMutator,
+            ),
+            itemBuilder: (_) => <PopupMenuEntry<_CatalogTrackAction>>[
+              const PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.play,
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -451,7 +647,7 @@ class _SelfHostedCollectionScreenState
                   title: Text('Play'),
                 ),
               ),
-              PopupMenuItem<_CatalogTrackAction>(
+              const PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.save,
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -459,7 +655,17 @@ class _SelfHostedCollectionScreenState
                   title: Text('Save to library'),
                 ),
               ),
-              PopupMenuItem<_CatalogTrackAction>(
+              if (playlistMutator != null && !isMutablePlaylist)
+                PopupMenuItem<_CatalogTrackAction>(
+                  value: _CatalogTrackAction.addToRemotePlaylist,
+                  enabled: track.externalId?.trim().isNotEmpty ?? false,
+                  child: const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.playlist_add),
+                    title: Text('Add to remote playlist'),
+                  ),
+                ),
+              const PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.cache,
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -467,7 +673,7 @@ class _SelfHostedCollectionScreenState
                   title: Text('Queue offline cache'),
                 ),
               ),
-              PopupMenuItem<_CatalogTrackAction>(
+              const PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.download,
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -475,6 +681,36 @@ class _SelfHostedCollectionScreenState
                   title: Text('Queue download'),
                 ),
               ),
+              if (isMutablePlaylist) ...<PopupMenuEntry<_CatalogTrackAction>>[
+                const PopupMenuDivider(),
+                PopupMenuItem<_CatalogTrackAction>(
+                  value: _CatalogTrackAction.moveUp,
+                  enabled: playlistIndex > 0,
+                  child: const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.arrow_upward),
+                    title: Text('Move up'),
+                  ),
+                ),
+                PopupMenuItem<_CatalogTrackAction>(
+                  value: _CatalogTrackAction.moveDown,
+                  enabled: playlistIndex >= 0 &&
+                      playlistIndex < tracks.length - 1,
+                  child: const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.arrow_downward),
+                    title: Text('Move down'),
+                  ),
+                ),
+                const PopupMenuItem<_CatalogTrackAction>(
+                  value: _CatalogTrackAction.removeFromRemotePlaylist,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.playlist_remove),
+                    title: Text('Remove from playlist'),
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -567,25 +803,283 @@ class _SelfHostedCollectionScreenState
     );
   }
 
+  Future<void> _addToRemotePlaylist(
+    MusicPlaylistMutationProvider playlistMutator,
+    Track track,
+  ) async {
+    final trackId = track.externalId?.trim() ?? '';
+    if (trackId.isEmpty || _playlistMutationInProgress) {
+      return;
+    }
+    setState(() => _playlistMutationInProgress = true);
+    try {
+      final playlists = await widget.provider.browseCollections(
+        MusicCatalogCollectionKind.playlist,
+      );
+      if (!mounted) {
+        return;
+      }
+      final selection = playlists.isEmpty
+          ? _newRemotePlaylistSelection
+          : await showModalBottomSheet<String>(
+              context: context,
+              showDragHandle: true,
+              builder: (sheetContext) => SafeArea(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 12),
+                  children: <Widget>[
+                    const ListTile(
+                      title: Text('Add to remote playlist'),
+                    ),
+                    ListTile(
+                      key: const Key('remote-playlist-create-with-track'),
+                      leading: const Icon(Icons.playlist_add),
+                      title: const Text('New playlist'),
+                      onTap: () => Navigator.of(sheetContext).pop(
+                        _newRemotePlaylistSelection,
+                      ),
+                    ),
+                    for (final playlist in playlists)
+                      ListTile(
+                        key: ValueKey<String>(
+                          'remote-playlist-choice-${playlist.id}',
+                        ),
+                        leading: const Icon(Icons.queue_music_outlined),
+                        title: Text(playlist.title),
+                        subtitle: playlist.subtitle.isEmpty
+                            ? null
+                            : Text(playlist.subtitle),
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop(playlist.id),
+                      ),
+                  ],
+                ),
+              ),
+            );
+      if (selection == null || !mounted) {
+        return;
+      }
+      if (selection == _newRemotePlaylistSelection) {
+        final name = await _promptForRemotePlaylistName(
+          context,
+          title: 'Create remote playlist',
+          actionLabel: 'Create',
+        );
+        if (name == null) {
+          return;
+        }
+        await playlistMutator.createPlaylist(
+          name,
+          trackIds: <String>[trackId],
+        );
+        if (mounted) {
+          _showMessage('Created $name with ${track.title}.');
+        }
+        return;
+      }
+      await playlistMutator.addPlaylistTracks(
+        selection,
+        <String>[trackId],
+      );
+      if (!mounted) {
+        return;
+      }
+      final target = playlists.where((item) => item.id == selection).first;
+      _showMessage('Added ${track.title} to ${target.title}.');
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _playlistMutationInProgress = false);
+      }
+    }
+  }
+
+  Future<void> _moveRemotePlaylistTrack(
+    MusicPlaylistMutationProvider playlistMutator,
+    List<Track> tracks,
+    int fromIndex,
+    int toIndex,
+  ) async {
+    if (fromIndex < 0 ||
+        fromIndex >= tracks.length ||
+        toIndex < 0 ||
+        toIndex >= tracks.length) {
+      return;
+    }
+    final trackIds = _externalTrackIds(tracks);
+    if (trackIds == null) {
+      _showMessage('This playlist contains a track without a provider ID.');
+      return;
+    }
+    final moved = trackIds.removeAt(fromIndex);
+    trackIds.insert(toIndex, moved);
+    await _runDetailPlaylistMutation(
+      () => playlistMutator.replacePlaylistTracks(
+        widget.collection.id,
+        trackIds,
+      ),
+      'Updated playlist order.',
+    );
+  }
+
+  Future<void> _removeRemotePlaylistTrack(
+    MusicPlaylistMutationProvider playlistMutator,
+    Track track,
+    List<Track> tracks,
+    int trackIndex,
+  ) async {
+    if (trackIndex < 0 || trackIndex >= tracks.length) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove from remote playlist?'),
+        content: Text('Remove ${track.title} from ${widget.collection.title}?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    final trackIds = _externalTrackIds(tracks);
+    if (trackIds == null) {
+      _showMessage('This playlist contains a track without a provider ID.');
+      return;
+    }
+    trackIds.removeAt(trackIndex);
+    await _runDetailPlaylistMutation(
+      () => playlistMutator.replacePlaylistTracks(
+        widget.collection.id,
+        trackIds,
+      ),
+      'Removed ${track.title}.',
+    );
+  }
+
+  Future<void> _runDetailPlaylistMutation(
+    Future<void> Function() mutation,
+    String successMessage,
+  ) async {
+    if (_playlistMutationInProgress) {
+      return;
+    }
+    setState(() => _playlistMutationInProgress = true);
+    try {
+      await mutation();
+      await _reload();
+      if (mounted) {
+        _showMessage(successMessage);
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _playlistMutationInProgress = false);
+      }
+    }
+  }
+
+  List<String>? _externalTrackIds(List<Track> tracks) {
+    final trackIds = <String>[];
+    for (final track in tracks) {
+      final trackId = track.externalId?.trim() ?? '';
+      if (trackId.isEmpty) {
+        return null;
+      }
+      trackIds.add(trackId);
+    }
+    return trackIds;
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   void _handleTrackAction(
     _CatalogTrackAction action,
     Track track,
     List<Track> queue,
+    int playlistIndex,
+    MusicPlaylistMutationProvider? playlistMutator,
   ) {
     switch (action) {
       case _CatalogTrackAction.play:
         unawaited(_play(track, queue));
       case _CatalogTrackAction.save:
         unawaited(_save(track));
+      case _CatalogTrackAction.addToRemotePlaylist:
+        if (playlistMutator != null) {
+          unawaited(_addToRemotePlaylist(playlistMutator, track));
+        }
       case _CatalogTrackAction.cache:
         unawaited(_queueOffline(track, OfflineMediaAction.cache));
       case _CatalogTrackAction.download:
         unawaited(_queueOffline(track, OfflineMediaAction.download));
+      case _CatalogTrackAction.moveUp:
+        if (playlistMutator != null) {
+          unawaited(
+            _moveRemotePlaylistTrack(
+              playlistMutator,
+              queue,
+              playlistIndex,
+              playlistIndex - 1,
+            ),
+          );
+        }
+      case _CatalogTrackAction.moveDown:
+        if (playlistMutator != null) {
+          unawaited(
+            _moveRemotePlaylistTrack(
+              playlistMutator,
+              queue,
+              playlistIndex,
+              playlistIndex + 1,
+            ),
+          );
+        }
+      case _CatalogTrackAction.removeFromRemotePlaylist:
+        if (playlistMutator != null) {
+          unawaited(
+            _removeRemotePlaylistTrack(
+              playlistMutator,
+              track,
+              queue,
+              playlistIndex,
+            ),
+          );
+        }
     }
   }
 }
 
-enum _CatalogTrackAction { play, save, cache, download }
+enum _CatalogTrackAction {
+  play,
+  save,
+  addToRemotePlaylist,
+  cache,
+  download,
+  moveUp,
+  moveDown,
+  removeFromRemotePlaylist,
+}
 
 class _CatalogOfflineState extends StatelessWidget {
   const _CatalogOfflineState();
@@ -664,6 +1158,55 @@ class _CatalogEmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+const _newRemotePlaylistSelection = '__aethertune_new_playlist__';
+
+Future<String?> _promptForRemotePlaylistName(
+  BuildContext context, {
+  required String title,
+  required String actionLabel,
+  String initialValue = '',
+}) async {
+  final controller = TextEditingController(text: initialValue);
+  var value = initialValue.trim();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          key: const Key('remote-playlist-name'),
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(labelText: 'Playlist name'),
+          onChanged: (nextValue) {
+            setDialogState(() => value = nextValue.trim());
+          },
+          onSubmitted: (_) {
+            if (value.isNotEmpty) {
+              Navigator.of(dialogContext).pop(value);
+            }
+          },
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: value.isEmpty
+                ? null
+                : () => Navigator.of(dialogContext).pop(value),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
+  return result;
 }
 
 String _kindPlural(MusicCatalogCollectionKind kind) {

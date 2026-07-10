@@ -29,6 +29,7 @@ void main() {
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.libraryBrowse,
+        MusicSourceCapability.playlistMutation,
         MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
@@ -216,6 +217,83 @@ void main() {
     expect(requests[0].queryParameters['id'], 'artist-1');
     expect(requests[1].queryParameters['id'], 'album-1');
     expect(requests[2].queryParameters['id'], 'playlist-1');
+  });
+
+  test('creates edits and deletes Subsonic playlists with ordered song IDs',
+      () async {
+    final requests = <Uri>[];
+    var saltIndex = 0;
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: () => 'mutation-salt-${saltIndex++}',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return '{"subsonic-response":{"status":"ok"}}';
+      },
+    );
+
+    await provider.createPlaylist(
+      '  Morning Focus  ',
+      trackIds: const <String>['song-1', 'song-2'],
+    );
+    await provider.renamePlaylist('playlist-1', 'Deep Focus');
+    await provider.addPlaylistTracks(
+      'playlist-1',
+      const <String>['song-3', 'song-4'],
+    );
+    await provider.replacePlaylistTracks(
+      'playlist-1',
+      const <String>['song-2', 'song-1', 'song-2'],
+    );
+    await provider.deletePlaylist('playlist-1');
+    await provider.addPlaylistTracks('playlist-1', const <String>[]);
+
+    expect(requests.map((request) => request.path), <String>[
+      '/navidrome/rest/createPlaylist.view',
+      '/navidrome/rest/updatePlaylist.view',
+      '/navidrome/rest/updatePlaylist.view',
+      '/navidrome/rest/createPlaylist.view',
+      '/navidrome/rest/deletePlaylist.view',
+    ]);
+    expect(requests[0].queryParameters['name'], 'Morning Focus');
+    expect(
+      requests[0].queryParametersAll['songId'],
+      <String>['song-1', 'song-2'],
+    );
+    expect(requests[1].queryParameters['playlistId'], 'playlist-1');
+    expect(requests[1].queryParameters['name'], 'Deep Focus');
+    expect(
+      requests[2].queryParametersAll['songIdToAdd'],
+      <String>['song-3', 'song-4'],
+    );
+    expect(requests[3].queryParameters['playlistId'], 'playlist-1');
+    expect(
+      requests[3].queryParametersAll['songId'],
+      <String>['song-2', 'song-1', 'song-2'],
+    );
+    expect(requests[4].queryParameters['id'], 'playlist-1');
+    expect(
+      requests.map((request) => request.queryParameters['s']).toSet(),
+      hasLength(5),
+    );
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters.containsKey('t') &&
+            !request.queryParameters.containsKey('p'),
+      ),
+      isTrue,
+    );
+    expect(
+      () => provider.renamePlaylist('playlist-1', ' '),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.addPlaylistTracks(' ', const <String>['song-1']),
+      throwsArgumentError,
+    );
   });
 
   test('loads Subsonic cover art through a salted credential request',

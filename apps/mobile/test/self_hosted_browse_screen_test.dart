@@ -121,6 +121,180 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('creates renames and deletes remote playlists', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final provider = _FakeCatalogProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Playlists'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('catalog-create-playlist')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('remote-playlist-name')),
+      'Morning Focus',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morning Focus'), findsOneWidget);
+    expect(provider.mutationCalls, contains('create:Morning Focus:'));
+
+    await tester.tap(
+      find.byKey(const Key('catalog-playlist-actions-playlist-2')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Rename'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('remote-playlist-name')),
+      'Morning Drive',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morning Drive'), findsOneWidget);
+    expect(find.text('Morning Focus'), findsNothing);
+    expect(provider.mutationCalls, contains('rename:playlist-2:Morning Drive'));
+
+    await tester.tap(
+      find.byKey(const Key('catalog-playlist-actions-playlist-2')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Morning Drive'), findsNothing);
+    expect(provider.mutationCalls, contains('delete:playlist-2'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('adds reorders and removes remote playlist tracks', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final provider = _FakeCatalogProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Blue Rooms'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Add to remote playlist'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('remote-playlist-choice-playlist-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.mutationCalls, contains('add:playlist-1:song-1'));
+    expect(provider.playlistTrackIds('playlist-1'), <String>[
+      'song-3',
+      'song-4',
+      'song-1',
+    ]);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Playlists'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Late Night'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-3')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Move down'));
+    await tester.pumpAndSettle();
+    expect(provider.playlistTrackIds('playlist-1'), <String>[
+      'song-4',
+      'song-3',
+      'song-1',
+    ]);
+
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-3')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(ListTile, 'Remove from playlist'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+
+    expect(provider.playlistTrackIds('playlist-1'), <String>[
+      'song-4',
+      'song-1',
+    ]);
+    expect(find.text('Playlist Cut'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('remote playlist failures preserve the current catalog', (
+    tester,
+  ) async {
+    final provider = _FakeCatalogProvider(mutationFailuresRemaining: 1);
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Playlists'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('catalog-create-playlist')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('remote-playlist-name')),
+      'Rejected Mix',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Remote playlist update failed'), findsOneWidget);
+    expect(find.text('Rejected Mix'), findsNothing);
+    expect(find.text('Late Night'), findsOneWidget);
+    expect(provider.mutationCalls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('offline mode performs no catalog requests', (tester) async {
     final provider = _FakeCatalogProvider();
     final library = LibraryStore();
@@ -213,18 +387,39 @@ Widget _testApp({
   );
 }
 
-class _FakeCatalogProvider implements MusicCatalogProvider {
+class _FakeCatalogProvider
+    implements MusicCatalogProvider, MusicPlaylistMutationProvider {
   _FakeCatalogProvider({
     this.artistFailuresRemaining = 0,
     this.albumFailuresRemaining = 0,
-  });
+    this.mutationFailuresRemaining = 0,
+  }) {
+    _playlistTracks['playlist-1'] = <Track>[
+      _track('song-3', 'Playlist Cut'),
+      _track('song-4', 'Night Signal'),
+    ];
+  }
 
   int artistFailuresRemaining;
   int albumFailuresRemaining;
+  int mutationFailuresRemaining;
   final List<MusicCatalogCollectionKind> browseCalls =
       <MusicCatalogCollectionKind>[];
   final List<MusicCatalogCollection> loadCalls = <MusicCatalogCollection>[];
   final List<String> artworkCalls = <String>[];
+  final List<String> mutationCalls = <String>[];
+  final List<MusicCatalogCollection> _playlists =
+      <MusicCatalogCollection>[
+    const MusicCatalogCollection(
+      id: 'playlist-1',
+      title: 'Late Night',
+      kind: MusicCatalogCollectionKind.playlist,
+      subtitle: '2 tracks',
+      itemCount: 2,
+      artworkId: 'playlist-cover-1',
+    ),
+  ];
+  final Map<String, List<Track>> _playlistTracks = <String, List<Track>>{};
 
   @override
   String get id => 'test-self-hosted';
@@ -242,6 +437,7 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.libraryBrowse,
         MusicSourceCapability.playlists,
+        MusicSourceCapability.playlistMutation,
         MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
@@ -293,15 +489,8 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
             artworkId: 'album-cover-1',
           ),
         ],
-      MusicCatalogCollectionKind.playlist => const <MusicCatalogCollection>[
-          MusicCatalogCollection(
-            id: 'playlist-1',
-            title: 'Late Night',
-            kind: MusicCatalogCollectionKind.playlist,
-            subtitle: '2 tracks',
-            artworkId: 'playlist-cover-1',
-          ),
-        ],
+      MusicCatalogCollectionKind.playlist =>
+        List<MusicCatalogCollection>.unmodifiable(_playlists),
     };
   }
 
@@ -332,7 +521,9 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
     return MusicCatalogDetail(
       collection: collection,
       tracks: collection.kind == MusicCatalogCollectionKind.playlist
-          ? <Track>[_track('song-3', 'Playlist Cut')]
+          ? List<Track>.unmodifiable(
+              _playlistTracks[collection.id] ?? const <Track>[],
+            )
           : <Track>[
               _track('song-1', 'Aether Session'),
               _track('song-2', 'Local Cloud'),
@@ -358,6 +549,113 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
     return Uri.parse(
       'https://music.example.test/stream/${track.externalId}',
     );
+  }
+
+  @override
+  Future<void> createPlaylist(
+    String name, {
+    List<String> trackIds = const <String>[],
+  }) async {
+    _failMutationIfNeeded();
+    final id = 'playlist-${_playlists.length + 1}';
+    mutationCalls.add('create:$name:${trackIds.join(',')}');
+    _playlistTracks[id] = trackIds.map(_trackForId).toList(growable: true);
+    _playlists.add(
+      MusicCatalogCollection(
+        id: id,
+        title: name,
+        kind: MusicCatalogCollectionKind.playlist,
+        subtitle: '${trackIds.length} tracks',
+        itemCount: trackIds.length,
+      ),
+    );
+  }
+
+  @override
+  Future<void> renamePlaylist(String playlistId, String name) async {
+    _failMutationIfNeeded();
+    mutationCalls.add('rename:$playlistId:$name');
+    final index = _playlists.indexWhere((item) => item.id == playlistId);
+    final current = _playlists[index];
+    _playlists[index] = MusicCatalogCollection(
+      id: current.id,
+      title: name,
+      kind: current.kind,
+      subtitle: current.subtitle,
+      itemCount: current.itemCount,
+      artworkId: current.artworkId,
+      artworkVersion: current.artworkVersion,
+    );
+  }
+
+  @override
+  Future<void> deletePlaylist(String playlistId) async {
+    _failMutationIfNeeded();
+    mutationCalls.add('delete:$playlistId');
+    _playlists.removeWhere((item) => item.id == playlistId);
+    _playlistTracks.remove(playlistId);
+  }
+
+  @override
+  Future<void> addPlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  ) async {
+    _failMutationIfNeeded();
+    mutationCalls.add('add:$playlistId:${trackIds.join(',')}');
+    _playlistTracks[playlistId]!.addAll(trackIds.map(_trackForId));
+    _syncPlaylistCount(playlistId);
+  }
+
+  @override
+  Future<void> replacePlaylistTracks(
+    String playlistId,
+    List<String> trackIds,
+  ) async {
+    _failMutationIfNeeded();
+    mutationCalls.add('replace:$playlistId:${trackIds.join(',')}');
+    _playlistTracks[playlistId] =
+        trackIds.map(_trackForId).toList(growable: true);
+    _syncPlaylistCount(playlistId);
+  }
+
+  List<String> playlistTrackIds(String playlistId) {
+    return (_playlistTracks[playlistId] ?? const <Track>[])
+        .map((track) => track.externalId!)
+        .toList(growable: false);
+  }
+
+  Track _trackForId(String externalId) {
+    return switch (externalId) {
+      'song-1' => _track(externalId, 'Aether Session'),
+      'song-2' => _track(externalId, 'Local Cloud'),
+      'song-3' => _track(externalId, 'Playlist Cut'),
+      'song-4' => _track(externalId, 'Night Signal'),
+      _ => _track(externalId, externalId),
+    };
+  }
+
+  void _syncPlaylistCount(String playlistId) {
+    final index = _playlists.indexWhere((item) => item.id == playlistId);
+    final current = _playlists[index];
+    final count = _playlistTracks[playlistId]?.length ?? 0;
+    _playlists[index] = MusicCatalogCollection(
+      id: current.id,
+      title: current.title,
+      kind: current.kind,
+      subtitle: '$count tracks',
+      itemCount: count,
+      artworkId: current.artworkId,
+      artworkVersion: current.artworkVersion,
+    );
+  }
+
+  void _failMutationIfNeeded() {
+    if (mutationFailuresRemaining <= 0) {
+      return;
+    }
+    mutationFailuresRemaining -= 1;
+    throw StateError('Remote playlist update failed.');
   }
 
   Track _track(String externalId, String title) {
