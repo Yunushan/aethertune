@@ -545,18 +545,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<String?> _importLyricsDocument(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       allowedExtensions: supportedLyricsDocumentExtensions,
       dialogTitle: 'Import lyrics file',
       type: FileType.custom,
-      withData: true,
     );
 
-    if (!context.mounted || result == null || result.files.isEmpty) {
+    if (!context.mounted || file == null) {
       return null;
     }
 
-    final file = result.files.single;
     if (!isSupportedLyricsDocumentName(file.name)) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Choose a .txt or .lrc lyrics file.')),
@@ -565,12 +563,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final bytes = file.bytes ??
-          (file.path == null ? null : await File(file.path!).readAsBytes());
-      if (bytes == null) {
-        throw const FormatException('Could not read lyrics file.');
-      }
-
+      final bytes = await file.readAsBytes();
       return decodeLyricsDocumentBytes(bytes, fileName: file.name);
     } on Object catch (error) {
       if (!context.mounted) {
@@ -730,10 +723,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      type: FileType.audio,
-    );
+    final result = await FilePicker.pickFiles(type: FileType.audio);
 
     if (result == null || result.files.isEmpty) {
       return;
