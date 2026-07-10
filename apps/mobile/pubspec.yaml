@@ -16,7 +16,7 @@ dependencies:
   media_kit_libs_linux: ^1.2.1
   media_kit_libs_windows_audio: ^1.0.9
   audio_session: ^0.1.25
-  file_picker: ^8.1.2
+  file_picker: ^11.0.2
   provider: ^6.1.2
   shared_preferences: ^2.3.2
   path_provider: ^2.1.5
