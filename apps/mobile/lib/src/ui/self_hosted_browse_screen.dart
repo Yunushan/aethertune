@@ -1167,17 +1167,16 @@ Future<String?> _promptForRemotePlaylistName(
   required String title,
   required String actionLabel,
   String initialValue = '',
-}) async {
-  final controller = TextEditingController(text: initialValue);
+}) {
   var value = initialValue.trim();
-  final result = await showDialog<String>(
+  return showDialog<String>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setDialogState) => AlertDialog(
         title: Text(title),
-        content: TextField(
+        content: TextFormField(
           key: const Key('remote-playlist-name'),
-          controller: controller,
+          initialValue: initialValue,
           autofocus: true,
           textInputAction: TextInputAction.done,
           decoration: const InputDecoration(labelText: 'Playlist name'),
@@ -1205,8 +1204,6 @@ Future<String?> _promptForRemotePlaylistName(
       ),
     ),
   );
-  controller.dispose();
-  return result;
 }
 
 String _kindPlural(MusicCatalogCollectionKind kind) {
