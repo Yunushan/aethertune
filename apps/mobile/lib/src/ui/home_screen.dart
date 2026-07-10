@@ -46,6 +46,7 @@ import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/self_hosted_account_editor.dart';
+import 'widgets/self_hosted_credential_rotation_dialog.dart';
 import 'widgets/track_tile.dart';
 
 class _AetherTuneNavigationDestination {
@@ -6048,7 +6049,7 @@ class _EmptyLibrary extends StatelessWidget {
   }
 }
 
-enum _SelfHostedAccountAction { browse, edit, remove }
+enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab();
@@ -6304,6 +6305,14 @@ class _SourcesTabState extends State<_SourcesTab> {
                         );
                       }
                       break;
+                    case _SelfHostedAccountAction.rotateCredential:
+                      if (selfHostedActionsEnabled &&
+                          selfHosted.hasCredential(account.id)) {
+                        unawaited(
+                          _rotateSelfHostedCredential(context, account),
+                        );
+                      }
+                      break;
                     case _SelfHostedAccountAction.remove:
                       unawaited(_removeSelfHostedAccount(context, account));
                       break;
@@ -6327,6 +6336,16 @@ class _SourcesTabState extends State<_SourcesTab> {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.edit_outlined),
                       title: Text('Edit and test'),
+                    ),
+                  ),
+                  PopupMenuItem<_SelfHostedAccountAction>(
+                    value: _SelfHostedAccountAction.rotateCredential,
+                    enabled: selfHostedActionsEnabled &&
+                        selfHosted.hasCredential(account.id),
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.key_outlined),
+                      title: Text('Rotate credential'),
                     ),
                   ),
                   const PopupMenuItem<_SelfHostedAccountAction>(
@@ -6999,6 +7018,33 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Removed ${account.name}.')),
+    );
+  }
+
+  Future<void> _rotateSelfHostedCredential(
+    BuildContext context,
+    SelfHostedProviderAccount account,
+  ) async {
+    final selfHosted = context.read<SelfHostedProviderStore>();
+    final player = context.read<PlayerController>();
+    final rotated = await showSelfHostedCredentialRotationDialog(
+      context,
+      account: account,
+      onRotate: (newSecret) async {
+        await selfHosted.rotateCredential(account.id, newSecret);
+        await player.refreshTracksFromSource(account.providerId);
+      },
+    );
+    if (!context.mounted || rotated != true) {
+      return;
+    }
+    setState(() {
+      _providerSearchResults.removeWhere(
+        (result) => result.providerId == account.providerId,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Rotated credential for ${account.name}.')),
     );
   }
 

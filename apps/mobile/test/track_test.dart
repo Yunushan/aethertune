@@ -111,6 +111,53 @@ void main() {
     expect(restored.providerArtworkVersion, 'v1');
   });
 
+  test('strips ephemeral media URLs while preserving provider metadata', () {
+    final track = Track(
+      id: 'private-media',
+      title: 'Private media',
+      artist: 'Artist',
+      album: 'Album',
+      genre: 'Ambient',
+      duration: const Duration(minutes: 4),
+      artworkUri: Uri.file('/private/cache/provider-artwork.png'),
+      artworkUriIsEphemeral: true,
+      providerArtworkId: 'cover-1',
+      providerArtworkVersion: 'v2',
+      streamUrl: 'https://media.example.test/audio?api_key=old-secret',
+      streamUrlIsEphemeral: true,
+      sourceId: 'self-hosted-jellyfin-account',
+      externalId: 'song-1',
+      isFavorite: true,
+      addedAt: DateTime.utc(2026, 7, 10),
+    );
+
+    final sanitized = track.withoutEphemeralMediaUris();
+
+    expect(sanitized.streamUrl, isNull);
+    expect(sanitized.streamUrlIsEphemeral, isFalse);
+    expect(sanitized.artworkUri, isNull);
+    expect(sanitized.artworkUriIsEphemeral, isFalse);
+    expect(sanitized.providerArtworkId, 'cover-1');
+    expect(sanitized.providerArtworkVersion, 'v2');
+    expect(sanitized.externalId, 'song-1');
+    expect(sanitized.sourceId, 'self-hosted-jellyfin-account');
+    expect(sanitized.isFavorite, isTrue);
+    expect(sanitized.addedAt, DateTime.utc(2026, 7, 10));
+    expect(sanitized.isPlayable, isFalse);
+  });
+
+  test('keeps non-ephemeral media references unchanged', () {
+    final track = Track(
+      id: 'public-media',
+      title: 'Public media',
+      artworkUri: Uri.parse('https://cdn.example.test/cover.jpg'),
+      streamUrl: 'https://cdn.example.test/audio.mp3',
+      sourceId: 'public-provider',
+    );
+
+    expect(track.withoutEphemeralMediaUris(), same(track));
+  });
+
   test('playable source checks ignore blank paths and URLs', () {
     final blankLocal = Track(
       id: 'blank-local',

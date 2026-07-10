@@ -86,13 +86,58 @@ void main() {
 
     expect(saveCalls, 1);
   });
+
+  testWidgets('edits account metadata without exposing the saved credential', (
+    tester,
+  ) async {
+    final account = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.jellyfin,
+      name: 'Bedroom',
+      baseUrl: 'https://media.example.test',
+      identity: 'user-1',
+      allowInsecureHttp: false,
+    );
+    SelfHostedProviderAccount? savedAccount;
+    String? submittedSecret;
+    await tester.pumpWidget(
+      _EditorHarness(
+        kind: SelfHostedProviderKind.jellyfin,
+        account: account,
+        onSave: (updated, secret) async {
+          savedAccount = updated;
+          submittedSecret = secret;
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Open editor'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('self-hosted-secret')), findsNothing);
+    await tester.enterText(
+      find.byKey(const Key('self-hosted-name')),
+      'Living room',
+    );
+    await tester.tap(find.byKey(const Key('self-hosted-test-save')));
+    await tester.pumpAndSettle();
+
+    expect(savedAccount?.id, account.id);
+    expect(savedAccount?.name, 'Living room');
+    expect(submittedSecret, isEmpty);
+    expect(find.text('Saved: Living room'), findsOneWidget);
+  });
 }
 
 class _EditorHarness extends StatefulWidget {
-  const _EditorHarness({required this.kind, required this.onSave});
+  const _EditorHarness({
+    required this.kind,
+    required this.onSave,
+    this.account,
+  });
 
   final SelfHostedProviderKind kind;
   final SelfHostedAccountSaver onSave;
+  final SelfHostedProviderAccount? account;
 
   @override
   State<_EditorHarness> createState() => _EditorHarnessState();
@@ -113,6 +158,7 @@ class _EditorHarnessState extends State<_EditorHarness> {
                   final result = await showSelfHostedAccountEditor(
                     context,
                     kind: widget.kind,
+                    account: widget.account,
                     onSave: (account, secret) async {
                       await widget.onSave(account, secret);
                       _savedName = account.name;

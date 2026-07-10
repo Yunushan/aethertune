@@ -94,6 +94,30 @@ class Track {
     );
   }
 
+  Track withoutEphemeralMediaUris() {
+    if (!streamUrlIsEphemeral && !artworkUriIsEphemeral) {
+      return this;
+    }
+    return Track(
+      id: id,
+      title: title,
+      artist: artist,
+      album: album,
+      genre: genre,
+      duration: duration,
+      artworkUri: artworkUriIsEphemeral ? null : artworkUri,
+      providerArtworkId: providerArtworkId,
+      providerArtworkVersion: providerArtworkVersion,
+      localPath: localPath,
+      contentHash: contentHash,
+      streamUrl: streamUrlIsEphemeral ? null : streamUrl,
+      sourceId: sourceId,
+      externalId: externalId,
+      isFavorite: isFavorite,
+      addedAt: addedAt,
+    );
+  }
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,

@@ -114,33 +114,34 @@ class _SelfHostedAccountEditorState extends State<SelfHostedAccountEditor> {
                 ),
                 textInputAction: TextInputAction.next,
               ),
-              TextField(
-                key: const Key('self-hosted-secret'),
-                controller: _secretController,
-                enabled: !_saving,
-                obscureText: _obscureSecret,
-                enableSuggestions: false,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: widget.kind.secretLabel,
-                  helperText: editing
-                      ? 'Leave blank to keep the existing credential.'
-                      : null,
-                  suffixIcon: IconButton(
-                    tooltip: _obscureSecret ? 'Show credential' : 'Hide credential',
-                    onPressed: _saving
-                        ? null
-                        : () => setState(
-                              () => _obscureSecret = !_obscureSecret,
-                            ),
-                    icon: Icon(
-                      _obscureSecret ? Icons.visibility : Icons.visibility_off,
+              if (!editing)
+                TextField(
+                  key: const Key('self-hosted-secret'),
+                  controller: _secretController,
+                  enabled: !_saving,
+                  obscureText: _obscureSecret,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  decoration: InputDecoration(
+                    labelText: widget.kind.secretLabel,
+                    suffixIcon: IconButton(
+                      tooltip:
+                          _obscureSecret ? 'Show credential' : 'Hide credential',
+                      onPressed: _saving
+                          ? null
+                          : () => setState(
+                                () => _obscureSecret = !_obscureSecret,
+                              ),
+                      icon: Icon(
+                        _obscureSecret
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
                     ),
                   ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _save(),
                 ),
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _save(),
-              ),
               if (usesHttp)
                 CheckboxListTile(
                   key: const Key('allow-insecure-http'),

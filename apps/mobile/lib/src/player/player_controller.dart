@@ -245,6 +245,87 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshTracksFromSource(String sourceId) async {
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty ||
+        !_queue.any((track) => track.sourceId == normalizedSourceId)) {
+      return;
+    }
+
+    final currentTrackId = _current?.id;
+    final hadLoadedQueue = _loadedPlaybackQueue.isNotEmpty;
+    final wasPlaying = hadLoadedQueue && _audio.playing;
+    final position = hadLoadedQueue ? _audio.position : Duration.zero;
+    if (hadLoadedQueue) {
+      await _audio.stop();
+      _loadedTrackId = null;
+      _loadedPlaybackQueue.clear();
+    }
+    final sanitized = _queue
+        .map(
+          (track) => track.sourceId == normalizedSourceId
+              ? track.withoutEphemeralMediaUris()
+              : track,
+        )
+        .toList(growable: false);
+    final resolver = _trackResolver;
+    final refreshed = resolver == null
+        ? sanitized
+        : await Future.wait(
+            sanitized.map((track) async {
+              if (track.sourceId != normalizedSourceId ||
+                  track.hasLocalSource) {
+                return track;
+              }
+              try {
+                return await resolver(track);
+              } on Object catch (error) {
+                debugPrint(
+                  'Could not refresh ${track.title} after credential rotation: '
+                  '$error',
+                );
+                return track;
+              }
+            }),
+          );
+
+    _queue
+      ..clear()
+      ..addAll(refreshed);
+    if (currentTrackId != null) {
+      final currentIndex = _queue.indexWhere(
+        (track) => track.id == currentTrackId,
+      );
+      _current = currentIndex == -1 ? null : _queue[currentIndex];
+    }
+    await _saveQueueSnapshot();
+
+    final current = _current;
+    if (current == null || !current.isPlayable) {
+      if (!hadLoadedQueue) {
+        await _audio.stop();
+      }
+      _loadedTrackId = null;
+      _loadedPlaybackQueue.clear();
+    } else if (hadLoadedQueue) {
+      try {
+        await _loadQueue(
+          current,
+          initialPosition: position,
+          forceReload: true,
+        );
+        if (wasPlaying) {
+          unawaited(_audio.play());
+        }
+      } on Object catch (error) {
+        debugPrint(
+          'Could not reload playback after credential rotation: $error',
+        );
+      }
+    }
+    notifyListeners();
+  }
+
   Future<void> seek(Duration position) async {
     await _audio.seek(position);
   }

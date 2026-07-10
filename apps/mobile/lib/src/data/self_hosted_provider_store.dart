@@ -240,6 +240,71 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> rotateCredential(String accountId, String newSecret) async {
+    SelfHostedProviderAccount? account;
+    for (final candidate in _accounts) {
+      if (candidate.id == accountId) {
+        account = candidate;
+        break;
+      }
+    }
+    if (account == null) {
+      throw StateError('Self-hosted account does not exist.');
+    }
+    final oldSecret = _secrets[accountId] ?? '';
+    if (oldSecret.isEmpty) {
+      throw StateError('The existing secure credential is unavailable.');
+    }
+    if (newSecret.isEmpty) {
+      throw FormatException('${account.kind.secretLabel} is required.');
+    }
+    if (newSecret == oldSecret) {
+      throw FormatException(
+        'New ${account.kind.secretLabel.toLowerCase()} must differ from the current credential.',
+      );
+    }
+
+    try {
+      await _connectionTester(account, newSecret);
+    } on Object catch (error) {
+      throw ProviderRequestException(
+        safeProviderErrorMessage(
+          error,
+          providerName: account.name,
+          secrets: <String>[oldSecret, newSecret],
+        ),
+      );
+    }
+
+    try {
+      await _credentialVault.write(accountId, newSecret);
+    } on Object catch (error) {
+      try {
+        await _credentialVault.write(accountId, oldSecret);
+      } on Object {
+        throw StateError(
+          '${account.name} credential rotation failed and the previous credential could not be restored.',
+        );
+      }
+      throw ProviderRequestException(
+        safeProviderErrorMessage(
+          error,
+          providerName: account.name,
+          secrets: <String>[oldSecret, newSecret],
+        ),
+      );
+    }
+
+    _secrets[accountId] = newSecret;
+    _clearArtworkRequests(accountId);
+    try {
+      await _artworkFileCache.removeProvider(account.providerId);
+    } on Object {
+      // Rotation succeeded; private cache cleanup is best effort.
+    }
+    notifyListeners();
+  }
+
   Future<void> remove(String accountId) async {
     final oldAccounts = List<SelfHostedProviderAccount>.from(_accounts);
     final oldSecret = _secrets[accountId];

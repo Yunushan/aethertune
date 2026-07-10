@@ -148,6 +148,100 @@ void main() {
     expect(store.accounts.single.name, 'Living room');
   });
 
+  test('rotates credentials atomically and clears private artwork', () async {
+    final vault = _MemoryCredentialVault();
+    final testedSecrets = <String>[];
+    final factorySecrets = <String>[];
+    final cacheRoot = await Directory.systemTemp.createTemp(
+      'aethertune-rotation-test-',
+    );
+    addTearDown(() async {
+      if (await cacheRoot.exists()) {
+        await cacheRoot.delete(recursive: true);
+      }
+    });
+    final artworkFileCache = ProviderArtworkFileCache(
+      cacheRootLoader: () async => cacheRoot,
+    );
+    final provider = _ArtworkCatalogProvider();
+    final store = SelfHostedProviderStore(
+      credentialVault: vault,
+      connectionTester: (account, secret) async {
+        testedSecrets.add(secret);
+        if (secret == 'rejected-secret') {
+          throw StateError('Rejected ${account.baseUri}?token=$secret');
+        }
+      },
+      providerFactory: (account, secret) {
+        factorySecrets.add(secret);
+        return provider;
+      },
+      artworkFileCache: artworkFileCache,
+    );
+    await store.load();
+    final account = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.jellyfin,
+      name: 'Rotation server',
+      baseUrl: 'https://media.example.test',
+      identity: 'user-1',
+      allowInsecureHttp: false,
+    );
+    provider.providerId = account.providerId;
+    await store.testAndSave(account, 'old-secret');
+    final artworkUri = await artworkFileCache.materialize(
+      sourceId: account.providerId,
+      artworkId: 'cover-1',
+      bytes: Uint8List.fromList(<int>[0x89, 0x50, 0x4e, 0x47, 1]),
+    );
+    final artworkFile = File.fromUri(artworkUri);
+    final initialRevision = store.artworkRevision;
+
+    await expectLater(
+      store.rotateCredential(account.id, 'rejected-secret'),
+      throwsA(
+        predicate<Object>((error) {
+          final message = error.toString();
+          return message.contains('[redacted]') &&
+              !message.contains('rejected-secret');
+        }),
+      ),
+    );
+    expect(vault.values[account.id], 'old-secret');
+    expect(await artworkFile.exists(), isTrue);
+
+    vault.failNextWriteForSecret = 'write-failure-secret';
+    await expectLater(
+      store.rotateCredential(account.id, 'write-failure-secret'),
+      throwsA(
+        predicate<Object>((error) {
+          final message = error.toString();
+          return message.contains('[redacted]') &&
+              !message.contains('write-failure-secret');
+        }),
+      ),
+    );
+    expect(vault.values[account.id], 'old-secret');
+    expect(await artworkFile.exists(), isTrue);
+
+    await store.rotateCredential(account.id, 'new-secret');
+
+    expect(vault.values[account.id], 'new-secret');
+    expect(store.artworkRevision, greaterThan(initialRevision));
+    expect(await artworkFile.exists(), isFalse);
+    expect(store.catalogProviderFor(account.id), same(provider));
+    expect(factorySecrets.last, 'new-secret');
+    expect(testedSecrets, <String>[
+      'old-secret',
+      'rejected-secret',
+      'write-failure-secret',
+      'new-secret',
+    ]);
+    await expectLater(
+      store.rotateCredential(account.id, 'new-secret'),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('does not persist failed connection attempts or expose secrets', () async {
     final vault = _MemoryCredentialVault();
     final store = SelfHostedProviderStore(
@@ -296,6 +390,7 @@ void main() {
 
 class _MemoryCredentialVault implements ProviderCredentialVault {
   final Map<String, String> values = <String, String>{};
+  String? failNextWriteForSecret;
 
   @override
   Future<String?> read(String accountId) async => values[accountId];
@@ -303,6 +398,10 @@ class _MemoryCredentialVault implements ProviderCredentialVault {
   @override
   Future<void> write(String accountId, String secret) async {
     values[accountId] = secret;
+    if (failNextWriteForSecret == secret) {
+      failNextWriteForSecret = null;
+      throw StateError('Could not store $secret.');
+    }
   }
 
   @override
