@@ -163,7 +163,7 @@ void main() {
     final artworkFileCache = ProviderArtworkFileCache(
       cacheRootLoader: () async => cacheRoot,
     );
-    final provider = _ArtworkCatalogProvider();
+    final provider = _ArtworkCatalogProvider('rotation-provider');
     final store = SelfHostedProviderStore(
       credentialVault: vault,
       connectionTester: (account, secret) async {
