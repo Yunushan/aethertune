@@ -22,10 +22,6 @@ ANDROID_PERMISSIONS = (
 ACTIVITY_NAME = "com.ryanheise.audioservice.AudioServiceActivity"
 SERVICE_NAME = "com.ryanheise.audioservice.AudioService"
 RECEIVER_NAME = "com.ryanheise.audioservice.MediaButtonReceiver"
-ANDROID_GRADLE_PROPERTIES = {
-    "android.builtInKotlin": "false",
-    "android.newDsl": "false",
-}
 
 
 def _find_named(
@@ -113,26 +109,6 @@ def configure_ios(info_plist_path: Path) -> None:
         plistlib.dump(info, stream, sort_keys=False)
 
 
-def configure_android_gradle(gradle_properties_path: Path) -> None:
-    lines = gradle_properties_path.read_text(encoding="utf-8").splitlines()
-    remaining = dict(ANDROID_GRADLE_PROPERTIES)
-    configured = []
-    for line in lines:
-        stripped = line.strip()
-        key = stripped.split("=", 1)[0].strip() if "=" in stripped else None
-        if key in remaining:
-            configured.append(f"{key}={remaining.pop(key)}")
-        else:
-            configured.append(line)
-    if remaining and configured and configured[-1].strip():
-        configured.append("")
-    configured.extend(f"{key}={value}" for key, value in remaining.items())
-    gradle_properties_path.write_text(
-        "\n".join(configured) + "\n",
-        encoding="utf-8",
-    )
-
-
 def verify_android(manifest_path: Path) -> None:
     root = ET.parse(manifest_path).getroot()
     permissions = {
@@ -160,35 +136,20 @@ def verify_ios(info_plist_path: Path) -> None:
         raise RuntimeError("iOS audio background mode is missing")
 
 
-def verify_android_gradle(gradle_properties_path: Path) -> None:
-    properties = {}
-    for line in gradle_properties_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            key, value = stripped.split("=", 1)
-            properties[key.strip()] = value.strip()
-    for key, expected in ANDROID_GRADLE_PROPERTIES.items():
-        if properties.get(key) != expected:
-            raise RuntimeError(f"Android Gradle property {key} must be {expected}")
-
-
 def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: configure_audio_service_platforms.py <flutter-app-dir>")
         return 2
     app_dir = Path(sys.argv[1]).resolve()
     android_manifest = app_dir / "android/app/src/main/AndroidManifest.xml"
-    android_gradle = app_dir / "android/gradle.properties"
     ios_info = app_dir / "ios/Runner/Info.plist"
-    for path in (android_manifest, android_gradle, ios_info):
+    for path in (android_manifest, ios_info):
         if not path.is_file():
             raise FileNotFoundError(path)
 
     configure_android(android_manifest)
-    configure_android_gradle(android_gradle)
     configure_ios(ios_info)
     verify_android(android_manifest)
-    verify_android_gradle(android_gradle)
     verify_ios(ios_info)
     print("Configured Android and iOS background media controls.")
     return 0

@@ -54,12 +54,6 @@ void main() {
         .map((element) => element.innerText);
     expect(modes, contains('audio'));
   });
-
-  test('generated Android wrapper supports legacy Kotlin plugins on AGP 9', () {
-    final properties = _readProperties(File('android/gradle.properties'));
-    expect(properties['android.builtInKotlin'], 'false');
-    expect(properties['android.newDsl'], 'false');
-  });
 }
 
 Set<String?> _componentNames(XmlDocument document, String elementName) {
@@ -70,17 +64,4 @@ Set<String?> _componentNames(XmlDocument document, String elementName) {
             element.getAttribute('name', namespace: _androidNamespace),
       )
       .toSet();
-}
-
-Map<String, String> _readProperties(File file) {
-  final properties = <String, String>{};
-  for (final line in file.readAsLinesSync()) {
-    final separator = line.indexOf('=');
-    if (separator <= 0 || line.trimLeft().startsWith('#')) {
-      continue;
-    }
-    properties[line.substring(0, separator).trim()] =
-        line.substring(separator + 1).trim();
-  }
-  return properties;
 }
