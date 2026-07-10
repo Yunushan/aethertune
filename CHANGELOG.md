@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a bounded private local-file bridge that publishes validated Jellyfin/Navidrome/Subsonic artwork to Android notifications and Apple lock-screen/Control Center metadata without persisting authenticated URLs or runtime file URIs; includes atomic writes, format-aware hashed paths, stale-part cleanup, account-scoped deletion, and system-media/serialization/cache tests.
 - Added credential-safe Jellyfin/Navidrome/Subsonic artwork for catalog rows, saved library tiles, the mini-player, and Now Playing using safe persisted image IDs, authenticated binary byte loaders, image MIME/10 MiB gates, bounded memory caching, and account invalidation tests; upgraded Subsonic requests from reversible password encoding to random-salt authentication tokens.
 - Added responsive Jellyfin and Navidrome/Subsonic Artists, Albums, Tracks, and Playlists browsing with filtering, drill-down, play/save/offline-queue actions, retry/empty states, endpoint fixtures, phone/desktop widget coverage, and offline zero-request enforcement.
 - Added Sources-tab Jellyfin and Navidrome/Subsonic account setup with connection testing, HTTPS-by-default validation, platform-secure credential storage, redacted failures, provider-search activation, runtime-only authenticated playback URLs, restart reconstruction, and account removal cleanup.
