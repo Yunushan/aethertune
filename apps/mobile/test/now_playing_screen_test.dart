@@ -33,7 +33,7 @@ void main() {
     var lyricsOpens = 0;
     await tester.pumpWidget(
       MultiProvider(
-        providers: <SingleChildWidget>[
+        providers: [
           ChangeNotifierProvider<LibraryStore>.value(value: library),
           ChangeNotifierProvider<PlayerController>.value(value: player),
         ],
