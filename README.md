@@ -56,7 +56,7 @@ These repo-hosted pictures and GIFs introduce each supported surface before some
 
 | Surface | What the README media introduces |
 |---|---|
-| Android | Touch-first library search, provider search, start-radio queues, and mini player |
+| Android | Touch-first library search, provider search, start-radio queues, and responsive mini/full player |
 | iOS | Playlists, synced lyrics, history, and privacy-first sources |
 | Windows | Wide desktop layout with provider search, radio queues, and playback controls |
 | macOS | Artwork-first player, lyrics, playlists, and provider privacy |
@@ -132,7 +132,7 @@ This scaffold includes real app code, not only a README:
 | Mobile app | Flutter app shell for Android and iOS |
 | Desktop app | Same Flutter client builds for Linux, macOS, and Windows in CI, with a desktop-width navigation rail |
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
-| Playback | Native playlist-backed `just_audio` controller for gapless local/URL queues, Android notification controls, iOS/macOS Control Center metadata and transport controls, a configured mobile music audio session, Android/iOS background-audio wrappers, native Android/iOS/macOS playback backends, and bundled MediaKit audio backends for Linux/Windows |
+| Playback | Responsive mini/full Now Playing surfaces with artwork swipe navigation, seek/time labels, favorite, queue, lyrics, shuffle/repeat and transport controls; native playlist-backed `just_audio` controller for gapless local/URL queues; Android notification controls; iOS/macOS Control Center metadata and transport controls; configured mobile music sessions and background-audio wrappers; native Android/iOS/macOS playback backends; and bundled MediaKit audio backends for Linux/Windows |
 | Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing plus basic ID3v1/ID3v2 MP3, FLAC Vorbis comment, M4A metadata atom, and WAV RIFF INFO parsing, matching `.lrc`/`.txt` lyric sidecars, plus embedded MP3/FLAC/M4A artwork display; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, flat folder groups, or recursive folder tree |
 | Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and the offline cache/download queue with byte-count/checksum metadata in `shared_preferences` |
 | Backup/restore | Export and restore a versioned JSON backup, including submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and queued offline media requests with cache metadata, from the Options tab |

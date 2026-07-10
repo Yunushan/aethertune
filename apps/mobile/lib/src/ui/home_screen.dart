@@ -34,6 +34,7 @@ import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
+import 'now_playing_screen.dart';
 import 'responsive_layout.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
@@ -281,6 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         PlayerBar(
+          onOpenNowPlaying: () => _openNowPlaying(context),
           onOpenQueue: () => _showQueue(context),
           onSaveQueue: () => _saveQueueAsPlaylist(context),
           onOpenLyrics: () => _showNowPlayingLyrics(context),
@@ -340,6 +342,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _selectTab(int index) {
     setState(() => _tabIndex = index);
+  }
+
+  Future<void> _openNowPlaying(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => NowPlayingScreen(
+          onOpenQueue: () => _showQueue(context),
+          onOpenLyrics: () => _showNowPlayingLyrics(context),
+        ),
+      ),
+    );
   }
 
   Future<void> _showAddToPlaylist(BuildContext context, Track track) async {

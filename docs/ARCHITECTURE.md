@@ -15,7 +15,8 @@ AetherTune is a local-first Flutter client with a provider-based source layer pl
 
 ```text
 UI layer
-  HomeScreen, Library tab, Sources tab, Options tab, PlayerBar, TrackTile
+  HomeScreen, Library tab, Sources tab, Options tab, responsive PlayerBar,
+  NowPlayingScreen, TrackTile
 
 State layer
   LibraryStore, PlayerController
@@ -86,6 +87,8 @@ provides:
 - seek
 - next/previous
 - queue
+- responsive compact and full Now Playing surfaces
+- artwork swipe navigation, live seek/time labels, favorite, lyrics, and queue actions
 - shuffle
 - repeat mode
 - sleep timer with optional fade-out

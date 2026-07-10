@@ -8,6 +8,10 @@
 - [x] MIT license
 - [x] Local import
 - [x] Local playback
+- [x] Responsive full Now Playing screen
+- [x] Phone-safe compact player controls
+- [x] Now Playing seek/time, favorite, lyrics, queue, shuffle, and repeat actions
+- [x] Artwork swipe next/previous navigation
 - [x] Local Home feed sections
 - [x] Local charts by playback range
 - [x] Local mood/activity mixes
@@ -43,6 +47,7 @@
 - [x] Provider interface
 - [ ] More unit tests
 - [ ] UI polish
+- [ ] Animated artwork transitions and artwork-derived player palettes
 
 ## 0.2.x: Library
 

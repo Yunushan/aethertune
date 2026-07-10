@@ -241,11 +241,11 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Material 3 shell | Done | Music You, modern Android apps | Full design system. |
-| Mini player / full player | Scaffolded | All music apps | Full-screen now-playing view and gestures. |
+| Mini player / full player | Done | All music apps | The compact player now switches to a phone-safe control set below 720 px and opens a responsive full Now Playing route. The full route provides large artwork, live seek/elapsed/remaining time, queue position, favorite, lyrics, queue, shuffle, repeat, previous/play-pause/next controls, and left/right artwork swipe navigation; widget tests cover the full control contract, automatic queue transition, and a 390 px no-overflow mini player. More secondary actions can be added with future provider features. |
 | Desktop responsive layout | Scaffolded | Desktop players | The Flutter shell switches from bottom navigation to a labeled, scrollable `NavigationRail` at desktop widths while preserving the player bar and tab state across Linux, macOS, and Windows builds; breakpoint behavior has unit coverage. Needed next: split panes, resizable sidebars, richer keyboard focus traversal, and desktop-specific density tuning. |
 | Themes | Scaffolded | Music You, RiMusic | Options exposes persisted System, Light, Dark, AMOLED, and accent color swatch choices; the app shell switches `ThemeMode`, applies the selected Material seed color, backups preserve theme/accent preferences, and store/theme tests cover persistence, restore, and seed mapping. Needed next: Material You dynamic platform color and per-platform polish. |
 | AMOLED theme | Scaffolded | Android music apps | AMOLED preference forces dark mode and uses black scaffold/canvas/navigation surfaces. Needed next: full component contrast audit and per-screen black-surface tuning. |
-| Artwork-dominant player | Roadmap | Namida, YouTube Music | Player redesign and animated transitions. |
+| Artwork-dominant player | Scaffolded | Namida, YouTube Music | The responsive full Now Playing route gives artwork up to 480 px the primary mobile/desktop visual position and keeps controls unframed beside or below it; artwork swipes navigate the queue. Animated shared-element transitions, palettes derived from artwork, and visualizer integration remain. |
 | Visualizer | Roadmap | Namida-style polish | Audio analysis and render surface. |
 | Accessibility pass | Roadmap | Required quality gate | Screen reader labels, focus order, contrast. |
 | Localization | Roadmap | Global music apps | ARB/i18n pipeline and translations. |

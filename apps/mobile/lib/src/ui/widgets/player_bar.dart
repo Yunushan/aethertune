@@ -7,12 +7,14 @@ import 'track_artwork.dart';
 
 class PlayerBar extends StatelessWidget {
   const PlayerBar({
+    required this.onOpenNowPlaying,
     required this.onOpenQueue,
     required this.onSaveQueue,
     required this.onOpenLyrics,
     super.key,
   });
 
+  final VoidCallback onOpenNowPlaying;
   final VoidCallback onOpenQueue;
   final VoidCallback onSaveQueue;
   final VoidCallback onOpenLyrics;
@@ -72,76 +74,98 @@ class PlayerBar extends StatelessWidget {
                 );
               },
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: <Widget>[
-                  TrackArtwork(
-                    artworkUri: current.artworkUri,
-                    size: 40,
-                    borderRadius: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Text(
-                          current.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 720;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Tooltip(
+                          message: 'Open now playing',
+                          child: Semantics(
+                            button: true,
+                            label: 'Open now playing for ${current.title}',
+                            child: InkWell(
+                              key: const Key('open-now-playing'),
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: onOpenNowPlaying,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: <Widget>[
+                                    TrackArtwork(
+                                      artworkUri: current.artworkUri,
+                                      size: 40,
+                                      borderRadius: 8,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: <Widget>[
+                                          Text(
+                                            current.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context).textTheme.titleMedium,
+                                          ),
+                                          Text(
+                                            current.artist,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                        Text(
-                          current.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      ),
+                      if (!compact) ...<Widget>[
+                        IconButton(
+                          tooltip: 'Lyrics',
+                          onPressed: onOpenLyrics,
+                          icon: const Icon(Icons.subtitles_outlined),
+                        ),
+                        IconButton(
+                          tooltip: 'Edit queue',
+                          onPressed: player.queue.isEmpty ? null : onOpenQueue,
+                          icon: const Icon(Icons.queue_music),
+                        ),
+                        IconButton(
+                          tooltip: 'Save queue as playlist',
+                          onPressed: player.queue.isEmpty ? null : onSaveQueue,
+                          icon: const Icon(Icons.playlist_add),
+                        ),
+                        IconButton(
+                          tooltip: 'Previous',
+                          onPressed: () => _runPlaybackAction(context, player.previous),
+                          icon: const Icon(Icons.skip_previous),
                         ),
                       ],
-                    ),
+                      IconButton.filledTonal(
+                        tooltip: player.isPlaying ? 'Pause' : 'Play',
+                        onPressed: () => _runPlaybackAction(
+                          context,
+                          player.togglePlayPause,
+                        ),
+                        icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
+                      ),
+                      IconButton(
+                        tooltip: 'Next',
+                        onPressed: () => _runPlaybackAction(context, player.next),
+                        icon: const Icon(Icons.skip_next),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: 'Lyrics',
-                    onPressed: onOpenLyrics,
-                    icon: const Icon(Icons.subtitles_outlined),
-                  ),
-                  IconButton(
-                    tooltip: 'Edit queue',
-                    onPressed: player.queue.isEmpty ? null : onOpenQueue,
-                    icon: const Icon(Icons.queue_music),
-                  ),
-                  IconButton(
-                    tooltip: 'Save queue as playlist',
-                    onPressed: player.queue.isEmpty ? null : onSaveQueue,
-                    icon: const Icon(Icons.playlist_add),
-                  ),
-                  IconButton(
-                    tooltip: 'Previous',
-                    onPressed: () => _runPlaybackAction(
-                      context,
-                      player.previous,
-                    ),
-                    icon: const Icon(Icons.skip_previous),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: () => _runPlaybackAction(
-                      context,
-                      player.togglePlayPause,
-                    ),
-                    icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
-                    label: Text(player.isPlaying ? 'Pause' : 'Play'),
-                  ),
-                  IconButton(
-                    tooltip: 'Next',
-                    onPressed: () => _runPlaybackAction(
-                      context,
-                      player.next,
-                    ),
-                    icon: const Icon(Icons.skip_next),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ],
         ),
