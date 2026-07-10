@@ -331,10 +331,9 @@ Future<Uint8List> captureListeningRecapPng(
     throw ArgumentError.value(pixelRatio, 'pixelRatio', 'Must be positive.');
   }
 
-  var renderObject = boundaryKey.currentContext?.findRenderObject();
+  final renderObject = boundaryKey.currentContext?.findRenderObject();
   if (renderObject is RenderRepaintBoundary && renderObject.debugNeedsPaint) {
-    await WidgetsBinding.instance.endOfFrame;
-    renderObject = boundaryKey.currentContext?.findRenderObject();
+    throw StateError('The listening recap card has not been painted yet.');
   }
   if (renderObject is! RenderRepaintBoundary) {
     throw StateError('The listening recap card is not ready to capture.');

@@ -35,21 +35,32 @@ void main() {
     expect(find.text('Night Spark'), findsOneWidget);
     expect(find.text('Orion - 7 play(s)'), findsOneWidget);
 
-    final bytes = await captureListeningRecapPng(
-      boundaryKey,
-      pixelRatio: 1,
-    );
+    final capture = await tester.runAsync<List<int>>(() async {
+      final bytes = await captureListeningRecapPng(
+        boundaryKey,
+        pixelRatio: 1,
+      );
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final result = <int>[
+        frame.image.width,
+        frame.image.height,
+        ...bytes.take(8),
+      ];
+      frame.image.dispose();
+      codec.dispose();
+      return result;
+    });
+    expect(capture, isNotNull);
+    final captured = capture!;
     expect(
-      bytes.take(8),
+      captured.skip(2),
       orderedEquals(<int>[137, 80, 78, 71, 13, 10, 26, 10]),
     );
-
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    expect(frame.image.width, listeningRecapCardWidth);
-    expect(frame.image.height, listeningRecapCardHeight);
-    frame.image.dispose();
-    codec.dispose();
+    expect(captured.take(2), <int>[
+      listeningRecapCardWidth.toInt(),
+      listeningRecapCardHeight.toInt(),
+    ]);
   });
 
   test('builds stable recap labels, durations, and PNG names', () {
