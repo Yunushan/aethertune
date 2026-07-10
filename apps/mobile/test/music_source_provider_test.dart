@@ -28,12 +28,14 @@ void main() {
       networkDomains: <String>['api.example.test', 'media.example.test'],
       dataSent: <String>['search query', 'library id'],
       requiresUserCredentials: true,
+      cachesMetadata: true,
       cachesMedia: true,
       supportsDownloads: true,
     );
 
     expect(disclosure.usesNetwork, isTrue);
     expect(disclosure.isLocalOnly, isFalse);
+    expect(disclosure.cachesMetadata, isTrue);
     expect(
       disclosure.networkSummary,
       'api.example.test, media.example.test',

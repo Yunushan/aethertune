@@ -19,7 +19,7 @@ A provider must:
 2. Avoid DRM bypass and private API scraping.
 3. Declare supported capabilities.
 4. Clearly document network endpoints and data sent.
-5. Declare whether it reads local files, stores credentials, caches media, or supports downloads.
+5. Declare whether it reads local files, stores credentials, caches metadata/media, or supports downloads.
 6. Store tokens only through platform-secure storage.
 7. Allow the user to remove credentials and cache.
 8. Return provider-neutral `Track` objects.
@@ -36,6 +36,7 @@ Use `ProviderPrivacyDisclosure` to list:
 - data sent to those domains
 - whether credentials are required
 - whether local files are read
+- whether selected metadata is cached
 - whether media is cached
 - whether downloads are allowed
 
@@ -58,6 +59,10 @@ Use `ProviderPrivacyDisclosure` to list:
 ## Internet Archive foundation
 
 `InternetArchiveProvider` searches the public Internet Archive audio catalog, applies keyword, collection, subject, creator, and year filters through supported search query fields, reads item metadata, expands every playable audio file on an item into provider-neutral `Track` results, returns collection/subject/creator/year facets for dedicated Archive searches, declares cache/download permission for public files, and resolves the stable `/download/{identifier}/{filename}` URL for playback. The Sources tab can search/filter public archive audio, apply returned facet chips, play results, save tracks, queue/cache checksum-verified direct public files with HTTP Range retry resume, and quota-limit/trim/clear private cached media from Options. Dedicated collection detail pages and background download jobs are still separate roadmap work.
+
+## LRCLIB lyrics foundation
+
+`LrcLibLyricsProvider` implements the separate provider-neutral `LyricsProvider` contract against LRCLIB's documented, openly accessible `/api/search` endpoint. Search starts only from the lyrics editor, identifies AetherTune through the recommended User-Agent header, and discloses that track/artist/album-derived search terms are sent to `lrclib.net`. Results are parsed defensively, deduplicated, and ranked locally using title, artist, album, duration, and synced/plain availability. AetherTune stores only a result the user selects, together with LRCLIB's provider name, record ID, and source URI; manual edits clear that attribution. Offline mode disables the request. The API is documented as beta, currently returns at most 20 records, and has no pagination, API key, or registration requirement. AetherTune does not publish lyrics or bundle LRCLIB database content.
 
 ## Jellyfin foundation
 

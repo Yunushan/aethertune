@@ -2454,7 +2454,17 @@ class LibraryStore extends ChangeNotifier {
       ..writeln('Track: ${_shareTextValue(track.title, 'Untitled')}')
       ..writeln('Artist: ${_shareTextValue(track.artist, 'Unknown Artist')}')
       ..writeln('Album: ${_shareTextValue(track.album, 'Unknown Album')}')
-      ..writeln('Format: ${lyrics.hasSyncedLines ? 'Synced LRC' : 'Plain text'}')
+      ..writeln('Format: ${lyrics.hasSyncedLines ? 'Synced LRC' : 'Plain text'}');
+    if (lyrics.hasProviderAttribution) {
+      final recordSuffix = lyrics.sourceExternalId.trim().isEmpty
+          ? ''
+          : ' #${lyrics.sourceExternalId.trim()}';
+      buffer.writeln('Source: ${lyrics.sourceName.trim()}$recordSuffix');
+      if (lyrics.sourceUri != null) {
+        buffer.writeln('Source URL: ${lyrics.sourceUri}');
+      }
+    }
+    buffer
       ..writeln('Lines: ${visibleLines.length} of ${lines.length}')
       ..writeln();
     for (final line in visibleLines) {
@@ -3547,7 +3557,14 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setLyrics(String trackId, String plainText) async {
+  Future<void> setLyrics(
+    String trackId,
+    String plainText, {
+    String sourceId = 'manual',
+    String sourceName = '',
+    String sourceExternalId = '',
+    Uri? sourceUri,
+  }) async {
     if (!_tracks.any((track) => track.id == trackId)) {
       return;
     }
@@ -3561,18 +3578,36 @@ class LibraryStore extends ChangeNotifier {
     _lyricsByTrackId[trackId] = TrackLyrics(
       trackId: trackId,
       plainText: normalized,
+      sourceId: sourceId.trim().isEmpty ? 'manual' : sourceId.trim(),
+      sourceName: sourceName.trim(),
+      sourceExternalId: sourceExternalId.trim(),
+      sourceUri: sourceUri,
       updatedAt: _clock(),
     );
     await _save();
     notifyListeners();
   }
 
-  Future<void> setLyricsIfAbsent(String trackId, String plainText) async {
+  Future<void> setLyricsIfAbsent(
+    String trackId,
+    String plainText, {
+    String sourceId = 'manual',
+    String sourceName = '',
+    String sourceExternalId = '',
+    Uri? sourceUri,
+  }) async {
     if (_lyricsByTrackId.containsKey(trackId)) {
       return;
     }
 
-    await setLyrics(trackId, plainText);
+    await setLyrics(
+      trackId,
+      plainText,
+      sourceId: sourceId,
+      sourceName: sourceName,
+      sourceExternalId: sourceExternalId,
+      sourceUri: sourceUri,
+    );
   }
 
   Future<void> deleteLyrics(String trackId) async {

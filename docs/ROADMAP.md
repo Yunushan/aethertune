@@ -169,7 +169,10 @@
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview
 - [x] Playback-synced lyric highlighting
-- [ ] Lyrics provider/search/cache
+- [x] User-triggered LRCLIB plain/synced lyrics search
+- [x] Local lyrics match ranking and attributed cache persistence
+- [x] Lyrics provider loading, empty, error, retry, and instrumental states
+- [ ] Additional lyrics providers and native file-save export
 
 ## 1.0.0: Stable
 

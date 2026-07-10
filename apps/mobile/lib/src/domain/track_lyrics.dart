@@ -13,25 +13,47 @@ class TrackLyrics {
   TrackLyrics({
     required this.trackId,
     required this.plainText,
+    this.sourceId = 'manual',
+    this.sourceName = '',
+    this.sourceExternalId = '',
+    this.sourceUri,
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String trackId;
   final String plainText;
+  final String sourceId;
+  final String sourceName;
+  final String sourceExternalId;
+  final Uri? sourceUri;
   final DateTime updatedAt;
 
   bool get isEmpty => plainText.trim().isEmpty;
   List<SyncedLyricLine> get syncedLines => parseSyncedLyricLines(plainText);
   bool get hasSyncedLines => syncedLines.isNotEmpty;
+  bool get hasProviderAttribution =>
+      sourceId.trim().isNotEmpty &&
+      sourceId != 'manual' &&
+      sourceName.trim().isNotEmpty;
+  String? get attributionLabel =>
+      hasProviderAttribution ? sourceName.trim() : null;
 
   TrackLyrics copyWith({
     String? trackId,
     String? plainText,
+    String? sourceId,
+    String? sourceName,
+    String? sourceExternalId,
+    Uri? sourceUri,
     DateTime? updatedAt,
   }) {
     return TrackLyrics(
       trackId: trackId ?? this.trackId,
       plainText: plainText ?? this.plainText,
+      sourceId: sourceId ?? this.sourceId,
+      sourceName: sourceName ?? this.sourceName,
+      sourceExternalId: sourceExternalId ?? this.sourceExternalId,
+      sourceUri: sourceUri ?? this.sourceUri,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -40,6 +62,10 @@ class TrackLyrics {
     return <String, Object?>{
       'trackId': trackId,
       'plainText': plainText,
+      'sourceId': sourceId,
+      'sourceName': sourceName,
+      'sourceExternalId': sourceExternalId,
+      'sourceUri': sourceUri?.toString(),
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
@@ -48,10 +74,21 @@ class TrackLyrics {
     return TrackLyrics(
       trackId: json['trackId'] as String,
       plainText: json['plainText'] as String? ?? '',
+      sourceId: json['sourceId'] as String? ?? 'manual',
+      sourceName: json['sourceName'] as String? ?? '',
+      sourceExternalId: json['sourceExternalId'] as String? ?? '',
+      sourceUri: _parseLyricsSourceUri(json['sourceUri'] as String?),
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
+}
+
+Uri? _parseLyricsSourceUri(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return null;
+  }
+  return Uri.tryParse(value);
 }
 
 List<SyncedLyricLine> parseSyncedLyricLines(String input) {

@@ -302,7 +302,14 @@ void main() {
     );
     await store.setLyrics('keep', 'old lyrics');
     now = DateTime.utc(2026, 1, 4, 12, 1);
-    await store.setLyrics('duplicate', 'new lyrics');
+    await store.setLyrics(
+      'duplicate',
+      'new lyrics',
+      sourceId: 'lrclib',
+      sourceName: 'LRCLIB',
+      sourceExternalId: '42',
+      sourceUri: Uri.parse('https://lrclib.net/api/get/42'),
+    );
     await store.recordPlayback('keep');
     now = DateTime.utc(2026, 1, 4, 12, 2);
     await store.recordPlayback('duplicate');
@@ -334,6 +341,8 @@ void main() {
       isTrue,
     );
     expect(store.lyricsForTrack('keep')!.plainText, 'new lyrics');
+    expect(store.lyricsForTrack('keep')!.sourceName, 'LRCLIB');
+    expect(store.lyricsForTrack('keep')!.sourceExternalId, '42');
     expect(store.lyricsForTrack('duplicate'), isNull);
     expect(
       store.playbackProgressForTrack('keep')!.position,
@@ -354,6 +363,7 @@ void main() {
       'other',
     ]);
     expect(secondStore.lyricsForTrack('keep')!.plainText, 'new lyrics');
+    expect(secondStore.lyricsForTrack('keep')!.sourceName, 'LRCLIB');
     expect(secondStore.playCountForTrack('keep'), 2);
   });
 
@@ -673,6 +683,41 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.lyricsForTrack('1')!.plainText, 'saved lyrics');
+  });
+
+  test('persists and shares selected lyrics provider attribution', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 7);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[
+      _track('1', title: 'Signal', artist: 'Mira', album: 'Dawn'),
+    ]);
+    await firstStore.setLyrics(
+      '1',
+      '[00:01.00]First line',
+      sourceId: 'lrclib',
+      sourceName: 'LRCLIB',
+      sourceExternalId: '42',
+      sourceUri: Uri.parse('https://lrclib.net/api/get/42'),
+    );
+
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+    final restored = secondStore.lyricsForTrack('1')!;
+    final shareText = secondStore.shareLyricsText('1')!;
+    final backup = secondStore.exportBackupJson();
+    final backupStore = LibraryStore(clock: clock);
+    await backupStore.load();
+    await backupStore.restoreBackupJson(backup);
+
+    expect(restored.sourceId, 'lrclib');
+    expect(restored.sourceName, 'LRCLIB');
+    expect(restored.sourceExternalId, '42');
+    expect(restored.sourceUri, Uri.parse('https://lrclib.net/api/get/42'));
+    expect(shareText, contains('Source: LRCLIB #42'));
+    expect(shareText, contains('Source URL: https://lrclib.net/api/get/42'));
+    expect(backupStore.lyricsForTrack('1')!.sourceName, 'LRCLIB');
+    expect(backupStore.lyricsForTrack('1')!.sourceExternalId, '42');
   });
 
   test('builds limited lyrics share text from plain and synced lyrics', () async {

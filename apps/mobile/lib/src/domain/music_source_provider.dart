@@ -97,6 +97,7 @@ final class ProviderPrivacyDisclosure {
     this.dataSent = const <String>[],
     this.requiresUserCredentials = false,
     this.readsLocalFiles = false,
+    this.cachesMetadata = false,
     this.cachesMedia = false,
     this.supportsDownloads = false,
   });
@@ -105,6 +106,7 @@ final class ProviderPrivacyDisclosure {
   final List<String> dataSent;
   final bool requiresUserCredentials;
   final bool readsLocalFiles;
+  final bool cachesMetadata;
   final bool cachesMedia;
   final bool supportsDownloads;
 

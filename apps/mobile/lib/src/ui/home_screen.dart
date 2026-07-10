@@ -15,6 +15,7 @@ import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
+import '../data/lrclib_lyrics_provider.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
@@ -39,6 +40,7 @@ import 'responsive_layout.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/listening_stats_bar_chart.dart';
+import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
 
@@ -117,6 +119,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   final _radioClickProvider = RadioBrowserProvider();
+  final _lyricsProvider = LrcLibLyricsProvider();
   int _tabIndex = 0;
   bool _favoritesOnly = false;
   bool _offlineLibraryOnly = false;
@@ -418,25 +421,32 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showLyricsEditor(BuildContext context, Track track) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
-    final existingLyrics = library.lyricsForTrack(track.id)?.plainText ?? '';
-    final plainText = await _promptForLyrics(
+    final existingLyrics = library.lyricsForTrack(track.id);
+    final result = await _promptForLyrics(
       context,
       track: track,
       library: library,
-      initialValue: existingLyrics,
+      initialLyrics: existingLyrics,
     );
 
-    if (!context.mounted || plainText == null) {
+    if (!context.mounted || result == null) {
       return;
     }
 
-    await library.setLyrics(track.id, plainText);
+    await library.setLyrics(
+      track.id,
+      result.plainText,
+      sourceId: result.sourceId,
+      sourceName: result.sourceName,
+      sourceExternalId: result.sourceExternalId,
+      sourceUri: result.sourceUri,
+    );
 
     if (!context.mounted) {
       return;
     }
 
-    final saved = plainText.trim().isNotEmpty;
+    final saved = result.plainText.trim().isNotEmpty;
     messenger.showSnackBar(
       SnackBar(
         content: Text(
@@ -446,16 +456,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<String?> _promptForLyrics(
+  Future<_LyricsEditorResult?> _promptForLyrics(
     BuildContext context, {
     required Track track,
     required LibraryStore library,
-    required String initialValue,
+    required TrackLyrics? initialLyrics,
   }) async {
+    final initialValue = initialLyrics?.plainText ?? '';
     final controller = TextEditingController(text: initialValue);
+    var sourceId = initialLyrics?.sourceId ?? 'manual';
+    var sourceName = initialLyrics?.sourceName ?? '';
+    var sourceExternalId = initialLyrics?.sourceExternalId ?? '';
+    var sourceUri = initialLyrics?.sourceUri;
 
     try {
-      return showDialog<String>(
+      return showDialog<_LyricsEditorResult>(
         context: context,
         builder: (dialogContext) {
           return StatefulBuilder(
@@ -480,8 +495,31 @@ class _HomeScreenState extends State<HomeScreen> {
                           keyboardType: TextInputType.multiline,
                           minLines: 8,
                           maxLines: 14,
-                          onChanged: (_) => setDialogState(() {}),
+                          onChanged: (_) {
+                            sourceId = 'manual';
+                            sourceName = '';
+                            sourceExternalId = '';
+                            sourceUri = null;
+                            setDialogState(() {});
+                          },
                         ),
+                        if (sourceName.trim().isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: <Widget>[
+                              const Icon(Icons.verified_outlined, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Source: $sourceName'
+                                  '${sourceExternalId.trim().isEmpty ? '' : ' #$sourceExternalId'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         if (syncedLines.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           _SyncedLyricsPreview(lines: syncedLines),
@@ -491,6 +529,38 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 actions: <Widget>[
+                  Tooltip(
+                    message: library.offlineModeEnabled
+                        ? 'Online lyrics search is unavailable in offline mode'
+                        : 'Search ${_lyricsProvider.name}',
+                    child: TextButton.icon(
+                      onPressed: library.offlineModeEnabled
+                          ? null
+                          : () async {
+                              final selected = await showLyricsSearchSheet(
+                                dialogContext,
+                                track: track,
+                                provider: _lyricsProvider,
+                              );
+                              final lyrics = selected?.preferredLyrics;
+                              if (!dialogContext.mounted || lyrics == null) {
+                                return;
+                              }
+
+                              controller.text = lyrics;
+                              controller.selection = TextSelection.collapsed(
+                                offset: controller.text.length,
+                              );
+                              sourceId = selected!.providerId;
+                              sourceName = selected.providerName;
+                              sourceExternalId = selected.externalId;
+                              sourceUri = selected.sourceUri;
+                              setDialogState(() {});
+                            },
+                      icon: const Icon(Icons.travel_explore),
+                      label: const Text('Search online'),
+                    ),
+                  ),
                   TextButton.icon(
                     onPressed: () async {
                       final imported = await _importLyricsDocument(context);
@@ -502,6 +572,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       controller.selection = TextSelection.collapsed(
                         offset: controller.text.length,
                       );
+                      sourceId = 'manual';
+                      sourceName = '';
+                      sourceExternalId = '';
+                      sourceUri = null;
                       setDialogState(() {});
                     },
                     icon: const Icon(Icons.upload_file_outlined),
@@ -532,7 +606,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   if (initialValue.isNotEmpty)
                     TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(''),
+                      onPressed: () => Navigator.of(dialogContext).pop(
+                        const _LyricsEditorResult(plainText: ''),
+                      ),
                       child: const Text('Delete'),
                     ),
                   TextButton(
@@ -541,7 +617,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   FilledButton(
                     onPressed: () {
-                      Navigator.of(dialogContext).pop(controller.text);
+                      Navigator.of(dialogContext).pop(
+                        _LyricsEditorResult(
+                          plainText: controller.text,
+                          sourceId: sourceId,
+                          sourceName: sourceName,
+                          sourceExternalId: sourceExternalId,
+                          sourceUri: sourceUri,
+                        ),
+                      );
                     },
                     child: const Text('Save'),
                   ),
@@ -1180,6 +1264,22 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
   }
 }
 
+class _LyricsEditorResult {
+  const _LyricsEditorResult({
+    required this.plainText,
+    this.sourceId = 'manual',
+    this.sourceName = '',
+    this.sourceExternalId = '',
+    this.sourceUri,
+  });
+
+  final String plainText;
+  final String sourceId;
+  final String sourceName;
+  final String sourceExternalId;
+  final Uri? sourceUri;
+}
+
 class _SyncedLyricsPreview extends StatelessWidget {
   const _SyncedLyricsPreview({required this.lines});
 
@@ -1258,6 +1358,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
       return _PlainNowPlayingLyrics(
         track: track,
         lyrics: currentLyrics.plainText,
+        sourceLabel: currentLyrics.attributionLabel,
         onEdit: onEdit,
         onShare: onShare,
       );
@@ -1266,6 +1367,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
     return _SyncedNowPlayingLyrics(
       track: track,
       lines: syncedLines,
+      sourceLabel: currentLyrics.attributionLabel,
       player: player,
       onEdit: onEdit,
       onShare: onShare,
@@ -1309,12 +1411,14 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
   const _PlainNowPlayingLyrics({
     required this.track,
     required this.lyrics,
+    required this.sourceLabel,
     required this.onEdit,
     required this.onShare,
   });
 
   final Track track;
   final String lyrics;
+  final String? sourceLabel;
   final VoidCallback onEdit;
   final VoidCallback onShare;
 
@@ -1332,7 +1436,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
             children: <Widget>[
               _NowPlayingLyricsHeader(
                 track: track,
-                subtitle: 'Plain lyrics',
+                subtitle: _lyricsSubtitle('Plain lyrics', sourceLabel),
                 onEdit: onEdit,
                 onShare: onShare,
               ),
@@ -1353,6 +1457,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
   const _SyncedNowPlayingLyrics({
     required this.track,
     required this.lines,
+    required this.sourceLabel,
     required this.player,
     required this.onEdit,
     required this.onShare,
@@ -1360,6 +1465,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
 
   final Track track;
   final List<SyncedLyricLine> lines;
+  final String? sourceLabel;
   final PlayerController player;
   final VoidCallback onEdit;
   final VoidCallback onShare;
@@ -1400,9 +1506,12 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                   if (index == 0) {
                     return _NowPlayingLyricsHeader(
                       track: widget.track,
-                      subtitle: activeIndex == -1
-                          ? 'Synced lyrics'
-                          : 'Line ${activeIndex + 1} of ${widget.lines.length}',
+                      subtitle: _lyricsSubtitle(
+                        activeIndex == -1
+                            ? 'Synced lyrics'
+                            : 'Line ${activeIndex + 1} of ${widget.lines.length}',
+                        widget.sourceLabel,
+                      ),
                       onEdit: widget.onEdit,
                       onShare: widget.onShare,
                     );
@@ -1484,6 +1593,11 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+String _lyricsSubtitle(String base, String? sourceLabel) {
+  final source = sourceLabel?.trim() ?? '';
+  return source.isEmpty ? base : '$base - $source';
 }
 
 class _SyncedNowPlayingLyricLine extends StatelessWidget {
@@ -7775,6 +7889,9 @@ String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
   }
   if (disclosure.readsLocalFiles) {
     parts.add('Reads selected local files');
+  }
+  if (disclosure.cachesMetadata) {
+    parts.add('Can cache metadata');
   }
   if (disclosure.cachesMedia) {
     parts.add('Can cache media');

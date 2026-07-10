@@ -1,3 +1,5 @@
 AetherTune
 
 This project is original MIT-licensed scaffold code generated for a free/open-source music application. It does not include proprietary app code, copyrighted media assets, private API credentials, or DRM circumvention code.
+
+The optional LRCLIB adapter uses LRCLIB's documented public search API at runtime. No LRCLIB lyrics database or lyrics content is bundled with AetherTune. A user-selected result is stored locally with provider attribution. Third-party lyrics remain the property of their respective rightsholders/providers and may be subject to separate terms and local law.

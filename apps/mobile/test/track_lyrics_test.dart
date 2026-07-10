@@ -70,4 +70,29 @@ Plain lyric line
     expect(lyrics.hasSyncedLines, isFalse);
     expect(lyrics.syncedLines, isEmpty);
   });
+
+  test('serializes provider attribution and reads legacy manual lyrics', () {
+    final lyrics = TrackLyrics(
+      trackId: 'track-1',
+      plainText: '[00:01.00]First line',
+      sourceId: 'lrclib',
+      sourceName: 'LRCLIB',
+      sourceExternalId: '42',
+      sourceUri: Uri.parse('https://lrclib.net/api/get/42'),
+      updatedAt: DateTime.utc(2026, 7, 10),
+    );
+
+    final restored = TrackLyrics.fromJson(lyrics.toJson());
+    final legacy = TrackLyrics.fromJson(<String, Object?>{
+      'trackId': 'legacy',
+      'plainText': 'manual lyrics',
+    });
+
+    expect(restored.hasProviderAttribution, isTrue);
+    expect(restored.attributionLabel, 'LRCLIB');
+    expect(restored.sourceExternalId, '42');
+    expect(restored.sourceUri, Uri.parse('https://lrclib.net/api/get/42'));
+    expect(legacy.sourceId, 'manual');
+    expect(legacy.hasProviderAttribution, isFalse);
+  });
 }

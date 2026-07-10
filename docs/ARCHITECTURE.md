@@ -22,11 +22,12 @@ State layer
   LibraryStore, PlayerController
 
 Domain layer
-  Track, MusicSourceProvider, OfflineMediaPolicy
+  Track, MusicSourceProvider, LyricsProvider, OfflineMediaPolicy
 
 Data/provider layer
   Local file import, LocalFolderScanner, DemoSourceProvider,
   PodcastRssProvider, RadioBrowserProvider, InternetArchiveProvider,
+  LrcLibLyricsProvider,
   OfflineCacheManager, future legal provider adapters
 
 Platform layer
@@ -62,6 +63,14 @@ abstract interface class MusicSourceProvider {
   Future<Uri?> resolveStream(Track track);
 }
 ```
+
+Lyrics adapters implement the smaller `LyricsProvider` contract and return
+provider-neutral `LyricsSearchResult` records. `LrcLibLyricsProvider` contacts
+the documented LRCLIB `/api/search` endpoint only after a user opens online
+lyrics search, sends the visible search terms with an identifying User-Agent,
+and locally ranks plain/synced candidates against track metadata and duration.
+The selected text is persisted in `TrackLyrics` with provider name, provider
+record ID, and source URI; manual edits clear provider attribution.
 
 Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage plus private-cache usage/manual eviction and automatic post-cache pressure eviction to persisted app-level and provider-level cache limits; background jobs and resumable downloads belong behind the same boundary later.
 
