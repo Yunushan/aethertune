@@ -21,6 +21,10 @@ void main() {
   testWidgets('full player exposes playback, queue, and library actions', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.reset);
+
     final engine = _FakePlaybackAudioEngine();
     final player = PlayerController(audioEngine: engine);
     final library = LibraryStore();
