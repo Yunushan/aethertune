@@ -136,7 +136,7 @@ List<LyricsSearchResult> parseLrcLibSearchResults(
         syncedLyrics: _jsonString(record['syncedLyrics']),
         sourceUri: baseUri.replace(
           path: _joinUriPath(baseUri.path, '/api/get/$id'),
-          query: '',
+          queryParameters: const <String, String>{},
         ),
       ),
     );
