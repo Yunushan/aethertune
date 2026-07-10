@@ -68,6 +68,8 @@ def fit_text(
     text_font: ImageFont.ImageFont,
     max_width: int,
     line_height: int,
+    *,
+    max_lines: int = 3,
 ) -> None:
     words = value.split()
     lines: list[str] = []
@@ -85,7 +87,7 @@ def fit_text(
         lines.append(current)
 
     x, y = xy
-    for line in lines[:3]:
+    for line in lines[:max_lines]:
         text(draw, (x, y), line, fill, text_font)
         y += line_height
 
@@ -168,26 +170,26 @@ def draw_desktop(
         draw.ellipse((dot_x, y + 16, dot_x + 10, y + 26), fill=color)
     text(draw, (x + 112, y + 13), f"AetherTune {title_value}", "#f8fafc", F_SMALL)
 
-    draw.rounded_rectangle((x + 26, y + 72, x + 190, y + h - 52), radius=18, fill="#111827" if not dark else "#020617")
+    draw.rounded_rectangle((x + 26, y + 62, x + 190, y + h - 28), radius=18, fill="#111827" if not dark else "#020617")
     for i, label in enumerate(("Library", "Sources", "Queue", "Options")):
-        chip(draw, (x + 46, y + 102 + i * 54, x + 170, y + 138 + i * 54), label, "#1e293b", "#dbeafe")
+        chip(draw, (x + 46, y + 82 + i * 48, x + 170, y + 116 + i * 48), label, "#1e293b", "#dbeafe")
 
-    draw.rounded_rectangle((x + 222, y + 82, x + w - 40, y + 132), radius=18, fill="#ffffff" if not dark else "#1e293b")
-    text(draw, (x + 246, y + 98), "Search open providers and local music", muted, F_SMALL)
-    draw.rounded_rectangle((x + w - 150, y + 94, x + w - 64, y + 120), radius=13, fill=accent)
-    text(draw, (x + w - 107, y + 106), "Play", "#ffffff", F_TINY, anchor="mm")
+    draw.rounded_rectangle((x + 222, y + 62, x + w - 40, y + 108), radius=16, fill="#ffffff" if not dark else "#1e293b")
+    text(draw, (x + 246, y + 77), "Search open providers and local music", muted, F_SMALL)
+    draw.rounded_rectangle((x + w - 150, y + 72, x + w - 64, y + 98), radius=13, fill=accent)
+    text(draw, (x + w - 107, y + 84), "Play", "#ffffff", F_TINY, anchor="mm")
 
     for i, label in enumerate(labels):
-        top = y + 164 + i * 72
-        draw.rounded_rectangle((x + 222, top, x + w - 40, top + 56), radius=18, fill="#ffffff" if not dark else "#1e293b", outline="#dbeafe")
-        draw.rounded_rectangle((x + 244, top + 13, x + 274, top + 43), radius=9, fill=accent)
-        text(draw, (x + 292, top + 16), label, fg, F_SMALL)
-        text(draw, (x + 292, top + 36), "cross-platform Flutter surface", muted, font(12))
+        top = y + 122 + i * 48
+        draw.rounded_rectangle((x + 222, top, x + w - 40, top + 42), radius=14, fill="#ffffff" if not dark else "#1e293b", outline="#dbeafe")
+        draw.rounded_rectangle((x + 244, top + 8, x + 270, top + 34), radius=8, fill=accent)
+        text(draw, (x + 286, top + 6), label, fg, F_SMALL)
+        text(draw, (x + 286, top + 25), "cross-platform Flutter surface", muted, font(11))
 
-    draw.rounded_rectangle((x + 222, y + h - 96, x + w - 40, y + h - 42), radius=20, fill="#020617" if not dark else "#111827")
-    text(draw, (x + 248, y + h - 76), "Mini player", "#f8fafc", F_SMALL)
-    draw.rounded_rectangle((x + w - 270, y + h - 70, x + w - 80, y + h - 62), radius=4, fill="#334155")
-    draw.rounded_rectangle((x + w - 270, y + h - 70, x + w - 168, y + h - 62), radius=4, fill=accent)
+    draw.rounded_rectangle((x + 222, y + h - 66, x + w - 40, y + h - 28), radius=16, fill="#020617" if not dark else "#111827")
+    text(draw, (x + 248, y + h - 54), "Mini player", "#f8fafc", F_SMALL)
+    draw.rounded_rectangle((x + w - 270, y + h - 48, x + w - 80, y + h - 40), radius=4, fill="#334155")
+    draw.rounded_rectangle((x + w - 270, y + h - 48, x + w - 168, y + h - 40), radius=4, fill=accent)
 
 
 def overview() -> Image.Image:
@@ -225,9 +227,18 @@ def mobile() -> Image.Image:
     image, draw = base("Mobile-first player", "Android and iOS previews for library, sources, lyrics, and queues.")
     draw_phone(draw, 94, 132, 260, 362, "Android", "#22c55e", ("Folder imports", "Provider search", "Start radio"))
     draw_phone(draw, 606, 132, 260, 362, "iOS", "#ec4899", ("Playlists", "Synced lyrics", "Privacy"), dark=False)
-    card(draw, (382, 178, 578, 448), "#ffffff")
-    text(draw, (414, 218), "One Flutter client", "#0f172a", F_H2)
-    fit_text(draw, (414, 262), "Touch-first browsing, local playback, smart playlists, and offline-aware source actions.", "#475569", F_SMALL, 130, 22)
+    card(draw, (374, 178, 586, 448), "#ffffff")
+    text(draw, (398, 218), "Shared Flutter UI", "#0f172a", font(20, bold=True))
+    fit_text(
+        draw,
+        (398, 258),
+        "Touch-first browsing, local playback, smart playlists, lyrics, queues, and offline-aware sources.",
+        "#475569",
+        F_SMALL,
+        164,
+        22,
+        max_lines=7,
+    )
     return image
 
 
