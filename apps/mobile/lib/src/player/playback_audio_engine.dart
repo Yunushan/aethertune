@@ -5,6 +5,7 @@ import '../domain/track.dart';
 abstract interface class PlaybackAudioEngine {
   Stream<Object?> get stateChanges;
   Stream<Duration?> get durationStream;
+  Stream<Duration> get positionStream;
   Stream<ProcessingState> get processingStateStream;
   Stream<int?> get currentIndexStream;
 
@@ -45,6 +46,9 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
 
   @override
   Stream<Duration?> get durationStream => _player.durationStream;
+
+  @override
+  Stream<Duration> get positionStream => _player.positionStream;
 
   @override
   Stream<ProcessingState> get processingStateStream =>

@@ -168,6 +168,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
   final _durationController =
       StreamController<Duration?>.broadcast(sync: true);
+  final _positionController = StreamController<Duration>.broadcast(sync: true);
   final _processingController =
       StreamController<ProcessingState>.broadcast(sync: true);
   final _indexController = StreamController<int?>.broadcast(sync: true);
@@ -191,6 +192,9 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   Stream<Duration?> get durationStream => _durationController.stream;
+
+  @override
+  Stream<Duration> get positionStream => _positionController.stream;
 
   @override
   Stream<ProcessingState> get processingStateStream =>
@@ -238,6 +242,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   void emitAutomaticIndex(int index) {
     currentIndex = index;
     positionValue = Duration.zero;
+    _positionController.add(positionValue);
     _indexController.add(index);
   }
 
@@ -267,6 +272,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> seek(Duration position, {int? index}) async {
     positionValue = position;
+    _positionController.add(positionValue);
     if (index != null) {
       currentIndex = index;
       _indexController.add(index);
@@ -304,6 +310,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Future<void> dispose() async {
     await _stateController.close();
     await _durationController.close();
+    await _positionController.close();
     await _processingController.close();
     await _indexController.close();
   }
