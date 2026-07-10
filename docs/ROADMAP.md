@@ -71,7 +71,8 @@
 - [x] Local stats recap
 - [x] Stats date ranges and export
 - [x] Yearly/monthly calendar recap cards
-- [ ] Richer recap visualizations and share cards
+- [x] Saveable monthly/yearly PNG recap cards
+- [ ] Richer recap charts and saved visual themes
 - [x] Recently added view
 - [x] Local search suggestions
 - [x] Persisted search query history

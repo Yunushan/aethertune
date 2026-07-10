@@ -36,6 +36,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'responsive_layout.dart';
 import 'theme_colors.dart';
+import 'widgets/listening_recap_card.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
 
@@ -4591,12 +4592,14 @@ class _HistoryTabState extends State<_HistoryTab> {
             title: 'Monthly recaps',
             icon: Icons.calendar_month_outlined,
             recaps: monthlyRecaps,
+            onShare: (recap) => _showListeningRecapPreview(context, recap),
           ),
           const SizedBox(height: 12),
           _ListeningRecapSection(
             title: 'Yearly recaps',
             icon: Icons.event_note_outlined,
             recaps: yearlyRecaps,
+            onShare: (recap) => _showListeningRecapPreview(context, recap),
           ),
           const SizedBox(height: 12),
           _LibraryStatsTrackSection(stats: stats),
@@ -4755,6 +4758,84 @@ class _HistoryTabState extends State<_HistoryTab> {
         );
       },
     );
+  }
+
+  Future<void> _showListeningRecapPreview(
+    BuildContext context,
+    LibraryListeningRecap recap,
+  ) async {
+    final boundaryKey = GlobalKey();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('${listeningRecapLabel(recap)} recap'),
+          content: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: RepaintBoundary(
+              key: boundaryKey,
+              child: ListeningRecapCard(recap: recap),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+            FilledButton.icon(
+              onPressed: () => _saveListeningRecapPng(
+                dialogContext,
+                recap: recap,
+                boundaryKey: boundaryKey,
+              ),
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('Save PNG'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _saveListeningRecapPng(
+    BuildContext context, {
+    required LibraryListeningRecap recap,
+    required GlobalKey boundaryKey,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final bytes = await captureListeningRecapPng(boundaryKey);
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save listening recap image',
+        fileName: listeningRecapPngFileName(recap),
+        type: FileType.custom,
+        allowedExtensions: const <String>['png'],
+        bytes: bytes,
+      );
+      if (outputPath == null || outputPath.isEmpty) {
+        return;
+      }
+
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Saved ${listeningRecapPngFileName(recap)}.')),
+      );
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save recap image: $error')),
+      );
+    }
   }
 }
 
@@ -4953,11 +5034,13 @@ class _ListeningRecapSection extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.recaps,
+    required this.onShare,
   });
 
   final String title;
   final IconData icon;
   final List<LibraryListeningRecap> recaps;
+  final ValueChanged<LibraryListeningRecap> onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -4989,11 +5072,16 @@ class _ListeningRecapSection extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                _listeningRecapLabel(recap),
+                                listeningRecapLabel(recap),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
+                            ),
+                            IconButton(
+                              tooltip: 'Save recap image',
+                              onPressed: () => onShare(recap),
+                              icon: const Icon(Icons.image_outlined),
                             ),
                           ],
                         ),
@@ -5020,15 +5108,6 @@ class _ListeningRecapSection extends StatelessWidget {
   }
 }
 
-String _listeningRecapLabel(LibraryListeningRecap recap) {
-  switch (recap.period) {
-    case LibraryRecapPeriod.month:
-      return '${_monthName(recap.start.month)} ${recap.start.year}';
-    case LibraryRecapPeriod.year:
-      return recap.start.year.toString();
-  }
-}
-
 String _listeningRecapSummary(LibraryStatsSummary stats) {
   final parts = <String>[
     '${stats.playbackCount} play(s)',
@@ -5043,28 +5122,6 @@ String _listeningRecapSummary(LibraryStatsSummary stats) {
   return parts.join(' · ');
 }
 
-String _monthName(int month) {
-  const names = <String>[
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
-  if (month < 1 || month > names.length) {
-    return 'Unknown month';
-  }
-
-  return names[month - 1];
-}
 
 class _StatsSection extends StatelessWidget {
   const _StatsSection({
