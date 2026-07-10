@@ -100,7 +100,10 @@ void main() {
 
     expect(gateway.fetchCalls, 0);
     expect(find.textContaining('Confirm insecure HTTP'), findsOneWidget);
-    expect(find.text('lan-private-token'), findsNothing);
+    final errorText = tester.widget<Text>(
+      find.byKey(const Key('library-sync-config-error')),
+    );
+    expect(errorText.data, isNot(contains('lan-private-token')));
 
     await tester.tap(find.byKey(const Key('library-sync-insecure-http')));
     await tester.pump();
@@ -148,7 +151,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Library changed on server'), findsOneWidget);
-    expect(find.textContaining('Linux desktop'), findsOneWidget);
+    expect(
+      find.text(
+        'Revision 4 was uploaded by Linux desktop. Choose which library to keep.',
+      ),
+      findsOneWidget,
+    );
     expect(gateway.pushedBaseRevisions, <int>[0]);
 
     await tester.tap(find.byKey(const Key('library-sync-use-local')));
