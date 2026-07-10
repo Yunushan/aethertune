@@ -72,6 +72,7 @@ void main() {
     await store.testAndSave(_account(), 'old-token');
 
     activeGateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
       fetchError: StateError('Rejected replacement-token.'),
     );
     await expectLater(
