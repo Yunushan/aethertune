@@ -147,6 +147,7 @@
 - [x] Jellyfin credential-safe in-app authenticated artwork
 - [x] Jellyfin private local artwork bridge for notification/lock-screen media metadata
 - [x] Jellyfin remote playlist create/edit/delete/reorder
+- [x] Jellyfin test-before-replace API-key rotation with rollback and queue/cache invalidation
 - [x] Navidrome/Subsonic provider foundation
 - [x] Navidrome/Subsonic settings UI and secure credential storage
 - [x] Navidrome/Subsonic artist, album, track, and playlist browse pages
@@ -154,6 +155,7 @@
 - [x] Navidrome/Subsonic credential-safe in-app authenticated artwork
 - [x] Navidrome/Subsonic private local artwork bridge for notification/lock-screen media metadata
 - [x] Navidrome/Subsonic remote playlist create/edit/delete/reorder
+- [x] Navidrome/Subsonic test-before-replace password rotation with rollback and queue/cache invalidation
 
 ## 0.6.x: Offline and lyrics
 
