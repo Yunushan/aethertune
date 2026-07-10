@@ -134,10 +134,7 @@ List<LyricsSearchResult> parseLrcLibSearchResults(
         instrumental: record['instrumental'] as bool? ?? false,
         plainLyrics: _jsonString(record['plainLyrics']),
         syncedLyrics: _jsonString(record['syncedLyrics']),
-        sourceUri: baseUri.replace(
-          path: _joinUriPath(baseUri.path, '/api/get/$id'),
-          queryParameters: const <String, String>{},
-        ),
+        sourceUri: _lyricsRecordUri(baseUri, id),
       ),
     );
   }
@@ -254,6 +251,16 @@ String _joinUriPath(String basePath, String childPath) {
       : basePath;
   final right = childPath.startsWith('/') ? childPath : '/$childPath';
   return '$left$right';
+}
+
+Uri _lyricsRecordUri(Uri baseUri, String id) {
+  return Uri(
+    scheme: baseUri.scheme,
+    userInfo: baseUri.userInfo,
+    host: baseUri.host,
+    port: baseUri.hasPort ? baseUri.port : null,
+    path: _joinUriPath(baseUri.path, '/api/get/$id'),
+  );
 }
 
 Future<String> _loadLrcLibResponse(
