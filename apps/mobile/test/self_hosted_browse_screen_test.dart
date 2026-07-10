@@ -161,6 +161,38 @@ void main() {
       hasLength(2),
     );
   });
+
+  testWidgets('failed collection details can be retried', (tester) async {
+    final provider = _FakeCatalogProvider(albumFailuresRemaining: 1);
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Blue Rooms'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Album detail request failed'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aether Session'), findsOneWidget);
+    expect(
+      provider.loadCalls.where(
+        (collection) => collection.kind == MusicCatalogCollectionKind.album,
+      ),
+      hasLength(2),
+    );
+  });
 }
 
 Widget _testApp({
@@ -178,9 +210,13 @@ Widget _testApp({
 }
 
 class _FakeCatalogProvider implements MusicCatalogProvider {
-  _FakeCatalogProvider({this.artistFailuresRemaining = 0});
+  _FakeCatalogProvider({
+    this.artistFailuresRemaining = 0,
+    this.albumFailuresRemaining = 0,
+  });
 
   int artistFailuresRemaining;
+  int albumFailuresRemaining;
   final List<MusicCatalogCollectionKind> browseCalls =
       <MusicCatalogCollectionKind>[];
   final List<MusicCatalogCollection> loadCalls = <MusicCatalogCollection>[];
@@ -265,6 +301,11 @@ class _FakeCatalogProvider implements MusicCatalogProvider {
     MusicCatalogCollection collection,
   ) async {
     loadCalls.add(collection);
+    if (collection.kind == MusicCatalogCollectionKind.album &&
+        albumFailuresRemaining > 0) {
+      albumFailuresRemaining -= 1;
+      throw StateError('Album detail request failed.');
+    }
     if (collection.kind == MusicCatalogCollectionKind.artist) {
       return MusicCatalogDetail(
         collection: collection,

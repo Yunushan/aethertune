@@ -77,7 +77,9 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
 
   Future<void> _refresh(MusicCatalogCollectionKind kind) async {
     final request = widget.provider.browseCollections(kind);
-    setState(() => _requests[kind] = request);
+    setState(() {
+      _requests[kind] = request;
+    });
     try {
       await request;
     } on Object {
@@ -458,7 +460,9 @@ class _SelfHostedCollectionScreenState
 
   Future<void> _reload() async {
     final request = widget.provider.loadCollection(widget.collection);
-    setState(() => _request = request);
+    setState(() {
+      _request = request;
+    });
     try {
       await request;
     } on Object {
