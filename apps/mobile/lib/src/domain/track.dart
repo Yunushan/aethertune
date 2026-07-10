@@ -13,6 +13,7 @@ class Track {
     this.genre = 'Unknown Genre',
     this.duration = Duration.zero,
     this.artworkUri,
+    this.artworkUriIsEphemeral = false,
     this.providerArtworkId,
     this.providerArtworkVersion,
     this.localPath,
@@ -32,6 +33,7 @@ class Track {
   final String genre;
   final Duration duration;
   final Uri? artworkUri;
+  final bool artworkUriIsEphemeral;
   final String? providerArtworkId;
   final String? providerArtworkVersion;
   final String? localPath;
@@ -55,6 +57,7 @@ class Track {
     String? genre,
     Duration? duration,
     Uri? artworkUri,
+    bool? artworkUriIsEphemeral,
     String? providerArtworkId,
     String? providerArtworkVersion,
     String? localPath,
@@ -74,6 +77,8 @@ class Track {
       genre: genre ?? this.genre,
       duration: duration ?? this.duration,
       artworkUri: artworkUri ?? this.artworkUri,
+      artworkUriIsEphemeral:
+          artworkUriIsEphemeral ?? this.artworkUriIsEphemeral,
       providerArtworkId: providerArtworkId ?? this.providerArtworkId,
       providerArtworkVersion:
           providerArtworkVersion ?? this.providerArtworkVersion,
@@ -97,7 +102,7 @@ class Track {
       'album': album,
       'genre': genre,
       'durationMs': duration.inMilliseconds,
-      'artworkUri': artworkUri?.toString(),
+      'artworkUri': artworkUriIsEphemeral ? null : artworkUri?.toString(),
       'providerArtworkId': providerArtworkId,
       'providerArtworkVersion': providerArtworkVersion,
       'localPath': localPath,

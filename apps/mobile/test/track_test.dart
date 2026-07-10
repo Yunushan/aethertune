@@ -89,6 +89,28 @@ void main() {
     expect(restored.isPlayable, isFalse);
   });
 
+  test('ephemeral provider artwork paths are never serialized', () {
+    final track = Track(
+      id: 'private-artwork',
+      title: 'Private artwork',
+      artworkUri: Uri.file('/private/cache/provider-artwork.png'),
+      artworkUriIsEphemeral: true,
+      providerArtworkId: 'cover-1',
+      providerArtworkVersion: 'v1',
+      sourceId: 'self-hosted-jellyfin-account',
+    );
+
+    final json = track.toJson();
+    final restored = Track.fromJson(json);
+
+    expect(json['artworkUri'], isNull);
+    expect(json.toString(), isNot(contains('/private/cache')));
+    expect(restored.artworkUri, isNull);
+    expect(restored.artworkUriIsEphemeral, isFalse);
+    expect(restored.providerArtworkId, 'cover-1');
+    expect(restored.providerArtworkVersion, 'v1');
+  });
+
   test('playable source checks ignore blank paths and URLs', () {
     final blankLocal = Track(
       id: 'blank-local',

@@ -8,6 +8,7 @@ import '../domain/music_source_provider.dart';
 import '../domain/self_hosted_provider_account.dart';
 import '../domain/track.dart';
 import 'jellyfin_provider.dart';
+import 'provider_artwork_file_cache.dart';
 import 'provider_credential_vault.dart';
 import 'provider_error.dart';
 import 'subsonic_provider.dart';
@@ -26,16 +27,19 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     ProviderCredentialVault? credentialVault,
     SelfHostedConnectionTester? connectionTester,
     SelfHostedProviderFactory? providerFactory,
+    ProviderArtworkFileCache? artworkFileCache,
   })  : _credentialVault =
             credentialVault ?? SecureProviderCredentialVault(),
         _connectionTester = connectionTester ?? _testConnection,
-        _providerFactory = providerFactory ?? _createProvider;
+        _providerFactory = providerFactory ?? _createProvider,
+        _artworkFileCache = artworkFileCache ?? ProviderArtworkFileCache();
 
   static const _accountsKey = 'aethertune.self_hosted_accounts.v1';
 
   final ProviderCredentialVault _credentialVault;
   final SelfHostedConnectionTester _connectionTester;
   final SelfHostedProviderFactory _providerFactory;
+  final ProviderArtworkFileCache _artworkFileCache;
   final List<SelfHostedProviderAccount> _accounts =
       <SelfHostedProviderAccount>[];
   final Map<String, String> _secrets = <String, String>{};
@@ -239,7 +243,14 @@ final class SelfHostedProviderStore extends ChangeNotifier {
   Future<void> remove(String accountId) async {
     final oldAccounts = List<SelfHostedProviderAccount>.from(_accounts);
     final oldSecret = _secrets[accountId];
-    if (!_accounts.any((item) => item.id == accountId)) {
+    SelfHostedProviderAccount? removedAccount;
+    for (final account in _accounts) {
+      if (account.id == accountId) {
+        removedAccount = account;
+        break;
+      }
+    }
+    if (removedAccount == null) {
       return;
     }
     _accounts.removeWhere((item) => item.id == accountId);
@@ -258,30 +269,39 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       rethrow;
     }
     _clearArtworkRequests(accountId);
+    try {
+      await _artworkFileCache.removeProvider(removedAccount.providerId);
+    } on Object {
+      // Account and credential deletion must not fail on best-effort cache cleanup.
+    }
     notifyListeners();
   }
 
   Future<Track> resolveTrack(Track track) async {
-    if (track.isPlayable) {
-      return track;
-    }
-    MusicSourceProvider? provider;
-    for (final candidate in musicProviders) {
-      if (candidate.id == track.sourceId) {
-        provider = candidate;
-        break;
-      }
-    }
+    final provider = _providerForSourceId(track.sourceId);
     if (provider == null) {
       return track;
     }
-    final streamUri = await provider.resolveStream(track);
-    if (streamUri == null) {
+    final results = await Future.wait<Uri?>(<Future<Uri?>>[
+      track.isPlayable
+          ? Future<Uri?>.value(null)
+          : provider.resolveStream(track),
+      track.artworkUri != null || track.providerArtworkId == null
+          ? Future<Uri?>.value(null)
+          : _materializeTrackArtwork(track),
+    ]);
+    final streamUri = results[0];
+    final artworkUri = results[1];
+    if (streamUri == null && artworkUri == null) {
       return track;
     }
     return track.copyWith(
-      streamUrl: streamUri.toString(),
-      streamUrlIsEphemeral: true,
+      streamUrl: streamUri?.toString(),
+      streamUrlIsEphemeral:
+          streamUri == null ? track.streamUrlIsEphemeral : true,
+      artworkUri: artworkUri,
+      artworkUriIsEphemeral:
+          artworkUri == null ? track.artworkUriIsEphemeral : true,
     );
   }
 
@@ -308,6 +328,44 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       (key, _) => key.startsWith('$accountId|'),
     );
     _artworkRevision += 1;
+  }
+
+  MusicCatalogProvider? _providerForSourceId(String sourceId) {
+    for (final account in _accounts) {
+      final secret = _secrets[account.id];
+      if (account.providerId == sourceId &&
+          secret != null &&
+          secret.isNotEmpty) {
+        return _providerFactory(account, secret);
+      }
+    }
+    return null;
+  }
+
+  Future<Uri?> _materializeTrackArtwork(Track track) async {
+    try {
+      final artworkId = track.providerArtworkId;
+      if (artworkId == null || artworkId.trim().isEmpty) {
+        return null;
+      }
+      final bytes = await loadArtwork(
+        sourceId: track.sourceId,
+        artworkId: artworkId,
+        version: track.providerArtworkVersion,
+        maxWidth: 512,
+      );
+      if (bytes == null || bytes.isEmpty) {
+        return null;
+      }
+      return _artworkFileCache.materialize(
+        sourceId: track.sourceId,
+        artworkId: artworkId,
+        version: track.providerArtworkVersion,
+        bytes: bytes,
+      );
+    } on Object {
+      return null;
+    }
   }
 
   static MusicCatalogProvider _createProvider(

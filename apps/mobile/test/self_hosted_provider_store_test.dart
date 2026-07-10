@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/provider_credential_vault.dart';
+import 'package:aethertune/src/data/provider_artwork_file_cache.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
@@ -188,6 +190,14 @@ void main() {
     final vault = _MemoryCredentialVault();
     final provider = _ArtworkCatalogProvider('self-hosted-artwork');
     final factorySecrets = <String>[];
+    final cacheRoot = await Directory.systemTemp.createTemp(
+      'aethertune-provider-store-artwork-',
+    );
+    addTearDown(() async {
+      if (await cacheRoot.exists()) {
+        await cacheRoot.delete(recursive: true);
+      }
+    });
     final store = SelfHostedProviderStore(
       credentialVault: vault,
       connectionTester: (account, secret) async {},
@@ -195,6 +205,9 @@ void main() {
         factorySecrets.add(secret);
         return provider;
       },
+      artworkFileCache: ProviderArtworkFileCache(
+        cacheRootLoader: () async => cacheRoot,
+      ),
     );
     await store.load();
     final account = createSelfHostedProviderAccount(
@@ -226,7 +239,50 @@ void main() {
     expect(factorySecrets, <String>['api-secret']);
     expect(store.hasCredentialForProvider(account.providerId), isTrue);
 
+    final resolved = await store.resolveTrack(
+      Track(
+        id: 'remote-track',
+        title: 'Remote track',
+        sourceId: account.providerId,
+        externalId: 'song-1',
+        providerArtworkId: 'cover-1',
+        providerArtworkVersion: 'v1',
+      ),
+    );
+    expect(resolved.streamUrl, 'https://media.example.test/stream/song-1');
+    expect(resolved.streamUrlIsEphemeral, isTrue);
+    expect(resolved.artworkUri?.scheme, 'file');
+    expect(resolved.artworkUriIsEphemeral, isTrue);
+    expect(await File.fromUri(resolved.artworkUri!).exists(), isTrue);
+    expect(resolved.toJson()['artworkUri'], isNull);
+    expect(resolved.toJson()['providerArtworkId'], 'cover-1');
+    expect(provider.artworkCalls, <String>[
+      'cover-1|v1|300',
+      'cover-1|v1|512',
+    ]);
+    expect(factorySecrets, <String>['api-secret', 'api-secret', 'api-secret']);
+    final resolvedArtworkFile = File.fromUri(resolved.artworkUri!);
+
+    provider.failArtwork = true;
+    final resolvedWithoutArtwork = await store.resolveTrack(
+      Track(
+        id: 'remote-track-with-broken-art',
+        title: 'Remote track with broken art',
+        sourceId: account.providerId,
+        externalId: 'song-2',
+        providerArtworkId: 'broken-cover',
+      ),
+    );
+    expect(
+      resolvedWithoutArtwork.streamUrl,
+      'https://media.example.test/stream/song-2',
+    );
+    expect(resolvedWithoutArtwork.artworkUri, isNull);
+    expect(factorySecrets, hasLength(5));
+    expect(factorySecrets.every((secret) => secret == 'api-secret'), isTrue);
+
     await store.remove(account.id);
+    expect(await resolvedArtworkFile.exists(), isFalse);
     expect(
       await store.loadArtwork(
         sourceId: account.providerId,
@@ -259,6 +315,7 @@ class _ArtworkCatalogProvider implements MusicCatalogProvider {
   _ArtworkCatalogProvider(this.providerId);
 
   String providerId;
+  bool failArtwork = false;
   final List<String> artworkCalls = <String>[];
 
   @override
@@ -300,6 +357,9 @@ class _ArtworkCatalogProvider implements MusicCatalogProvider {
     int maxWidth = 512,
   }) async {
     artworkCalls.add('$artworkId|${version ?? ''}|$maxWidth');
+    if (failArtwork) {
+      throw StateError('Artwork is unavailable.');
+    }
     return Uint8List.fromList(<int>[7, 8, 9]);
   }
 
@@ -307,5 +367,9 @@ class _ArtworkCatalogProvider implements MusicCatalogProvider {
   Future<List<Track>> search(String query) async => const <Track>[];
 
   @override
-  Future<Uri?> resolveStream(Track track) async => null;
+  Future<Uri?> resolveStream(Track track) async {
+    return Uri.parse(
+      'https://media.example.test/stream/${track.externalId}',
+    );
+  }
 }

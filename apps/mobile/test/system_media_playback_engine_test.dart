@@ -45,6 +45,9 @@ void main() {
       id: 'private-track',
       title: 'Private Track',
       artist: 'Private Artist',
+      artworkUri: Uri.file('/private/cache/provider-artwork.png'),
+      artworkUriIsEphemeral: true,
+      providerArtworkId: 'cover-1',
       streamUrl: 'https://media.example.test/audio?api_key=$secret',
       streamUrlIsEphemeral: true,
       sourceId: 'self-hosted-jellyfin',
@@ -55,7 +58,7 @@ void main() {
 
     final item = engine.mediaItem.value!;
     expect(item.id, 'private-track');
-    expect(item.artUri, isNull);
+    expect(item.artUri, Uri.file('/private/cache/provider-artwork.png'));
     expect(item.extras, isNot(contains('streamUrl')));
     expect(item.extras.toString(), isNot(contains(secret)));
     expect(item.extras?['sourceId'], 'self-hosted-jellyfin');
