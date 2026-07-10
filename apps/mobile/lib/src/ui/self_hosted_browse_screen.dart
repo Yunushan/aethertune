@@ -192,7 +192,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                           key: const Key('catalog-create-playlist'),
                           onPressed: _playlistMutationInProgress
                               ? null
-                              : () => _createPlaylist(playlistMutator!),
+                              : () => _createPlaylist(playlistMutator),
                           icon: const Icon(Icons.playlist_add),
                           label: const Text('Create playlist'),
                         ),
@@ -272,7 +272,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                         tooltip: 'Actions for ${collection.title}',
                         onSelected: (action) => _handlePlaylistAction(
                           action,
-                          playlistMutator!,
+                          playlistMutator,
                           collection,
                         ),
                         itemBuilder: (_) => const <
