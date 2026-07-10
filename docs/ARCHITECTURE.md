@@ -73,6 +73,11 @@ abstract interface class MusicCatalogProvider implements MusicSourceProvider {
   Future<MusicCatalogDetail> loadCollection(
     MusicCatalogCollection collection,
   );
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  });
 }
 ```
 
@@ -86,7 +91,7 @@ record ID, and source URI; manual edits clear provider attribution.
 
 Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage plus private-cache usage/manual eviction and automatic post-cache pressure eviction to persisted app-level and provider-level cache limits; background jobs and resumable downloads belong behind the same boundary later.
 
-Credentialed self-hosted adapters are assembled by `SelfHostedProviderStore`. Non-secret server/account metadata uses preferences, while `ProviderCredentialVault` stores only the API key or password through the operating system secure-storage backend. `MusicCatalogProvider` gives Jellyfin and Navidrome/Subsonic one neutral artist/album/playlist collection model and detail contract, so the responsive browser does not contain protocol-specific JSON or endpoint logic. Search and browse tracks remain metadata-only. `PlayerController` asks the store to resolve them immediately before native queue loading; resolved authenticated URLs are marked ephemeral and omitted by `Track.toJson`, so queue snapshots, library JSON, and backups cannot retain them. Connection/search/browse errors redact raw, URI-encoded, and reversible hex credential forms, while offline mode prevents catalog requests at the screen boundary.
+Credentialed self-hosted adapters are assembled by `SelfHostedProviderStore`. Non-secret server/account metadata uses preferences, while `ProviderCredentialVault` stores only the API key or password through the operating system secure-storage backend. `MusicCatalogProvider` gives Jellyfin and Navidrome/Subsonic one neutral artist/album/playlist collection model, detail contract, and authenticated artwork byte boundary, so responsive UI contains no protocol-specific JSON, endpoints, or credentials. `Track.providerArtworkId` and `providerArtworkVersion` persist only safe provider identifiers. The adapter's binary loader enforces image MIME, non-empty content, and a 10 MiB limit before a 128-entry store cache feeds `TrackArtwork`; cache entries are invalidated on account edits/removal. Jellyfin artwork authenticates through a private header, while Subsonic requests use per-request salted tokens instead of reversible password encoding. Search and browse tracks remain metadata-only. `PlayerController` resolves authenticated stream URLs immediately before native queue loading and marks them ephemeral, so queue snapshots, library JSON, and backups cannot retain them. Errors redact raw, URI-encoded, hex, and token query values, while offline mode prevents catalog requests at the screen boundary.
 
 ## Playback
 
