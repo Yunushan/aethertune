@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import 'provider_error.dart';
 
 typedef JellyfinRequestLoader = Future<String> Function(Uri requestUri);
 
@@ -15,7 +16,6 @@ class JellyfinProvider implements MusicSourceProvider {
     String? name,
     JellyfinRequestLoader? requestLoader,
     this.limit = 20,
-    this.includeAuthenticatedUrlsInSearch = false,
   })  : id = id ?? 'jellyfin-${Track.stableLocalId(baseUri.toString())}',
         name = name ?? 'Jellyfin',
         _requestLoader = requestLoader ?? _loadJellyfinJson;
@@ -34,7 +34,6 @@ class JellyfinProvider implements MusicSourceProvider {
   final String userId;
   final String apiKey;
   final int limit;
-  final bool includeAuthenticatedUrlsInSearch;
   final JellyfinRequestLoader _requestLoader;
 
   @override
@@ -78,24 +77,33 @@ class JellyfinProvider implements MusicSourceProvider {
       return const <Track>[];
     }
 
-    final items = parseJellyfinItemsResponse(
-      await _requestLoader(_searchUri(normalizedQuery)),
-    );
+    return _guardRequest(() async {
+      final items = parseJellyfinItemsResponse(
+        await _requestLoader(_searchUri(normalizedQuery)),
+      );
 
-    return items
-        .take(limit)
-        .map(
-          (item) => item.toTrack(
-            sourceId: id,
-            streamUri: includeAuthenticatedUrlsInSearch
-                ? streamUriFor(item.id)
-                : null,
-            artworkUri: includeAuthenticatedUrlsInSearch
-                ? primaryImageUriFor(item.id, hasImage: item.hasPrimaryImage)
-                : null,
+      return items
+          .take(limit)
+          .map((item) => item.toTrack(sourceId: id))
+          .toList(growable: false);
+    });
+  }
+
+  Future<void> testConnection() async {
+    await _guardRequest(() async {
+      parseJellyfinItemsResponse(
+        await _requestLoader(
+          _requestUri(
+            '/Users/$userId/Items',
+            const <String, String>{
+              'Recursive': 'true',
+              'IncludeItemTypes': 'Audio',
+              'Limit': '1',
+            },
           ),
-        )
-        .toList(growable: false);
+        ),
+      );
+    });
   }
 
   @override
@@ -159,6 +167,20 @@ class JellyfinProvider implements MusicSourceProvider {
         ...parameters,
       },
     );
+  }
+
+  Future<T> _guardRequest<T>(Future<T> Function() request) async {
+    try {
+      return await request();
+    } on Object catch (error) {
+      throw ProviderRequestException(
+        safeProviderErrorMessage(
+          error,
+          providerName: name,
+          secrets: <String>[apiKey],
+        ),
+      );
+    }
   }
 }
 
@@ -239,9 +261,8 @@ Future<String> _loadJellyfinJson(Uri uri) async {
     request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw HttpException(
+      throw ProviderRequestException(
         'Jellyfin request failed with HTTP ${response.statusCode}.',
-        uri: uri,
       );
     }
 

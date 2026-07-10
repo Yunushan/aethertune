@@ -19,7 +19,7 @@ UI layer
   NowPlayingScreen, TrackTile
 
 State layer
-  LibraryStore, PlayerController
+  LibraryStore, SelfHostedProviderStore, PlayerController
 
 Domain layer
   Track, MusicSourceProvider, LyricsProvider, OfflineMediaPolicy
@@ -27,7 +27,8 @@ Domain layer
 Data/provider layer
   Local file import, LocalFolderScanner, DemoSourceProvider,
   PodcastRssProvider, RadioBrowserProvider, InternetArchiveProvider,
-  LrcLibLyricsProvider,
+  JellyfinProvider, SubsonicProvider, LrcLibLyricsProvider,
+  ProviderCredentialVault,
   OfflineCacheManager, future legal provider adapters
 
 Platform layer
@@ -45,6 +46,7 @@ Server layer
 
 - `localPath` for local files.
 - `streamUrl` for legal direct streams.
+- a runtime-only authenticated `streamUrl` that serialization deliberately omits.
 - metadata only while a provider resolves playback.
 - `sourceId` to trace where it came from.
 
@@ -73,6 +75,8 @@ The selected text is persisted in `TrackLyrics` with provider name, provider
 record ID, and source URI; manual edits clear provider attribution.
 
 Adapters should not leak service-specific logic into the player or UI. They should return neutral `Track` objects and declare capabilities plus privacy/network behavior up front so cache, download, auth, and sync code can enforce provider policy. Cache and download code must pass tracks through `OfflineMediaPolicy`, which requires matching provider capability plus disclosure before any non-local media is cached or downloaded. `OfflineCacheManager` handles the current user-triggered direct HTTP(S) media materialization into private app storage plus private-cache usage/manual eviction and automatic post-cache pressure eviction to persisted app-level and provider-level cache limits; background jobs and resumable downloads belong behind the same boundary later.
+
+Credentialed self-hosted adapters are assembled by `SelfHostedProviderStore`. Non-secret server/account metadata uses preferences, while `ProviderCredentialVault` stores only the API key or password through the operating system secure-storage backend. Search results remain metadata-only. `PlayerController` asks the store to resolve them immediately before native queue loading; resolved authenticated URLs are marked ephemeral and omitted by `Track.toJson`, so queue snapshots, library JSON, and backups cannot retain them. Connection/search errors redact raw, URI-encoded, and reversible hex credential forms.
 
 ## Playback
 
@@ -105,9 +109,14 @@ provides:
 - iOS/macOS Control Center and lock-screen controls
 - Android/iOS background music audio-session configuration
 
+The same wrapper configuration step sets Android API 23 plus disabled auto
+backup for encrypted storage, creates iOS/macOS Keychain entitlements, and is
+verified by Flutter tests. Linux CI/release jobs install libsecret; Windows
+release builders require the Visual C++ ATL component used by the plugin.
+
 ## Persistence
 
-`LibraryStore` currently uses `shared_preferences` for a simple JSON track store. When the app grows, migrate to a structured local database such as SQLite, Drift, Isar, or ObjectBox.
+`LibraryStore` currently uses `shared_preferences` for a simple JSON track store. Self-hosted account metadata also uses preferences, but provider API keys/passwords never do: they use `flutter_secure_storage` through `ProviderCredentialVault` and are excluded from JSON backups. When the app grows, migrate non-secret structured data to a database such as SQLite or Drift while preserving the vault boundary.
 
 ## Server
 

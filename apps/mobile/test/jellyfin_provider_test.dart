@@ -55,25 +55,25 @@ void main() {
     expect(streamUri.queryParameters['static'], 'true');
   });
 
-  test('can expose authenticated stream and artwork URLs in search', () async {
+  test('redacts authenticated request URLs from provider errors', () async {
     final provider = JellyfinProvider(
       baseUri: Uri.parse('https://media.example.test'),
       userId: 'user-1',
       apiKey: 'api-secret',
-      includeAuthenticatedUrlsInSearch: true,
-      requestLoader: (_) async => _jellyfinItemsJson,
+      requestLoader: (uri) async => throw StateError('Request failed: $uri'),
     );
 
-    final track = (await provider.search('glass')).single;
-
-    expect(track.streamUrl, isNotNull);
-    final streamUri = Uri.parse(track.streamUrl!);
-    expect(streamUri.path, '/Audio/song-1/stream');
-    expect(streamUri.queryParameters['api_key'], 'api-secret');
-
-    expect(track.artworkUri, isNotNull);
-    expect(track.artworkUri!.path, '/Items/song-1/Images/Primary');
-    expect(track.artworkUri!.queryParameters['api_key'], 'api-secret');
+    await expectLater(
+      provider.search('glass'),
+      throwsA(
+        predicate<Object>((error) {
+          final message = error.toString();
+          return message.contains('Jellyfin request failed') &&
+              message.contains('[redacted]') &&
+              !message.contains('api-secret');
+        }),
+      ),
+    );
   });
 
   test('handles empty responses and offline policy for user-owned media', () {
@@ -99,6 +99,25 @@ void main() {
 
     expect(policy.canCache(track), isTrue);
     expect(policy.canDownload(track), isTrue);
+  });
+
+  test('tests credentials without requiring a search result', () async {
+    Uri? capturedUri;
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        capturedUri = uri;
+        return '{"Items":[]}';
+      },
+    );
+
+    await provider.testConnection();
+
+    expect(capturedUri!.path, '/Users/user-1/Items');
+    expect(capturedUri!.queryParameters['api_key'], 'api-secret');
+    expect(capturedUri!.queryParameters['Limit'], '1');
   });
 }
 

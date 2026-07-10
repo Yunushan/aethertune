@@ -125,6 +125,105 @@ void main() {
     expect(restoredEngine.playing, isTrue);
   });
 
+  test(
+    'resolves credentialed queues after restart without persisting secrets',
+    () async {
+      const secret = 'private-api-key';
+      final metadataQueue = <Track>[
+        Track(
+          id: 'private-1',
+          title: 'Private 1',
+          sourceId: 'self-hosted',
+          externalId: 'song-1',
+        ),
+        Track(
+          id: 'private-2',
+          title: 'Private 2',
+          sourceId: 'self-hosted',
+          externalId: 'song-2',
+        ),
+      ];
+      Future<Track> resolve(Track track) async {
+        return track.copyWith(
+          streamUrl:
+              'https://music.example.test/${track.externalId}?api_key=$secret',
+          streamUrlIsEphemeral: true,
+        );
+      }
+
+      final firstEngine = _FakePlaybackAudioEngine();
+      final firstController = PlayerController(
+        audioEngine: firstEngine,
+        trackResolver: resolve,
+      );
+      await firstController.playTrack(
+        metadataQueue.first,
+        queue: metadataQueue,
+      );
+
+      expect(firstEngine.queue, hasLength(2));
+      expect(
+        firstEngine.queue.every((track) => track.streamUrl!.contains(secret)),
+        isTrue,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final firstSnapshot = prefs.getString('aethertune.player_queue.v1')!;
+      expect(firstSnapshot, isNot(contains(secret)));
+      expect(firstSnapshot, isNot(contains('api_key')));
+      firstController.dispose();
+      await _flushAsyncWork();
+
+      final restoredEngine = _FakePlaybackAudioEngine();
+      final restoredController = PlayerController(
+        audioEngine: restoredEngine,
+        trackResolver: resolve,
+      );
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedQueue();
+
+      expect(restoredController.queue.every((track) => !track.isPlayable), isTrue);
+      await restoredController.togglePlayPause();
+
+      expect(restoredEngine.queue, hasLength(2));
+      expect(
+        restoredEngine.queue.every(
+          (track) => track.streamUrl!.contains(secret),
+        ),
+        isTrue,
+      );
+      final restoredSnapshot = prefs.getString('aethertune.player_queue.v1')!;
+      expect(restoredSnapshot, isNot(contains(secret)));
+      expect(restoredSnapshot, isNot(contains('api_key')));
+    },
+  );
+
+  test('removes every queued track for a deleted provider account', () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final privateTrack = Track(
+      id: 'private',
+      title: 'Private',
+      streamUrl: 'https://music.example.test/private',
+      sourceId: 'self-hosted',
+    );
+    final localTrack = _track('local');
+    await controller.playTrack(privateTrack, queue: <Track>[
+      privateTrack,
+      localTrack,
+    ]);
+
+    await controller.removeTracksFromSource('self-hosted');
+
+    expect(controller.current, isNull);
+    expect(controller.queue.map((track) => track.id), <String>['local']);
+    expect(engine.stopCalls, 1);
+    final prefs = await SharedPreferences.getInstance();
+    final snapshot = prefs.getString('aethertune.player_queue.v1')!;
+    expect(snapshot, isNot(contains('music.example.test')));
+    expect(snapshot, contains('local'));
+  });
+
   test('isolates the current source for stop-at-end behavior', () async {
     final engine = _FakePlaybackAudioEngine();
     final controller = PlayerController(audioEngine: engine);

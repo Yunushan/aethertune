@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import 'provider_error.dart';
 
 typedef SubsonicRequestLoader = Future<String> Function(Uri requestUri);
 
@@ -17,7 +18,6 @@ class SubsonicProvider implements MusicSourceProvider {
     this.limit = 20,
     this.apiVersion = '1.16.1',
     this.clientName = 'AetherTune',
-    this.includeAuthenticatedUrlsInSearch = false,
   })  : id = id ?? 'subsonic-${Track.stableLocalId(baseUri.toString())}',
         name = name ?? 'Navidrome / Subsonic',
         _requestLoader = requestLoader ?? _loadSubsonicJson;
@@ -38,7 +38,6 @@ class SubsonicProvider implements MusicSourceProvider {
   final int limit;
   final String apiVersion;
   final String clientName;
-  final bool includeAuthenticatedUrlsInSearch;
   final SubsonicRequestLoader _requestLoader;
 
   @override
@@ -82,23 +81,25 @@ class SubsonicProvider implements MusicSourceProvider {
       return const <Track>[];
     }
 
-    final songs = parseSubsonicSearchResponse(
-      await _requestLoader(_searchUri(normalizedQuery)),
-    );
-    return songs
-        .take(limit)
-        .map(
-          (song) => song.toTrack(
-            sourceId: id,
-            streamUri: includeAuthenticatedUrlsInSearch
-                ? streamUriFor(song.id)
-                : null,
-            artworkUri: includeAuthenticatedUrlsInSearch
-                ? coverArtUriFor(song.coverArt)
-                : null,
-          ),
-        )
-        .toList(growable: false);
+    return _guardRequest(() async {
+      final songs = parseSubsonicSearchResponse(
+        await _requestLoader(_searchUri(normalizedQuery)),
+      );
+      return songs
+          .take(limit)
+          .map((song) => song.toTrack(sourceId: id))
+          .toList(growable: false);
+    });
+  }
+
+  Future<void> testConnection() async {
+    await _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri('/rest/ping.view', const <String, String>{}),
+        ),
+      );
+    });
   }
 
   @override
@@ -168,6 +169,20 @@ class SubsonicProvider implements MusicSourceProvider {
       'c': clientName,
       'f': 'json',
     };
+  }
+
+  Future<T> _guardRequest<T>(Future<T> Function() request) async {
+    try {
+      return await request();
+    } on Object catch (error) {
+      throw ProviderRequestException(
+        safeProviderErrorMessage(
+          error,
+          providerName: name,
+          secrets: <String>[password],
+        ),
+      );
+    }
   }
 }
 
@@ -281,9 +296,8 @@ Future<String> _loadSubsonicJson(Uri uri) async {
     request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw HttpException(
+      throw ProviderRequestException(
         'Subsonic request failed with HTTP ${response.statusCode}.',
-        uri: uri,
       );
     }
 

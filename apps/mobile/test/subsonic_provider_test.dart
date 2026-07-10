@@ -78,21 +78,26 @@ void main() {
     );
   });
 
-  test('can expose authenticated stream and artwork URLs in search results', () async {
+  test('redacts reversible password encoding from provider errors', () async {
     final provider = SubsonicProvider(
       baseUri: Uri.parse('https://music.example.test'),
       username: 'demo',
       password: 'pw',
-      requestLoader: (_) async => _searchResponseJson,
-      includeAuthenticatedUrlsInSearch: true,
+      requestLoader: (uri) async => throw StateError('Request failed: $uri'),
     );
 
-    final track = (await provider.search('aether')).first;
-
-    expect(track.streamUrl, contains('/rest/stream.view'));
-    expect(track.streamUrl, contains('id=song-1'));
-    expect(track.artworkUri.toString(), contains('/rest/getCoverArt.view'));
-    expect(track.artworkUri.toString(), contains('id=cover-1'));
+    await expectLater(
+      provider.search('aether'),
+      throwsA(
+        predicate<Object>((error) {
+          final message = error.toString();
+          return message.contains('Navidrome / Subsonic request failed') &&
+              message.contains('[redacted]') &&
+              !message.contains('7077') &&
+              !message.contains('p=enc%3A7077');
+        }),
+      ),
+    );
   });
 
   test('handles failed responses and offline policy for user-owned media', () {
@@ -125,6 +130,25 @@ void main() {
 
     expect(decision.isAllowed, isTrue);
     expect(decision.providerId, provider.id);
+  });
+
+  test('tests credentials through the Subsonic ping endpoint', () async {
+    Uri? capturedUri;
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test'),
+      username: 'yunus',
+      password: 'secret',
+      requestLoader: (uri) async {
+        capturedUri = uri;
+        return '{"subsonic-response":{"status":"ok"}}';
+      },
+    );
+
+    await provider.testConnection();
+
+    expect(capturedUri!.path, '/rest/ping.view');
+    expect(capturedUri!.queryParameters['u'], 'yunus');
+    expect(capturedUri!.queryParameters['p'], 'enc:736563726574');
   });
 }
 

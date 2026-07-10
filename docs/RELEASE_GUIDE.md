@@ -33,6 +33,18 @@ Open the generated iOS project in Xcode for signing, capabilities, and App Store
 
 Build desktop packages on their native operating systems:
 
+On Ubuntu/Debian builders, install the secure-storage build/runtime packages
+before building:
+
+```bash
+sudo apt install libsecret-1-0 libsecret-1-dev
+```
+
+Windows builders need the Visual C++ ATL component alongside the Flutter
+desktop toolchain. The bootstrap script creates the required iOS/macOS
+Keychain entitlements. It also sets Android minimum SDK 23 and disables Android
+auto backup so encrypted credential material is not restored without its key.
+
 ```bash
 cd apps/mobile
 flutter build linux --release

@@ -20,9 +20,10 @@ import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
+import '../data/self_hosted_provider_store.dart';
 import '../data/subsonic_provider.dart';
-import '../domain/music_source_provider.dart';
 import '../domain/lyrics_document.dart';
+import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
 import '../domain/playback_progress_entry.dart';
@@ -30,6 +31,7 @@ import '../domain/playlist.dart';
 import '../domain/podcast_opml.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/provider_search.dart';
+import '../domain/self_hosted_provider_account.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
@@ -42,6 +44,7 @@ import 'widgets/listening_recap_card.dart';
 import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
+import 'widgets/self_hosted_account_editor.dart';
 import 'widgets/track_tile.dart';
 
 class _AetherTuneNavigationDestination {
@@ -6044,6 +6047,8 @@ class _EmptyLibrary extends StatelessWidget {
   }
 }
 
+enum _SelfHostedAccountAction { edit, remove }
+
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab();
 
@@ -6121,8 +6126,12 @@ class _SourcesTabState extends State<_SourcesTab> {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
+    final selfHosted = context.watch<SelfHostedProviderStore>();
     final podcastSubscriptions = library.podcastSubscriptions;
     final offlineModeEnabled = library.offlineModeEnabled;
+    final selfHostedActionsEnabled = selfHosted.loaded &&
+        selfHosted.loadError == null &&
+        !offlineModeEnabled;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -6198,32 +6207,123 @@ class _SourcesTabState extends State<_SourcesTab> {
           capabilities: _archiveProvider.capabilities,
           disclosure: _archiveProvider.disclosure,
         ),
-        const _ProviderCard(
-          title: 'Jellyfin',
-          status: 'Adapter foundation',
-          description:
-              'Tested Jellyfin audio search and stream resolver for user-owned music libraries; settings UI remains roadmap.',
-          icon: Icons.storage_outlined,
-          capabilities: JellyfinProvider.defaultCapabilities,
-          disclosure: ProviderPrivacyDisclosure(
-            requiresUserCredentials: true,
-            cachesMedia: true,
-            supportsDownloads: true,
-          ),
+        const SizedBox(height: 16),
+        Text(
+          'Self-hosted servers',
+          style: Theme.of(context).textTheme.titleMedium,
         ),
-        const _ProviderCard(
-          title: 'Navidrome / Subsonic',
-          status: 'Adapter foundation',
-          description:
-              'Tested Subsonic REST search and stream resolver for user-owned music servers; settings UI remains roadmap.',
-          icon: Icons.dns_outlined,
-          capabilities: SubsonicProvider.defaultCapabilities,
-          disclosure: ProviderPrivacyDisclosure(
-            requiresUserCredentials: true,
-            cachesMedia: true,
-            supportsDownloads: true,
-          ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            OutlinedButton.icon(
+              onPressed: selfHostedActionsEnabled
+                  ? () => _editSelfHostedAccount(
+                        context,
+                        SelfHostedProviderKind.jellyfin,
+                      )
+                  : null,
+              icon: const Icon(Icons.storage_outlined),
+              label: const Text('Add Jellyfin'),
+            ),
+            OutlinedButton.icon(
+              onPressed: selfHostedActionsEnabled
+                  ? () => _editSelfHostedAccount(
+                        context,
+                        SelfHostedProviderKind.subsonic,
+                      )
+                  : null,
+              icon: const Icon(Icons.dns_outlined),
+              label: const Text('Add Navidrome'),
+            ),
+          ],
         ),
+        if (!selfHosted.loaded) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ],
+        if (selfHosted.loadError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Secure credential storage unavailable'),
+            subtitle: Text(selfHosted.loadError!),
+          ),
+        ],
+        if (selfHosted.loaded && selfHosted.accounts.isEmpty)
+          const ListTile(
+            leading: Icon(Icons.cloud_outlined),
+            title: Text('No self-hosted server configured'),
+            subtitle: Text(
+              'Add a user-owned Jellyfin, Navidrome, or Subsonic-compatible server.',
+            ),
+          )
+        else
+          for (final account in selfHosted.accounts)
+            _ProviderCard(
+              title: account.name,
+              status: selfHosted.hasCredential(account.id)
+                  ? 'Enabled'
+                  : 'Credential missing',
+              description:
+                  '${account.kind.label} at ${account.baseUri} / '
+                  '${account.kind.identityLabel}: ${account.identity}',
+              icon: account.kind == SelfHostedProviderKind.jellyfin
+                  ? Icons.storage_outlined
+                  : Icons.dns_outlined,
+              capabilities: account.kind == SelfHostedProviderKind.jellyfin
+                  ? JellyfinProvider.defaultCapabilities
+                  : SubsonicProvider.defaultCapabilities,
+              disclosure: _selfHostedDisclosure(account),
+              onTap: selfHostedActionsEnabled
+                  ? () => _editSelfHostedAccount(
+                        context,
+                        account.kind,
+                        account: account,
+                      )
+                  : null,
+              actions: PopupMenuButton<_SelfHostedAccountAction>(
+                tooltip: 'Manage ${account.name}',
+                onSelected: (action) {
+                  switch (action) {
+                    case _SelfHostedAccountAction.edit:
+                      if (selfHostedActionsEnabled) {
+                        unawaited(
+                          _editSelfHostedAccount(
+                            context,
+                            account.kind,
+                            account: account,
+                          ),
+                        );
+                      }
+                      break;
+                    case _SelfHostedAccountAction.remove:
+                      unawaited(_removeSelfHostedAccount(context, account));
+                      break;
+                  }
+                },
+                itemBuilder: (_) => <PopupMenuEntry<_SelfHostedAccountAction>>[
+                  PopupMenuItem<_SelfHostedAccountAction>(
+                    value: _SelfHostedAccountAction.edit,
+                    enabled: selfHostedActionsEnabled,
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit and test'),
+                    ),
+                  ),
+                  const PopupMenuItem<_SelfHostedAccountAction>(
+                    value: _SelfHostedAccountAction.remove,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Remove'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         const _ProviderCard(
           title: 'More open catalogs',
           status: 'Adapter roadmap',
@@ -6784,6 +6884,86 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  Future<void> _editSelfHostedAccount(
+    BuildContext context,
+    SelfHostedProviderKind kind, {
+    SelfHostedProviderAccount? account,
+  }) async {
+    final store = context.read<SelfHostedProviderStore>();
+    final saved = await showSelfHostedAccountEditor(
+      context,
+      kind: kind,
+      account: account,
+      onSave: store.testAndSave,
+    );
+    if (!context.mounted || saved != true) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${account == null ? 'Added' : 'Updated'} '
+          '${account?.name ?? kind.label}.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _removeSelfHostedAccount(
+    BuildContext context,
+    SelfHostedProviderAccount account,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove ${account.name}?'),
+        content: const Text(
+          'The account metadata and its secure credential will be deleted from this device.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+
+    final library = context.read<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final selfHosted = context.read<SelfHostedProviderStore>();
+    await player.removeTracksFromSource(account.providerId);
+    await selfHosted.remove(account.id);
+    final pendingEntries = library.offlineCacheQueue
+        .where(
+          (entry) =>
+              entry.track.sourceId == account.providerId &&
+              entry.status != OfflineCacheEntryStatus.cached,
+        )
+        .toList(growable: false);
+    for (final entry in pendingEntries) {
+      await library.removeOfflineCacheEntry(entry.id);
+    }
+    if (!context.mounted) {
+      return;
+    }
+    setState(() {
+      _providerSearchResults.removeWhere(
+        (result) => result.providerId == account.providerId,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed ${account.name}.')),
+    );
+  }
+
   List<MusicSourceProvider> _providerSearchSources({bool localOnly = false}) {
     final library = context.read<LibraryStore>();
     final localLibraryProvider = LocalLibraryProvider(
@@ -6798,6 +6978,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _provider,
       _radioProvider,
       _archiveProvider,
+      ...context.read<SelfHostedProviderStore>().musicProviders,
     ];
   }
 
@@ -7004,7 +7185,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<Track> get _providerSearchPlayableQueue {
     return _providerSearchResults
         .map((result) => result.track)
-        .where((track) => track.isPlayable)
+        .where(_providerSearchCoordinator.canResolve)
         .toList(growable: false);
   }
 
@@ -7106,6 +7287,12 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   IconData _providerSearchIcon(String providerId) {
+    if (providerId.startsWith('self-hosted-jellyfin-')) {
+      return Icons.storage_outlined;
+    }
+    if (providerId.startsWith('self-hosted-subsonic-')) {
+      return Icons.dns_outlined;
+    }
     switch (providerId) {
       case LocalLibraryProvider.providerId:
         return Icons.library_music_outlined;
@@ -7832,6 +8019,8 @@ class _ProviderCard extends StatelessWidget {
     required this.icon,
     this.capabilities = const <MusicSourceCapability>{},
     this.disclosure,
+    this.onTap,
+    this.actions,
   });
 
   final String title;
@@ -7840,17 +8029,34 @@ class _ProviderCard extends StatelessWidget {
   final IconData icon;
   final Set<MusicSourceCapability> capabilities;
   final ProviderPrivacyDisclosure? disclosure;
+  final VoidCallback? onTap;
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
         leading: Icon(icon),
-        title: Text(title),
+        onTap: onTap,
+        title: actions == null
+            ? Text(title)
+            : Row(
+                children: <Widget>[
+                  Expanded(child: Text(title)),
+                  actions!,
+                ],
+              ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            if (actions != null) ...<Widget>[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(label: Text(status)),
+              ),
+              const SizedBox(height: 4),
+            ],
             Text(description),
             if (capabilities.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
@@ -7875,11 +8081,27 @@ class _ProviderCard extends StatelessWidget {
             ],
           ],
         ),
-        trailing: Chip(label: Text(status)),
+        trailing: actions == null ? Chip(label: Text(status)) : null,
       ),
     );
   }
+}
 
+ProviderPrivacyDisclosure _selfHostedDisclosure(
+  SelfHostedProviderAccount account,
+) {
+  return ProviderPrivacyDisclosure(
+    networkDomains: <String>[account.baseUri.host],
+    dataSent: <String>[
+      account.kind == SelfHostedProviderKind.jellyfin
+          ? 'API key, user ID, search query, and media item IDs'
+          : 'username, encoded password, search query, and media item IDs',
+    ],
+    requiresUserCredentials: true,
+    cachesMetadata: true,
+    cachesMedia: true,
+    supportsDownloads: true,
+  );
 }
 
 String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
@@ -8744,6 +8966,7 @@ class _SettingsTab extends StatelessWidget {
     List<OfflineCacheEntry> entries,
   ) async {
     final library = context.read<LibraryStore>();
+    final selfHosted = context.read<SelfHostedProviderStore>();
     final messenger = ScaffoldMessenger.of(context);
     final cacheRoot = await getApplicationDocumentsDirectory();
     if (!context.mounted) {
@@ -8766,7 +8989,12 @@ class _SettingsTab extends StatelessWidget {
       final processingEntry = library.offlineCacheEntryById(entry.id) ?? entry;
 
       try {
-        final materialization = await manager.materialize(processingEntry);
+        final resolvedTrack = await selfHosted.resolveTrack(
+          processingEntry.track,
+        );
+        final materialization = await manager.materialize(
+          processingEntry.copyWith(track: resolvedTrack),
+        );
         final cacheReason = materialization.checksum.isEmpty
             ? 'Cached ${_formatByteCount(materialization.byteCount)}.'
             : 'Cached ${_formatByteCount(materialization.byteCount)}; checksum verified.';

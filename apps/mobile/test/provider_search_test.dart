@@ -234,6 +234,39 @@ void main() {
 
     expect(resolved.streamUrl, 'https://example.test/resolved.mp3');
     expect(resolved.isPlayable, isTrue);
+    expect(resolved.streamUrlIsEphemeral, isFalse);
+  });
+
+  test('never serializes resolved URLs for credentialed providers', () async {
+    final track = Track(
+      id: 'private-track',
+      title: 'Private Track',
+      sourceId: 'private',
+      externalId: 'song-1',
+    );
+    final coordinator = ProviderSearchCoordinator(
+      <MusicSourceProvider>[
+        _FakeProvider(
+          id: 'private',
+          name: 'Private server',
+          capabilities: const <MusicSourceCapability>{
+            MusicSourceCapability.streamResolution,
+          },
+          resolvedStreamUri: Uri.parse(
+            'https://music.example.test/stream?token=super-secret',
+          ),
+          disclosure: const ProviderPrivacyDisclosure(
+            requiresUserCredentials: true,
+          ),
+        ),
+      ],
+    );
+
+    final resolved = await coordinator.resolvePlayableTrack(track);
+
+    expect(resolved.streamUrl, contains('super-secret'));
+    expect(resolved.streamUrlIsEphemeral, isTrue);
+    expect(resolved.toJson()['streamUrl'], isNull);
   });
 
   test('exposes provider offline cache and download policy decisions', () {

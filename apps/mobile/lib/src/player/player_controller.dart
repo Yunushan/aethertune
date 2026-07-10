@@ -11,9 +11,14 @@ import '../domain/track_queue.dart';
 import 'offline_playback_policy.dart';
 import 'playback_audio_engine.dart';
 
+typedef TrackPlaybackResolver = Future<Track> Function(Track track);
+
 class PlayerController extends ChangeNotifier {
-  PlayerController({PlaybackAudioEngine? audioEngine})
-      : _audio = audioEngine ?? JustAudioPlaybackEngine() {
+  PlayerController({
+    PlaybackAudioEngine? audioEngine,
+    TrackPlaybackResolver? trackResolver,
+  })  : _audio = audioEngine ?? JustAudioPlaybackEngine(),
+        _trackResolver = trackResolver {
     _playerStateSub = _audio.stateChanges.listen((_) => notifyListeners());
     _durationSub = _audio.durationStream.listen((duration) {
       _duration = duration ?? Duration.zero;
@@ -33,6 +38,7 @@ class PlayerController extends ChangeNotifier {
   static const _playbackSettingsKey = 'aethertune.playback_settings.v1';
 
   final PlaybackAudioEngine _audio;
+  TrackPlaybackResolver? _trackResolver;
   final List<Track> _queue = <Track>[];
   final List<Track> _loadedPlaybackQueue = <Track>[];
 
@@ -70,6 +76,10 @@ class PlayerController extends ChangeNotifier {
   bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
   Duration get sleepTimerFadeDuration => _sleepTimerFadeDuration;
   bool get offlineModeEnabled => _offlineModeEnabled;
+
+  void setTrackResolver(TrackPlaybackResolver? resolver) {
+    _trackResolver = resolver;
+  }
 
   void setOfflineModeEnabled(bool enabled) {
     if (_offlineModeEnabled == enabled) {
@@ -152,28 +162,25 @@ class PlayerController extends ChangeNotifier {
     List<Track>? queue,
     Duration? initialPosition,
   }) async {
+    if (_offlineModeEnabled) {
+      requireOfflineModePlaybackAllowed(
+        track,
+        offlineModeEnabled: true,
+      );
+    }
+
+    final preparedTrack = await _prepareQueueForPlayback(track, queue: queue);
     requireOfflineModePlaybackAllowed(
-      track,
+      preparedTrack,
       offlineModeEnabled: _offlineModeEnabled,
     );
 
-    if (queue != null) {
-      _queue
-        ..clear()
-        ..addAll(queue);
-      if (!_queue.any((queued) => queued.id == track.id)) {
-        _queue.add(track);
-      }
-    } else if (!_queue.any((queued) => queued.id == track.id)) {
-      _queue.add(track);
-    }
-
-    _current = track;
+    _current = preparedTrack;
     notifyListeners();
     await _saveQueueSnapshot();
 
     await _loadQueue(
-      track,
+      preparedTrack,
       initialPosition: initialPosition ?? Duration.zero,
     );
     unawaited(_audio.play());
@@ -189,14 +196,24 @@ class PlayerController extends ChangeNotifier {
     if (_audio.playing) {
       await _audio.pause();
     } else {
+      if (_offlineModeEnabled) {
+        requireOfflineModePlaybackAllowed(
+          _current!,
+          offlineModeEnabled: true,
+        );
+      }
+
+      final preparedTrack = await _prepareQueueForPlayback(_current!);
+      _current = preparedTrack;
       requireOfflineModePlaybackAllowed(
-        _current!,
+        preparedTrack,
         offlineModeEnabled: _offlineModeEnabled,
       );
 
-      final wasLoaded = _loadedTrackId == _current!.id;
+      final wasLoaded = _loadedTrackId == preparedTrack.id;
       if (!wasLoaded) {
-        await _loadQueue(_current!);
+        await _saveQueueSnapshot();
+        await _loadQueue(preparedTrack);
       }
 
       unawaited(_audio.play());
@@ -210,6 +227,21 @@ class PlayerController extends ChangeNotifier {
   Future<void> stop() async {
     _cancelSleepFadeSteps(restoreVolume: true);
     await _audio.stop();
+    notifyListeners();
+  }
+
+  Future<void> removeTracksFromSource(String sourceId) async {
+    final removesCurrent = _current?.sourceId == sourceId;
+    _queue.removeWhere((track) => track.sourceId == sourceId);
+    if (removesCurrent) {
+      await _audio.stop();
+      _current = null;
+      _loadedTrackId = null;
+      _loadedPlaybackQueue.clear();
+    } else if (_current != null) {
+      await _reloadQueuePreservingPlayback();
+    }
+    await _saveQueueSnapshot();
     notifyListeners();
   }
 
@@ -493,6 +525,39 @@ class PlayerController extends ChangeNotifier {
     } finally {
       _isLoadingQueue = false;
     }
+  }
+
+  Future<Track> _prepareQueueForPlayback(
+    Track track, {
+    List<Track>? queue,
+  }) async {
+    final candidates = queue == null
+        ? List<Track>.from(_queue)
+        : List<Track>.from(queue);
+    final existingIndex = candidates.indexWhere((item) => item.id == track.id);
+    if (existingIndex == -1) {
+      candidates.add(track);
+    } else {
+      candidates[existingIndex] = track;
+    }
+
+    final resolver = _trackResolver;
+    final prepared = resolver == null
+        ? candidates
+        : await Future.wait(
+            candidates.map(
+              (item) =>
+                  item.isPlayable ? Future<Track>.value(item) : resolver(item),
+            ),
+          );
+    final preparedTrack = prepared.firstWhere(
+      (item) => item.id == track.id,
+      orElse: () => track,
+    );
+    _queue
+      ..clear()
+      ..addAll(prepared);
+    return preparedTrack;
   }
 
   List<Track> _playbackQueueForCurrentMode() {

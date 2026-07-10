@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
+import '../data/self_hosted_provider_store.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
 import 'home_screen.dart';
@@ -19,16 +20,23 @@ class AetherTuneApp extends StatelessWidget {
         ChangeNotifierProvider<LibraryStore>(
           create: (_) => LibraryStore()..load(),
         ),
-        ChangeNotifierProxyProvider<LibraryStore, PlayerController>(
+        ChangeNotifierProvider<SelfHostedProviderStore>(
+          create: (_) => SelfHostedProviderStore()..load(),
+        ),
+        ChangeNotifierProxyProvider2<
+            LibraryStore,
+            SelfHostedProviderStore,
+            PlayerController>(
           create: (_) => PlayerController(audioEngine: audioEngine)
             ..loadPersistedQueue()
             ..loadPersistedPlaybackSettings(),
-          update: (_, library, player) {
+          update: (_, library, selfHosted, player) {
             final controller = player ??
                 (PlayerController(audioEngine: audioEngine)
                   ..loadPersistedQueue()
                   ..loadPersistedPlaybackSettings());
             controller.setOfflineModeEnabled(library.offlineModeEnabled);
+            controller.setTrackResolver(selfHosted.resolveTrack);
             return controller;
           },
         ),

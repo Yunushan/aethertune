@@ -65,6 +65,26 @@ void main() {
     expect(decoded.isPlayable, isTrue);
   });
 
+  test('ephemeral authenticated streams are never serialized', () {
+    final track = Track(
+      id: 'private',
+      title: 'Private stream',
+      streamUrl: 'https://media.example.test/stream?api_key=secret',
+      streamUrlIsEphemeral: true,
+      sourceId: 'self-hosted-jellyfin-account',
+      externalId: 'song-1',
+    );
+
+    final json = track.toJson();
+    final restored = Track.fromJson(json);
+
+    expect(track.isPlayable, isTrue);
+    expect(json['streamUrl'], isNull);
+    expect(json.toString(), isNot(contains('secret')));
+    expect(restored.streamUrl, isNull);
+    expect(restored.isPlayable, isFalse);
+  });
+
   test('playable source checks ignore blank paths and URLs', () {
     final blankLocal = Track(
       id: 'blank-local',

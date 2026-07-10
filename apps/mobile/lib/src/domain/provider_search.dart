@@ -54,12 +54,17 @@ final class ProviderSearchCoordinator {
       return track;
     }
 
-    final streamUri = await providerFor(track.sourceId)?.resolveStream(track);
+    final provider = providerFor(track.sourceId);
+    final streamUri = await provider?.resolveStream(track);
     if (streamUri == null) {
       return track;
     }
 
-    return track.copyWith(streamUrl: streamUri.toString());
+    return track.copyWith(
+      streamUrl: streamUri.toString(),
+      streamUrlIsEphemeral:
+          provider?.disclosure.requiresUserCredentials ?? false,
+    );
   }
 
   Future<ProviderSearchResponse> search(String query) async {

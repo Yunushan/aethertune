@@ -35,6 +35,33 @@ void main() {
     expect(engine.mediaItem.value?.duration, const Duration(minutes: 4));
   });
 
+  test('does not publish authenticated stream URLs to system media metadata',
+      () async {
+    const secret = 'private-api-key';
+    final delegate = _FakePlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+    final track = Track(
+      id: 'private-track',
+      title: 'Private Track',
+      artist: 'Private Artist',
+      streamUrl: 'https://media.example.test/audio?api_key=$secret',
+      streamUrlIsEphemeral: true,
+      sourceId: 'self-hosted-jellyfin',
+      externalId: 'song-1',
+    );
+
+    await engine.setQueue(<Track>[track], initialIndex: 0);
+
+    final item = engine.mediaItem.value!;
+    expect(item.id, 'private-track');
+    expect(item.artUri, isNull);
+    expect(item.extras, isNot(contains('streamUrl')));
+    expect(item.extras.toString(), isNot(contains(secret)));
+    expect(item.extras?['sourceId'], 'self-hosted-jellyfin');
+    expect(item.extras?['externalId'], 'song-1');
+  });
+
   test('publishes playback state for notifications and control center',
       () async {
     final delegate = _FakePlaybackAudioEngine();

@@ -42,7 +42,13 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Unified provider search
 
-`ProviderSearchCoordinator` fans out a search query to adapters that declare `metadataSearch`, skips non-search providers, ranks mixed `Track` results by playable status and typo-tolerant metadata match quality, limits each provider contribution, resolves metadata-only results through `resolveStream` when the adapter supports it, and returns provider-specific failures without dropping successful results. The Sources tab exposes this as provider search across the local library, demo provider, Radio Browser, and Internet Archive. When offline mode is enabled, unified search uses the local library adapter only so it does not contact network providers. Pagination, authenticated provider opt-in, and richer provider-specific ranking are still roadmap work.
+`ProviderSearchCoordinator` fans out a search query to adapters that declare `metadataSearch`, skips non-search providers, ranks mixed `Track` results by playable status and typo-tolerant metadata match quality, limits each provider contribution, resolves metadata-only results through `resolveStream` when the adapter supports it, and returns provider-specific failures without dropping successful results. The Sources tab exposes this across the local library, demo provider, Radio Browser, Internet Archive, and user-configured Jellyfin/Navidrome/Subsonic accounts. When offline mode is enabled, unified search uses the local library adapter only so it does not contact network providers. Pagination and richer provider-specific ranking remain roadmap work.
+
+## Credential handling
+
+`SelfHostedProviderStore` persists non-secret account metadata separately from `ProviderCredentialVault`. The production vault uses `flutter_secure_storage`; Android uses its configured encrypted storage with backup disabled, Apple wrappers declare Keychain entitlements, Linux builds include libsecret, and Windows uses the platform plugin backend. Sources requires HTTPS unless the user explicitly accepts an insecure-HTTP warning. Connection errors redact raw, URI-encoded, and Subsonic hex-encoded secrets.
+
+Authenticated providers return metadata-only `Track` objects from search. The player resolves credential-bearing URLs immediately before loading its native queue, marks those URLs ephemeral, and `Track.toJson` omits them from queue/library/backup serialization. On restart, metadata-only queue entries are resolved again from the vault. Removing an account deletes its secret and removes that provider's tracks from the queue. OAuth refresh/rotation and cross-device credential sync are intentionally not implemented yet.
 
 ## Offline cache and download policy
 
@@ -66,11 +72,11 @@ Use `ProviderPrivacyDisclosure` to list:
 
 ## Jellyfin foundation
 
-`JellyfinProvider` targets user-owned Jellyfin servers. It builds API-key authenticated audio searches against a configured user's library, maps Jellyfin audio item metadata into provider-neutral `Track` objects, generates authenticated stream and primary artwork URLs when requested, discloses the configured server host and credential/search/item-id data sent, declares authentication/cache/download capabilities for user-owned media, and is covered by provider-specific tests plus the shared provider contract test. The provider is constructor-configured; settings UI, secure credential storage, library browse pages, playlists, and sync are still roadmap work.
+`JellyfinProvider` targets user-owned Jellyfin servers. Sources creates, tests, edits, and removes account-backed instances. The adapter builds API-key authenticated audio searches against the configured user's library, maps items into metadata-only provider-neutral tracks, resolves authenticated stream URLs only for immediate playback, discloses the configured host and data sent, and declares authentication/cache/download capabilities. Dedicated browse pages, authenticated artwork loading, remote playlists, token rotation, and sync remain roadmap work.
 
 ## Navidrome/Subsonic foundation
 
-`SubsonicProvider` targets user-owned Navidrome or Subsonic-compatible servers through the documented Subsonic REST API. It builds authenticated JSON requests with encoded password credentials, searches songs through `search3.view`, maps song metadata to provider-neutral `Track` objects, discloses the configured server host and credential/search/song-id data sent, declares authentication/cache/download capabilities for user-owned media, and resolves playable streams through `stream.view`. The provider is constructor-configured and tested; settings UI, secure credential storage, library browse pages, playlists, and sync are still roadmap work.
+`SubsonicProvider` targets user-owned Navidrome or Subsonic-compatible servers through the documented Subsonic REST API. Sources creates, tests through `ping.view`, edits, and removes account-backed instances. The adapter sends the protocol's reversibly encoded password only over HTTPS by default, searches through `search3.view`, maps metadata-only tracks, and resolves `stream.view` URLs only for immediate playback. Dedicated browse pages, authenticated artwork loading, remote playlists, token authentication/rotation, and sync remain roadmap work.
 
 ## Minimal provider
 

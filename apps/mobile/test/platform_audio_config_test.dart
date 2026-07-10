@@ -36,6 +36,13 @@ void main() {
       _componentNames(document, 'receiver'),
       contains('com.ryanheise.audioservice.MediaButtonReceiver'),
     );
+    final application = document.findAllElements('application').single;
+    expect(
+      application.getAttribute('allowBackup', namespace: _androidNamespace),
+      'false',
+    );
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    expect(gradle, contains('minSdk = 23'));
   });
 
   test('generated iOS wrapper enables background audio', () {
@@ -76,6 +83,33 @@ void main() {
     );
     expect(keyIndex, greaterThanOrEqualTo(0));
     expect(entries[keyIndex + 1].innerText, '14.0');
+  });
+
+  test('generated Apple wrappers declare keychain entitlements', () {
+    for (final path in <String>[
+      'ios/Runner/DebugProfile.entitlements',
+      'ios/Runner/Release.entitlements',
+      'macos/Runner/DebugProfile.entitlements',
+      'macos/Runner/Release.entitlements',
+    ]) {
+      final document = XmlDocument.parse(File(path).readAsStringSync());
+      expect(
+        document.findAllElements('key').map((key) => key.innerText),
+        contains('keychain-access-groups'),
+        reason: path,
+      );
+    }
+
+    final project =
+        File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+    expect(
+      project,
+      contains('CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;'),
+    );
+    expect(
+      project,
+      contains('CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;'),
+    );
   });
 }
 

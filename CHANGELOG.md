@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added Sources-tab Jellyfin and Navidrome/Subsonic account setup with connection testing, HTTPS-by-default validation, platform-secure credential storage, redacted failures, provider-search activation, runtime-only authenticated playback URLs, restart reconstruction, and account removal cleanup.
 - Added basic M4A title, artist, album, and genre metadata atom parsing during recursive folder scans.
 - Added basic FLAC Vorbis comment title, artist, album, and genre parsing during recursive folder scans.
 - Added basic ID3v2 MP3 title, artist, album, and genre text-frame parsing during recursive folder scans.

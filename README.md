@@ -93,9 +93,8 @@ The server preview covers the Dart service that ships with the repo: health chec
 
 ## Quick Start
 
-The bootstrap requires Flutter and Python 3. Python is used only to apply and
-validate `audio_service` settings in Flutter's generated Android and iOS XML
-property files.
+The bootstrap requires Flutter and Python 3. Python applies and validates the
+generated Android/iOS/macOS media-session and secure-storage settings.
 
 ```bash
 git clone https://github.com/YOUR_NAME/aethertune.git
@@ -140,7 +139,7 @@ This scaffold includes real app code, not only a README:
 | Server | Dart HTTP service with `/health`, `/api/v1/info`, and catalog endpoints |
 | Playback | Responsive mini/full Now Playing surfaces with artwork swipe navigation, seek/time labels, favorite, queue, lyrics, shuffle/repeat and transport controls; native playlist-backed `just_audio` controller for gapless local/URL queues; Android notification controls; iOS/macOS Control Center metadata and transport controls; configured mobile music sessions and background-audio wrappers; native Android/iOS/macOS playback backends; and bundled MediaKit audio backends for Linux/Windows |
 | Local library | Import audio files through the native file picker or recursive folder scanner with filename metadata parsing plus basic ID3v1/ID3v2 MP3, FLAC Vorbis comment, M4A metadata atom, and WAV RIFF INFO parsing, matching `.lrc`/`.txt` lyric sidecars, plus embedded MP3/FLAC/M4A artwork display; edit saved metadata; resolve duplicates; search, sort, suggestion chips, and browse by artist, album, genre, source, flat folder groups, or recursive folder tree |
-| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and the offline cache/download queue with byte-count/checksum metadata in `shared_preferences` |
+| Persistence | Saves imported tracks, favorites, playlists, lyrics, podcast feed subscriptions, podcast refresh status, podcast episode progress, playback history, submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and the offline cache/download queue with byte-count/checksum metadata in `shared_preferences`; self-hosted provider secrets are excluded and stored through the platform credential vault |
 | Backup/restore | Export and restore a versioned JSON backup, including submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, app/provider offline cache size limits, and queued offline media requests with cache metadata, from the Options tab |
 | Home feed | Local Home tab sections for recommendations, mood/activity mixes, continue listening, recently played, radio seeds, most played, favorites, recently added tracks, and range-filtered local charts with responsive top-track/top-artist bars |
 | Search | Typo-tolerant local library filtering by title, artist, album, genre, source, folder, saved lyrics, favorites, and local-files-only offline readiness with sortable results and suggestion chips from submitted searches, playback history, and library metadata |
@@ -151,7 +150,7 @@ This scaffold includes real app code, not only a README:
 | Favorites | Toggle favorites per track |
 | Sleep timer | Stop playback after presets, a custom 1-1440 minute duration, or the current track, with optional 10-second, 30-second, 1-minute, or 2-minute fade-out |
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
-| Provider architecture | `MusicSourceProvider` and `LyricsProvider` interfaces with privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered checksum-verified private media cache storage, unified music-provider search, LRCLIB plain/synced lyrics search, demo provider, Podcast RSS feeds, Radio Browser, Internet Archive, Jellyfin, and Navidrome/Subsonic foundations |
+| Provider architecture | `MusicSourceProvider` and `LyricsProvider` interfaces with privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered checksum-verified private media cache storage, unified music-provider search, LRCLIB plain/synced lyrics search, demo provider, Podcast RSS feeds, Radio Browser, Internet Archive, and configurable Jellyfin/Navidrome/Subsonic accounts with tested secure credential storage |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, runs provider and system-media contract tests, compiles an Android APK and unsigned iOS app, builds all desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
@@ -176,7 +175,7 @@ AetherTune is designed to support the combined feature categories users expect f
 | Server | Health/info/catalog API foundation, sync and remote library roadmap |
 | UI customization | Material 3 shell with persisted system/light/dark/AMOLED theme preference and persisted accent color swatches; dynamic platform color roadmap |
 | Privacy | No telemetry, no ads, no tracking, no forced account, provider disclosure, and a local pause-listening-history control |
-| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across the local library and legal adapters with offline local-only search, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download queue and private cache eligibility/eviction, Radio Browser mirror discovery/search/filter/stream validation/play/save/click accounting with live-stream cache/download denial, Internet Archive audio search/filter/facet suggestions/play/save/cache-download queue and private cache eligibility/eviction with multi-file item results, Jellyfin API-key search/stream adapter foundation, and Navidrome/Subsonic REST search/stream adapter foundation; self-hosted settings UI and official API providers remain roadmap |
+| Multi-source | Local provider support plus offline-mode network pausing and saved stream playback blocking, unified provider search across the local library and legal adapters with offline local-only search, Podcast RSS feed subscriptions/play/save/OPML/refresh status/progress resume/cache-download queue and private cache eligibility/eviction, Radio Browser mirror discovery/search/filter/stream validation/play/save/click accounting with live-stream cache/download denial, Internet Archive audio search/filter/facet suggestions/play/save/cache-download queue and private cache eligibility/eviction with multi-file item results, and Sources-tab Jellyfin plus Navidrome/Subsonic accounts with connection testing, secure secret storage, search, and runtime-only authenticated stream resolution; dedicated self-hosted browse/playlists/sync and official API providers remain roadmap |
 
 For the full truth table, see [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md). The matrix separates **implemented**, **scaffolded**, **planned**, and **not included** features so the project does not make fake “100% done” claims.
 

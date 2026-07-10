@@ -16,6 +16,7 @@ class Track {
     this.localPath,
     this.contentHash,
     this.streamUrl,
+    this.streamUrlIsEphemeral = false,
     this.sourceId = 'local',
     this.externalId,
     this.isFavorite = false,
@@ -32,6 +33,7 @@ class Track {
   final String? localPath;
   final String? contentHash;
   final String? streamUrl;
+  final bool streamUrlIsEphemeral;
   final String sourceId;
   final String? externalId;
   final bool isFavorite;
@@ -52,6 +54,7 @@ class Track {
     String? localPath,
     String? contentHash,
     String? streamUrl,
+    bool? streamUrlIsEphemeral,
     String? sourceId,
     String? externalId,
     bool? isFavorite,
@@ -68,6 +71,8 @@ class Track {
       localPath: localPath ?? this.localPath,
       contentHash: contentHash ?? this.contentHash,
       streamUrl: streamUrl ?? this.streamUrl,
+      streamUrlIsEphemeral:
+          streamUrlIsEphemeral ?? this.streamUrlIsEphemeral,
       sourceId: sourceId ?? this.sourceId,
       externalId: externalId ?? this.externalId,
       isFavorite: isFavorite ?? this.isFavorite,
@@ -86,7 +91,7 @@ class Track {
       'artworkUri': artworkUri?.toString(),
       'localPath': localPath,
       'contentHash': contentHash,
-      'streamUrl': streamUrl,
+      'streamUrl': streamUrlIsEphemeral ? null : streamUrl,
       'sourceId': sourceId,
       'externalId': externalId,
       'isFavorite': isFavorite,

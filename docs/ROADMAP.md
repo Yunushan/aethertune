@@ -142,9 +142,11 @@
 - [x] Internet Archive facet suggestion UI and collection filter chips
 - [ ] Internet Archive dedicated collection detail pages
 - [x] Jellyfin provider foundation
-- [ ] Jellyfin settings UI and secure credential storage
+- [x] Jellyfin settings UI and secure credential storage
+- [ ] Jellyfin library browse pages, authenticated artwork, and remote playlists
 - [x] Navidrome/Subsonic provider foundation
-- [ ] Navidrome/Subsonic settings UI and secure credential storage
+- [x] Navidrome/Subsonic settings UI and secure credential storage
+- [ ] Navidrome/Subsonic browse pages, authenticated artwork, and remote playlists
 
 ## 0.6.x: Offline and lyrics
 
