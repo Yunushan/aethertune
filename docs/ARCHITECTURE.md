@@ -75,7 +75,9 @@ back to the same player. Android and iOS wrapper settings are applied and
 validated by `scripts/configure_audio_service_platforms.py` whenever the
 generated Flutter wrappers are bootstrapped. The file-picker dependency is
 exactly pinned to the upstream AGP 9 built-in Kotlin compatible prerelease
-until that migration reaches a stable package release. The player provides:
+until that migration reaches a stable package release; generated iOS projects
+are pinned to its required iOS 14 minimum and verified in tests. The player
+provides:
 
 - local file playback
 - stream URL playback

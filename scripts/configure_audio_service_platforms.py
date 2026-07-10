@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import plistlib
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -22,6 +23,7 @@ ANDROID_PERMISSIONS = (
 ACTIVITY_NAME = "com.ryanheise.audioservice.AudioServiceActivity"
 SERVICE_NAME = "com.ryanheise.audioservice.AudioService"
 RECEIVER_NAME = "com.ryanheise.audioservice.MediaButtonReceiver"
+IOS_DEPLOYMENT_TARGET = "14.0"
 
 
 def _find_named(
@@ -109,6 +111,27 @@ def configure_ios(info_plist_path: Path) -> None:
         plistlib.dump(info, stream, sort_keys=False)
 
 
+def configure_ios_deployment_target(
+    project_path: Path,
+    framework_info_path: Path,
+) -> None:
+    project = project_path.read_text(encoding="utf-8")
+    project, replacements = re.subn(
+        r"IPHONEOS_DEPLOYMENT_TARGET = [^;]+;",
+        f"IPHONEOS_DEPLOYMENT_TARGET = {IOS_DEPLOYMENT_TARGET};",
+        project,
+    )
+    if replacements == 0:
+        raise RuntimeError(f"No iOS deployment target in {project_path}")
+    project_path.write_text(project, encoding="utf-8")
+
+    with framework_info_path.open("rb") as stream:
+        framework_info = plistlib.load(stream)
+    framework_info["MinimumOSVersion"] = IOS_DEPLOYMENT_TARGET
+    with framework_info_path.open("wb") as stream:
+        plistlib.dump(framework_info, stream, sort_keys=False)
+
+
 def verify_android(manifest_path: Path) -> None:
     root = ET.parse(manifest_path).getroot()
     permissions = {
@@ -136,6 +159,20 @@ def verify_ios(info_plist_path: Path) -> None:
         raise RuntimeError("iOS audio background mode is missing")
 
 
+def verify_ios_deployment_target(
+    project_path: Path,
+    framework_info_path: Path,
+) -> None:
+    project = project_path.read_text(encoding="utf-8")
+    targets = set(re.findall(r"IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);", project))
+    if not targets or targets != {IOS_DEPLOYMENT_TARGET}:
+        raise RuntimeError(f"Unexpected iOS deployment targets: {sorted(targets)}")
+    with framework_info_path.open("rb") as stream:
+        framework_info = plistlib.load(stream)
+    if framework_info.get("MinimumOSVersion") != IOS_DEPLOYMENT_TARGET:
+        raise RuntimeError("Flutter framework iOS minimum version is not 14.0")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: configure_audio_service_platforms.py <flutter-app-dir>")
@@ -143,14 +180,23 @@ def main() -> int:
     app_dir = Path(sys.argv[1]).resolve()
     android_manifest = app_dir / "android/app/src/main/AndroidManifest.xml"
     ios_info = app_dir / "ios/Runner/Info.plist"
-    for path in (android_manifest, ios_info):
+    ios_project = app_dir / "ios/Runner.xcodeproj/project.pbxproj"
+    ios_framework_info = app_dir / "ios/Flutter/AppFrameworkInfo.plist"
+    for path in (
+        android_manifest,
+        ios_info,
+        ios_project,
+        ios_framework_info,
+    ):
         if not path.is_file():
             raise FileNotFoundError(path)
 
     configure_android(android_manifest)
     configure_ios(ios_info)
+    configure_ios_deployment_target(ios_project, ios_framework_info)
     verify_android(android_manifest)
     verify_ios(ios_info)
+    verify_ios_deployment_target(ios_project, ios_framework_info)
     print("Configured Android and iOS background media controls.")
     return 0
 

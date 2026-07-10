@@ -54,6 +54,29 @@ void main() {
         .map((element) => element.innerText);
     expect(modes, contains('audio'));
   });
+
+  test('generated iOS wrapper targets iOS 14 for Darwin plugins', () {
+    final project =
+        File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+    final targets = RegExp(r'IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);')
+        .allMatches(project)
+        .map((match) => match.group(1))
+        .toSet();
+    expect(targets, <String?>{'14.0'});
+
+    final frameworkInfo = XmlDocument.parse(
+      File('ios/Flutter/AppFrameworkInfo.plist').readAsStringSync(),
+    );
+    final elements = frameworkInfo.findAllElements('dict').first.childElements;
+    final entries = elements.toList(growable: false);
+    final keyIndex = entries.indexWhere(
+      (element) =>
+          element.name.local == 'key' &&
+          element.innerText == 'MinimumOSVersion',
+    );
+    expect(keyIndex, greaterThanOrEqualTo(0));
+    expect(entries[keyIndex + 1].innerText, '14.0');
+  });
 }
 
 Set<String?> _componentNames(XmlDocument document, String elementName) {
