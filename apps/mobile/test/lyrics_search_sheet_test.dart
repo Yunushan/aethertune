@@ -182,7 +182,7 @@ final _track = Track(
   title: 'Signal',
   artist: 'Mira',
   album: 'Dawn',
-  duration: Duration(minutes: 3),
+  duration: const Duration(minutes: 3),
   localPath: '/music/signal.mp3',
 );
 
