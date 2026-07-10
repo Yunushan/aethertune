@@ -9,10 +9,12 @@ import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
 import 'offline_playback_policy.dart';
+import 'playback_audio_engine.dart';
 
 class PlayerController extends ChangeNotifier {
-  PlayerController() {
-    _playerStateSub = _audio.playerStateStream.listen((_) => notifyListeners());
+  PlayerController({PlaybackAudioEngine? audioEngine})
+      : _audio = audioEngine ?? JustAudioPlaybackEngine() {
+    _playerStateSub = _audio.stateChanges.listen((_) => notifyListeners());
     _durationSub = _audio.durationStream.listen((duration) {
       _duration = duration ?? Duration.zero;
       notifyListeners();
@@ -22,17 +24,22 @@ class PlayerController extends ChangeNotifier {
         unawaited(_handleTrackCompleted());
       }
     });
+    _currentIndexSub = _audio.currentIndexStream.listen(
+      _handleCurrentIndexChanged,
+    );
   }
 
   static const _queueSnapshotKey = 'aethertune.player_queue.v1';
   static const _playbackSettingsKey = 'aethertune.playback_settings.v1';
 
-  final AudioPlayer _audio = AudioPlayer();
+  final PlaybackAudioEngine _audio;
   final List<Track> _queue = <Track>[];
+  final List<Track> _loadedPlaybackQueue = <Track>[];
 
-  StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<Object?>? _playerStateSub;
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<ProcessingState>? _completedSub;
+  StreamSubscription<int?>? _currentIndexSub;
   Timer? _sleepTimer;
   Timer? _sleepFadeStartTimer;
   Timer? _sleepFadeStepTimer;
@@ -45,6 +52,7 @@ class PlayerController extends ChangeNotifier {
   bool _queueSnapshotLoaded = false;
   bool _playbackSettingsLoaded = false;
   bool _offlineModeEnabled = false;
+  bool _isLoadingQueue = false;
   int _playbackStartSerial = 0;
   double? _sleepFadeStartVolume;
 
@@ -76,7 +84,10 @@ class PlayerController extends ChangeNotifier {
           offlineModeEnabled: _offlineModeEnabled,
         )) {
       _loadedTrackId = null;
+      _loadedPlaybackQueue.clear();
       unawaited(_audio.stop());
+    } else if (_current != null && _loadedPlaybackQueue.isNotEmpty) {
+      unawaited(_reloadQueuePreservingPlayback());
     }
     notifyListeners();
   }
@@ -100,6 +111,7 @@ class PlayerController extends ChangeNotifier {
           ..addAll(snapshot.tracks);
         _current = snapshot.currentTrack;
         _loadedTrackId = null;
+        _loadedPlaybackQueue.clear();
       } catch (_) {
         await prefs.remove(_queueSnapshotKey);
       }
@@ -149,6 +161,9 @@ class PlayerController extends ChangeNotifier {
       _queue
         ..clear()
         ..addAll(queue);
+      if (!_queue.any((queued) => queued.id == track.id)) {
+        _queue.add(track);
+      }
     } else if (!_queue.any((queued) => queued.id == track.id)) {
       _queue.add(track);
     }
@@ -157,11 +172,11 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
     await _saveQueueSnapshot();
 
-    await _load(track);
-    if (initialPosition != null && initialPosition > Duration.zero) {
-      await _audio.seek(initialPosition);
-    }
-    await _audio.play();
+    await _loadQueue(
+      track,
+      initialPosition: initialPosition ?? Duration.zero,
+    );
+    unawaited(_audio.play());
     _playbackStartSerial += 1;
     notifyListeners();
   }
@@ -181,10 +196,10 @@ class PlayerController extends ChangeNotifier {
 
       final wasLoaded = _loadedTrackId == _current!.id;
       if (!wasLoaded) {
-        await _load(_current!);
+        await _loadQueue(_current!);
       }
 
-      await _audio.play();
+      unawaited(_audio.play());
       if (!wasLoaded) {
         _playbackStartSerial += 1;
       }
@@ -206,6 +221,20 @@ class PlayerController extends ChangeNotifier {
     if (_queue.isEmpty || _current == null) {
       await stop();
       return;
+    }
+
+    if (_loadedPlaybackQueue.isNotEmpty &&
+        _loadedPlaybackQueue.any((track) => track.id == _current!.id)) {
+      if (_audio.hasNext) {
+        await _audio.seekToNext();
+        unawaited(_audio.play());
+        return;
+      }
+      if (_audio.loopMode == LoopMode.all) {
+        await _audio.seek(Duration.zero, index: 0);
+        unawaited(_audio.play());
+        return;
+      }
     }
 
     final index = _queue.indexWhere((track) => track.id == _current!.id);
@@ -231,6 +260,14 @@ class PlayerController extends ChangeNotifier {
       return;
     }
 
+    if (_loadedPlaybackQueue.isNotEmpty &&
+        _loadedPlaybackQueue.any((track) => track.id == _current!.id) &&
+        _audio.hasPrevious) {
+      await _audio.seekToPrevious();
+      unawaited(_audio.play());
+      return;
+    }
+
     final index = _queue.indexWhere((track) => track.id == _current!.id);
     final previousTrack = _previousPlayableTrack(index - 1);
     if (previousTrack != null) {
@@ -248,6 +285,7 @@ class PlayerController extends ChangeNotifier {
       ..clear()
       ..addAll(reordered);
     unawaited(_saveQueueSnapshot());
+    unawaited(_reloadQueuePreservingPlayback());
     notifyListeners();
   }
 
@@ -265,6 +303,7 @@ class PlayerController extends ChangeNotifier {
       ..clear()
       ..addAll(remaining);
     unawaited(_saveQueueSnapshot());
+    unawaited(_reloadQueuePreservingPlayback());
     notifyListeners();
   }
 
@@ -285,6 +324,7 @@ class PlayerController extends ChangeNotifier {
     bool fadeOut = false,
     Duration fadeDuration = defaultSleepTimerFadeDuration,
   }) {
+    final restoreGaplessQueue = _stopAtEndOfTrack;
     _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = false;
     _sleepTimerFadesOut = fadeOut;
@@ -301,18 +341,26 @@ class PlayerController extends ChangeNotifier {
         () => _startSleepFade(fadeDuration),
       );
     }
+    if (restoreGaplessQueue) {
+      unawaited(_reloadQueuePreservingPlayback());
+    }
     notifyListeners();
   }
 
   void stopAtEndOfTrack() {
     _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = true;
+    unawaited(_isolateCurrentTrackUntilCompletion());
     notifyListeners();
   }
 
   void cancelSleepTimer() {
+    final restoreGaplessQueue = _stopAtEndOfTrack;
     _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = false;
+    if (restoreGaplessQueue) {
+      unawaited(_reloadQueuePreservingPlayback());
+    }
     notifyListeners();
   }
 
@@ -324,6 +372,26 @@ class PlayerController extends ChangeNotifier {
     }
 
     await next();
+  }
+
+  void _handleCurrentIndexChanged(int? index) {
+    if (_isLoadingQueue ||
+        index == null ||
+        index < 0 ||
+        index >= _loadedPlaybackQueue.length) {
+      return;
+    }
+
+    final track = _loadedPlaybackQueue[index];
+    _loadedTrackId = track.id;
+    if (_current?.id == track.id) {
+      return;
+    }
+
+    _current = track;
+    _playbackStartSerial += 1;
+    unawaited(_saveQueueSnapshot());
+    notifyListeners();
   }
 
   void _startSleepFade(Duration fadeDuration) {
@@ -390,20 +458,108 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  Future<void> _load(Track track) async {
-    if (track.hasLocalSource) {
-      await _audio.setFilePath(track.localPath!);
+  Future<void> _loadQueue(
+    Track track, {
+    Duration initialPosition = Duration.zero,
+    bool forceReload = false,
+  }) async {
+    final playbackQueue = _playbackQueueForCurrentMode();
+    final index = playbackQueue.indexWhere((item) => item.id == track.id);
+    if (index == -1) {
+      throw StateError('Track is not playable in the current mode: ${track.title}');
+    }
+
+    if (!forceReload && _sameQueueOrder(_loadedPlaybackQueue, playbackQueue)) {
+      await _audio.seek(initialPosition, index: index);
       _loadedTrackId = track.id;
       return;
     }
 
-    if (track.hasStreamSource) {
-      await _audio.setUrl(track.streamUrl!);
+    _loadedPlaybackQueue
+      ..clear()
+      ..addAll(playbackQueue);
+    _isLoadingQueue = true;
+    try {
+      await _audio.setQueue(
+        playbackQueue,
+        initialIndex: index,
+        initialPosition: initialPosition,
+      );
       _loadedTrackId = track.id;
+    } on Object {
+      _loadedPlaybackQueue.clear();
+      _loadedTrackId = null;
+      rethrow;
+    } finally {
+      _isLoadingQueue = false;
+    }
+  }
+
+  List<Track> _playbackQueueForCurrentMode() {
+    return _queue
+        .where(
+          (track) =>
+              (track.hasLocalSource || track.hasStreamSource) &&
+              offlineModeAllowsPlayback(
+                track,
+                offlineModeEnabled: _offlineModeEnabled,
+              ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _reloadQueuePreservingPlayback() async {
+    final track = _current;
+    if (track == null ||
+        !offlineModeAllowsPlayback(
+          track,
+          offlineModeEnabled: _offlineModeEnabled,
+        )) {
       return;
     }
 
-    throw StateError('Track has no local path or stream URL: ${track.title}');
+    final wasPlaying = _audio.playing;
+    final position = _audio.position;
+    try {
+      await _loadQueue(
+        track,
+        initialPosition: position,
+        forceReload: true,
+      );
+      if (wasPlaying) {
+        unawaited(_audio.play());
+      }
+    } on Object catch (error) {
+      debugPrint('Could not rebuild gapless queue: $error');
+    }
+  }
+
+  Future<void> _isolateCurrentTrackUntilCompletion() async {
+    final track = _current;
+    if (track == null || _loadedTrackId != track.id) {
+      return;
+    }
+
+    final wasPlaying = _audio.playing;
+    final position = _audio.position;
+    _loadedPlaybackQueue
+      ..clear()
+      ..add(track);
+    _isLoadingQueue = true;
+    try {
+      await _audio.setQueue(
+        <Track>[track],
+        initialIndex: 0,
+        initialPosition: position,
+      );
+      if (wasPlaying) {
+        unawaited(_audio.play());
+      }
+    } on Object catch (error) {
+      debugPrint('Could not isolate sleep-timer track: $error');
+    } finally {
+      _isLoadingQueue = false;
+    }
   }
 
   Future<void> _saveQueueSnapshot() async {
@@ -486,10 +642,11 @@ class PlayerController extends ChangeNotifier {
       }
 
       final track = _queue[index];
-      if (offlineModeAllowsPlayback(
-        track,
-        offlineModeEnabled: _offlineModeEnabled,
-      )) {
+      if ((track.hasLocalSource || track.hasStreamSource) &&
+          offlineModeAllowsPlayback(
+            track,
+            offlineModeEnabled: _offlineModeEnabled,
+          )) {
         return track;
       }
 
@@ -503,10 +660,11 @@ class PlayerController extends ChangeNotifier {
   Track? _previousPlayableTrack(int startIndex) {
     for (var index = startIndex; index >= 0; index -= 1) {
       final track = _queue[index];
-      if (offlineModeAllowsPlayback(
-        track,
-        offlineModeEnabled: _offlineModeEnabled,
-      )) {
+      if ((track.hasLocalSource || track.hasStreamSource) &&
+          offlineModeAllowsPlayback(
+            track,
+            offlineModeEnabled: _offlineModeEnabled,
+          )) {
         return track;
       }
     }
@@ -520,7 +678,8 @@ class PlayerController extends ChangeNotifier {
     _playerStateSub?.cancel();
     _durationSub?.cancel();
     _completedSub?.cancel();
-    _audio.dispose();
+    _currentIndexSub?.cancel();
+    unawaited(_audio.dispose());
     super.dispose();
   }
 }

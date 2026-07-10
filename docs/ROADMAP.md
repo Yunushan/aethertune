@@ -21,6 +21,9 @@
 - [x] Queue
 - [x] Queue reorder/remove
 - [x] Persistent queue
+- [x] Native playlist-backed gapless queue engine
+- [x] Linux/Windows MediaKit audio backends with playlist prefetch
+- [ ] Physical-device acoustic gapless transition fixtures
 - [x] Save queue as playlist
 - [x] Local seed-based track radio queues
 - [x] Local share text for tracks, browse groups, and playlists

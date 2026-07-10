@@ -11,6 +11,9 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   just_audio: ^0.9.42
+  just_audio_media_kit: ^2.1.0
+  media_kit_libs_linux: ^1.2.1
+  media_kit_libs_windows_audio: ^1.0.9
   audio_session: ^0.1.21
   file_picker: ^8.1.2
   provider: ^6.1.2

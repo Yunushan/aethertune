@@ -29,7 +29,8 @@ Data/provider layer
   OfflineCacheManager, future legal provider adapters
 
 Platform layer
-  Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker, audio backend
+  Flutter Android/iOS/Linux/macOS/Windows wrappers, file picker,
+  native just_audio playlist backend plus MediaKit Linux/Windows audio backends
 
 Server layer
   Dart Shelf handler, health endpoint, app info endpoint, catalog endpoint
