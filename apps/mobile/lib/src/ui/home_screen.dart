@@ -545,7 +545,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<String?> _importLyricsDocument(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       allowedExtensions: supportedLyricsDocumentExtensions,
       dialogTitle: 'Import lyrics file',
       type: FileType.custom,
@@ -730,7 +730,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       allowMultiple: true,
       type: FileType.audio,
     );
@@ -766,7 +766,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final folderPath = await FilePicker.platform.getDirectoryPath(
+    final folderPath = await FilePicker.getDirectoryPath(
       dialogTitle: 'Import audio folder',
     );
     if (!context.mounted || folderPath == null) {
@@ -5036,7 +5036,7 @@ class _HistoryTabState extends State<_HistoryTab> {
 
     try {
       final bytes = await captureListeningRecapPng(boundaryKey);
-      final outputPath = await FilePicker.platform.saveFile(
+      final outputPath = await FilePicker.saveFile(
         dialogTitle: 'Save listening recap image',
         fileName: listeningRecapPngFileName(recap),
         type: FileType.custom,
@@ -8582,7 +8582,7 @@ class _SettingsTab extends StatelessWidget {
       return;
     }
 
-    final destinationPath = await FilePicker.platform.getDirectoryPath(
+    final destinationPath = await FilePicker.getDirectoryPath(
       dialogTitle: 'Export cached media',
     );
     if (!context.mounted || destinationPath == null) {
