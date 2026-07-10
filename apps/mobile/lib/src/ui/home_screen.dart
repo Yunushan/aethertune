@@ -43,6 +43,7 @@ import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/listening_stats_bar_chart.dart';
+import 'widgets/library_sync_panel.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/self_hosted_account_editor.dart';
@@ -8766,6 +8767,8 @@ class _SettingsTab extends StatelessWidget {
             leading: const Icon(Icons.more_horiz),
             title: Text('${offlineQueue.length - 5} more queued item(s)'),
           ),
+        const Divider(),
+        const LibrarySyncPanel(),
         const Divider(),
         ListTile(
           leading: const Icon(Icons.file_upload_outlined),

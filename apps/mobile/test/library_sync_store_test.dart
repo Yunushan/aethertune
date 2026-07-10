@@ -35,8 +35,10 @@ void main() {
       },
     );
     await store.load();
+    final library = LibraryStore();
+    await library.load();
 
-    await store.testAndSave(_account(), 'private-token');
+    await store.testAndSave(library, _account(), 'private-token');
 
     expect(store.isConfigured, isTrue);
     expect(store.lastKnownRevision, 0);
@@ -69,14 +71,20 @@ void main() {
       clientFactory: (account, token) => activeGateway,
     );
     await store.load();
-    await store.testAndSave(_account(), 'old-token');
+    final library = LibraryStore();
+    await library.load();
+    await store.testAndSave(library, _account(), 'old-token');
 
     activeGateway = _FakeSyncGateway(
       remote: const LibrarySyncRemoteSnapshot(revision: 0),
       fetchError: StateError('Rejected replacement-token.'),
     );
     await expectLater(
-      store.testAndSave(_account(deviceId: 'Changed device'), 'replacement-token'),
+      store.testAndSave(
+        library,
+        _account(deviceId: 'Changed device'),
+        'replacement-token',
+      ),
       throwsA(
         predicate<Object>((error) {
           final message = error.toString();
@@ -91,7 +99,11 @@ void main() {
     activeGateway = firstGateway;
     vault.failNextWriteFor = 'write-failure-token';
     await expectLater(
-      store.testAndSave(_account(deviceId: 'Changed device'), 'write-failure-token'),
+      store.testAndSave(
+        library,
+        _account(deviceId: 'Changed device'),
+        'write-failure-token',
+      ),
       throwsA(isA<Exception>()),
     );
     expect(vault.token, 'old-token');
@@ -115,7 +127,7 @@ void main() {
       Track(id: 'track-1', title: 'Track 1', localPath: '/music/track.mp3'),
     ]);
     await sync.load();
-    await sync.testAndSave(_account(), 'token');
+    await sync.testAndSave(library, _account(), 'token');
     gateway.pushError = const LibrarySyncConflictException(
       currentRevision: 4,
       updatedByDevice: 'Other device',
@@ -187,7 +199,7 @@ void main() {
       clientFactory: (account, token) => gateway,
     );
     await sync.load();
-    await sync.testAndSave(_account(), 'token');
+    await sync.testAndSave(localStore, _account(), 'token');
 
     await sync.pull(localStore);
 
@@ -211,7 +223,7 @@ void main() {
     final library = LibraryStore();
     await library.load();
     await sync.load();
-    await sync.testAndSave(_account(), 'token');
+    await sync.testAndSave(library, _account(), 'token');
     await library.setOfflineModeEnabled(true);
 
     await expectLater(sync.push(library), throwsA(isA<StateError>()));

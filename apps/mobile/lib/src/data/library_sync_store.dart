@@ -99,6 +99,7 @@ class LibrarySyncStore extends ChangeNotifier {
   }
 
   Future<LibrarySyncRemoteSnapshot> testAndSave(
+    LibraryStore library,
     LibrarySyncAccount account,
     String token,
   ) async {
@@ -107,6 +108,7 @@ class LibrarySyncStore extends ChangeNotifier {
       throw const FormatException('Sync token is required.');
     }
     return _runBusy(() async {
+      _requireOnline(library);
       LibrarySyncRemoteSnapshot remote;
       try {
         remote = await _clientFactory(account, normalizedToken).fetch();

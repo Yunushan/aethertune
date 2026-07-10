@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
+import '../data/library_sync_store.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
@@ -22,6 +23,9 @@ class AetherTuneApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<SelfHostedProviderStore>(
           create: (_) => SelfHostedProviderStore()..load(),
+        ),
+        ChangeNotifierProvider<LibrarySyncStore>(
+          create: (_) => LibrarySyncStore()..load(),
         ),
         ChangeNotifierProxyProvider2<
             LibraryStore,
