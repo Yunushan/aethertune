@@ -1183,7 +1183,7 @@ Future<String?> _promptForRemotePlaylistName(
           onChanged: (nextValue) {
             setDialogState(() => value = nextValue.trim());
           },
-          onSubmitted: (_) {
+          onFieldSubmitted: (_) {
             if (value.isNotEmpty) {
               Navigator.of(dialogContext).pop(value);
             }
