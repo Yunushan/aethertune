@@ -37,6 +37,7 @@ import '../player/player_controller.dart';
 import 'responsive_layout.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
+import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/track_tile.dart';
 
@@ -1893,6 +1894,8 @@ class _LocalChartsPreview extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _LibraryStatsOverview(stats: stats),
+        const SizedBox(height: 16),
+        _LibraryStatsCharts(stats: stats),
         const SizedBox(height: 16),
         _LibraryStatsTrackSection(stats: stats),
         const SizedBox(height: 12),
@@ -4452,7 +4455,7 @@ class _HistoryTab extends StatefulWidget {
 class _HistoryTabState extends State<_HistoryTab> {
   final _historySearchController = TextEditingController();
 
-  _HistoryStatsRange _statsRange = _HistoryStatsRange.all;
+  ListeningHistoryRange _statsRange = ListeningHistoryRange.all;
   String _historyQuery = '';
 
   @override
@@ -4467,7 +4470,7 @@ class _HistoryTabState extends State<_HistoryTab> {
     final player = context.read<PlayerController>();
     final now = DateTime.now();
     final statsFrom = _historyStatsRangeStart(_statsRange, now);
-    final statsTo = _statsRange == _HistoryStatsRange.all ? null : now;
+    final statsTo = _statsRange == ListeningHistoryRange.all ? null : now;
     final historyQuery = _historyQuery.trim();
     final hasHistorySearch = historyQuery.isNotEmpty;
     final recentlyPlayed = library.recentlyPlayedTracks(
@@ -4509,6 +4512,11 @@ class _HistoryTabState extends State<_HistoryTab> {
                 'History',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
+            ),
+            IconButton(
+              tooltip: 'Saved history views',
+              onPressed: () => _showSavedHistoryViews(context),
+              icon: const Icon(Icons.bookmarks_outlined),
             ),
             IconButton(
               tooltip: 'Export stats',
@@ -4563,15 +4571,16 @@ class _HistoryTabState extends State<_HistoryTab> {
           },
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<_HistoryStatsRange>(
+        DropdownButtonFormField<ListeningHistoryRange>(
+          key: ValueKey<ListeningHistoryRange>(_statsRange),
           initialValue: _statsRange,
           decoration: const InputDecoration(
             labelText: 'Stats range',
             prefixIcon: Icon(Icons.date_range),
           ),
-          items: <DropdownMenuItem<_HistoryStatsRange>>[
-            for (final range in _HistoryStatsRange.values)
-              DropdownMenuItem<_HistoryStatsRange>(
+          items: <DropdownMenuItem<ListeningHistoryRange>>[
+            for (final range in ListeningHistoryRange.values)
+              DropdownMenuItem<ListeningHistoryRange>(
                 value: range,
                 child: Text(_historyStatsRangeLabel(range)),
               ),
@@ -4587,6 +4596,8 @@ class _HistoryTabState extends State<_HistoryTab> {
         const SizedBox(height: 12),
         _LibraryStatsOverview(stats: stats),
         if (stats.playbackCount > 0) ...<Widget>[
+          const SizedBox(height: 16),
+          _LibraryStatsCharts(stats: stats),
           const SizedBox(height: 16),
           _ListeningRecapSection(
             title: 'Monthly recaps',
@@ -4684,6 +4695,224 @@ class _HistoryTabState extends State<_HistoryTab> {
             ),
       ],
     );
+  }
+
+  Future<void> _showSavedHistoryViews(BuildContext context) async {
+    final currentQuery = _historyQuery.trim();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Consumer<LibraryStore>(
+            builder: (_, library, child) {
+              return ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  ListTile(
+                    leading: const Icon(Icons.bookmark_add_outlined),
+                    title: const Text('Save current view'),
+                    subtitle: Text(
+                      _savedHistoryViewDescription(
+                        range: _statsRange,
+                        query: currentQuery,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(_createSavedHistoryView(context));
+                    },
+                  ),
+                  if (library.savedHistoryViews.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 12, 24, 20),
+                      child: Text(
+                        'Saved views keep a date range and history search together.',
+                      ),
+                    )
+                  else
+                    for (final view in library.savedHistoryViews)
+                      ListTile(
+                        leading: Icon(
+                          view.range == _statsRange &&
+                                  view.query == currentQuery
+                              ? Icons.bookmark
+                              : Icons.bookmark_border,
+                        ),
+                        title: Text(view.name),
+                        subtitle: Text(
+                          _savedHistoryViewDescription(
+                            range: view.range,
+                            query: view.query,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: PopupMenuButton<_SavedHistoryViewAction>(
+                          tooltip: 'Edit saved history view',
+                          onSelected: (action) async {
+                            switch (action) {
+                              case _SavedHistoryViewAction.update:
+                                await library.updateSavedHistoryView(
+                                  view.id,
+                                  name: view.name,
+                                  query: _historyQuery,
+                                  range: _statsRange,
+                                );
+                                break;
+                              case _SavedHistoryViewAction.rename:
+                                Navigator.of(sheetContext).pop();
+                                await _renameSavedHistoryView(context, view);
+                                break;
+                              case _SavedHistoryViewAction.delete:
+                                await library.deleteSavedHistoryView(view.id);
+                                break;
+                            }
+                          },
+                          itemBuilder: (_) => const <
+                              PopupMenuEntry<_SavedHistoryViewAction>>[
+                            PopupMenuItem<_SavedHistoryViewAction>(
+                              value: _SavedHistoryViewAction.update,
+                              child: ListTile(
+                                leading: Icon(Icons.save_outlined),
+                                title: Text('Update to current'),
+                              ),
+                            ),
+                            PopupMenuItem<_SavedHistoryViewAction>(
+                              value: _SavedHistoryViewAction.rename,
+                              child: ListTile(
+                                leading: Icon(Icons.edit_outlined),
+                                title: Text('Rename'),
+                              ),
+                            ),
+                            PopupMenuItem<_SavedHistoryViewAction>(
+                              value: _SavedHistoryViewAction.delete,
+                              child: ListTile(
+                                leading: Icon(Icons.delete_outline),
+                                title: Text('Delete'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _applySavedHistoryView(view);
+                        },
+                      ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void _applySavedHistoryView(SavedHistoryView view) {
+    _historySearchController.value = TextEditingValue(
+      text: view.query,
+      selection: TextSelection.collapsed(offset: view.query.length),
+    );
+    setState(() {
+      _historyQuery = view.query;
+      _statsRange = view.range;
+    });
+  }
+
+  Future<void> _createSavedHistoryView(BuildContext context) async {
+    final name = await _showSavedHistoryViewNameDialog(
+      context,
+      title: 'Save history view',
+      actionLabel: 'Save',
+    );
+    if (!context.mounted || name == null) {
+      return;
+    }
+
+    try {
+      await context.read<LibraryStore>().createSavedHistoryView(
+            name: name,
+            query: _historyQuery,
+            range: _statsRange,
+          );
+    } on ArgumentError catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message?.toString() ?? '$error')),
+      );
+    }
+  }
+
+  Future<void> _renameSavedHistoryView(
+    BuildContext context,
+    SavedHistoryView view,
+  ) async {
+    final name = await _showSavedHistoryViewNameDialog(
+      context,
+      title: 'Rename history view',
+      actionLabel: 'Rename',
+      initialName: view.name,
+    );
+    if (!context.mounted || name == null) {
+      return;
+    }
+
+    await context.read<LibraryStore>().updateSavedHistoryView(
+          view.id,
+          name: name,
+          query: view.query,
+          range: view.range,
+        );
+  }
+
+  Future<String?> _showSavedHistoryViewNameDialog(
+    BuildContext context, {
+    required String title,
+    required String actionLabel,
+    String initialName = '',
+  }) async {
+    final controller = TextEditingController(text: initialName);
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text(title),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'View name'),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) {
+                if (value.trim().isNotEmpty) {
+                  Navigator.of(dialogContext).pop(value.trim());
+                }
+              },
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final value = controller.text.trim();
+                  if (value.isNotEmpty) {
+                    Navigator.of(dialogContext).pop(value);
+                  }
+                },
+                child: Text(actionLabel),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _showStatsExportPicker(
@@ -4839,30 +5068,41 @@ class _HistoryTabState extends State<_HistoryTab> {
   }
 }
 
-enum _HistoryStatsRange { all, sevenDays, thirtyDays, year }
+enum _SavedHistoryViewAction { update, rename, delete }
 
-String _historyStatsRangeLabel(_HistoryStatsRange range) {
+String _savedHistoryViewDescription({
+  required ListeningHistoryRange range,
+  required String query,
+}) {
+  final normalizedQuery = query.trim();
+  if (normalizedQuery.isEmpty) {
+    return _historyStatsRangeLabel(range);
+  }
+  return '${_historyStatsRangeLabel(range)} - "$normalizedQuery"';
+}
+
+String _historyStatsRangeLabel(ListeningHistoryRange range) {
   switch (range) {
-    case _HistoryStatsRange.all:
+    case ListeningHistoryRange.all:
       return 'All time';
-    case _HistoryStatsRange.sevenDays:
+    case ListeningHistoryRange.sevenDays:
       return 'Last 7 days';
-    case _HistoryStatsRange.thirtyDays:
+    case ListeningHistoryRange.thirtyDays:
       return 'Last 30 days';
-    case _HistoryStatsRange.year:
+    case ListeningHistoryRange.year:
       return 'Last year';
   }
 }
 
-DateTime? _historyStatsRangeStart(_HistoryStatsRange range, DateTime now) {
+DateTime? _historyStatsRangeStart(ListeningHistoryRange range, DateTime now) {
   switch (range) {
-    case _HistoryStatsRange.all:
+    case ListeningHistoryRange.all:
       return null;
-    case _HistoryStatsRange.sevenDays:
+    case ListeningHistoryRange.sevenDays:
       return now.subtract(const Duration(days: 7));
-    case _HistoryStatsRange.thirtyDays:
+    case ListeningHistoryRange.thirtyDays:
       return now.subtract(const Duration(days: 30));
-    case _HistoryStatsRange.year:
+    case ListeningHistoryRange.year:
       return now.subtract(const Duration(days: 365));
   }
 }
@@ -4917,6 +5157,79 @@ class _LibraryStatsOverview extends StatelessWidget {
           value: _formatStatsDuration(stats.estimatedListeningDuration),
         ),
       ],
+    );
+  }
+}
+
+class _LibraryStatsCharts extends StatelessWidget {
+  const _LibraryStatsCharts({required this.stats});
+
+  final LibraryStatsSummary stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final trackData = stats.topTracks
+        .map(
+          (trackStats) => ListeningStatsBarDatum(
+            label: trackStats.track.title,
+            value: trackStats.playCount,
+            valueLabel: '${trackStats.playCount} play(s)',
+          ),
+        )
+        .toList(growable: false);
+    final artistData = stats.topArtists
+        .map(
+          (artistStats) => ListeningStatsBarDatum(
+            label: artistStats.label,
+            value: artistStats.playCount,
+            valueLabel: '${artistStats.playCount} play(s)',
+          ),
+        )
+        .toList(growable: false);
+    if (trackData.isEmpty && artistData.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final trackChart = ListeningStatsBarChart(
+      title: 'Top tracks chart',
+      icon: Icons.music_note_outlined,
+      color: colorScheme.primary,
+      data: trackData,
+    );
+    final artistChart = ListeningStatsBarChart(
+      title: 'Top artists chart',
+      icon: Icons.person_outline,
+      color: colorScheme.tertiary,
+      data: artistData,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showSideBySide = constraints.maxWidth >= 720 &&
+            trackData.isNotEmpty &&
+            artistData.isNotEmpty;
+        if (showSideBySide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(child: trackChart),
+              const SizedBox(width: 28),
+              Expanded(child: artistChart),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (trackData.isNotEmpty) trackChart,
+            if (trackData.isNotEmpty && artistData.isNotEmpty)
+              const SizedBox(height: 20),
+            if (artistData.isNotEmpty) artistChart,
+          ],
+        );
+      },
     );
   }
 }

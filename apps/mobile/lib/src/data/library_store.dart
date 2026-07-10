@@ -57,6 +57,8 @@ enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
 enum LibraryRecapPeriod { month, year }
 
+enum ListeningHistoryRange { all, sevenDays, thirtyDays, year }
+
 enum LibraryMoodMixType { focus, energy, chill, workout, sleep }
 
 enum LibrarySimilarityReason { artist, album, genre, folder, source }
@@ -309,6 +311,67 @@ class CustomSmartPlaylist {
   }
 }
 
+class SavedHistoryView {
+  SavedHistoryView({
+    required this.id,
+    required this.name,
+    this.query = '',
+    this.range = ListeningHistoryRange.all,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+  final String id;
+  final String name;
+  final String query;
+  final ListeningHistoryRange range;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  SavedHistoryView copyWith({
+    String? id,
+    String? name,
+    String? query,
+    ListeningHistoryRange? range,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return SavedHistoryView(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      query: query ?? this.query,
+      range: range ?? this.range,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'id': id,
+      'name': name,
+      'query': query,
+      'range': range.name,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  factory SavedHistoryView.fromJson(Map<String, Object?> json) {
+    return SavedHistoryView(
+      id: json['id'] as String,
+      name: json['name'] as String? ?? 'Untitled history view',
+      query: json['query'] as String? ?? '',
+      range: _listeningHistoryRangeFromName(json['range'] as String?),
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+}
+
 class LibraryStatsSummary {
   const LibraryStatsSummary({
     this.from,
@@ -444,6 +507,13 @@ CustomSmartPlaylistSortMode _customSmartPlaylistSortModeFromName(
   );
 }
 
+ListeningHistoryRange _listeningHistoryRangeFromName(String? value) {
+  return ListeningHistoryRange.values.firstWhere(
+    (range) => range.name == value,
+    orElse: () => ListeningHistoryRange.all,
+  );
+}
+
 AppThemePreference _appThemePreferenceFromName(String? value) {
   return AppThemePreference.values.firstWhere(
     (preference) => preference.name == value,
@@ -468,6 +538,7 @@ class LibraryStore extends ChangeNotifier {
   static const _playlistsKey = 'aethertune.playlists.v1';
   static const _customSmartPlaylistsKey =
       'aethertune.custom_smart_playlists.v1';
+  static const _savedHistoryViewsKey = 'aethertune.saved_history_views.v1';
   static const _podcastSubscriptionsKey =
       'aethertune.podcast_subscriptions.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
@@ -499,6 +570,7 @@ class LibraryStore extends ChangeNotifier {
   final List<Playlist> _playlists = <Playlist>[];
   final List<CustomSmartPlaylist> _customSmartPlaylists =
       <CustomSmartPlaylist>[];
+  final List<SavedHistoryView> _savedHistoryViews = <SavedHistoryView>[];
   final List<PodcastSubscription> _podcastSubscriptions =
       <PodcastSubscription>[];
   final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
@@ -521,6 +593,8 @@ class LibraryStore extends ChangeNotifier {
   List<Playlist> get playlists => List.unmodifiable(_playlists);
   List<CustomSmartPlaylist> get customSmartPlaylists =>
       List.unmodifiable(_customSmartPlaylists);
+  List<SavedHistoryView> get savedHistoryViews =>
+      List.unmodifiable(_savedHistoryViews);
   List<PodcastSubscription> get podcastSubscriptions =>
       List.unmodifiable(_podcastSubscriptions);
   List<PlaybackHistoryEntry> get playbackHistory =>
@@ -592,6 +666,23 @@ class LibraryStore extends ChangeNotifier {
               )
               .toList(growable: false),
         );
+    }
+
+    final rawSavedHistoryViews = prefs.getString(_savedHistoryViewsKey);
+    if (rawSavedHistoryViews != null && rawSavedHistoryViews.isNotEmpty) {
+      final decoded = jsonDecode(rawSavedHistoryViews) as List<dynamic>;
+      _savedHistoryViews
+        ..clear()
+        ..addAll(
+          _dedupeSavedHistoryViews(
+            decoded.whereType<Map>().map(
+                  (item) => SavedHistoryView.fromJson(
+                    Map<String, Object?>.from(item),
+                  ),
+                ),
+          ),
+        );
+      _sortSavedHistoryViews();
     }
 
     final rawPodcastSubscriptions = prefs.getString(_podcastSubscriptionsKey);
@@ -810,6 +901,7 @@ class LibraryStore extends ChangeNotifier {
     _tracks.clear();
     _playlists.clear();
     _customSmartPlaylists.clear();
+    _savedHistoryViews.clear();
     _podcastSubscriptions.clear();
     _history.clear();
     _searchQueryHistory.clear();
@@ -2168,6 +2260,8 @@ class LibraryStore extends ChangeNotifier {
       'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
       'customSmartPlaylists':
           _customSmartPlaylists.map((rule) => rule.toJson()).toList(),
+      'savedHistoryViews':
+          _savedHistoryViews.map((view) => view.toJson()).toList(),
       'podcastSubscriptions':
           _podcastSubscriptions.map((item) => item.toJson()).toList(),
       'history': _history.map((entry) => entry.toJson()).toList(),
@@ -2568,6 +2662,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredTracks = <Track>[];
     final restoredPlaylists = <Playlist>[];
     final restoredCustomSmartPlaylists = <CustomSmartPlaylist>[];
+    final restoredSavedHistoryViews = <SavedHistoryView>[];
     final restoredPodcastSubscriptions = <PodcastSubscription>[];
     final restoredHistory = <PlaybackHistoryEntry>[];
     final restoredSearchQueryHistory = <String>[];
@@ -2634,6 +2729,13 @@ class LibraryStore extends ChangeNotifier {
           'customSmartPlaylists',
           isRequired: false,
         ).map(CustomSmartPlaylist.fromJson),
+      );
+      restoredSavedHistoryViews.addAll(
+        _jsonObjectList(
+          backup,
+          'savedHistoryViews',
+          isRequired: false,
+        ).map(SavedHistoryView.fromJson),
       );
       restoredHistory.addAll(
         _jsonObjectList(backup, 'history', isRequired: false).map(
@@ -2704,6 +2806,9 @@ class LibraryStore extends ChangeNotifier {
     final sanitizedCustomSmartPlaylists = _dedupeCustomSmartPlaylists(
       restoredCustomSmartPlaylists,
     );
+    final sanitizedSavedHistoryViews = _dedupeSavedHistoryViews(
+      restoredSavedHistoryViews,
+    );
 
     _tracks
       ..clear()
@@ -2714,6 +2819,9 @@ class LibraryStore extends ChangeNotifier {
     _customSmartPlaylists
       ..clear()
       ..addAll(sanitizedCustomSmartPlaylists);
+    _savedHistoryViews
+      ..clear()
+      ..addAll(sanitizedSavedHistoryViews);
     _podcastSubscriptions
       ..clear()
       ..addAll(sanitizedPodcastSubscriptions);
@@ -2744,6 +2852,7 @@ class LibraryStore extends ChangeNotifier {
     _sortTracks();
     _sortPlaylists();
     _sortCustomSmartPlaylists();
+    _sortSavedHistoryViews();
     _sortPodcastSubscriptions();
     _sortHistory();
     _sortOfflineCacheQueue();
@@ -3545,6 +3654,64 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _customSmartPlaylists.removeAt(index);
+    await _save();
+    notifyListeners();
+  }
+
+  Future<SavedHistoryView> createSavedHistoryView({
+    required String name,
+    String query = '',
+    ListeningHistoryRange range = ListeningHistoryRange.all,
+  }) async {
+    final normalizedName = _normalizeSavedHistoryViewName(name);
+    final now = _clock();
+    final view = SavedHistoryView(
+      id: _savedHistoryViewId(normalizedName, now),
+      name: normalizedName,
+      query: query.trim(),
+      range: range,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    _savedHistoryViews.add(view);
+    _sortSavedHistoryViews();
+    await _save();
+    notifyListeners();
+    return view;
+  }
+
+  Future<SavedHistoryView?> updateSavedHistoryView(
+    String id, {
+    required String name,
+    required String query,
+    required ListeningHistoryRange range,
+  }) async {
+    final index = _savedHistoryViews.indexWhere((view) => view.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final updated = _savedHistoryViews[index].copyWith(
+      name: _normalizeSavedHistoryViewName(name),
+      query: query.trim(),
+      range: range,
+      updatedAt: _clock(),
+    );
+    _savedHistoryViews[index] = updated;
+    _sortSavedHistoryViews();
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<void> deleteSavedHistoryView(String id) async {
+    final index = _savedHistoryViews.indexWhere((view) => view.id == id);
+    if (index == -1) {
+      return;
+    }
+
+    _savedHistoryViews.removeAt(index);
     await _save();
     notifyListeners();
   }
@@ -4736,6 +4903,19 @@ class LibraryStore extends ChangeNotifier {
     return normalized;
   }
 
+  String _normalizeSavedHistoryViewName(String name) {
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        name,
+        'name',
+        'Saved history view name cannot be empty.',
+      );
+    }
+
+    return normalized;
+  }
+
   int _sanitizeMinimumPlayCount(int value) {
     if (value < 0) {
       return 0;
@@ -4758,6 +4938,12 @@ class LibraryStore extends ChangeNotifier {
 
   void _sortCustomSmartPlaylists() {
     _customSmartPlaylists.sort(
+      (a, b) => b.updatedAt.compareTo(a.updatedAt),
+    );
+  }
+
+  void _sortSavedHistoryViews() {
+    _savedHistoryViews.sort(
       (a, b) => b.updatedAt.compareTo(a.updatedAt),
     );
   }
@@ -4855,6 +5041,11 @@ class LibraryStore extends ChangeNotifier {
 
   String _customSmartPlaylistId(String name, DateTime createdAt) {
     final base = 'smart-${createdAt.microsecondsSinceEpoch}-$name';
+    return base64Url.encode(utf8.encode(base)).replaceAll('=', '');
+  }
+
+  String _savedHistoryViewId(String name, DateTime createdAt) {
+    final base = 'history-${createdAt.microsecondsSinceEpoch}-$name';
     return base64Url.encode(utf8.encode(base)).replaceAll('=', '');
   }
 
@@ -5081,6 +5272,27 @@ class LibraryStore extends ChangeNotifier {
     return byId.values.toList(growable: false);
   }
 
+  List<SavedHistoryView> _dedupeSavedHistoryViews(
+    Iterable<SavedHistoryView> views,
+  ) {
+    final byId = <String, SavedHistoryView>{};
+    for (final view in views) {
+      final id = view.id.trim();
+      final name = view.name.trim();
+      if (id.isEmpty || name.isEmpty) {
+        continue;
+      }
+
+      byId[id] = view.copyWith(
+        id: id,
+        name: name,
+        query: view.query.trim(),
+      );
+    }
+
+    return byId.values.toList(growable: false);
+  }
+
   List<PodcastSubscription> _dedupePodcastSubscriptions(
     Iterable<PodcastSubscription> subscriptions,
   ) {
@@ -5218,6 +5430,9 @@ class LibraryStore extends ChangeNotifier {
     final encodedCustomSmartPlaylists = jsonEncode(
       _customSmartPlaylists.map((rule) => rule.toJson()).toList(),
     );
+    final encodedSavedHistoryViews = jsonEncode(
+      _savedHistoryViews.map((view) => view.toJson()).toList(),
+    );
     final encodedPodcastSubscriptions = jsonEncode(
       _podcastSubscriptions.map((item) => item.toJson()).toList(),
     );
@@ -5240,6 +5455,7 @@ class LibraryStore extends ChangeNotifier {
       _customSmartPlaylistsKey,
       encodedCustomSmartPlaylists,
     );
+    await prefs.setString(_savedHistoryViewsKey, encodedSavedHistoryViews);
     await prefs.setString(
       _podcastSubscriptionsKey,
       encodedPodcastSubscriptions,

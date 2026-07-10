@@ -1468,6 +1468,81 @@ void main() {
     expect(store.playbackHistoryEntries(query: 'missing'), isEmpty);
   });
 
+  test('creates updates persists backs up and deletes saved history views',
+      () async {
+    var now = DateTime.utc(2026, 1, 10, 13);
+    final firstStore = LibraryStore(clock: () => now);
+    await firstStore.load();
+
+    final created = await firstStore.createSavedHistoryView(
+      name: '  Recent Mira  ',
+      query: '  mira  ',
+      range: ListeningHistoryRange.sevenDays,
+    );
+
+    expect(created.name, 'Recent Mira');
+    expect(created.query, 'mira');
+    expect(created.range, ListeningHistoryRange.sevenDays);
+    expect(firstStore.savedHistoryViews.single.id, created.id);
+    await expectLater(
+      firstStore.createSavedHistoryView(name: '   '),
+      throwsArgumentError,
+    );
+
+    now = DateTime.utc(2026, 1, 10, 14);
+    final updated = await firstStore.updateSavedHistoryView(
+      created.id,
+      name: 'Mira month',
+      query: '  ambient  ',
+      range: ListeningHistoryRange.thirtyDays,
+    );
+
+    expect(updated, isNotNull);
+    final updatedView = updated!;
+    expect(updatedView.name, 'Mira month');
+    expect(updatedView.query, 'ambient');
+    expect(updatedView.range, ListeningHistoryRange.thirtyDays);
+    expect(updatedView.updatedAt, now);
+    expect(
+      await firstStore.updateSavedHistoryView(
+        'missing',
+        name: 'Missing',
+        query: '',
+        range: ListeningHistoryRange.all,
+      ),
+      isNull,
+    );
+
+    final secondStore = LibraryStore(clock: () => now);
+    await secondStore.load();
+    expect(
+      secondStore.savedHistoryViews.single.toJson(),
+      updatedView.toJson(),
+    );
+
+    final backup = jsonDecode(secondStore.exportBackupJson())
+        as Map<String, dynamic>;
+    expect(backup['savedHistoryViews'], hasLength(1));
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final restoredStore = LibraryStore(clock: () => now);
+    await restoredStore.load();
+    await restoredStore.restoreBackupJson(jsonEncode(backup));
+    expect(
+      restoredStore.savedHistoryViews.single.toJson(),
+      updatedView.toJson(),
+    );
+
+    await restoredStore.deleteSavedHistoryView(created.id);
+    expect(restoredStore.savedHistoryViews, isEmpty);
+    await restoredStore.deleteSavedHistoryView(created.id);
+    expect(restoredStore.savedHistoryViews, isEmpty);
+
+    backup.remove('savedHistoryViews');
+    await restoredStore.restoreBackupJson(jsonEncode(backup));
+    expect(restoredStore.savedHistoryViews, isEmpty);
+  });
+
   test('pauses playback history and resume progress recording', () async {
     var now = DateTime.utc(2026, 1, 10, 12);
     final store = LibraryStore(clock: () => now);

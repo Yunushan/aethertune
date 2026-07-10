@@ -17,6 +17,7 @@
 - [x] Pause listening history privacy control
 - [x] Delete individual listening-history entries
 - [x] Search listening history
+- [x] Persisted saved history range/query views
 - [x] Queue
 - [x] Queue reorder/remove
 - [x] Persistent queue
@@ -72,7 +73,8 @@
 - [x] Stats date ranges and export
 - [x] Yearly/monthly calendar recap cards
 - [x] Saveable monthly/yearly PNG recap cards
-- [ ] Richer recap charts and saved visual themes
+- [x] Responsive top-track/top-artist recap bar charts
+- [ ] Calendar heatmaps and saved visual themes
 - [x] Recently added view
 - [x] Local search suggestions
 - [x] Persisted search query history
