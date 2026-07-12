@@ -14,6 +14,8 @@ class LyricsDocumentExport {
   final String text;
 
   List<int> get bytes => utf8.encode(text);
+
+  String get extension => lyricsDocumentExtensionForText(text);
 }
 
 bool isSupportedLyricsDocumentName(String fileName) {

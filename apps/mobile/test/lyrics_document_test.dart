@@ -41,10 +41,12 @@ void main() {
     )!;
 
     expect(plainExport.fileName, 'Plain Song.txt');
+    expect(plainExport.extension, 'txt');
     expect(plainExport.text, 'First line\nSecond line');
     expect(utf8.decode(plainExport.bytes), plainExport.text);
 
     expect(syncedExport.fileName, 'Mira Vale - Dawn Signal.lrc');
+    expect(syncedExport.extension, 'lrc');
     expect(syncedExport.text, contains('[00:01.00]First synced'));
     expect(utf8.decode(syncedExport.bytes), syncedExport.text);
   });

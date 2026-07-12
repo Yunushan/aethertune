@@ -600,6 +600,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.file_download_outlined),
                     label: const Text('Copy export'),
                   ),
+                  Tooltip(
+                    message: 'Save lyrics file',
+                    child: IconButton(
+                      onPressed: () => unawaited(
+                        _saveLyricsDraftExportDocument(
+                          context,
+                          track,
+                          controller.text,
+                        ),
+                      ),
+                      icon: const Icon(Icons.save_alt_outlined),
+                    ),
+                  ),
                   TextButton.icon(
                     onPressed: () => unawaited(
                       _copyLyricsDraftShareText(
@@ -5888,6 +5901,54 @@ Future<void> _copyLyricsDraftExportDocument(
         : 'Copied ${export.fileName} export text.',
     unavailableMessage: 'Add lyrics before copying export text.',
   );
+}
+
+Future<void> _saveLyricsDraftExportDocument(
+  BuildContext context,
+  Track track,
+  String plainText,
+) async {
+  final export = buildLyricsDocumentExport(
+    title: track.title,
+    artist: track.artist,
+    plainText: plainText,
+  );
+  if (export == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Add lyrics before saving an export file.')),
+    );
+    return;
+  }
+
+  final messenger = ScaffoldMessenger.of(context);
+  final bytes = Uint8List.fromList(export.bytes);
+  try {
+    final outputPath = await FilePicker.saveFile(
+      dialogTitle: 'Save lyrics file',
+      fileName: export.fileName,
+      type: FileType.custom,
+      allowedExtensions: <String>[export.extension],
+      bytes: bytes,
+    );
+    if (outputPath == null || outputPath.isEmpty) {
+      return;
+    }
+
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      await File(outputPath).writeAsBytes(bytes, flush: true);
+    }
+    if (!context.mounted) {
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text('Saved ${export.fileName}.')));
+  } on Exception catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not save lyrics file: $error')),
+    );
+  }
 }
 
 Future<void> _copyTextToClipboard(
