@@ -73,6 +73,12 @@ void main() {
     await tester.ensureVisible(speedItem);
     await tester.tap(speedItem);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('now-playing-track-speed')));
+    await tester.pumpAndSettle();
+    final trackSpeedItem = find.text('2x');
+    await tester.ensureVisible(trackSpeedItem);
+    await tester.tap(trackSpeedItem);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add to favorites'));
     await tester.tap(find.widgetWithText(TextButton, 'Lyrics'));
     await tester.tap(find.widgetWithText(TextButton, 'Queue'));
@@ -80,7 +86,8 @@ void main() {
 
     expect(engine.shuffleValue, isTrue);
     expect(engine.loopModeValue, LoopMode.all);
-    expect(engine.speedValue, 1.5);
+    expect(engine.speedValue, 2);
+    expect(library.playbackSpeedForTrack(first.id), 2);
     expect(engine.volumeValue, 0.4);
     expect(library.tracks.first.isFavorite, isTrue);
     expect(queueOpens, 1);

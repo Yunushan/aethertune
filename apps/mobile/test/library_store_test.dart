@@ -2459,6 +2459,25 @@ void main() {
     );
   });
 
+  test('persists per-track playback speed overrides locally', () async {
+    final firstStore = LibraryStore();
+    await firstStore.load();
+    await firstStore.setTrackPlaybackSpeed('podcast-episode', 1.5);
+
+    expect(firstStore.playbackSpeedForTrack('podcast-episode'), 1.5);
+    await expectLater(
+      firstStore.setTrackPlaybackSpeed('podcast-episode', 1.1),
+      throwsArgumentError,
+    );
+
+    final secondStore = LibraryStore();
+    await secondStore.load();
+    expect(secondStore.playbackSpeedForTrack('podcast-episode'), 1.5);
+
+    await secondStore.clearTrackPlaybackSpeed('podcast-episode');
+    expect(secondStore.playbackSpeedForTrack('podcast-episode'), isNull);
+  });
+
   test(
     'queues policy approved offline cache entries and persists them',
     () async {

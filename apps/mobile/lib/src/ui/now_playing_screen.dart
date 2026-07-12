@@ -48,7 +48,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             onPressed: player.queue.isEmpty ? null : widget.onOpenQueue,
             icon: const Icon(Icons.queue_music),
           ),
-          _PlaybackSpeedMenu(player: player),
+          if (current != null)
+            _TrackPlaybackSpeedMenu(
+              player: player,
+              library: library,
+              track: current,
+            ),
+          _PlaybackSpeedMenu(
+            player: player,
+            trackPlaybackSpeedOverride: current == null
+                ? null
+                : library.playbackSpeedForTrack(current.id),
+          ),
         ],
       ),
       body: current == null
@@ -372,27 +383,93 @@ class _NowPlayingControls extends StatelessWidget {
 }
 
 class _PlaybackSpeedMenu extends StatelessWidget {
-  const _PlaybackSpeedMenu({required this.player});
+  const _PlaybackSpeedMenu({
+    required this.player,
+    required this.trackPlaybackSpeedOverride,
+  });
 
   final PlayerController player;
+  final double? trackPlaybackSpeedOverride;
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<double>(
       key: const Key('now-playing-speed'),
-      tooltip: 'Playback speed: ${_formatPlaybackSpeed(player.playbackSpeed)}',
+      tooltip:
+          'Default speed: ${_formatPlaybackSpeed(player.defaultPlaybackSpeed)}',
       icon: const Icon(Icons.speed),
-      onSelected: player.setPlaybackSpeed,
+      onSelected: (speed) async {
+        await player.setPlaybackSpeed(speed);
+        final override = trackPlaybackSpeedOverride;
+        if (override != null) {
+          await player.setTemporaryPlaybackSpeed(override);
+        }
+      },
       itemBuilder: (context) => <PopupMenuEntry<double>>[
         for (final speed in PlayerController.supportedPlaybackSpeeds)
           CheckedPopupMenuItem<double>(
             value: speed,
-            checked: speed == player.playbackSpeed,
+            checked: speed == player.defaultPlaybackSpeed,
             child: Text(_formatPlaybackSpeed(speed)),
           ),
       ],
     );
   }
+}
+
+class _TrackPlaybackSpeedMenu extends StatelessWidget {
+  const _TrackPlaybackSpeedMenu({
+    required this.player,
+    required this.library,
+    required this.track,
+  });
+
+  final PlayerController player;
+  final LibraryStore library;
+  final Track track;
+
+  @override
+  Widget build(BuildContext context) {
+    final override = library.playbackSpeedForTrack(track.id);
+    final activeSpeed = override ?? player.defaultPlaybackSpeed;
+    return PopupMenuButton<_TrackPlaybackSpeedSelection>(
+      key: const Key('now-playing-track-speed'),
+      tooltip: override == null
+          ? 'Track speed: Default (${_formatPlaybackSpeed(activeSpeed)})'
+          : 'Track speed: ${_formatPlaybackSpeed(activeSpeed)}',
+      icon: const Icon(Icons.tune),
+      onSelected: (selection) async {
+        final speed = selection.speed;
+        if (speed == null) {
+          await library.clearTrackPlaybackSpeed(track.id);
+          await player.setTemporaryPlaybackSpeed(player.defaultPlaybackSpeed);
+          return;
+        }
+        await library.setTrackPlaybackSpeed(track.id, speed);
+        await player.setTemporaryPlaybackSpeed(speed);
+      },
+      itemBuilder: (context) => <PopupMenuEntry<_TrackPlaybackSpeedSelection>>[
+        CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
+          value: const _TrackPlaybackSpeedSelection(),
+          checked: override == null,
+          child: Text('Use default (${_formatPlaybackSpeed(player.defaultPlaybackSpeed)})'),
+        ),
+        const PopupMenuDivider(),
+        for (final speed in PlayerController.supportedPlaybackSpeeds)
+          CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
+            value: _TrackPlaybackSpeedSelection(speed),
+            checked: override == speed,
+            child: Text(_formatPlaybackSpeed(speed)),
+          ),
+      ],
+    );
+  }
+}
+
+class _TrackPlaybackSpeedSelection {
+  const _TrackPlaybackSpeedSelection([this.speed]);
+
+  final double? speed;
 }
 
 class _PlaybackVolumeControl extends StatelessWidget {

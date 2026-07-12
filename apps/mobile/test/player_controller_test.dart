@@ -17,7 +17,10 @@ void main() {
     final firstEngine = _FakePlaybackAudioEngine();
     final firstController = PlayerController(audioEngine: firstEngine);
     await firstController.setPlaybackSpeed(1.5);
-    expect(firstEngine.speedValue, 1.5);
+    await firstController.setTemporaryPlaybackSpeed(2);
+    expect(firstEngine.speedValue, 2);
+    expect(firstController.playbackSpeed, 2);
+    expect(firstController.defaultPlaybackSpeed, 1.5);
     firstController.dispose();
 
     final restoredEngine = _FakePlaybackAudioEngine();
@@ -26,6 +29,7 @@ void main() {
     await restoredController.loadPersistedPlaybackSettings();
 
     expect(restoredController.playbackSpeed, 1.5);
+    expect(restoredController.defaultPlaybackSpeed, 1.5);
     await expectLater(
       restoredController.setPlaybackSpeed(1.1),
       throwsArgumentError,

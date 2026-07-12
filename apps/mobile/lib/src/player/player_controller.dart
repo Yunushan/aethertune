@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/sleep_timer_duration.dart';
+import '../domain/playback_speed.dart';
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
 import 'offline_playback_policy.dart';
@@ -16,16 +17,7 @@ typedef TrackPlaybackResolver = Future<Track> Function(Track track);
 class PlayerController extends ChangeNotifier {
   static const minVolume = 0.0;
   static const maxVolume = 1.0;
-  static const supportedPlaybackSpeeds = <double>[
-    0.5,
-    0.75,
-    1,
-    1.25,
-    1.5,
-    2,
-    2.5,
-    3,
-  ];
+  static const supportedPlaybackSpeeds = supportedPlaybackSpeedValues;
 
   PlayerController({
     PlaybackAudioEngine? audioEngine,
@@ -75,6 +67,7 @@ class PlayerController extends ChangeNotifier {
   int _playbackStartSerial = 0;
   double? _sleepFadeStartVolume;
   double _volume = maxVolume;
+  double _defaultPlaybackSpeed = 1;
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
@@ -83,6 +76,7 @@ class PlayerController extends ChangeNotifier {
   bool get shuffleEnabled => _audio.shuffleModeEnabled;
   LoopMode get loopMode => _audio.loopMode;
   double get playbackSpeed => _audio.speed;
+  double get defaultPlaybackSpeed => _defaultPlaybackSpeed;
   double get volume => _volume;
   Duration get duration => _duration;
   Duration get position => _audio.position;
@@ -165,9 +159,10 @@ class PlayerController extends ChangeNotifier {
         await _audio.setLoopMode(
           _loopModeFromJson(settings['loopMode'] as String?),
         );
-        await _audio.setSpeed(
-          _playbackSpeedFromJson(settings['playbackSpeed']),
+        _defaultPlaybackSpeed = _playbackSpeedFromJson(
+          settings['playbackSpeed'],
         );
+        await _audio.setSpeed(_defaultPlaybackSpeed);
         _volume = _volumeFromJson(settings['volume']);
         await _audio.setVolume(_volume);
       } catch (_) {
@@ -455,15 +450,19 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setPlaybackSpeed(double speed) async {
-    if (!supportedPlaybackSpeeds.contains(speed)) {
-      throw ArgumentError.value(
-        speed,
-        'speed',
-        'Playback speed must be one of the supported values.',
-      );
-    }
+    _requireSupportedPlaybackSpeed(speed);
+    _defaultPlaybackSpeed = speed;
     await _audio.setSpeed(speed);
     await _savePlaybackSettings();
+    notifyListeners();
+  }
+
+  Future<void> setTemporaryPlaybackSpeed(double speed) async {
+    _requireSupportedPlaybackSpeed(speed);
+    if (_audio.speed == speed) {
+      return;
+    }
+    await _audio.setSpeed(speed);
     notifyListeners();
   }
 
@@ -782,7 +781,7 @@ class PlayerController extends ChangeNotifier {
         <String, Object?>{
           'shuffleEnabled': _audio.shuffleModeEnabled,
           'loopMode': _loopModeToJson(_audio.loopMode),
-          'playbackSpeed': _audio.speed,
+          'playbackSpeed': _defaultPlaybackSpeed,
           'volume': _volume,
         },
       ),
@@ -820,6 +819,16 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return 1;
+  }
+
+  void _requireSupportedPlaybackSpeed(double speed) {
+    if (!isSupportedPlaybackSpeed(speed)) {
+      throw ArgumentError.value(
+        speed,
+        'speed',
+        'Playback speed must be one of the supported values.',
+      );
+    }
   }
 
   double _volumeFromJson(Object? value) {

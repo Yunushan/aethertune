@@ -202,6 +202,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    _applyTrackPlaybackSpeed(player, library, track);
+
     if (player.playbackStartSerial == _lastRecordedPlaybackSerial) {
       return;
     }
@@ -209,6 +211,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _lastRecordedPlaybackSerial = player.playbackStartSerial;
     unawaited(library.recordPlayback(track.id));
     unawaited(_recordRadioStationClick(track));
+  }
+
+  void _applyTrackPlaybackSpeed(
+    PlayerController player,
+    LibraryStore library,
+    Track track,
+  ) {
+    final speed =
+        library.playbackSpeedForTrack(track.id) ?? player.defaultPlaybackSpeed;
+    if ((player.playbackSpeed - speed).abs() < 0.0001) {
+      return;
+    }
+    unawaited(player.setTemporaryPlaybackSpeed(speed));
   }
 
   Future<void> _recordRadioStationClick(Track track) async {
@@ -9532,9 +9547,11 @@ class _SettingsTab extends StatelessWidget {
         ),
         ListTile(
           title: const Text('Playback speed'),
-          subtitle: const Text('Applies to the current and future playback.'),
+          subtitle: const Text(
+            'Sets the default for future playback; track overrides stay separate.',
+          ),
           trailing: DropdownButton<double>(
-            value: player.playbackSpeed,
+            value: player.defaultPlaybackSpeed,
             items: <DropdownMenuItem<double>>[
               for (final speed in PlayerController.supportedPlaybackSpeeds)
                 DropdownMenuItem<double>(
@@ -9546,9 +9563,17 @@ class _SettingsTab extends StatelessWidget {
                   ),
                 ),
             ],
-            onChanged: (speed) {
-              if (speed != null) {
-                unawaited(player.setPlaybackSpeed(speed));
+            onChanged: (speed) async {
+              if (speed == null) {
+                return;
+              }
+              await player.setPlaybackSpeed(speed);
+              final current = player.current;
+              final override = current == null
+                  ? null
+                  : library.playbackSpeedForTrack(current.id);
+              if (override != null) {
+                await player.setTemporaryPlaybackSpeed(override);
               }
             },
           ),

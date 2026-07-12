@@ -8,6 +8,7 @@ import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
+import '../domain/playback_speed.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
 import '../domain/podcast_subscription.dart';
@@ -580,6 +581,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.automatic_offline_queue.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
+  static const _trackPlaybackSpeedOverridesKey =
+      'aethertune.track_playback_speed_overrides.v1';
   static const _desktopQueuePaneWidthKey =
       'aethertune.desktop_queue_pane_width.v1';
   static const _onboardingCompletedKey =
@@ -617,6 +620,7 @@ class LibraryStore extends ChangeNotifier {
   final Map<String, PlaybackProgressEntry> _progressByTrackId =
       <String, PlaybackProgressEntry>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
+  final Map<String, double> _trackPlaybackSpeedOverrides = <String, double>{};
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
   final List<String> _watchedLocalFolderPaths = <String>[];
   final DateTime Function() _clock;
@@ -656,6 +660,8 @@ class LibraryStore extends ChangeNotifier {
   List<PlaybackProgressEntry> get playbackProgress =>
       List.unmodifiable(_progressByTrackId.values);
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
+  Map<String, double> get trackPlaybackSpeedOverrides =>
+      Map.unmodifiable(_trackPlaybackSpeedOverrides);
   List<OfflineCacheEntry> get offlineCacheQueue =>
       List.unmodifiable(_offlineCacheQueue);
   List<String> get watchedLocalFolderPaths =>
@@ -843,6 +849,13 @@ class LibraryStore extends ChangeNotifier {
     _accentColor = _appAccentColorFromName(
       prefs.getString(_accentColorKey),
     );
+    _trackPlaybackSpeedOverrides
+      ..clear()
+      ..addAll(
+        _decodeTrackPlaybackSpeedOverrides(
+          prefs.getString(_trackPlaybackSpeedOverridesKey),
+        ),
+      );
     _desktopQueuePaneWidth = _sanitizeDesktopQueuePaneWidth(
       prefs.getDouble(_desktopQueuePaneWidthKey) ??
           defaultDesktopQueuePaneWidth,
@@ -1010,6 +1023,7 @@ class LibraryStore extends ChangeNotifier {
     _tracks.removeWhere((track) => track.id == id);
     _removeTrackFromPlaylists(id);
     _lyricsByTrackId.remove(id);
+    _trackPlaybackSpeedOverrides.remove(id);
     _history.removeWhere((entry) => entry.trackId == id);
     _progressByTrackId.remove(id);
     await _save();
@@ -1067,6 +1081,7 @@ class LibraryStore extends ChangeNotifier {
     _searchQueryHistory.clear();
     _progressByTrackId.clear();
     _lyricsByTrackId.clear();
+    _trackPlaybackSpeedOverrides.clear();
     _offlineCacheQueue.clear();
     await _save();
     notifyListeners();
@@ -1108,6 +1123,38 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _accentColor = accentColor;
+    await _save();
+    notifyListeners();
+  }
+
+  double? playbackSpeedForTrack(String trackId) {
+    return _trackPlaybackSpeedOverrides[trackId.trim()];
+  }
+
+  Future<void> setTrackPlaybackSpeed(String trackId, double speed) async {
+    final normalizedTrackId = trackId.trim();
+    if (normalizedTrackId.isEmpty) {
+      throw ArgumentError.value(trackId, 'trackId', 'Track ID cannot be empty.');
+    }
+    if (!isSupportedPlaybackSpeed(speed)) {
+      throw ArgumentError.value(
+        speed,
+        'speed',
+        'Playback speed must be one of the supported values.',
+      );
+    }
+    if (_trackPlaybackSpeedOverrides[normalizedTrackId] == speed) {
+      return;
+    }
+    _trackPlaybackSpeedOverrides[normalizedTrackId] = speed;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> clearTrackPlaybackSpeed(String trackId) async {
+    if (_trackPlaybackSpeedOverrides.remove(trackId.trim()) == null) {
+      return;
+    }
     await _save();
     notifyListeners();
   }
@@ -5944,6 +5991,29 @@ class LibraryStore extends ChangeNotifier {
     return megabytes;
   }
 
+  Map<String, double> _decodeTrackPlaybackSpeedOverrides(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return <String, double>{};
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return <String, double>{};
+      }
+      final overrides = <String, double>{};
+      for (final entry in decoded.entries) {
+        final trackId = entry.key.toString().trim();
+        final speed = entry.value is num ? (entry.value as num).toDouble() : null;
+        if (trackId.isNotEmpty && speed != null && isSupportedPlaybackSpeed(speed)) {
+          overrides[trackId] = speed;
+        }
+      }
+      return overrides;
+    } on FormatException {
+      return <String, double>{};
+    }
+  }
+
   double _sanitizeDesktopQueuePaneWidth(double width) {
     if (!width.isFinite) {
       return defaultDesktopQueuePaneWidth;
@@ -6244,6 +6314,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);
+    await prefs.setString(
+      _trackPlaybackSpeedOverridesKey,
+      jsonEncode(_trackPlaybackSpeedOverrides),
+    );
     await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
     await prefs.setBool(_onboardingCompletedKey, _onboardingCompleted);
     await prefs.setInt(
