@@ -210,6 +210,61 @@ void main() {
     expect(sync.conflict, isNull);
   });
 
+  test('automatic uploads are opt-in, paced, persisted, and conflict-safe',
+      () async {
+    var now = DateTime.utc(2026, 7, 11, 9);
+    final vault = _MemorySyncVault();
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+    );
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: vault,
+      clientFactory: (account, token) => gateway,
+      clock: () => now,
+    );
+    await library.load();
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+
+    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+    expect(gateway.pushCalls, 0);
+
+    await sync.setAutomaticUploadEnabled(true);
+    expect(await sync.uploadAutomaticallyIfDue(library), isTrue);
+    expect(gateway.pushCalls, 1);
+    expect(sync.lastAutomaticUploadAt, now);
+
+    now = now.add(const Duration(minutes: 14));
+    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+    expect(gateway.pushCalls, 1);
+
+    now = now.add(const Duration(minutes: 1));
+    await library.setOfflineModeEnabled(true);
+    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+    expect(gateway.pushCalls, 1);
+    await library.setOfflineModeEnabled(false);
+
+    now = now.add(const Duration(minutes: 15));
+    gateway.pushError = const LibrarySyncConflictException(
+      currentRevision: 7,
+      updatedByDevice: 'Desktop',
+    );
+    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+    expect(gateway.pushCalls, 2);
+    expect(sync.conflict?.currentRevision, 7);
+    expect(sync.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
+
+    final restored = LibrarySyncStore(
+      credentialVault: vault,
+      clientFactory: (account, token) => gateway,
+      clock: () => now,
+    );
+    await restored.load();
+    expect(restored.automaticUploadEnabled, isTrue);
+    expect(restored.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
+  });
+
   test('offline mode blocks network sync and removal clears secure state',
       () async {
     final vault = _MemorySyncVault();

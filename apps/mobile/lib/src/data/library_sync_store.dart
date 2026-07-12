@@ -29,6 +29,7 @@ class LibrarySyncStore extends ChangeNotifier {
         _clock = clock ?? DateTime.now;
 
   static const _metadataKey = 'aethertune.library_sync.metadata.v1';
+  static const automaticUploadInterval = Duration(minutes: 15);
 
   final LibrarySyncCredentialVault _credentialVault;
   final LibrarySyncClientFactory _clientFactory;
@@ -41,6 +42,9 @@ class LibrarySyncStore extends ChangeNotifier {
   DateTime? _lastSyncAt;
   DateTime? _remoteUpdatedAt;
   String? _remoteUpdatedByDevice;
+  bool _automaticUploadEnabled = false;
+  DateTime? _lastAutomaticUploadAttemptAt;
+  DateTime? _lastAutomaticUploadAt;
   LibrarySyncConflictException? _conflict;
   String? _lastError;
   bool _loaded = false;
@@ -52,6 +56,8 @@ class LibrarySyncStore extends ChangeNotifier {
   DateTime? get lastSyncAt => _lastSyncAt;
   DateTime? get remoteUpdatedAt => _remoteUpdatedAt;
   String? get remoteUpdatedByDevice => _remoteUpdatedByDevice;
+  bool get automaticUploadEnabled => _automaticUploadEnabled;
+  DateTime? get lastAutomaticUploadAt => _lastAutomaticUploadAt;
   LibrarySyncConflictException? get conflict => _conflict;
   String? get lastError => _lastError;
   bool get loaded => _loaded;
@@ -86,6 +92,13 @@ class LibrarySyncStore extends ChangeNotifier {
         _remoteUpdatedAt = _optionalDate(metadata['remoteUpdatedAt']);
         _remoteUpdatedByDevice = _optionalString(
           metadata['remoteUpdatedByDevice'],
+        );
+        _automaticUploadEnabled = metadata['automaticUploadEnabled'] == true;
+        _lastAutomaticUploadAttemptAt = _optionalDate(
+          metadata['lastAutomaticUploadAttemptAt'],
+        );
+        _lastAutomaticUploadAt = _optionalDate(
+          metadata['lastAutomaticUploadAt'],
         );
         _token = await _credentialVault.read();
       }
@@ -200,6 +213,51 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
+  Future<void> setAutomaticUploadEnabled(bool enabled) async {
+    if (_automaticUploadEnabled == enabled) {
+      return;
+    }
+
+    final previous = _automaticUploadEnabled;
+    _automaticUploadEnabled = enabled;
+    try {
+      await _saveMetadata();
+    } on Object {
+      _automaticUploadEnabled = previous;
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  Future<bool> uploadAutomaticallyIfDue(LibraryStore library) async {
+    if (!_loaded ||
+        !_automaticUploadEnabled ||
+        !isConfigured ||
+        library.offlineModeEnabled ||
+        _busy) {
+      return false;
+    }
+
+    final now = _clock().toUtc();
+    final previousAttempt = _lastAutomaticUploadAttemptAt;
+    if (previousAttempt != null &&
+        now.difference(previousAttempt) < automaticUploadInterval) {
+      return false;
+    }
+
+    _lastAutomaticUploadAttemptAt = now;
+    try {
+      await _saveMetadata();
+      await push(library);
+      _lastAutomaticUploadAt = now;
+      await _saveMetadata();
+      notifyListeners();
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<LibrarySyncRemoteSnapshot> pull(LibraryStore library) {
     return _runBusy(() async {
       _requireOnline(library);
@@ -240,6 +298,9 @@ class LibrarySyncStore extends ChangeNotifier {
       _lastSyncAt = null;
       _remoteUpdatedAt = null;
       _remoteUpdatedByDevice = null;
+      _automaticUploadEnabled = false;
+      _lastAutomaticUploadAttemptAt = null;
+      _lastAutomaticUploadAt = null;
       _conflict = null;
     });
   }
@@ -298,6 +359,10 @@ class LibrarySyncStore extends ChangeNotifier {
         'lastSyncAt': _lastSyncAt?.toIso8601String(),
         'remoteUpdatedAt': _remoteUpdatedAt?.toIso8601String(),
         'remoteUpdatedByDevice': _remoteUpdatedByDevice,
+        'automaticUploadEnabled': _automaticUploadEnabled,
+        'lastAutomaticUploadAttemptAt':
+            _lastAutomaticUploadAttemptAt?.toIso8601String(),
+        'lastAutomaticUploadAt': _lastAutomaticUploadAt?.toIso8601String(),
       }),
     );
     if (!saved) {

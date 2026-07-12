@@ -9,6 +9,7 @@ import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
 import 'home_screen.dart';
 import 'theme_colors.dart';
+import 'widgets/library_sync_automatic_upload.dart';
 
 class AetherTuneApp extends StatelessWidget {
   const AetherTuneApp({super.key, this.audioEngine});
@@ -54,20 +55,22 @@ class AetherTuneApp extends StatelessWidget {
           },
         ),
       ],
-      child: Consumer<LibraryStore>(
-        builder: (context, library, _) {
-          return MaterialApp(
-            title: 'AetherTune',
-            debugShowCheckedModeBanner: false,
-            themeMode: _themeModeForPreference(library.themePreference),
-            theme: _lightTheme(library.accentColor),
-            darkTheme: _darkThemeForPreference(
-              library.themePreference,
-              library.accentColor,
-            ),
-            home: const HomeScreen(),
-          );
-        },
+      child: LibrarySyncAutomaticUpload(
+        child: Consumer<LibraryStore>(
+          builder: (context, library, _) {
+            return MaterialApp(
+              title: 'AetherTune',
+              debugShowCheckedModeBanner: false,
+              themeMode: _themeModeForPreference(library.themePreference),
+              theme: _lightTheme(library.accentColor),
+              darkTheme: _darkThemeForPreference(
+                library.themePreference,
+                library.accentColor,
+              ),
+              home: const HomeScreen(),
+            );
+          },
+        ),
       ),
     );
   }

@@ -68,6 +68,19 @@ class LibrarySyncPanel extends StatelessWidget {
               ],
             ),
           ),
+        if (sync.isConfigured)
+          SwitchListTile.adaptive(
+            key: const Key('library-sync-automatic-upload'),
+            secondary: const Icon(Icons.sync_outlined),
+            title: const Text('Automatic foreground uploads'),
+            subtitle: const Text(
+              'Upload every 15 minutes while the app is open. Server changes still require a manual choice.',
+            ),
+            value: sync.automaticUploadEnabled,
+            onChanged: actionsEnabled
+                ? (enabled) => _setAutomaticUpload(context, enabled)
+                : null,
+          ),
         if (library.offlineModeEnabled)
           const ListTile(
             dense: true,
@@ -205,6 +218,19 @@ class LibrarySyncPanel extends StatelessWidget {
       if (context.mounted) {
         _showSuccess(context, 'Downloaded server revision ${result.revision}.');
       }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, error);
+      }
+    }
+  }
+
+  static Future<void> _setAutomaticUpload(
+    BuildContext context,
+    bool enabled,
+  ) async {
+    try {
+      await context.read<LibrarySyncStore>().setAutomaticUploadEnabled(enabled);
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, error);

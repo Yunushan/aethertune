@@ -61,6 +61,9 @@ void main() {
     expect(gateway.fetchCalls, 1);
     expect(find.textContaining('sync.example.test'), findsOneWidget);
     expect(find.byKey(const Key('library-sync-upload')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('library-sync-automatic-upload')));
+    await tester.pumpAndSettle();
+    expect(sync.automaticUploadEnabled, isTrue);
     expect(find.text('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
   });
