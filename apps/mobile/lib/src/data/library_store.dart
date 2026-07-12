@@ -237,6 +237,8 @@ class CustomSmartPlaylist {
     this.query = '',
     this.sourceId = '',
     this.genre = '',
+    this.minimumDurationSeconds = 0,
+    this.maximumDurationSeconds = 0,
     this.favoritesOnly = false,
     this.minimumPlayCount = 0,
     this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
@@ -251,6 +253,8 @@ class CustomSmartPlaylist {
   final String query;
   final String sourceId;
   final String genre;
+  final int minimumDurationSeconds;
+  final int maximumDurationSeconds;
   final bool favoritesOnly;
   final int minimumPlayCount;
   final CustomSmartPlaylistSortMode sortMode;
@@ -264,6 +268,8 @@ class CustomSmartPlaylist {
     String? query,
     String? sourceId,
     String? genre,
+    int? minimumDurationSeconds,
+    int? maximumDurationSeconds,
     bool? favoritesOnly,
     int? minimumPlayCount,
     CustomSmartPlaylistSortMode? sortMode,
@@ -277,6 +283,10 @@ class CustomSmartPlaylist {
       query: query ?? this.query,
       sourceId: sourceId ?? this.sourceId,
       genre: genre ?? this.genre,
+      minimumDurationSeconds:
+          minimumDurationSeconds ?? this.minimumDurationSeconds,
+      maximumDurationSeconds:
+          maximumDurationSeconds ?? this.maximumDurationSeconds,
       favoritesOnly: favoritesOnly ?? this.favoritesOnly,
       minimumPlayCount: minimumPlayCount ?? this.minimumPlayCount,
       sortMode: sortMode ?? this.sortMode,
@@ -293,6 +303,8 @@ class CustomSmartPlaylist {
       'query': query,
       'sourceId': sourceId,
       'genre': genre,
+      'minimumDurationSeconds': minimumDurationSeconds,
+      'maximumDurationSeconds': maximumDurationSeconds,
       'favoritesOnly': favoritesOnly,
       'minimumPlayCount': minimumPlayCount,
       'sortMode': sortMode.name,
@@ -309,6 +321,8 @@ class CustomSmartPlaylist {
       query: json['query'] as String? ?? '',
       sourceId: json['sourceId'] as String? ?? '',
       genre: json['genre'] as String? ?? '',
+      minimumDurationSeconds: json['minimumDurationSeconds'] as int? ?? 0,
+      maximumDurationSeconds: json['maximumDurationSeconds'] as int? ?? 0,
       favoritesOnly: json['favoritesOnly'] as bool? ?? false,
       minimumPlayCount: json['minimumPlayCount'] as int? ?? 0,
       sortMode: _customSmartPlaylistSortModeFromName(
@@ -2066,6 +2080,16 @@ class LibraryStore extends ChangeNotifier {
 
       if (rule.genre.isNotEmpty &&
           track.genre.toLowerCase() != rule.genre.toLowerCase()) {
+        return false;
+      }
+
+      final durationSeconds = track.duration.inSeconds;
+      if (rule.minimumDurationSeconds > 0 &&
+          durationSeconds < rule.minimumDurationSeconds) {
+        return false;
+      }
+      if (rule.maximumDurationSeconds > 0 &&
+          durationSeconds > rule.maximumDurationSeconds) {
         return false;
       }
 
@@ -4029,6 +4053,8 @@ class LibraryStore extends ChangeNotifier {
     String query = '',
     String sourceId = '',
     String genre = '',
+    int minimumDurationSeconds = 0,
+    int maximumDurationSeconds = 0,
     bool favoritesOnly = false,
     int minimumPlayCount = 0,
     CustomSmartPlaylistSortMode sortMode =
@@ -4043,6 +4069,8 @@ class LibraryStore extends ChangeNotifier {
       query: query.trim(),
       sourceId: sourceId.trim(),
       genre: genre.trim(),
+      minimumDurationSeconds: _sanitizeMinimumPlayCount(minimumDurationSeconds),
+      maximumDurationSeconds: _sanitizeMinimumPlayCount(maximumDurationSeconds),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
       sortMode: sortMode,
@@ -4065,6 +4093,8 @@ class LibraryStore extends ChangeNotifier {
     required String query,
     String? sourceId,
     String? genre,
+    int? minimumDurationSeconds,
+    int? maximumDurationSeconds,
     required bool favoritesOnly,
     required int minimumPlayCount,
     required CustomSmartPlaylistSortMode sortMode,
@@ -4080,6 +4110,12 @@ class LibraryStore extends ChangeNotifier {
       query: query.trim(),
       sourceId: sourceId?.trim(),
       genre: genre?.trim(),
+      minimumDurationSeconds: minimumDurationSeconds == null
+          ? null
+          : _sanitizeMinimumPlayCount(minimumDurationSeconds),
+      maximumDurationSeconds: maximumDurationSeconds == null
+          ? null
+          : _sanitizeMinimumPlayCount(maximumDurationSeconds),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
       sortMode: sortMode,

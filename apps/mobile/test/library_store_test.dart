@@ -80,6 +80,26 @@ void main() {
     );
   });
 
+  test('filters custom smart playlists by duration bounds', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('short', duration: const Duration(seconds: 30)),
+      _track('target', duration: const Duration(seconds: 120)),
+      _track('long', duration: const Duration(seconds: 600)),
+    ]);
+    final rule = await store.createCustomSmartPlaylist(
+      name: 'Two minute tracks',
+      minimumDurationSeconds: 60,
+      maximumDurationSeconds: 300,
+    );
+
+    expect(
+      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['target'],
+    );
+  });
+
   test('creates manual playlists with existing tracks only', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 1),

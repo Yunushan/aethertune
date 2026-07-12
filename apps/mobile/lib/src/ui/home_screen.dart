@@ -3284,6 +3284,12 @@ String _customSmartPlaylistSubtitle(
   if (rule.genre.trim().isNotEmpty) {
     parts.add('Genre: ${rule.genre}');
   }
+  if (rule.minimumDurationSeconds > 0) {
+    parts.add('${rule.minimumDurationSeconds}s+');
+  }
+  if (rule.maximumDurationSeconds > 0) {
+    parts.add('up to ${rule.maximumDurationSeconds}s');
+  }
   if (rule.favoritesOnly) {
     parts.add('Favorites');
   }
@@ -3302,6 +3308,8 @@ class _CustomSmartPlaylistDraft {
     required this.query,
     required this.sourceId,
     required this.genre,
+    required this.minimumDurationSeconds,
+    required this.maximumDurationSeconds,
     required this.favoritesOnly,
     required this.minimumPlayCount,
     required this.sortMode,
@@ -3312,6 +3320,8 @@ class _CustomSmartPlaylistDraft {
   final String query;
   final String sourceId;
   final String genre;
+  final int minimumDurationSeconds;
+  final int maximumDurationSeconds;
   final bool favoritesOnly;
   final int minimumPlayCount;
   final CustomSmartPlaylistSortMode sortMode;
@@ -3669,6 +3679,8 @@ class _PlaylistsTab extends StatelessWidget {
       query: draft.query,
       sourceId: draft.sourceId,
       genre: draft.genre,
+      minimumDurationSeconds: draft.minimumDurationSeconds,
+      maximumDurationSeconds: draft.maximumDurationSeconds,
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
       sortMode: draft.sortMode,
@@ -3703,6 +3715,8 @@ class _PlaylistsTab extends StatelessWidget {
       query: draft.query,
       sourceId: draft.sourceId,
       genre: draft.genre,
+      minimumDurationSeconds: draft.minimumDurationSeconds,
+      maximumDurationSeconds: draft.maximumDurationSeconds,
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
       sortMode: draft.sortMode,
@@ -4205,6 +4219,12 @@ class _PlaylistsTab extends StatelessWidget {
     final genreController = TextEditingController(
       text: initialRule?.genre ?? '',
     );
+    final minimumDurationController = TextEditingController(
+      text: (initialRule?.minimumDurationSeconds ?? 0).toString(),
+    );
+    final maximumDurationController = TextEditingController(
+      text: (initialRule?.maximumDurationSeconds ?? 0).toString(),
+    );
     final minimumPlayCountController = TextEditingController(
       text: (initialRule?.minimumPlayCount ?? 0).toString(),
     );
@@ -4232,6 +4252,10 @@ class _PlaylistsTab extends StatelessWidget {
                   query: queryController.text.trim(),
                   sourceId: sourceIdController.text.trim(),
                   genre: genreController.text.trim(),
+                  minimumDurationSeconds:
+                      int.tryParse(minimumDurationController.text.trim()) ?? 0,
+                  maximumDurationSeconds:
+                      int.tryParse(maximumDurationController.text.trim()) ?? 0,
                   favoritesOnly: favoritesOnly,
                   minimumPlayCount:
                       int.tryParse(minimumPlayCountController.text.trim()) ??
@@ -4276,6 +4300,22 @@ class _PlaylistsTab extends StatelessWidget {
                           decoration: const InputDecoration(
                             labelText: 'Exact genre',
                           ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: minimumDurationController,
+                          decoration: const InputDecoration(
+                            labelText: 'Minimum duration (seconds)',
+                          ),
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: maximumDurationController,
+                          decoration: const InputDecoration(
+                            labelText: 'Maximum duration (seconds)',
+                          ),
+                          keyboardType: TextInputType.number,
                           textInputAction: TextInputAction.next,
                         ),
                         SwitchListTile(
@@ -4351,6 +4391,8 @@ class _PlaylistsTab extends StatelessWidget {
       queryController.dispose();
       sourceIdController.dispose();
       genreController.dispose();
+      minimumDurationController.dispose();
+      maximumDurationController.dispose();
       minimumPlayCountController.dispose();
       limitController.dispose();
     }
