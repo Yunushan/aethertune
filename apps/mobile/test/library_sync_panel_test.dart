@@ -155,11 +155,10 @@ void main() {
 
     expect(find.text('Library changed on server'), findsOneWidget);
     expect(
-      find.text(
-        'Revision 4 was uploaded by Linux desktop. Choose which library to keep.',
-      ),
+      find.textContaining('Revision 4 was uploaded by Linux desktop.'),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('library-sync-merge')), findsOneWidget);
     expect(gateway.pushedBaseRevisions, <int>[0]);
 
     await tester.tap(find.byKey(const Key('library-sync-use-local')));

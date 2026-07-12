@@ -275,6 +275,38 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
+  Future<LibrarySyncRemoteSnapshot> mergeAndPush(LibraryStore library) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      final remote = await client.fetch();
+      if (!remote.hasSnapshot) {
+        throw StateError('The sync server does not have a library snapshot yet.');
+      }
+      final localBeforeMerge = library.exportSyncSnapshotJson();
+      try {
+        await library.mergeSyncSnapshotJson(jsonEncode(remote.snapshot));
+        final decoded = jsonDecode(library.exportSyncSnapshotJson());
+        if (decoded is! Map) {
+          throw const FormatException('Merged portable library snapshot is invalid.');
+        }
+        final result = await client.push(
+          baseRevision: remote.revision,
+          snapshot: Map<String, Object?>.from(decoded),
+        );
+        _lastKnownRevision = result.revision;
+        _applyRemoteMetadata(result);
+        _lastSyncAt = _clock().toUtc();
+        _conflict = null;
+        await _saveMetadata();
+        return result;
+      } on Object {
+        await library.restoreSyncSnapshotJson(localBeforeMerge);
+        rethrow;
+      }
+    });
+  }
+
   Future<void> remove() async {
     await _runBusy(() async {
       final oldToken = _token;

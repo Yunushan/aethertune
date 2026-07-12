@@ -33,6 +33,33 @@ void main() {
     expect(restored.playlists, isEmpty);
   });
 
+  test('merges sync snapshots without dropping independent tracks or playlists',
+      () async {
+    final now = DateTime.utc(2026, 2, 1);
+    final local = LibraryStore(clock: () => now);
+    final remote = LibraryStore(clock: () => now);
+    await local.load();
+    await remote.load();
+    await local.addTracks(<Track>[_track('local')]);
+    await remote.addTracks(<Track>[_track('remote')]);
+    final localPlaylist = await local.createPlaylist(
+      'Merged',
+      trackIds: <String>['local'],
+    );
+    await remote.createPlaylist('Merged', trackIds: <String>['remote']);
+
+    await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
+
+    expect(local.tracks.map((track) => track.id), containsAll(<String>[
+      'local',
+      'remote',
+    ]));
+    expect(local.playlistById(localPlaylist.id)!.trackIds, <String>[
+      'local',
+      'remote',
+    ]);
+  });
+
   test('creates manual playlists with existing tracks only', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 1),

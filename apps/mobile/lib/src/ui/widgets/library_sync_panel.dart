@@ -6,7 +6,7 @@ import '../../data/library_sync_client.dart';
 import '../../data/library_sync_store.dart';
 import '../../domain/library_sync_account.dart';
 
-enum _LibrarySyncConflictChoice { server, local }
+enum _LibrarySyncConflictChoice { server, merge, local }
 
 class LibrarySyncPanel extends StatelessWidget {
   const LibrarySyncPanel({super.key});
@@ -162,6 +162,14 @@ class LibrarySyncPanel extends StatelessWidget {
               'Downloaded server revision ${result.revision}.',
             );
           }
+        } else if (choice == _LibrarySyncConflictChoice.merge) {
+          final result = await sync.mergeAndPush(library);
+          if (context.mounted) {
+            _showSuccess(
+              context,
+              'Merged and uploaded library revision ${result.revision}.',
+            );
+          }
         } else {
           final result = await sync.push(
             library,
@@ -250,7 +258,7 @@ class LibrarySyncPanel extends StatelessWidget {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Library changed on server'),
         content: Text(
-          'Revision ${conflict.currentRevision} was uploaded by $source. Choose which library to keep.',
+          'Revision ${conflict.currentRevision} was uploaded by $source. Merge keeps independent items from both devices, combines playlist memberships, and keeps this device when the same metadata record conflicts.',
         ),
         actions: <Widget>[
           TextButton(
@@ -264,6 +272,14 @@ class LibrarySyncPanel extends StatelessWidget {
             ),
             icon: const Icon(Icons.cloud_download_outlined),
             label: const Text('Use server copy'),
+          ),
+          OutlinedButton.icon(
+            key: const Key('library-sync-merge'),
+            onPressed: () => Navigator.of(dialogContext).pop(
+              _LibrarySyncConflictChoice.merge,
+            ),
+            icon: const Icon(Icons.merge_type),
+            label: const Text('Merge both'),
           ),
           FilledButton.icon(
             key: const Key('library-sync-use-local'),

@@ -3095,6 +3095,165 @@ class LibraryStore extends ChangeNotifier {
     await restoreBackupJson(jsonEncode(snapshot));
   }
 
+  Future<void> mergeSyncSnapshotJson(String snapshotJson) async {
+    final remote = _decodeSyncSnapshot(snapshotJson);
+    final local = Map<String, Object?>.from(
+      jsonDecode(exportSyncSnapshotJson()) as Map,
+    );
+    final merged = Map<String, Object?>.from(remote)..addAll(local);
+
+    for (final key in const <String>[
+      'tracks',
+      'customSmartPlaylists',
+      'savedHistoryViews',
+      'podcastSubscriptions',
+    ]) {
+      merged[key] = _mergeSyncObjectLists(
+        local[key],
+        remote[key],
+        identity: (item) => _syncString(item['id']),
+      );
+    }
+    merged['history'] = _mergeSyncObjectLists(
+      local['history'],
+      remote['history'],
+      identity: (item) {
+        final trackId = _syncString(item['trackId']);
+        final playedAt = _syncString(item['playedAt']);
+        return trackId == null || playedAt == null ? null : '$trackId|$playedAt';
+      },
+    );
+    merged['playlists'] = _mergeSyncPlaylists(local['playlists'], remote['playlists']);
+    for (final key in const <String>['progress', 'lyrics']) {
+      merged[key] = _mergeSyncObjectLists(
+        local[key],
+        remote[key],
+        identity: (item) => _syncString(item['trackId']),
+        preferNewerUpdatedAt: true,
+      );
+    }
+    merged['searchQueryHistory'] = _mergeSyncStrings(
+      local['searchQueryHistory'],
+      remote['searchQueryHistory'],
+    );
+    await restoreSyncSnapshotJson(jsonEncode(merged));
+  }
+
+  Map<String, Object?> _decodeSyncSnapshot(String snapshotJson) {
+    final decoded = jsonDecode(snapshotJson);
+    if (decoded is! Map) {
+      throw const FormatException('Sync snapshot must be a JSON object.');
+    }
+    final snapshot = Map<String, Object?>.from(decoded);
+    if (snapshot['syncVersion'] != _syncSnapshotVersion) {
+      throw FormatException(
+        'Unsupported sync snapshot version: ${snapshot['syncVersion']}.',
+      );
+    }
+    final tracks = snapshot['tracks'];
+    if (tracks is! List) {
+      throw const FormatException('Sync snapshot tracks must be a list.');
+    }
+    for (final item in tracks) {
+      if (item is! Map) {
+        throw const FormatException('Sync snapshot contains an invalid track.');
+      }
+      final localPath = item['localPath'];
+      if (localPath is String && localPath.trim().isNotEmpty) {
+        throw const FormatException('Sync snapshot contains a device-local file path.');
+      }
+    }
+    return snapshot;
+  }
+
+  List<Object?> _mergeSyncObjectLists(
+    Object? localValue,
+    Object? remoteValue, {
+    required String? Function(Map<String, Object?> item) identity,
+    bool preferNewerUpdatedAt = false,
+  }) {
+    final merged = <String, Map<String, Object?>>{};
+    void add(Object? value, {required bool local}) {
+      if (value is! List) {
+        return;
+      }
+      for (final item in value) {
+        if (item is! Map) {
+          continue;
+        }
+        final json = Map<String, Object?>.from(item);
+        final id = identity(json);
+        if (id == null || id.isEmpty) {
+          continue;
+        }
+        final existing = merged[id];
+        if (existing == null ||
+            (preferNewerUpdatedAt
+                ? _syncUpdatedAt(json).isAfter(_syncUpdatedAt(existing))
+                : local)) {
+          merged[id] = json;
+        }
+      }
+    }
+
+    add(remoteValue, local: false);
+    add(localValue, local: true);
+    return merged.values.toList(growable: false);
+  }
+
+  List<Object?> _mergeSyncPlaylists(Object? localValue, Object? remoteValue) {
+    final remote = _mergeSyncObjectLists(
+      null,
+      remoteValue,
+      identity: (item) => _syncString(item['id']),
+    );
+    final byId = <String, Map<String, Object?>>{
+      for (final item in remote.whereType<Map>())
+        if (_syncString(item['id']) case final id?) id: Map<String, Object?>.from(item),
+    };
+    if (localValue is List) {
+      for (final item in localValue) {
+        if (item is! Map) {
+          continue;
+        }
+        final local = Map<String, Object?>.from(item);
+        final id = _syncString(local['id']);
+        if (id == null || id.isEmpty) {
+          continue;
+        }
+        final remotePlaylist = byId[id];
+        if (remotePlaylist != null) {
+          local['trackIds'] = _mergeSyncStrings(
+            local['trackIds'],
+            remotePlaylist['trackIds'],
+          );
+        }
+        byId[id] = local;
+      }
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  List<Object?> _mergeSyncStrings(Object? localValue, Object? remoteValue) {
+    final values = <String>[];
+    for (final value in <Object?>[localValue, remoteValue]) {
+      if (value is! List) {
+        continue;
+      }
+      for (final item in value) {
+        if (item is String && item.trim().isNotEmpty && !values.contains(item)) {
+          values.add(item);
+        }
+      }
+    }
+    return values;
+  }
+
+  DateTime _syncUpdatedAt(Map<String, Object?> item) {
+    return DateTime.tryParse(item['updatedAt'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   Playlist? playlistById(String id) {
     final index = _playlists.indexWhere((playlist) => playlist.id == id);
     if (index == -1) {
