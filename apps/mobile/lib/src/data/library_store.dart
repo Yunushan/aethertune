@@ -50,6 +50,7 @@ enum LibraryHomeSectionType {
   radioSeeds,
   mostPlayed,
   favorites,
+  subscribedEpisodes,
   recentlyAdded,
 }
 
@@ -1767,6 +1768,12 @@ class LibraryStore extends ChangeNotifier {
     addSection(
       LibraryHomeSectionType.favorites,
       tracksForSmartPlaylist(SmartPlaylistType.favorites, limit: limit),
+    );
+    addSection(
+      LibraryHomeSectionType.subscribedEpisodes,
+      _tracks
+          .where((track) => track.sourceId.startsWith('podcast-'))
+          .toList(growable: false),
     );
     addSection(
       LibraryHomeSectionType.recentlyAdded,

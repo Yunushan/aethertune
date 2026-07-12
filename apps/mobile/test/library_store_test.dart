@@ -2869,6 +2869,13 @@ void main() {
         genre: 'Pop',
         addedAt: DateTime.utc(2026, 1, 4),
       ),
+      _track(
+        'episode',
+        title: 'Feed episode',
+        genre: 'Podcast',
+        sourceId: 'podcast-example',
+        addedAt: DateTime.utc(2026, 1, 5),
+      ),
     ]);
 
     await store.recordPlaybackProgress(
@@ -2893,8 +2900,19 @@ void main() {
         LibraryHomeSectionType.radioSeeds,
         LibraryHomeSectionType.mostPlayed,
         LibraryHomeSectionType.favorites,
+        LibraryHomeSectionType.subscribedEpisodes,
         LibraryHomeSectionType.recentlyAdded,
       ],
+    );
+    expect(
+      sections
+          .firstWhere(
+            (section) =>
+                section.type == LibraryHomeSectionType.subscribedEpisodes,
+          )
+          .tracks
+          .map((track) => track.id),
+      <String>['episode'],
     );
     expect(
       sections
@@ -2931,7 +2949,7 @@ void main() {
           )
           .tracks
           .map((track) => track.id),
-      <String>['new', 'favorite'],
+      <String>['episode', 'new'],
     );
     expect(store.homeFeedSections(limit: 0), isEmpty);
   });

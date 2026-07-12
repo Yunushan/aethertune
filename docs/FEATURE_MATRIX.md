@@ -193,7 +193,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
-| Provider subscriptions | Scaffolded | Grayjay, NewPipe, LibreTube | Podcast RSS feed subscriptions are persisted and removable; creator/channel subscriptions for video and multi-source feeds remain. |
+| Provider subscriptions | Scaffolded | Grayjay, NewPipe, LibreTube | Podcast RSS feed subscriptions are persisted and removable; saved episode tracks from those feeds appear in a dedicated Home **Subscribed episodes** section as well as the general library. Creator/channel subscriptions for video and multi-source feeds remain. |
 | Creator/channel following | Roadmap | Grayjay, YouTube Music | Creator identity model and feed. |
 | Multi-source unified feed | Roadmap | Grayjay | Feed merge, dedupe, ranking, filters. |
 | Public profile | Roadmap | YouTube Music | Optional server account and privacy controls. |

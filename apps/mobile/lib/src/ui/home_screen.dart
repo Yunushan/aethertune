@@ -2227,6 +2227,8 @@ IconData _homeSectionIcon(LibraryHomeSectionType type) {
       return Icons.trending_up;
     case LibraryHomeSectionType.favorites:
       return Icons.favorite_border;
+    case LibraryHomeSectionType.subscribedEpisodes:
+      return Icons.podcasts_outlined;
     case LibraryHomeSectionType.recentlyAdded:
       return Icons.new_releases_outlined;
   }
@@ -2244,6 +2246,8 @@ String _homeSectionTitle(LibraryHomeSectionType type) {
       return 'Most played';
     case LibraryHomeSectionType.favorites:
       return 'Favorites';
+    case LibraryHomeSectionType.subscribedEpisodes:
+      return 'Subscribed episodes';
     case LibraryHomeSectionType.recentlyAdded:
       return 'Recently added';
   }
@@ -2261,6 +2265,8 @@ String _homeSectionSubtitle(LibraryHomeSectionType type) {
       return 'Highest play counts';
     case LibraryHomeSectionType.favorites:
       return 'Hearted tracks';
+    case LibraryHomeSectionType.subscribedEpisodes:
+      return 'Saved episodes from your podcast feeds';
     case LibraryHomeSectionType.recentlyAdded:
       return 'Newest imports';
   }
