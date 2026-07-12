@@ -1174,6 +1174,35 @@ void main() {
     expect(csvDocument, contains(to.toIso8601String()));
   });
 
+  test('aggregates listening heatmap days within an exact range', () async {
+    var now = DateTime.utc(2026, 7, 5, 9);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('one', title: 'One', duration: const Duration(minutes: 4)),
+      _track('two', title: 'Two', duration: const Duration(minutes: 6)),
+    ]);
+
+    await store.recordPlayback('one');
+    now = DateTime.utc(2026, 7, 5, 18);
+    await store.recordPlayback('two');
+    now = DateTime.utc(2026, 7, 6, 8);
+    await store.recordPlayback('one');
+
+    final days = store.listeningHeatmap(
+      from: DateTime.utc(2026, 7, 4),
+      to: DateTime.utc(2026, 7, 7),
+    );
+
+    expect(days, hasLength(4));
+    expect(days[0].playbackCount, 0);
+    expect(days[1].playbackCount, 2);
+    expect(days[1].estimatedListeningDuration, const Duration(minutes: 10));
+    expect(days[2].playbackCount, 1);
+    expect(days[2].estimatedListeningDuration, const Duration(minutes: 4));
+    expect(days[3].playbackCount, 0);
+  });
+
   test('builds local chart snapshots for selected ranges', () async {
     var now = DateTime.utc(2026, 2, 1, 12);
     final store = LibraryStore(clock: () => now);

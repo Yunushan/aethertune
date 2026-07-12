@@ -52,6 +52,7 @@ import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
+import 'widgets/listening_heatmap.dart';
 import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/library_sync_panel.dart';
 import 'widgets/desktop_queue_pane.dart';
@@ -5291,6 +5292,11 @@ class _HistoryTabState extends State<_HistoryTab> {
       for (final track in library.tracks) track.id: track,
     };
     final stats = library.libraryStats(from: statsFrom, to: statsTo);
+    final heatmapFrom = statsFrom ?? now.subtract(const Duration(days: 83));
+    final heatmapDays = library.listeningHeatmap(
+      from: heatmapFrom,
+      to: now,
+    );
     final monthlyRecaps = library.listeningRecaps(
       period: LibraryRecapPeriod.month,
       limit: 6,
@@ -5402,6 +5408,16 @@ class _HistoryTabState extends State<_HistoryTab> {
         if (stats.playbackCount > 0) ...<Widget>[
           const SizedBox(height: 16),
           _LibraryStatsCharts(stats: stats),
+          const SizedBox(height: 16),
+          _StatsSection(
+            title: 'Listening calendar',
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: ListeningHeatmap(days: heatmapDays),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           _ListeningRecapSection(
             title: 'Monthly recaps',

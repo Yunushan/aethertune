@@ -475,6 +475,18 @@ class LibraryListeningRecap {
   final LibraryStatsSummary stats;
 }
 
+class LibraryListeningHeatmapDay {
+  const LibraryListeningHeatmapDay({
+    required this.day,
+    required this.playbackCount,
+    required this.estimatedListeningDuration,
+  });
+
+  final DateTime day;
+  final int playbackCount;
+  final Duration estimatedListeningDuration;
+}
+
 class TrackRadioSeedQueue {
   const TrackRadioSeedQueue({
     required this.seedTrack,
@@ -1951,6 +1963,50 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return recaps;
+  }
+
+  List<LibraryListeningHeatmapDay> listeningHeatmap({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    final startDay = _calendarDay(from);
+    final endDay = _calendarDay(to);
+    if (endDay.isBefore(startDay)) {
+      return <LibraryListeningHeatmapDay>[];
+    }
+
+    final tracksById = <String, Track>{
+      for (final track in _tracks) track.id: track,
+    };
+    final playCounts = <DateTime, int>{};
+    final listeningDurations = <DateTime, Duration>{};
+    for (final entry in _history) {
+      if (!_historyEntryInRange(entry, from: from, to: to)) {
+        continue;
+      }
+
+      final day = _calendarDay(entry.playedAt);
+      playCounts[day] = (playCounts[day] ?? 0) + 1;
+      final track = tracksById[entry.trackId];
+      if (track != null) {
+        listeningDurations[day] =
+            (listeningDurations[day] ?? Duration.zero) + track.duration;
+      }
+    }
+
+    final days = <LibraryListeningHeatmapDay>[];
+    for (var day = startDay; !day.isAfter(endDay);) {
+      days.add(
+        LibraryListeningHeatmapDay(
+          day: day,
+          playbackCount: playCounts[day] ?? 0,
+          estimatedListeningDuration:
+              listeningDurations[day] ?? Duration.zero,
+        ),
+      );
+      day = DateTime(day.year, day.month, day.day + 1);
+    }
+    return days;
   }
 
   List<LibraryMoodMix> localMoodMixes({int limit = 8}) {
@@ -3768,6 +3824,10 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  DateTime _calendarDay(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
   }
 
   bool _samePlaybackHistoryEntry(
