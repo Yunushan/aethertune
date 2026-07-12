@@ -162,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _lastProgressTrackId;
   Duration _lastRecordedProgressPosition = Duration.zero;
   int _lastRecordedPlaybackSerial = 0;
+  double? _desktopQueuePaneDragWidth;
 
   @override
   void initState() {
@@ -257,6 +258,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final useDesktopQueuePane = usesDesktopQueuePane(
       MediaQuery.of(context).size.width,
     );
+    final savedDesktopQueuePaneWidth = context.select<LibraryStore, double>(
+      (library) => library.desktopQueuePaneWidth,
+    );
+    final desktopQueuePaneWidth =
+        _desktopQueuePaneDragWidth ?? savedDesktopQueuePaneWidth;
     final tabContent = Column(
       children: <Widget>[
         Expanded(
@@ -372,9 +378,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   const VerticalDivider(width: 1),
                   Expanded(child: tabContent),
                   if (useDesktopQueuePane) ...<Widget>[
-                    const VerticalDivider(width: 1),
+                    DesktopQueuePaneResizeHandle(
+                      onDragUpdate: (delta) => _resizeDesktopQueuePane(
+                        delta,
+                        savedDesktopQueuePaneWidth,
+                      ),
+                      onDragEnd: () => _persistDesktopQueuePaneWidth(context),
+                    ),
                     SizedBox(
-                      width: 320,
+                      width: desktopQueuePaneWidth,
                       child: DesktopQueuePane(
                         onOpenNowPlaying: () => _openNowPlaying(context),
                         onOpenQueue: () => _showQueue(context),
@@ -405,6 +417,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _selectTab(int index) {
     setState(() => _tabIndex = index);
+  }
+
+  void _resizeDesktopQueuePane(double horizontalDelta, double savedWidth) {
+    final currentWidth = _desktopQueuePaneDragWidth ?? savedWidth;
+    setState(() {
+      _desktopQueuePaneDragWidth = (currentWidth - horizontalDelta)
+          .clamp(
+            LibraryStore.minDesktopQueuePaneWidth,
+            LibraryStore.maxDesktopQueuePaneWidth,
+          )
+          .toDouble();
+    });
+  }
+
+  void _persistDesktopQueuePaneWidth(BuildContext context) {
+    final width = _desktopQueuePaneDragWidth;
+    if (width == null) {
+      return;
+    }
+    setState(() => _desktopQueuePaneDragWidth = null);
+    unawaited(context.read<LibraryStore>().setDesktopQueuePaneWidth(width));
   }
 
   void _selectPreviousTab() {

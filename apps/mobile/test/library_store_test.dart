@@ -2231,6 +2231,10 @@ void main() {
     expect(firstStore.themePreference, AppThemePreference.system);
     expect(firstStore.accentColor, AppAccentColor.indigo);
     expect(
+      firstStore.desktopQueuePaneWidth,
+      LibraryStore.defaultDesktopQueuePaneWidth,
+    );
+    expect(
       firstStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
     );
@@ -2240,6 +2244,7 @@ void main() {
     await firstStore.setPauseListeningHistory(true);
     await firstStore.setThemePreference(AppThemePreference.amoled);
     await firstStore.setAccentColor(AppAccentColor.rose);
+    await firstStore.setDesktopQueuePaneWidth(410);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
       ' Internet-Archive ',
@@ -2250,6 +2255,7 @@ void main() {
     expect(firstStore.pauseListeningHistory, isTrue);
     expect(firstStore.themePreference, AppThemePreference.amoled);
     expect(firstStore.accentColor, AppAccentColor.rose);
+    expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
     expect(
@@ -2268,6 +2274,7 @@ void main() {
     expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
+    expect(secondStore.desktopQueuePaneWidth, 410);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -2391,6 +2398,23 @@ void main() {
     expect(
       persistedStore.offlineCacheLimitMegabytes,
       LibraryStore.maxOfflineCacheLimitMegabytes,
+    );
+  });
+
+  test('clamps the persisted desktop queue pane width', () async {
+    final store = LibraryStore();
+    await store.load();
+
+    await store.setDesktopQueuePaneWidth(-1);
+    expect(
+      store.desktopQueuePaneWidth,
+      LibraryStore.minDesktopQueuePaneWidth,
+    );
+
+    await store.setDesktopQueuePaneWidth(10000);
+    expect(
+      store.desktopQueuePaneWidth,
+      LibraryStore.maxDesktopQueuePaneWidth,
     );
   });
 

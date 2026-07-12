@@ -580,6 +580,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.automatic_offline_queue.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
+  static const _desktopQueuePaneWidthKey =
+      'aethertune.desktop_queue_pane_width.v1';
   static const _onboardingCompletedKey =
       'aethertune.onboarding_completed.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
@@ -593,6 +595,9 @@ class LibraryStore extends ChangeNotifier {
   static const minOfflineCacheLimitMegabytes = 50;
   static const minOfflineCacheProviderLimitMegabytes = 1;
   static const maxOfflineCacheLimitMegabytes = 51200;
+  static const defaultDesktopQueuePaneWidth = 320.0;
+  static const minDesktopQueuePaneWidth = 260.0;
+  static const maxDesktopQueuePaneWidth = 480.0;
   static const _maxHistoryEntries = 500;
   static const _maxSearchQueryHistoryEntries = 20;
   static const _minSavedProgress = Duration(seconds: 5);
@@ -620,6 +625,7 @@ class LibraryStore extends ChangeNotifier {
   bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.indigo;
+  double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _onboardingCompleted = false;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
   final Map<String, int> _offlineCacheProviderLimitMegabytes = <String, int>{};
@@ -652,6 +658,7 @@ class LibraryStore extends ChangeNotifier {
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
+  double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
   bool get onboardingCompleted => _onboardingCompleted;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
   int get offlineCacheLimitBytes => _offlineCacheLimitMegabytes * 1024 * 1024;
@@ -826,6 +833,10 @@ class LibraryStore extends ChangeNotifier {
     );
     _accentColor = _appAccentColorFromName(
       prefs.getString(_accentColorKey),
+    );
+    _desktopQueuePaneWidth = _sanitizeDesktopQueuePaneWidth(
+      prefs.getDouble(_desktopQueuePaneWidthKey) ??
+          defaultDesktopQueuePaneWidth,
     );
     _onboardingCompleted = prefs.getBool(_onboardingCompletedKey) ?? false;
     _offlineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
@@ -1088,6 +1099,17 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _accentColor = accentColor;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setDesktopQueuePaneWidth(double width) async {
+    final sanitized = _sanitizeDesktopQueuePaneWidth(width);
+    if (_desktopQueuePaneWidth == sanitized) {
+      return;
+    }
+
+    _desktopQueuePaneWidth = sanitized;
     await _save();
     notifyListeners();
   }
@@ -5853,6 +5875,15 @@ class LibraryStore extends ChangeNotifier {
     return megabytes;
   }
 
+  double _sanitizeDesktopQueuePaneWidth(double width) {
+    if (!width.isFinite) {
+      return defaultDesktopQueuePaneWidth;
+    }
+    return width
+        .clamp(minDesktopQueuePaneWidth, maxDesktopQueuePaneWidth)
+        .toDouble();
+  }
+
   int _sanitizeOfflineCacheProviderLimitMegabytes(int megabytes) {
     if (megabytes < minOfflineCacheProviderLimitMegabytes) {
       return minOfflineCacheProviderLimitMegabytes;
@@ -6144,6 +6175,7 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);
+    await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
     await prefs.setBool(_onboardingCompletedKey, _onboardingCompleted);
     await prefs.setInt(
       _offlineCacheLimitMegabytesKey,

@@ -194,6 +194,32 @@ void main() {
     expect(nowPlayingOpens, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('desktop queue resize handle reports drag changes and completion', (
+    tester,
+  ) async {
+    var accumulatedDelta = 0.0;
+    var completed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DesktopQueuePaneResizeHandle(
+            onDragUpdate: (delta) => accumulatedDelta += delta,
+            onDragEnd: () => completed = true,
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('desktop-queue-pane-resize'))),
+    );
+    await gesture.moveBy(const Offset(-36, 0));
+    await gesture.up();
+
+    expect(accumulatedDelta, lessThan(0));
+    expect(completed, isTrue);
+  });
 }
 
 Track _track(

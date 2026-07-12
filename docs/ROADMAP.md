@@ -102,8 +102,8 @@
 - [ ] Physical Android/iOS interruption, route, battery, and background lifecycle fixtures
 - [ ] Windows/Linux global media key support
 - [x] Desktop navigation rail at wide widths
-- [x] Wide desktop queue split pane with queue selection, removal, and reordering
-- [ ] Resizable side panes, tray/menu bar, and installer polish
+- [x] Wide desktop queue split pane with persisted resizing, queue selection, removal, and reordering
+- [ ] Tray/menu bar and installer polish
 
 ## 0.4.x: Server foundation
 

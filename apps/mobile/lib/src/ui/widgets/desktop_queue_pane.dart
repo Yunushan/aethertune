@@ -6,6 +6,34 @@ import '../../player/offline_playback_policy.dart';
 import '../../player/player_controller.dart';
 import 'track_artwork.dart';
 
+class DesktopQueuePaneResizeHandle extends StatelessWidget {
+  const DesktopQueuePaneResizeHandle({
+    required this.onDragUpdate,
+    required this.onDragEnd,
+    super.key,
+  });
+
+  final ValueChanged<double> onDragUpdate;
+  final VoidCallback onDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        key: const Key('desktop-queue-pane-resize'),
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (details) => onDragUpdate(details.delta.dx),
+        onHorizontalDragEnd: (_) => onDragEnd(),
+        child: const SizedBox(
+          width: 12,
+          child: Center(child: VerticalDivider(width: 1)),
+        ),
+      ),
+    );
+  }
+}
+
 class DesktopQueuePane extends StatelessWidget {
   const DesktopQueuePane({
     required this.onOpenNowPlaying,
