@@ -7,12 +7,17 @@ Future<LyricsSearchResult?> showLyricsSearchSheet(
   BuildContext context, {
   required Track track,
   required LyricsProvider provider,
+  bool offlineOnly = false,
 }) {
   return showModalBottomSheet<LyricsSearchResult>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => LyricsSearchSheet(track: track, provider: provider),
+    builder: (_) => LyricsSearchSheet(
+      track: track,
+      provider: provider,
+      offlineOnly: offlineOnly,
+    ),
   );
 }
 
@@ -20,11 +25,13 @@ class LyricsSearchSheet extends StatefulWidget {
   const LyricsSearchSheet({
     required this.track,
     required this.provider,
+    this.offlineOnly = false,
     super.key,
   });
 
   final Track track;
   final LyricsProvider provider;
+  final bool offlineOnly;
 
   @override
   State<LyricsSearchSheet> createState() => _LyricsSearchSheetState();
@@ -78,7 +85,9 @@ class _LyricsSearchSheetState extends State<LyricsSearchSheet> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  _privacySummary(widget.provider),
+                  widget.offlineOnly
+                      ? 'Offline mode: cached ${widget.provider.name} results only. No network request is made.'
+                      : _privacySummary(widget.provider),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -183,15 +192,16 @@ class _LyricsSearchSheetState extends State<LyricsSearchSheet> {
       _error = null;
     });
     try {
-      final results = await widget.provider.search(
-        LyricsSearchQuery(
+      final query = LyricsSearchQuery(
           keywords: keywords,
           trackName: widget.track.title,
           artistName: widget.track.artist,
           albumName: widget.track.album,
           duration: widget.track.duration,
-        ),
-      );
+        );
+      final results = widget.offlineOnly && widget.provider is OfflineLyricsProvider
+          ? await (widget.provider as OfflineLyricsProvider).searchOffline(query)
+          : await widget.provider.search(query);
       if (!mounted) {
         return;
       }

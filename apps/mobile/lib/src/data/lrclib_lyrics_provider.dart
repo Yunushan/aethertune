@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../domain/lyrics_provider.dart';
 import '../domain/music_source_provider.dart';
 
@@ -9,18 +12,42 @@ typedef LrcLibResponseLoader = Future<String> Function(
   Map<String, String> headers,
 );
 
-final class LrcLibLyricsProvider implements LyricsProvider {
+abstract interface class LrcLibSearchCache {
+  Future<String?> read(String key);
+  Future<void> write(String key, String responseBody);
+}
+
+class SharedPreferencesLrcLibSearchCache implements LrcLibSearchCache {
+  static const _prefix = 'aethertune.lrclib.search.v1.';
+
+  @override
+  Future<String?> read(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('$_prefix$key');
+  }
+
+  @override
+  Future<void> write(String key, String responseBody) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_prefix$key', responseBody);
+  }
+}
+
+final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvider {
   LrcLibLyricsProvider({
     Uri? baseUri,
     LrcLibResponseLoader? responseLoader,
+    LrcLibSearchCache? searchCache,
   })  : baseUri = baseUri ?? Uri.parse('https://lrclib.net'),
-        _responseLoader = responseLoader ?? _loadLrcLibResponse;
+        _responseLoader = responseLoader ?? _loadLrcLibResponse,
+        _searchCache = searchCache ?? SharedPreferencesLrcLibSearchCache();
 
   static const userAgent =
       'AetherTune/0.1.0 (+https://github.com/Yunushan/aethertune)';
 
   final Uri baseUri;
   final LrcLibResponseLoader _responseLoader;
+  final LrcLibSearchCache _searchCache;
 
   @override
   String get id => 'lrclib';
@@ -45,6 +72,55 @@ final class LrcLibLyricsProvider implements LyricsProvider {
 
   @override
   Future<List<LyricsSearchResult>> search(LyricsSearchQuery query) async {
+    _validateQuery(query);
+    final response = await _responseLoader(
+      _searchUri(query),
+      const <String, String>{
+        HttpHeaders.acceptHeader: 'application/json',
+        HttpHeaders.userAgentHeader: userAgent,
+      },
+    );
+    await _searchCache.write(_cacheKey(query), response);
+    return _parseAndRank(response, query);
+  }
+
+  @override
+  Future<List<LyricsSearchResult>> searchOffline(LyricsSearchQuery query) async {
+    _validateQuery(query);
+    final cached = await _searchCache.read(_cacheKey(query));
+    if (cached == null || cached.isEmpty) {
+      throw StateError('No cached lyrics results are available for this search.');
+    }
+    return _parseAndRank(cached, query);
+  }
+
+  List<LyricsSearchResult> _parseAndRank(
+    String response,
+    LyricsSearchQuery query,
+  ) {
+    final results = parseLrcLibSearchResults(
+      response,
+      providerId: id,
+      providerName: name,
+      baseUri: baseUri,
+    );
+
+    return rankLrcLibSearchResults(results, query);
+  }
+
+  String _cacheKey(LyricsSearchQuery query) {
+    final value = <String>[
+      baseUri.toString(),
+      query.keywords.trim(),
+      query.trackName.trim(),
+      query.artistName.trim(),
+      query.albumName.trim(),
+      query.duration.inMilliseconds.toString(),
+    ].join('\u0000');
+    return sha256.convert(value.codeUnits).toString();
+  }
+
+  void _validateQuery(LyricsSearchQuery query) {
     if (!query.hasSearchTerms) {
       throw ArgumentError.value(
         query.keywords,
@@ -52,21 +128,6 @@ final class LrcLibLyricsProvider implements LyricsProvider {
         'Lyrics search requires keywords or a track title.',
       );
     }
-
-    final results = parseLrcLibSearchResults(
-      await _responseLoader(
-        _searchUri(query),
-        const <String, String>{
-          HttpHeaders.acceptHeader: 'application/json',
-          HttpHeaders.userAgentHeader: userAgent,
-        },
-      ),
-      providerId: id,
-      providerName: name,
-      baseUri: baseUri,
-    );
-
-    return rankLrcLibSearchResults(results, query);
   }
 
   Uri _searchUri(LyricsSearchQuery query) {

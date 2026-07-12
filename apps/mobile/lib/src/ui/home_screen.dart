@@ -546,16 +546,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 actions: <Widget>[
                   Tooltip(
                     message: library.offlineModeEnabled
-                        ? 'Online lyrics search is unavailable in offline mode'
+                        ? 'Search cached ${_lyricsProvider.name} results'
                         : 'Search ${_lyricsProvider.name}',
                     child: TextButton.icon(
-                      onPressed: library.offlineModeEnabled
-                          ? null
-                          : () async {
+                      onPressed: () async {
                               final selected = await showLyricsSearchSheet(
                                 dialogContext,
                                 track: track,
                                 provider: _lyricsProvider,
+                                offlineOnly: library.offlineModeEnabled,
                               );
                               final lyrics = selected?.preferredLyrics;
                               if (!dialogContext.mounted || lyrics == null) {

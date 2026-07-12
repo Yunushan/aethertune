@@ -69,3 +69,7 @@ abstract interface class LyricsProvider {
 
   Future<List<LyricsSearchResult>> search(LyricsSearchQuery query);
 }
+
+abstract interface class OfflineLyricsProvider {
+  Future<List<LyricsSearchResult>> searchOffline(LyricsSearchQuery query);
+}

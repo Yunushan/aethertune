@@ -1,11 +1,41 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/lrclib_lyrics_provider.dart';
 import 'package:aethertune/src/domain/lyrics_provider.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  test('returns persisted cached results without issuing a network request',
+      () async {
+    final cache = _MemorySearchCache();
+    var requests = 0;
+    final provider = LrcLibLyricsProvider(
+      searchCache: cache,
+      responseLoader: (uri, headers) async {
+        requests += 1;
+        return '[{"id":7,"trackName":"Cached Song","artistName":"Artist","plainLyrics":"Cached text"}]';
+      },
+    );
+    const query = LyricsSearchQuery(
+      keywords: 'cached song',
+      trackName: 'Cached Song',
+      artistName: 'Artist',
+    );
+
+    await provider.search(query);
+    final cached = await provider.searchOffline(query);
+
+    expect(requests, 1);
+    expect(cached.single.trackName, 'Cached Song');
+  });
   test('search uses the documented endpoint, disclosure, and user agent', () async {
     Uri? capturedUri;
     Map<String, String>? capturedHeaders;
@@ -92,6 +122,18 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+}
+
+class _MemorySearchCache implements LrcLibSearchCache {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String responseBody) async {
+    values[key] = responseBody;
+  }
 }
 
 const _searchResponse = '''
