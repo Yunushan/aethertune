@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Documented and tested portable snapshot restoration for manual playlists and valid playback progress, while keeping automatic merge and collaboration as future work.
 - Added persistent watched audio folders: recursive imports now monitor relevant audio and sidecar-lyrics changes with debounced rescans, safe incomplete-scan handling, user-state preservation, and Options refresh/remove controls.
 - Added persisted 0.5x-3x playback-speed controls in Now Playing and Options, with system-media state propagation and player/widget contract coverage.
 - Documented the implemented optional self-hosted cross-device library snapshot sync, including secure-token configuration, checksum verification, explicit conflict resolution, and its intentionally excluded device-local state.

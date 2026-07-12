@@ -231,8 +231,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Authentication | Roadmap | Sync services | Token model, secure storage, tests. |
 | User profiles | Roadmap | YouTube Music | Optional account model. |
 | Library sync | Done | YouTube Music / multi-device needs | The optional Dart server accepts authenticated `GET`/`PUT /api/v1/sync/library` snapshots with size checks, checksums, durable latest-revision storage, and optimistic conflict responses. The client requires HTTPS unless the user explicitly permits HTTP, stores its token securely, and exposes manual upload/download plus conflict resolution. Automatic sync, registration, token lifecycle, and merge remain roadmap work. |
-| Playback position sync | Scaffolded | Podcasts/video apps | Local podcast episode progress/resume is implemented; server sync APIs, conflict resolution, and cross-device restore remain. |
-| Playlist sync | Roadmap | Music services | Server playlist API. |
+| Playback position sync | Scaffolded | Podcasts/video apps | Local podcast episode progress/resume is implemented, and the manual authenticated library snapshot carries valid progress entries across devices with the rest of the portable library. Automatic background sync, per-item conflict merge, and video-specific state remain. |
+| Playlist sync | Scaffolded | Music services | Manual playlists, ordered track IDs, and safe remote artwork URIs are included in the authenticated portable library snapshot and restore across devices. Automatic per-playlist merge, collaboration, provider credentials, and a dedicated server playlist API remain. |
 | Provider credential vault | Scaffolded | Self-hosted/official APIs | Jellyfin API keys and Navidrome/Subsonic passwords use `flutter_secure_storage` across Android, iOS, Linux, macOS, and Windows; account metadata and safe artwork IDs are separate, secrets and credential-bearing media/artwork URLs are excluded from queue/library JSON and backups, Subsonic requests derive per-request salted tokens, and confirmed test-before-replace rotation rolls back failed vault writes before invalidating artwork and re-resolving active queues. Deletion removes vault entries and provider caches, Android backup is disabled, Apple keychain entitlements are generated, and Linux CI/release installs libsecret. Needed next: biometric policy choices, migration/versioning, and physical-device keychain/keystore/credential-manager tests. |
 | Admin/ops endpoints | Roadmap | Server deployments | Metrics without user tracking, logs, health. |
 | Federation/self-hosting docs | Roadmap | Open-source server users | Docker, systemd, reverse proxy, TLS docs. |
@@ -331,7 +331,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.
 9. Add discovery: home feed, charts, recommendations, moods, artist/track radio, similar artists.
 10. Add video surfaces only through legal providers: video player, PiP, captions, chapters, subscriptions.
-11. Extend the implemented static-credential vault with OAuth token refresh, biometric policy, and migration/versioning, then build server auth, sync, playlist/library/playback-position APIs, and self-hosting docs.
+11. Extend the implemented static-credential vault with OAuth token refresh, biometric policy, and migration/versioning, then build automatic sync, per-item playlist/library/playback-position merge APIs, and self-hosting docs.
 12. Polish desktop: responsive layout, tray/menu bar, global hotkeys, installers, signing.
 13. Harden release artifacts with signing, notarization, installers, and store-ready packaging.
 14. Add accessibility, localization, golden tests, integration tests, provider tests, dependency audits, and privacy/network audits.

@@ -102,6 +102,11 @@ void main() {
       remoteTrack.id,
       'Synced lyrics',
     );
+    await remoteStore.recordPlaybackProgress(
+      remoteTrack.id,
+      const Duration(minutes: 2),
+      const Duration(minutes: 4),
+    );
     final remoteSnapshot = remoteStore.exportSyncSnapshotJson();
 
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -142,6 +147,10 @@ void main() {
     expect(localStore.playlists.single.trackIds, <String>['remote-track-id']);
     expect(localStore.lyricsForTrack('remote-track-id')?.plainText,
         'Synced lyrics');
+    expect(
+      localStore.playbackProgressForTrack('remote-track-id')?.position,
+      const Duration(minutes: 2),
+    );
     expect(localStore.offlineModeEnabled, isTrue);
     expect(localStore.offlineCacheLimitMegabytes, 777);
     expect(localStore.offlineCacheQueue.single.track.id, 'device-cache-job');

@@ -91,7 +91,7 @@ Tap the moon icon in the top-right corner and choose a preset duration, choose *
 
 ## Cross-device library sync
 
-In Options, configure a self-hosted AetherTune server with its URL, a device name, and an operator-provided bearer token. The app tests the connection before retaining the token in secure storage. Use the upload and download controls to move a portable library snapshot between devices. Downloading asks for confirmation because it replaces the portable library state; matching local files and device-specific cache settings stay on the device. When another device has uploaded a newer revision, choose the server copy or explicitly replace it with this device. Sync is paused in Offline mode and does not transfer provider credentials, runtime stream URLs, queue state, or cached media.
+In Options, configure a self-hosted AetherTune server with its URL, a device name, and an operator-provided bearer token. The app tests the connection before retaining the token in secure storage. Use the upload and download controls to move a portable library snapshot between devices. The snapshot includes library metadata, manual playlists, lyrics, listening history, and valid playback progress. Downloading asks for confirmation because it replaces the portable library state; matching local files and device-specific cache settings stay on the device. When another device has uploaded a newer revision, choose the server copy or explicitly replace it with this device. Sync is paused in Offline mode and does not transfer provider credentials, runtime stream URLs, queue state, watched folder paths, or cached media.
 
 ## Options
 
