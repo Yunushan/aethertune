@@ -1,6 +1,6 @@
 # Architecture
 
-AetherTune is a local-first Flutter client with a provider-based source layer plus a small Dart server foundation for health checks, metadata, and future sync APIs.
+AetherTune is a local-first Flutter client with a provider-based source layer plus an optional Dart server for health checks, catalog metadata, and authenticated portable-library snapshots.
 
 ## Goals
 
@@ -39,7 +39,8 @@ Platform layer
   audio_service system media session on Android/iOS/macOS
 
 Server layer
-  Dart Shelf handler, health endpoint, app info endpoint, catalog endpoint
+  Dart Shelf handler, health/info/catalog endpoints, authenticated versioned
+  library snapshot endpoint with checksum and optimistic revision conflict handling
 ```
 
 ## Domain model
@@ -136,11 +137,20 @@ release builders require the Visual C++ ATL component used by the plugin.
 
 ## Server
 
-`services/server` is a Dart package with a Shelf-compatible request handler. It currently exposes:
+`services/server` is a Dart package with a Shelf-compatible request handler. It exposes:
 
 - `GET /health`
 - `GET /api/v1/info`
 - `GET /api/v1/tracks`
+- `GET /api/v1/sync/library`
+- `PUT /api/v1/sync/library`
+
+The sync routes are disabled until the operator supplies an
+`AETHERTUNE_SYNC_USERS` JSON map of user IDs to bearer tokens. The server keeps
+only the latest checksum-verified portable snapshot per user under
+`AETHERTUNE_DATA_DIR`, enforces an optimistic base revision, and rejects local
+paths and device cache jobs. Registration, token lifecycle, automatic sync,
+and merge policies remain client/server roadmap work.
 
 The server is intentionally small, but it is real code with tests and CI coverage. Future server work should add authenticated sync, remote library metadata, and provider coordination without weakening the client-first privacy model.
 
