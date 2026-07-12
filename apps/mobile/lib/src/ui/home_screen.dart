@@ -46,6 +46,7 @@ import '../domain/track_lyrics.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
+import 'desktop_navigation_shortcuts.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
@@ -328,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: const Text('AetherTune'),
         actions: <Widget>[
@@ -376,10 +377,29 @@ class _HomeScreenState extends State<HomeScreen> {
               destinations: _navigationBarDestinations(),
             ),
     );
+
+    return DesktopNavigationShortcutScope(
+      enabled: useNavigationRail,
+      onDestinationSelected: _selectTab,
+      onPreviousDestination: _selectPreviousTab,
+      onNextDestination: _selectNextTab,
+      child: scaffold,
+    );
   }
 
   void _selectTab(int index) {
     setState(() => _tabIndex = index);
+  }
+
+  void _selectPreviousTab() {
+    _selectTab(
+      (_tabIndex - 1 + _aetherTuneNavigationDestinations.length) %
+          _aetherTuneNavigationDestinations.length,
+    );
+  }
+
+  void _selectNextTab() {
+    _selectTab((_tabIndex + 1) % _aetherTuneNavigationDestinations.length);
   }
 
   Future<void> _openNowPlaying(BuildContext context) async {
