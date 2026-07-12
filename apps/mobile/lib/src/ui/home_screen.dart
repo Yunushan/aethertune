@@ -47,6 +47,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
+import 'platform_text_share.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
@@ -106,6 +107,7 @@ const _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
 ];
 
 final _playlistArtworkFileStore = PlaylistArtworkFileStore();
+const _platformTextShareService = SharePlusTextShareService();
 
 List<NavigationDestination> _navigationBarDestinations() {
   return _aetherTuneNavigationDestinations.map((destination) {
@@ -6516,8 +6518,46 @@ Future<void> _copyTextToClipboard(
   }
 
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(copiedMessage)),
+    SnackBar(
+      content: Text(copiedMessage),
+      action: SnackBarAction(
+        label: 'Share',
+        onPressed: () => unawaited(_shareCopiedText(context, text)),
+      ),
+    ),
   );
+}
+
+Future<void> _shareCopiedText(BuildContext context, String text) async {
+  if (!context.mounted) {
+    return;
+  }
+  final messenger = ScaffoldMessenger.of(context);
+  final renderBox = context.findRenderObject() as RenderBox?;
+  final origin = renderBox == null || !renderBox.hasSize
+      ? null
+      : renderBox.localToGlobal(Offset.zero) & renderBox.size;
+  try {
+    final status = await _platformTextShareService.share(
+      PlatformTextShareRequest(
+        text: text,
+        sharePositionOrigin: origin,
+      ),
+    );
+    if (!context.mounted || status != PlatformTextShareStatus.unavailable) {
+      return;
+    }
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Native sharing is unavailable here.')),
+    );
+  } on Object catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not open the share sheet: $error')),
+    );
+  }
 }
 
 String _formatDurationLabel(Duration duration) {

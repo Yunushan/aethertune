@@ -198,7 +198,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Multi-source unified feed | Roadmap | Grayjay | Feed merge, dedupe, ranking, filters. |
 | Public profile | Roadmap | YouTube Music | Optional server account and privacy controls. |
 | Taste-match/shared mixes | Roadmap | YouTube Music | Server-side sharing and opt-in profile model. |
-| Share track/album/playlist | Scaffolded | All music apps | Track menus, album/artist/genre/source/folder browse sheets, and playlist menus copy local AetherTune share text for tracks, groups, and playlists; local file paths are redacted from share payloads; monthly/yearly listening recaps render and save as PNG cards. Needed next: native platform share sheets, deep links, track/album/playlist artwork cards, importable links, and server-backed public sharing. |
+| Share track/album/playlist | Scaffolded | All music apps | Track menus, album/artist/genre/source/folder browse sheets, and playlist menus copy local AetherTune share text for tracks, groups, playlists, and lyrics; local file paths are redacted from share payloads. Each successful copy confirmation now includes a native platform Share action using the same text, with an anchored iPad/macOS presentation origin and unavailable/error states. Monthly/yearly listening recaps render and save as PNG cards. Needed next: deep links, track/album/playlist artwork cards, importable links, and server-backed public sharing. |
 | Comments/community posts | Not included by default | YouTube-style platforms | Moderation burden; official APIs only if ever supported. |
 
 ### Platform Integrations

@@ -25,6 +25,7 @@ dependencies:
   collection: ^1.18.0
   crypto: ^3.0.7
   xml: ^6.5.0
+  share_plus: ^13.2.0
 
 dev_dependencies:
   flutter_test:
