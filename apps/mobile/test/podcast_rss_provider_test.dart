@@ -19,6 +19,14 @@ void main() {
     expect(episode.title, 'Open Audio Episode');
     expect(episode.author, 'Guest Host');
     expect(episode.duration, const Duration(hours: 1, minutes: 2, seconds: 3));
+    expect(episode.chapters.map((chapter) => chapter.title), <String>[
+      'Introduction',
+      'Interview',
+    ]);
+    expect(
+      episode.chapters[1].start,
+      const Duration(minutes: 10, seconds: 30, milliseconds: 500),
+    );
     expect(episode.publishedAt, DateTime.utc(2026, 7, 6, 10));
 
     final track = episode.toTrack(sourceId: 'podcast-test', feed: feed);
@@ -28,6 +36,7 @@ void main() {
     expect(track.genre, 'Podcast');
     expect(track.isPlayable, isTrue);
     expect(track.streamUrl, 'https://media.example.test/episode-1.mp3');
+    expect(track.chapters, episode.chapters);
   });
 
   test('search loads the feed locally and resolves episode streams', () async {
@@ -86,7 +95,7 @@ void main() {
 }
 
 const _samplePodcastFeed = '''
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:psc="http://podlove.org/simple-chapters">
   <channel>
     <title>Aether Radio</title>
     <description>Open podcast feed.</description>
@@ -98,6 +107,12 @@ const _samplePodcastFeed = '''
       <description>Playable open audio.</description>
       <itunes:author>Guest Host</itunes:author>
       <itunes:duration>01:02:03</itunes:duration>
+      <psc:chapters version="1.2">
+        <psc:chapter start="00:00:00.000" title="Introduction" />
+        <psc:chapter start="00:10:30.500" title="Interview" />
+        <psc:chapter start="01:02:03.000" title="After the end" />
+        <psc:chapter start="bad" title="Malformed" />
+      </psc:chapters>
       <pubDate>Mon, 06 Jul 2026 10:00:00 GMT</pubDate>
       <enclosure
         url="https://media.example.test/episode-1.mp3"

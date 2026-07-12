@@ -5,6 +5,7 @@ import 'package:xml/xml.dart';
 
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import '../domain/track_chapter.dart';
 
 typedef PodcastFeedLoader = Future<String> Function(Uri feedUri);
 
@@ -111,6 +112,7 @@ final class PodcastEpisode {
     required this.author,
     required this.streamUri,
     required this.duration,
+    this.chapters = const <TrackChapter>[],
     this.artworkUri,
     this.publishedAt,
   });
@@ -121,6 +123,7 @@ final class PodcastEpisode {
   final String author;
   final Uri streamUri;
   final Duration duration;
+  final List<TrackChapter> chapters;
   final Uri? artworkUri;
   final DateTime? publishedAt;
 
@@ -135,6 +138,7 @@ final class PodcastEpisode {
       album: feed.title,
       genre: 'Podcast',
       duration: duration,
+      chapters: chapters,
       artworkUri: artworkUri ?? feed.artworkUri,
       streamUrl: streamUri.toString(),
       sourceId: sourceId,
@@ -229,6 +233,7 @@ PodcastEpisode? _episodeFromItem(
   final title = _childText(item, 'title', fallback: 'Untitled episode');
   final guid = _childText(item, 'guid', fallback: enclosureUrl);
 
+  final duration = parsePodcastDuration(_childText(item, 'duration'));
   return PodcastEpisode(
     id: guid,
     title: title,
@@ -239,9 +244,78 @@ PodcastEpisode? _episodeFromItem(
     ),
     author: _childText(item, 'author', fallback: feedAuthor),
     streamUri: streamUri,
-    duration: parsePodcastDuration(_childText(item, 'duration')),
+    duration: duration,
+    chapters: _inlineChapters(item, maximum: duration),
     artworkUri: _imageUri(item),
     publishedAt: _parseRssDate(_childText(item, 'pubDate')),
+  );
+}
+
+List<TrackChapter> _inlineChapters(
+  XmlElement item, {
+  required Duration maximum,
+}) {
+  final chapters = <TrackChapter>[];
+  for (final container in item.descendants.whereType<XmlElement>()) {
+    if (container.name.local != 'chapters') {
+      continue;
+    }
+    for (final chapter in container.childElements) {
+      if (chapter.name.local != 'chapter') {
+        continue;
+      }
+
+      final start = _parseChapterStart(chapter.getAttribute('start'));
+      final title = (chapter.getAttribute('title') ??
+              chapter.getAttribute('name') ??
+              chapter.innerText)
+          .trim();
+      if (start == null || title.isEmpty) {
+        continue;
+      }
+
+      try {
+        chapters.add(TrackChapter(start: start, title: title));
+      } on ArgumentError {
+        continue;
+      }
+    }
+  }
+
+  return TrackChapter.normalize(chapters, maximum: maximum);
+}
+
+Duration? _parseChapterStart(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+
+  final parts = normalized.split(':');
+  if (parts.length < 2 || parts.length > 3) {
+    return null;
+  }
+
+  final seconds = double.tryParse(parts.removeLast());
+  final minutes = int.tryParse(parts.removeLast());
+  final hours = parts.isEmpty ? 0 : int.tryParse(parts.single);
+  if (seconds == null ||
+      minutes == null ||
+      hours == null ||
+      seconds < 0 ||
+      seconds >= 60 ||
+      minutes < 0 ||
+      minutes >= 60 ||
+      hours < 0) {
+    return null;
+  }
+
+  return Duration(
+    microseconds:
+        ((hours * Duration.microsecondsPerHour) +
+                (minutes * Duration.microsecondsPerMinute) +
+                (seconds * Duration.microsecondsPerSecond))
+            .round(),
   );
 }
 
