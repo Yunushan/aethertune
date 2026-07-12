@@ -18,7 +18,8 @@ class OfflineCacheForegroundWorker extends StatefulWidget {
       _OfflineCacheForegroundWorkerState();
 }
 
-class _OfflineCacheForegroundWorkerState extends State<OfflineCacheForegroundWorker>
+class _OfflineCacheForegroundWorkerState
+    extends State<OfflineCacheForegroundWorker>
     with WidgetsBindingObserver {
   Timer? _timer;
   bool _processing = false;
@@ -70,7 +71,7 @@ class _OfflineCacheForegroundWorkerState extends State<OfflineCacheForegroundWor
         cacheRoot: root,
         resolveTrack: resolver,
       );
-      await worker.processNext(library);
+      await worker.processPending(library);
     } finally {
       _processing = false;
     }
