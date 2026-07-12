@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
+import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
@@ -1211,20 +1212,30 @@ Future<void> _showTrackMetadataEditor(
     return;
   }
 
-  if (updated != null && _canWriteMp3Id3v1(updated)) {
-    final writeFile = await _confirmMp3TagWrite(context, updated);
+  if (updated != null && _canWriteEmbeddedMetadata(updated)) {
+    final writeFile = await _confirmEmbeddedTagWrite(context, updated);
     if (!context.mounted) {
       return;
     }
     if (writeFile == true) {
       try {
-        await const Mp3Id3v1TagWriter().write(
-          path: updated.localPath!,
-          title: updated.title,
-          artist: updated.artist,
-          album: updated.album,
-          genre: updated.genre,
-        );
+        if (_isLocalMp3(updated)) {
+          await const Mp3Id3v1TagWriter().write(
+            path: updated.localPath!,
+            title: updated.title,
+            artist: updated.artist,
+            album: updated.album,
+            genre: updated.genre,
+          );
+        } else {
+          await const FlacVorbisCommentWriter().write(
+            path: updated.localPath!,
+            title: updated.title,
+            artist: updated.artist,
+            album: updated.album,
+            genre: updated.genre,
+          );
+        }
       } on Object catch (error) {
         if (context.mounted) {
           messenger.showSnackBar(
@@ -3128,17 +3139,25 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
   }
 }
 
-bool _canWriteMp3Id3v1(Track track) {
+bool _canWriteEmbeddedMetadata(Track track) {
+  return _isLocalMp3(track) ||
+      (track.localPath?.trim() ?? '').toLowerCase().endsWith('.flac');
+}
+
+bool _isLocalMp3(Track track) {
   return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.mp3');
 }
 
-Future<bool?> _confirmMp3TagWrite(BuildContext context, Track track) {
+Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
+  final isMp3 = _isLocalMp3(track);
   return showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Update MP3 file tags?'),
-      content: const Text(
-        'This writes title, artist, album, and genre to standard ID3v2 MP3 text tags, with an ID3v1 compatibility tag. Artwork and other supported ID3v2 frames are preserved. Unsupported tag layouts are left unchanged.',
+      title: Text('Update ${isMp3 ? 'MP3' : 'FLAC'} file tags?'),
+      content: Text(
+        isMp3
+            ? 'This writes title, artist, album, and genre to standard ID3v2 MP3 text tags, with an ID3v1 compatibility tag. Artwork and other supported ID3v2 frames are preserved. Unsupported tag layouts are left unchanged.'
+            : 'This writes title, artist, album, and genre to standard FLAC Vorbis comments. Artwork and other FLAC metadata blocks are preserved.',
       ),
       actions: <Widget>[
         TextButton(
@@ -3148,7 +3167,7 @@ Future<bool?> _confirmMp3TagWrite(BuildContext context, Track track) {
         FilledButton.icon(
           onPressed: () => Navigator.of(dialogContext).pop(true),
           icon: const Icon(Icons.save_outlined),
-          label: const Text('Update MP3'),
+          label: Text('Update ${isMp3 ? 'MP3' : 'FLAC'}'),
         ),
       ],
     ),
