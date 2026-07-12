@@ -83,6 +83,61 @@ void main() {
     expect(feed.episodes.single.title, 'Open Audio Episode');
   });
 
+  test('loads same-origin Podcasting 2.0 chapter documents', () async {
+    final requestedUris = <Uri>[];
+    final provider = PodcastRssProvider(
+      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+      feedLoader: (_) async => _externalChapterPodcastFeed,
+      chapterLoader: (uri) async {
+        requestedUris.add(uri);
+        return '''
+          {"version":"1.2.0","chapters":[
+            {"startTime":0,"title":"Opening"},
+            {"startTime":30.5,"title":"Topic"},
+            {"startTime":120,"title":"Too late"},
+            {"startTime":"bad","title":"Malformed"}
+          ]}
+        ''';
+      },
+    );
+
+    final feed = await provider.fetchFeed();
+
+    expect(requestedUris, <Uri>[Uri.parse('https://feeds.example.test/chapters.json')]);
+    expect(feed.episodes.single.chapters.map((chapter) => chapter.title), <String>[
+      'Opening',
+      'Topic',
+    ]);
+    expect(
+      feed.episodes.single.chapters[1].start,
+      const Duration(seconds: 30, milliseconds: 500),
+    );
+  });
+
+  test('does not request external chapter URLs outside the feed origin', () async {
+    var chapterRequests = 0;
+    final provider = PodcastRssProvider(
+      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+      feedLoader: (_) async => _crossOriginChapterPodcastFeed,
+      chapterLoader: (_) async {
+        chapterRequests += 1;
+        return '{}';
+      },
+    );
+
+    final feed = await provider.fetchFeed();
+
+    expect(chapterRequests, 0);
+    expect(feed.episodes.single.chapters, isEmpty);
+  });
+
+  test('rejects malformed external chapter documents', () {
+    expect(
+      () => parsePodcastingChapterDocument('{"version":"1.2"}'),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('duration parser accepts common RSS formats', () {
     expect(parsePodcastDuration('3723'), const Duration(seconds: 3723));
     expect(parsePodcastDuration('02:03'), const Duration(minutes: 2, seconds: 3));
@@ -126,6 +181,36 @@ const _samplePodcastFeed = '''
         url="https://media.example.test/episode-2.mp4"
         length="456"
         type="video/mp4" />
+    </item>
+  </channel>
+</rss>
+''';
+
+const _externalChapterPodcastFeed = '''
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>External chapters</title>
+    <item>
+      <guid>external-chapter-episode</guid>
+      <title>External chapter episode</title>
+      <itunes:duration xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">00:02:00</itunes:duration>
+      <podcast:chapters url="https://feeds.example.test/chapters.json" type="application/json" />
+      <enclosure url="https://media.example.test/episode.mp3" type="audio/mpeg" />
+    </item>
+  </channel>
+</rss>
+''';
+
+const _crossOriginChapterPodcastFeed = '''
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Cross origin chapters</title>
+    <item>
+      <guid>cross-origin-chapter-episode</guid>
+      <title>Cross origin chapter episode</title>
+      <itunes:duration xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">00:02:00</itunes:duration>
+      <podcast:chapters url="https://cdn.example.test/chapters.json" type="application/json" />
+      <enclosure url="https://media.example.test/episode.mp3" type="audio/mpeg" />
     </item>
   </channel>
 </rss>

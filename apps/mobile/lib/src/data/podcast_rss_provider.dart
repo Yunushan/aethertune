@@ -8,17 +8,23 @@ import '../domain/track.dart';
 import '../domain/track_chapter.dart';
 
 typedef PodcastFeedLoader = Future<String> Function(Uri feedUri);
+typedef PodcastChapterLoader = Future<String> Function(Uri chapterUri);
 
 class PodcastRssProvider implements MusicSourceProvider {
+  static const maxExternalChapterDocumentsPerFeed = 20;
+
   PodcastRssProvider({
     required this.feedUri,
     String? id,
     PodcastFeedLoader? feedLoader,
+    PodcastChapterLoader? chapterLoader,
   })  : id = id ?? 'podcast-${Track.stableLocalId(feedUri.toString())}',
-        _feedLoader = feedLoader ?? _loadPodcastFeed;
+        _feedLoader = feedLoader ?? _loadPodcastFeed,
+        _chapterLoader = chapterLoader ?? _loadPodcastChapters;
 
   final Uri feedUri;
   final PodcastFeedLoader _feedLoader;
+  final PodcastChapterLoader _chapterLoader;
 
   @override
   final String id;
@@ -70,10 +76,49 @@ class PodcastRssProvider implements MusicSourceProvider {
     return tracks;
   }
 
-  Future<PodcastRssFeed> fetchFeed() {
-    return _feedLoader(feedUri).then(
-      (xml) => parsePodcastRssFeed(xml, feedUri: feedUri),
-    );
+  Future<PodcastRssFeed> fetchFeed() async {
+    final xml = await _feedLoader(feedUri);
+    final feed = parsePodcastRssFeed(xml, feedUri: feedUri);
+    return _loadExternalChapters(feed);
+  }
+
+  Future<PodcastRssFeed> _loadExternalChapters(PodcastRssFeed feed) async {
+    var remaining = maxExternalChapterDocumentsPerFeed;
+    final episodes = <PodcastEpisode>[];
+    for (final episode in feed.episodes) {
+      final chapterUri = episode.chapterUri;
+      if (remaining <= 0 ||
+          chapterUri == null ||
+          !_isSameOriginChapterUri(chapterUri)) {
+        episodes.add(episode);
+        continue;
+      }
+
+      remaining -= 1;
+      try {
+        final document = await _chapterLoader(chapterUri);
+        final chapters = parsePodcastingChapterDocument(
+          document,
+          maximum: episode.duration,
+        );
+        episodes.add(
+          episode.withChapters(
+            TrackChapter.normalize(
+              <TrackChapter>[...episode.chapters, ...chapters],
+              maximum: episode.duration,
+            ),
+          ),
+        );
+      } on Object {
+        episodes.add(episode);
+      }
+    }
+    return feed.copyWith(episodes: episodes);
+  }
+
+  bool _isSameOriginChapterUri(Uri uri) {
+    return uri.origin == feedUri.origin &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
   }
 
   @override
@@ -102,6 +147,17 @@ final class PodcastRssFeed {
   final String author;
   final Uri? artworkUri;
   final List<PodcastEpisode> episodes;
+
+  PodcastRssFeed copyWith({List<PodcastEpisode>? episodes}) {
+    return PodcastRssFeed(
+      feedUri: feedUri,
+      title: title,
+      description: description,
+      author: author,
+      episodes: episodes ?? this.episodes,
+      artworkUri: artworkUri,
+    );
+  }
 }
 
 final class PodcastEpisode {
@@ -113,6 +169,7 @@ final class PodcastEpisode {
     required this.streamUri,
     required this.duration,
     this.chapters = const <TrackChapter>[],
+    this.chapterUri,
     this.artworkUri,
     this.publishedAt,
   });
@@ -124,6 +181,7 @@ final class PodcastEpisode {
   final Uri streamUri;
   final Duration duration;
   final List<TrackChapter> chapters;
+  final Uri? chapterUri;
   final Uri? artworkUri;
   final DateTime? publishedAt;
 
@@ -143,6 +201,21 @@ final class PodcastEpisode {
       streamUrl: streamUri.toString(),
       sourceId: sourceId,
       addedAt: publishedAt,
+    );
+  }
+
+  PodcastEpisode withChapters(List<TrackChapter> updatedChapters) {
+    return PodcastEpisode(
+      id: id,
+      title: title,
+      description: description,
+      author: author,
+      streamUri: streamUri,
+      duration: duration,
+      chapters: updatedChapters,
+      chapterUri: chapterUri,
+      artworkUri: artworkUri,
+      publishedAt: publishedAt,
     );
   }
 }
@@ -246,9 +319,63 @@ PodcastEpisode? _episodeFromItem(
     streamUri: streamUri,
     duration: duration,
     chapters: _inlineChapters(item, maximum: duration),
+    chapterUri: _chapterDocumentUri(item),
     artworkUri: _imageUri(item),
     publishedAt: _parseRssDate(_childText(item, 'pubDate')),
   );
+}
+
+Uri? _chapterDocumentUri(XmlElement item) {
+  final chapters = _firstChild(item, 'chapters');
+  final value = chapters?.getAttribute('url')?.trim();
+  final uri = value == null || value.isEmpty ? null : Uri.tryParse(value);
+  if (uri == null ||
+      (uri.scheme.toLowerCase() != 'http' && uri.scheme.toLowerCase() != 'https')) {
+    return null;
+  }
+  return uri;
+}
+
+List<TrackChapter> parsePodcastingChapterDocument(
+  String document, {
+  Duration maximum = Duration.zero,
+}) {
+  final decoded = jsonDecode(document);
+  if (decoded is! Map || decoded['chapters'] is! List) {
+    throw const FormatException('Podcast chapter document must contain chapters.');
+  }
+
+  final chapters = <TrackChapter>[];
+  for (final value in decoded['chapters'] as List) {
+    if (value is! Map) {
+      continue;
+    }
+    final rawStart = value['startTime'];
+    final seconds = rawStart is num
+        ? rawStart.toDouble()
+        : rawStart is String
+            ? double.tryParse(rawStart.trim())
+            : null;
+    final title = value['title'];
+    if (seconds == null || !seconds.isFinite || seconds < 0 || title is! String) {
+      continue;
+    }
+
+    try {
+      chapters.add(
+        TrackChapter(
+          start: Duration(
+            microseconds: (seconds * Duration.microsecondsPerSecond).round(),
+          ),
+          title: title,
+        ),
+      );
+    } on ArgumentError {
+      continue;
+    }
+  }
+
+  return TrackChapter.normalize(chapters, maximum: maximum);
 }
 
 List<TrackChapter> _inlineChapters(
@@ -332,6 +459,25 @@ Future<String> _loadPodcastFeed(Uri feedUri) async {
       throw HttpException(
         'Podcast feed request failed with HTTP ${response.statusCode}.',
         uri: feedUri,
+      );
+    }
+
+    return utf8.decodeStream(response);
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<String> _loadPodcastChapters(Uri chapterUri) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(chapterUri);
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    final response = await request.close();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        'Podcast chapter request failed with HTTP ${response.statusCode}.',
+        uri: chapterUri,
       );
     }
 
