@@ -261,16 +261,16 @@ def linux() -> Image.Image:
 
 
 def server() -> Image.Image:
-    image, draw = base("Server foundation", "Dart service endpoints for health, catalog data, and future sync work.")
+    image, draw = base("Optional sync server", "Authenticated, versioned snapshots for a local-first library.")
     card(draw, (90, 142, 364, 432), "#0f172a")
     text(draw, (124, 186), "AetherTune Server", "#f8fafc", F_H2)
-    for i, endpoint in enumerate(("/health", "/api/v1/info", "/api/v1/catalog")):
+    for i, endpoint in enumerate(("/health", "/api/v1/info", "/api/v1/sync/library")):
         draw.rounded_rectangle((124, 226 + i * 58, 326, 270 + i * 58), radius=15, fill=("#064e3b", "#1e3a8a", "#7c2d12")[i])
         text(draw, (150, 239 + i * 58), endpoint, "#f8fafc", F_SMALL)
 
     card(draw, (416, 142, 870, 432), "#ffffff")
     text(draw, (454, 192), "Cross-platform app, shared project", "#0f172a", F_H2)
-    for i, label in enumerate(("Release artifacts", "Provider-backed sync roadmap", "Legal source adapters")):
+    for i, label in enumerate(("Bearer-token authentication", "Checksum + revision conflicts", "Portable, path-free snapshots")):
         draw.rounded_rectangle((454, 240 + i * 54, 818, 282 + i * 54), radius=16, fill="#ecfeff", outline="#a5f3fc")
         text(draw, (480, 252 + i * 54), label, "#155e75", F_SMALL)
     return image
