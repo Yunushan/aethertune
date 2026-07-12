@@ -1,0 +1,8 @@
+.dart_tool/
+.git/
+data/
+test/
+coverage/
+Dockerfile
+docker-compose.yml
+.env

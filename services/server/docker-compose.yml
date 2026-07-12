@@ -1,0 +1,15 @@
+services:
+  aethertune-server:
+    build: .
+    ports:
+      - "${AETHERTUNE_PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      AETHERTUNE_DATA_DIR: /data
+      AETHERTUNE_SYNC_USERS: "${AETHERTUNE_SYNC_USERS:?Set AETHERTUNE_SYNC_USERS in .env}"
+    volumes:
+      - aethertune-server-data:/data
+    restart: unless-stopped
+
+volumes:
+  aethertune-server-data:

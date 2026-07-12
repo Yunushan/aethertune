@@ -109,8 +109,8 @@
 - [x] Server health endpoint
 - [x] Server info endpoint
 - [x] Server catalog endpoint
-- [ ] Auth model
-- [ ] Library sync API
+- [x] Static bearer-token auth model
+- [x] Versioned library sync API with durable snapshots
 - [ ] Remote provider coordination
 
 ## 0.5.x: Open providers

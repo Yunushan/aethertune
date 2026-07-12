@@ -37,8 +37,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Android/iOS app shell | Done | Flutter app with Material 3 UI. | Store signing, background modes, platform polish. |
 | Linux/macOS/Windows desktop build | Done | CI builds debug desktop targets. | Desktop-first layout, installers, update channel. |
-| Server package | Done | Dart HTTP service under `services/server`. | Auth, sync, provider coordination, deployment docs. |
-| Server health/info/catalog endpoints | Done | Covered by server tests and CI compile gate. | Real persisted catalog and authenticated APIs. |
+| Server package | Done | Dart HTTP service under `services/server` with static bearer-token auth, durable versioned sync snapshots, and a Docker/Compose deployment path with health checks. | Provider coordination, account/token lifecycle, and production TLS/reverse-proxy automation. |
+| Server health/info/catalog endpoints | Done | Covered by server tests and CI compile gate; Docker health checks call `/health`. | Real persisted catalog and provider-coordination APIs. |
 | MIT license | Done | Root `LICENSE`. | Third-party notice automation. |
 | No telemetry | Done | No analytics SDK or tracking dependency. | Privacy tests and network-call audit. |
 | Local audio import | Done | Native file picker plus recursive folder scanner for supported audio extensions, including filename track-number parsing, artist/title parsing, basic ID3v1 MP3 title/artist/album tag parsing, basic ID3v2 MP3 title/artist/album/genre text-frame and APIC/PIC artwork parsing, basic FLAC Vorbis comment title/artist/album/genre and picture artwork parsing, basic M4A title/artist/album/genre atom plus `covr` artwork parsing, basic WAV RIFF INFO title/artist/album/genre parsing, and matching `.lrc`/`.txt` lyric sidecar import with scanner tests. Track rows and the player bar render local/provider artwork with a fallback icon. | Folder watch, scoped storage UX, richer embedded tag parsing, tag writing, and artwork editing. |
