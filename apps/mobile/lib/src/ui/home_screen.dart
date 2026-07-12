@@ -7301,9 +7301,7 @@ class _SourcesTabState extends State<_SourcesTab> {
               selected: subscription.id == _selectedPodcastSubscriptionId,
               title: Text(subscription.title),
               subtitle: Text(_podcastSubscriptionSubtitle(subscription)),
-              onTap: offlineModeEnabled
-                  ? null
-                  : () => _loadPodcastEpisodes(context, subscription),
+              onTap: () => _selectPodcastSubscription(context, subscription),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -8281,6 +8279,20 @@ class _SourcesTabState extends State<_SourcesTab> {
     await _loadAndSavePodcastFeed(context, feedUri);
   }
 
+  void _selectPodcastSubscription(
+    BuildContext context,
+    PodcastSubscription subscription,
+  ) {
+    setState(() {
+      _selectedPodcastSubscriptionId = subscription.id;
+      _podcastEpisodeTracks = subscription.episodes;
+      _podcastError = null;
+    });
+    if (!context.read<LibraryStore>().offlineModeEnabled) {
+      _loadPodcastEpisodes(context, subscription);
+    }
+  }
+
   Future<void> _loadAndSavePodcastFeed(
     BuildContext context,
     Uri feedUri,
@@ -8296,6 +8308,9 @@ class _SourcesTabState extends State<_SourcesTab> {
 
     try {
       final feed = await provider.fetchFeed();
+      final tracks = feed.episodes
+          .map((episode) => episode.toTrack(sourceId: provider.id, feed: feed))
+          .toList(growable: false);
       final saved = await library.savePodcastSubscription(
         PodcastSubscription(
           id: stablePodcastSubscriptionId(feed.feedUri.toString()),
@@ -8304,13 +8319,11 @@ class _SourcesTabState extends State<_SourcesTab> {
           description: feed.description,
           author: feed.author,
           artworkUri: feed.artworkUri,
+          episodes: tracks,
         ),
       );
       final refreshed =
           await library.markPodcastSubscriptionFetched(saved.id) ?? saved;
-      final tracks = feed.episodes
-          .map((episode) => episode.toTrack(sourceId: provider.id, feed: feed))
-          .toList(growable: false);
 
       if (!context.mounted) {
         return;
@@ -8373,6 +8386,11 @@ class _SourcesTabState extends State<_SourcesTab> {
       try {
         final provider = PodcastRssProvider(feedUri: feedUri);
         final feed = await provider.fetchFeed();
+        final tracks = feed.episodes
+            .map(
+              (episode) => episode.toTrack(sourceId: provider.id, feed: feed),
+            )
+            .toList(growable: false);
         final saved = await library.savePodcastSubscription(
           PodcastSubscription(
             id: stablePodcastSubscriptionId(feed.feedUri.toString()),
@@ -8381,6 +8399,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             description: feed.description,
             author: feed.author,
             artworkUri: feed.artworkUri,
+            episodes: tracks,
           ),
         );
         await library.markPodcastSubscriptionFetched(saved.id);

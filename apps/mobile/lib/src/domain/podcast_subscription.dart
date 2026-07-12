@@ -11,7 +11,9 @@ final class PodcastSubscription {
     DateTime? addedAt,
     this.lastFetchedAt,
     this.lastFetchError = '',
-  }) : addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    Iterable<Track> episodes = const <Track>[],
+  })  : addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+        episodes = List<Track>.unmodifiable(_normalizeEpisodes(episodes));
 
   final String id;
   final String feedUrl;
@@ -22,6 +24,7 @@ final class PodcastSubscription {
   final DateTime addedAt;
   final DateTime? lastFetchedAt;
   final String lastFetchError;
+  final List<Track> episodes;
 
   bool isRefreshDue(
     DateTime now, {
@@ -45,6 +48,7 @@ final class PodcastSubscription {
     DateTime? addedAt,
     DateTime? lastFetchedAt,
     String? lastFetchError,
+    Iterable<Track>? episodes,
     bool clearArtworkUri = false,
     bool clearLastFetchedAt = false,
   }) {
@@ -59,6 +63,7 @@ final class PodcastSubscription {
       lastFetchedAt:
           clearLastFetchedAt ? null : lastFetchedAt ?? this.lastFetchedAt,
       lastFetchError: lastFetchError ?? this.lastFetchError,
+      episodes: episodes ?? this.episodes,
     );
   }
 
@@ -73,6 +78,7 @@ final class PodcastSubscription {
       'addedAt': addedAt.toIso8601String(),
       'lastFetchedAt': lastFetchedAt?.toIso8601String(),
       'lastFetchError': lastFetchError,
+      'episodes': episodes.map((episode) => episode.toJson()).toList(),
     };
   }
 
@@ -89,7 +95,24 @@ final class PodcastSubscription {
           DateTime.fromMillisecondsSinceEpoch(0),
       lastFetchedAt: DateTime.tryParse(json['lastFetchedAt'] as String? ?? ''),
       lastFetchError: json['lastFetchError'] as String? ?? '',
+      episodes: (json['episodes'] as List<Object?>? ?? const <Object?>[])
+          .whereType<Map>()
+          .map((item) => Track.fromJson(Map<String, Object?>.from(item))),
     );
+  }
+
+  static List<Track> _normalizeEpisodes(Iterable<Track> episodes) {
+    final byId = <String, Track>{};
+    for (final episode in episodes) {
+      if (episode.id.trim().isEmpty || byId.containsKey(episode.id)) {
+        continue;
+      }
+      byId[episode.id] = episode;
+      if (byId.length == maxCachedPodcastEpisodesPerSubscription) {
+        break;
+      }
+    }
+    return byId.values.toList(growable: false);
   }
 
   static Uri? _parseUri(String? value) {
@@ -102,6 +125,7 @@ final class PodcastSubscription {
 }
 
 const defaultPodcastRefreshInterval = Duration(hours: 12);
+const maxCachedPodcastEpisodesPerSubscription = 100;
 
 String stablePodcastSubscriptionId(String feedUrl) {
   return 'podcast-feed-${Track.stableLocalId(feedUrl.trim())}';

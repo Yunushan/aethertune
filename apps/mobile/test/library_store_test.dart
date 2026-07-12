@@ -47,6 +47,22 @@ void main() {
       trackIds: <String>['local'],
     );
     await remote.createPlaylist('Merged', trackIds: <String>['remote']);
+    final localSubscription = await local.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'podcast',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether Radio',
+        episodes: <Track>[_track('local-episode', sourceId: 'podcast-rss')],
+      ),
+    );
+    await remote.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'podcast',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether Radio Remote',
+        episodes: <Track>[_track('remote-episode', sourceId: 'podcast-rss')],
+      ),
+    );
 
     await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
 
@@ -58,6 +74,13 @@ void main() {
       'local',
       'remote',
     ]);
+    expect(
+      local
+          .podcastSubscriptionById(localSubscription.id)!
+          .episodes
+          .map((track) => track.id),
+      <String>['local-episode', 'remote-episode'],
+    );
   });
 
   test('filters custom smart playlists by exact source and genre', () async {
@@ -1803,6 +1826,13 @@ void main() {
         description: ' Open feed ',
         author: ' Aether Hosts ',
         artworkUri: Uri.parse('https://media.example.test/show.jpg'),
+        episodes: <Track>[
+          _track(
+            'episode-1',
+            sourceId: 'podcast-rss',
+            addedAt: DateTime.utc(2026, 1, 14),
+          ),
+        ],
       ),
     );
     await firstStore.savePodcastSubscription(
@@ -1819,6 +1849,10 @@ void main() {
       stablePodcastSubscriptionId('https://feeds.example.test/aether.xml'),
     );
     expect(firstStore.podcastSubscriptions.single.title, 'Aether Radio Updated');
+    expect(
+      firstStore.podcastSubscriptions.single.episodes.map((track) => track.id),
+      <String>['episode-1'],
+    );
     expect(subscription.addedAt, DateTime.utc(2026, 1, 15));
 
     now = DateTime.utc(2026, 1, 15, 6);
@@ -1870,6 +1904,13 @@ void main() {
     expect(
       secondStore.podcastSubscriptionById(subscription.id)!.lastFetchError,
       isEmpty,
+    );
+    expect(
+      secondStore
+          .podcastSubscriptionById(subscription.id)!
+          .episodes
+          .map((track) => track.id),
+      <String>['episode-1'],
     );
 
     await secondStore.deletePodcastSubscription(subscription.id);
@@ -2885,6 +2926,22 @@ void main() {
     );
     await store.toggleFavorite('favorite');
     await store.recordPlayback('favorite');
+    await store.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'podcast-feed',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether Radio',
+        episodes: <Track>[
+          _track(
+            'cached-episode',
+            title: 'Cached feed episode',
+            genre: 'Podcast',
+            sourceId: 'podcast-rss',
+            addedAt: DateTime.utc(2026, 1, 6),
+          ),
+        ],
+      ),
+    );
     now = DateTime.utc(2026, 1, 14, 14, 1);
     await store.recordPlayback('continue');
     now = DateTime.utc(2026, 1, 14, 14, 2);
@@ -2912,7 +2969,7 @@ void main() {
           )
           .tracks
           .map((track) => track.id),
-      <String>['episode'],
+      <String>['cached-episode', 'episode'],
     );
     expect(
       sections

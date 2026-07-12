@@ -1771,9 +1771,7 @@ class LibraryStore extends ChangeNotifier {
     );
     addSection(
       LibraryHomeSectionType.subscribedEpisodes,
-      _tracks
-          .where((track) => track.sourceId.startsWith('podcast-'))
-          .toList(growable: false),
+      _subscribedPodcastEpisodeTracks(),
     );
     addSection(
       LibraryHomeSectionType.recentlyAdded,
@@ -1781,6 +1779,22 @@ class LibraryStore extends ChangeNotifier {
     );
 
     return sections;
+  }
+
+  List<Track> _subscribedPodcastEpisodeTracks() {
+    final byId = <String, Track>{
+      for (final subscription in _podcastSubscriptions)
+        for (final episode in subscription.episodes) episode.id: episode,
+    };
+    for (final track in _tracks.where(
+      (track) => track.sourceId.startsWith('podcast-'),
+    )) {
+      byId[track.id] = track;
+    }
+
+    final episodes = byId.values.toList(growable: false);
+    episodes.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    return episodes;
   }
 
   LibraryChartsSnapshot localCharts({
@@ -3159,7 +3173,6 @@ class LibraryStore extends ChangeNotifier {
       'tracks',
       'customSmartPlaylists',
       'savedHistoryViews',
-      'podcastSubscriptions',
     ]) {
       merged[key] = _mergeSyncObjectLists(
         local[key],
@@ -3167,6 +3180,10 @@ class LibraryStore extends ChangeNotifier {
         identity: (item) => _syncString(item['id']),
       );
     }
+    merged['podcastSubscriptions'] = _mergeSyncPodcastSubscriptions(
+      local['podcastSubscriptions'],
+      remote['podcastSubscriptions'],
+    );
     merged['history'] = _mergeSyncObjectLists(
       local['history'],
       remote['history'],
@@ -3285,6 +3302,71 @@ class LibraryStore extends ChangeNotifier {
       }
     }
     return byId.values.toList(growable: false);
+  }
+
+  List<Object?> _mergeSyncPodcastSubscriptions(
+    Object? localValue,
+    Object? remoteValue,
+  ) {
+    final remote = _mergeSyncObjectLists(
+      null,
+      remoteValue,
+      identity: (item) => _syncString(item['id']),
+    );
+    final byId = <String, Map<String, Object?>>{
+      for (final item in remote.whereType<Map>())
+        if (_syncString(item['id']) case final id?)
+          id: Map<String, Object?>.from(item),
+    };
+    if (localValue is List) {
+      for (final item in localValue) {
+        if (item is! Map) {
+          continue;
+        }
+        final local = Map<String, Object?>.from(item);
+        final id = _syncString(local['id']);
+        if (id == null || id.isEmpty) {
+          continue;
+        }
+        final remoteSubscription = byId[id];
+        if (remoteSubscription != null) {
+          local['episodes'] = _mergeSyncPodcastEpisodes(
+            local['episodes'],
+            remoteSubscription['episodes'],
+          );
+        }
+        byId[id] = local;
+      }
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  List<Object?> _mergeSyncPodcastEpisodes(
+    Object? localValue,
+    Object? remoteValue,
+  ) {
+    final merged = <Object?>[];
+    final ids = <String>{};
+    for (final value in <Object?>[localValue, remoteValue]) {
+      if (value is! List) {
+        continue;
+      }
+      for (final item in value) {
+        if (item is! Map) {
+          continue;
+        }
+        final episode = Map<String, Object?>.from(item);
+        final id = _syncString(episode['id']);
+        if (id == null || id.isEmpty || !ids.add(id)) {
+          continue;
+        }
+        merged.add(episode);
+        if (merged.length == maxCachedPodcastEpisodesPerSubscription) {
+          return merged;
+        }
+      }
+    }
+    return merged;
   }
 
   List<Object?> _mergeSyncStrings(Object? localValue, Object? remoteValue) {
@@ -3925,6 +4007,9 @@ class LibraryStore extends ChangeNotifier {
       lastFetchError: subscription.lastFetchError.trim().isEmpty
           ? existing?.lastFetchError ?? ''
           : subscription.lastFetchError.trim(),
+      episodes: subscription.episodes.isEmpty
+          ? existing?.episodes ?? const <Track>[]
+          : subscription.episodes,
     );
     if (index == -1) {
       _podcastSubscriptions.add(saved);
@@ -5899,6 +5984,7 @@ class LibraryStore extends ChangeNotifier {
         addedAt: subscription.addedAt,
         lastFetchedAt: subscription.lastFetchedAt,
         lastFetchError: subscription.lastFetchError,
+        episodes: subscription.episodes,
       );
     }
 
