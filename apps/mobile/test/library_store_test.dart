@@ -40,8 +40,9 @@ void main() {
     final remote = LibraryStore(clock: () => now);
     await local.load();
     await remote.load();
-    await local.addTracks(<Track>[_track('local')]);
-    await remote.addTracks(<Track>[_track('remote')]);
+    await local.addTracks(<Track>[_track('local'), _track('shared')]);
+    await remote.addTracks(<Track>[_track('remote'), _track('shared')]);
+    await remote.toggleFavorite('shared');
     final localPlaylist = await local.createPlaylist(
       'Merged',
       trackIds: <String>['local'],
@@ -74,6 +75,10 @@ void main() {
       'local',
       'remote',
     ]);
+    expect(
+      local.tracks.singleWhere((track) => track.id == 'shared').isFavorite,
+      isTrue,
+    );
     expect(
       local
           .podcastSubscriptionById(localSubscription.id)!

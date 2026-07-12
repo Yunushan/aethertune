@@ -3192,7 +3192,6 @@ class LibraryStore extends ChangeNotifier {
     final merged = Map<String, Object?>.from(remote)..addAll(local);
 
     for (final key in const <String>[
-      'tracks',
       'customSmartPlaylists',
       'savedHistoryViews',
     ]) {
@@ -3202,6 +3201,7 @@ class LibraryStore extends ChangeNotifier {
         identity: (item) => _syncString(item['id']),
       );
     }
+    merged['tracks'] = _mergeSyncTracks(local['tracks'], remote['tracks']);
     merged['podcastSubscriptions'] = _mergeSyncPodcastSubscriptions(
       local['podcastSubscriptions'],
       remote['podcastSubscriptions'],
@@ -3319,6 +3319,38 @@ class LibraryStore extends ChangeNotifier {
             local['trackIds'],
             remotePlaylist['trackIds'],
           );
+        }
+        byId[id] = local;
+      }
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  List<Object?> _mergeSyncTracks(Object? localValue, Object? remoteValue) {
+    final remote = _mergeSyncObjectLists(
+      null,
+      remoteValue,
+      identity: (item) => _syncString(item['id']),
+    );
+    final byId = <String, Map<String, Object?>>{
+      for (final item in remote.whereType<Map>())
+        if (_syncString(item['id']) case final id?)
+          id: Map<String, Object?>.from(item),
+    };
+    if (localValue is List) {
+      for (final item in localValue) {
+        if (item is! Map) {
+          continue;
+        }
+        final local = Map<String, Object?>.from(item);
+        final id = _syncString(local['id']);
+        if (id == null || id.isEmpty) {
+          continue;
+        }
+        final remoteTrack = byId[id];
+        if (remoteTrack != null) {
+          local['isFavorite'] =
+              local['isFavorite'] == true || remoteTrack['isFavorite'] == true;
         }
         byId[id] = local;
       }
