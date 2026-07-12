@@ -3278,6 +3278,12 @@ String _customSmartPlaylistSubtitle(
   if (rule.query.trim().isNotEmpty) {
     parts.add('Search: ${rule.query}');
   }
+  if (rule.sourceId.trim().isNotEmpty) {
+    parts.add('Source: ${rule.sourceId}');
+  }
+  if (rule.genre.trim().isNotEmpty) {
+    parts.add('Genre: ${rule.genre}');
+  }
   if (rule.favoritesOnly) {
     parts.add('Favorites');
   }
@@ -3294,6 +3300,8 @@ class _CustomSmartPlaylistDraft {
   const _CustomSmartPlaylistDraft({
     required this.name,
     required this.query,
+    required this.sourceId,
+    required this.genre,
     required this.favoritesOnly,
     required this.minimumPlayCount,
     required this.sortMode,
@@ -3302,6 +3310,8 @@ class _CustomSmartPlaylistDraft {
 
   final String name;
   final String query;
+  final String sourceId;
+  final String genre;
   final bool favoritesOnly;
   final int minimumPlayCount;
   final CustomSmartPlaylistSortMode sortMode;
@@ -3657,6 +3667,8 @@ class _PlaylistsTab extends StatelessWidget {
     final rule = await library.createCustomSmartPlaylist(
       name: draft.name,
       query: draft.query,
+      sourceId: draft.sourceId,
+      genre: draft.genre,
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
       sortMode: draft.sortMode,
@@ -3689,6 +3701,8 @@ class _PlaylistsTab extends StatelessWidget {
       rule.id,
       name: draft.name,
       query: draft.query,
+      sourceId: draft.sourceId,
+      genre: draft.genre,
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
       sortMode: draft.sortMode,
@@ -4185,6 +4199,12 @@ class _PlaylistsTab extends StatelessWidget {
     final queryController = TextEditingController(
       text: initialRule?.query ?? '',
     );
+    final sourceIdController = TextEditingController(
+      text: initialRule?.sourceId ?? '',
+    );
+    final genreController = TextEditingController(
+      text: initialRule?.genre ?? '',
+    );
     final minimumPlayCountController = TextEditingController(
       text: (initialRule?.minimumPlayCount ?? 0).toString(),
     );
@@ -4210,6 +4230,8 @@ class _PlaylistsTab extends StatelessWidget {
                 return _CustomSmartPlaylistDraft(
                   name: name,
                   query: queryController.text.trim(),
+                  sourceId: sourceIdController.text.trim(),
+                  genre: genreController.text.trim(),
                   favoritesOnly: favoritesOnly,
                   minimumPlayCount:
                       int.tryParse(minimumPlayCountController.text.trim()) ??
@@ -4239,6 +4261,20 @@ class _PlaylistsTab extends StatelessWidget {
                           controller: queryController,
                           decoration: const InputDecoration(
                             labelText: 'Search text',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: sourceIdController,
+                          decoration: const InputDecoration(
+                            labelText: 'Exact source ID',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: genreController,
+                          decoration: const InputDecoration(
+                            labelText: 'Exact genre',
                           ),
                           textInputAction: TextInputAction.next,
                         ),
@@ -4313,6 +4349,8 @@ class _PlaylistsTab extends StatelessWidget {
     } finally {
       nameController.dispose();
       queryController.dispose();
+      sourceIdController.dispose();
+      genreController.dispose();
       minimumPlayCountController.dispose();
       limitController.dispose();
     }

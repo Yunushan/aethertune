@@ -60,6 +60,26 @@ void main() {
     ]);
   });
 
+  test('filters custom smart playlists by exact source and genre', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('local-rock', genre: 'Rock', sourceId: 'local'),
+      _track('archive-rock', genre: 'Rock', sourceId: 'archive'),
+      _track('archive-jazz', genre: 'Jazz', sourceId: 'archive'),
+    ]);
+    final rule = await store.createCustomSmartPlaylist(
+      name: 'Archive rock',
+      sourceId: 'ARCHIVE',
+      genre: 'rock',
+    );
+
+    expect(
+      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['archive-rock'],
+    );
+  });
+
   test('creates manual playlists with existing tracks only', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 1),

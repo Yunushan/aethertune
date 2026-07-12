@@ -235,6 +235,8 @@ class CustomSmartPlaylist {
     required this.id,
     required this.name,
     this.query = '',
+    this.sourceId = '',
+    this.genre = '',
     this.favoritesOnly = false,
     this.minimumPlayCount = 0,
     this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
@@ -247,6 +249,8 @@ class CustomSmartPlaylist {
   final String id;
   final String name;
   final String query;
+  final String sourceId;
+  final String genre;
   final bool favoritesOnly;
   final int minimumPlayCount;
   final CustomSmartPlaylistSortMode sortMode;
@@ -258,6 +262,8 @@ class CustomSmartPlaylist {
     String? id,
     String? name,
     String? query,
+    String? sourceId,
+    String? genre,
     bool? favoritesOnly,
     int? minimumPlayCount,
     CustomSmartPlaylistSortMode? sortMode,
@@ -269,6 +275,8 @@ class CustomSmartPlaylist {
       id: id ?? this.id,
       name: name ?? this.name,
       query: query ?? this.query,
+      sourceId: sourceId ?? this.sourceId,
+      genre: genre ?? this.genre,
       favoritesOnly: favoritesOnly ?? this.favoritesOnly,
       minimumPlayCount: minimumPlayCount ?? this.minimumPlayCount,
       sortMode: sortMode ?? this.sortMode,
@@ -283,6 +291,8 @@ class CustomSmartPlaylist {
       'id': id,
       'name': name,
       'query': query,
+      'sourceId': sourceId,
+      'genre': genre,
       'favoritesOnly': favoritesOnly,
       'minimumPlayCount': minimumPlayCount,
       'sortMode': sortMode.name,
@@ -297,6 +307,8 @@ class CustomSmartPlaylist {
       id: json['id'] as String,
       name: json['name'] as String? ?? 'Untitled smart playlist',
       query: json['query'] as String? ?? '',
+      sourceId: json['sourceId'] as String? ?? '',
+      genre: json['genre'] as String? ?? '',
       favoritesOnly: json['favoritesOnly'] as bool? ?? false,
       minimumPlayCount: json['minimumPlayCount'] as int? ?? 0,
       sortMode: _customSmartPlaylistSortModeFromName(
@@ -2044,6 +2056,16 @@ class LibraryStore extends ChangeNotifier {
 
       if (rule.minimumPlayCount > 0 &&
           playCountForTrack(track.id) < rule.minimumPlayCount) {
+        return false;
+      }
+
+      if (rule.sourceId.isNotEmpty &&
+          track.sourceId.toLowerCase() != rule.sourceId.toLowerCase()) {
+        return false;
+      }
+
+      if (rule.genre.isNotEmpty &&
+          track.genre.toLowerCase() != rule.genre.toLowerCase()) {
         return false;
       }
 
@@ -4005,6 +4027,8 @@ class LibraryStore extends ChangeNotifier {
   Future<CustomSmartPlaylist> createCustomSmartPlaylist({
     required String name,
     String query = '',
+    String sourceId = '',
+    String genre = '',
     bool favoritesOnly = false,
     int minimumPlayCount = 0,
     CustomSmartPlaylistSortMode sortMode =
@@ -4017,6 +4041,8 @@ class LibraryStore extends ChangeNotifier {
       id: _customSmartPlaylistId(normalizedName, now),
       name: normalizedName,
       query: query.trim(),
+      sourceId: sourceId.trim(),
+      genre: genre.trim(),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
       sortMode: sortMode,
@@ -4037,6 +4063,8 @@ class LibraryStore extends ChangeNotifier {
     String id, {
     required String name,
     required String query,
+    String? sourceId,
+    String? genre,
     required bool favoritesOnly,
     required int minimumPlayCount,
     required CustomSmartPlaylistSortMode sortMode,
@@ -4050,6 +4078,8 @@ class LibraryStore extends ChangeNotifier {
     final updated = _customSmartPlaylists[index].copyWith(
       name: _normalizeCustomSmartPlaylistName(name),
       query: query.trim(),
+      sourceId: sourceId?.trim(),
+      genre: genre?.trim(),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
       sortMode: sortMode,
