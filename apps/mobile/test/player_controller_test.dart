@@ -57,6 +57,36 @@ void main() {
     await expectLater(restoredController.setVolume(1.1), throwsArgumentError);
   });
 
+  test('persists skip intervals and clamps skip seeks to track bounds',
+      () async {
+    final firstEngine = _FakePlaybackAudioEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+    await firstController.setSkipBackwardInterval(const Duration(seconds: 15));
+    await firstController.setSkipForwardInterval(const Duration(seconds: 45));
+    firstEngine
+      ..positionValue = const Duration(seconds: 10)
+      ..emitDuration(const Duration(seconds: 40));
+
+    await firstController.skipBackward();
+    expect(firstEngine.positionValue, Duration.zero);
+    firstEngine.positionValue = const Duration(seconds: 20);
+    await firstController.skipForward();
+    expect(firstEngine.positionValue, const Duration(seconds: 40));
+    await expectLater(
+      firstController.setSkipForwardInterval(const Duration(seconds: 12)),
+      throwsArgumentError,
+    );
+    firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.skipBackwardInterval, const Duration(seconds: 15));
+    expect(restoredController.skipForwardInterval, const Duration(seconds: 45));
+  });
+
   test('loads one native queue and follows gapless index transitions',
       () async {
     final engine = _FakePlaybackAudioEngine();
@@ -581,6 +611,10 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> setLoopMode(LoopMode mode) async {
     loopModeValue = mode;
+  }
+
+  void emitDuration(Duration duration) {
+    _durationController.add(duration);
   }
 
   @override

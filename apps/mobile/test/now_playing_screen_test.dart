@@ -56,6 +56,8 @@ void main() {
     expect(find.text('Track 1 of 2'), findsOneWidget);
     expect(find.byKey(const Key('now-playing-seek')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-volume')), findsOneWidget);
+    expect(find.byKey(const Key('now-playing-skip-backward')), findsOneWidget);
+    expect(find.byKey(const Key('now-playing-skip-forward')), findsOneWidget);
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     final volumeSlider = tester.widget<Slider>(
@@ -75,7 +77,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-track-speed')));
     await tester.pumpAndSettle();
-    final trackSpeedItem = find.text('2x');
+    final trackSpeedItem = find.byKey(
+      const Key('now-playing-track-speed-2.0'),
+    );
     await tester.ensureVisible(trackSpeedItem);
     await tester.tap(trackSpeedItem);
     await tester.pumpAndSettle();

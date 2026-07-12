@@ -9579,6 +9579,44 @@ class _SettingsTab extends StatelessWidget {
           ),
         ),
         ListTile(
+          title: const Text('Skip backward'),
+          subtitle: const Text('Interval used by the full player rewind control.'),
+          trailing: DropdownButton<Duration>(
+            value: player.skipBackwardInterval,
+            items: <DropdownMenuItem<Duration>>[
+              for (final interval in PlayerController.supportedSkipIntervals)
+                DropdownMenuItem<Duration>(
+                  value: interval,
+                  child: Text('${interval.inSeconds}s'),
+                ),
+            ],
+            onChanged: (interval) {
+              if (interval != null) {
+                unawaited(player.setSkipBackwardInterval(interval));
+              }
+            },
+          ),
+        ),
+        ListTile(
+          title: const Text('Skip forward'),
+          subtitle: const Text('Interval used by the full player forward control.'),
+          trailing: DropdownButton<Duration>(
+            value: player.skipForwardInterval,
+            items: <DropdownMenuItem<Duration>>[
+              for (final interval in PlayerController.supportedSkipIntervals)
+                DropdownMenuItem<Duration>(
+                  value: interval,
+                  child: Text('${interval.inSeconds}s'),
+                ),
+            ],
+            onChanged: (interval) {
+              if (interval != null) {
+                unawaited(player.setSkipForwardInterval(interval));
+              }
+            },
+          ),
+        ),
+        ListTile(
           leading: Icon(
             player.volume == 0
                 ? Icons.volume_off_outlined

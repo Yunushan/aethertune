@@ -18,6 +18,14 @@ class PlayerController extends ChangeNotifier {
   static const minVolume = 0.0;
   static const maxVolume = 1.0;
   static const supportedPlaybackSpeeds = supportedPlaybackSpeedValues;
+  static const supportedSkipIntervals = <Duration>[
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+    Duration(seconds: 45),
+    Duration(seconds: 60),
+  ];
 
   PlayerController({
     PlaybackAudioEngine? audioEngine,
@@ -68,6 +76,8 @@ class PlayerController extends ChangeNotifier {
   double? _sleepFadeStartVolume;
   double _volume = maxVolume;
   double _defaultPlaybackSpeed = 1;
+  Duration _skipBackwardInterval = const Duration(seconds: 10);
+  Duration _skipForwardInterval = const Duration(seconds: 30);
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
@@ -77,6 +87,8 @@ class PlayerController extends ChangeNotifier {
   LoopMode get loopMode => _audio.loopMode;
   double get playbackSpeed => _audio.speed;
   double get defaultPlaybackSpeed => _defaultPlaybackSpeed;
+  Duration get skipBackwardInterval => _skipBackwardInterval;
+  Duration get skipForwardInterval => _skipForwardInterval;
   double get volume => _volume;
   Duration get duration => _duration;
   Duration get position => _audio.position;
@@ -163,6 +175,14 @@ class PlayerController extends ChangeNotifier {
           settings['playbackSpeed'],
         );
         await _audio.setSpeed(_defaultPlaybackSpeed);
+        _skipBackwardInterval = _skipIntervalFromJson(
+          settings['skipBackwardSeconds'],
+          fallback: _skipBackwardInterval,
+        );
+        _skipForwardInterval = _skipIntervalFromJson(
+          settings['skipForwardSeconds'],
+          fallback: _skipForwardInterval,
+        );
         _volume = _volumeFromJson(settings['volume']);
         await _audio.setVolume(_volume);
       } catch (_) {
@@ -347,6 +367,21 @@ class PlayerController extends ChangeNotifier {
     await _audio.seek(position);
   }
 
+  Future<void> seekBy(Duration offset) async {
+    var target = position + offset;
+    if (target.isNegative) {
+      target = Duration.zero;
+    }
+    if (duration > Duration.zero && target > duration) {
+      target = duration;
+    }
+    await seek(target);
+  }
+
+  Future<void> skipBackward() => seekBy(-_skipBackwardInterval);
+
+  Future<void> skipForward() => seekBy(_skipForwardInterval);
+
   Future<void> next() async {
     if (_queue.isEmpty || _current == null) {
       await stop();
@@ -463,6 +498,26 @@ class PlayerController extends ChangeNotifier {
       return;
     }
     await _audio.setSpeed(speed);
+    notifyListeners();
+  }
+
+  Future<void> setSkipBackwardInterval(Duration interval) async {
+    _requireSupportedSkipInterval(interval);
+    if (_skipBackwardInterval == interval) {
+      return;
+    }
+    _skipBackwardInterval = interval;
+    await _savePlaybackSettings();
+    notifyListeners();
+  }
+
+  Future<void> setSkipForwardInterval(Duration interval) async {
+    _requireSupportedSkipInterval(interval);
+    if (_skipForwardInterval == interval) {
+      return;
+    }
+    _skipForwardInterval = interval;
+    await _savePlaybackSettings();
     notifyListeners();
   }
 
@@ -782,6 +837,8 @@ class PlayerController extends ChangeNotifier {
           'shuffleEnabled': _audio.shuffleModeEnabled,
           'loopMode': _loopModeToJson(_audio.loopMode),
           'playbackSpeed': _defaultPlaybackSpeed,
+          'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
+          'skipForwardSeconds': _skipForwardInterval.inSeconds,
           'volume': _volume,
         },
       ),
@@ -827,6 +884,29 @@ class PlayerController extends ChangeNotifier {
         speed,
         'speed',
         'Playback speed must be one of the supported values.',
+      );
+    }
+  }
+
+  Duration _skipIntervalFromJson(
+    Object? value, {
+    required Duration fallback,
+  }) {
+    if (value is num) {
+      final interval = Duration(seconds: value.round());
+      if (supportedSkipIntervals.contains(interval)) {
+        return interval;
+      }
+    }
+    return fallback;
+  }
+
+  void _requireSupportedSkipInterval(Duration interval) {
+    if (!supportedSkipIntervals.contains(interval)) {
+      throw ArgumentError.value(
+        interval,
+        'interval',
+        'Skip interval must be one of the supported values.',
       );
     }
   }

@@ -84,6 +84,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Equalizer | Roadmap | Namida, Musify, RiMusic | Platform-specific DSP layer. |
 | Bass boost / virtualizer | Roadmap | Android music clients | Android DSP support and fallback behavior. |
 | Pitch / tempo control | Roadmap | Podcast/video clients | DSP backend and UI controls. |
+| Configurable skip intervals | Done | NewPipe, PipePipe, podcast/music clients | Options persists independent 5/10/15/30/45/60-second backward and forward intervals. Full Now Playing exposes dedicated rewind/forward controls that clamp seeks to the current track bounds. |
 | Skip silence | Roadmap | Podcast/music clients | Audio analysis or playback backend support. |
 | Audio-only mode for video sources | Blocked / official-only | YouTube Music, YMusic | Only through official APIs or user-provided legal streams. |
 | Playback speed | Done | NewPipe, PipePipe, LibreTube, podcast and music players | The shared audio engine supports 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x, 2.5x, and 3x playback. Options sets a persisted default and Now Playing can apply or clear a device-local speed override for the current track without changing that default; automatic track changes restore the applicable override or default. Supported system media sessions receive the effective speed. Pitch-preserving DSP remains future work. |

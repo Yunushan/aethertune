@@ -328,6 +328,14 @@ class _NowPlayingControls extends StatelessWidget {
                     : () => _runPlaybackAction(context, player.previous),
                 icon: const Icon(Icons.skip_previous),
               ),
+              IconButton(
+                key: const Key('now-playing-skip-backward'),
+                tooltip: 'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
+                onPressed: player.duration > Duration.zero
+                    ? player.skipBackward
+                    : null,
+                icon: const Icon(Icons.fast_rewind),
+              ),
               IconButton.filled(
                 key: const Key('now-playing-play-pause'),
                 tooltip: player.isPlaying ? 'Pause' : 'Play',
@@ -338,6 +346,14 @@ class _NowPlayingControls extends StatelessWidget {
                   player.togglePlayPause,
                 ),
                 icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
+              ),
+              IconButton(
+                key: const Key('now-playing-skip-forward'),
+                tooltip: 'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
+                onPressed: player.duration > Duration.zero
+                    ? player.skipForward
+                    : null,
+                icon: const Icon(Icons.fast_forward),
               ),
               IconButton(
                 tooltip: 'Next',
@@ -449,14 +465,16 @@ class _TrackPlaybackSpeedMenu extends StatelessWidget {
         await player.setTemporaryPlaybackSpeed(speed);
       },
       itemBuilder: (context) => <PopupMenuEntry<_TrackPlaybackSpeedSelection>>[
-        CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
-          value: const _TrackPlaybackSpeedSelection(),
+          CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
+            key: const Key('now-playing-track-speed-default'),
+            value: const _TrackPlaybackSpeedSelection(),
           checked: override == null,
           child: Text('Use default (${_formatPlaybackSpeed(player.defaultPlaybackSpeed)})'),
         ),
         const PopupMenuDivider(),
         for (final speed in PlayerController.supportedPlaybackSpeeds)
           CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
+            key: Key('now-playing-track-speed-$speed'),
             value: _TrackPlaybackSpeedSelection(speed),
             checked: override == speed,
             child: Text(_formatPlaybackSpeed(speed)),
