@@ -50,6 +50,7 @@ import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/library_sync_panel.dart';
+import 'widgets/lyrics_share_card.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
 import 'widgets/self_hosted_account_editor.dart';
@@ -630,6 +631,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     icon: const Icon(Icons.ios_share),
                     label: const Text('Copy share text'),
+                  ),
+                  Tooltip(
+                    message: 'Save lyrics share card',
+                    child: IconButton(
+                      onPressed: () => unawaited(
+                        _showLyricsShareCard(
+                          context,
+                          library,
+                          track,
+                          controller.text,
+                        ),
+                      ),
+                      icon: const Icon(Icons.image_outlined),
+                    ),
                   ),
                   if (initialValue.isNotEmpty)
                     TextButton(
@@ -6250,6 +6265,87 @@ Future<void> _copyLyricsDraftShareText(
     copiedMessage: 'Copied lyrics share text for ${track.title}.',
     unavailableMessage: 'Add lyrics before copying share text.',
   );
+}
+
+Future<void> _showLyricsShareCard(
+  BuildContext context,
+  LibraryStore library,
+  Track track,
+  String plainText,
+) async {
+  final shareText =
+      library.shareLyricsText(track.id, plainText: plainText) ?? '';
+  if (shareText.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Add lyrics before saving a share card.')),
+    );
+    return;
+  }
+  final boundaryKey = GlobalKey();
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Lyrics share card'),
+      content: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: RepaintBoundary(
+          key: boundaryKey,
+          child: LyricsShareCard(
+            title: track.title,
+            artist: track.artist,
+            shareText: shareText,
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
+        FilledButton.icon(
+          onPressed: () => unawaited(
+            _saveLyricsShareCard(dialogContext, boundaryKey, track),
+          ),
+          icon: const Icon(Icons.image_outlined),
+          label: const Text('Save PNG'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _saveLyricsShareCard(
+  BuildContext context,
+  GlobalKey boundaryKey,
+  Track track,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final bytes = await captureLyricsShareCardPng(boundaryKey);
+    final fileName = 'aethertune-lyrics-${track.id}.png';
+    final outputPath = await FilePicker.saveFile(
+      dialogTitle: 'Save lyrics share card',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: const <String>['png'],
+      bytes: bytes,
+    );
+    if (outputPath == null || outputPath.isEmpty) {
+      return;
+    }
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      await File(outputPath).writeAsBytes(bytes, flush: true);
+    }
+    if (context.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+    }
+  } on Object catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save lyrics share card: $error')),
+      );
+    }
+  }
 }
 
 Future<void> _copyLyricsDraftExportDocument(
