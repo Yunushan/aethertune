@@ -57,7 +57,7 @@ Saved synced LRC lyrics are searched by their visible lyric text, not by timesta
 
 ## Metadata
 
-Open a track menu and choose **Edit metadata** to update the saved title, artist, album, or genre. These edits update library search, browse groups, playlists, suggestions, and backups. For a local MP3, AetherTune separately asks whether to write title, artist, album, and supported standard genres to the file's ID3v1 tag; custom genres remain app-only and long or non-Latin text may be shortened by the legacy tag format.
+Open a track menu and choose **Edit metadata** to update the saved title, artist, album, or genre. These edits update library search, browse groups, playlists, suggestions, and backups. For a local MP3, AetherTune separately asks whether to write the values to the file. It writes ID3v2.3/v2.4 text frames so Unicode metadata and custom genres survive, keeps an ID3v1 compatibility tag for older players, preserves supported artwork and other non-editable ID3v2 frames, and aborts before changing files with unsupported tag layouts.
 
 ## Duplicate resolver
 

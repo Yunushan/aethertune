@@ -3138,7 +3138,7 @@ Future<bool?> _confirmMp3TagWrite(BuildContext context, Track track) {
     builder: (dialogContext) => AlertDialog(
       title: const Text('Update MP3 file tags?'),
       content: const Text(
-        'This writes title, artist, album, and supported standard genres to the local MP3 ID3v1 tag. Unknown genres stay app-only, and long or non-Latin characters may be shortened.',
+        'This writes title, artist, album, and genre to standard ID3v2 MP3 text tags, with an ID3v1 compatibility tag. Artwork and other supported ID3v2 frames are preserved. Unsupported tag layouts are left unchanged.',
       ),
       actions: <Widget>[
         TextButton(
