@@ -30,4 +30,13 @@ DerivedData/
 Thumbs.db
 
 # Generated app wrappers can be regenerated with scripts/bootstrap_client.sh
-# Keep them tracked if you decide to publish platform-specific settings.
+# Track platform-specific settings explicitly only when they cannot be recreated.
+/apps/mobile/.gitignore
+/apps/mobile/.metadata
+/apps/mobile/android/
+/apps/mobile/ios/
+/apps/mobile/linux/
+/apps/mobile/macos/
+/apps/mobile/windows/
+/apps/mobile/pubspec.lock
+/services/server/pubspec.lock

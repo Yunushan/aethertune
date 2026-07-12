@@ -83,7 +83,7 @@ Open a track menu in the Library tab and choose **Lyrics**. You can save plain t
 
 ## Backup and restore
 
-Open the Options tab and choose **Export backup** to view a versioned JSON backup. Choose **Restore backup** and paste a backup JSON to replace the local library, playlists, lyrics, listening history, saved history views, submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, queued offline media requests, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup. Backups preserve queue metadata and local cache paths, not copied media bytes.
+Open the Options tab and choose **Export backup**, then choose **Save backup file** to write a versioned UTF-8 JSON file through the platform file dialog. **View backup JSON** remains available when you need to inspect or copy the document. Choose **Restore backup**, then choose **Choose backup file** or **Paste backup JSON** to replace the local library, playlists, lyrics, listening history, saved history views, submitted search history, pause-listening-history preference, theme and accent preferences, offline mode, queued offline media requests, podcast feed subscriptions, podcast refresh state, and podcast episode progress with that backup. Backups preserve queue metadata and local cache paths, not copied media bytes.
 
 ## Sleep timer
 

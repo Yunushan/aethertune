@@ -23,6 +23,7 @@ import '../data/podcast_rss_provider.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/subsonic_provider.dart';
+import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_entry.dart';
@@ -9207,8 +9208,80 @@ class _SettingsTab extends StatelessWidget {
   }
 
   Future<void> _showBackupExport(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.save_alt_outlined),
+                title: const Text('Save backup file'),
+                subtitle: const Text(
+                  'Write a portable JSON backup to a chosen location.',
+                ),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _saveBackupFile(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.code_outlined),
+                title: const Text('View backup JSON'),
+                subtitle: const Text('Inspect or copy the backup text.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _showBackupJson(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveBackupFile(BuildContext context) async {
     final library = context.read<LibraryStore>();
     final backupJson = library.exportBackupJson();
+    final fileName = aetherTuneBackupFileName(DateTime.now());
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final bytes = encodeAetherTuneBackupFile(backupJson);
+      final outputPath = await FilePicker.saveFile(
+        dialogTitle: 'Save AetherTune backup',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const <String>[aetherTuneBackupFileExtension],
+        bytes: bytes,
+      );
+      if (outputPath == null || outputPath.isEmpty) {
+        return;
+      }
+
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (!context.mounted) {
+        return;
+      }
+
+      messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save backup file: $error')),
+      );
+    }
+  }
+
+  Future<void> _showBackupJson(BuildContext context) async {
+    final backupJson = context.read<LibraryStore>().exportBackupJson();
 
     await showDialog<void>(
       context: context,
@@ -9233,12 +9306,84 @@ class _SettingsTab extends StatelessWidget {
   }
 
   Future<void> _showBackupRestore(BuildContext context) async {
-    final library = context.read<LibraryStore>();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: const Text('Choose backup file'),
+                subtitle: const Text(
+                  'Restore an AetherTune JSON backup from storage.',
+                ),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _restoreBackupFile(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.content_paste_outlined),
+                title: const Text('Paste backup JSON'),
+                subtitle: const Text('Restore from copied backup text.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _restoreBackupFromText(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _restoreBackupFile(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const <String>[aetherTuneBackupFileExtension],
+      );
+      final files = result?.files;
+      if (files == null || files.isEmpty) {
+        return;
+      }
+
+      final file = files.first;
+      final bytes = await file.readAsBytes();
+      if (!context.mounted) {
+        return;
+      }
+      await _restoreBackupJson(context, decodeAetherTuneBackupFile(bytes));
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not read backup file: $error')),
+      );
+    }
+  }
+
+  Future<void> _restoreBackupFromText(BuildContext context) async {
     final backupJson = await _promptForBackupJson(context);
     if (!context.mounted || backupJson == null) {
       return;
     }
+    await _restoreBackupJson(context, backupJson);
+  }
+
+  Future<void> _restoreBackupJson(
+    BuildContext context,
+    String backupJson,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       await library.restoreBackupJson(backupJson);
