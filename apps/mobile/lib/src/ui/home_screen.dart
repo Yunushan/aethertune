@@ -13,6 +13,7 @@ import '../data/demo_source_provider.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
+import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
@@ -877,6 +878,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await library.setLyricsIfAbsent(entry.key, entry.value);
         }
       }
+      await library.watchLocalFolder(folderPath);
 
       if (!context.mounted) {
         return;
@@ -8480,6 +8482,7 @@ class _SettingsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
+    final folderWatcher = context.watch<LocalFolderWatchStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
     final offlineCacheLimitBytes = library.offlineCacheLimitBytes;
@@ -8541,6 +8544,51 @@ class _SettingsTab extends StatelessWidget {
             },
           ),
         ),
+        if (library.watchedLocalFolderPaths.isNotEmpty) ...<Widget>[
+          const Divider(),
+          Text(
+            'Watched folders',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          for (final rootPath in library.watchedLocalFolderPaths)
+            ListTile(
+              leading: const Icon(Icons.folder_eye_outlined),
+              title: Text(
+                p.basename(rootPath),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                folderWatcher?.errorFor(rootPath) ??
+                    (folderWatcher?.isRefreshing(rootPath) ?? false
+                        ? 'Refreshing library changes...'
+                        : rootPath),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Refresh folder',
+                    onPressed: folderWatcher == null ||
+                            folderWatcher.isRefreshing(rootPath)
+                        ? null
+                        : () => folderWatcher.refresh(rootPath),
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  IconButton(
+                    tooltip: 'Stop watching folder',
+                    onPressed: () => unawaited(
+                      library.unwatchLocalFolder(rootPath),
+                    ),
+                    icon: const Icon(Icons.folder_off_outlined),
+                  ),
+                ],
+              ),
+            ),
+        ],
         ListTile(
           leading: const Icon(Icons.palette_outlined),
           title: const Text('Theme'),

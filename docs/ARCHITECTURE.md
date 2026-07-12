@@ -27,7 +27,7 @@ Domain layer
   OfflineMediaPolicy
 
 Data/provider layer
-  Local file import, LocalFolderScanner, DemoSourceProvider,
+  Local file import, LocalFolderScanner, LocalFolderWatchStore, DemoSourceProvider,
   PodcastRssProvider, RadioBrowserProvider, InternetArchiveProvider,
   JellyfinProvider, SubsonicProvider, LrcLibLyricsProvider,
   ProviderCredentialVault, ProviderArtworkFileCache,
@@ -109,7 +109,7 @@ until that migration reaches a stable package release; generated iOS projects
 are pinned to its required iOS 14 minimum and verified in tests. The player
 provides:
 
-- local file playback
+- local file playback and persistent watched-folder rescans
 - stream URL playback
 - play/pause
 - stop

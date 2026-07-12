@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added persistent watched audio folders: recursive imports now monitor relevant audio and sidecar-lyrics changes with debounced rescans, safe incomplete-scan handling, user-state preservation, and Options refresh/remove controls.
 - Added persisted 0.5x-3x playback-speed controls in Now Playing and Options, with system-media state propagation and player/widget contract coverage.
 - Documented the implemented optional self-hosted cross-device library snapshot sync, including secure-token configuration, checksum verification, explicit conflict resolution, and its intentionally excluded device-local state.
 - Added atomic test-before-replace credential rotation for Jellyfin and Navidrome/Subsonic with confirmation UI, secure-vault rollback, old/new secret redaction, metadata-editor isolation, private artwork invalidation, and position-preserving active queue re-resolution that stops unresolved tracks.

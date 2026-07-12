@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
 import '../data/library_sync_store.dart';
+import '../data/local_folder_watch_store.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
@@ -26,6 +27,14 @@ class AetherTuneApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<LibrarySyncStore>(
           create: (_) => LibrarySyncStore()..load(),
+        ),
+        ChangeNotifierProxyProvider<LibraryStore, LocalFolderWatchStore>(
+          create: (_) => LocalFolderWatchStore(),
+          update: (_, library, watcher) {
+            final store = watcher ?? LocalFolderWatchStore();
+            store.updateLibrary(library);
+            return store;
+          },
         ),
         ChangeNotifierProxyProvider2<
             LibraryStore,

@@ -63,6 +63,7 @@
 - [x] Backup/restore JSON
 - [x] Imported-track folder browse
 - [x] Recursive folder import
+- [x] Persistent watched folders with debounced local rescan
 - [x] Recursive folder browser
 - [x] Filename metadata scanner
 - [x] Basic ID3v1 MP3 metadata scanner

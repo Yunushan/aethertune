@@ -556,6 +556,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.offline_cache_limit_mb.v1';
   static const _offlineCacheProviderLimitMegabytesKey =
       'aethertune.offline_cache_provider_limit_mb.v1';
+  static const _watchedLocalFolderPathsKey =
+      'aethertune.watched_local_folder_paths.v1';
   static const defaultOfflineCacheLimitMegabytes = 500;
   static const minOfflineCacheLimitMegabytes = 50;
   static const minOfflineCacheProviderLimitMegabytes = 1;
@@ -580,6 +582,7 @@ class LibraryStore extends ChangeNotifier {
       <String, PlaybackProgressEntry>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
+  final List<String> _watchedLocalFolderPaths = <String>[];
   final DateTime Function() _clock;
   bool _pauseListeningHistory = false;
   bool _offlineModeEnabled = false;
@@ -607,6 +610,8 @@ class LibraryStore extends ChangeNotifier {
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   List<OfflineCacheEntry> get offlineCacheQueue =>
       List.unmodifiable(_offlineCacheQueue);
+  List<String> get watchedLocalFolderPaths =>
+      List.unmodifiable(_watchedLocalFolderPaths);
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get pauseListeningHistory => _pauseListeningHistory;
@@ -814,6 +819,13 @@ class LibraryStore extends ChangeNotifier {
           ),
         );
     }
+    _watchedLocalFolderPaths
+      ..clear()
+      ..addAll(
+        _dedupeWatchedLocalFolderPaths(
+          prefs.getStringList(_watchedLocalFolderPathsKey) ?? const <String>[],
+        ),
+      );
 
     _removeMissingPlaylistTracks();
     _removeMissingLyrics();
@@ -845,6 +857,95 @@ class LibraryStore extends ChangeNotifier {
       await _save();
       notifyListeners();
     }
+  }
+
+  Future<void> watchLocalFolder(String rootPath) async {
+    final normalized = _normalizeWatchedLocalFolderPath(rootPath);
+    if (_watchedLocalFolderPaths.contains(normalized)) {
+      return;
+    }
+    _watchedLocalFolderPaths.add(normalized);
+    _watchedLocalFolderPaths.sort();
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> unwatchLocalFolder(String rootPath) async {
+    final normalized = _normalizeWatchedLocalFolderPath(rootPath);
+    if (!_watchedLocalFolderPaths.remove(normalized)) {
+      return;
+    }
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> reconcileWatchedLocalFolder(
+    String rootPath, {
+    required Iterable<Track> tracks,
+    required Map<String, String> sidecarLyricsByTrackId,
+    required bool pruneMissing,
+  }) async {
+    final root = _normalizeWatchedLocalFolderPath(rootPath);
+    if (!_watchedLocalFolderPaths.contains(root)) {
+      return;
+    }
+    final scannedTracks = tracks
+        .where((track) => _isLocalTrackWithinFolder(track, root))
+        .toList(growable: false);
+    final scannedIds = scannedTracks.map((track) => track.id).toSet();
+    var changed = false;
+
+    for (final scanned in scannedTracks) {
+      final index = _tracks.indexWhere((track) => track.id == scanned.id);
+      if (index == -1) {
+        _tracks.add(scanned);
+        changed = true;
+        continue;
+      }
+      final current = _tracks[index];
+      if (current.contentHash == scanned.contentHash) {
+        continue;
+      }
+      _tracks[index] = _scannedTrackWithPreservedUserState(current, scanned);
+      changed = true;
+    }
+
+    if (pruneMissing) {
+      final deletedIds = _tracks
+          .where((track) => _isLocalTrackWithinFolder(track, root))
+          .where((track) => !scannedIds.contains(track.id))
+          .map((track) => track.id)
+          .toList(growable: false);
+      for (final trackId in deletedIds) {
+        _tracks.removeWhere((track) => track.id == trackId);
+        _removeTrackFromPlaylists(trackId);
+        _lyricsByTrackId.remove(trackId);
+        _history.removeWhere((entry) => entry.trackId == trackId);
+        _progressByTrackId.remove(trackId);
+        changed = true;
+      }
+    }
+
+    for (final entry in sidecarLyricsByTrackId.entries) {
+      if (_lyricsByTrackId.containsKey(entry.key) ||
+          !_tracks.any((track) => track.id == entry.key) ||
+          entry.value.trim().isEmpty) {
+        continue;
+      }
+      _lyricsByTrackId[entry.key] = TrackLyrics(
+        trackId: entry.key,
+        plainText: entry.value.trim(),
+        updatedAt: _clock(),
+      );
+      changed = true;
+    }
+
+    if (!changed) {
+      return;
+    }
+    _sortTracks();
+    await _save();
+    notifyListeners();
   }
 
   Future<void> removeTrack(String id) async {
@@ -5694,6 +5795,67 @@ class LibraryStore extends ChangeNotifier {
       jsonEncode(_offlineCacheProviderLimitMegabytes),
     );
     await prefs.setString(_offlineCacheQueueKey, encodedOfflineCacheQueue);
+    await prefs.setStringList(
+      _watchedLocalFolderPathsKey,
+      _watchedLocalFolderPaths,
+    );
+  }
+
+  String _normalizeWatchedLocalFolderPath(String rootPath) {
+    final trimmed = rootPath.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('Folder path is required.');
+    }
+    return path.normalize(path.absolute(trimmed));
+  }
+
+  List<String> _dedupeWatchedLocalFolderPaths(Iterable<String> paths) {
+    final seen = <String>{};
+    final normalized = <String>[];
+    for (final rawPath in paths) {
+      try {
+        final value = _normalizeWatchedLocalFolderPath(rawPath);
+        if (seen.add(value)) {
+          normalized.add(value);
+        }
+      } on FormatException {
+        continue;
+      }
+    }
+    normalized.sort();
+    return normalized;
+  }
+
+  bool _isLocalTrackWithinFolder(Track track, String rootPath) {
+    final localPath = track.localPath;
+    if (track.sourceId != 'local' || localPath == null || localPath.isEmpty) {
+      return false;
+    }
+    final normalized = path.normalize(path.absolute(localPath));
+    return normalized == rootPath || path.isWithin(rootPath, normalized);
+  }
+
+  Track _scannedTrackWithPreservedUserState(Track current, Track scanned) {
+    return Track(
+      id: scanned.id,
+      title: scanned.title,
+      artist: scanned.artist,
+      album: scanned.album,
+      genre: scanned.genre,
+      duration: scanned.duration,
+      artworkUri: scanned.artworkUri,
+      artworkUriIsEphemeral: scanned.artworkUriIsEphemeral,
+      providerArtworkId: scanned.providerArtworkId,
+      providerArtworkVersion: scanned.providerArtworkVersion,
+      localPath: scanned.localPath,
+      contentHash: scanned.contentHash,
+      streamUrl: scanned.streamUrl,
+      streamUrlIsEphemeral: scanned.streamUrlIsEphemeral,
+      sourceId: scanned.sourceId,
+      externalId: scanned.externalId,
+      isFavorite: current.isFavorite,
+      addedAt: current.addedAt,
+    );
   }
 }
 
