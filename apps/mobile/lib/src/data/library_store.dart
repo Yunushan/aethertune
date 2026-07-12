@@ -246,6 +246,7 @@ class CustomSmartPlaylist {
     this.maximumDurationSeconds = 0,
     this.favoritesOnly = false,
     this.minimumPlayCount = 0,
+    this.minimumDaysSinceLastPlayed = 0,
     this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
     this.limit = 50,
     DateTime? createdAt,
@@ -264,6 +265,7 @@ class CustomSmartPlaylist {
   final int maximumDurationSeconds;
   final bool favoritesOnly;
   final int minimumPlayCount;
+  final int minimumDaysSinceLastPlayed;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
   final DateTime createdAt;
@@ -281,6 +283,7 @@ class CustomSmartPlaylist {
     int? maximumDurationSeconds,
     bool? favoritesOnly,
     int? minimumPlayCount,
+    int? minimumDaysSinceLastPlayed,
     CustomSmartPlaylistSortMode? sortMode,
     int? limit,
     DateTime? createdAt,
@@ -300,6 +303,8 @@ class CustomSmartPlaylist {
           maximumDurationSeconds ?? this.maximumDurationSeconds,
       favoritesOnly: favoritesOnly ?? this.favoritesOnly,
       minimumPlayCount: minimumPlayCount ?? this.minimumPlayCount,
+      minimumDaysSinceLastPlayed:
+          minimumDaysSinceLastPlayed ?? this.minimumDaysSinceLastPlayed,
       sortMode: sortMode ?? this.sortMode,
       limit: limit ?? this.limit,
       createdAt: createdAt ?? this.createdAt,
@@ -320,6 +325,7 @@ class CustomSmartPlaylist {
       'maximumDurationSeconds': maximumDurationSeconds,
       'favoritesOnly': favoritesOnly,
       'minimumPlayCount': minimumPlayCount,
+      'minimumDaysSinceLastPlayed': minimumDaysSinceLastPlayed,
       'sortMode': sortMode.name,
       'limit': limit,
       'createdAt': createdAt.toIso8601String(),
@@ -340,6 +346,8 @@ class CustomSmartPlaylist {
       maximumDurationSeconds: json['maximumDurationSeconds'] as int? ?? 0,
       favoritesOnly: json['favoritesOnly'] as bool? ?? false,
       minimumPlayCount: json['minimumPlayCount'] as int? ?? 0,
+      minimumDaysSinceLastPlayed:
+          json['minimumDaysSinceLastPlayed'] as int? ?? 0,
       sortMode: _customSmartPlaylistSortModeFromName(
         json['sortMode'] as String?,
       ),
@@ -2257,6 +2265,16 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final searchQuery = SearchQuery.parse(rule.query);
+    final lastPlayedByTrack = <String, DateTime>{};
+    if (rule.minimumDaysSinceLastPlayed > 0) {
+      for (final entry in _history) {
+        final current = lastPlayedByTrack[entry.trackId];
+        if (current == null || entry.playedAt.isAfter(current)) {
+          lastPlayedByTrack[entry.trackId] = entry.playedAt;
+        }
+      }
+    }
+    final now = _clock();
     final tracks = _tracks.where((track) {
       if (rule.favoritesOnly && !track.isFavorite) {
         return false;
@@ -2265,6 +2283,15 @@ class LibraryStore extends ChangeNotifier {
       if (rule.minimumPlayCount > 0 &&
           playCountForTrack(track.id) < rule.minimumPlayCount) {
         return false;
+      }
+
+      if (rule.minimumDaysSinceLastPlayed > 0) {
+        final lastPlayed = lastPlayedByTrack[track.id];
+        if (lastPlayed != null &&
+            now.difference(lastPlayed) <
+                Duration(days: rule.minimumDaysSinceLastPlayed)) {
+          return false;
+        }
       }
 
       if (rule.sourceId.isNotEmpty &&
@@ -4370,6 +4397,7 @@ class LibraryStore extends ChangeNotifier {
     int maximumDurationSeconds = 0,
     bool favoritesOnly = false,
     int minimumPlayCount = 0,
+    int minimumDaysSinceLastPlayed = 0,
     CustomSmartPlaylistSortMode sortMode =
         CustomSmartPlaylistSortMode.recentlyAdded,
     int limit = 50,
@@ -4388,6 +4416,8 @@ class LibraryStore extends ChangeNotifier {
       maximumDurationSeconds: _sanitizeMinimumPlayCount(maximumDurationSeconds),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
+      minimumDaysSinceLastPlayed:
+          _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
       sortMode: sortMode,
       limit: _sanitizeCustomSmartPlaylistLimit(limit),
       createdAt: now,
@@ -4414,6 +4444,7 @@ class LibraryStore extends ChangeNotifier {
     int? maximumDurationSeconds,
     required bool favoritesOnly,
     required int minimumPlayCount,
+    int? minimumDaysSinceLastPlayed,
     required CustomSmartPlaylistSortMode sortMode,
     required int limit,
   }) async {
@@ -4437,6 +4468,9 @@ class LibraryStore extends ChangeNotifier {
           : _sanitizeMinimumPlayCount(maximumDurationSeconds),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
+      minimumDaysSinceLastPlayed: minimumDaysSinceLastPlayed == null
+          ? null
+          : _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
       sortMode: sortMode,
       limit: _sanitizeCustomSmartPlaylistLimit(limit),
       updatedAt: _clock(),
@@ -6225,6 +6259,8 @@ class LibraryStore extends ChangeNotifier {
         artist: rule.artist.trim(),
         album: rule.album.trim(),
         minimumPlayCount: _sanitizeMinimumPlayCount(rule.minimumPlayCount),
+        minimumDaysSinceLastPlayed:
+            _sanitizeMinimumPlayCount(rule.minimumDaysSinceLastPlayed),
         limit: _sanitizeCustomSmartPlaylistLimit(rule.limit),
       );
     }

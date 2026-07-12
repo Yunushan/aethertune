@@ -3372,6 +3372,9 @@ String _customSmartPlaylistSubtitle(
   if (rule.minimumPlayCount > 0) {
     parts.add('${rule.minimumPlayCount}+ plays');
   }
+  if (rule.minimumDaysSinceLastPlayed > 0) {
+    parts.add('${rule.minimumDaysSinceLastPlayed}+ days since played');
+  }
   parts.add(_customSmartPlaylistSortLabel(rule.sortMode));
   parts.add('Limit ${rule.limit}');
 
@@ -3390,6 +3393,7 @@ class _CustomSmartPlaylistDraft {
     required this.maximumDurationSeconds,
     required this.favoritesOnly,
     required this.minimumPlayCount,
+    required this.minimumDaysSinceLastPlayed,
     required this.sortMode,
     required this.limit,
   });
@@ -3404,6 +3408,7 @@ class _CustomSmartPlaylistDraft {
   final int maximumDurationSeconds;
   final bool favoritesOnly;
   final int minimumPlayCount;
+  final int minimumDaysSinceLastPlayed;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
 }
@@ -3823,6 +3828,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       maximumDurationSeconds: draft.maximumDurationSeconds,
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
+      minimumDaysSinceLastPlayed: draft.minimumDaysSinceLastPlayed,
       sortMode: draft.sortMode,
       limit: draft.limit,
     );
@@ -3861,6 +3867,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       maximumDurationSeconds: draft.maximumDurationSeconds,
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
+      minimumDaysSinceLastPlayed: draft.minimumDaysSinceLastPlayed,
       sortMode: draft.sortMode,
       limit: draft.limit,
     );
@@ -4424,6 +4431,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     final minimumPlayCountController = TextEditingController(
       text: (initialRule?.minimumPlayCount ?? 0).toString(),
     );
+    final minimumDaysSinceLastPlayedController = TextEditingController(
+      text: (initialRule?.minimumDaysSinceLastPlayed ?? 0).toString(),
+    );
     final limitController = TextEditingController(
       text: (initialRule?.limit ?? 50).toString(),
     );
@@ -4457,6 +4467,11 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   favoritesOnly: favoritesOnly,
                   minimumPlayCount:
                       int.tryParse(minimumPlayCountController.text.trim()) ??
+                          0,
+                  minimumDaysSinceLastPlayed:
+                      int.tryParse(
+                        minimumDaysSinceLastPlayedController.text.trim(),
+                      ) ??
                           0,
                   sortMode: sortMode,
                   limit: int.tryParse(limitController.text.trim()) ?? 50,
@@ -4546,6 +4561,14 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           keyboardType: TextInputType.number,
                           textInputAction: TextInputAction.next,
                         ),
+                        TextField(
+                          controller: minimumDaysSinceLastPlayedController,
+                          decoration: const InputDecoration(
+                            labelText: 'Not played in at least (days)',
+                          ),
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                        ),
                         DropdownButtonFormField<CustomSmartPlaylistSortMode>(
                           initialValue: sortMode,
                           decoration: const InputDecoration(
@@ -4608,6 +4631,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       minimumDurationController.dispose();
       maximumDurationController.dispose();
       minimumPlayCountController.dispose();
+      minimumDaysSinceLastPlayedController.dispose();
       limitController.dispose();
     }
   }

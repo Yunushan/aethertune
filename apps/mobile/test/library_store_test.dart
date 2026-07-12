@@ -149,6 +149,34 @@ void main() {
     );
   });
 
+  test('filters smart playlists by time since last play', () async {
+    var now = DateTime.utc(2026, 7, 10, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('recent', title: 'Recent'),
+      _track('stale', title: 'Stale'),
+      _track('never', title: 'Never'),
+    ]);
+
+    now = DateTime.utc(2026, 7, 1, 12);
+    await store.recordPlayback('stale');
+    now = DateTime.utc(2026, 7, 9, 12);
+    await store.recordPlayback('recent');
+    now = DateTime.utc(2026, 7, 10, 12);
+
+    final rule = await store.createCustomSmartPlaylist(
+      name: 'Rediscover',
+      minimumDaysSinceLastPlayed: 7,
+      sortMode: CustomSmartPlaylistSortMode.title,
+    );
+
+    expect(
+      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['never', 'stale'],
+    );
+  });
+
   test('creates manual playlists with existing tracks only', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 1),
