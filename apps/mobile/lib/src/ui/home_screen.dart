@@ -27,6 +27,7 @@ import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/subsonic_provider.dart';
+import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
@@ -1227,8 +1228,16 @@ Future<void> _showTrackMetadataEditor(
             album: updated.album,
             genre: updated.genre,
           );
-        } else {
+        } else if (_isLocalFlac(updated)) {
           await const FlacVorbisCommentWriter().write(
+            path: updated.localPath!,
+            title: updated.title,
+            artist: updated.artist,
+            album: updated.album,
+            genre: updated.genre,
+          );
+        } else {
+          await const WavRiffInfoWriter().write(
             path: updated.localPath!,
             title: updated.title,
             artist: updated.artist,
@@ -3140,24 +3149,37 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
 }
 
 bool _canWriteEmbeddedMetadata(Track track) {
-  return _isLocalMp3(track) ||
-      (track.localPath?.trim() ?? '').toLowerCase().endsWith('.flac');
+  return _isLocalMp3(track) || _isLocalFlac(track) || _isLocalWav(track);
 }
 
 bool _isLocalMp3(Track track) {
   return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.mp3');
 }
 
+bool _isLocalFlac(Track track) {
+  return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.flac');
+}
+
+bool _isLocalWav(Track track) {
+  return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.wav');
+}
+
 Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
-  final isMp3 = _isLocalMp3(track);
+  final format = _isLocalMp3(track)
+      ? 'MP3'
+      : _isLocalFlac(track)
+      ? 'FLAC'
+      : 'WAV';
   return showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text('Update ${isMp3 ? 'MP3' : 'FLAC'} file tags?'),
+      title: Text('Update $format file tags?'),
       content: Text(
-        isMp3
+        format == 'MP3'
             ? 'This writes title, artist, album, and genre to standard ID3v2 MP3 text tags, with an ID3v1 compatibility tag. Artwork and other supported ID3v2 frames are preserved. Unsupported tag layouts are left unchanged.'
-            : 'This writes title, artist, album, and genre to standard FLAC Vorbis comments. Artwork and other FLAC metadata blocks are preserved.',
+            : format == 'FLAC'
+            ? 'This writes title, artist, album, and genre to standard FLAC Vorbis comments. Artwork and other FLAC metadata blocks are preserved.'
+            : 'This writes title, artist, album, and genre to standard WAV RIFF INFO fields. Other RIFF chunks and audio bytes are preserved. Characters outside legacy Latin-1 are replaced with question marks in the file tag.',
       ),
       actions: <Widget>[
         TextButton(
@@ -3167,7 +3189,7 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
         FilledButton.icon(
           onPressed: () => Navigator.of(dialogContext).pop(true),
           icon: const Icon(Icons.save_outlined),
-          label: Text('Update ${isMp3 ? 'MP3' : 'FLAC'}'),
+          label: Text('Update $format'),
         ),
       ],
     ),
