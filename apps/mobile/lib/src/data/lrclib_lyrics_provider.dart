@@ -80,8 +80,9 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
         HttpHeaders.userAgentHeader: userAgent,
       },
     );
+    final results = _parseAndRank(response, query);
     await _searchCache.write(_cacheKey(query), response);
-    return _parseAndRank(response, query);
+    return results;
   }
 
   @override

@@ -36,6 +36,18 @@ void main() {
     expect(requests, 1);
     expect(cached.single.trackName, 'Cached Song');
   });
+
+  test('does not persist malformed provider responses', () async {
+    final cache = _MemorySearchCache();
+    final provider = LrcLibLyricsProvider(
+      searchCache: cache,
+      responseLoader: (uri, headers) async => '{}',
+    );
+    const query = LyricsSearchQuery(keywords: 'broken');
+
+    await expectLater(provider.search(query), throwsA(isA<FormatException>()));
+    expect(cache.values, isEmpty);
+  });
   test('search uses the documented endpoint, disclosure, and user agent', () async {
     Uri? capturedUri;
     Map<String, String>? capturedHeaders;
