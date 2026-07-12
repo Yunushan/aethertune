@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -30,6 +31,7 @@ import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
 import '../domain/playback_progress_entry.dart';
 import '../domain/playlist.dart';
+import '../domain/playlist_export_file.dart';
 import '../domain/podcast_opml.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/provider_search.dart';
@@ -3065,6 +3067,17 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
   }
 }
 
+String _playlistDocumentFormatFileExtension(PlaylistDocumentFormat format) {
+  switch (format) {
+    case PlaylistDocumentFormat.json:
+      return 'json';
+    case PlaylistDocumentFormat.m3u:
+      return 'm3u';
+    case PlaylistDocumentFormat.csv:
+      return 'csv';
+  }
+}
+
 IconData _playlistDocumentFormatIcon(PlaylistDocumentFormat format) {
   switch (format) {
     case PlaylistDocumentFormat.json:
@@ -3290,12 +3303,106 @@ class _PlaylistsTab extends StatelessWidget {
     BuildContext context,
     PlaylistDocumentFormat format,
   ) async {
-    final library = context.read<LibraryStore>();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: Text('Choose ${_playlistDocumentFormatLabel(format)} file'),
+                subtitle: Text(
+                  'Import a .${_playlistDocumentFormatFileExtension(format)} playlist file.',
+                ),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _importPlaylistFile(context, format);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.content_paste_outlined),
+                title: Text('Paste ${_playlistDocumentFormatLabel(format)} content'),
+                subtitle: const Text('Import a copied playlist document.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _importPlaylistText(context, format);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _importPlaylistFile(
+    BuildContext context,
+    PlaylistDocumentFormat format,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final extension = _playlistDocumentFormatFileExtension(format);
+    final file = await FilePicker.pickFile(
+      allowedExtensions: <String>[extension],
+      dialogTitle: 'Import ${_playlistDocumentFormatLabel(format)} playlist',
+      type: FileType.custom,
+    );
+    if (!context.mounted || file == null) {
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith('.$extension')) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Choose a .$extension playlist file.')),
+      );
+      return;
+    }
+
+    try {
+      final document = utf8.decode(
+        await file.readAsBytes(),
+        allowMalformed: false,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      await _importPlaylistDocument(context, format, document);
+    } on FormatException {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Playlist files must be valid UTF-8 text.')),
+      );
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not read playlist file: $error')),
+      );
+    }
+  }
+
+  Future<void> _importPlaylistText(
+    BuildContext context,
+    PlaylistDocumentFormat format,
+  ) async {
     final document = await _promptForPlaylistDocument(context, format);
     if (!context.mounted || document == null) {
       return;
     }
+    await _importPlaylistDocument(context, format, document);
+  }
+
+  Future<void> _importPlaylistDocument(
+    BuildContext context,
+    PlaylistDocumentFormat format,
+    String document,
+  ) async {
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final playlist = await library.importPlaylistDocument(
@@ -3541,8 +3648,91 @@ class _PlaylistsTab extends StatelessWidget {
     Playlist playlist,
     PlaylistDocumentFormat format,
   ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.save_alt_outlined),
+                title: Text('Save ${_playlistDocumentFormatLabel(format)} file'),
+                subtitle: const Text('Write a portable playlist to a chosen location.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _savePlaylistExportFile(context, playlist, format);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.code_outlined),
+                title: Text('View ${_playlistDocumentFormatLabel(format)} content'),
+                subtitle: const Text('Inspect or copy the playlist document.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _showPlaylistExportDocument(context, playlist, format);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _savePlaylistExportFile(
+    BuildContext context,
+    Playlist playlist,
+    PlaylistDocumentFormat format,
+  ) async {
     final library = context.read<LibraryStore>();
     final document = library.exportPlaylistDocument(
+      playlist.id,
+      format: format,
+    );
+    final extension = _playlistDocumentFormatFileExtension(format);
+    final fileName = playlistExportFileName(
+      playlistName: playlist.name,
+      extension: extension,
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    final bytes = Uint8List.fromList(utf8.encode(document));
+
+    try {
+      final outputPath = await FilePicker.saveFile(
+        dialogTitle: 'Save ${_playlistDocumentFormatLabel(format)} playlist',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: <String>[extension],
+        bytes: bytes,
+      );
+      if (outputPath == null || outputPath.isEmpty) {
+        return;
+      }
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save playlist file: $error')),
+      );
+    }
+  }
+
+  Future<void> _showPlaylistExportDocument(
+    BuildContext context,
+    Playlist playlist,
+    PlaylistDocumentFormat format,
+  ) async {
+    final document = context.read<LibraryStore>().exportPlaylistDocument(
       playlist.id,
       format: format,
     );
