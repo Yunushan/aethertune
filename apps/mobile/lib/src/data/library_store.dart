@@ -2359,7 +2359,9 @@ class LibraryStore extends ChangeNotifier {
       'offlineCacheProviderLimitMegabytes':
           Map<String, int>.from(_offlineCacheProviderLimitMegabytes),
       'tracks': _tracks.map((track) => track.toJson()).toList(),
-      'playlists': _playlists.map((playlist) => playlist.toJson()).toList(),
+      'playlists': _playlists
+          .map(_portablePlaylistJson)
+          .toList(growable: false),
       'customSmartPlaylists':
           _customSmartPlaylists.map((rule) => rule.toJson()).toList(),
       'savedHistoryViews':
@@ -2391,14 +2393,9 @@ class LibraryStore extends ChangeNotifier {
       ..['tracks'] = _tracks
           .map(_portableSyncTrackJson)
           .toList(growable: false)
-      ..['playlists'] = _playlists.map((playlist) {
-        final json = playlist.toJson();
-        json['artworkUri'] = _portableSyncUri(
-          json['artworkUri'] as String?,
-          allowData: false,
-        );
-        return json;
-      }).toList(growable: false);
+      ..['playlists'] = _playlists
+          .map(_portablePlaylistJson)
+          .toList(growable: false);
 
     const encoder = JsonEncoder.withIndent('  ');
     return encoder.convert(backup);
@@ -2427,7 +2424,7 @@ class LibraryStore extends ChangeNotifier {
       'type': 'aethertune.playlist',
       'version': _playlistDocumentVersion,
       'exportedAt': _clock().toIso8601String(),
-      'playlist': playlist.toJson(),
+      'playlist': _portablePlaylistJson(playlist),
       'tracks': tracks.map((track) => track.toJson()).toList(),
     });
   }
@@ -4279,6 +4276,15 @@ class LibraryStore extends ChangeNotifier {
         json['streamUrl'] as String?,
         allowData: false,
       );
+    return json;
+  }
+
+  Map<String, Object?> _portablePlaylistJson(Playlist playlist) {
+    final json = playlist.toJson();
+    json['artworkUri'] = _portableSyncUri(
+      json['artworkUri'] as String?,
+      allowData: false,
+    );
     return json;
   }
 

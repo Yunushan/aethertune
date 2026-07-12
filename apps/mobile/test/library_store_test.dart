@@ -437,6 +437,35 @@ void main() {
     );
   });
 
+  test('keeps local playlist artwork private to the current device', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[_track('1')]);
+    final playlist = await store.createPlaylist('Private artwork');
+    final localArtwork = Uri.file('/private/playlist-artwork.png');
+    await store.updatePlaylistArtwork(playlist.id, localArtwork);
+
+    expect(store.playlistById(playlist.id)!.artworkUri, localArtwork);
+
+    final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
+    final backupPlaylist = (backup['playlists'] as List<dynamic>).single
+        as Map<String, dynamic>;
+    expect(backupPlaylist['artworkUri'], isNull);
+
+    final document = jsonDecode(store.exportPlaylistJson(playlist.id))
+        as Map<String, dynamic>;
+    expect(
+      (document['playlist'] as Map<String, dynamic>)['artworkUri'],
+      isNull,
+    );
+
+    final snapshot = jsonDecode(store.exportSyncSnapshotJson())
+        as Map<String, dynamic>;
+    final snapshotPlaylist = (snapshot['playlists'] as List<dynamic>).single
+        as Map<String, dynamic>;
+    expect(snapshotPlaylist['artworkUri'], isNull);
+  });
+
   test('exports and imports playlist JSON documents', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 1),

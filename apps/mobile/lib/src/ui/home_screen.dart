@@ -21,6 +21,7 @@ import '../data/lrclib_lyrics_provider.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
+import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/subsonic_provider.dart';
@@ -98,6 +99,8 @@ const _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
     label: 'Options',
   ),
 ];
+
+final _playlistArtworkFileStore = PlaylistArtworkFileStore();
 
 List<NavigationDestination> _navigationBarDestinations() {
   return _aetherTuneNavigationDestinations.map((destination) {
@@ -3584,44 +3587,151 @@ class _PlaylistsTab extends StatelessWidget {
     BuildContext context,
     Playlist playlist,
   ) async {
-    final library = context.read<LibraryStore>();
-    final messenger = ScaffoldMessenger.of(context);
-    final value = await _promptForPlaylistArtwork(
-      context,
-      playlist.artworkUri?.toString() ?? '',
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose image file'),
+                subtitle: const Text('Store a private PNG, JPEG, GIF, or WebP image.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _pickPlaylistArtworkFile(context, playlist);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.link_outlined),
+                title: const Text('Set image URL'),
+                subtitle: const Text('Use an http or https image URL.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _setPlaylistArtworkUrl(context, playlist);
+                },
+              ),
+              if (playlist.artworkUri != null)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Remove artwork'),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _removePlaylistArtwork(context, playlist);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  Future<void> _pickPlaylistArtworkFile(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final file = await FilePicker.pickFile(
+      type: FileType.image,
+      dialogTitle: 'Choose playlist artwork',
+    );
+    if (!context.mounted || file == null) {
+      return;
+    }
+
+    try {
+      final artworkUri = await _playlistArtworkFileStore.save(
+        await file.readAsBytes(),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      final updated = await context.read<LibraryStore>().updatePlaylistArtwork(
+        playlist.id,
+        artworkUri,
+      );
+      if (!context.mounted || updated == null) {
+        return;
+      }
+      await _playlistArtworkFileStore.delete(playlist.artworkUri);
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Updated artwork for ${updated.name}.')),
+      );
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } on Exception catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not save artwork: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _setPlaylistArtworkUrl(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final initialValue = playlist.artworkUri != null &&
+            _isNetworkImageUri(playlist.artworkUri!)
+        ? playlist.artworkUri!.toString()
+        : '';
+    final value = await _promptForPlaylistArtwork(context, initialValue);
     if (!context.mounted || value == null) {
       return;
     }
 
     final normalized = value.trim();
-    Uri? artworkUri;
-    if (normalized.isNotEmpty) {
-      artworkUri = Uri.tryParse(normalized);
-      if (artworkUri == null || !_isNetworkImageUri(artworkUri)) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Enter an http or https image URL.')),
-        );
-        return;
-      }
+    final artworkUri = Uri.tryParse(normalized);
+    if (artworkUri == null || !_isNetworkImageUri(artworkUri)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter an http or https image URL.')),
+      );
+      return;
     }
 
-    final updated = await library.updatePlaylistArtwork(
+    final updated = await context.read<LibraryStore>().updatePlaylistArtwork(
       playlist.id,
       artworkUri,
     );
     if (!context.mounted || updated == null) {
       return;
     }
-
+    await _playlistArtworkFileStore.delete(playlist.artworkUri);
+    if (!context.mounted) {
+      return;
+    }
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          artworkUri == null
-              ? 'Removed artwork for ${updated.name}.'
-              : 'Updated artwork for ${updated.name}.',
-        ),
-      ),
+      SnackBar(content: Text('Updated artwork for ${updated.name}.')),
+    );
+  }
+
+  Future<void> _removePlaylistArtwork(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final updated = await context.read<LibraryStore>().updatePlaylistArtwork(
+      playlist.id,
+      null,
+    );
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    await _playlistArtworkFileStore.delete(playlist.artworkUri);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed artwork for ${updated.name}.')),
     );
   }
 
@@ -3633,6 +3743,7 @@ class _PlaylistsTab extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     await library.deletePlaylist(playlist.id);
+    await _playlistArtworkFileStore.delete(playlist.artworkUri);
 
     if (!context.mounted) {
       return;
@@ -4673,7 +4784,23 @@ class _PlaylistArtwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final uri = playlist.artworkUri;
     final fallback = _PlaylistArtworkFallback(size: size);
-    if (uri == null || !_isNetworkImageUri(uri)) {
+    if (uri == null) {
+      return fallback;
+    }
+
+    if (uri.scheme == 'file') {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.file(
+          File(uri.toFilePath()),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        ),
+      );
+    }
+    if (!_isNetworkImageUri(uri)) {
       return fallback;
     }
 
