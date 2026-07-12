@@ -3381,7 +3381,7 @@ class _CustomSmartPlaylistDraft {
   final int limit;
 }
 
-class _PlaylistsTab extends StatelessWidget {
+class _PlaylistsTab extends StatefulWidget {
   const _PlaylistsTab({
     required this.onAddToPlaylist,
     required this.onLyrics,
@@ -3389,6 +3389,16 @@ class _PlaylistsTab extends StatelessWidget {
 
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
+
+  @override
+  State<_PlaylistsTab> createState() => _PlaylistsTabState();
+}
+
+class _PlaylistsTabState extends State<_PlaylistsTab> {
+  String? _folderFilter;
+
+  ValueChanged<Track> get onAddToPlaylist => widget.onAddToPlaylist;
+  ValueChanged<Track> get onLyrics => widget.onLyrics;
 
   @override
   Widget build(BuildContext context) {
@@ -3400,6 +3410,21 @@ class _PlaylistsTab extends StatelessWidget {
 
     final smartPlaylists = library.smartPlaylists();
     final customSmartPlaylists = library.customSmartPlaylists;
+    final folders = library.playlistFolders;
+    final hasUnfiledPlaylists = library.playlists.any(
+      (playlist) => playlist.folder.trim().isEmpty,
+    );
+    final activeFolder = _folderFilter != null &&
+            _folderFilter != '' &&
+            !folders.contains(_folderFilter)
+        ? null
+        : _folderFilter;
+    final manualPlaylists = library.playlists.where((playlist) {
+      if (activeFolder == null) {
+        return true;
+      }
+      return playlist.folder.trim() == activeFolder;
+    }).toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3475,10 +3500,41 @@ class _PlaylistsTab extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
+        if (folders.isNotEmpty || hasUnfiledPlaylists) ...<Widget>[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              ChoiceChip(
+                label: const Text('All'),
+                selected: activeFolder == null,
+                onSelected: (_) => setState(() => _folderFilter = null),
+              ),
+              if (hasUnfiledPlaylists)
+                ChoiceChip(
+                  label: const Text('Unfiled'),
+                  selected: activeFolder == '',
+                  onSelected: (_) => setState(() => _folderFilter = ''),
+                ),
+              for (final folder in folders)
+                ChoiceChip(
+                  label: Text(folder),
+                  selected: activeFolder == folder,
+                  onSelected: (_) => setState(() => _folderFilter = folder),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
         if (library.playlists.isEmpty)
           _EmptyPlaylists(onCreate: () => _createPlaylist(context))
+        else if (manualPlaylists.isEmpty)
+          const ListTile(
+            leading: Icon(Icons.folder_off_outlined),
+            title: Text('No playlists in this folder'),
+          )
         else
-          for (final playlist in library.playlists)
+          for (final playlist in manualPlaylists)
             _PlaylistCard(
               playlist: playlist,
               onOpen: () => _showPlaylist(context, playlist.id),
@@ -3492,6 +3548,7 @@ class _PlaylistsTab extends StatelessWidget {
               ),
               onArtwork: () => _editPlaylistArtwork(context, playlist),
               onRename: () => _renamePlaylist(context, playlist),
+              onMoveToFolder: () => _movePlaylistToFolder(context, playlist),
               onDelete: () => _deletePlaylist(context, playlist),
             ),
       ],
@@ -3810,6 +3867,54 @@ class _PlaylistsTab extends StatelessWidget {
     }
 
     await library.renamePlaylist(playlist.id, name);
+  }
+
+  Future<void> _movePlaylistToFolder(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final controller = TextEditingController(text: playlist.folder);
+    try {
+      final folder = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('Move ${playlist.name}'),
+            content: TextField(
+              autofocus: true,
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Folder',
+                hintText: 'Leave empty for Unfiled',
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
+                child: const Text('Move'),
+              ),
+            ],
+          );
+        },
+      );
+      if (!context.mounted || folder == null) {
+        return;
+      }
+      await context.read<LibraryStore>().updatePlaylistFolder(
+        playlist.id,
+        folder,
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _editPlaylistArtwork(
@@ -4949,6 +5054,7 @@ class _PlaylistCard extends StatelessWidget {
     required this.onShare,
     required this.onArtwork,
     required this.onRename,
+    required this.onMoveToFolder,
     required this.onDelete,
   });
 
@@ -4958,6 +5064,7 @@ class _PlaylistCard extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onArtwork;
   final VoidCallback onRename;
+  final VoidCallback onMoveToFolder;
   final VoidCallback onDelete;
 
   @override
@@ -4966,7 +5073,11 @@ class _PlaylistCard extends StatelessWidget {
       child: ListTile(
         leading: _PlaylistArtwork(playlist: playlist),
         title: Text(playlist.name),
-        subtitle: Text('${playlist.trackCount} track(s)'),
+        subtitle: Text(
+          playlist.folder.trim().isEmpty
+              ? '${playlist.trackCount} track(s)'
+              : '${playlist.folder} · ${playlist.trackCount} track(s)',
+        ),
         onTap: onOpen,
         trailing: PopupMenuButton<_PlaylistAction>(
           onSelected: (action) {
@@ -4985,6 +5096,9 @@ class _PlaylistCard extends StatelessWidget {
                 break;
               case _PlaylistAction.rename:
                 onRename();
+                break;
+              case _PlaylistAction.folder:
+                onMoveToFolder();
                 break;
               case _PlaylistAction.artwork:
                 onArtwork();
@@ -5029,6 +5143,13 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.drive_file_rename_outline),
                 title: Text('Rename'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.folder,
+              child: ListTile(
+                leading: Icon(Icons.drive_folder_upload_outlined),
+                title: Text('Move to folder'),
               ),
             ),
             PopupMenuItem(
@@ -5174,6 +5295,7 @@ enum _PlaylistAction {
   exportCsv,
   share,
   rename,
+  folder,
   artwork,
   delete,
 }

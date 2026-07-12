@@ -497,6 +497,42 @@ void main() {
     expect(secondStore.tracksForPlaylist(playlist.id).single.id, '1');
   });
 
+  test('organizes playlists in persisted folders', () async {
+    var now = DateTime.utc(2026, 1, 4);
+    final firstStore = LibraryStore(clock: () => now);
+    await firstStore.load();
+    final playlist = await firstStore.createPlaylist(
+      'Late night',
+      folder: 'Chill',
+    );
+
+    expect(firstStore.playlistFolders, <String>['Chill']);
+    now = now.add(const Duration(minutes: 1));
+    final updated = await firstStore.updatePlaylistFolder(
+      playlist.id,
+      'Evening',
+    );
+
+    expect(updated!.folder, 'Evening');
+    expect(updated.updatedAt, now);
+    expect(firstStore.playlistFolders, <String>['Evening']);
+
+    final secondStore = LibraryStore(clock: () => now);
+    await secondStore.load();
+
+    expect(secondStore.playlistById(playlist.id)!.folder, 'Evening');
+    expect(secondStore.playlistFolders, <String>['Evening']);
+
+    final document = jsonDecode(firstStore.exportPlaylistJson(playlist.id))
+        as Map<String, dynamic>;
+    expect((document['playlist'] as Map<String, dynamic>)['folder'], 'Evening');
+
+    final restoredStore = LibraryStore(clock: () => now);
+    await restoredStore.load();
+    await restoredStore.restoreBackupJson(firstStore.exportBackupJson());
+    expect(restoredStore.playlistById(playlist.id)!.folder, 'Evening');
+  });
+
   test('edits persists exports imports and clears playlist artwork', () async {
     var now = DateTime.utc(2026, 1, 4, 5);
     DateTime clock() => now;

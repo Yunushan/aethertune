@@ -4,6 +4,7 @@ class Playlist {
     required this.id,
     required this.name,
     List<String> trackIds = const <String>[],
+    this.folder = '',
     this.artworkUri,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -14,6 +15,7 @@ class Playlist {
   final String id;
   final String name;
   final List<String> trackIds;
+  final String folder;
   final Uri? artworkUri;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -25,6 +27,7 @@ class Playlist {
     String? id,
     String? name,
     List<String>? trackIds,
+    String? folder,
     Uri? artworkUri,
     bool clearArtworkUri = false,
     DateTime? createdAt,
@@ -34,6 +37,7 @@ class Playlist {
       id: id ?? this.id,
       name: name ?? this.name,
       trackIds: trackIds ?? this.trackIds,
+      folder: folder ?? this.folder,
       artworkUri: clearArtworkUri ? null : artworkUri ?? this.artworkUri,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -45,6 +49,7 @@ class Playlist {
       'id': id,
       'name': name,
       'trackIds': trackIds,
+      'folder': folder,
       'artworkUri': artworkUri?.toString(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -58,6 +63,7 @@ class Playlist {
       id: json['id'] as String,
       name: json['name'] as String? ?? 'Untitled playlist',
       trackIds: rawTrackIds.whereType<String>().toList(growable: false),
+      folder: json['folder'] as String? ?? '',
       artworkUri: _parseUri(json['artworkUri'] as String?),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),

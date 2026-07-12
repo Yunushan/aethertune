@@ -634,6 +634,15 @@ class LibraryStore extends ChangeNotifier {
   bool get loaded => _loaded;
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
+  List<String> get playlistFolders {
+    final folders = _playlists
+        .map((playlist) => playlist.folder.trim())
+        .where((folder) => folder.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    folders.sort(_compareText);
+    return folders;
+  }
   List<CustomSmartPlaylist> get customSmartPlaylists =>
       List.unmodifiable(_customSmartPlaylists);
   List<SavedHistoryView> get savedHistoryViews =>
@@ -4349,6 +4358,7 @@ class LibraryStore extends ChangeNotifier {
     String name, {
     Iterable<String> trackIds = const <String>[],
     Uri? artworkUri,
+    String folder = '',
   }) async {
     final normalizedName = name.trim();
     if (normalizedName.isEmpty) {
@@ -4365,6 +4375,7 @@ class LibraryStore extends ChangeNotifier {
       id: _playlistId(normalizedName, now),
       name: normalizedName,
       trackIds: filteredTrackIds,
+      folder: folder.trim(),
       artworkUri: artworkUri,
       createdAt: now,
       updatedAt: now,
@@ -4396,6 +4407,32 @@ class LibraryStore extends ChangeNotifier {
     _sortPlaylists();
     await _save();
     notifyListeners();
+  }
+
+  Future<Playlist?> updatePlaylistFolder(
+    String playlistId,
+    String folder,
+  ) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return null;
+    }
+
+    final normalizedFolder = folder.trim();
+    final existing = _playlists[index];
+    if (existing.folder == normalizedFolder) {
+      return existing;
+    }
+
+    final updated = existing.copyWith(
+      folder: normalizedFolder,
+      updatedAt: _clock(),
+    );
+    _playlists[index] = updated;
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+    return updated;
   }
 
   Future<Playlist?> updatePlaylistArtwork(
