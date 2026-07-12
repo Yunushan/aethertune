@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
@@ -58,8 +61,8 @@ class AetherTuneApp extends StatelessWidget {
       ],
       child: OfflineCacheForegroundWorker(
         child: LibrarySyncAutomaticUpload(
-          child: Consumer<LibraryStore>(
-          builder: (context, library, _) {
+          child: Consumer2<LibraryStore, PlayerController>(
+          builder: (context, library, player, _) {
             return MaterialApp(
               title: 'AetherTune',
               debugShowCheckedModeBanner: false,
@@ -69,7 +72,19 @@ class AetherTuneApp extends StatelessWidget {
                 library.themePreference,
                 library.accentColor,
               ),
-              home: const HomeScreen(),
+              home: CallbackShortcuts(
+                bindings: <ShortcutActivator, VoidCallback>{
+                  const SingleActivator(LogicalKeyboardKey.mediaPlayPause):
+                      () => unawaited(player.togglePlayPause()),
+                  const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
+                      () => unawaited(player.next()),
+                  const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious):
+                      () => unawaited(player.previous()),
+                  const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                      () => unawaited(player.togglePlayPause()),
+                },
+                child: const Focus(autofocus: true, child: HomeScreen()),
+              ),
             );
           },
           ),
