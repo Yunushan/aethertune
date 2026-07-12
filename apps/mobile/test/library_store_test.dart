@@ -10,6 +10,7 @@ import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/offline_cache_entry.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/domain/track_chapter.dart';
 
 void main() {
   setUp(() {
@@ -2798,6 +2799,40 @@ void main() {
     expect(updated!.artist, 'Unknown Artist');
     expect(updated.album, 'Unknown Album');
     expect(updated.genre, 'Unknown Genre');
+  });
+
+  test('persists validated track chapters across library reloads', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'chaptered',
+        title: 'Chaptered',
+        duration: const Duration(minutes: 3),
+      ),
+    ]);
+
+    final updated = await store.updateTrackChapters(
+      'chaptered',
+      <TrackChapter>[
+        TrackChapter(start: const Duration(minutes: 2), title: 'Second'),
+        TrackChapter(start: Duration.zero, title: 'First'),
+        TrackChapter(start: const Duration(minutes: 3), title: 'Too late'),
+      ],
+    );
+
+    expect(updated!.chapters.map((chapter) => chapter.title), <String>[
+      'First',
+      'Second',
+    ]);
+    expect(await store.updateTrackChapters('missing', <TrackChapter>[]), isNull);
+
+    final reloaded = LibraryStore();
+    await reloaded.load();
+    expect(reloaded.tracks.single.chapters.map((chapter) => chapter.title), <String>[
+      'First',
+      'Second',
+    ]);
   });
 
   test('builds smart playlists from library and playback state', () async {

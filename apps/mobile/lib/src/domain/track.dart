@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'track_chapter.dart';
+
 /// A provider-independent music item.
 ///
 /// A track can be backed by a local file, a resolved stream URL from a legal
@@ -23,8 +25,13 @@ class Track {
     this.sourceId = 'local',
     this.externalId,
     this.isFavorite = false,
+    List<TrackChapter>? chapters,
     DateTime? addedAt,
-  }) : addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : chapters = TrackChapter.normalize(
+         chapters ?? const <TrackChapter>[],
+         maximum: duration,
+       ),
+       addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String id;
   final String title;
@@ -43,6 +50,7 @@ class Track {
   final String sourceId;
   final String? externalId;
   final bool isFavorite;
+  final List<TrackChapter> chapters;
   final DateTime addedAt;
 
   bool get hasLocalSource => localPath?.trim().isNotEmpty == true;
@@ -67,6 +75,7 @@ class Track {
     String? sourceId,
     String? externalId,
     bool? isFavorite,
+    List<TrackChapter>? chapters,
     DateTime? addedAt,
   }) {
     return Track(
@@ -85,11 +94,11 @@ class Track {
       localPath: localPath ?? this.localPath,
       contentHash: contentHash ?? this.contentHash,
       streamUrl: streamUrl ?? this.streamUrl,
-      streamUrlIsEphemeral:
-          streamUrlIsEphemeral ?? this.streamUrlIsEphemeral,
+      streamUrlIsEphemeral: streamUrlIsEphemeral ?? this.streamUrlIsEphemeral,
       sourceId: sourceId ?? this.sourceId,
       externalId: externalId ?? this.externalId,
       isFavorite: isFavorite ?? this.isFavorite,
+      chapters: chapters ?? this.chapters,
       addedAt: addedAt ?? this.addedAt,
     );
   }
@@ -114,6 +123,7 @@ class Track {
       sourceId: sourceId,
       externalId: externalId,
       isFavorite: isFavorite,
+      chapters: chapters,
       addedAt: addedAt,
     );
   }
@@ -135,6 +145,8 @@ class Track {
       'sourceId': sourceId,
       'externalId': externalId,
       'isFavorite': isFavorite,
+      if (chapters.isNotEmpty)
+        'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
       'addedAt': addedAt.toIso8601String(),
     };
   }
@@ -156,7 +168,9 @@ class Track {
       sourceId: json['sourceId'] as String? ?? 'local',
       externalId: json['externalId'] as String?,
       isFavorite: json['isFavorite'] as bool? ?? false,
-      addedAt: DateTime.tryParse(json['addedAt'] as String? ?? '') ??
+      chapters: _parseChapters(json['chapters']),
+      addedAt:
+          DateTime.tryParse(json['addedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -166,6 +180,16 @@ class Track {
       return null;
     }
     return Uri.tryParse(value);
+  }
+
+  static List<TrackChapter> _parseChapters(Object? value) {
+    if (value is! List) {
+      return const <TrackChapter>[];
+    }
+    return value
+        .map(TrackChapter.tryFromJson)
+        .whereType<TrackChapter>()
+        .toList(growable: false);
   }
 
   static String stableLocalId(String path) {

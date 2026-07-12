@@ -185,7 +185,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Audio/video toggle | Blocked / official-only | YouTube Music | Only where provider terms allow. |
 | Picture-in-picture | Roadmap | YouTube Music, NewPipe | Platform PiP APIs and tests. |
 | Captions/subtitles | Roadmap | YouTube/NewPipe-style apps | Caption parser/provider support. |
-| Chapters | Roadmap | YouTube/NewPipe-style apps | Chapter model and player markers. |
+| Chapters | Scaffolded | YouTube/NewPipe-style apps | Saved tracks carry normalized, portable chapter markers. Full Now Playing shows the active marker, expands to a timestamped seek list, and provides a validated timestamp/title editor for the saved current track. Model, store, and widget tests cover parsing, persistence, active selection, and seek behavior. Needed next: legal provider chapter parsing and visual timeline markers. |
 | Sponsor/segment skipping | Not included by default | Video clients | Could support user-owned/open segment data; no invasive tracking. |
 | Channel/creator pages | Roadmap | Grayjay, NewPipe, LibreTube | Multi-source creator model. |
 | Video comments | Not included by default | YouTube apps | High moderation/privacy cost; official APIs only if added. |

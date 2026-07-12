@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/domain/track_chapter.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/now_playing_screen.dart';
@@ -29,7 +30,16 @@ void main() {
     final engine = _FakePlaybackAudioEngine();
     final player = PlayerController(audioEngine: engine);
     final library = LibraryStore();
-    final first = _track('first', title: 'First Song', durationSeconds: 240);
+    final first = _track('first', title: 'First Song', durationSeconds: 240)
+        .copyWith(
+          chapters: <TrackChapter>[
+            TrackChapter(start: Duration.zero, title: 'Introduction'),
+            TrackChapter(
+              start: const Duration(minutes: 1),
+              title: 'Main section',
+            ),
+          ],
+        );
     final second = _track('second', title: 'Second Song', durationSeconds: 180);
     await library.addTracks(<Track>[first, second]);
     await player.playTrack(first, queue: <Track>[first, second]);
@@ -58,7 +68,27 @@ void main() {
     expect(find.byKey(const Key('now-playing-volume')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-skip-backward')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-skip-forward')), findsOneWidget);
+    expect(find.byKey(const Key('now-playing-chapters')), findsOneWidget);
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('now-playing-chapters')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('now-playing-chapter-60000')));
+    await tester.pump();
+    expect(engine.positionValue, const Duration(minutes: 1));
+
+    await tester.tap(find.byKey(const Key('now-playing-chapters-editor')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('now-playing-chapters-input')),
+      '0:00 Opening\n2:00 Deep dive',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(
+      library.tracks.first.chapters.map((chapter) => chapter.title),
+      <String>['Opening', 'Deep dive'],
+    );
 
     final volumeSlider = tester.widget<Slider>(
       find.byKey(const Key('now-playing-volume')),

@@ -14,6 +14,7 @@ import '../domain/playlist.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/search_matcher.dart';
 import '../domain/track.dart';
+import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 
 enum LibrarySortMode { recentlyAdded, title, artist, album }
@@ -1449,6 +1450,32 @@ class LibraryStore extends ChangeNotifier {
     await _save();
     notifyListeners();
 
+    return updated;
+  }
+
+  Future<Track?> updateTrackChapters(
+    String id,
+    Iterable<TrackChapter> chapters,
+  ) async {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final current = _tracks[index];
+    final updated = current.copyWith(
+      chapters: TrackChapter.normalize(
+        chapters,
+        maximum: current.duration,
+      ),
+    );
+    if (_sameChapters(current.chapters, updated.chapters)) {
+      return updated;
+    }
+
+    _tracks[index] = updated;
+    await _save();
+    notifyListeners();
     return updated;
   }
 
@@ -6388,8 +6415,25 @@ class LibraryStore extends ChangeNotifier {
       sourceId: scanned.sourceId,
       externalId: scanned.externalId,
       isFavorite: current.isFavorite,
+      chapters: current.chapters,
       addedAt: current.addedAt,
     );
+  }
+
+  bool _sameChapters(
+    List<TrackChapter> left,
+    List<TrackChapter> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index].start != right[index].start ||
+          left[index].title != right[index].title) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 

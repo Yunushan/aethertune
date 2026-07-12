@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
 import '../domain/track.dart';
+import '../domain/track_chapter.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'widgets/track_artwork.dart';
@@ -33,6 +34,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
     final current = player.current;
+    final savedCurrent = current == null
+        ? null
+        : _findTrack(library.tracks, current.id);
 
     return Scaffold(
       appBar: AppBar(
@@ -48,6 +52,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             onPressed: player.queue.isEmpty ? null : widget.onOpenQueue,
             icon: const Icon(Icons.queue_music),
           ),
+          if (savedCurrent != null)
+            IconButton(
+              key: const Key('now-playing-chapters-editor'),
+              tooltip: 'Edit chapters',
+              onPressed: () => _showTrackChaptersEditor(savedCurrent),
+              icon: const Icon(Icons.format_list_numbered),
+            ),
           if (current != null)
             _TrackPlaybackSpeedMenu(
               player: player,
@@ -72,6 +83,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   isFavorite: savedTrack?.isFavorite ?? false,
                   canFavorite: savedTrack != null,
                   player: player,
+                  chapters: savedTrack?.chapters ?? current.chapters,
                   onToggleFavorite: savedTrack == null
                       ? null
                       : () => library.toggleFavorite(current.id),
@@ -143,6 +155,31 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       );
     }
   }
+
+  Future<void> _showTrackChaptersEditor(Track track) async {
+    final chapters = await _promptForTrackChapters(context, track);
+    if (!mounted || chapters == null) {
+      return;
+    }
+
+    final updated = await context.read<LibraryStore>().updateTrackChapters(
+      track.id,
+      chapters,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          updated == null
+              ? 'Track is no longer in the library.'
+              : 'Saved ${updated.chapters.length} chapter(s).',
+        ),
+      ),
+    );
+  }
 }
 
 class _NowPlayingContent {
@@ -151,6 +188,7 @@ class _NowPlayingContent {
     required bool isFavorite,
     required bool canFavorite,
     required PlayerController player,
+    required List<TrackChapter> chapters,
     required Future<void> Function()? onToggleFavorite,
     required VoidCallback onOpenQueue,
     required VoidCallback onOpenLyrics,
@@ -168,6 +206,7 @@ class _NowPlayingContent {
           isFavorite: isFavorite,
           canFavorite: canFavorite,
           player: player,
+          chapters: chapters,
           onToggleFavorite: onToggleFavorite,
           onOpenQueue: onOpenQueue,
           onOpenLyrics: onOpenLyrics,
@@ -233,6 +272,7 @@ class _NowPlayingControls extends StatelessWidget {
     required this.isFavorite,
     required this.canFavorite,
     required this.player,
+    required this.chapters,
     required this.onToggleFavorite,
     required this.onOpenQueue,
     required this.onOpenLyrics,
@@ -242,6 +282,7 @@ class _NowPlayingControls extends StatelessWidget {
   final bool isFavorite;
   final bool canFavorite;
   final PlayerController player;
+  final List<TrackChapter> chapters;
   final Future<void> Function()? onToggleFavorite;
   final VoidCallback onOpenQueue;
   final VoidCallback onOpenLyrics;
@@ -307,6 +348,10 @@ class _NowPlayingControls extends StatelessWidget {
             ),
           const SizedBox(height: 18),
           _PlaybackProgress(player: player, fallbackDuration: track.duration),
+          if (chapters.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 4),
+            _ChapterMarkers(player: player, chapters: chapters),
+          ],
           const SizedBox(height: 4),
           _PlaybackVolumeControl(player: player),
           const SizedBox(height: 8),
@@ -533,6 +578,59 @@ class _PlaybackVolumeControl extends StatelessWidget {
   }
 }
 
+class _ChapterMarkers extends StatelessWidget {
+  const _ChapterMarkers({required this.player, required this.chapters});
+
+  final PlayerController player;
+  final List<TrackChapter> chapters;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Duration>(
+      stream: player.positionStream,
+      initialData: player.position,
+      builder: (context, snapshot) {
+        final active = _activeChapter(chapters, snapshot.data ?? Duration.zero);
+        return ExpansionTile(
+          key: const Key('now-playing-chapters'),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: const Text('Chapters'),
+          subtitle: Text(
+            active == null
+                ? '${chapters.length} markers'
+                : '${formatTrackChapterTimestamp(active.start)} ${active.title}',
+          ),
+          children: <Widget>[
+            for (final chapter in chapters)
+              ListTile(
+                key: Key('now-playing-chapter-${chapter.start.inMilliseconds}'),
+                dense: true,
+                selected: chapter == active,
+                leading: Text(formatTrackChapterTimestamp(chapter.start)),
+                title: Text(chapter.title),
+                onTap: () => player.seek(chapter.start),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+TrackChapter? _activeChapter(
+  List<TrackChapter> chapters,
+  Duration position,
+) {
+  TrackChapter? active;
+  for (final chapter in chapters) {
+    if (chapter.start > position) {
+      break;
+    }
+    active = chapter;
+  }
+  return active;
+}
+
 class _PlaybackProgress extends StatelessWidget {
   const _PlaybackProgress({required this.player, required this.fallbackDuration});
 
@@ -592,6 +690,97 @@ Track? _findTrack(List<Track> tracks, String id) {
     }
   }
   return null;
+}
+
+Future<List<TrackChapter>?> _promptForTrackChapters(
+  BuildContext context,
+  Track track,
+) {
+  return showDialog<List<TrackChapter>>(
+    context: context,
+    builder: (_) => _TrackChaptersDialog(track: track),
+  );
+}
+
+class _TrackChaptersDialog extends StatefulWidget {
+  const _TrackChaptersDialog({required this.track});
+
+  final Track track;
+
+  @override
+  State<_TrackChaptersDialog> createState() => _TrackChaptersDialogState();
+}
+
+class _TrackChaptersDialogState extends State<_TrackChaptersDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: formatTrackChapters(widget.track.chapters),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    try {
+      final chapters = parseTrackChapters(
+        _controller.text,
+        maximum: widget.track.duration,
+      );
+      Navigator.of(context).pop(chapters);
+    } on FormatException catch (error) {
+      setState(() => _errorText = error.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Chapters for ${widget.track.title}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          key: const Key('now-playing-chapters-input'),
+          controller: _controller,
+          autofocus: true,
+          minLines: 6,
+          maxLines: 12,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          decoration: InputDecoration(
+            labelText: 'Chapters',
+            hintText: '0:00 Introduction',
+            helperText: 'Timestamp and title per line',
+            errorText: _errorText,
+          ),
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() => _errorText = null);
+            }
+          },
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _controller.clear,
+          child: const Text('Clear'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
+    );
+  }
 }
 
 Duration _remaining(Duration duration, Duration position) {
