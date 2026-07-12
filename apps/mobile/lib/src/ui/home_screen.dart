@@ -58,6 +58,7 @@ import 'widgets/desktop_queue_pane.dart';
 import 'widgets/lyrics_share_card.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
+import 'widgets/playlist_artwork.dart';
 import 'widgets/self_hosted_account_editor.dart';
 import 'widgets/self_hosted_credential_rotation_dialog.dart';
 import 'widgets/track_tile.dart';
@@ -3552,6 +3553,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           for (final playlist in manualPlaylists)
             _PlaylistCard(
               playlist: playlist,
+              tracks: library.tracksForPlaylist(playlist.id),
               onOpen: () => _showPlaylist(context, playlist.id),
               onExport: (format) => _showPlaylistExport(
                 context,
@@ -4838,7 +4840,11 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
             shrinkWrap: true,
             children: <Widget>[
               ListTile(
-                leading: _PlaylistArtwork(playlist: playlist, size: 48),
+                leading: PlaylistArtwork(
+                  playlist: playlist,
+                  tracks: allTracks,
+                  size: 48,
+                ),
                 title: Text(playlist.name),
                 subtitle: Text(
                   hasQuery
@@ -5064,6 +5070,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
 class _PlaylistCard extends StatelessWidget {
   const _PlaylistCard({
     required this.playlist,
+    required this.tracks,
     required this.onOpen,
     required this.onExport,
     required this.onShare,
@@ -5074,6 +5081,7 @@ class _PlaylistCard extends StatelessWidget {
   });
 
   final Playlist playlist;
+  final List<Track> tracks;
   final VoidCallback onOpen;
   final ValueChanged<PlaylistDocumentFormat> onExport;
   final VoidCallback onShare;
@@ -5086,7 +5094,7 @@ class _PlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
-        leading: _PlaylistArtwork(playlist: playlist),
+        leading: PlaylistArtwork(playlist: playlist, tracks: tracks),
         title: Text(playlist.name),
         subtitle: Text(
           playlist.folder.trim().isEmpty
@@ -5183,84 +5191,6 @@ class _PlaylistCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PlaylistArtwork extends StatelessWidget {
-  const _PlaylistArtwork({
-    required this.playlist,
-    this.size = 40,
-  });
-
-  final Playlist playlist;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final uri = playlist.artworkUri;
-    final fallback = _PlaylistArtworkFallback(size: size);
-    if (uri == null) {
-      return fallback;
-    }
-
-    if (uri.scheme == 'file') {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.file(
-          File(uri.toFilePath()),
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback,
-        ),
-      );
-    }
-    if (!_isNetworkImageUri(uri)) {
-      return fallback;
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Image.network(
-        uri.toString(),
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) {
-            return child;
-          }
-
-          return fallback;
-        },
-      ),
-    );
-  }
-}
-
-class _PlaylistArtworkFallback extends StatelessWidget {
-  const _PlaylistArtworkFallback({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(
-        Icons.queue_music,
-        color: colorScheme.onSecondaryContainer,
-        size: size * 0.55,
       ),
     );
   }
