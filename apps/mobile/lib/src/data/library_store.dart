@@ -239,6 +239,8 @@ class CustomSmartPlaylist {
     required this.name,
     this.query = '',
     this.sourceId = '',
+    this.artist = '',
+    this.album = '',
     this.genre = '',
     this.minimumDurationSeconds = 0,
     this.maximumDurationSeconds = 0,
@@ -255,6 +257,8 @@ class CustomSmartPlaylist {
   final String name;
   final String query;
   final String sourceId;
+  final String artist;
+  final String album;
   final String genre;
   final int minimumDurationSeconds;
   final int maximumDurationSeconds;
@@ -270,6 +274,8 @@ class CustomSmartPlaylist {
     String? name,
     String? query,
     String? sourceId,
+    String? artist,
+    String? album,
     String? genre,
     int? minimumDurationSeconds,
     int? maximumDurationSeconds,
@@ -285,6 +291,8 @@ class CustomSmartPlaylist {
       name: name ?? this.name,
       query: query ?? this.query,
       sourceId: sourceId ?? this.sourceId,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
       genre: genre ?? this.genre,
       minimumDurationSeconds:
           minimumDurationSeconds ?? this.minimumDurationSeconds,
@@ -305,6 +313,8 @@ class CustomSmartPlaylist {
       'name': name,
       'query': query,
       'sourceId': sourceId,
+      'artist': artist,
+      'album': album,
       'genre': genre,
       'minimumDurationSeconds': minimumDurationSeconds,
       'maximumDurationSeconds': maximumDurationSeconds,
@@ -323,6 +333,8 @@ class CustomSmartPlaylist {
       name: json['name'] as String? ?? 'Untitled smart playlist',
       query: json['query'] as String? ?? '',
       sourceId: json['sourceId'] as String? ?? '',
+      artist: json['artist'] as String? ?? '',
+      album: json['album'] as String? ?? '',
       genre: json['genre'] as String? ?? '',
       minimumDurationSeconds: json['minimumDurationSeconds'] as int? ?? 0,
       maximumDurationSeconds: json['maximumDurationSeconds'] as int? ?? 0,
@@ -2257,6 +2269,16 @@ class LibraryStore extends ChangeNotifier {
 
       if (rule.sourceId.isNotEmpty &&
           track.sourceId.toLowerCase() != rule.sourceId.toLowerCase()) {
+        return false;
+      }
+
+      if (rule.artist.isNotEmpty &&
+          track.artist.toLowerCase() != rule.artist.toLowerCase()) {
+        return false;
+      }
+
+      if (rule.album.isNotEmpty &&
+          track.album.toLowerCase() != rule.album.toLowerCase()) {
         return false;
       }
 
@@ -4341,6 +4363,8 @@ class LibraryStore extends ChangeNotifier {
     required String name,
     String query = '',
     String sourceId = '',
+    String artist = '',
+    String album = '',
     String genre = '',
     int minimumDurationSeconds = 0,
     int maximumDurationSeconds = 0,
@@ -4357,6 +4381,8 @@ class LibraryStore extends ChangeNotifier {
       name: normalizedName,
       query: query.trim(),
       sourceId: sourceId.trim(),
+      artist: artist.trim(),
+      album: album.trim(),
       genre: genre.trim(),
       minimumDurationSeconds: _sanitizeMinimumPlayCount(minimumDurationSeconds),
       maximumDurationSeconds: _sanitizeMinimumPlayCount(maximumDurationSeconds),
@@ -4381,6 +4407,8 @@ class LibraryStore extends ChangeNotifier {
     required String name,
     required String query,
     String? sourceId,
+    String? artist,
+    String? album,
     String? genre,
     int? minimumDurationSeconds,
     int? maximumDurationSeconds,
@@ -4398,6 +4426,8 @@ class LibraryStore extends ChangeNotifier {
       name: _normalizeCustomSmartPlaylistName(name),
       query: query.trim(),
       sourceId: sourceId?.trim(),
+      artist: artist?.trim(),
+      album: album?.trim(),
       genre: genre?.trim(),
       minimumDurationSeconds: minimumDurationSeconds == null
           ? null
@@ -6192,6 +6222,8 @@ class LibraryStore extends ChangeNotifier {
         id: id,
         name: name,
         query: rule.query.trim(),
+        artist: rule.artist.trim(),
+        album: rule.album.trim(),
         minimumPlayCount: _sanitizeMinimumPlayCount(rule.minimumPlayCount),
         limit: _sanitizeCustomSmartPlaylistLimit(rule.limit),
       );

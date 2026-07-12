@@ -3351,6 +3351,12 @@ String _customSmartPlaylistSubtitle(
   if (rule.sourceId.trim().isNotEmpty) {
     parts.add('Source: ${rule.sourceId}');
   }
+  if (rule.artist.trim().isNotEmpty) {
+    parts.add('Artist: ${rule.artist}');
+  }
+  if (rule.album.trim().isNotEmpty) {
+    parts.add('Album: ${rule.album}');
+  }
   if (rule.genre.trim().isNotEmpty) {
     parts.add('Genre: ${rule.genre}');
   }
@@ -3377,6 +3383,8 @@ class _CustomSmartPlaylistDraft {
     required this.name,
     required this.query,
     required this.sourceId,
+    required this.artist,
+    required this.album,
     required this.genre,
     required this.minimumDurationSeconds,
     required this.maximumDurationSeconds,
@@ -3389,6 +3397,8 @@ class _CustomSmartPlaylistDraft {
   final String name;
   final String query;
   final String sourceId;
+  final String artist;
+  final String album;
   final String genre;
   final int minimumDurationSeconds;
   final int maximumDurationSeconds;
@@ -3806,6 +3816,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       name: draft.name,
       query: draft.query,
       sourceId: draft.sourceId,
+      artist: draft.artist,
+      album: draft.album,
       genre: draft.genre,
       minimumDurationSeconds: draft.minimumDurationSeconds,
       maximumDurationSeconds: draft.maximumDurationSeconds,
@@ -3842,6 +3854,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       name: draft.name,
       query: draft.query,
       sourceId: draft.sourceId,
+      artist: draft.artist,
+      album: draft.album,
       genre: draft.genre,
       minimumDurationSeconds: draft.minimumDurationSeconds,
       maximumDurationSeconds: draft.maximumDurationSeconds,
@@ -4392,6 +4406,12 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     final sourceIdController = TextEditingController(
       text: initialRule?.sourceId ?? '',
     );
+    final artistController = TextEditingController(
+      text: initialRule?.artist ?? '',
+    );
+    final albumController = TextEditingController(
+      text: initialRule?.album ?? '',
+    );
     final genreController = TextEditingController(
       text: initialRule?.genre ?? '',
     );
@@ -4427,6 +4447,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   name: name,
                   query: queryController.text.trim(),
                   sourceId: sourceIdController.text.trim(),
+                  artist: artistController.text.trim(),
+                  album: albumController.text.trim(),
                   genre: genreController.text.trim(),
                   minimumDurationSeconds:
                       int.tryParse(minimumDurationController.text.trim()) ?? 0,
@@ -4468,6 +4490,20 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           controller: sourceIdController,
                           decoration: const InputDecoration(
                             labelText: 'Exact source ID',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: artistController,
+                          decoration: const InputDecoration(
+                            labelText: 'Exact artist',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        TextField(
+                          controller: albumController,
+                          decoration: const InputDecoration(
+                            labelText: 'Exact album',
                           ),
                           textInputAction: TextInputAction.next,
                         ),
@@ -4566,6 +4602,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       nameController.dispose();
       queryController.dispose();
       sourceIdController.dispose();
+      artistController.dispose();
+      albumController.dispose();
       genreController.dispose();
       minimumDurationController.dispose();
       maximumDurationController.dispose();

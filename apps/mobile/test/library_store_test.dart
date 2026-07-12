@@ -89,17 +89,37 @@ void main() {
     );
   });
 
-  test('filters custom smart playlists by exact source and genre', () async {
+  test('filters custom smart playlists by exact source artist album and genre', () async {
     final store = LibraryStore();
     await store.load();
     await store.addTracks(<Track>[
-      _track('local-rock', genre: 'Rock', sourceId: 'local'),
-      _track('archive-rock', genre: 'Rock', sourceId: 'archive'),
-      _track('archive-jazz', genre: 'Jazz', sourceId: 'archive'),
+      _track(
+        'local-rock',
+        artist: 'Mira',
+        album: 'Vault',
+        genre: 'Rock',
+        sourceId: 'local',
+      ),
+      _track(
+        'archive-rock',
+        artist: 'Mira',
+        album: 'Vault',
+        genre: 'Rock',
+        sourceId: 'archive',
+      ),
+      _track(
+        'archive-jazz',
+        artist: 'Mira',
+        album: 'Vault',
+        genre: 'Jazz',
+        sourceId: 'archive',
+      ),
     ]);
     final rule = await store.createCustomSmartPlaylist(
       name: 'Archive rock',
       sourceId: 'ARCHIVE',
+      artist: 'mira',
+      album: 'vault',
       genre: 'rock',
     );
 
@@ -3205,6 +3225,8 @@ void main() {
     final rule = await store.createCustomSmartPlaylist(
       name: '  Ambient Ari  ',
       query: 'ambient',
+      artist: 'Ari',
+      album: 'Album',
       favoritesOnly: true,
       minimumPlayCount: 1,
       sortMode: CustomSmartPlaylistSortMode.mostPlayed,
@@ -3213,6 +3235,8 @@ void main() {
 
     expect(rule.name, 'Ambient Ari');
     expect(rule.query, 'ambient');
+    expect(rule.artist, 'Ari');
+    expect(rule.album, 'Album');
     expect(
       store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
       <String>['ari-old', 'ari-new'],
@@ -3222,6 +3246,8 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.customSmartPlaylists.single.id, rule.id);
+    expect(secondStore.customSmartPlaylists.single.artist, 'Ari');
+    expect(secondStore.customSmartPlaylists.single.album, 'Album');
     expect(
       secondStore.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
       <String>['ari-old', 'ari-new'],
@@ -3231,6 +3257,8 @@ void main() {
       rule.id,
       name: 'Ari Library',
       query: 'ari',
+      artist: 'Ari',
+      album: 'Album',
       favoritesOnly: false,
       minimumPlayCount: 0,
       sortMode: CustomSmartPlaylistSortMode.title,
