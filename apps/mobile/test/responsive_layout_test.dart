@@ -12,4 +12,10 @@ void main() {
     expect(usesDesktopNavigationRail(desktopNavigationRailBreakpoint), isTrue);
     expect(usesDesktopNavigationRail(1440), isTrue);
   });
+
+  test('uses the queue pane only on wide desktop workspaces', () {
+    expect(usesDesktopQueuePane(1199), isFalse);
+    expect(usesDesktopQueuePane(desktopQueuePaneBreakpoint), isTrue);
+    expect(usesDesktopQueuePane(1600), isTrue);
+  });
 }

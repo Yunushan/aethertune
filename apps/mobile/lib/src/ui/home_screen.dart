@@ -54,6 +54,7 @@ import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/library_sync_panel.dart';
+import 'widgets/desktop_queue_pane.dart';
 import 'widgets/lyrics_share_card.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
@@ -253,6 +254,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final useNavigationRail = usesDesktopNavigationRail(
       MediaQuery.of(context).size.width,
     );
+    final useDesktopQueuePane = usesDesktopQueuePane(
+      MediaQuery.of(context).size.width,
+    );
     final tabContent = Column(
       children: <Widget>[
         Expanded(
@@ -367,6 +371,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const VerticalDivider(width: 1),
                   Expanded(child: tabContent),
+                  if (useDesktopQueuePane) ...<Widget>[
+                    const VerticalDivider(width: 1),
+                    SizedBox(
+                      width: 320,
+                      child: DesktopQueuePane(
+                        onOpenNowPlaying: () => _openNowPlaying(context),
+                        onOpenQueue: () => _showQueue(context),
+                      ),
+                    ),
+                  ],
                 ],
               )
             : tabContent,

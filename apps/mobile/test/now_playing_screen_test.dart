@@ -11,6 +11,7 @@ import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/now_playing_screen.dart';
+import 'package:aethertune/src/ui/widgets/desktop_queue_pane.dart';
 import 'package:aethertune/src/ui/widgets/player_bar.dart';
 
 void main() {
@@ -143,6 +144,55 @@ void main() {
 
     await tester.tap(find.byKey(const Key('open-now-playing')));
     expect(nowPlayingOpens, 1);
+  });
+
+  testWidgets('desktop queue pane selects removes and opens queue actions', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(tester.view.reset);
+
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    final first = _track('first', title: 'First Song', durationSeconds: 240);
+    final second = _track('second', title: 'Second Song', durationSeconds: 180);
+    await player.playTrack(first, queue: <Track>[first, second]);
+    var nowPlayingOpens = 0;
+    var queueOpens = 0;
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlayerController>.value(
+        value: player,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              child: DesktopQueuePane(
+                onOpenNowPlaying: () => nowPlayingOpens += 1,
+                onOpenQueue: () => queueOpens += 1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Queue'), findsOneWidget);
+    expect(find.text('2 tracks'), findsOneWidget);
+    await tester.tap(find.byTooltip('Open queue editor'));
+    await tester.tap(find.text('Second Song').last);
+    await tester.pump();
+
+    expect(player.current?.id, 'second');
+    expect(queueOpens, 1);
+    await tester.tap(find.byTooltip('Remove from queue').first);
+    await tester.pump();
+
+    expect(player.queue.map((track) => track.id), <String>['second']);
+    await tester.tap(find.text('Second Song').first);
+    expect(nowPlayingOpens, 1);
+    expect(tester.takeException(), isNull);
   });
 }
 
