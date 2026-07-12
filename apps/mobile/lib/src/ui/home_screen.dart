@@ -18,6 +18,7 @@ import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
+import '../data/mp3_id3v1_tag_writer.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
@@ -1176,6 +1177,30 @@ Future<void> _showTrackMetadataEditor(
 
   if (!context.mounted) {
     return;
+  }
+
+  if (updated != null && _canWriteMp3Id3v1(updated)) {
+    final writeFile = await _confirmMp3TagWrite(context, updated);
+    if (!context.mounted) {
+      return;
+    }
+    if (writeFile == true) {
+      try {
+        await const Mp3Id3v1TagWriter().write(
+          path: updated.localPath!,
+          title: updated.title,
+          artist: updated.artist,
+          album: updated.album,
+        );
+      } on Object catch (error) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Saved app metadata, but could not update MP3 tags: $error')),
+          );
+        }
+        return;
+      }
+    }
   }
 
   messenger.showSnackBar(
@@ -3068,6 +3093,33 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
+}
+
+bool _canWriteMp3Id3v1(Track track) {
+  return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.mp3');
+}
+
+Future<bool?> _confirmMp3TagWrite(BuildContext context, Track track) {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Update MP3 file tags?'),
+      content: const Text(
+        'This writes title, artist, and album to the local MP3 ID3v1 tag. Genre stays app-only, and long or non-Latin characters may be shortened.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Keep app-only'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Update MP3'),
+        ),
+      ],
+    ),
+  );
 }
 
 String _playlistDocumentFormatFileExtension(PlaylistDocumentFormat format) {

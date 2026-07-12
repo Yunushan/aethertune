@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/offline_cache_queue_worker.dart';
-import 'package:aethertune/src/domain/track.dart';
 
 void main() {
   setUp(() {
