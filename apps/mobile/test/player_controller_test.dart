@@ -12,6 +12,26 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
+  test('persists supported playback speed and rejects unsupported values',
+      () async {
+    final firstEngine = _FakePlaybackAudioEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+    await firstController.setPlaybackSpeed(1.5);
+    expect(firstEngine.speedValue, 1.5);
+    await firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.playbackSpeed, 1.5);
+    await expectLater(
+      restoredController.setPlaybackSpeed(1.1),
+      throwsArgumentError,
+    );
+  });
+
   test('loads one native queue and follows gapless index transitions',
       () async {
     final engine = _FakePlaybackAudioEngine();
@@ -411,6 +431,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   bool shuffleValue = false;
   LoopMode loopModeValue = LoopMode.off;
   double volumeValue = 1;
+  double speedValue = 1;
   int currentIndex = 0;
   int setQueueCalls = 0;
   int seekToNextCalls = 0;
@@ -449,7 +470,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration get bufferedPosition => positionValue;
 
   @override
-  double get speed => 1;
+  double get speed => speedValue;
 
   @override
   double get volume => volumeValue;
@@ -535,6 +556,11 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> setLoopMode(LoopMode mode) async {
     loopModeValue = mode;
+  }
+
+  @override
+  Future<void> setSpeed(double speed) async {
+    speedValue = speed;
   }
 
   @override

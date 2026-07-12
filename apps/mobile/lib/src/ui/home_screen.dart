@@ -8519,6 +8519,29 @@ class _SettingsTab extends StatelessWidget {
           ),
         ),
         ListTile(
+          title: const Text('Playback speed'),
+          subtitle: const Text('Applies to the current and future playback.'),
+          trailing: DropdownButton<double>(
+            value: player.playbackSpeed,
+            items: <DropdownMenuItem<double>>[
+              for (final speed in PlayerController.supportedPlaybackSpeeds)
+                DropdownMenuItem<double>(
+                  value: speed,
+                  child: Text(
+                    speed == speed.roundToDouble()
+                        ? '${speed.toStringAsFixed(0)}x'
+                        : '${speed}x',
+                  ),
+                ),
+            ],
+            onChanged: (speed) {
+              if (speed != null) {
+                unawaited(player.setPlaybackSpeed(speed));
+              }
+            },
+          ),
+        ),
+        ListTile(
           leading: const Icon(Icons.palette_outlined),
           title: const Text('Theme'),
           subtitle: Text(library.themePreference.label),

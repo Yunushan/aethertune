@@ -14,6 +14,17 @@ import 'playback_audio_engine.dart';
 typedef TrackPlaybackResolver = Future<Track> Function(Track track);
 
 class PlayerController extends ChangeNotifier {
+  static const supportedPlaybackSpeeds = <double>[
+    0.5,
+    0.75,
+    1,
+    1.25,
+    1.5,
+    2,
+    2.5,
+    3,
+  ];
+
   PlayerController({
     PlaybackAudioEngine? audioEngine,
     TrackPlaybackResolver? trackResolver,
@@ -68,6 +79,7 @@ class PlayerController extends ChangeNotifier {
   bool get isPlaying => _audio.playing;
   bool get shuffleEnabled => _audio.shuffleModeEnabled;
   LoopMode get loopMode => _audio.loopMode;
+  double get playbackSpeed => _audio.speed;
   Duration get duration => _duration;
   Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
@@ -147,6 +159,9 @@ class PlayerController extends ChangeNotifier {
         );
         await _audio.setLoopMode(
           _loopModeFromJson(settings['loopMode'] as String?),
+        );
+        await _audio.setSpeed(
+          _playbackSpeedFromJson(settings['playbackSpeed']),
         );
       } catch (_) {
         await prefs.remove(_playbackSettingsKey);
@@ -428,6 +443,19 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setLoopMode(LoopMode mode) async {
     await _audio.setLoopMode(mode);
+    await _savePlaybackSettings();
+    notifyListeners();
+  }
+
+  Future<void> setPlaybackSpeed(double speed) async {
+    if (!supportedPlaybackSpeeds.contains(speed)) {
+      throw ArgumentError.value(
+        speed,
+        'speed',
+        'Playback speed must be one of the supported values.',
+      );
+    }
+    await _audio.setSpeed(speed);
     await _savePlaybackSettings();
     notifyListeners();
   }
@@ -730,6 +758,7 @@ class PlayerController extends ChangeNotifier {
         <String, Object?>{
           'shuffleEnabled': _audio.shuffleModeEnabled,
           'loopMode': _loopModeToJson(_audio.loopMode),
+          'playbackSpeed': _audio.speed,
         },
       ),
     );
@@ -756,6 +785,16 @@ class PlayerController extends ChangeNotifier {
       case LoopMode.off:
         return 'off';
     }
+  }
+
+  double _playbackSpeedFromJson(Object? value) {
+    if (value is num) {
+      final speed = value.toDouble();
+      if (supportedPlaybackSpeeds.contains(speed)) {
+        return speed;
+      }
+    }
+    return 1;
   }
 
   bool _sameQueueOrder(List<Track> left, List<Track> right) {

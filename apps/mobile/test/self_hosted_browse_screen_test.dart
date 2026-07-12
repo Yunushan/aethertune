@@ -717,8 +717,10 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Duration get bufferedPosition => Duration.zero;
 
+  double speedValue = 1;
+
   @override
-  double get speed => 1;
+  double get speed => speedValue;
 
   @override
   double get volume => 1;
@@ -766,6 +768,9 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   Future<void> setLoopMode(LoopMode mode) async => loopModeValue = mode;
+
+  @override
+  Future<void> setSpeed(double speed) async => speedValue = speed;
 
   @override
   Future<void> setVolume(double volume) async {}

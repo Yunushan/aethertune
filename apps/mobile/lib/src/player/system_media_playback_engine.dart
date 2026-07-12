@@ -182,6 +182,12 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   @override
+  Future<void> setSpeed(double speed) async {
+    await _engine.setSpeed(speed);
+    _publishState();
+  }
+
+  @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) =>
       setLoopMode(_loopModeForRepeatMode(repeatMode));
 

@@ -33,6 +33,7 @@ abstract interface class PlaybackAudioEngine {
   Future<void> seekToPrevious();
   Future<void> setShuffleModeEnabled(bool enabled);
   Future<void> setLoopMode(LoopMode mode);
+  Future<void> setSpeed(double speed);
   Future<void> setVolume(double volume);
   Future<void> dispose();
 }
@@ -145,6 +146,9 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
 
   @override
   Future<void> setLoopMode(LoopMode mode) => _player.setLoopMode(mode);
+
+  @override
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
 
   @override
   Future<void> setVolume(double volume) => _player.setVolume(volume);

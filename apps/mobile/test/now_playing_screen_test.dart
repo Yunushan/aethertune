@@ -58,6 +58,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('now-playing-shuffle')));
     await tester.tap(find.byKey(const Key('now-playing-repeat')));
+    await tester.tap(find.byKey(const Key('now-playing-speed')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('1.5x'));
     await tester.tap(find.byTooltip('Add to favorites'));
     await tester.tap(find.widgetWithText(TextButton, 'Lyrics'));
     await tester.tap(find.widgetWithText(TextButton, 'Queue'));
@@ -65,6 +68,7 @@ void main() {
 
     expect(engine.shuffleValue, isTrue);
     expect(engine.loopModeValue, LoopMode.all);
+    expect(engine.speedValue, 1.5);
     expect(library.tracks.first.isFavorite, isTrue);
     expect(queueOpens, 1);
     expect(lyricsOpens, 1);
@@ -161,6 +165,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   LoopMode loopModeValue = LoopMode.off;
   int currentIndex = 0;
   int seekToNextCalls = 0;
+  double speedValue = 1;
 
   @override
   Stream<Object?> get stateChanges => _stateController.stream;
@@ -194,7 +199,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration get bufferedPosition => positionValue;
 
   @override
-  double get speed => 1;
+  double get speed => speedValue;
 
   @override
   double get volume => 1;
@@ -274,6 +279,11 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> setLoopMode(LoopMode mode) async {
     loopModeValue = mode;
+  }
+
+  @override
+  Future<void> setSpeed(double speed) async {
+    speedValue = speed;
   }
 
   @override

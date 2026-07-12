@@ -46,6 +46,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             onPressed: player.queue.isEmpty ? null : widget.onOpenQueue,
             icon: const Icon(Icons.queue_music),
           ),
+          _PlaybackSpeedMenu(player: player),
         ],
       ),
       body: current == null
@@ -366,6 +367,30 @@ class _NowPlayingControls extends StatelessWidget {
   }
 }
 
+class _PlaybackSpeedMenu extends StatelessWidget {
+  const _PlaybackSpeedMenu({required this.player});
+
+  final PlayerController player;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<double>(
+      key: const Key('now-playing-speed'),
+      tooltip: 'Playback speed: ${_formatPlaybackSpeed(player.playbackSpeed)}',
+      icon: const Icon(Icons.speed),
+      onSelected: player.setPlaybackSpeed,
+      itemBuilder: (context) => <PopupMenuEntry<double>>[
+        for (final speed in PlayerController.supportedPlaybackSpeeds)
+          CheckedPopupMenuItem<double>(
+            value: speed,
+            checked: speed == player.playbackSpeed,
+            child: Text(_formatPlaybackSpeed(speed)),
+          ),
+      ],
+    );
+  }
+}
+
 class _PlaybackProgress extends StatelessWidget {
   const _PlaybackProgress({required this.player, required this.fallbackDuration});
 
@@ -462,6 +487,13 @@ String _repeatTooltip(LoopMode mode) {
     case LoopMode.one:
       return 'Disable repeat';
   }
+}
+
+String _formatPlaybackSpeed(double speed) {
+  final value = speed == speed.roundToDouble()
+      ? speed.toStringAsFixed(0)
+      : speed.toString();
+  return '${value}x';
 }
 
 Future<void> _runPlaybackAction(

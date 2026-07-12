@@ -90,6 +90,10 @@ void main() {
     expect(state.controls, contains(MediaControl.pause));
     expect(state.controls, contains(MediaControl.skipToNext));
     expect(state.systemActions, contains(MediaAction.seek));
+
+    await engine.setSpeed(1.5);
+    expect(delegate.speedValue, 1.5);
+    expect(engine.playbackState.value.speed, 1.5);
   });
 
   test('routes system transport, repeat, and shuffle commands', () async {
@@ -159,6 +163,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration positionValue = Duration.zero;
   Duration bufferedPositionValue = Duration.zero;
   double volumeValue = 1;
+  double speedValue = 1;
 
   @override
   Stream<Object?> get stateChanges => _stateController.stream;
@@ -192,7 +197,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration get bufferedPosition => bufferedPositionValue;
 
   @override
-  double get speed => 1;
+  double get speed => speedValue;
 
   @override
   double get volume => volumeValue;
@@ -262,6 +267,11 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> setLoopMode(LoopMode mode) async {
     loopModeValue = mode;
+  }
+
+  @override
+  Future<void> setSpeed(double speed) async {
+    speedValue = speed;
   }
 
   @override

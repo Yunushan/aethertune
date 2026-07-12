@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added persisted 0.5x-3x playback-speed controls in Now Playing and Options, with system-media state propagation and player/widget contract coverage.
+- Documented the implemented optional self-hosted cross-device library snapshot sync, including secure-token configuration, checksum verification, explicit conflict resolution, and its intentionally excluded device-local state.
 - Added atomic test-before-replace credential rotation for Jellyfin and Navidrome/Subsonic with confirmation UI, secure-vault rollback, old/new secret redaction, metadata-editor isolation, private artwork invalidation, and position-preserving active queue re-resolution that stops unresolved tracks.
 - Added capability-gated remote playlist creation, rename, deletion, track append, removal, and reordering for Jellyfin and Navidrome/Subsonic using documented APIs, credential-redacted failures, offline gating, refreshed catalog state, exact request fixtures, and phone widget flows.
 - Added a bounded private local-file bridge that publishes validated Jellyfin/Navidrome/Subsonic artwork to Android notifications and Apple lock-screen/Control Center metadata without persisting authenticated URLs or runtime file URIs; includes atomic writes, format-aware hashed paths, stale-part cleanup, account-scoped deletion, and system-media/serialization/cache tests.
