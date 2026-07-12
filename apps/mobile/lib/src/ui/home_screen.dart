@@ -7263,6 +7263,15 @@ class _SourcesTabState extends State<_SourcesTab> {
               icon: const Icon(Icons.file_download_outlined),
               label: const Text('Export OPML'),
             ),
+            OutlinedButton.icon(
+              onPressed: _podcastLoading ||
+                      offlineModeEnabled ||
+                      podcastSubscriptions.isEmpty
+                  ? null
+                  : () => _refreshAllPodcastFeeds(context),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh all'),
+            ),
           ],
         ),
         if (_podcastLoading) ...<Widget>[
@@ -8331,6 +8340,75 @@ class _SourcesTabState extends State<_SourcesTab> {
         _podcastError = error.toString();
       });
     }
+  }
+
+  Future<void> _refreshAllPodcastFeeds(BuildContext context) async {
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      return;
+    }
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final subscriptions = library.podcastSubscriptions;
+    if (subscriptions.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _podcastLoading = true;
+      _podcastError = null;
+    });
+
+    var refreshed = 0;
+    var failed = 0;
+    for (final subscription in subscriptions) {
+      final feedUri = Uri.tryParse(subscription.feedUrl);
+      if (feedUri == null) {
+        failed += 1;
+        await library.markPodcastSubscriptionFetchFailed(
+          subscription.id,
+          'Saved feed URL is invalid.',
+        );
+        continue;
+      }
+      try {
+        final provider = PodcastRssProvider(feedUri: feedUri);
+        final feed = await provider.fetchFeed();
+        final saved = await library.savePodcastSubscription(
+          PodcastSubscription(
+            id: stablePodcastSubscriptionId(feed.feedUri.toString()),
+            feedUrl: feed.feedUri.toString(),
+            title: feed.title,
+            description: feed.description,
+            author: feed.author,
+            artworkUri: feed.artworkUri,
+          ),
+        );
+        await library.markPodcastSubscriptionFetched(saved.id);
+        refreshed += 1;
+      } catch (error) {
+        failed += 1;
+        await library.markPodcastSubscriptionFetchFailed(subscription.id, error);
+      }
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+    setState(() {
+      _podcastLoading = false;
+      _podcastError = failed == 0
+          ? null
+          : '$failed podcast feed(s) could not be refreshed.';
+    });
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          failed == 0
+              ? 'Refreshed $refreshed podcast feed(s).'
+              : 'Refreshed $refreshed feed(s); $failed failed.',
+        ),
+      ),
+    );
   }
 
   String _podcastSubscriptionSubtitle(PodcastSubscription subscription) {
