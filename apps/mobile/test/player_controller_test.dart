@@ -32,6 +32,27 @@ void main() {
     );
   });
 
+  test('persists volume and rejects values outside the supported range',
+      () async {
+    final firstEngine = _FakePlaybackAudioEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+    await firstController.setVolume(0.35);
+
+    expect(firstController.volume, 0.35);
+    expect(firstEngine.volumeValue, 0.35);
+    firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.volume, 0.35);
+    expect(restoredEngine.volumeValue, 0.35);
+    await expectLater(restoredController.setVolume(-0.1), throwsArgumentError);
+    await expectLater(restoredController.setVolume(1.1), throwsArgumentError);
+  });
+
   test('loads one native queue and follows gapless index transitions',
       () async {
     final engine = _FakePlaybackAudioEngine();

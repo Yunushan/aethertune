@@ -14,6 +14,8 @@ import 'playback_audio_engine.dart';
 typedef TrackPlaybackResolver = Future<Track> Function(Track track);
 
 class PlayerController extends ChangeNotifier {
+  static const minVolume = 0.0;
+  static const maxVolume = 1.0;
   static const supportedPlaybackSpeeds = <double>[
     0.5,
     0.75,
@@ -72,6 +74,7 @@ class PlayerController extends ChangeNotifier {
   bool _isLoadingQueue = false;
   int _playbackStartSerial = 0;
   double? _sleepFadeStartVolume;
+  double _volume = maxVolume;
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
@@ -80,6 +83,7 @@ class PlayerController extends ChangeNotifier {
   bool get shuffleEnabled => _audio.shuffleModeEnabled;
   LoopMode get loopMode => _audio.loopMode;
   double get playbackSpeed => _audio.speed;
+  double get volume => _volume;
   Duration get duration => _duration;
   Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
@@ -87,6 +91,7 @@ class PlayerController extends ChangeNotifier {
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
   bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
   Duration get sleepTimerFadeDuration => _sleepTimerFadeDuration;
+  bool get isSleepFadeActive => _sleepFadeStepTimer != null;
   bool get offlineModeEnabled => _offlineModeEnabled;
 
   void setTrackResolver(TrackPlaybackResolver? resolver) {
@@ -163,6 +168,8 @@ class PlayerController extends ChangeNotifier {
         await _audio.setSpeed(
           _playbackSpeedFromJson(settings['playbackSpeed']),
         );
+        _volume = _volumeFromJson(settings['volume']);
+        await _audio.setVolume(_volume);
       } catch (_) {
         await prefs.remove(_playbackSettingsKey);
       }
@@ -460,6 +467,23 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> previewVolume(double volume) async {
+    _validateVolume(volume);
+    _volume = volume;
+    await _audio.setVolume(volume);
+    notifyListeners();
+  }
+
+  Future<void> setVolume(double volume) async {
+    await previewVolume(volume);
+    await _savePlaybackSettings();
+  }
+
+  static String formatVolume(double volume) {
+    final percent = (volume.clamp(minVolume, maxVolume) * 100).round();
+    return '$percent%';
+  }
+
   void startSleepTimer(
     Duration duration, {
     bool fadeOut = false,
@@ -545,7 +569,7 @@ class PlayerController extends ChangeNotifier {
     }
 
     var step = 0;
-    _sleepFadeStartVolume = _audio.volume;
+    _sleepFadeStartVolume = _volume;
     _sleepFadeStepTimer = Timer.periodic(stepInterval, (timer) {
       step += 1;
       unawaited(
@@ -759,6 +783,7 @@ class PlayerController extends ChangeNotifier {
           'shuffleEnabled': _audio.shuffleModeEnabled,
           'loopMode': _loopModeToJson(_audio.loopMode),
           'playbackSpeed': _audio.speed,
+          'volume': _volume,
         },
       ),
     );
@@ -795,6 +820,26 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return 1;
+  }
+
+  double _volumeFromJson(Object? value) {
+    if (value is num) {
+      final volume = value.toDouble();
+      if (volume >= minVolume && volume <= maxVolume) {
+        return volume;
+      }
+    }
+    return maxVolume;
+  }
+
+  void _validateVolume(double volume) {
+    if (!volume.isFinite || volume < minVolume || volume > maxVolume) {
+      throw ArgumentError.value(
+        volume,
+        'volume',
+        'Volume must be between 0 and 1.',
+      );
+    }
   }
 
   bool _sameQueueOrder(List<Track> left, List<Track> right) {

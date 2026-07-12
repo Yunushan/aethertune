@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
@@ -294,6 +296,8 @@ class _NowPlayingControls extends StatelessWidget {
             ),
           const SizedBox(height: 18),
           _PlaybackProgress(player: player, fallbackDuration: track.duration),
+          const SizedBox(height: 4),
+          _PlaybackVolumeControl(player: player),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -386,6 +390,49 @@ class _PlaybackSpeedMenu extends StatelessWidget {
             checked: speed == player.playbackSpeed,
             child: Text(_formatPlaybackSpeed(speed)),
           ),
+      ],
+    );
+  }
+}
+
+class _PlaybackVolumeControl extends StatelessWidget {
+  const _PlaybackVolumeControl({required this.player});
+
+  final PlayerController player;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = player.isSleepFadeActive;
+    return Row(
+      children: <Widget>[
+        Icon(
+          player.volume == 0
+              ? Icons.volume_off_outlined
+              : Icons.volume_up_outlined,
+          semanticLabel: 'Playback volume',
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Slider(
+            key: const Key('now-playing-volume'),
+            value: player.volume,
+            semanticFormatterCallback: (value) =>
+                'Playback volume ${PlayerController.formatVolume(value)}',
+            onChanged: disabled
+                ? null
+                : (value) => unawaited(player.previewVolume(value)),
+            onChangeEnd: disabled
+                ? null
+                : (value) => unawaited(player.setVolume(value)),
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            PlayerController.formatVolume(player.volume),
+            textAlign: TextAlign.end,
+          ),
+        ),
       ],
     );
   }

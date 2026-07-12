@@ -54,7 +54,15 @@ void main() {
     expect(find.text('First Song'), findsOneWidget);
     expect(find.text('Track 1 of 2'), findsOneWidget);
     expect(find.byKey(const Key('now-playing-seek')), findsOneWidget);
+    expect(find.byKey(const Key('now-playing-volume')), findsOneWidget);
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
+
+    final volumeSlider = tester.widget<Slider>(
+      find.byKey(const Key('now-playing-volume')),
+    );
+    volumeSlider.onChanged!(0.4);
+    volumeSlider.onChangeEnd!(0.4);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('now-playing-shuffle')));
     await tester.tap(find.byKey(const Key('now-playing-repeat')));
@@ -72,6 +80,7 @@ void main() {
     expect(engine.shuffleValue, isTrue);
     expect(engine.loopModeValue, LoopMode.all);
     expect(engine.speedValue, 1.5);
+    expect(engine.volumeValue, 0.4);
     expect(library.tracks.first.isFavorite, isTrue);
     expect(queueOpens, 1);
     expect(lyricsOpens, 1);
@@ -169,6 +178,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   int currentIndex = 0;
   int seekToNextCalls = 0;
   double speedValue = 1;
+  double volumeValue = 1;
 
   @override
   Stream<Object?> get stateChanges => _stateController.stream;
@@ -205,7 +215,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   double get speed => speedValue;
 
   @override
-  double get volume => 1;
+  double get volume => volumeValue;
 
   @override
   bool get hasNext => currentIndex + 1 < queue.length;
@@ -290,7 +300,9 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   }
 
   @override
-  Future<void> setVolume(double volume) async {}
+  Future<void> setVolume(double volume) async {
+    volumeValue = volume;
+  }
 
   @override
   Future<void> dispose() async {

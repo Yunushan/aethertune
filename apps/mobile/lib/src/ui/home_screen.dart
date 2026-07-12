@@ -9100,6 +9100,26 @@ class _SettingsTab extends StatelessWidget {
             },
           ),
         ),
+        ListTile(
+          leading: Icon(
+            player.volume == 0
+                ? Icons.volume_off_outlined
+                : Icons.volume_up_outlined,
+          ),
+          title: const Text('Playback volume'),
+          subtitle: Slider(
+            value: player.volume,
+            semanticFormatterCallback: (value) =>
+                'Playback volume ${PlayerController.formatVolume(value)}',
+            onChanged: player.isSleepFadeActive
+                ? null
+                : (value) => unawaited(player.previewVolume(value)),
+            onChangeEnd: player.isSleepFadeActive
+                ? null
+                : (value) => unawaited(player.setVolume(value)),
+          ),
+          trailing: Text(PlayerController.formatVolume(player.volume)),
+        ),
         if (library.watchedLocalFolderPaths.isNotEmpty) ...<Widget>[
           const Divider(),
           Text(
