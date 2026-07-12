@@ -549,6 +549,8 @@ class LibraryStore extends ChangeNotifier {
   static const _pauseListeningHistoryKey =
       'aethertune.pause_listening_history.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
+  static const _automaticOfflineQueueKey =
+      'aethertune.automatic_offline_queue.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
@@ -586,6 +588,7 @@ class LibraryStore extends ChangeNotifier {
   final DateTime Function() _clock;
   bool _pauseListeningHistory = false;
   bool _offlineModeEnabled = false;
+  bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.indigo;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
@@ -616,6 +619,7 @@ class LibraryStore extends ChangeNotifier {
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get pauseListeningHistory => _pauseListeningHistory;
   bool get offlineModeEnabled => _offlineModeEnabled;
+  bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
@@ -784,6 +788,8 @@ class LibraryStore extends ChangeNotifier {
     _pauseListeningHistory =
         prefs.getBool(_pauseListeningHistoryKey) ?? false;
     _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
+    _automaticOfflineQueueEnabled =
+        prefs.getBool(_automaticOfflineQueueKey) ?? false;
     _themePreference = _appThemePreferenceFromName(
       prefs.getString(_themePreferenceKey),
     );
@@ -4279,6 +4285,15 @@ class LibraryStore extends ChangeNotifier {
     return json;
   }
 
+  Future<void> setAutomaticOfflineQueueEnabled(bool enabled) async {
+    if (_automaticOfflineQueueEnabled == enabled) {
+      return;
+    }
+    _automaticOfflineQueueEnabled = enabled;
+    await _save();
+    notifyListeners();
+  }
+
   Map<String, Object?> _portablePlaylistJson(Playlist playlist) {
     final json = playlist.toJson();
     json['artworkUri'] = _portableSyncUri(
@@ -5790,6 +5805,10 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_pauseListeningHistoryKey, _pauseListeningHistory);
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
+    await prefs.setBool(
+      _automaticOfflineQueueKey,
+      _automaticOfflineQueueEnabled,
+    );
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);
     await prefs.setInt(

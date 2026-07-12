@@ -9041,6 +9041,19 @@ class _SettingsTab extends StatelessWidget {
             unawaited(library.setOfflineModeEnabled(value));
           },
         ),
+        SwitchListTile(
+          secondary: const Icon(Icons.download_for_offline_outlined),
+          title: const Text('Automatic foreground downloads'),
+          subtitle: const Text(
+            'Process one approved queued item at a time while the app is open.',
+          ),
+          value: library.automaticOfflineQueueEnabled,
+          onChanged: library.offlineModeEnabled
+              ? null
+              : (value) {
+                  unawaited(library.setAutomaticOfflineQueueEnabled(value));
+                },
+        ),
         ListTile(
           leading: const Icon(Icons.download_for_offline_outlined),
           title: const Text('Offline queue'),

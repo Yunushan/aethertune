@@ -10,6 +10,7 @@ import '../player/player_controller.dart';
 import 'home_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
+import 'widgets/offline_cache_foreground_worker.dart';
 
 class AetherTuneApp extends StatelessWidget {
   const AetherTuneApp({super.key, this.audioEngine});
@@ -55,8 +56,9 @@ class AetherTuneApp extends StatelessWidget {
           },
         ),
       ],
-      child: LibrarySyncAutomaticUpload(
-        child: Consumer<LibraryStore>(
+      child: OfflineCacheForegroundWorker(
+        child: LibrarySyncAutomaticUpload(
+          child: Consumer<LibraryStore>(
           builder: (context, library, _) {
             return MaterialApp(
               title: 'AetherTune',
@@ -70,6 +72,7 @@ class AetherTuneApp extends StatelessWidget {
               home: const HomeScreen(),
             );
           },
+          ),
         ),
       ),
     );
