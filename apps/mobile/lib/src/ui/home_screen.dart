@@ -8553,7 +8553,7 @@ class _SettingsTab extends StatelessWidget {
           const SizedBox(height: 4),
           for (final rootPath in library.watchedLocalFolderPaths)
             ListTile(
-              leading: const Icon(Icons.folder_eye_outlined),
+              leading: const Icon(Icons.folder_open_outlined),
               title: Text(
                 p.basename(rootPath),
                 maxLines: 1,

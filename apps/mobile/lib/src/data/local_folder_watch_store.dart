@@ -24,7 +24,7 @@ class LocalFolderWatchStore extends ChangeNotifier {
     LocalFolderScan? scanner,
     LocalFolderWatchStreamFactory? watchStreamFactory,
     this.debounce = const Duration(milliseconds: 750),
-  })  : _scanner = scanner ?? LocalFolderScanner().scan,
+  })  : _scanner = scanner ?? const LocalFolderScanner().scan,
         _watchStreamFactory = watchStreamFactory ?? _watchDirectory;
 
   final LocalFolderScan _scanner;

@@ -18,7 +18,7 @@ void main() {
     final firstController = PlayerController(audioEngine: firstEngine);
     await firstController.setPlaybackSpeed(1.5);
     expect(firstEngine.speedValue, 1.5);
-    await firstController.dispose();
+    firstController.dispose();
 
     final restoredEngine = _FakePlaybackAudioEngine();
     final restoredController = PlayerController(audioEngine: restoredEngine);

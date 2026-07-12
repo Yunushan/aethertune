@@ -60,7 +60,10 @@ void main() {
     await tester.tap(find.byKey(const Key('now-playing-repeat')));
     await tester.tap(find.byKey(const Key('now-playing-speed')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('1.5x'));
+    final speedItem = find.widgetWithText(CheckedPopupMenuItem<double>, '1.5x');
+    await tester.ensureVisible(speedItem);
+    await tester.tap(speedItem);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add to favorites'));
     await tester.tap(find.widgetWithText(TextButton, 'Lyrics'));
     await tester.tap(find.widgetWithText(TextButton, 'Queue'));
