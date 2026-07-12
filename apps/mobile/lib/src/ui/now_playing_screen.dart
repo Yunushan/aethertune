@@ -347,7 +347,11 @@ class _NowPlayingControls extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 18),
-          _PlaybackProgress(player: player, fallbackDuration: track.duration),
+          _PlaybackProgress(
+            player: player,
+            fallbackDuration: track.duration,
+            chapters: chapters,
+          ),
           if (chapters.isNotEmpty) ...<Widget>[
             const SizedBox(height: 4),
             _ChapterMarkers(player: player, chapters: chapters),
@@ -632,10 +636,15 @@ TrackChapter? _activeChapter(
 }
 
 class _PlaybackProgress extends StatelessWidget {
-  const _PlaybackProgress({required this.player, required this.fallbackDuration});
+  const _PlaybackProgress({
+    required this.player,
+    required this.fallbackDuration,
+    required this.chapters,
+  });
 
   final PlayerController player;
   final Duration fallbackDuration;
+  final List<TrackChapter> chapters;
 
   @override
   Widget build(BuildContext context) {
@@ -666,6 +675,11 @@ class _PlaybackProgress extends StatelessWidget {
                       )
                   : null,
             ),
+            if (duration > Duration.zero && chapters.isNotEmpty)
+              _ChapterTimelineMarkers(
+                chapters: chapters,
+                duration: duration,
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Row(
@@ -681,6 +695,72 @@ class _PlaybackProgress extends StatelessWidget {
       },
     );
   }
+}
+
+class _ChapterTimelineMarkers extends StatelessWidget {
+  const _ChapterTimelineMarkers({
+    required this.chapters,
+    required this.duration,
+  });
+
+  final List<TrackChapter> chapters;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      height: 6,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final durationMilliseconds = duration.inMilliseconds;
+          if (durationMilliseconds <= 0) {
+            return const SizedBox.shrink();
+          }
+
+          return Stack(
+            children: <Widget>[
+              for (final chapter in chapters)
+                if (chapter.start < duration)
+                  Positioned(
+                    left: _chapterMarkerOffset(
+                      chapter.start,
+                      duration,
+                      constraints.maxWidth,
+                    ),
+                    child: Semantics(
+                      label: '${chapter.title} at '
+                          '${formatTrackChapterTimestamp(chapter.start)}',
+                      child: Container(
+                        key: Key(
+                          'now-playing-chapter-marker-'
+                          '${chapter.start.inMilliseconds}',
+                        ),
+                        width: 3,
+                        height: 6,
+                        color: color,
+                      ),
+                    ),
+                  ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+double _chapterMarkerOffset(
+  Duration start,
+  Duration duration,
+  double availableWidth,
+) {
+  if (duration <= Duration.zero || availableWidth <= 3) {
+    return 0;
+  }
+
+  final fraction = (start.inMilliseconds / duration.inMilliseconds).clamp(0, 1);
+  return (availableWidth * fraction).clamp(0, availableWidth - 3).toDouble();
 }
 
 Track? _findTrack(List<Track> tracks, String id) {

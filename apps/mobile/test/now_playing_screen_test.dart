@@ -69,6 +69,10 @@ void main() {
     expect(find.byKey(const Key('now-playing-skip-backward')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-skip-forward')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-chapters')), findsOneWidget);
+    expect(
+      find.byKey(const Key('now-playing-chapter-marker-60000')),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('now-playing-chapters')));
