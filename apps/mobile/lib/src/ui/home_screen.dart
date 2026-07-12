@@ -47,6 +47,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
+import 'internet_archive_item_screen.dart';
 import 'platform_text_share.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
@@ -7003,7 +7004,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   final _radioCodecController = TextEditingController();
   final _radioMinBitrateController = TextEditingController();
   final _radioMaxBitrateController = TextEditingController();
-  List<Track> _archiveTracks = <Track>[];
+  List<InternetArchiveItem> _archiveItems = <InternetArchiveItem>[];
   List<Track> _demoTracks = <Track>[];
   List<Track> _podcastEpisodeTracks = <Track>[];
   List<ProviderSearchResult> _providerSearchResults = <ProviderSearchResult>[];
@@ -7795,7 +7796,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             title: const Text('Archive search failed'),
             subtitle: Text(_archiveError!),
           ),
-        ] else if (_archiveTracks.isEmpty && !_archiveLoading) ...<Widget>[
+        ] else if (_archiveItems.isEmpty && !_archiveLoading) ...<Widget>[
           const SizedBox(height: 8),
           const ListTile(
             leading: Icon(Icons.archive_outlined),
@@ -7806,36 +7807,13 @@ class _SourcesTabState extends State<_SourcesTab> {
           ),
         ] else ...<Widget>[
           const SizedBox(height: 8),
-          for (final track in _archiveTracks)
+          for (final item in _archiveItems)
             ListTile(
               leading: const Icon(Icons.archive_outlined),
-              title: Text(track.title),
-              subtitle: Text('${track.artist} / ${track.genre}'),
-              onTap: () => _playArchiveTrack(context, track),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  IconButton(
-                    tooltip: 'Save archive track',
-                    onPressed: () => _saveArchiveTrack(context, track),
-                    icon: const Icon(Icons.library_add_outlined),
-                  ),
-                  _offlineQueueMenu(
-                    context: context,
-                    track: track,
-                    decisionFor: (action) =>
-                        _providerSearchCoordinator.offlineDecision(
-                      track,
-                      action,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Play archive track',
-                    onPressed: () => _playArchiveTrack(context, track),
-                    icon: const Icon(Icons.play_arrow),
-                  ),
-                ],
-              ),
+              title: Text(item.title),
+              subtitle: Text(_archiveItemSubtitle(item)),
+              onTap: () => _openArchiveItem(context, item),
+              trailing: const Icon(Icons.chevron_right),
             ),
         ],
         const SizedBox(height: 16),
@@ -8730,7 +8708,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   Future<void> _searchArchiveItems() async {
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
-        _archiveTracks = <Track>[];
+        _archiveItems = <InternetArchiveItem>[];
         _archiveFacets = <InternetArchiveFacet>[];
         _archiveLoading = false;
         _archiveError = 'Offline mode is on.';
@@ -8753,7 +8731,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
 
       setState(() {
-        _archiveTracks = page.tracks;
+        _archiveItems = page.items;
         _archiveFacets = page.facets;
         _archiveLoading = false;
       });
@@ -8763,7 +8741,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
 
       setState(() {
-        _archiveTracks = <Track>[];
+        _archiveItems = <InternetArchiveItem>[];
         _archiveFacets = <InternetArchiveFacet>[];
         _archiveLoading = false;
         _archiveError = error.toString();
@@ -8771,39 +8749,28 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
   }
 
-  Future<void> _playArchiveTrack(BuildContext context, Track track) async {
-    if (_offlineModeBlocksStream(context, track)) {
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    final player = context.read<PlayerController>();
-
-    try {
-      await player.playTrack(track, queue: _archiveTracks);
-    } catch (_) {
-      if (!context.mounted) {
-        return;
-      }
-
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not play ${track.title}.')),
-      );
-    }
+  String _archiveItemSubtitle(InternetArchiveItem item) {
+    final playableFileCount =
+        item.files.where((file) => file.isPlayableAudio).length;
+    final parts = <String>[
+      if (item.creator.isNotEmpty) item.creator,
+      if (item.year.isNotEmpty) item.year,
+      '$playableFileCount playable ${playableFileCount == 1 ? 'file' : 'files'}',
+    ];
+    return parts.join(' / ');
   }
 
-  Future<void> _saveArchiveTrack(BuildContext context, Track track) async {
-    final library = context.read<LibraryStore>();
-    final messenger = ScaffoldMessenger.of(context);
-
-    await library.addTracks(<Track>[track]);
-
-    if (!context.mounted) {
-      return;
-    }
-
-    messenger.showSnackBar(
-      SnackBar(content: Text('Saved ${track.title}.')),
+  Future<void> _openArchiveItem(
+    BuildContext context,
+    InternetArchiveItem item,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => InternetArchiveItemScreen(
+          item: item,
+          provider: _archiveProvider,
+        ),
+      ),
     );
   }
 

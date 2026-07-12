@@ -168,6 +168,10 @@ void main() {
       'Aether Public Session - aether-session-vbr',
       'Aether Public Session - aether-session',
     ]);
+    expect(page.items.map((item) => item.identifier), <String>[
+      'aether_session',
+      'no_audio_item',
+    ]);
     expect(page.facetsFor('collection').single.value, 'opensource_audio');
     expect(page.facetsFor('subject').single.count, 7);
   });

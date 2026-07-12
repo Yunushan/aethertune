@@ -31,10 +31,12 @@ final class InternetArchiveSearchFilters {
 
 final class InternetArchiveAudioSearchPage {
   const InternetArchiveAudioSearchPage({
+    required this.items,
     required this.tracks,
     required this.facets,
   });
 
+  final List<InternetArchiveItem> items;
   final List<Track> tracks;
   final List<InternetArchiveFacet> facets;
 
@@ -120,14 +122,17 @@ class InternetArchiveProvider implements MusicSourceProvider {
         _searchUri(query.trim(), filters, includeFacets: includeFacets),
       ),
     );
+    final items = <InternetArchiveItem>[];
     final tracks = <Track>[];
 
     for (final result in results.results.take(limit)) {
       final item = await fetchItem(result.identifier);
+      items.add(item);
       tracks.addAll(item.toTracks(sourceId: id, baseUri: baseUri));
     }
 
     return InternetArchiveAudioSearchPage(
+      items: items,
       tracks: tracks,
       facets: results.facets,
     );
