@@ -25,8 +25,11 @@ curl http://127.0.0.1:8080/health
 `AETHERTUNE_SYNC_USERS` must remain valid JSON, for example
 `{"phone":"token-one","desktop":"token-two"}`. The account ID is the
 server-side sync user; each client enters its corresponding bearer token in
-the app. Compose refuses to start when the variable is absent, and `.env` is
-ignored by the image build context.
+the app. For deployments with a managed secret store, a value can instead be
+`sha256:<64-hex-digest>`; the server hashes the client bearer token and compares
+it to that digest without keeping the raw value in memory. Invalid digest
+values stop startup with a configuration error. Compose refuses to start when
+the variable is absent, and `.env` is ignored by the image build context.
 
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the

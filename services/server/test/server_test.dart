@@ -349,16 +349,24 @@ void main() {
 
   test('authenticator parses JSON users and rejects malformed configuration',
       () {
+    final hashedToken = sha256.convert(utf8.encode('token-three')).toString();
     final authenticator = StaticSyncAuthenticator.fromJson(
-      '{"yunus":"token-one","desktop":"token-two"}',
+      '{"yunus":"token-one","desktop":"token-two","server":"sha256:$hashedToken"}',
     );
     expect(authenticator.isConfigured, isTrue);
     expect(authenticator.authenticate('token-one'), 'yunus');
     expect(authenticator.authenticate('token-two'), 'desktop');
+    expect(authenticator.authenticate('token-three'), 'server');
     expect(authenticator.authenticate('wrong-token'), isNull);
     expect(StaticSyncAuthenticator.fromJson(null).isConfigured, isFalse);
     expect(
       () => StaticSyncAuthenticator.fromJson('["invalid"]'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => StaticSyncAuthenticator.fromJson(
+        '{"yunus":"sha256:not-a-token-digest"}',
+      ),
       throwsA(isA<FormatException>()),
     );
   });

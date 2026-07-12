@@ -37,7 +37,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 |---|---:|---|---|
 | Android/iOS app shell | Done | Flutter app with Material 3 UI. | Store signing, background modes, platform polish. |
 | Linux/macOS/Windows desktop build | Done | CI builds debug desktop targets; wide layouts use a navigation rail, keyboard navigation, and a functional persisted-resizable queue split pane. | Tray/menu bar, installers, and update channel. |
-| Server package | Done | Dart HTTP service under `services/server` with static bearer-token auth, durable versioned sync snapshots, and a Docker/Compose deployment path with health checks. | Provider coordination, account/token lifecycle, and production TLS/reverse-proxy automation. |
+| Server package | Done | Dart HTTP service under `services/server` with static raw or SHA-256-digest bearer-token configuration, durable versioned sync snapshots, and a Docker/Compose deployment path with health checks. | Provider coordination, account lifecycle, and production TLS/reverse-proxy automation. |
 | Server health/info/catalog endpoints | Done | Covered by server tests and CI compile gate; Docker health checks call `/health`. | Real persisted catalog and provider-coordination APIs. |
 | MIT license | Done | Root `LICENSE`. | Third-party notice automation. |
 | No telemetry | Done | No analytics SDK or tracking dependency. | Privacy tests and network-call audit. |

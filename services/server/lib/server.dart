@@ -323,7 +323,7 @@ class StaticSyncAuthenticator implements SyncAuthenticator {
       : _userTokenHashes = <String, List<int>>{
           for (final entry in users.entries)
             if (entry.key.trim().isNotEmpty && entry.value.isNotEmpty)
-              entry.key.trim(): sha256.convert(utf8.encode(entry.value)).bytes,
+              entry.key.trim(): _configuredTokenHash(entry.value),
         };
 
   factory StaticSyncAuthenticator.fromJson(String? rawUsers) {
@@ -356,6 +356,24 @@ class StaticSyncAuthenticator implements SyncAuthenticator {
     }
     return null;
   }
+}
+
+List<int> _configuredTokenHash(String configuredToken) {
+  const prefix = 'sha256:';
+  if (!configuredToken.startsWith(prefix)) {
+    return sha256.convert(utf8.encode(configuredToken)).bytes;
+  }
+
+  final hex = configuredToken.substring(prefix.length);
+  if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hex)) {
+    throw const FormatException(
+      'AETHERTUNE_SYNC_USERS SHA-256 token digests must contain 64 hex characters.',
+    );
+  }
+  return <int>[
+    for (var index = 0; index < hex.length; index += 2)
+      int.parse(hex.substring(index, index + 2), radix: 16),
+  ];
 }
 
 bool _constantTimeEquals(List<int> left, List<int> right) {
