@@ -16,6 +16,23 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
+  test('persists onboarding completion without adding it to library data',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+
+    expect(store.onboardingCompleted, isFalse);
+
+    await store.setOnboardingCompleted(true);
+
+    final restored = LibraryStore();
+    await restored.load();
+
+    expect(restored.onboardingCompleted, isTrue);
+    expect(restored.tracks, isEmpty);
+    expect(restored.playlists, isEmpty);
+  });
+
   test('creates manual playlists with existing tracks only', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 1),

@@ -25,6 +25,10 @@ dart pub get
 dart run bin/server.dart
 ```
 
+## First-run setup
+
+On first launch, choose **Open Library** to begin importing local audio, **Open Sources** to set up supported legal catalogs and user-owned servers, or **Start at Home** to explore first. Setup never enables a network provider by itself and can be skipped. Use **Run setup again** in Options whenever you want to revisit these choices.
+
 ## Import local music
 
 1. Open the app.

@@ -250,7 +250,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Visualizer | Roadmap | Namida-style polish | Audio analysis and render surface. |
 | Accessibility pass | Roadmap | Required quality gate | Screen reader labels, focus order, contrast. |
 | Localization | Roadmap | Global music apps | ARB/i18n pipeline and translations. |
-| Onboarding | Roadmap | Consumer apps | First-run provider/local import flow. |
+| Onboarding | Scaffolded | Consumer apps | A persistent first-run screen offers a local-library, legal-sources, or privacy-first starting point, routes into the corresponding existing tab, can be skipped, and can be replayed from Options. Needed next: platform permission education, import progress, and guided self-hosted connection setup. |
 | Empty/error/loading states | Scaffolded | Required product quality | Standard state components and tests. |
 
 ### Privacy, Safety, And Legal Boundaries

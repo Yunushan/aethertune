@@ -125,7 +125,17 @@ List<NavigationRailDestination> _navigationRailDestinations() {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    this.initialTab = 0,
+    this.onRestartOnboarding,
+  }) : assert(
+         initialTab >= 0 &&
+             initialTab < _aetherTuneNavigationDestinations.length,
+       );
+
+  final int initialTab;
+  final VoidCallback? onRestartOnboarding;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -135,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   final _radioClickProvider = RadioBrowserProvider();
   final _lyricsProvider = LrcLibLyricsProvider();
-  int _tabIndex = 0;
+  late int _tabIndex;
   bool _favoritesOnly = false;
   bool _offlineLibraryOnly = false;
   String _query = '';
@@ -146,6 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _lastProgressTrackId;
   Duration _lastRecordedProgressPosition = Duration.zero;
   int _lastRecordedPlaybackSerial = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabIndex = widget.initialTab;
+  }
 
   @override
   void didChangeDependencies() {
@@ -295,7 +311,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const _HistoryTab(),
               const _SourcesTab(),
-              const _SettingsTab(),
+              _SettingsTab(
+                onRestartOnboarding: widget.onRestartOnboarding,
+              ),
             ],
           ),
         ),
@@ -9003,7 +9021,9 @@ class _AccentColorDropdownLabel extends StatelessWidget {
 }
 
 class _SettingsTab extends StatelessWidget {
-  const _SettingsTab();
+  const _SettingsTab({this.onRestartOnboarding});
+
+  final VoidCallback? onRestartOnboarding;
 
   @override
   Widget build(BuildContext context) {
@@ -9025,6 +9045,15 @@ class _SettingsTab extends StatelessWidget {
       children: <Widget>[
         Text('Options', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
+        if (onRestartOnboarding != null)
+          ListTile(
+            leading: const Icon(Icons.rocket_launch_outlined),
+            title: const Text('Run setup again'),
+            subtitle: const Text(
+              'Choose a local-library or legal-source starting point.',
+            ),
+            onTap: onRestartOnboarding,
+          ),
         SwitchListTile(
           title: const Text('Shuffle queue'),
           subtitle: const Text('Randomize playback order when supported by the queue.'),

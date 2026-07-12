@@ -11,14 +11,22 @@ import '../data/self_hosted_provider_store.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
 import 'widgets/offline_cache_foreground_worker.dart';
 
-class AetherTuneApp extends StatelessWidget {
+class AetherTuneApp extends StatefulWidget {
   const AetherTuneApp({super.key, this.audioEngine});
 
   final PlaybackAudioEngine? audioEngine;
+
+  @override
+  State<AetherTuneApp> createState() => _AetherTuneAppState();
+}
+
+class _AetherTuneAppState extends State<AetherTuneApp> {
+  int _onboardingDestination = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -45,12 +53,12 @@ class AetherTuneApp extends StatelessWidget {
             LibraryStore,
             SelfHostedProviderStore,
             PlayerController>(
-          create: (_) => PlayerController(audioEngine: audioEngine)
+          create: (_) => PlayerController(audioEngine: widget.audioEngine)
             ..loadPersistedQueue()
             ..loadPersistedPlaybackSettings(),
           update: (_, library, selfHosted, player) {
             final controller = player ??
-                (PlayerController(audioEngine: audioEngine)
+                (PlayerController(audioEngine: widget.audioEngine)
                   ..loadPersistedQueue()
                   ..loadPersistedPlaybackSettings());
             controller.setOfflineModeEnabled(library.offlineModeEnabled);
@@ -72,19 +80,41 @@ class AetherTuneApp extends StatelessWidget {
                 library.themePreference,
                 library.accentColor,
               ),
-              home: CallbackShortcuts(
-                bindings: <ShortcutActivator, VoidCallback>{
-                  const SingleActivator(LogicalKeyboardKey.mediaPlayPause):
-                      () => unawaited(player.togglePlayPause()),
-                  const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
-                      () => unawaited(player.next()),
-                  const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious):
-                      () => unawaited(player.previous()),
-                  const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-                      () => unawaited(player.togglePlayPause()),
-                },
-                child: const Focus(autofocus: true, child: HomeScreen()),
-              ),
+              home: !library.loaded
+                  ? const _AppLoadingScreen()
+                  : CallbackShortcuts(
+                      bindings: <ShortcutActivator, VoidCallback>{
+                        const SingleActivator(LogicalKeyboardKey.mediaPlayPause):
+                            () => unawaited(player.togglePlayPause()),
+                        const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
+                            () => unawaited(player.next()),
+                        const SingleActivator(
+                          LogicalKeyboardKey.mediaTrackPrevious,
+                        ): () => unawaited(player.previous()),
+                        const SingleActivator(
+                          LogicalKeyboardKey.keyK,
+                          control: true,
+                        ): () => unawaited(player.togglePlayPause()),
+                      },
+                      child: Focus(
+                        autofocus: true,
+                        child: library.onboardingCompleted
+                            ? HomeScreen(
+                                initialTab: _onboardingDestination,
+                                onRestartOnboarding: () => unawaited(
+                                  library.setOnboardingCompleted(false),
+                                ),
+                              )
+                            : OnboardingScreen(
+                                onFinished: (destination) async {
+                                  setState(() {
+                                    _onboardingDestination = destination;
+                                  });
+                                  await library.setOnboardingCompleted(true);
+                                },
+                              ),
+                      ),
+                    ),
             );
           },
           ),
@@ -138,4 +168,15 @@ ThemeData _darkThemeForPreference(
     colorSchemeSeed: seedColor,
     brightness: Brightness.dark,
   );
+}
+
+class _AppLoadingScreen extends StatelessWidget {
+  const _AppLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
 }
