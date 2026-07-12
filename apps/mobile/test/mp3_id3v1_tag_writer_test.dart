@@ -27,24 +27,30 @@ void main() {
       title: 'A title',
       artist: 'An artist',
       album: 'An album',
+      genre: 'Rock',
     );
 
     var bytes = await file.readAsBytes();
+    expect(bytes.take(3), <int>[1, 2, 3]);
     expect(String.fromCharCodes(bytes.sublist(bytes.length - 128, bytes.length - 125)), 'TAG');
     expect(_field(bytes, 3, 30), 'A title');
     expect(_field(bytes, 33, 30), 'An artist');
     expect(_field(bytes, 63, 30), 'An album');
+    expect(bytes.last, 17);
 
     await writer.write(
       path: file.path,
       title: 'Updated',
       artist: 'Unicode ?',
       album: '',
+      genre: 'Custom genre',
     );
     bytes = await file.readAsBytes();
+    expect(bytes.take(3), <int>[1, 2, 3]);
     expect(_field(bytes, 3, 30), 'Updated');
     expect(_field(bytes, 33, 30), 'Unicode ?');
     expect(_field(bytes, 63, 30), isEmpty);
+    expect(bytes.last, 17);
   });
 
   test('rejects non-MP3 paths', () async {
@@ -54,6 +60,7 @@ void main() {
         title: 'Title',
         artist: '',
         album: '',
+        genre: '',
       ),
       throwsA(isA<FormatException>()),
     );

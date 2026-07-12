@@ -1191,6 +1191,7 @@ Future<void> _showTrackMetadataEditor(
           title: updated.title,
           artist: updated.artist,
           album: updated.album,
+          genre: updated.genre,
         );
       } on Object catch (error) {
         if (context.mounted) {
@@ -3105,7 +3106,7 @@ Future<bool?> _confirmMp3TagWrite(BuildContext context, Track track) {
     builder: (dialogContext) => AlertDialog(
       title: const Text('Update MP3 file tags?'),
       content: const Text(
-        'This writes title, artist, and album to the local MP3 ID3v1 tag. Genre stays app-only, and long or non-Latin characters may be shortened.',
+        'This writes title, artist, album, and supported standard genres to the local MP3 ID3v1 tag. Unknown genres stay app-only, and long or non-Latin characters may be shortened.',
       ),
       actions: <Widget>[
         TextButton(
