@@ -1,0 +1,22 @@
+[Unit]
+Description=AetherTune self-hosted sync server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=aethertune
+EnvironmentFile=/etc/aethertune/server.env
+Environment=AETHERTUNE_DATA_DIR=/var/lib/aethertune
+ExecStart=/usr/local/bin/aethertune-server
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aethertune
+
+[Install]
+WantedBy=multi-user.target

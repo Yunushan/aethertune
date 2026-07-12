@@ -1,0 +1,7 @@
+# Replace sync.example.com with a DNS name that resolves to this host.
+# Caddy obtains and renews HTTPS certificates automatically.
+sync.example.com {
+  encode zstd gzip
+  reverse_proxy 127.0.0.1:8080
+  header -Server
+}

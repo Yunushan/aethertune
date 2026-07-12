@@ -31,6 +31,12 @@ it to that digest without keeping the raw value in memory. Invalid digest
 values stop startup with a configuration error. Compose refuses to start when
 the variable is absent, and `.env` is ignored by the image build context.
 
+Compose binds to `127.0.0.1` by default. Use the supplied
+[`deploy/Caddyfile`](deploy/Caddyfile) for HTTPS and see
+[`deploy/README.md`](deploy/README.md) for Docker/Caddy, native systemd,
+backup, update, and client-setup steps. Do not set a public bind address unless
+the host firewall and a TLS proxy protect the service.
+
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
 public internet, and do not commit populated `.env` files. The named

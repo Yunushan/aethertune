@@ -1,0 +1,74 @@
+# Production Deployment
+
+The AetherTune client requires HTTPS by default. Keep the server on loopback
+and use a TLS reverse proxy for public access. The sync service stores only
+portable library snapshots. Back up its state before host or image changes.
+
+## Docker and Caddy
+
+1. Copy `services/server/.env.example` to `services/server/.env` and set one
+   long, unique bearer token per client account in `AETHERTUNE_SYNC_USERS`.
+   Keep `AETHERTUNE_BIND_ADDRESS=127.0.0.1`.
+2. Start the service with `docker compose up --build -d` from
+   `services/server`.
+3. Copy `deploy/Caddyfile` to the Caddy configuration directory, replace
+   `sync.example.com`, then validate and reload Caddy:
+
+   ```bash
+   caddy validate --config /etc/caddy/Caddyfile
+   sudo systemctl reload caddy
+   ```
+
+4. Verify both paths:
+
+   ```bash
+   curl --fail http://127.0.0.1:8080/health
+   curl --fail https://sync.example.com/health
+   ```
+
+Do not change `AETHERTUNE_BIND_ADDRESS` to a public interface when using this
+reverse proxy. Caddy is the only process that should accept internet traffic.
+
+## Native systemd Service
+
+Build a release executable on the target architecture, then install it and the
+unit file:
+
+```bash
+cd services/server
+dart pub get
+dart compile exe bin/server.dart -o aethertune-server
+sudo install -m 0755 aethertune-server /usr/local/bin/aethertune-server
+sudo install -m 0644 deploy/aethertune.service /etc/systemd/system/aethertune.service
+sudo install -d -m 0700 /etc/aethertune
+sudo install -m 0600 deploy/server.env.example /etc/aethertune/server.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now aethertune
+sudo systemctl status aethertune
+```
+
+The native service listens on `PORT` (default `8080`) and writes snapshots to
+the systemd-managed `/var/lib/aethertune` state directory. Place the supplied
+`Caddyfile` in front of the service exactly as in the Docker setup.
+
+## Tokens, Backups, and Updates
+
+Generate bearer tokens outside shell history. For a hash-only server
+configuration, hash a token before placing it in `/etc/aethertune/server.env`:
+
+```bash
+printf '%s' 'replace-with-a-secret-token' | sha256sum | awk '{print "sha256:" $1}'
+```
+
+For Docker, archive the named volume before maintenance. For systemd, stop the
+service and archive `/var/lib/aethertune`:
+
+```bash
+sudo systemctl stop aethertune
+sudo tar -C /var/lib -czf aethertune-sync-backup.tgz aethertune
+sudo systemctl start aethertune
+```
+
+Test updates on a backup first. After an update, verify `/health` locally and
+through HTTPS before configuring the AetherTune app in Options with the public
+`https://` URL, a device name, and its matching bearer token.
