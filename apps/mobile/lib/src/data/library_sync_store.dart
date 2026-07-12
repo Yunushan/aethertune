@@ -284,6 +284,7 @@ class LibrarySyncStore extends ChangeNotifier {
         throw StateError('The sync server does not have a library snapshot yet.');
       }
       final localBeforeMerge = library.exportSyncSnapshotJson();
+      var remoteAcceptedMerge = false;
       try {
         await library.mergeSyncSnapshotJson(jsonEncode(remote.snapshot));
         final decoded = jsonDecode(library.exportSyncSnapshotJson());
@@ -294,6 +295,7 @@ class LibrarySyncStore extends ChangeNotifier {
           baseRevision: remote.revision,
           snapshot: Map<String, Object?>.from(decoded),
         );
+        remoteAcceptedMerge = true;
         _lastKnownRevision = result.revision;
         _applyRemoteMetadata(result);
         _lastSyncAt = _clock().toUtc();
@@ -301,7 +303,9 @@ class LibrarySyncStore extends ChangeNotifier {
         await _saveMetadata();
         return result;
       } on Object {
-        await library.restoreSyncSnapshotJson(localBeforeMerge);
+        if (!remoteAcceptedMerge) {
+          await library.restoreSyncSnapshotJson(localBeforeMerge);
+        }
         rethrow;
       }
     });

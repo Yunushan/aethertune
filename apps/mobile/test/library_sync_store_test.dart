@@ -210,6 +210,74 @@ void main() {
     expect(sync.conflict, isNull);
   });
 
+  test('merge and push keeps the accepted merged library', () async {
+    final remoteSnapshot = _emptySnapshot()
+      ..['tracks'] = <Object?>[
+        Track(id: 'remote-track', title: 'Remote track').toJson(),
+      ];
+    final gateway = _FakeSyncGateway(
+      remote: LibrarySyncRemoteSnapshot(
+        revision: 4,
+        updatedAt: DateTime.utc(2026, 7, 12),
+        updatedByDevice: 'Desktop',
+        checksum: 'remote-checksum',
+        snapshot: remoteSnapshot,
+      ),
+    );
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await library.load();
+    await library.addTracks(<Track>[Track(id: 'local-track', title: 'Local')]);
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+
+    await sync.mergeAndPush(library);
+
+    expect(library.tracks.map((track) => track.id), containsAll(<String>[
+      'local-track',
+      'remote-track',
+    ]));
+    expect(gateway.pushedBaseRevisions, <int>[4]);
+    expect(sync.lastKnownRevision, 5);
+  });
+
+  test('merge and push restores the local library when the server rejects it',
+      () async {
+    final remoteSnapshot = _emptySnapshot()
+      ..['tracks'] = <Object?>[
+        Track(id: 'remote-track', title: 'Remote track').toJson(),
+      ];
+    final gateway = _FakeSyncGateway(
+      remote: LibrarySyncRemoteSnapshot(
+        revision: 4,
+        updatedAt: DateTime.utc(2026, 7, 12),
+        updatedByDevice: 'Desktop',
+        checksum: 'remote-checksum',
+        snapshot: remoteSnapshot,
+      ),
+    )..pushError = StateError('Server rejected merged snapshot.');
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await library.load();
+    await library.addTracks(<Track>[Track(id: 'local-track', title: 'Local')]);
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+
+    await expectLater(
+      sync.mergeAndPush(library),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(library.tracks.map((track) => track.id), <String>['local-track']);
+    expect(sync.lastKnownRevision, 0);
+  });
+
   test('automatic uploads are opt-in, paced, persisted, and conflict-safe',
       () async {
     var now = DateTime.utc(2026, 7, 11, 9);
