@@ -1,7 +1,7 @@
 import 'package:aethertune/src/ui/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:aethertune/l10n/app_localizations.dart';
 
 Widget _localizedOnboarding({
   required Future<void> Function(int destination) onFinished,
