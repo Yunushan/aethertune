@@ -1590,6 +1590,7 @@ Future<void> _pickTrackArtworkFile(BuildContext context, Track track) async {
 
 Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
   final messenger = ScaffoldMessenger.of(context);
+  final library = context.read<LibraryStore>();
   final file = await FilePicker.pickFile(
     type: FileType.image,
     dialogTitle: 'Choose M4A cover artwork',
@@ -1612,7 +1613,7 @@ Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
       path: track.localPath!,
       artwork: artwork,
     );
-    final updated = await context.read<LibraryStore>().updateEmbeddedTrackArtwork(
+    final updated = await library.updateEmbeddedTrackArtwork(
       track.id,
       _m4aArtworkDataUri(artwork),
     );
