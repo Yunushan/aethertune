@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a Now Playing track share-card preview with native PNG save support.
 - Added persisted **Match all** and **Match any** modes to custom smart playlist rules.
 - Added a bounded selected-line picker for lyrics share text in the editor and
   Now Playing, including plain/LRC timestamp normalization and safe range

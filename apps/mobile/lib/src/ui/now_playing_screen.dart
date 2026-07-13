@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +12,7 @@ import '../domain/track_chapter.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'widgets/track_artwork.dart';
+import 'widgets/track_share_card.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   const NowPlayingScreen({
@@ -42,6 +45,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       appBar: AppBar(
         title: const Text('Now playing'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Save track share card',
+            onPressed: current == null ? null : () => _showTrackShareCard(current),
+            icon: const Icon(Icons.image_outlined),
+          ),
           IconButton(
             tooltip: 'Lyrics',
             onPressed: current == null ? null : widget.onOpenLyrics,
@@ -163,6 +171,53 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
       );
+    }
+  }
+
+  Future<void> _showTrackShareCard(Track track) async {
+    final boundaryKey = GlobalKey();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Track share card'),
+        content: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: RepaintBoundary(
+            key: boundaryKey,
+            child: TrackShareCard(track: track),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+          FilledButton.icon(
+            onPressed: () => _saveTrackShareCard(dialogContext, boundaryKey, track),
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Save PNG'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveTrackShareCard(BuildContext context, GlobalKey boundaryKey, Track track) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await captureTrackShareCardPng(boundaryKey);
+      final fileName = 'aethertune-track-${track.id}.png';
+      final outputPath = await FilePicker.saveFile(
+        dialogTitle: 'Save track share card',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const <String>['png'],
+        bytes: bytes,
+      );
+      if (outputPath == null || outputPath.isEmpty) return;
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+    } on Object catch (error) {
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('Could not save track share card: $error')));
     }
   }
 
