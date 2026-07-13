@@ -89,14 +89,22 @@ void main() {
       (widget) =>
           widget is TextField && widget.decoration?.labelText == 'Archive search',
     );
-    await tester.scrollUntilVisible(archiveSearch, 300);
+    await tester.scrollUntilVisible(
+      archiveSearch,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.enterText(archiveSearch, 'ambient');
     await tester.tap(find.byTooltip('Search archive audio'));
     await tester.pumpAndSettle();
 
     expect(find.text('Archive first'), findsOneWidget);
     final loadMore = find.textContaining('Load more archive results');
-    await tester.scrollUntilVisible(loadMore, 300);
+    await tester.scrollUntilVisible(
+      loadMore,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(loadMore);
     await tester.pumpAndSettle();
 
