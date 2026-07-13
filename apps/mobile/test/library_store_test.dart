@@ -2489,6 +2489,7 @@ void main() {
     expect(firstStore.pauseListeningHistory, isFalse);
     expect(firstStore.themePreference, AppThemePreference.system);
     expect(firstStore.accentColor, AppAccentColor.indigo);
+    expect(firstStore.languagePreference, AppLanguagePreference.system);
     expect(
       firstStore.desktopQueuePaneWidth,
       LibraryStore.defaultDesktopQueuePaneWidth,
@@ -2503,6 +2504,7 @@ void main() {
     await firstStore.setPauseListeningHistory(true);
     await firstStore.setThemePreference(AppThemePreference.amoled);
     await firstStore.setAccentColor(AppAccentColor.rose);
+    await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
     await firstStore.setDesktopQueuePaneWidth(410);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
@@ -2514,6 +2516,7 @@ void main() {
     expect(firstStore.pauseListeningHistory, isTrue);
     expect(firstStore.themePreference, AppThemePreference.amoled);
     expect(firstStore.accentColor, AppAccentColor.rose);
+    expect(firstStore.languagePreference, AppLanguagePreference.arabic);
     expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
@@ -2533,6 +2536,7 @@ void main() {
     expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
+    expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.desktopQueuePaneWidth, 410);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
@@ -2546,6 +2550,7 @@ void main() {
     expect(backup['pauseListeningHistory'], isTrue);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
     expect(backup['accentColor'], AppAccentColor.rose.name);
+    expect(backup['languagePreference'], AppLanguagePreference.arabic.name);
     expect(backup['offlineCacheLimitMegabytes'], 2048);
     expect(
       backup['offlineCacheProviderLimitMegabytes'],
@@ -2557,6 +2562,7 @@ void main() {
       ..remove('pauseListeningHistory')
       ..remove('themePreference')
       ..remove('accentColor')
+      ..remove('languagePreference')
       ..remove('offlineCacheLimitMegabytes')
       ..remove('offlineCacheProviderLimitMegabytes');
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
@@ -2565,6 +2571,7 @@ void main() {
     expect(secondStore.pauseListeningHistory, isFalse);
     expect(secondStore.themePreference, AppThemePreference.system);
     expect(secondStore.accentColor, AppAccentColor.indigo);
+    expect(secondStore.languagePreference, AppLanguagePreference.system);
     expect(
       secondStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
@@ -2577,6 +2584,7 @@ void main() {
     expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
+    expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),

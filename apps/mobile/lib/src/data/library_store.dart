@@ -81,6 +81,8 @@ enum AppThemePreference { system, light, dark, amoled }
 
 enum AppAccentColor { indigo, teal, rose, amber, violet, green }
 
+enum AppLanguagePreference { system, english, turkish, arabic }
+
 extension AppThemePreferenceLabel on AppThemePreference {
   String get label {
     switch (this) {
@@ -591,6 +593,13 @@ AppAccentColor _appAccentColorFromName(String? value) {
   );
 }
 
+AppLanguagePreference _appLanguagePreferenceFromName(String? value) {
+  return AppLanguagePreference.values.firstWhere(
+    (preference) => preference.name == value,
+    orElse: () => AppLanguagePreference.system,
+  );
+}
+
 class LibraryStore extends ChangeNotifier {
   LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
@@ -617,6 +626,7 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.automatic_offline_queue.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
+  static const _languagePreferenceKey = 'aethertune.language_preference.v1';
   static const _trackPlaybackSpeedOverridesKey =
       'aethertune.track_playback_speed_overrides.v1';
   static const _desktopQueuePaneWidthKey =
@@ -666,6 +676,7 @@ class LibraryStore extends ChangeNotifier {
   bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.indigo;
+  AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _onboardingCompleted = false;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
@@ -711,6 +722,7 @@ class LibraryStore extends ChangeNotifier {
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
+  AppLanguagePreference get languagePreference => _languagePreference;
   double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
   bool get onboardingCompleted => _onboardingCompleted;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
@@ -894,6 +906,9 @@ class LibraryStore extends ChangeNotifier {
     );
     _accentColor = _appAccentColorFromName(
       prefs.getString(_accentColorKey),
+    );
+    _languagePreference = _appLanguagePreferenceFromName(
+      prefs.getString(_languagePreferenceKey),
     );
     _trackPlaybackSpeedOverrides
       ..clear()
@@ -1467,6 +1482,18 @@ class LibraryStore extends ChangeNotifier {
 
     final current = _tracks[index];
     _tracks[index] = current.copyWith(isFavorite: !current.isFavorite);
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setLanguagePreference(
+    AppLanguagePreference preference,
+  ) async {
+    if (_languagePreference == preference) {
+      return;
+    }
+
+    _languagePreference = preference;
     await _save();
     notifyListeners();
   }
@@ -2819,6 +2846,7 @@ class LibraryStore extends ChangeNotifier {
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
       'accentColor': _accentColor.name,
+      'languagePreference': _languagePreference.name,
       'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
       'offlineCacheProviderLimitMegabytes':
           Map<String, int>.from(_offlineCacheProviderLimitMegabytes),
@@ -3274,6 +3302,7 @@ class LibraryStore extends ChangeNotifier {
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
     var restoredAccentColor = AppAccentColor.indigo;
+    var restoredLanguagePreference = AppLanguagePreference.system;
     var restoredOfflineCacheLimitMegabytes =
         defaultOfflineCacheLimitMegabytes;
     var restoredOfflineCacheProviderLimitMegabytes = <String, int>{};
@@ -3294,6 +3323,9 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredAccentColor = _appAccentColorFromName(
         _jsonOptionalString(backup, 'accentColor'),
+      );
+      restoredLanguagePreference = _appLanguagePreferenceFromName(
+        _jsonOptionalString(backup, 'languagePreference'),
       );
       restoredOfflineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
         _jsonInt(
@@ -3454,6 +3486,7 @@ class LibraryStore extends ChangeNotifier {
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
     _accentColor = restoredAccentColor;
+    _languagePreference = restoredLanguagePreference;
     _offlineCacheLimitMegabytes = restoredOfflineCacheLimitMegabytes;
     _offlineCacheProviderLimitMegabytes
       ..clear()
@@ -6724,6 +6757,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);
+    await prefs.setString(
+      _languagePreferenceKey,
+      _languagePreference.name,
+    );
     await prefs.setString(
       _trackPlaybackSpeedOverridesKey,
       jsonEncode(_trackPlaybackSpeedOverrides),

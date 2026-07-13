@@ -73,6 +73,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
           child: Consumer2<LibraryStore, PlayerController>(
           builder: (context, library, player, _) {
             return MaterialApp(
+              locale: localeForLanguagePreference(
+                library.languagePreference,
+              ),
               onGenerateTitle: (context) =>
                   AppLocalizations.of(context)!.appTitle,
               debugShowCheckedModeBanner: false,
@@ -125,6 +128,19 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
       ),
     );
+  }
+}
+
+Locale? localeForLanguagePreference(AppLanguagePreference preference) {
+  switch (preference) {
+    case AppLanguagePreference.system:
+      return null;
+    case AppLanguagePreference.english:
+      return const Locale('en');
+    case AppLanguagePreference.turkish:
+      return const Locale('tr');
+    case AppLanguagePreference.arabic:
+      return const Locale('ar');
   }
 }
 

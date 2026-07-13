@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a persisted System/English/Turkish/Arabic language override in Options,
+  including portable backup restore and RTL Arabic support.
 - Added generated Flutter localization catalogs for English, Turkish, and Arabic, covering the app shell, responsive navigation, and first-run onboarding with RTL Arabic layout support.
 - Added transactional local M4A title, artist, album, genre, and PNG/JPEG embedded-cover writing for standard tail- and front-metadata layouts. Front-loaded files safely repair validated `stco`/`co64` media offsets, while malformed or fragmented layouts are refused before mutation.
 - Improved player accessibility with spoken compact-player seek values and semantic previous/next artwork actions for assistive technologies.

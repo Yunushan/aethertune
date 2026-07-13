@@ -9973,6 +9973,22 @@ class _AccentColorDropdownLabel extends StatelessWidget {
   }
 }
 
+String _languagePreferenceLabel(
+  AppLocalizations localizations,
+  AppLanguagePreference preference,
+) {
+  switch (preference) {
+    case AppLanguagePreference.system:
+      return localizations.languageSystem;
+    case AppLanguagePreference.english:
+      return localizations.languageEnglish;
+    case AppLanguagePreference.turkish:
+      return localizations.languageTurkish;
+    case AppLanguagePreference.arabic:
+      return localizations.languageArabic;
+  }
+}
+
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab({this.onRestartOnboarding});
 
@@ -9980,6 +9996,7 @@ class _SettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
@@ -10166,6 +10183,33 @@ class _SettingsTab extends StatelessWidget {
               ),
             ),
         ],
+        ListTile(
+          leading: const Icon(Icons.language_outlined),
+          title: Text(localizations.language),
+          subtitle: Text(
+            _languagePreferenceLabel(
+              localizations,
+              library.languagePreference,
+            ),
+          ),
+          trailing: DropdownButton<AppLanguagePreference>(
+            value: library.languagePreference,
+            items: <DropdownMenuItem<AppLanguagePreference>>[
+              for (final preference in AppLanguagePreference.values)
+                DropdownMenuItem<AppLanguagePreference>(
+                  value: preference,
+                  child: Text(
+                    _languagePreferenceLabel(localizations, preference),
+                  ),
+                ),
+            ],
+            onChanged: (preference) {
+              if (preference != null) {
+                unawaited(library.setLanguagePreference(preference));
+              }
+            },
+          ),
+        ),
         ListTile(
           leading: const Icon(Icons.palette_outlined),
           title: const Text('Theme'),
