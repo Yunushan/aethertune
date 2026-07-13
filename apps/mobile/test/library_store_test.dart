@@ -2815,7 +2815,16 @@ void main() {
     expect(processing.reason, 'Caching media...');
 
     final processingPause = await store.pauseOfflineCacheEntry(queued.id);
-    expect(processingPause!.status, OfflineCacheEntryStatus.processing);
+    expect(processingPause!.status, OfflineCacheEntryStatus.paused);
+    expect(processingPause.reason, 'Paused by user.');
+
+    final resumed = await store.resumeOfflineCacheEntry(queued.id);
+    expect(resumed!.status, OfflineCacheEntryStatus.queued);
+
+    final resumedProcessing = await store.markOfflineCacheEntryProcessing(
+      queued.id,
+    );
+    expect(resumedProcessing!.status, OfflineCacheEntryStatus.processing);
 
     now = DateTime.utc(2026, 1, 16, 16);
     final cachedTrack = track.copyWith(localPath: '/cache/audio.mp3');

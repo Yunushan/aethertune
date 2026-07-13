@@ -128,13 +128,23 @@ void main() {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       try {
+        final startsAt = request.headers.value(HttpHeaders.rangeHeader) ==
+                'bytes=2-'
+            ? 2
+            : 0;
+        final bytes = <int>[1, 2, 3, 4, 5, 6, 7, 8]
+            .skip(startsAt)
+            .toList(growable: false);
         request.response.headers.contentType = ContentType('audio', 'mpeg');
-        request.response.headers.contentLength = 8;
-        request.response.add(<int>[1, 2, 3, 4]);
+        request.response.headers.contentLength = bytes.length;
+        if (startsAt > 0) {
+          request.response.statusCode = HttpStatus.partialContent;
+        }
+        request.response.add(bytes.take(2));
         await request.response.flush();
         firstChunkSent.complete();
         await Future<void>.delayed(const Duration(seconds: 1));
-        request.response.add(<int>[5, 6, 7, 8]);
+        request.response.add(bytes.skip(2));
         await request.response.close();
       } on Object {
         // The client deliberately closes the request after cancellation.
@@ -154,6 +164,11 @@ void main() {
         createdAt: DateTime.utc(2026, 1, 17),
       );
       final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+      await manager.mediaDirectory.create(recursive: true);
+      final partialFile = File(
+        p.join(manager.mediaDirectory.path, '${entry.id}.mp3.part'),
+      );
+      await partialFile.writeAsBytes(<int>[1, 2]);
       final token = OfflineCacheCancellationToken();
       final operation = manager.materialize(
         entry,
@@ -164,14 +179,15 @@ void main() {
       token.cancel();
 
       await expectLater(operation, throwsA(isA<OfflineCacheCancelled>()));
-      final partialFile = File(
-        p.join(manager.mediaDirectory.path, '${entry.id}.mp3.part'),
-      );
       final completedFile = File(
         p.join(manager.mediaDirectory.path, '${entry.id}.mp3'),
       );
       expect(await partialFile.exists(), isTrue);
       expect(await partialFile.length(), greaterThan(0));
+      expect(
+        (await partialFile.readAsBytes()).take(2).toList(),
+        <int>[1, 2],
+      );
       expect(await completedFile.exists(), isFalse);
     } finally {
       await server.close(force: true);
