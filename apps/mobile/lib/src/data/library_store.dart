@@ -3069,7 +3069,7 @@ class LibraryStore extends ChangeNotifier {
 
     final limit = maxLines <= 0 ? 8 : maxLines;
     final normalizedStartLine = startLine.clamp(0, lines.length - 1).toInt();
-    final normalizedEndLine = (endLine ?? (normalizedStartLine + limit - 1))
+    final normalizedEndLine = (endLine ?? (lines.length - 1))
         .clamp(normalizedStartLine, lines.length - 1)
         .toInt();
     final selectedLines = lines.sublist(
