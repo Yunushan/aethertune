@@ -94,6 +94,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     _horizontalDragDistance += delta;
                   },
                   onHorizontalDragEnd: () => _finishArtworkSwipe(player),
+                  onArtworkPrevious: player.hasPrevious
+                      ? () => _runPlaybackAction(player.previous)
+                      : null,
+                  onArtworkNext: player.hasNext
+                      ? () => _runPlaybackAction(player.next)
+                      : null,
                 );
 
                 if (constraints.maxWidth >= 900) {
@@ -195,11 +201,15 @@ class _NowPlayingContent {
     required VoidCallback onHorizontalDragStart,
     required ValueChanged<double> onHorizontalDragUpdate,
     required VoidCallback onHorizontalDragEnd,
+    required VoidCallback? onArtworkPrevious,
+    required VoidCallback? onArtworkNext,
   })  : artwork = _NowPlayingArtwork(
           track: track,
           onHorizontalDragStart: onHorizontalDragStart,
           onHorizontalDragUpdate: onHorizontalDragUpdate,
           onHorizontalDragEnd: onHorizontalDragEnd,
+          onPrevious: onArtworkPrevious,
+          onNext: onArtworkNext,
         ),
         controls = _NowPlayingControls(
           track: track,
@@ -222,12 +232,16 @@ class _NowPlayingArtwork extends StatelessWidget {
     required this.onHorizontalDragStart,
     required this.onHorizontalDragUpdate,
     required this.onHorizontalDragEnd,
+    required this.onPrevious,
+    required this.onNext,
   });
 
   final Track track;
   final VoidCallback onHorizontalDragStart;
   final ValueChanged<double> onHorizontalDragUpdate;
   final VoidCallback onHorizontalDragEnd;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -240,8 +254,14 @@ class _NowPlayingArtwork extends StatelessWidget {
 
         return Center(
           child: Semantics(
+            key: const Key('now-playing-artwork-semantics'),
             image: true,
-            label: 'Artwork for ${track.title}. Swipe left for next or right for previous.',
+            label: 'Artwork for ${track.title}',
+            hint: 'Use increase for next track or decrease for previous track.',
+            increasedValue: onNext == null ? null : 'Next track',
+            decreasedValue: onPrevious == null ? null : 'Previous track',
+            onIncrease: onNext,
+            onDecrease: onPrevious,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onHorizontalDragStart: (_) => onHorizontalDragStart(),

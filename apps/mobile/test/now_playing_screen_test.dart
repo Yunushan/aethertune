@@ -75,6 +75,42 @@ void main() {
     );
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+    final artworkSemantics = tester.getSemantics(
+      find.byKey(const Key('now-playing-artwork-semantics')),
+    );
+    expect(
+      artworkSemantics.getSemanticsData().hasAction(SemanticsAction.increase),
+      isTrue,
+    );
+    expect(
+      artworkSemantics.getSemanticsData().hasAction(SemanticsAction.decrease),
+      isFalse,
+    );
+    await tester.sendSemanticsAction(
+      artworkSemantics.id,
+      SemanticsAction.increase,
+    );
+    await tester.pump();
+    expect(find.text('Second Song'), findsOneWidget);
+
+    final secondArtworkSemantics = tester.getSemantics(
+      find.byKey(const Key('now-playing-artwork-semantics')),
+    );
+    expect(
+      secondArtworkSemantics.getSemanticsData().hasAction(
+        SemanticsAction.decrease,
+      ),
+      isTrue,
+    );
+    await tester.sendSemanticsAction(
+      secondArtworkSemantics.id,
+      SemanticsAction.decrease,
+    );
+    await tester.pump();
+    expect(find.text('First Song'), findsOneWidget);
+
     await tester.tap(find.byKey(const Key('now-playing-chapters')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-chapter-60000')));
@@ -186,6 +222,16 @@ void main() {
     expect(find.byTooltip('Play'), findsNothing);
     expect(find.byTooltip('Pause'), findsOneWidget);
     expect(find.byTooltip('Next'), findsOneWidget);
+
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
+    expect(
+      tester
+          .getSemantics(find.byKey(const Key('player-bar-seek')))
+          .getSemanticsData()
+          .value,
+      'Playback position 0:00 of 3:20',
+    );
 
     await tester.tap(find.byKey(const Key('open-now-playing')));
     expect(nowPlayingOpens, 1);

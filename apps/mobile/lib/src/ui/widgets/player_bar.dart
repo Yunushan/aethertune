@@ -66,8 +66,12 @@ class PlayerBar extends StatelessWidget {
                 final value = position.inMilliseconds.clamp(0, max.toInt()).toDouble();
 
                 return Slider(
+                  key: const Key('player-bar-seek'),
                   value: value,
                   max: max,
+                  semanticFormatterCallback: (value) =>
+                      'Playback position ${_formatPlaybackTime(Duration(milliseconds: value.round()))} '
+                      'of ${_formatPlaybackTime(duration)}',
                   onChanged: (value) {
                     player.seek(Duration(milliseconds: value.round()));
                   },
@@ -194,4 +198,12 @@ class PlayerBar extends StatelessWidget {
       );
     }
   }
+}
+
+String _formatPlaybackTime(Duration duration) {
+  final safe = duration.isNegative ? Duration.zero : duration;
+  final hours = safe.inHours;
+  final minutes = safe.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = safe.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return hours > 0 ? '$hours:$minutes:$seconds' : '${safe.inMinutes}:$seconds';
 }
