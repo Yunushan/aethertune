@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -149,6 +150,39 @@ void main() {
       library.offlineCacheEntryById(waitingEntryId)!.status,
       OfflineCacheEntryStatus.queued,
     );
+  });
+
+  test('pauses an active request without marking it as a failed cache',
+      () async {
+    final root = await Directory.systemTemp.createTemp('aethertune-worker-');
+    addTearDown(() => root.delete(recursive: true));
+    final library = LibraryStore();
+    await library.load();
+    final entry = await _queueLocalEntry(library, 'active-pause');
+    final resolverStarted = Completer<void>();
+    final releaseResolver = Completer<void>();
+    final worker = OfflineCacheQueueWorker(
+      cacheRoot: root,
+      resolveTrack: (track) async {
+        resolverStarted.complete();
+        await releaseResolver.future;
+        return track;
+      },
+    );
+
+    final processing = worker.processNext(library);
+    await resolverStarted.future;
+    await library.pauseOfflineCacheEntry(entry.id);
+    releaseResolver.complete();
+
+    final result = await processing;
+
+    expect(result!.status, OfflineCacheEntryStatus.paused);
+    expect(
+      library.offlineCacheEntryById(entry.id)!.status,
+      OfflineCacheEntryStatus.paused,
+    );
+    expect(library.offlineCacheEntryById(entry.id)!.reason, 'Paused by user.');
   });
 }
 

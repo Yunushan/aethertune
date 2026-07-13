@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +10,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/offline_cache_manager.dart';
 import 'package:aethertune/src/data/offline_cache_pressure_enforcer.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
+import 'package:aethertune/src/domain/offline_cache_cancellation.dart';
 import 'package:aethertune/src/domain/offline_cache_entry.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -115,6 +117,62 @@ void main() {
         mediaBytes,
       );
       expect(await partialFile.exists(), isFalse);
+    } finally {
+      await server.close(force: true);
+    }
+  });
+
+  test('cancels an active HTTP cache while retaining a resumable partial file',
+      () async {
+    final firstChunkSent = Completer<void>();
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      try {
+        request.response.headers.contentType = ContentType('audio', 'mpeg');
+        request.response.headers.contentLength = 8;
+        request.response.add(<int>[1, 2, 3, 4]);
+        await request.response.flush();
+        firstChunkSent.complete();
+        await Future<void>.delayed(const Duration(seconds: 1));
+        request.response.add(<int>[5, 6, 7, 8]);
+        await request.response.close();
+      } on Object {
+        // The client deliberately closes the request after cancellation.
+      }
+    });
+
+    try {
+      final entry = OfflineCacheEntry(
+        id: 'entry-cancel',
+        track: Track(
+          id: 'track-cancel',
+          title: 'Cancelable archive',
+          sourceId: 'internet-archive',
+          streamUrl: 'http://127.0.0.1:${server.port}/media/song.mp3',
+        ),
+        action: OfflineMediaAction.cache,
+        createdAt: DateTime.utc(2026, 1, 17),
+      );
+      final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+      final token = OfflineCacheCancellationToken();
+      final operation = manager.materialize(
+        entry,
+        cancellationToken: token,
+      );
+
+      await firstChunkSent.future;
+      token.cancel();
+
+      await expectLater(operation, throwsA(isA<OfflineCacheCancelled>()));
+      final partialFile = File(
+        p.join(manager.mediaDirectory.path, '${entry.id}.mp3.part'),
+      );
+      final completedFile = File(
+        p.join(manager.mediaDirectory.path, '${entry.id}.mp3'),
+      );
+      expect(await partialFile.exists(), isTrue);
+      expect(await partialFile.length(), greaterThan(0));
+      expect(await completedFile.exists(), isFalse);
     } finally {
       await server.close(force: true);
     }

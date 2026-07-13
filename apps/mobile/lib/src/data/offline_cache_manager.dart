@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../domain/offline_cache_cancellation.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/track.dart';
 
@@ -84,7 +86,9 @@ final class OfflineCacheManager {
 
   Future<OfflineCacheMaterialization> materialize(
     OfflineCacheEntry entry,
+    {OfflineCacheCancellationToken? cancellationToken},
   ) async {
+    cancellationToken?.throwIfCancelled();
     if (entry.track.hasLocalSource) {
       return OfflineCacheMaterialization(
         track: entry.track,
@@ -112,16 +116,33 @@ final class OfflineCacheManager {
     final partialFile = File('${file.path}.part');
     final downloader = _downloader;
     if (downloader == null) {
-      await _downloadWithHttpClient(streamUri, file, partialFile);
+      await _downloadWithHttpClient(
+        streamUri,
+        file,
+        partialFile,
+        cancellationToken: cancellationToken,
+      );
     } else {
+      cancellationToken?.throwIfCancelled();
       final bytes = await downloader(streamUri);
+      cancellationToken?.throwIfCancelled();
       if (bytes.isEmpty) {
         throw StateError('Downloaded media is empty for ${entry.track.title}.');
       }
       await _deleteIfExists(partialFile);
-      await file.writeAsBytes(bytes, flush: true);
+      await partialFile.writeAsBytes(bytes, flush: true);
+      cancellationToken?.throwIfCancelled();
+      await _deleteIfExists(file);
+      await partialFile.rename(file.path);
+      try {
+        cancellationToken?.throwIfCancelled();
+      } on OfflineCacheCancelled {
+        await _restoreCompletedFileAsPartial(file, partialFile);
+        rethrow;
+      }
     }
 
+    cancellationToken?.throwIfCancelled();
     final savedBytes = await file.readAsBytes();
     if (savedBytes.isEmpty) {
       throw StateError('Downloaded media is empty for ${entry.track.title}.');
@@ -134,6 +155,7 @@ final class OfflineCacheManager {
         'Cached media checksum verification failed for ${entry.track.title}.',
       );
     }
+    cancellationToken?.throwIfCancelled();
 
     return OfflineCacheMaterialization(
       track: entry.track.copyWith(localPath: file.path),
@@ -300,12 +322,17 @@ final class OfflineCacheManager {
     Uri uri,
     File targetFile,
     File partialFile,
+    {OfflineCacheCancellationToken? cancellationToken},
   ) async {
     final client = HttpClient();
+    cancellationToken?.whenCancelled.then<void>((_) {
+      client.close(force: true);
+    });
     try {
       var resumeStart = await _fileLength(partialFile);
       var restartedAfterInvalidRange = false;
       while (true) {
+        cancellationToken?.throwIfCancelled();
         final request = await client.getUrl(uri);
         if (resumeStart > 0) {
           request.headers.set(
@@ -314,6 +341,7 @@ final class OfflineCacheManager {
           );
         }
         final response = await request.close();
+        cancellationToken?.throwIfCancelled();
 
         if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable &&
             resumeStart > 0 &&
@@ -347,6 +375,7 @@ final class OfflineCacheManager {
         );
         try {
           await for (final chunk in response) {
+            cancellationToken?.throwIfCancelled();
             receivedBytes += chunk.length;
             sink.add(chunk);
           }
@@ -367,13 +396,38 @@ final class OfflineCacheManager {
           throw StateError('Downloaded media is empty.');
         }
 
+        cancellationToken?.throwIfCancelled();
         await _deleteIfExists(targetFile);
         await partialFile.rename(targetFile.path);
+        try {
+          cancellationToken?.throwIfCancelled();
+        } on OfflineCacheCancelled {
+          await _restoreCompletedFileAsPartial(targetFile, partialFile);
+          rethrow;
+        }
         return;
       }
+    } on Object {
+      cancellationToken?.throwIfCancelled();
+      rethrow;
     } finally {
       client.close(force: true);
     }
+  }
+}
+
+Future<void> _restoreCompletedFileAsPartial(
+  File targetFile,
+  File partialFile,
+) async {
+  if (!await targetFile.exists() || await partialFile.exists()) {
+    return;
+  }
+
+  try {
+    await targetFile.rename(partialFile.path);
+  } on FileSystemException {
+    // The next attempt can resume or replace a locked/missing file.
   }
 }
 

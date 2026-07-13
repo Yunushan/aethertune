@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
+import '../domain/offline_cache_cancellation.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
 import '../domain/playback_speed.dart';
@@ -1298,6 +1299,7 @@ class LibraryStore extends ChangeNotifier {
 
     final now = _clock();
     final id = OfflineCacheEntry.stableIdFor(track, action);
+    OfflineCacheCancellationRegistry.instance.clear(id);
     final index = _offlineCacheQueue.indexWhere((entry) => entry.id == id);
     final entry = index == -1
         ? OfflineCacheEntry(
@@ -1330,6 +1332,7 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<void> removeOfflineCacheEntry(String id) async {
+    OfflineCacheCancellationRegistry.instance.cancel(id);
     final previousLength = _offlineCacheQueue.length;
     _offlineCacheQueue.removeWhere((entry) => entry.id == id);
     if (_offlineCacheQueue.length == previousLength) {
@@ -1345,6 +1348,9 @@ class LibraryStore extends ChangeNotifier {
       return;
     }
 
+    for (final entry in _offlineCacheQueue) {
+      OfflineCacheCancellationRegistry.instance.cancel(entry.id);
+    }
     _offlineCacheQueue.clear();
     await _save();
     notifyListeners();
@@ -1360,6 +1366,10 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<OfflineCacheEntry?> markOfflineCacheEntryProcessing(String id) {
+    if (offlineCacheEntryById(id) == null) {
+      return Future<OfflineCacheEntry?>.value(null);
+    }
+    OfflineCacheCancellationRegistry.instance.begin(id);
     return _updateOfflineCacheEntry(
       id,
       status: OfflineCacheEntryStatus.processing,
@@ -1400,9 +1410,12 @@ class LibraryStore extends ChangeNotifier {
     final entry = offlineCacheEntryById(id);
     if (entry == null ||
         (entry.status != OfflineCacheEntryStatus.queued &&
-            entry.status != OfflineCacheEntryStatus.failed)) {
+            entry.status != OfflineCacheEntryStatus.failed &&
+            entry.status != OfflineCacheEntryStatus.processing)) {
       return Future<OfflineCacheEntry?>.value(entry);
     }
+
+    OfflineCacheCancellationRegistry.instance.cancel(id);
 
     return _updateOfflineCacheEntry(
       id,
@@ -1417,6 +1430,7 @@ class LibraryStore extends ChangeNotifier {
       return Future<OfflineCacheEntry?>.value(entry);
     }
 
+    OfflineCacheCancellationRegistry.instance.clear(id);
     return _updateOfflineCacheEntry(
       id,
       status: OfflineCacheEntryStatus.queued,

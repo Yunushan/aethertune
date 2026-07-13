@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added active offline cache/download cancellation: pausing or removing an in-progress request now stops its foreground HTTP transfer, keeps resumable private `.part` bytes, and preserves the correct paused queue state instead of recording a false failure.
 - Added local track artwork editing: validated private PNG/JPEG/GIF/WebP picks, safe web URLs, scanned-artwork restore, scanner-refresh preservation, and portable backup/sync/playlist privacy fallback.
 - Added persisted local artist following from artist browse sheets, a newest-followed-artists Home feed section, and backup/snapshot-sync coverage; remote creator/channel subscriptions remain roadmap work.
 - Added paginated Internet Archive audio search with explicit continuation, exhaustion, retry-safe result retention, and provider pagination tests.

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../domain/offline_cache_cancellation.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/track.dart';
 import 'library_store.dart';
@@ -72,12 +73,21 @@ class OfflineCacheQueueWorker {
     OfflineCacheEntry entry,
   ) async {
     await library.markOfflineCacheEntryProcessing(entry.id);
+    final cancellationToken = OfflineCacheCancellationRegistry.instance.tokenFor(
+      entry.id,
+    );
     final processing = library.offlineCacheEntryById(entry.id) ?? entry;
     try {
       final resolvedTrack = await _resolveTrack(processing.track);
+      cancellationToken.throwIfCancelled();
       final materialization = await _manager.materialize(
         processing.copyWith(track: resolvedTrack),
+        cancellationToken: cancellationToken,
       );
+      if (library.offlineCacheEntryById(entry.id)?.status !=
+          OfflineCacheEntryStatus.processing) {
+        return library.offlineCacheEntryById(entry.id) ?? entry;
+      }
       final reason = materialization.checksum.isEmpty
           ? 'Cached ${materialization.byteCount} bytes.'
           : 'Cached ${materialization.byteCount} bytes; checksum verified.';
@@ -89,10 +99,22 @@ class OfflineCacheQueueWorker {
         checksum: materialization.checksum,
       );
       await enforceOfflineCacheLimit(library: library, manager: _manager);
+    } on OfflineCacheCancelled {
+      // The store already records the paused state; the private `.part` file
+      // remains available for a later HTTP Range resume.
     } on Object catch (error) {
+      if (library.offlineCacheEntryById(entry.id)?.status ==
+          OfflineCacheEntryStatus.paused) {
+        return library.offlineCacheEntryById(entry.id) ?? entry;
+      }
       await library.markOfflineCacheEntryFailed(
         entry.id,
         reason: error.toString(),
+      );
+    } finally {
+      OfflineCacheCancellationRegistry.instance.release(
+        entry.id,
+        cancellationToken,
       );
     }
 

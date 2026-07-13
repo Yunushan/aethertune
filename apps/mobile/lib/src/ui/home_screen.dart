@@ -32,6 +32,7 @@ import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
+import '../domain/offline_cache_cancellation.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/playback_history_entry.dart';
 import '../domain/playback_progress_entry.dart';
@@ -9737,7 +9738,8 @@ bool _canProcessOfflineCacheEntry(OfflineCacheEntry entry) {
 
 bool _canPauseOfflineCacheEntry(OfflineCacheEntry entry) {
   return entry.status == OfflineCacheEntryStatus.queued ||
-      entry.status == OfflineCacheEntryStatus.failed;
+      entry.status == OfflineCacheEntryStatus.failed ||
+      entry.status == OfflineCacheEntryStatus.processing;
 }
 
 bool _canResumeOfflineCacheEntry(OfflineCacheEntry entry) {
@@ -10259,6 +10261,8 @@ class _SettingsTab extends StatelessWidget {
                 IconButton(
                   tooltip: _canResumeOfflineCacheEntry(entry)
                       ? 'Resume offline request'
+                      : entry.status == OfflineCacheEntryStatus.processing
+                          ? 'Pause active offline request'
                       : 'Pause offline request',
                   onPressed: _canResumeOfflineCacheEntry(entry)
                       ? () => unawaited(
@@ -10606,15 +10610,23 @@ class _SettingsTab extends StatelessWidget {
       }
 
       await library.markOfflineCacheEntryProcessing(entry.id);
+      final cancellationToken = OfflineCacheCancellationRegistry.instance
+          .tokenFor(entry.id);
       final processingEntry = library.offlineCacheEntryById(entry.id) ?? entry;
 
       try {
         final resolvedTrack = await selfHosted.resolveTrack(
           processingEntry.track,
         );
+        cancellationToken.throwIfCancelled();
         final materialization = await manager.materialize(
           processingEntry.copyWith(track: resolvedTrack),
+          cancellationToken: cancellationToken,
         );
+        if (library.offlineCacheEntryById(entry.id)?.status !=
+            OfflineCacheEntryStatus.processing) {
+          continue;
+        }
         final cacheReason = materialization.checksum.isEmpty
             ? 'Cached ${_formatByteCount(materialization.byteCount)}.'
             : 'Cached ${_formatByteCount(materialization.byteCount)}; checksum verified.';
@@ -10632,12 +10644,23 @@ class _SettingsTab extends StatelessWidget {
         evicted += evictionResult.evictedEntryIds.length;
         evictedBytes += evictionResult.evictedBytes;
         cached += 1;
+      } on OfflineCacheCancelled {
+        // The Options control has already persisted the paused state.
       } on Object catch (error) {
+        if (library.offlineCacheEntryById(entry.id)?.status ==
+            OfflineCacheEntryStatus.paused) {
+          continue;
+        }
         await library.markOfflineCacheEntryFailed(
           entry.id,
           reason: _offlineCacheErrorMessage(error),
         );
         failed += 1;
+      } finally {
+        OfflineCacheCancellationRegistry.instance.release(
+          entry.id,
+          cancellationToken,
+        );
       }
     }
 
