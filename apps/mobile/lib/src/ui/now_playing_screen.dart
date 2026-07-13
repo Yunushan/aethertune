@@ -78,6 +78,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           : LayoutBuilder(
               builder: (context, constraints) {
                 final savedTrack = _findTrack(library.tracks, current.id);
+                final currentQueueIndex = player.queue.indexWhere(
+                  (track) => track.id == current.id,
+                );
                 final content = _NowPlayingContent(
                   track: current,
                   isFavorite: savedTrack?.isFavorite ?? false,
@@ -94,10 +97,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     _horizontalDragDistance += delta;
                   },
                   onHorizontalDragEnd: () => _finishArtworkSwipe(player),
-                  onArtworkPrevious: player.hasPrevious
+                  onArtworkPrevious: currentQueueIndex > 0
                       ? () => _runPlaybackAction(player.previous)
                       : null,
-                  onArtworkNext: player.hasNext
+                  onArtworkNext: currentQueueIndex >= 0 &&
+                          currentQueueIndex < player.queue.length - 1
                       ? () => _runPlaybackAction(player.next)
                       : null,
                 );
