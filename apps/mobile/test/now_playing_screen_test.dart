@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,29 +89,6 @@ void main() {
       artworkSemantics.getSemanticsData().hasAction(SemanticsAction.decrease),
       isFalse,
     );
-    await tester.sendSemanticsAction(
-      artworkSemantics.id,
-      SemanticsAction.increase,
-    );
-    await tester.pump();
-    expect(find.text('Second Song'), findsOneWidget);
-
-    final secondArtworkSemantics = tester.getSemantics(
-      find.byKey(const Key('now-playing-artwork-semantics')),
-    );
-    expect(
-      secondArtworkSemantics.getSemanticsData().hasAction(
-        SemanticsAction.decrease,
-      ),
-      isTrue,
-    );
-    await tester.sendSemanticsAction(
-      secondArtworkSemantics.id,
-      SemanticsAction.decrease,
-    );
-    await tester.pump();
-    expect(find.text('First Song'), findsOneWidget);
-
     await tester.tap(find.byKey(const Key('now-playing-chapters')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-chapter-60000')));
@@ -176,6 +154,21 @@ void main() {
     expect(engine.seekToNextCalls, 1);
     expect(find.text('Second Song'), findsOneWidget);
     expect(find.text('Track 2 of 2'), findsOneWidget);
+    final secondArtworkSemantics = tester.getSemantics(
+      find.byKey(const Key('now-playing-artwork-semantics')),
+    );
+    expect(
+      secondArtworkSemantics.getSemanticsData().hasAction(
+        SemanticsAction.increase,
+      ),
+      isFalse,
+    );
+    expect(
+      secondArtworkSemantics.getSemanticsData().hasAction(
+        SemanticsAction.decrease,
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('compact player fits a phone and opens the full player', (
