@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/internet_archive_provider.dart';
@@ -194,6 +196,111 @@ void main() {
       parseInternetArchiveSearchResults('{"response":{"docs":[]}}'),
       isEmpty,
     );
+  });
+
+  test('loads requested pages and exposes archive search exhaustion', () async {
+    final searchUris = <Uri>[];
+    final provider = InternetArchiveProvider(
+      baseUri: Uri.parse('https://archive.org'),
+      limit: 2,
+      searchLoader: (uri) async {
+        searchUris.add(uri);
+        switch (uri.queryParameters['page']) {
+          case '1':
+            return _paginationSearchJson(
+              totalResults: 5,
+              identifiers: <String>['first', 'second'],
+            );
+          case '2':
+            return _paginationSearchJson(
+              totalResults: 5,
+              identifiers: <String>['third', 'fourth'],
+            );
+          case '3':
+            return _paginationSearchJson(
+              totalResults: 5,
+              identifiers: <String>['fifth'],
+            );
+          default:
+            throw StateError(
+              'Unexpected page ${uri.queryParameters['page']}.',
+            );
+        }
+      },
+      metadataLoader: (uri) async {
+        return _paginationMetadataJson(uri.pathSegments.last);
+      },
+    );
+
+    final first = await provider.searchAudioPage('ambient', page: 1);
+    final second = await provider.searchAudioPage(
+      'ambient',
+      page: 2,
+      includeFacets: false,
+    );
+    final third = await provider.searchAudioPage(
+      'ambient',
+      page: 3,
+      includeFacets: false,
+    );
+
+    expect(searchUris.map((uri) => uri.queryParameters['page']), <String?>[
+      '1',
+      '2',
+      '3',
+    ]);
+    expect(first.totalResults, 5);
+    expect(first.hasMore, isTrue);
+    expect(second.hasMore, isTrue);
+    expect(third.hasMore, isFalse);
+    expect(third.items.single.identifier, 'fifth');
+  });
+
+  test('rejects archive page zero before issuing a request', () async {
+    final provider = InternetArchiveProvider(
+      searchLoader: (_) async => throw StateError('Must not load.'),
+    );
+
+    await expectLater(
+      provider.searchAudioPage('ambient', page: 0),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+}
+
+String _paginationSearchJson({
+  required int totalResults,
+  required List<String> identifiers,
+}) {
+  return jsonEncode(<String, Object?>{
+    'response': <String, Object?>{
+      'numFound': totalResults,
+      'docs': identifiers
+          .map(
+            (identifier) => <String, Object?>{
+              'identifier': identifier,
+              'title': 'Archive $identifier',
+            },
+          )
+          .toList(growable: false),
+    },
+  });
+}
+
+String _paginationMetadataJson(String identifier) {
+  return jsonEncode(<String, Object?>{
+    'metadata': <String, Object?>{
+      'identifier': identifier,
+      'title': 'Archive $identifier',
+      'creator': 'AetherTune tests',
+    },
+    'files': <Object?>[
+      <String, Object?>{
+        'name': '$identifier.mp3',
+        'format': 'VBR MP3',
+        'length': '30',
+      },
+    ],
   });
 }
 

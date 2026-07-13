@@ -34,11 +34,17 @@ final class InternetArchiveAudioSearchPage {
     required this.items,
     required this.tracks,
     required this.facets,
+    required this.page,
+    required this.totalResults,
+    required this.hasMore,
   });
 
   final List<InternetArchiveItem> items;
   final List<Track> tracks;
   final List<InternetArchiveFacet> facets;
+  final int page;
+  final int? totalResults;
+  final bool hasMore;
 
   List<InternetArchiveFacet> facetsFor(String field) {
     return facets
@@ -53,7 +59,8 @@ class InternetArchiveProvider implements MusicSourceProvider {
     InternetArchiveSearchLoader? searchLoader,
     InternetArchiveMetadataLoader? metadataLoader,
     this.limit = 10,
-  })  : baseUri = baseUri ?? Uri.parse('https://archive.org'),
+  })  : assert(limit > 0),
+        baseUri = baseUri ?? Uri.parse('https://archive.org'),
         _searchLoader = searchLoader ?? _loadInternetArchiveJson,
         _metadataLoader = metadataLoader ?? _loadInternetArchiveJson;
 
@@ -115,11 +122,21 @@ class InternetArchiveProvider implements MusicSourceProvider {
   Future<InternetArchiveAudioSearchPage> searchAudioPage(
     String query, {
     InternetArchiveSearchFilters filters = const InternetArchiveSearchFilters(),
-    bool includeFacets = true,
+    bool? includeFacets,
+    int page = 1,
   }) async {
+    if (page < 1) {
+      throw ArgumentError.value(page, 'page', 'Must be at least 1.');
+    }
+
     final results = parseInternetArchiveSearchPage(
       await _searchLoader(
-        _searchUri(query.trim(), filters, includeFacets: includeFacets),
+        _searchUri(
+          query.trim(),
+          filters,
+          includeFacets: includeFacets ?? page == 1,
+          page: page,
+        ),
       ),
     );
     final items = <InternetArchiveItem>[];
@@ -135,6 +152,9 @@ class InternetArchiveProvider implements MusicSourceProvider {
       items: items,
       tracks: tracks,
       facets: results.facets,
+      page: page,
+      totalResults: results.totalResults,
+      hasMore: _hasMoreResults(results, page: page, limit: limit),
     );
   }
 
@@ -172,6 +192,7 @@ class InternetArchiveProvider implements MusicSourceProvider {
     String query,
     InternetArchiveSearchFilters filters, {
     required bool includeFacets,
+    required int page,
   }) {
     final archiveQuery = _searchQuery(query, filters);
     final queryParameters = <String, dynamic>{
@@ -189,7 +210,7 @@ class InternetArchiveProvider implements MusicSourceProvider {
       ],
       'sort[]': const <String>['downloads desc'],
       'rows': limit.toString(),
-      'page': '1',
+      'page': page.toString(),
       'output': 'json',
     };
     if (includeFacets) {
@@ -221,10 +242,12 @@ final class InternetArchiveSearchPage {
   const InternetArchiveSearchPage({
     required this.results,
     required this.facets,
+    required this.totalResults,
   });
 
   final List<InternetArchiveSearchResult> results;
   final List<InternetArchiveFacet> facets;
+  final int? totalResults;
 
   List<InternetArchiveFacet> facetsFor(String field) {
     return facets
@@ -455,6 +478,7 @@ InternetArchiveSearchPage parseInternetArchiveSearchPage(String jsonText) {
     return const InternetArchiveSearchPage(
       results: <InternetArchiveSearchResult>[],
       facets: <InternetArchiveFacet>[],
+      totalResults: null,
     );
   }
 
@@ -463,6 +487,7 @@ InternetArchiveSearchPage parseInternetArchiveSearchPage(String jsonText) {
     return const InternetArchiveSearchPage(
       results: <InternetArchiveSearchResult>[],
       facets: <InternetArchiveFacet>[],
+      totalResults: null,
     );
   }
 
@@ -474,7 +499,24 @@ InternetArchiveSearchPage parseInternetArchiveSearchPage(String jsonText) {
   final facetsJson = response['facets'] ?? decoded['facets'];
   final facets = _facetsFromJson(facetsJson);
 
-  return InternetArchiveSearchPage(results: results, facets: facets);
+  return InternetArchiveSearchPage(
+    results: results,
+    facets: facets,
+    totalResults: _nullableNonNegativeInt(response['numFound']),
+  );
+}
+
+bool _hasMoreResults(
+  InternetArchiveSearchPage results, {
+  required int page,
+  required int limit,
+}) {
+  final totalResults = results.totalResults;
+  if (totalResults != null) {
+    return ((page - 1) * limit) + results.results.length < totalResults;
+  }
+
+  return results.results.length >= limit;
 }
 
 InternetArchiveItem parseInternetArchiveItem(String jsonText) {
@@ -685,6 +727,22 @@ int _intValue(Object? value) {
   }
 
   return int.tryParse(_stringValue(value)) ?? 0;
+}
+
+int? _nullableNonNegativeInt(Object? value) {
+  if (value == null) {
+    return null;
+  }
+
+  final parsed = switch (value) {
+    num number => number.toInt(),
+    _ => int.tryParse(value.toString().trim()),
+  };
+  if (parsed == null || parsed < 0) {
+    return null;
+  }
+
+  return parsed;
 }
 
 String _stringValue(Object? value) {

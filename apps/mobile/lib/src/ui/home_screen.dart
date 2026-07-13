@@ -138,6 +138,7 @@ class HomeScreen extends StatefulWidget {
     super.key,
     this.initialTab = 0,
     this.onRestartOnboarding,
+    this.internetArchiveProvider,
   }) : assert(
          initialTab >= 0 &&
              initialTab < _aetherTuneNavigationDestinations.length,
@@ -145,6 +146,7 @@ class HomeScreen extends StatefulWidget {
 
   final int initialTab;
   final VoidCallback? onRestartOnboarding;
+  final InternetArchiveProvider? internetArchiveProvider;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -343,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const _HistoryTab(),
-              const _SourcesTab(),
+              _SourcesTab(archiveProvider: widget.internetArchiveProvider),
               _SettingsTab(
                 onRestartOnboarding: widget.onRestartOnboarding,
               ),
@@ -6980,7 +6982,9 @@ class _EmptyLibrary extends StatelessWidget {
 enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
 class _SourcesTab extends StatefulWidget {
-  const _SourcesTab();
+  const _SourcesTab({this.archiveProvider});
+
+  final InternetArchiveProvider? archiveProvider;
 
   @override
   State<_SourcesTab> createState() => _SourcesTabState();
@@ -6988,7 +6992,7 @@ class _SourcesTab extends StatefulWidget {
 
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
-  final _archiveProvider = InternetArchiveProvider();
+  late final InternetArchiveProvider _archiveProvider;
   final _providerSearchController = TextEditingController();
   final _archiveSearchController = TextEditingController();
   final _archiveCollectionController = TextEditingController();
@@ -7014,6 +7018,10 @@ class _SourcesTabState extends State<_SourcesTab> {
       <String, RadioBrowserStreamValidation>{};
   final Set<String> _radioValidatingTrackIds = <String>{};
   List<InternetArchiveFacet> _archiveFacets = <InternetArchiveFacet>[];
+  int _archivePage = 0;
+  int? _archiveTotalResults;
+  int _archiveRequestSerial = 0;
+  bool _archiveHasMore = false;
   bool _archiveLoading = false;
   String? _archiveError;
   bool _podcastLoading = false;
@@ -7027,6 +7035,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   @override
   void initState() {
     super.initState();
+    _archiveProvider = widget.archiveProvider ?? InternetArchiveProvider();
     _provider.search('').then((tracks) {
       if (mounted) {
         setState(() => _demoTracks = tracks);
@@ -7727,8 +7736,9 @@ class _SourcesTabState extends State<_SourcesTab> {
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted:
-                    offlineModeEnabled ? null : (_) => _searchArchiveItems(),
+                onSubmitted: offlineModeEnabled || _archiveLoading
+                    ? null
+                    : (_) => _searchArchiveItems(),
               ),
             ),
             const SizedBox(width: 8),
@@ -7769,7 +7779,7 @@ class _SourcesTabState extends State<_SourcesTab> {
               keyboardType: TextInputType.number,
             ),
             OutlinedButton.icon(
-              onPressed: _clearArchiveFilters,
+              onPressed: _archiveLoading ? null : _clearArchiveFilters,
               icon: const Icon(Icons.filter_alt_off_outlined),
               label: const Text('Clear'),
             ),
@@ -7789,7 +7799,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           const SizedBox(height: 12),
           const LinearProgressIndicator(),
         ],
-        if (_archiveError != null) ...<Widget>[
+        if (_archiveError != null && _archiveItems.isEmpty) ...<Widget>[
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.error_outline),
@@ -7815,6 +7825,40 @@ class _SourcesTabState extends State<_SourcesTab> {
               onTap: () => _openArchiveItem(context, item),
               trailing: const Icon(Icons.chevron_right),
             ),
+        ],
+        if (_archiveItems.isNotEmpty && _archiveError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Could not load more archive audio'),
+            subtitle: Text(_archiveError!),
+            trailing: IconButton(
+              tooltip: 'Retry loading archive results',
+              onPressed: _archiveLoading || offlineModeEnabled
+                  ? null
+                  : _loadMoreArchiveItems,
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        ],
+        if (_archiveItems.isNotEmpty && _archiveHasMore) ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _archiveLoading || offlineModeEnabled
+                  ? null
+                  : _loadMoreArchiveItems,
+              icon: const Icon(Icons.expand_more),
+              label: Text(_archiveLoadMoreLabel),
+            ),
+          ),
+        ] else if (_archiveItems.isNotEmpty && _archiveTotalResults != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            'All $_archiveTotalResults archive results loaded.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
         const SizedBox(height: 16),
         Text(
@@ -8706,47 +8750,112 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _searchArchiveItems() async {
+    await _loadArchiveItems(reset: true);
+  }
+
+  Future<void> _loadMoreArchiveItems() async {
+    await _loadArchiveItems(reset: false);
+  }
+
+  Future<void> _loadArchiveItems({required bool reset}) async {
+    if (_archiveLoading || (!reset && !_archiveHasMore)) {
+      return;
+    }
+
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
+        _archiveRequestSerial += 1;
         _archiveItems = <InternetArchiveItem>[];
         _archiveFacets = <InternetArchiveFacet>[];
+        _archivePage = 0;
+        _archiveTotalResults = null;
+        _archiveHasMore = false;
         _archiveLoading = false;
         _archiveError = 'Offline mode is on.';
       });
       return;
     }
 
+    final requestSerial =
+        reset ? ++_archiveRequestSerial : _archiveRequestSerial;
+    final requestedPage = reset ? 1 : _archivePage + 1;
+
     setState(() {
       _archiveLoading = true;
       _archiveError = null;
+      if (reset) {
+        _archiveItems = <InternetArchiveItem>[];
+        _archiveFacets = <InternetArchiveFacet>[];
+        _archivePage = 0;
+        _archiveTotalResults = null;
+        _archiveHasMore = false;
+      }
     });
 
     try {
       final page = await _archiveProvider.searchAudioPage(
         _archiveSearchController.text,
         filters: _archiveFilters(),
+        page: requestedPage,
+        includeFacets: reset,
       );
-      if (!mounted) {
+      if (!mounted || requestSerial != _archiveRequestSerial) {
         return;
       }
 
       setState(() {
-        _archiveItems = page.items;
-        _archiveFacets = page.facets;
+        _archiveItems = reset
+            ? page.items
+            : _mergeArchiveItems(_archiveItems, page.items);
+        if (reset) {
+          _archiveFacets = page.facets;
+        }
+        _archivePage = page.page;
+        _archiveTotalResults = page.totalResults;
+        _archiveHasMore = page.hasMore;
         _archiveLoading = false;
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestSerial != _archiveRequestSerial) {
         return;
       }
 
       setState(() {
-        _archiveItems = <InternetArchiveItem>[];
-        _archiveFacets = <InternetArchiveFacet>[];
+        if (reset) {
+          _archiveItems = <InternetArchiveItem>[];
+          _archiveFacets = <InternetArchiveFacet>[];
+          _archivePage = 0;
+          _archiveTotalResults = null;
+          _archiveHasMore = false;
+        }
         _archiveLoading = false;
         _archiveError = error.toString();
       });
     }
+  }
+
+  List<InternetArchiveItem> _mergeArchiveItems(
+    List<InternetArchiveItem> current,
+    List<InternetArchiveItem> incoming,
+  ) {
+    final identifiers = current.map((item) => item.identifier).toSet();
+    return <InternetArchiveItem>[
+      ...current,
+      for (final item in incoming)
+        if (identifiers.add(item.identifier)) item,
+    ];
+  }
+
+  String get _archiveLoadMoreLabel {
+    final totalResults = _archiveTotalResults;
+    if (totalResults == null) {
+      return 'Load more archive results';
+    }
+
+    final remaining = totalResults - _archiveItems.length;
+    return remaining > 0
+        ? 'Load more archive results ($remaining remaining)'
+        : 'Load more archive results';
   }
 
   String _archiveItemSubtitle(InternetArchiveItem item) {
@@ -8891,7 +9000,13 @@ class _SourcesTabState extends State<_SourcesTab> {
       _archiveSubjectController.clear();
       _archiveCreatorController.clear();
       _archiveYearController.clear();
+      _archiveRequestSerial += 1;
+      _archiveItems = <InternetArchiveItem>[];
       _archiveFacets = <InternetArchiveFacet>[];
+      _archivePage = 0;
+      _archiveTotalResults = null;
+      _archiveHasMore = false;
+      _archiveError = null;
     });
   }
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added paginated Internet Archive audio search with explicit continuation, exhaustion, retry-safe result retention, and provider pagination tests.
 - Documented and tested portable snapshot restoration for manual playlists and valid playback progress, while keeping automatic merge and collaboration as future work.
 - Added persistent watched audio folders: recursive imports now monitor relevant audio and sidecar-lyrics changes with debounced rescans, safe incomplete-scan handling, user-state preservation, and Options refresh/remove controls.
 - Added persisted 0.5x-3x playback-speed controls in Now Playing and Options, with system-media state propagation and player/widget contract coverage.
