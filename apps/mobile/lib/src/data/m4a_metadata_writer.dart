@@ -526,7 +526,7 @@ int _shiftedMediaOffset(
     return original;
   }
   final updated = original + offsetDelta;
-  if (updated < 0 || updated > _maxUint64) {
+  if (updated < 0 || updated > _maxM4aChunkOffset) {
     throw const FormatException('M4A media chunk offset would overflow.');
   }
   return updated;
@@ -685,6 +685,9 @@ int _uint64(List<int> bytes, int offset) {
   if (offset + 8 > bytes.length) {
     throw const FormatException('M4A 64-bit integer field is truncated.');
   }
+  if ((bytes[offset] & 0x80) != 0) {
+    throw const FormatException('M4A 64-bit media chunk offset is too large.');
+  }
   var value = 0;
   for (var index = 0; index < 8; index += 1) {
     value = (value << 8) | bytes[offset + index];
@@ -712,7 +715,7 @@ void _setUint32(Uint8List bytes, int offset, int value) {
 }
 
 void _setUint64(Uint8List bytes, int offset, int value) {
-  if (value < 0 || value > _maxUint64) {
+  if (value < 0 || value > _maxM4aChunkOffset) {
     throw const FormatException('M4A 64-bit media chunk offset would overflow.');
   }
   for (var index = 7; index >= 0; index -= 1) {
@@ -727,7 +730,7 @@ const _maxTopLevelAtoms = 512;
 const _maxChildAtoms = 1024;
 const _maxContainerDepth = 32;
 const _copyChunkBytes = 64 * 1024;
-const _maxUint64 = 0xffffffffffffffff;
+const _maxM4aChunkOffset = 0x7fffffffffffffff;
 const _titleType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _artistType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _albumType = <int>[0xa9, 0x61, 0x6c, 0x62];

@@ -234,6 +234,60 @@ void main() {
     expect(await file.readAsBytes(), original);
   });
 
+  test('leaves front-loaded M4A files with unsupported co64 offsets untouched', () async {
+    final file = File('${temporaryDirectory.path}/large-co64-front-loaded.m4a');
+    final original = _m4aFile(
+      audio: <int>[1, 2, 3],
+      mediaBeforeMoov: false,
+      extraMoovChildren: <int>[
+        ..._atom(
+          'trak',
+          _atom(
+            'mdia',
+            _atom(
+              'minf',
+              _atom(
+                'stbl',
+                _atom(
+                  'co64',
+                  <int>[
+                    0,
+                    0,
+                    0,
+                    0,
+                    ..._uint32Bytes(1),
+                    0x80,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+    await file.writeAsBytes(original);
+
+    await expectLater(
+      const M4aMetadataWriter().write(
+        path: file.path,
+        title: 'Title',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Rock',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+
+    expect(await file.readAsBytes(), original);
+  });
+
   test('leaves malformed M4A metadata untouched', () async {
     final file = File('${temporaryDirectory.path}/malformed.m4a');
     final original = <int>[
