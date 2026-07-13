@@ -1642,7 +1642,7 @@ Future<bool?> _confirmM4aArtworkWrite(BuildContext context) {
     builder: (dialogContext) => AlertDialog(
       title: const Text('Update M4A embedded artwork?'),
       content: const Text(
-        'This replaces the file cover with the selected PNG or JPEG. Other M4A metadata is preserved. Files with front-loaded moov metadata are left unchanged to protect audio offsets.',
+        'This replaces the file cover with the selected PNG or JPEG. Other M4A metadata is preserved. Standard front-loaded M4A files repair validated chunk offsets; malformed or fragmented layouts are left unchanged.',
       ),
       actions: <Widget>[
         TextButton(
@@ -3653,7 +3653,7 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
             : format == 'FLAC'
             ? 'This writes title, artist, album, and genre to standard FLAC Vorbis comments. Artwork and other FLAC metadata blocks are preserved.'
             : format == 'M4A'
-            ? 'This writes title, artist, album, and genre to standard M4A metadata atoms while preserving artwork and other metadata items. Files with front-loaded moov metadata are left unchanged to protect audio offsets.'
+            ? 'This writes title, artist, album, and genre to standard M4A metadata atoms while preserving artwork and other metadata items. Standard front-loaded M4A files repair validated chunk offsets; malformed or fragmented layouts are left unchanged.'
             : 'This writes title, artist, album, and genre to standard WAV RIFF INFO fields. Other RIFF chunks and audio bytes are preserved. Characters outside legacy Latin-1 are replaced with question marks in the file tag.',
       ),
       actions: <Widget>[

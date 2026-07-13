@@ -95,10 +95,8 @@ Future<_M4aWritePlan> _buildWritePlan(
     }
     final moov = moovAtoms.single;
     final mediaAtoms = atoms.where((atom) => _hasAsciiType(atom, 'mdat')).toList();
-    if (mediaAtoms.isEmpty || mediaAtoms.any((atom) => atom.start > moov.start)) {
-      throw const FormatException(
-        'Only M4A files with media data before moov can be safely updated.',
-      );
+    if (mediaAtoms.isEmpty) {
+      throw const FormatException('M4A must contain media data before it can be updated.');
     }
 
     final payloadLength = moov.end - moov.payloadStart;
@@ -111,16 +109,34 @@ Future<_M4aWritePlan> _buildWritePlan(
       throw const FormatException('M4A moov metadata could not be read completely.');
     }
 
+    var updatedMoov = _updatedMoov(
+      Uint8List.fromList(payload),
+      title: title,
+      artist: artist,
+      album: album,
+      genre: genre,
+      artwork: artwork,
+    );
+    final movedMediaAtoms = mediaAtoms
+        .where((atom) => atom.start > moov.start)
+        .toList(growable: false);
+    final offsetDelta = updatedMoov.length - moov.length;
+    if (movedMediaAtoms.isNotEmpty && offsetDelta != 0) {
+      if (atoms.any((atom) => _hasAsciiType(atom, 'moof'))) {
+        throw const FormatException(
+          'Fragmented M4A layouts cannot be updated safely.',
+        );
+      }
+      updatedMoov = _shiftMdatChunkOffsets(
+        updatedMoov,
+        offsetDelta: offsetDelta,
+        movedMediaAtoms: movedMediaAtoms,
+      );
+    }
+
     return _M4aWritePlan(
       atoms: atoms,
-      moov: _updatedMoov(
-        Uint8List.fromList(payload),
-        title: title,
-        artist: artist,
-        album: album,
-        genre: genre,
-        artwork: artwork,
-      ),
+      moov: updatedMoov,
     );
   } finally {
     await access.close();
@@ -366,6 +382,169 @@ Uint8List _atomBytes(List<int> type, List<int> payload) {
   return bytes.takeBytes();
 }
 
+Uint8List _shiftMdatChunkOffsets(
+  Uint8List moov, {
+  required int offsetDelta,
+  required List<_M4aAtom> movedMediaAtoms,
+}) {
+  if (moov.length < 8 || !_matchesAsciiType(moov, 4, 'moov')) {
+    throw const FormatException('M4A moov metadata could not be updated safely.');
+  }
+  final updated = Uint8List.fromList(moov);
+  _shiftChunkOffsetContainers(
+    updated,
+    startOffset: 8,
+    endOffset: updated.length,
+    offsetDelta: offsetDelta,
+    movedMediaAtoms: movedMediaAtoms,
+  );
+  return updated;
+}
+
+void _shiftChunkOffsetContainers(
+  Uint8List bytes, {
+  required int startOffset,
+  required int endOffset,
+  required int offsetDelta,
+  required List<_M4aAtom> movedMediaAtoms,
+  int depth = 0,
+}) {
+  if (depth > _maxContainerDepth) {
+    throw const FormatException('M4A metadata nesting is too deep to update safely.');
+  }
+  var offset = startOffset;
+  var atomCount = 0;
+  while (offset < endOffset) {
+    if (offset + 8 > endOffset || atomCount >= _maxChildAtoms) {
+      throw const FormatException('M4A chunk-offset container layout is invalid.');
+    }
+    final size = _uint32(bytes, offset);
+    if (size < 8 || size == 1 || offset + size > endOffset) {
+      throw const FormatException('M4A chunk-offset atom layout is invalid.');
+    }
+    final payloadStart = offset + 8;
+    final atomEnd = offset + size;
+    if (_matchesAsciiType(bytes, offset + 4, 'stco')) {
+      _shiftStcoOffsets(
+        bytes,
+        payloadStart: payloadStart,
+        payloadEnd: atomEnd,
+        offsetDelta: offsetDelta,
+        movedMediaAtoms: movedMediaAtoms,
+      );
+    } else if (_matchesAsciiType(bytes, offset + 4, 'co64')) {
+      _shiftCo64Offsets(
+        bytes,
+        payloadStart: payloadStart,
+        payloadEnd: atomEnd,
+        offsetDelta: offsetDelta,
+        movedMediaAtoms: movedMediaAtoms,
+      );
+    } else if (_isChunkOffsetContainer(bytes, offset + 4)) {
+      var childStart = payloadStart;
+      if (_matchesAsciiType(bytes, offset + 4, 'meta')) {
+        if (childStart + 4 > atomEnd) {
+          throw const FormatException('M4A meta atom is missing full-box flags.');
+        }
+        childStart += 4;
+      }
+      _shiftChunkOffsetContainers(
+        bytes,
+        startOffset: childStart,
+        endOffset: atomEnd,
+        offsetDelta: offsetDelta,
+        movedMediaAtoms: movedMediaAtoms,
+        depth: depth + 1,
+      );
+    }
+    offset = atomEnd;
+    atomCount += 1;
+  }
+}
+
+void _shiftStcoOffsets(
+  Uint8List bytes, {
+  required int payloadStart,
+  required int payloadEnd,
+  required int offsetDelta,
+  required List<_M4aAtom> movedMediaAtoms,
+}) {
+  if (payloadStart + 8 > payloadEnd) {
+    throw const FormatException('M4A stco atom is truncated.');
+  }
+  final entryCount = _uint32(bytes, payloadStart + 4);
+  final entriesStart = payloadStart + 8;
+  if (entryCount > (payloadEnd - entriesStart) ~/ 4 ||
+      entriesStart + entryCount * 4 != payloadEnd) {
+    throw const FormatException('M4A stco atom has an invalid entry count.');
+  }
+  for (var index = 0; index < entryCount; index += 1) {
+    final entryOffset = entriesStart + index * 4;
+    final original = _uint32(bytes, entryOffset);
+    final updated = _shiftedMediaOffset(original, offsetDelta, movedMediaAtoms);
+    if (updated != original) {
+      _setUint32(bytes, entryOffset, updated);
+    }
+  }
+}
+
+void _shiftCo64Offsets(
+  Uint8List bytes, {
+  required int payloadStart,
+  required int payloadEnd,
+  required int offsetDelta,
+  required List<_M4aAtom> movedMediaAtoms,
+}) {
+  if (payloadStart + 8 > payloadEnd) {
+    throw const FormatException('M4A co64 atom is truncated.');
+  }
+  final entryCount = _uint32(bytes, payloadStart + 4);
+  final entriesStart = payloadStart + 8;
+  if (entryCount > (payloadEnd - entriesStart) ~/ 8 ||
+      entriesStart + entryCount * 8 != payloadEnd) {
+    throw const FormatException('M4A co64 atom has an invalid entry count.');
+  }
+  for (var index = 0; index < entryCount; index += 1) {
+    final entryOffset = entriesStart + index * 8;
+    final original = _uint64(bytes, entryOffset);
+    final updated = _shiftedMediaOffset(original, offsetDelta, movedMediaAtoms);
+    if (updated != original) {
+      _setUint64(bytes, entryOffset, updated);
+    }
+  }
+}
+
+int _shiftedMediaOffset(
+  int original,
+  int offsetDelta,
+  List<_M4aAtom> movedMediaAtoms,
+) {
+  final pointsAtMovedMedia = movedMediaAtoms.any(
+    (atom) => original >= atom.payloadStart && original < atom.end,
+  );
+  if (!pointsAtMovedMedia) {
+    return original;
+  }
+  final updated = original + offsetDelta;
+  if (updated < 0 || updated > _maxUint64) {
+    throw const FormatException('M4A media chunk offset would overflow.');
+  }
+  return updated;
+}
+
+bool _isChunkOffsetContainer(Uint8List bytes, int typeOffset) {
+  return _matchesAsciiType(bytes, typeOffset, 'moov') ||
+      _matchesAsciiType(bytes, typeOffset, 'trak') ||
+      _matchesAsciiType(bytes, typeOffset, 'mdia') ||
+      _matchesAsciiType(bytes, typeOffset, 'minf') ||
+      _matchesAsciiType(bytes, typeOffset, 'stbl') ||
+      _matchesAsciiType(bytes, typeOffset, 'edts') ||
+      _matchesAsciiType(bytes, typeOffset, 'dinf') ||
+      _matchesAsciiType(bytes, typeOffset, 'udta') ||
+      _matchesAsciiType(bytes, typeOffset, 'meta') ||
+      _matchesAsciiType(bytes, typeOffset, 'mvex');
+}
+
 Future<void> _replaceWithTaggedCopy(File file, _M4aWritePlan plan) async {
   final suffix = DateTime.now().microsecondsSinceEpoch;
   final temporary = File('${file.path}.aethertune-$suffix.part');
@@ -426,6 +605,14 @@ bool _hasAsciiType(_M4aAtom atom, String type) {
       atom.type[1] == type.codeUnitAt(1) &&
       atom.type[2] == type.codeUnitAt(2) &&
       atom.type[3] == type.codeUnitAt(3);
+}
+
+bool _matchesAsciiType(Uint8List bytes, int offset, String type) {
+  return offset + 4 <= bytes.length &&
+      bytes[offset] == type.codeUnitAt(0) &&
+      bytes[offset + 1] == type.codeUnitAt(1) &&
+      bytes[offset + 2] == type.codeUnitAt(2) &&
+      bytes[offset + 3] == type.codeUnitAt(3);
 }
 
 bool _isEditableItem(
@@ -494,6 +681,17 @@ int _uint32(List<int> bytes, int offset) {
       bytes[offset + 3];
 }
 
+int _uint64(List<int> bytes, int offset) {
+  if (offset + 8 > bytes.length) {
+    throw const FormatException('M4A 64-bit integer field is truncated.');
+  }
+  var value = 0;
+  for (var index = 0; index < 8; index += 1) {
+    value = (value << 8) | bytes[offset + index];
+  }
+  return value;
+}
+
 Uint8List _uint32Bytes(int value) {
   return Uint8List.fromList(<int>[
     (value >> 24) & 0xff,
@@ -503,11 +701,33 @@ Uint8List _uint32Bytes(int value) {
   ]);
 }
 
+void _setUint32(Uint8List bytes, int offset, int value) {
+  if (value < 0 || value > 0xffffffff) {
+    throw const FormatException('M4A 32-bit media chunk offset would overflow.');
+  }
+  bytes[offset] = (value >> 24) & 0xff;
+  bytes[offset + 1] = (value >> 16) & 0xff;
+  bytes[offset + 2] = (value >> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+}
+
+void _setUint64(Uint8List bytes, int offset, int value) {
+  if (value < 0 || value > _maxUint64) {
+    throw const FormatException('M4A 64-bit media chunk offset would overflow.');
+  }
+  for (var index = 7; index >= 0; index -= 1) {
+    bytes[offset + index] = value & 0xff;
+    value >>= 8;
+  }
+}
+
 const _maxMoovBytes = 4 * 1024 * 1024;
 const maxM4aEmbeddedArtworkBytes = 512 * 1024;
 const _maxTopLevelAtoms = 512;
 const _maxChildAtoms = 1024;
+const _maxContainerDepth = 32;
 const _copyChunkBytes = 64 * 1024;
+const _maxUint64 = 0xffffffffffffffff;
 const _titleType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _artistType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _albumType = <int>[0xa9, 0x61, 0x6c, 0x62];
