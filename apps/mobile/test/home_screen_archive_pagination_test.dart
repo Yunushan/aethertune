@@ -12,6 +12,7 @@ import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/l10n/app_localizations.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/home_screen.dart';
@@ -76,6 +77,8 @@ void main() {
           ChangeNotifierProvider<PlayerController>.value(value: player),
         ],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: HomeScreen(
             initialTab: 4,
             internetArchiveProvider: provider,
