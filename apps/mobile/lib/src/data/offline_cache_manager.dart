@@ -87,7 +87,7 @@ final class OfflineCacheManager {
   Future<OfflineCacheMaterialization> materialize(
     OfflineCacheEntry entry, {
     OfflineCacheCancellationToken? cancellationToken,
-  ) async {
+  }) async {
     cancellationToken?.throwIfCancelled();
     if (entry.track.hasLocalSource) {
       return OfflineCacheMaterialization(
@@ -323,7 +323,7 @@ final class OfflineCacheManager {
     File targetFile,
     File partialFile, {
     OfflineCacheCancellationToken? cancellationToken,
-  ) async {
+  }) async {
     final client = HttpClient();
     cancellationToken?.whenCancelled.then<void>((_) {
       client.close(force: true);
