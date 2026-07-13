@@ -769,6 +769,40 @@ void main() {
     expect(restored.artworkIsUserManaged, isFalse);
   });
 
+  test('updates scanned embedded artwork without replacing a private cover',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    final originalArtwork = Uri.parse('data:image/png;base64,b3JpZ2luYWw=');
+    final replacementArtwork = Uri.parse('data:image/jpeg;base64,cmVwbGFjZWQ=');
+    final privateArtwork = Uri.file('/private/track-artwork.png');
+    await store.addTracks(<Track>[
+      _track('1', artworkUri: originalArtwork),
+    ]);
+
+    final scannedUpdate = await store.updateEmbeddedTrackArtwork(
+      '1',
+      replacementArtwork,
+    );
+    expect(scannedUpdate!.artworkUri, replacementArtwork);
+    expect(scannedUpdate.artworkSourceUri, replacementArtwork);
+    expect(scannedUpdate.artworkIsUserManaged, isFalse);
+
+    await store.updateTrackArtwork('1', privateArtwork);
+    final preservedPrivateArtwork = await store.updateEmbeddedTrackArtwork(
+      '1',
+      originalArtwork,
+    );
+    expect(preservedPrivateArtwork!.artworkUri, privateArtwork);
+    expect(preservedPrivateArtwork.artworkSourceUri, originalArtwork);
+    expect(preservedPrivateArtwork.artworkIsUserManaged, isTrue);
+
+    await expectLater(
+      store.updateEmbeddedTrackArtwork('1', Uri.parse('https://example.com/cover.png')),
+      throwsArgumentError,
+    );
+  });
+
   test('exports and imports playlist JSON documents', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 1),

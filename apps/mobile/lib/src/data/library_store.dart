@@ -1594,6 +1594,43 @@ class LibraryStore extends ChangeNotifier {
     return updated;
   }
 
+  Future<Track?> updateEmbeddedTrackArtwork(String id, Uri? artworkUri) async {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final current = _tracks[index];
+    if (current.sourceId != 'local') {
+      throw UnsupportedError(
+        'Embedded artwork is available for local library tracks only.',
+      );
+    }
+    if (artworkUri != null && artworkUri.scheme != 'data') {
+      throw ArgumentError.value(
+        artworkUri,
+        'artworkUri',
+        'Embedded artwork must use a data URI.',
+      );
+    }
+
+    final updated = current.artworkIsUserManaged
+        ? current.copyWith(
+            artworkSourceUri: artworkUri,
+            clearArtworkSourceUri: artworkUri == null,
+          )
+        : current.copyWith(
+            artworkUri: artworkUri,
+            clearArtworkUri: artworkUri == null,
+            artworkSourceUri: artworkUri,
+            clearArtworkSourceUri: artworkUri == null,
+          );
+    _tracks[index] = updated;
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
   Future<Track?> updateTrackChapters(
     String id,
     Iterable<TrackChapter> chapters,

@@ -29,6 +29,29 @@ class M4aMetadataWriter {
     );
     await _replaceWithTaggedCopy(file, plan);
   }
+
+  Future<void> writeArtwork({
+    required String path,
+    required Uint8List artwork,
+  }) async {
+    if (!path.toLowerCase().endsWith('.m4a')) {
+      throw const FormatException('Only local M4A files can be updated.');
+    }
+    if (artwork.isEmpty || artwork.lengthInBytes > maxM4aEmbeddedArtworkBytes) {
+      throw const FormatException('M4A artwork must be a PNG or JPEG smaller than 512 KiB.');
+    }
+    if (_m4aArtworkDataType(artwork) == null) {
+      throw const FormatException('M4A artwork must be a PNG or JPEG image.');
+    }
+
+    final file = File(path);
+    if (!await file.exists()) {
+      throw FileSystemException('The M4A file no longer exists.', path);
+    }
+
+    final plan = await _buildWritePlan(file, artwork: artwork);
+    await _replaceWithTaggedCopy(file, plan);
+  }
 }
 
 class _M4aWritePlan {
@@ -56,10 +79,11 @@ class _M4aAtom {
 
 Future<_M4aWritePlan> _buildWritePlan(
   File file, {
-  required String title,
-  required String artist,
-  required String album,
-  required String genre,
+  String? title,
+  String? artist,
+  String? album,
+  String? genre,
+  Uint8List? artwork,
 }) async {
   final access = await file.open(mode: FileMode.read);
   try {
@@ -95,6 +119,7 @@ Future<_M4aWritePlan> _buildWritePlan(
         artist: artist,
         album: album,
         genre: genre,
+        artwork: artwork,
       ),
     );
   } finally {
@@ -136,10 +161,11 @@ Future<List<_M4aAtom>> _readTopLevelAtoms(
 
 Uint8List _updatedMoov(
   Uint8List payload, {
-  required String title,
-  required String artist,
-  required String album,
-  required String genre,
+  String? title,
+  String? artist,
+  String? album,
+  String? genre,
+  Uint8List? artwork,
 }) {
   final moovChildren = _childAtoms(payload);
   final udtaAtoms = moovChildren.where((atom) => _hasAsciiType(atom, 'udta')).toList();
@@ -155,6 +181,7 @@ Uint8List _updatedMoov(
     artist: artist,
     album: album,
     genre: genre,
+    artwork: artwork,
   );
 
   final output = BytesBuilder(copy: false);
@@ -169,10 +196,11 @@ Uint8List _updatedMoov(
 
 Uint8List _updatedUdta(
   Uint8List payload, {
-  required String title,
-  required String artist,
-  required String album,
-  required String genre,
+  String? title,
+  String? artist,
+  String? album,
+  String? genre,
+  Uint8List? artwork,
 }) {
   final children = _childAtoms(payload);
   final metaAtoms = children.where((atom) => _hasAsciiType(atom, 'meta')).toList();
@@ -188,6 +216,7 @@ Uint8List _updatedUdta(
     artist: artist,
     album: album,
     genre: genre,
+    artwork: artwork,
   );
 
   final output = BytesBuilder(copy: false);
@@ -202,10 +231,11 @@ Uint8List _updatedUdta(
 
 Uint8List _updatedMeta(
   Uint8List payload, {
-  required String title,
-  required String artist,
-  required String album,
-  required String genre,
+  String? title,
+  String? artist,
+  String? album,
+  String? genre,
+  Uint8List? artwork,
 }) {
   if (payload.isNotEmpty && payload.length < 4) {
     throw const FormatException('M4A meta atom is missing full-box flags.');
@@ -225,6 +255,7 @@ Uint8List _updatedMeta(
     artist: artist,
     album: album,
     genre: genre,
+    artwork: artwork,
   );
 
   final output = BytesBuilder(copy: false)..add(flags);
@@ -239,28 +270,39 @@ Uint8List _updatedMeta(
 
 Uint8List _updatedIlst(
   Uint8List payload, {
-  required String title,
-  required String artist,
-  required String album,
-  required String genre,
+  String? title,
+  String? artist,
+  String? album,
+  String? genre,
+  Uint8List? artwork,
 }) {
   final output = BytesBuilder(copy: false);
   for (final item in _childAtoms(payload)) {
-    if (!_isEditableItem(item.type)) {
+    if (!_isEditableItem(
+      item.type,
+      updateTitle: title != null,
+      updateArtist: artist != null,
+      updateAlbum: album != null,
+      updateGenre: genre != null,
+      updateArtwork: artwork != null,
+    )) {
       output.add(payload.sublist(item.start, item.end));
     }
   }
-  if (title.trim().isNotEmpty) {
+  if (title != null && title.trim().isNotEmpty) {
     output.add(_textItem(_titleType, title));
   }
-  if (artist.trim().isNotEmpty) {
+  if (artist != null && artist.trim().isNotEmpty) {
     output.add(_textItem(_artistType, artist));
   }
-  if (album.trim().isNotEmpty) {
+  if (album != null && album.trim().isNotEmpty) {
     output.add(_textItem(_albumType, album));
   }
-  if (genre.trim().isNotEmpty) {
+  if (genre != null && genre.trim().isNotEmpty) {
     output.add(_textItem(_genreType, genre));
+  }
+  if (artwork != null) {
+    output.add(_artworkItem(artwork));
   }
   return _atom('ilst', output.takeBytes());
 }
@@ -295,6 +337,18 @@ Uint8List _textItem(List<int> type, String value) {
     ..add(const <int>[0, 0, 0, 0])
     ..add(utf8.encode(value.trim()));
   return _atomBytes(type, _atom('data', data.takeBytes()));
+}
+
+Uint8List _artworkItem(Uint8List artwork) {
+  final dataType = _m4aArtworkDataType(artwork);
+  if (dataType == null) {
+    throw const FormatException('M4A artwork must be a PNG or JPEG image.');
+  }
+  final data = BytesBuilder(copy: false)
+    ..add(_uint32Bytes(dataType))
+    ..add(const <int>[0, 0, 0, 0])
+    ..add(artwork);
+  return _atom('covr', _atom('data', data.takeBytes()));
 }
 
 Uint8List _atom(String type, List<int> payload) {
@@ -374,11 +428,40 @@ bool _hasAsciiType(_M4aAtom atom, String type) {
       atom.type[3] == type.codeUnitAt(3);
 }
 
-bool _isEditableItem(List<int> type) {
-  return _sameBytes(type, _titleType) ||
-      _sameBytes(type, _artistType) ||
-      _sameBytes(type, _albumType) ||
-      _sameBytes(type, _genreType);
+bool _isEditableItem(
+  List<int> type, {
+  required bool updateTitle,
+  required bool updateArtist,
+  required bool updateAlbum,
+  required bool updateGenre,
+  required bool updateArtwork,
+}) {
+  return (updateTitle && _sameBytes(type, _titleType)) ||
+      (updateArtist && _sameBytes(type, _artistType)) ||
+      (updateAlbum && _sameBytes(type, _albumType)) ||
+      (updateGenre && _sameBytes(type, _genreType)) ||
+      (updateArtwork && _hasAsciiTypeBytes(type, 'covr'));
+}
+
+int? _m4aArtworkDataType(Uint8List bytes) {
+  if (bytes.lengthInBytes >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4e &&
+      bytes[3] == 0x47 &&
+      bytes[4] == 0x0d &&
+      bytes[5] == 0x0a &&
+      bytes[6] == 0x1a &&
+      bytes[7] == 0x0a) {
+    return 14;
+  }
+  if (bytes.lengthInBytes >= 3 &&
+      bytes[0] == 0xff &&
+      bytes[1] == 0xd8 &&
+      bytes[2] == 0xff) {
+    return 13;
+  }
+  return null;
 }
 
 bool _sameBytes(List<int> left, List<int> right) {
@@ -391,6 +474,14 @@ bool _sameBytes(List<int> left, List<int> right) {
     }
   }
   return true;
+}
+
+bool _hasAsciiTypeBytes(List<int> type, String value) {
+  return type.length == 4 &&
+      type[0] == value.codeUnitAt(0) &&
+      type[1] == value.codeUnitAt(1) &&
+      type[2] == value.codeUnitAt(2) &&
+      type[3] == value.codeUnitAt(3);
 }
 
 int _uint32(List<int> bytes, int offset) {
@@ -413,6 +504,7 @@ Uint8List _uint32Bytes(int value) {
 }
 
 const _maxMoovBytes = 4 * 1024 * 1024;
+const maxM4aEmbeddedArtworkBytes = 512 * 1024;
 const _maxTopLevelAtoms = 512;
 const _maxChildAtoms = 1024;
 const _copyChunkBytes = 64 * 1024;

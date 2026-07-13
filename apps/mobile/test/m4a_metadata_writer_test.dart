@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -69,6 +70,63 @@ void main() {
     expect(_mdatPayload(bytes), <int>[9, 8, 7]);
     expect(_containsBytes(bytes, artwork), isTrue);
     expect(_containsBytes(bytes, customPayload), isTrue);
+  });
+
+  test('replaces embedded M4A artwork and preserves text, audio, and custom metadata', () async {
+    final file = File('${temporaryDirectory.path}/cover.m4a');
+    final originalArtwork = <int>[0x89, 0x50, 0x4e, 0x47, 1];
+    final replacementArtwork = <int>[0xff, 0xd8, 0xff, 0xe0, 2];
+    final customPayload = <int>[0xca, 0xfe, 0xba, 0xbe];
+    await file.writeAsBytes(
+      _m4aFile(
+        audio: <int>[3, 4, 5],
+        title: 'Existing title',
+        artwork: originalArtwork,
+        customPayload: customPayload,
+      ),
+    );
+
+    await const M4aMetadataWriter().writeArtwork(
+      path: file.path,
+      artwork: Uint8List.fromList(replacementArtwork),
+    );
+
+    final bytes = await file.readAsBytes();
+    expect(_mdatPayload(bytes), <int>[3, 4, 5]);
+    expect(_containsBytes(bytes, originalArtwork), isFalse);
+    expect(_containsBytes(bytes, replacementArtwork), isTrue);
+    expect(_containsBytes(bytes, utf8.encode('Existing title')), isTrue);
+    expect(_containsBytes(bytes, customPayload), isTrue);
+
+    final result = await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+      importedAt: DateTime.utc(2026, 1, 1),
+    );
+    expect(result.tracks.single.artworkUri?.scheme, 'data');
+    expect(result.tracks.single.artworkUri.toString(), contains('image/jpeg'));
+  });
+
+  test('rejects unsupported or oversized M4A artwork without touching the file', () async {
+    final file = File('${temporaryDirectory.path}/invalid-cover.m4a');
+    final original = _m4aFile(audio: <int>[4, 5, 6]);
+    await file.writeAsBytes(original);
+
+    await expectLater(
+      const M4aMetadataWriter().writeArtwork(
+        path: file.path,
+        artwork: Uint8List.fromList(<int>[0x47, 0x49, 0x46, 0x38]),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    await expectLater(
+      const M4aMetadataWriter().writeArtwork(
+        path: file.path,
+        artwork: Uint8List(maxM4aEmbeddedArtworkBytes + 1),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+
+    expect(await file.readAsBytes(), original);
   });
 
   test('leaves front-loaded M4A files untouched', () async {

@@ -1508,6 +1508,18 @@ Future<void> _editTrackArtwork(BuildContext context, Track track) async {
                 await _setTrackArtworkUrl(context, track);
               },
             ),
+            if (_isLocalM4a(track))
+              ListTile(
+                leading: const Icon(Icons.save_alt_outlined),
+                title: const Text('Write cover to M4A file'),
+                subtitle: const Text(
+                  'Replace the embedded cover with a PNG or JPEG under 512 KiB.',
+                ),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _writeM4aArtwork(context, track);
+                },
+              ),
             if (track.artworkIsUserManaged)
               ListTile(
                 leading: const Icon(Icons.restore_outlined),
@@ -1574,6 +1586,91 @@ Future<void> _pickTrackArtworkFile(BuildContext context, Track track) async {
       );
     }
   }
+}
+
+Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final file = await FilePicker.pickFile(
+    type: FileType.image,
+    dialogTitle: 'Choose M4A cover artwork',
+  );
+  if (!context.mounted || file == null) {
+    return;
+  }
+
+  final artwork = await file.readAsBytes();
+  if (!context.mounted) {
+    return;
+  }
+  final confirmed = await _confirmM4aArtworkWrite(context);
+  if (!context.mounted || confirmed != true) {
+    return;
+  }
+
+  try {
+    await const M4aMetadataWriter().writeArtwork(
+      path: track.localPath!,
+      artwork: artwork,
+    );
+    final updated = await context.read<LibraryStore>().updateEmbeddedTrackArtwork(
+      track.id,
+      _m4aArtworkDataUri(artwork),
+    );
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('Wrote embedded artwork for ${updated.title}.')),
+    );
+  } on FormatException catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  } on Object catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not update embedded M4A artwork: $error')),
+      );
+    }
+  }
+}
+
+Future<bool?> _confirmM4aArtworkWrite(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Update M4A embedded artwork?'),
+      content: const Text(
+        'This replaces the file cover with the selected PNG or JPEG. Other M4A metadata is preserved. Files with front-loaded moov metadata are left unchanged to protect audio offsets.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Update M4A'),
+        ),
+      ],
+    ),
+  );
+}
+
+Uri _m4aArtworkDataUri(List<int> artwork) {
+  final mimeType = artwork.length >= 8 &&
+          artwork[0] == 0x89 &&
+          artwork[1] == 0x50 &&
+          artwork[2] == 0x4e &&
+          artwork[3] == 0x47 &&
+          artwork[4] == 0x0d &&
+          artwork[5] == 0x0a &&
+          artwork[6] == 0x1a &&
+          artwork[7] == 0x0a
+      ? 'image/png'
+      : 'image/jpeg';
+  return Uri.parse('data:$mimeType;base64,${base64Encode(artwork)}');
 }
 
 Future<void> _setTrackArtworkUrl(BuildContext context, Track track) async {
