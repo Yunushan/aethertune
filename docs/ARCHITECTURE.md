@@ -152,7 +152,7 @@ only the latest checksum-verified portable snapshot per user under
 paths and device cache jobs. Registration, token lifecycle, automatic sync,
 and merge policies remain client/server roadmap work.
 
-The server is intentionally small, but it is real code with tests and CI coverage. Future server work should add authenticated sync, remote library metadata, and provider coordination without weakening the client-first privacy model.
+The server is intentionally small, but it is real code with tests and CI coverage. Future server work should add account registration and token lifecycle, automatic merge/background sync, remote library metadata, and provider coordination without weakening the client-first privacy model.
 
 ## Future modules
 
