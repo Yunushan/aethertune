@@ -1537,6 +1537,49 @@ class LibraryStore extends ChangeNotifier {
     return updated;
   }
 
+  Future<Track?> updateTrackArtwork(String id, Uri? artworkUri) async {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final current = _tracks[index];
+    if (current.sourceId != 'local') {
+      throw UnsupportedError(
+        'Artwork editing is available for local library tracks only.',
+      );
+    }
+    if (artworkUri != null &&
+        artworkUri.scheme != 'file' &&
+        artworkUri.scheme != 'http' &&
+        artworkUri.scheme != 'https') {
+      throw ArgumentError.value(
+        artworkUri,
+        'artworkUri',
+        'Artwork must be a local file or an http/https URL.',
+      );
+    }
+
+    final updated = artworkUri == null
+        ? current.copyWith(
+            artworkUri: current.artworkSourceUri,
+            clearArtworkUri: current.artworkSourceUri == null,
+            clearArtworkSourceUri: true,
+            artworkIsUserManaged: false,
+          )
+        : current.copyWith(
+            artworkUri: artworkUri,
+            artworkSourceUri: current.artworkIsUserManaged
+                ? current.artworkSourceUri
+                : current.artworkUri,
+            artworkIsUserManaged: true,
+          );
+    _tracks[index] = updated;
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
   Future<Track?> updateTrackChapters(
     String id,
     Iterable<TrackChapter> chapters,
@@ -2728,7 +2771,7 @@ class LibraryStore extends ChangeNotifier {
       'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
       'offlineCacheProviderLimitMegabytes':
           Map<String, int>.from(_offlineCacheProviderLimitMegabytes),
-      'tracks': _tracks.map((track) => track.toJson()).toList(),
+      'tracks': _tracks.map(_portableTrackArtworkJson).toList(),
       'playlists': _playlists
           .map(_portablePlaylistJson)
           .toList(growable: false),
@@ -2796,7 +2839,7 @@ class LibraryStore extends ChangeNotifier {
       'version': _playlistDocumentVersion,
       'exportedAt': _clock().toIso8601String(),
       'playlist': _portablePlaylistJson(playlist),
-      'tracks': tracks.map((track) => track.toJson()).toList(),
+      'tracks': tracks.map(_portableTrackArtworkJson).toList(),
     });
   }
 
@@ -3457,6 +3500,11 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<void> mergeSyncSnapshotJson(String snapshotJson) async {
+    final localPrivateArtworkByTrackId = <String, Track>{
+      for (final track in _tracks)
+        if (track.artworkIsUserManaged && track.artworkUri?.scheme == 'file')
+          track.id: track,
+    };
     final remote = _decodeSyncSnapshot(snapshotJson);
     final local = Map<String, Object?>.from(
       jsonDecode(exportSyncSnapshotJson()) as Map,
@@ -3505,6 +3553,29 @@ class LibraryStore extends ChangeNotifier {
       remote['searchQueryHistory'],
     );
     await restoreSyncSnapshotJson(jsonEncode(merged));
+
+    var restoredPrivateArtwork = false;
+    for (final entry in localPrivateArtworkByTrackId.entries) {
+      final index = _tracks.indexWhere((track) => track.id == entry.key);
+      if (index == -1) {
+        continue;
+      }
+      final restored = _tracks[index];
+      if (restored.sourceId != 'local') {
+        continue;
+      }
+      final original = entry.value;
+      _tracks[index] = restored.copyWith(
+        artworkUri: original.artworkUri,
+        artworkSourceUri: original.artworkSourceUri,
+        artworkIsUserManaged: true,
+      );
+      restoredPrivateArtwork = true;
+    }
+    if (restoredPrivateArtwork) {
+      await _save();
+      notifyListeners();
+    }
   }
 
   Map<String, Object?> _decodeSyncSnapshot(String snapshotJson) {
@@ -4980,17 +5051,34 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Map<String, Object?> _portableSyncTrackJson(Track track) {
-    final json = track.toJson();
+    final json = _portableTrackArtworkJson(track);
     json
       ..['localPath'] = null
-      ..['artworkUri'] = _portableSyncUri(
-        json['artworkUri'] as String?,
-        allowData: true,
-      )
       ..['streamUrl'] = _portableSyncUri(
         json['streamUrl'] as String?,
         allowData: false,
       );
+    return json;
+  }
+
+  Map<String, Object?> _portableTrackArtworkJson(Track track) {
+    final json = track.toJson();
+    final portableArtwork = _portableSyncUri(
+      json['artworkUri'] as String?,
+      allowData: true,
+    );
+    final portableSourceArtwork = _portableSyncUri(
+      json['artworkSourceUri'] as String?,
+      allowData: true,
+    );
+    final hasPortableManagedArtwork =
+        track.artworkIsUserManaged && portableArtwork != null;
+    json
+      ..['artworkUri'] = portableArtwork ?? portableSourceArtwork
+      ..['artworkSourceUri'] = hasPortableManagedArtwork
+          ? portableSourceArtwork
+          : null
+      ..['artworkIsUserManaged'] = hasPortableManagedArtwork;
     return json;
   }
 
@@ -6648,7 +6736,13 @@ class LibraryStore extends ChangeNotifier {
       album: scanned.album,
       genre: scanned.genre,
       duration: scanned.duration,
-      artworkUri: scanned.artworkUri,
+      artworkUri: current.artworkIsUserManaged
+          ? current.artworkUri
+          : scanned.artworkUri,
+      artworkSourceUri: current.artworkIsUserManaged
+          ? current.artworkSourceUri
+          : null,
+      artworkIsUserManaged: current.artworkIsUserManaged,
       artworkUriIsEphemeral: scanned.artworkUriIsEphemeral,
       providerArtworkId: scanned.providerArtworkId,
       providerArtworkVersion: scanned.providerArtworkVersion,

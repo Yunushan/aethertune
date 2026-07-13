@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added local track artwork editing: validated private PNG/JPEG/GIF/WebP picks, safe web URLs, scanned-artwork restore, scanner-refresh preservation, and portable backup/sync/playlist privacy fallback.
 - Added persisted local artist following from artist browse sheets, a newest-followed-artists Home feed section, and backup/snapshot-sync coverage; remote creator/channel subscriptions remain roadmap work.
 - Added paginated Internet Archive audio search with explicit continuation, exhaustion, retry-safe result retention, and provider pagination tests.
 - Documented and tested portable snapshot restoration for manual playlists and valid playback progress, while keeping automatic merge and collaboration as future work.

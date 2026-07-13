@@ -27,16 +27,20 @@ void main() {
       path: '$root/one.mp3',
       title: 'Original title',
       hash: 'old-hash',
+      artworkUri: Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
       addedAt: DateTime.utc(2026, 1, 1),
     );
     await store.addTracks(<Track>[original]);
     await store.toggleFavorite(original.id);
     await store.setLyrics(original.id, 'Manual lyrics');
+    final privateArtwork = Uri.file('/private/manual-cover.png');
+    await store.updateTrackArtwork(original.id, privateArtwork);
 
     final refreshed = _track(
       path: '$root/one.mp3',
       title: 'Rescanned title',
       hash: 'new-hash',
+      artworkUri: Uri.parse('data:image/png;base64,cmVzY2FubmVk'),
       addedAt: DateTime.utc(2026, 7, 12),
     );
     final added = _track(
@@ -58,6 +62,12 @@ void main() {
     expect(updated.title, 'Rescanned title');
     expect(updated.isFavorite, isTrue);
     expect(updated.addedAt, DateTime.utc(2026, 1, 1));
+    expect(updated.artworkUri, privateArtwork);
+    expect(
+      updated.artworkSourceUri,
+      Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
+    );
+    expect(updated.artworkIsUserManaged, isTrue);
     expect(store.lyricsForTrack(original.id)?.plainText, 'Manual lyrics');
     expect(
       store.lyricsForTrack(added.id)?.plainText,
@@ -165,6 +175,7 @@ Track _track({
   required String path,
   required String title,
   required String hash,
+  Uri? artworkUri,
   DateTime? addedAt,
 }) {
   return Track(
@@ -174,6 +185,7 @@ Track _track({
     album: 'Watched album',
     localPath: path,
     contentHash: hash,
+    artworkUri: artworkUri,
     sourceId: 'local',
     addedAt: addedAt,
   );

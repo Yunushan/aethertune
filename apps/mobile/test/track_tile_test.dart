@@ -1,0 +1,37 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/ui/widgets/track_tile.dart';
+
+void main() {
+  testWidgets('shows and invokes the optional artwork action', (tester) async {
+    var artworkEdits = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TrackTile(
+            track: Track(id: 'local', title: 'Local track'),
+            onPlay: () {},
+            onFavorite: () {},
+            onAddToPlaylist: () {},
+            onLyrics: () {},
+            onEditMetadata: () {},
+            onEditArtwork: () => artworkEdits += 1,
+            onRemove: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(PopupMenuButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Artwork'), findsOneWidget);
+
+    await tester.tap(find.text('Artwork'));
+    await tester.pumpAndSettle();
+
+    expect(artworkEdits, 1);
+  });
+}

@@ -15,6 +15,7 @@ class TrackTile extends StatelessWidget {
     required this.onAddToPlaylist,
     required this.onLyrics,
     required this.onEditMetadata,
+    this.onEditArtwork,
     required this.onRemove,
     super.key,
   });
@@ -29,6 +30,7 @@ class TrackTile extends StatelessWidget {
   final VoidCallback onAddToPlaylist;
   final VoidCallback onLyrics;
   final VoidCallback onEditMetadata;
+  final VoidCallback? onEditArtwork;
   final VoidCallback onRemove;
 
   @override
@@ -80,6 +82,9 @@ class TrackTile extends StatelessWidget {
               break;
             case _TrackAction.editMetadata:
               onEditMetadata();
+              break;
+            case _TrackAction.editArtwork:
+              onEditArtwork?.call();
               break;
             case _TrackAction.remove:
               onRemove();
@@ -148,6 +153,14 @@ class TrackTile extends StatelessWidget {
               title: Text('Edit metadata'),
             ),
           ),
+          if (onEditArtwork != null)
+            const PopupMenuItem(
+              value: _TrackAction.editArtwork,
+              child: ListTile(
+                leading: Icon(Icons.image_outlined),
+                title: Text('Artwork'),
+              ),
+            ),
           const PopupMenuItem(
             value: _TrackAction.remove,
             child: ListTile(
@@ -170,5 +183,6 @@ enum _TrackAction {
   addToPlaylist,
   lyrics,
   editMetadata,
+  editArtwork,
   remove,
 }

@@ -27,6 +27,7 @@ import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/subsonic_provider.dart';
+import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
@@ -111,6 +112,7 @@ const _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
 ];
 
 final _playlistArtworkFileStore = PlaylistArtworkFileStore();
+final _trackArtworkFileStore = TrackArtworkFileStore();
 const _platformTextShareService = SharePlusTextShareService();
 
 List<NavigationDestination> _navigationBarDestinations() {
@@ -1458,6 +1460,215 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
   }
 }
 
+Future<void> _editTrackArtwork(BuildContext context, Track track) async {
+  if (track.sourceId != 'local') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Artwork editing is available for local library tracks.'),
+      ),
+    );
+    return;
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      return SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose image file'),
+              subtitle: const Text(
+                'Store a private PNG, JPEG, GIF, or WebP image.',
+              ),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await _pickTrackArtworkFile(context, track);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link_outlined),
+              title: const Text('Set image URL'),
+              subtitle: const Text('Use an http or https image URL.'),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await _setTrackArtworkUrl(context, track);
+              },
+            ),
+            if (track.artworkIsUserManaged)
+              ListTile(
+                leading: const Icon(Icons.restore_outlined),
+                title: const Text('Restore scanned artwork'),
+                subtitle: const Text(
+                  'Remove the saved cover and use the embedded artwork again.',
+                ),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _restoreTrackArtwork(context, track);
+                },
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _pickTrackArtworkFile(BuildContext context, Track track) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final file = await FilePicker.pickFile(
+    type: FileType.image,
+    dialogTitle: 'Choose track artwork',
+  );
+  if (!context.mounted || file == null) {
+    return;
+  }
+
+  Uri? savedArtwork;
+  try {
+    savedArtwork = await _trackArtworkFileStore.save(await file.readAsBytes());
+    if (!context.mounted) {
+      await _trackArtworkFileStore.delete(savedArtwork);
+      return;
+    }
+    final updated = await context.read<LibraryStore>().updateTrackArtwork(
+      track.id,
+      savedArtwork,
+    );
+    if (!context.mounted || updated == null) {
+      await _trackArtworkFileStore.delete(savedArtwork);
+      return;
+    }
+    await _trackArtworkFileStore.delete(
+      track.artworkIsUserManaged ? track.artworkUri : null,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('Updated artwork for ${updated.title}.')),
+    );
+  } on FormatException catch (error) {
+    await _trackArtworkFileStore.delete(savedArtwork);
+    if (context.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  } on Object catch (error) {
+    await _trackArtworkFileStore.delete(savedArtwork);
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save artwork: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _setTrackArtworkUrl(BuildContext context, Track track) async {
+  final initialValue = track.artworkIsUserManaged &&
+          track.artworkUri != null &&
+          _isNetworkImageUri(track.artworkUri!)
+      ? track.artworkUri!.toString()
+      : '';
+  final value = await _promptForTrackArtworkUrl(context, initialValue);
+  if (!context.mounted || value == null) {
+    return;
+  }
+
+  final artworkUri = Uri.tryParse(value.trim());
+  if (artworkUri == null || !_isNetworkImageUri(artworkUri)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Enter an http or https image URL.')),
+    );
+    return;
+  }
+
+  try {
+    final updated = await context.read<LibraryStore>().updateTrackArtwork(
+      track.id,
+      artworkUri,
+    );
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    await _trackArtworkFileStore.delete(
+      track.artworkIsUserManaged ? track.artworkUri : null,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Updated artwork for ${updated.title}.')),
+    );
+  } on Object catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save artwork: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _restoreTrackArtwork(BuildContext context, Track track) async {
+  final updated = await context.read<LibraryStore>().updateTrackArtwork(
+    track.id,
+    null,
+  );
+  if (!context.mounted || updated == null) {
+    return;
+  }
+  await _trackArtworkFileStore.delete(track.artworkUri);
+  if (!context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Restored scanned artwork for ${updated.title}.')),
+  );
+}
+
+Future<String?> _promptForTrackArtworkUrl(
+  BuildContext context,
+  String initialValue,
+) async {
+  final controller = TextEditingController(text: initialValue);
+  try {
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Track artwork URL'),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Image URL',
+              hintText: 'https://example.com/cover.png',
+            ),
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  } finally {
+    controller.dispose();
+  }
+}
+
 class _LyricsEditorResult {
   const _LyricsEditorResult({
     required this.plainText,
@@ -2060,6 +2271,9 @@ class _HomeTabState extends State<_HomeTab> {
               onEditMetadata: () => unawaited(
                 _showTrackMetadataEditor(context, track),
               ),
+              onEditArtwork: track.sourceId == 'local'
+                  ? () => unawaited(_editTrackArtwork(context, track))
+                  : null,
               onRemove: () => library.removeTrack(track.id),
             ),
           const SizedBox(height: 12),
@@ -2128,6 +2342,9 @@ class _HomeTabState extends State<_HomeTab> {
           onEditMetadata: () => unawaited(
             _showTrackMetadataEditor(context, track),
           ),
+          onEditArtwork: track.sourceId == 'local'
+              ? () => unawaited(_editTrackArtwork(context, track))
+              : null,
           onRemove: () => library.removeTrack(track.id),
         ),
       const SizedBox(height: 12),
@@ -2572,6 +2789,9 @@ class _LibraryTab extends StatelessWidget {
                   onEditMetadata: () => unawaited(
                     _showTrackMetadataEditor(context, track),
                   ),
+                  onEditArtwork: track.sourceId == 'local'
+                      ? () => unawaited(_editTrackArtwork(context, track))
+                      : null,
                   onRemove: () => library.removeTrack(track.id),
                 );
               },
@@ -2909,6 +3129,9 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                 onEditMetadata: () => unawaited(
                   _showTrackMetadataEditor(context, track),
                 ),
+                onEditArtwork: track.sourceId == 'local'
+                    ? () => unawaited(_editTrackArtwork(context, track))
+                    : null,
                 onRemove: () => library.removeTrack(track.id),
               );
             },
@@ -2993,6 +3216,9 @@ class _LibraryFolderNodeTracksSheet extends StatelessWidget {
                 onEditMetadata: () => unawaited(
                   _showTrackMetadataEditor(context, track),
                 ),
+                onEditArtwork: track.sourceId == 'local'
+                    ? () => unawaited(_editTrackArtwork(context, track))
+                    : null,
                 onRemove: () => library.removeTrack(track.id),
               );
             },
@@ -3097,6 +3323,9 @@ class _SimilarTracksSheet extends StatelessWidget {
                 onEditMetadata: () => unawaited(
                   _showTrackMetadataEditor(context, track),
                 ),
+                onEditArtwork: track.sourceId == 'local'
+                    ? () => unawaited(_editTrackArtwork(context, track))
+                    : null,
                 onRemove: () => library.removeTrack(track.id),
               );
             },
@@ -4767,6 +4996,9 @@ class _SmartPlaylistSheet extends StatelessWidget {
                 onEditMetadata: () => unawaited(
                   _showTrackMetadataEditor(context, track),
                 ),
+                onEditArtwork: track.sourceId == 'local'
+                    ? () => unawaited(_editTrackArtwork(context, track))
+                    : null,
                 onRemove: () => library.removeTrack(track.id),
               );
             },
@@ -4875,6 +5107,9 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
                 onEditMetadata: () => unawaited(
                   _showTrackMetadataEditor(context, track),
                 ),
+                onEditArtwork: track.sourceId == 'local'
+                    ? () => unawaited(_editTrackArtwork(context, track))
+                    : null,
                 onRemove: () => library.removeTrack(track.id),
               );
             },

@@ -718,6 +718,57 @@ void main() {
     expect(snapshotPlaylist['artworkUri'], isNull);
   });
 
+  test('keeps private user track artwork on-device and restores source artwork',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    final scannedArtwork = Uri.parse('data:image/png;base64,c2Nhbm5lZA==');
+    final privateArtwork = Uri.file('/private/track-artwork.png');
+    await store.addTracks(<Track>[
+      _track('1', artworkUri: scannedArtwork),
+    ]);
+
+    final updated = await store.updateTrackArtwork('1', privateArtwork);
+    expect(updated!.artworkUri, privateArtwork);
+    expect(updated.artworkSourceUri, scannedArtwork);
+    expect(updated.artworkIsUserManaged, isTrue);
+
+    final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
+    final backupTrack = (backup['tracks'] as List<dynamic>).single
+        as Map<String, dynamic>;
+    expect(backupTrack['artworkUri'], scannedArtwork.toString());
+    expect(backupTrack['artworkSourceUri'], isNull);
+    expect(backupTrack['artworkIsUserManaged'], isFalse);
+
+    final playlist = await store.createPlaylist('Private track cover',
+        trackIds: <String>['1']);
+    final document = jsonDecode(store.exportPlaylistJson(playlist.id))
+        as Map<String, dynamic>;
+    final documentTrack = (document['tracks'] as List<dynamic>).single
+        as Map<String, dynamic>;
+    expect(documentTrack['artworkUri'], scannedArtwork.toString());
+
+    final snapshot = jsonDecode(store.exportSyncSnapshotJson())
+        as Map<String, dynamic>;
+    final snapshotTrack = (snapshot['tracks'] as List<dynamic>).single
+        as Map<String, dynamic>;
+    expect(snapshotTrack['artworkUri'], scannedArtwork.toString());
+    expect(snapshotTrack['artworkSourceUri'], isNull);
+    expect(snapshotTrack['artworkIsUserManaged'], isFalse);
+
+    final remote = LibraryStore();
+    await remote.load();
+    await store.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
+    expect(store.tracks.single.artworkUri, privateArtwork);
+    expect(store.tracks.single.artworkSourceUri, scannedArtwork);
+    expect(store.tracks.single.artworkIsUserManaged, isTrue);
+
+    final restored = await store.updateTrackArtwork('1', null);
+    expect(restored!.artworkUri, scannedArtwork);
+    expect(restored.artworkSourceUri, isNull);
+    expect(restored.artworkIsUserManaged, isFalse);
+  });
+
   test('exports and imports playlist JSON documents', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 1),
@@ -3669,6 +3720,7 @@ Track _track(
   String? localPath,
   String? contentHash,
   String? streamUrl,
+  Uri? artworkUri,
 }) {
   return Track(
     id: id,
@@ -3677,6 +3729,7 @@ Track _track(
     album: album,
     genre: genre,
     duration: duration,
+    artworkUri: artworkUri,
     localPath: localPath ?? '/music/$id.mp3',
     contentHash: contentHash,
     streamUrl: streamUrl,

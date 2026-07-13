@@ -15,6 +15,8 @@ class Track {
     this.genre = 'Unknown Genre',
     this.duration = Duration.zero,
     this.artworkUri,
+    this.artworkSourceUri,
+    this.artworkIsUserManaged = false,
     this.artworkUriIsEphemeral = false,
     this.providerArtworkId,
     this.providerArtworkVersion,
@@ -40,6 +42,8 @@ class Track {
   final String genre;
   final Duration duration;
   final Uri? artworkUri;
+  final Uri? artworkSourceUri;
+  final bool artworkIsUserManaged;
   final bool artworkUriIsEphemeral;
   final String? providerArtworkId;
   final String? providerArtworkVersion;
@@ -65,6 +69,10 @@ class Track {
     String? genre,
     Duration? duration,
     Uri? artworkUri,
+    bool clearArtworkUri = false,
+    Uri? artworkSourceUri,
+    bool clearArtworkSourceUri = false,
+    bool? artworkIsUserManaged,
     bool? artworkUriIsEphemeral,
     String? providerArtworkId,
     String? providerArtworkVersion,
@@ -85,7 +93,12 @@ class Track {
       album: album ?? this.album,
       genre: genre ?? this.genre,
       duration: duration ?? this.duration,
-      artworkUri: artworkUri ?? this.artworkUri,
+      artworkUri: clearArtworkUri ? null : artworkUri ?? this.artworkUri,
+      artworkSourceUri: clearArtworkSourceUri
+          ? null
+          : artworkSourceUri ?? this.artworkSourceUri,
+      artworkIsUserManaged:
+          artworkIsUserManaged ?? this.artworkIsUserManaged,
       artworkUriIsEphemeral:
           artworkUriIsEphemeral ?? this.artworkUriIsEphemeral,
       providerArtworkId: providerArtworkId ?? this.providerArtworkId,
@@ -115,6 +128,8 @@ class Track {
       genre: genre,
       duration: duration,
       artworkUri: artworkUriIsEphemeral ? null : artworkUri,
+      artworkSourceUri: artworkSourceUri,
+      artworkIsUserManaged: artworkIsUserManaged,
       providerArtworkId: providerArtworkId,
       providerArtworkVersion: providerArtworkVersion,
       localPath: localPath,
@@ -137,6 +152,8 @@ class Track {
       'genre': genre,
       'durationMs': duration.inMilliseconds,
       'artworkUri': artworkUriIsEphemeral ? null : artworkUri?.toString(),
+      'artworkSourceUri': artworkSourceUri?.toString(),
+      'artworkIsUserManaged': artworkIsUserManaged,
       'providerArtworkId': providerArtworkId,
       'providerArtworkVersion': providerArtworkVersion,
       'localPath': localPath,
@@ -160,6 +177,8 @@ class Track {
       genre: json['genre'] as String? ?? 'Unknown Genre',
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
       artworkUri: _parseUri(json['artworkUri'] as String?),
+      artworkSourceUri: _parseUri(json['artworkSourceUri'] as String?),
+      artworkIsUserManaged: json['artworkIsUserManaged'] as bool? ?? false,
       providerArtworkId: json['providerArtworkId'] as String?,
       providerArtworkVersion: json['providerArtworkVersion'] as String?,
       localPath: json['localPath'] as String?,
