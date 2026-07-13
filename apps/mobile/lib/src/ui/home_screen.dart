@@ -2288,6 +2288,8 @@ IconData _homeSectionIcon(LibraryHomeSectionType type) {
       return Icons.play_circle_outline;
     case LibraryHomeSectionType.recentlyPlayed:
       return Icons.history_outlined;
+    case LibraryHomeSectionType.followedArtists:
+      return Icons.people_outline;
     case LibraryHomeSectionType.radioSeeds:
       return Icons.radio_outlined;
     case LibraryHomeSectionType.mostPlayed:
@@ -2307,6 +2309,8 @@ String _homeSectionTitle(LibraryHomeSectionType type) {
       return 'Continue listening';
     case LibraryHomeSectionType.recentlyPlayed:
       return 'Recently played';
+    case LibraryHomeSectionType.followedArtists:
+      return 'From artists you follow';
     case LibraryHomeSectionType.radioSeeds:
       return 'Start radio';
     case LibraryHomeSectionType.mostPlayed:
@@ -2326,6 +2330,8 @@ String _homeSectionSubtitle(LibraryHomeSectionType type) {
       return 'Saved playback progress';
     case LibraryHomeSectionType.recentlyPlayed:
       return 'Latest library plays';
+    case LibraryHomeSectionType.followedArtists:
+      return 'Newest local additions by followed artists';
     case LibraryHomeSectionType.radioSeeds:
       return 'Seeds with local matches';
     case LibraryHomeSectionType.mostPlayed:
@@ -2828,21 +2834,47 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
+                final canFollowArtist =
+                    type == LibraryBrowseType.artist &&
+                    library.canFollowArtist(group.label);
+                final isFollowed = library.isArtistFollowed(group.label);
                 return ListTile(
                   leading: Icon(_libraryBrowseTypeIcon(type)),
                   title: Text(group.label),
                   subtitle: Text(_libraryBrowseGroupSubtitle(group)),
-                  trailing: IconButton(
-                    tooltip: 'Copy share text',
-                    onPressed: () => unawaited(
-                      _copyBrowseGroupShareText(
-                        context,
-                        library,
-                        type,
-                        group,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (canFollowArtist)
+                        IconButton(
+                          tooltip: isFollowed
+                              ? 'Unfollow artist'
+                              : 'Follow artist',
+                          onPressed: () => unawaited(
+                            library.setArtistFollowed(
+                              group.label,
+                              !isFollowed,
+                            ),
+                          ),
+                          icon: Icon(
+                            isFollowed
+                                ? Icons.person_remove_outlined
+                                : Icons.person_add_alt_1_outlined,
+                          ),
+                        ),
+                      IconButton(
+                        tooltip: 'Copy share text',
+                        onPressed: () => unawaited(
+                          _copyBrowseGroupShareText(
+                            context,
+                            library,
+                            type,
+                            group,
+                          ),
+                        ),
+                        icon: const Icon(Icons.ios_share),
                       ),
-                    ),
-                    icon: const Icon(Icons.ios_share),
+                    ],
                   ),
                 );
               }

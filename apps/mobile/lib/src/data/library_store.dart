@@ -49,6 +49,7 @@ enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 enum LibraryHomeSectionType {
   continueListening,
   recentlyPlayed,
+  followedArtists,
   radioSeeds,
   mostPlayed,
   favorites,
@@ -603,6 +604,7 @@ class LibraryStore extends ChangeNotifier {
   static const _savedHistoryViewsKey = 'aethertune.saved_history_views.v1';
   static const _podcastSubscriptionsKey =
       'aethertune.podcast_subscriptions.v1';
+  static const _followedArtistsKey = 'aethertune.followed_artists.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _progressKey = 'aethertune.playback_progress.v1';
@@ -648,6 +650,7 @@ class LibraryStore extends ChangeNotifier {
   final List<SavedHistoryView> _savedHistoryViews = <SavedHistoryView>[];
   final List<PodcastSubscription> _podcastSubscriptions =
       <PodcastSubscription>[];
+  final List<String> _followedArtists = <String>[];
   final List<PlaybackHistoryEntry> _history = <PlaybackHistoryEntry>[];
   final List<String> _searchQueryHistory = <String>[];
   final Map<String, PlaybackProgressEntry> _progressByTrackId =
@@ -686,6 +689,7 @@ class LibraryStore extends ChangeNotifier {
       List.unmodifiable(_savedHistoryViews);
   List<PodcastSubscription> get podcastSubscriptions =>
       List.unmodifiable(_podcastSubscriptions);
+  List<String> get followedArtists => List.unmodifiable(_followedArtists);
   List<PlaybackHistoryEntry> get playbackHistory =>
       List.unmodifiable(_history);
   List<String> get searchQueryHistory =>
@@ -798,6 +802,14 @@ class LibraryStore extends ChangeNotifier {
               .toList(growable: false),
         );
     }
+
+    _followedArtists
+      ..clear()
+      ..addAll(
+        _dedupeFollowedArtists(
+          prefs.getStringList(_followedArtistsKey) ?? const <String>[],
+        ),
+      );
 
     final rawLyrics = prefs.getString(_lyricsKey);
     if (rawLyrics != null && rawLyrics.isNotEmpty) {
@@ -1445,6 +1457,46 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool canFollowArtist(String artist) {
+    final normalized = artist.trim();
+    return normalized.isNotEmpty &&
+        normalized.toLowerCase() != 'unknown artist';
+  }
+
+  bool isArtistFollowed(String artist) {
+    final key = _followedArtistKey(artist);
+    return key.isNotEmpty &&
+        _followedArtists.any((value) => _followedArtistKey(value) == key);
+  }
+
+  Future<bool> setArtistFollowed(String artist, bool followed) async {
+    final normalized = artist.trim();
+    if (!canFollowArtist(normalized)) {
+      return false;
+    }
+
+    final key = _followedArtistKey(normalized);
+    final existingIndex = _followedArtists.indexWhere(
+      (value) => _followedArtistKey(value) == key,
+    );
+    if (followed) {
+      if (existingIndex != -1) {
+        return false;
+      }
+      _followedArtists.add(normalized);
+      _sortFollowedArtists();
+    } else {
+      if (existingIndex == -1) {
+        return false;
+      }
+      _followedArtists.removeAt(existingIndex);
+    }
+
+    await _save();
+    notifyListeners();
+    return true;
+  }
+
   Future<Track?> updateTrackMetadata(
     String id, {
     required String title,
@@ -1895,6 +1947,10 @@ class LibraryStore extends ChangeNotifier {
       recentlyPlayedTracks(limit: limit),
     );
     addSection(
+      LibraryHomeSectionType.followedArtists,
+      _followedArtistTracks(limit: limit),
+    );
+    addSection(
       LibraryHomeSectionType.radioSeeds,
       _homeRadioSeedTracks(limit: limit),
     );
@@ -1932,6 +1988,22 @@ class LibraryStore extends ChangeNotifier {
     final episodes = byId.values.toList(growable: false);
     episodes.sort((a, b) => b.addedAt.compareTo(a.addedAt));
     return episodes;
+  }
+
+  List<Track> _followedArtistTracks({required int limit}) {
+    if (_followedArtists.isEmpty) {
+      return <Track>[];
+    }
+
+    final followedKeys = _followedArtists
+        .map(_followedArtistKey)
+        .where((key) => key.isNotEmpty)
+        .toSet();
+    final tracks = _tracks
+        .where((track) => followedKeys.contains(_followedArtistKey(track.artist)))
+        .toList(growable: false);
+    tracks.sort(_compareByDateThenTitle);
+    return tracks.take(limit).toList(growable: false);
   }
 
   LibraryChartsSnapshot localCharts({
@@ -2666,6 +2738,7 @@ class LibraryStore extends ChangeNotifier {
           _savedHistoryViews.map((view) => view.toJson()).toList(),
       'podcastSubscriptions':
           _podcastSubscriptions.map((item) => item.toJson()).toList(),
+      'followedArtists': _followedArtists,
       'history': _history.map((entry) => entry.toJson()).toList(),
       'searchQueryHistory': _searchQueryHistory,
       'progress':
@@ -3097,6 +3170,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredCustomSmartPlaylists = <CustomSmartPlaylist>[];
     final restoredSavedHistoryViews = <SavedHistoryView>[];
     final restoredPodcastSubscriptions = <PodcastSubscription>[];
+    final restoredFollowedArtists = <String>[];
     final restoredHistory = <PlaybackHistoryEntry>[];
     final restoredSearchQueryHistory = <String>[];
     final restoredProgress = <PlaybackProgressEntry>[];
@@ -3185,6 +3259,9 @@ class LibraryStore extends ChangeNotifier {
           isRequired: false,
         ).map(PodcastSubscription.fromJson),
       );
+      restoredFollowedArtists.addAll(
+        _jsonStringList(backup, 'followedArtists', isRequired: false),
+      );
       restoredProgress.addAll(
         _jsonObjectList(backup, 'progress', isRequired: false).map(
           PlaybackProgressEntry.fromJson,
@@ -3236,6 +3313,9 @@ class LibraryStore extends ChangeNotifier {
     final sanitizedPodcastSubscriptions = _dedupePodcastSubscriptions(
       restoredPodcastSubscriptions,
     );
+    final sanitizedFollowedArtists = _dedupeFollowedArtists(
+      restoredFollowedArtists,
+    );
     final sanitizedCustomSmartPlaylists = _dedupeCustomSmartPlaylists(
       restoredCustomSmartPlaylists,
     );
@@ -3258,6 +3338,9 @@ class LibraryStore extends ChangeNotifier {
     _podcastSubscriptions
       ..clear()
       ..addAll(sanitizedPodcastSubscriptions);
+    _followedArtists
+      ..clear()
+      ..addAll(sanitizedFollowedArtists);
     _history
       ..clear()
       ..addAll(sanitizedHistory);
@@ -3287,6 +3370,7 @@ class LibraryStore extends ChangeNotifier {
     _sortCustomSmartPlaylists();
     _sortSavedHistoryViews();
     _sortPodcastSubscriptions();
+    _sortFollowedArtists();
     _sortHistory();
     _sortOfflineCacheQueue();
     _trimHistory();
@@ -3393,6 +3477,10 @@ class LibraryStore extends ChangeNotifier {
     merged['podcastSubscriptions'] = _mergeSyncPodcastSubscriptions(
       local['podcastSubscriptions'],
       remote['podcastSubscriptions'],
+    );
+    merged['followedArtists'] = _mergeSyncStrings(
+      local['followedArtists'],
+      remote['followedArtists'],
     );
     merged['history'] = _mergeSyncObjectLists(
       local['history'],
@@ -6241,6 +6329,32 @@ class LibraryStore extends ChangeNotifier {
     return values;
   }
 
+  String _followedArtistKey(String artist) => artist.trim().toLowerCase();
+
+  List<String> _dedupeFollowedArtists(Iterable<String> artists) {
+    final values = <String>[];
+    final seen = <String>{};
+    for (final artist in artists) {
+      final normalized = artist.trim();
+      if (!canFollowArtist(normalized)) {
+        continue;
+      }
+      if (!seen.add(_followedArtistKey(normalized))) {
+        continue;
+      }
+      values.add(normalized);
+    }
+    values.sort(_compareText);
+    return values;
+  }
+
+  void _sortFollowedArtists() {
+    final normalized = _dedupeFollowedArtists(_followedArtists);
+    _followedArtists
+      ..clear()
+      ..addAll(normalized);
+  }
+
   List<CustomSmartPlaylist> _dedupeCustomSmartPlaylists(
     Iterable<CustomSmartPlaylist> rules,
   ) {
@@ -6433,6 +6547,7 @@ class LibraryStore extends ChangeNotifier {
     final encodedPodcastSubscriptions = jsonEncode(
       _podcastSubscriptions.map((item) => item.toJson()).toList(),
     );
+    final followedArtists = _dedupeFollowedArtists(_followedArtists);
     final encodedHistory = jsonEncode(
       _history.map((entry) => entry.toJson()).toList(),
     );
@@ -6457,6 +6572,7 @@ class LibraryStore extends ChangeNotifier {
       _podcastSubscriptionsKey,
       encodedPodcastSubscriptions,
     );
+    await prefs.setStringList(_followedArtistsKey, followedArtists);
     await prefs.setString(_historyKey, encodedHistory);
     await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
     await prefs.setString(_progressKey, encodedProgress);

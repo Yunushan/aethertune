@@ -65,6 +65,8 @@ void main() {
         episodes: <Track>[_track('remote-episode', sourceId: 'podcast-rss')],
       ),
     );
+    await local.setArtistFollowed('Mira', true);
+    await remote.setArtistFollowed('Orion', true);
 
     await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
 
@@ -87,6 +89,59 @@ void main() {
           .map((track) => track.id),
       <String>['local-episode', 'remote-episode'],
     );
+    expect(local.followedArtists, <String>['Mira', 'Orion']);
+  });
+
+  test('persists local artist follows and builds the newest follow feed',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'mira-old',
+        artist: 'Mira',
+        addedAt: DateTime.utc(2026, 1, 1),
+      ),
+      _track(
+        'mira-new',
+        artist: ' mira ',
+        addedAt: DateTime.utc(2026, 1, 4),
+      ),
+      _track(
+        'orion-new',
+        artist: 'Orion',
+        addedAt: DateTime.utc(2026, 1, 5),
+      ),
+      _track(
+        'other-new',
+        artist: 'Ari',
+        addedAt: DateTime.utc(2026, 1, 6),
+      ),
+    ]);
+
+    expect(store.canFollowArtist('Unknown Artist'), isFalse);
+    expect(await store.setArtistFollowed(' Mira ', true), isTrue);
+    expect(await store.setArtistFollowed('mira', true), isFalse);
+    expect(await store.setArtistFollowed('Orion', true), isTrue);
+    expect(store.followedArtists, <String>['Mira', 'Orion']);
+    expect(store.isArtistFollowed('  MIRA'), isTrue);
+
+    final section = store.homeFeedSections(limit: 3).firstWhere(
+          (section) => section.type == LibraryHomeSectionType.followedArtists,
+        );
+    expect(
+      section.tracks.map((track) => track.id),
+      <String>['orion-new', 'mira-new', 'mira-old'],
+    );
+
+    final backup = store.exportBackupJson();
+    final restored = LibraryStore();
+    await restored.load();
+    await restored.restoreBackupJson(backup);
+
+    expect(restored.followedArtists, <String>['Mira', 'Orion']);
+    expect(await restored.setArtistFollowed('Mira', false), isTrue);
+    expect(restored.isArtistFollowed('mira'), isFalse);
   });
 
   test('filters custom smart playlists by exact source artist album and genre', () async {
