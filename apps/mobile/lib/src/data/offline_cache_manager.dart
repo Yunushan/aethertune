@@ -85,8 +85,8 @@ final class OfflineCacheManager {
   }
 
   Future<OfflineCacheMaterialization> materialize(
-    OfflineCacheEntry entry,
-    {OfflineCacheCancellationToken? cancellationToken},
+    OfflineCacheEntry entry, {
+    OfflineCacheCancellationToken? cancellationToken,
   ) async {
     cancellationToken?.throwIfCancelled();
     if (entry.track.hasLocalSource) {
@@ -321,8 +321,8 @@ final class OfflineCacheManager {
   static Future<void> _downloadWithHttpClient(
     Uri uri,
     File targetFile,
-    File partialFile,
-    {OfflineCacheCancellationToken? cancellationToken},
+    File partialFile, {
+    OfflineCacheCancellationToken? cancellationToken,
   ) async {
     final client = HttpClient();
     cancellationToken?.whenCancelled.then<void>((_) {
