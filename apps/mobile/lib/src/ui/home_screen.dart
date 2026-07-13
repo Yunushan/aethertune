@@ -7123,12 +7123,11 @@ Future<_LyricsShareRange?> _promptForLyricsShareRange(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Text(
-                    'Choose up to $_maxLyricsShareRangeLines visible lyrics lines.',
-                  ),
+                  const Text('Choose up to 8 visible lyrics lines.'),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: startLine,
+                    key: ValueKey('lyrics-share-start-$startLine'),
+                    initialValue: startLine,
                     decoration: const InputDecoration(labelText: 'Start line'),
                     items: <DropdownMenuItem<int>>[
                       for (var index = 0; index < lines.length; index++)
@@ -7155,7 +7154,8 @@ Future<_LyricsShareRange?> _promptForLyricsShareRange(
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: endLine,
+                    key: ValueKey('lyrics-share-end-$startLine-$endLine'),
+                    initialValue: endLine,
                     decoration: const InputDecoration(labelText: 'End line'),
                     items: <DropdownMenuItem<int>>[
                       for (
