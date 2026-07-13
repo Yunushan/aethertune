@@ -77,7 +77,6 @@ void main() {
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     final artworkSemantics = tester.getSemantics(
       find.byKey(const Key('now-playing-artwork-semantics')),
     );
@@ -169,6 +168,7 @@ void main() {
       ),
       isTrue,
     );
+    semantics.dispose();
   });
 
   testWidgets('compact player fits a phone and opens the full player', (
