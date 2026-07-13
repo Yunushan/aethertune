@@ -19,6 +19,7 @@ import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
+import '../data/m4a_metadata_writer.dart';
 import '../data/mp3_id3v1_tag_writer.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
@@ -1328,6 +1329,14 @@ Future<void> _showTrackMetadataEditor(
             album: updated.album,
             genre: updated.genre,
           );
+        } else if (_isLocalM4a(updated)) {
+          await const M4aMetadataWriter().write(
+            path: updated.localPath!,
+            title: updated.title,
+            artist: updated.artist,
+            album: updated.album,
+            genre: updated.genre,
+          );
         } else {
           await const WavRiffInfoWriter().write(
             path: updated.localPath!,
@@ -1340,7 +1349,7 @@ Future<void> _showTrackMetadataEditor(
       } on Object catch (error) {
         if (context.mounted) {
           messenger.showSnackBar(
-            SnackBar(content: Text('Saved app metadata, but could not update MP3 tags: $error')),
+            SnackBar(content: Text('Saved app metadata, but could not update embedded tags: $error')),
           );
         }
         return;
@@ -3506,7 +3515,10 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
 }
 
 bool _canWriteEmbeddedMetadata(Track track) {
-  return _isLocalMp3(track) || _isLocalFlac(track) || _isLocalWav(track);
+  return _isLocalMp3(track) ||
+      _isLocalFlac(track) ||
+      _isLocalM4a(track) ||
+      _isLocalWav(track);
 }
 
 bool _isLocalMp3(Track track) {
@@ -3515,6 +3527,10 @@ bool _isLocalMp3(Track track) {
 
 bool _isLocalFlac(Track track) {
   return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.flac');
+}
+
+bool _isLocalM4a(Track track) {
+  return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.m4a');
 }
 
 bool _isLocalWav(Track track) {
@@ -3526,6 +3542,8 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
       ? 'MP3'
       : _isLocalFlac(track)
       ? 'FLAC'
+      : _isLocalM4a(track)
+      ? 'M4A'
       : 'WAV';
   return showDialog<bool>(
     context: context,
@@ -3536,6 +3554,8 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
             ? 'This writes title, artist, album, and genre to standard ID3v2 MP3 text tags, with an ID3v1 compatibility tag. Artwork and other supported ID3v2 frames are preserved. Unsupported tag layouts are left unchanged.'
             : format == 'FLAC'
             ? 'This writes title, artist, album, and genre to standard FLAC Vorbis comments. Artwork and other FLAC metadata blocks are preserved.'
+            : format == 'M4A'
+            ? 'This writes title, artist, album, and genre to standard M4A metadata atoms while preserving artwork and other metadata items. Files with front-loaded moov metadata are left unchanged to protect audio offsets.'
             : 'This writes title, artist, album, and genre to standard WAV RIFF INFO fields. Other RIFF chunks and audio bytes are preserved. Characters outside legacy Latin-1 are replaced with question marks in the file tag.',
       ),
       actions: <Widget>[

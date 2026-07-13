@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added transactional local M4A title, artist, album, and genre writing for safe tail-metadata layouts, preserving artwork, custom metadata items, and media bytes while refusing front-loaded or malformed files before mutation.
 - Improved player accessibility with spoken compact-player seek values and semantic previous/next artwork actions for assistive technologies.
 
 - Added active offline cache/download cancellation: pausing or removing an in-progress request now stops its foreground HTTP transfer, keeps resumable private `.part` bytes, and preserves the correct paused queue state instead of recording a false failure.
