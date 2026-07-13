@@ -81,6 +81,8 @@ class _AetherTuneNavigationDestination {
   final String Function(AppLocalizations localizations) label;
 }
 
+const _aetherTuneNavigationDestinationCount = 6;
+
 final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
   _AetherTuneNavigationDestination(
     icon: Icons.home_outlined,
@@ -150,7 +152,7 @@ class HomeScreen extends StatefulWidget {
     this.internetArchiveProvider,
   }) : assert(
          initialTab >= 0 &&
-             initialTab < _aetherTuneNavigationDestinations.length,
+             initialTab < _aetherTuneNavigationDestinationCount,
        );
 
   final int initialTab;
