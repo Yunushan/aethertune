@@ -1115,12 +1115,38 @@ void main() {
     expect(plainShare, contains('...'));
     expect(plainShare, isNot(contains('fourth line')));
 
+    final selectedPlainShare = store.shareLyricsText(
+      '1',
+      startLine: 1,
+      endLine: 3,
+    )!;
+    expect(selectedPlainShare, contains('Lines: 3 of 4 (selected 2-4)'));
+    expect(selectedPlainShare, contains('second line'));
+    expect(selectedPlainShare, contains('fourth line'));
+    expect(selectedPlainShare, isNot(contains('first line')));
+
+    final clampedRangeShare = store.shareLyricsText(
+      '1',
+      startLine: -2,
+      endLine: 100,
+      maxLines: 2,
+    )!;
+    expect(clampedRangeShare, contains('Lines: 2 of 4 (selected 1-4)'));
+    expect(clampedRangeShare, contains('first line'));
+    expect(clampedRangeShare, contains('second line'));
+    expect(clampedRangeShare, isNot(contains('third line')));
+    expect(clampedRangeShare, contains('...'));
+
     final syncedShare = store.shareLyricsText('2')!;
     expect(syncedShare, contains('Format: Synced LRC'));
     expect(syncedShare, contains('First synced'));
     expect(syncedShare, contains('Second synced'));
     expect(syncedShare, isNot(contains('[00:01.00]')));
     expect(syncedShare, isNot(contains('untimed note')));
+    expect(
+      store.lyricsShareLines('2'),
+      <String>['First synced', 'Second synced'],
+    );
 
     final draftShare = store.shareLyricsText(
       '1',

@@ -3046,6 +3046,8 @@ class LibraryStore extends ChangeNotifier {
   String? shareLyricsText(
     String trackId, {
     String? plainText,
+    int startLine = 0,
+    int? endLine,
     int maxLines = 8,
   }) {
     final track = _trackById(trackId);
@@ -3066,7 +3068,15 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final limit = maxLines <= 0 ? 8 : maxLines;
-    final visibleLines = lines.take(limit).toList(growable: false);
+    final normalizedStartLine = startLine.clamp(0, lines.length - 1).toInt();
+    final normalizedEndLine = (endLine ?? (normalizedStartLine + limit - 1))
+        .clamp(normalizedStartLine, lines.length - 1)
+        .toInt();
+    final selectedLines = lines.sublist(
+      normalizedStartLine,
+      normalizedEndLine + 1,
+    );
+    final visibleLines = selectedLines.take(limit).toList(growable: false);
     final buffer = StringBuffer()
       ..writeln('AetherTune lyrics')
       ..writeln('Track: ${_shareTextValue(track.title, 'Untitled')}')
@@ -3083,16 +3093,34 @@ class LibraryStore extends ChangeNotifier {
       }
     }
     buffer
-      ..writeln('Lines: ${visibleLines.length} of ${lines.length}')
+      ..writeln(
+        'Lines: ${visibleLines.length} of ${lines.length} '
+        '(selected ${normalizedStartLine + 1}-${normalizedEndLine + 1})',
+      )
       ..writeln();
     for (final line in visibleLines) {
       buffer.writeln(line);
     }
-    if (lines.length > visibleLines.length) {
+    if (selectedLines.length > visibleLines.length) {
       buffer.writeln('...');
     }
 
     return buffer.toString().trimRight();
+  }
+
+  List<String> lyricsShareLines(String trackId, {String? plainText}) {
+    if (_trackById(trackId) == null) {
+      return const <String>[];
+    }
+
+    final lyrics = plainText == null
+        ? _lyricsByTrackId[trackId]
+        : TrackLyrics(trackId: trackId, plainText: plainText);
+    if (lyrics == null || lyrics.isEmpty) {
+      return const <String>[];
+    }
+
+    return List.unmodifiable(_shareLyricsLines(lyrics));
   }
 
   LyricsDocumentExport? exportLyricsDocument(String trackId) {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a bounded selected-line picker for lyrics share text in the editor and
+  Now Playing, including plain/LRC timestamp normalization and safe range
+  clamping.
 - Added a persisted System/English/Turkish/Arabic language override in Options,
   including portable backup restore and RTL Arabic support.
 - Added generated Flutter localization catalogs for English, Turkish, and Arabic, covering the app shell, responsive navigation, and first-run onboarding with RTL Arabic layout support.

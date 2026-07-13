@@ -752,6 +752,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.ios_share),
                     label: const Text('Copy share text'),
                   ),
+                  TextButton.icon(
+                    onPressed: () => unawaited(
+                      _copyLyricsSelectedRangeShareText(
+                        dialogContext,
+                        library,
+                        track,
+                        plainText: controller.text,
+                      ),
+                    ),
+                    icon: const Icon(Icons.format_line_spacing),
+                    label: const Text('Share selected lines'),
+                  ),
                   Tooltip(
                     message: 'Save lyrics share card',
                     child: IconButton(
@@ -923,6 +935,9 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           onShare: () => unawaited(
             _copyLyricsShareText(context, library, track),
+          ),
+          onShareRange: () => unawaited(
+            _copyLyricsSelectedRangeShareText(context, library, track),
           ),
         );
       },
@@ -1859,6 +1874,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
     required this.player,
     required this.onEdit,
     required this.onShare,
+    required this.onShareRange,
   });
 
   final Track track;
@@ -1866,6 +1882,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
   final PlayerController player;
   final VoidCallback onEdit;
   final VoidCallback onShare;
+  final VoidCallback onShareRange;
 
   @override
   Widget build(BuildContext context) {
@@ -1882,6 +1899,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
         sourceLabel: currentLyrics.attributionLabel,
         onEdit: onEdit,
         onShare: onShare,
+        onShareRange: onShareRange,
       );
     }
 
@@ -1892,6 +1910,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
       player: player,
       onEdit: onEdit,
       onShare: onShare,
+      onShareRange: onShareRange,
     );
   }
 }
@@ -1935,6 +1954,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
     required this.sourceLabel,
     required this.onEdit,
     required this.onShare,
+    required this.onShareRange,
   });
 
   final Track track;
@@ -1942,6 +1962,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
   final String? sourceLabel;
   final VoidCallback onEdit;
   final VoidCallback onShare;
+  final VoidCallback onShareRange;
 
   @override
   Widget build(BuildContext context) {
@@ -1960,6 +1981,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
                 subtitle: _lyricsSubtitle('Plain lyrics', sourceLabel),
                 onEdit: onEdit,
                 onShare: onShare,
+                onShareRange: onShareRange,
               ),
               const Divider(height: 1),
               Padding(
@@ -1982,6 +2004,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
     required this.player,
     required this.onEdit,
     required this.onShare,
+    required this.onShareRange,
   });
 
   final Track track;
@@ -1990,6 +2013,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
   final PlayerController player;
   final VoidCallback onEdit;
   final VoidCallback onShare;
+  final VoidCallback onShareRange;
 
   @override
   State<_SyncedNowPlayingLyrics> createState() =>
@@ -2035,6 +2059,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                       ),
                       onEdit: widget.onEdit,
                       onShare: widget.onShare,
+                      onShareRange: widget.onShareRange,
                     );
                   }
 
@@ -2083,12 +2108,14 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
     required this.subtitle,
     required this.onEdit,
     this.onShare,
+    this.onShareRange,
   });
 
   final Track track;
   final String subtitle;
   final VoidCallback onEdit;
   final VoidCallback? onShare;
+  final VoidCallback? onShareRange;
 
   @override
   Widget build(BuildContext context) {
@@ -2104,6 +2131,12 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
               tooltip: 'Copy share text',
               onPressed: onShare,
               icon: const Icon(Icons.ios_share),
+            ),
+          if (onShareRange != null)
+            IconButton(
+              tooltip: 'Share selected lines',
+              onPressed: onShareRange,
+              icon: const Icon(Icons.format_line_spacing),
             ),
           IconButton(
             tooltip: 'Edit lyrics',
@@ -7020,6 +7053,163 @@ Future<void> _copyLyricsDraftShareText(
     copiedMessage: 'Copied lyrics share text for ${track.title}.',
     unavailableMessage: 'Add lyrics before copying share text.',
   );
+}
+
+const _maxLyricsShareRangeLines = 8;
+
+class _LyricsShareRange {
+  const _LyricsShareRange({required this.startLine, required this.endLine});
+
+  final int startLine;
+  final int endLine;
+}
+
+Future<void> _copyLyricsSelectedRangeShareText(
+  BuildContext context,
+  LibraryStore library,
+  Track track, {
+  String? plainText,
+}) async {
+  final lines = library.lyricsShareLines(track.id, plainText: plainText);
+  if (lines.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Add lyrics before sharing selected lines.')),
+    );
+    return;
+  }
+
+  final range = await _promptForLyricsShareRange(context, lines: lines);
+  if (!context.mounted || range == null) {
+    return;
+  }
+
+  await _copyTextToClipboard(
+    context,
+    library.shareLyricsText(
+      track.id,
+      plainText: plainText,
+      startLine: range.startLine,
+      endLine: range.endLine,
+      maxLines: _maxLyricsShareRangeLines,
+    ),
+    copiedMessage: 'Copied selected lyrics for ${track.title}.',
+    unavailableMessage: 'Selected lyrics are unavailable for ${track.title}.',
+  );
+}
+
+Future<_LyricsShareRange?> _promptForLyricsShareRange(
+  BuildContext context, {
+  required List<String> lines,
+}) async {
+  var startLine = 0;
+  var endLine = _lyricsShareRangeEndLimit(startLine, lines.length);
+
+  return showDialog<_LyricsShareRange>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (_, setDialogState) {
+          final maximumEndLine = _lyricsShareRangeEndLimit(
+            startLine,
+            lines.length,
+          );
+          final selectedLines = lines.sublist(startLine, endLine + 1);
+
+          return AlertDialog(
+            title: const Text('Share selected lines'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    'Choose up to $_maxLyricsShareRangeLines visible lyrics lines.',
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: startLine,
+                    decoration: const InputDecoration(labelText: 'Start line'),
+                    items: <DropdownMenuItem<int>>[
+                      for (var index = 0; index < lines.length; index++)
+                        DropdownMenuItem<int>(
+                          value: index,
+                          child: Text('Line ${index + 1}'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setDialogState(() {
+                        startLine = value;
+                        final newMaximumEndLine = _lyricsShareRangeEndLimit(
+                          startLine,
+                          lines.length,
+                        );
+                        endLine = endLine
+                            .clamp(startLine, newMaximumEndLine)
+                            .toInt();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: endLine,
+                    decoration: const InputDecoration(labelText: 'End line'),
+                    items: <DropdownMenuItem<int>>[
+                      for (
+                        var index = startLine;
+                        index <= maximumEndLine;
+                        index++
+                      )
+                        DropdownMenuItem<int>(
+                          value: index,
+                          child: Text('Line ${index + 1}'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => endLine = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    selectedLines.join('\n'),
+                    maxLines: _maxLyricsShareRangeLines,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  _LyricsShareRange(
+                    startLine: startLine,
+                    endLine: endLine,
+                  ),
+                ),
+                icon: const Icon(Icons.ios_share),
+                label: const Text('Copy selected lines'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+int _lyricsShareRangeEndLimit(int startLine, int lineCount) {
+  return (startLine + _maxLyricsShareRangeLines - 1)
+      .clamp(startLine, lineCount - 1)
+      .toInt();
 }
 
 Future<void> _showLyricsShareCard(
