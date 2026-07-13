@@ -63,6 +63,7 @@ void main() {
 
     expect(find.text("AetherTune'a hoş geldiniz"), findsOneWidget);
     expect(find.text('Kitaplığı aç'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Kurulumu atla'), 300);
     expect(find.text('Kurulumu atla'), findsOneWidget);
   });
 
