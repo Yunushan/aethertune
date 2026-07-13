@@ -64,7 +64,7 @@ void main() {
 
     await tester.pumpWidget(
       MultiProvider(
-        providers: <SingleChildWidget>[
+        providers: [
           ChangeNotifierProvider<LibraryStore>.value(value: library),
           ChangeNotifierProvider<SelfHostedProviderStore>.value(
             value: selfHosted,
