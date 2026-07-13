@@ -24,12 +24,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Night Spark'), findsOneWidget);
 
-    final bytes = await tester.runAsync(() => captureTrackShareCardPng(boundaryKey));
-    final codec = await ui.instantiateImageCodec(bytes!);
-    final frame = await codec.getNextFrame();
-    expect(frame.image.width, (trackShareCardWidth * 3).toInt());
-    expect(frame.image.height, (trackShareCardHeight * 3).toInt());
-    frame.image.dispose();
-    codec.dispose();
+    final capture = await tester.runAsync<List<int>>(() async {
+      final bytes = await captureTrackShareCardPng(boundaryKey);
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final result = <int>[frame.image.width, frame.image.height];
+      frame.image.dispose();
+      codec.dispose();
+      return result;
+    });
+    expect(capture, <int>[
+      (trackShareCardWidth * 3).toInt(),
+      (trackShareCardHeight * 3).toInt(),
+    ]);
   });
 }
