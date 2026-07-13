@@ -77,6 +77,8 @@ enum CustomSmartPlaylistSortMode {
   mostPlayed,
 }
 
+enum CustomSmartPlaylistMatchMode { all, any }
+
 enum AppThemePreference { system, light, dark, amoled }
 
 enum AppAccentColor { indigo, teal, rose, amber, violet, green }
@@ -251,6 +253,7 @@ class CustomSmartPlaylist {
     this.favoritesOnly = false,
     this.minimumPlayCount = 0,
     this.minimumDaysSinceLastPlayed = 0,
+    this.matchMode = CustomSmartPlaylistMatchMode.all,
     this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
     this.limit = 50,
     DateTime? createdAt,
@@ -270,6 +273,7 @@ class CustomSmartPlaylist {
   final bool favoritesOnly;
   final int minimumPlayCount;
   final int minimumDaysSinceLastPlayed;
+  final CustomSmartPlaylistMatchMode matchMode;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
   final DateTime createdAt;
@@ -288,6 +292,7 @@ class CustomSmartPlaylist {
     bool? favoritesOnly,
     int? minimumPlayCount,
     int? minimumDaysSinceLastPlayed,
+    CustomSmartPlaylistMatchMode? matchMode,
     CustomSmartPlaylistSortMode? sortMode,
     int? limit,
     DateTime? createdAt,
@@ -309,6 +314,7 @@ class CustomSmartPlaylist {
       minimumPlayCount: minimumPlayCount ?? this.minimumPlayCount,
       minimumDaysSinceLastPlayed:
           minimumDaysSinceLastPlayed ?? this.minimumDaysSinceLastPlayed,
+      matchMode: matchMode ?? this.matchMode,
       sortMode: sortMode ?? this.sortMode,
       limit: limit ?? this.limit,
       createdAt: createdAt ?? this.createdAt,
@@ -330,6 +336,7 @@ class CustomSmartPlaylist {
       'favoritesOnly': favoritesOnly,
       'minimumPlayCount': minimumPlayCount,
       'minimumDaysSinceLastPlayed': minimumDaysSinceLastPlayed,
+      'matchMode': matchMode.name,
       'sortMode': sortMode.name,
       'limit': limit,
       'createdAt': createdAt.toIso8601String(),
@@ -352,6 +359,9 @@ class CustomSmartPlaylist {
       minimumPlayCount: json['minimumPlayCount'] as int? ?? 0,
       minimumDaysSinceLastPlayed:
           json['minimumDaysSinceLastPlayed'] as int? ?? 0,
+      matchMode: _customSmartPlaylistMatchModeFromName(
+        json['matchMode'] as String?,
+      ),
       sortMode: _customSmartPlaylistSortModeFromName(
         json['sortMode'] as String?,
       ),
@@ -590,6 +600,15 @@ AppAccentColor _appAccentColorFromName(String? value) {
   return AppAccentColor.values.firstWhere(
     (accent) => accent.name == value,
     orElse: () => AppAccentColor.indigo,
+  );
+}
+
+CustomSmartPlaylistMatchMode _customSmartPlaylistMatchModeFromName(
+  String? value,
+) {
+  return CustomSmartPlaylistMatchMode.values.firstWhere(
+    (mode) => mode.name == value,
+    orElse: () => CustomSmartPlaylistMatchMode.all,
   );
 }
 
@@ -2468,61 +2487,60 @@ class LibraryStore extends ChangeNotifier {
       }
     }
     final now = _clock();
-    final tracks = _tracks.where((track) {
-      if (rule.favoritesOnly && !track.isFavorite) {
-        return false;
-      }
-
-      if (rule.minimumPlayCount > 0 &&
-          playCountForTrack(track.id) < rule.minimumPlayCount) {
-        return false;
-      }
-
-      if (rule.minimumDaysSinceLastPlayed > 0) {
-        final lastPlayed = lastPlayedByTrack[track.id];
-        if (lastPlayed != null &&
-            now.difference(lastPlayed) <
-                Duration(days: rule.minimumDaysSinceLastPlayed)) {
-          return false;
-        }
-      }
-
-      if (rule.sourceId.isNotEmpty &&
-          track.sourceId.toLowerCase() != rule.sourceId.toLowerCase()) {
-        return false;
-      }
-
-      if (rule.artist.isNotEmpty &&
-          track.artist.toLowerCase() != rule.artist.toLowerCase()) {
-        return false;
-      }
-
-      if (rule.album.isNotEmpty &&
-          track.album.toLowerCase() != rule.album.toLowerCase()) {
-        return false;
-      }
-
-      if (rule.genre.isNotEmpty &&
-          track.genre.toLowerCase() != rule.genre.toLowerCase()) {
-        return false;
-      }
-
-      final durationSeconds = track.duration.inSeconds;
-      if (rule.minimumDurationSeconds > 0 &&
-          durationSeconds < rule.minimumDurationSeconds) {
-        return false;
-      }
-      if (rule.maximumDurationSeconds > 0 &&
-          durationSeconds > rule.maximumDurationSeconds) {
-        return false;
-      }
-
-      return searchQuery.isEmpty || _trackMatchesQuery(track, searchQuery);
-    }).toList(growable: false);
+    final tracks = _tracks
+        .where(
+          (track) => _matchesCustomSmartPlaylistRule(
+            track,
+            rule,
+            searchQuery: searchQuery,
+            lastPlayedAt: lastPlayedByTrack[track.id],
+            now: now,
+          ),
+        )
+        .toList(growable: false);
 
     _sortCustomSmartPlaylistTracks(tracks, rule.sortMode);
 
     return tracks.take(rule.limit).toList(growable: false);
+  }
+
+  bool _matchesCustomSmartPlaylistRule(
+    Track track,
+    CustomSmartPlaylist rule, {
+    required SearchQuery searchQuery,
+    required DateTime? lastPlayedAt,
+    required DateTime now,
+  }) {
+    final matches = <bool>[
+      if (rule.favoritesOnly) track.isFavorite,
+      if (rule.minimumPlayCount > 0)
+        playCountForTrack(track.id) >= rule.minimumPlayCount,
+      if (rule.minimumDaysSinceLastPlayed > 0)
+        lastPlayedAt == null ||
+            now.difference(lastPlayedAt) >=
+                Duration(days: rule.minimumDaysSinceLastPlayed),
+      if (rule.sourceId.isNotEmpty)
+        track.sourceId.toLowerCase() == rule.sourceId.toLowerCase(),
+      if (rule.artist.isNotEmpty)
+        track.artist.toLowerCase() == rule.artist.toLowerCase(),
+      if (rule.album.isNotEmpty)
+        track.album.toLowerCase() == rule.album.toLowerCase(),
+      if (rule.genre.isNotEmpty)
+        track.genre.toLowerCase() == rule.genre.toLowerCase(),
+      if (rule.minimumDurationSeconds > 0)
+        track.duration.inSeconds >= rule.minimumDurationSeconds,
+      if (rule.maximumDurationSeconds > 0)
+        track.duration.inSeconds <= rule.maximumDurationSeconds,
+      if (!searchQuery.isEmpty) _trackMatchesQuery(track, searchQuery),
+    ];
+    if (matches.isEmpty) {
+      return true;
+    }
+
+    return switch (rule.matchMode) {
+      CustomSmartPlaylistMatchMode.all => matches.every((match) => match),
+      CustomSmartPlaylistMatchMode.any => matches.any((match) => match),
+    };
   }
 
   TrackRadioSeedQueue? radioQueueForTrack(String seedTrackId, {int limit = 50}) {
@@ -4669,6 +4687,7 @@ class LibraryStore extends ChangeNotifier {
     bool favoritesOnly = false,
     int minimumPlayCount = 0,
     int minimumDaysSinceLastPlayed = 0,
+    CustomSmartPlaylistMatchMode matchMode = CustomSmartPlaylistMatchMode.all,
     CustomSmartPlaylistSortMode sortMode =
         CustomSmartPlaylistSortMode.recentlyAdded,
     int limit = 50,
@@ -4689,6 +4708,7 @@ class LibraryStore extends ChangeNotifier {
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
       minimumDaysSinceLastPlayed:
           _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
+      matchMode: matchMode,
       sortMode: sortMode,
       limit: _sanitizeCustomSmartPlaylistLimit(limit),
       createdAt: now,
@@ -4716,6 +4736,7 @@ class LibraryStore extends ChangeNotifier {
     required bool favoritesOnly,
     required int minimumPlayCount,
     int? minimumDaysSinceLastPlayed,
+    required CustomSmartPlaylistMatchMode matchMode,
     required CustomSmartPlaylistSortMode sortMode,
     required int limit,
   }) async {
@@ -4742,6 +4763,7 @@ class LibraryStore extends ChangeNotifier {
       minimumDaysSinceLastPlayed: minimumDaysSinceLastPlayed == null
           ? null
           : _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
+      matchMode: matchMode,
       sortMode: sortMode,
       limit: _sanitizeCustomSmartPlaylistLimit(limit),
       updatedAt: _clock(),
@@ -6575,6 +6597,7 @@ class LibraryStore extends ChangeNotifier {
         minimumPlayCount: _sanitizeMinimumPlayCount(rule.minimumPlayCount),
         minimumDaysSinceLastPlayed:
             _sanitizeMinimumPlayCount(rule.minimumDaysSinceLastPlayed),
+        matchMode: rule.matchMode,
         limit: _sanitizeCustomSmartPlaylistLimit(rule.limit),
       );
     }

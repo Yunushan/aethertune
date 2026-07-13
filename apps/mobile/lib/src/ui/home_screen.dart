@@ -3764,11 +3764,21 @@ String _customSmartPlaylistSortLabel(CustomSmartPlaylistSortMode sortMode) {
   }
 }
 
+String _customSmartPlaylistMatchModeLabel(
+  CustomSmartPlaylistMatchMode matchMode,
+) {
+  return switch (matchMode) {
+    CustomSmartPlaylistMatchMode.all => 'Match all',
+    CustomSmartPlaylistMatchMode.any => 'Match any',
+  };
+}
+
 String _customSmartPlaylistSubtitle(
   CustomSmartPlaylist rule,
   int trackCount,
 ) {
   final parts = <String>['$trackCount track(s)'];
+  parts.add(_customSmartPlaylistMatchModeLabel(rule.matchMode));
   if (rule.query.trim().isNotEmpty) {
     parts.add('Search: ${rule.query}');
   }
@@ -3818,6 +3828,7 @@ class _CustomSmartPlaylistDraft {
     required this.favoritesOnly,
     required this.minimumPlayCount,
     required this.minimumDaysSinceLastPlayed,
+    required this.matchMode,
     required this.sortMode,
     required this.limit,
   });
@@ -3833,6 +3844,7 @@ class _CustomSmartPlaylistDraft {
   final bool favoritesOnly;
   final int minimumPlayCount;
   final int minimumDaysSinceLastPlayed;
+  final CustomSmartPlaylistMatchMode matchMode;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
 }
@@ -4253,6 +4265,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
       minimumDaysSinceLastPlayed: draft.minimumDaysSinceLastPlayed,
+      matchMode: draft.matchMode,
       sortMode: draft.sortMode,
       limit: draft.limit,
     );
@@ -4292,6 +4305,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       favoritesOnly: draft.favoritesOnly,
       minimumPlayCount: draft.minimumPlayCount,
       minimumDaysSinceLastPlayed: draft.minimumDaysSinceLastPlayed,
+      matchMode: draft.matchMode,
       sortMode: draft.sortMode,
       limit: draft.limit,
     );
@@ -4862,6 +4876,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       text: (initialRule?.limit ?? 50).toString(),
     );
     var favoritesOnly = initialRule?.favoritesOnly ?? false;
+    var matchMode =
+        initialRule?.matchMode ?? CustomSmartPlaylistMatchMode.all;
     var sortMode =
         initialRule?.sortMode ?? CustomSmartPlaylistSortMode.recentlyAdded;
 
@@ -4897,6 +4913,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                         minimumDaysSinceLastPlayedController.text.trim(),
                       ) ??
                           0,
+                  matchMode: matchMode,
                   sortMode: sortMode,
                   limit: int.tryParse(limitController.text.trim()) ?? 50,
                 );
@@ -4917,6 +4934,33 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             labelText: 'Name',
                           ),
                           textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Rule matching',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SegmentedButton<CustomSmartPlaylistMatchMode>(
+                          segments: const <
+                            ButtonSegment<CustomSmartPlaylistMatchMode>
+                          >[
+                            ButtonSegment<CustomSmartPlaylistMatchMode>(
+                              value: CustomSmartPlaylistMatchMode.all,
+                              label: Text('Match all'),
+                            ),
+                            ButtonSegment<CustomSmartPlaylistMatchMode>(
+                              value: CustomSmartPlaylistMatchMode.any,
+                              label: Text('Match any'),
+                            ),
+                          ],
+                          selected: <CustomSmartPlaylistMatchMode>{matchMode},
+                          onSelectionChanged: (selection) {
+                            setDialogState(() => matchMode = selection.first);
+                          },
                         ),
                         TextField(
                           controller: queryController,

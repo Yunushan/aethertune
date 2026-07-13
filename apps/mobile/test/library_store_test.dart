@@ -184,6 +184,73 @@ void main() {
     );
   });
 
+  test('matches any custom smart playlist criterion and persists the mode', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'mira-ambient',
+        title: 'Alpha',
+        artist: 'Mira',
+        genre: 'Ambient',
+      ),
+      _track(
+        'other-jazz',
+        title: 'Bravo',
+        artist: 'Other',
+        genre: 'Jazz',
+      ),
+      _track(
+        'mira-jazz',
+        title: 'Delta',
+        artist: 'Mira',
+        genre: 'Jazz',
+      ),
+      _track(
+        'other-rock',
+        title: 'Charlie',
+        artist: 'Other',
+        genre: 'Rock',
+      ),
+    ]);
+    final rule = await store.createCustomSmartPlaylist(
+      name: 'Mira or jazz',
+      artist: 'Mira',
+      genre: 'Jazz',
+      matchMode: CustomSmartPlaylistMatchMode.any,
+      sortMode: CustomSmartPlaylistSortMode.title,
+    );
+
+    expect(
+      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['mira-ambient', 'other-jazz', 'mira-jazz'],
+    );
+
+    final persisted = LibraryStore();
+    await persisted.load();
+    expect(
+      persisted.customSmartPlaylists.single.matchMode,
+      CustomSmartPlaylistMatchMode.any,
+    );
+
+    await persisted.updateCustomSmartPlaylist(
+      rule.id,
+      name: rule.name,
+      query: rule.query,
+      artist: rule.artist,
+      genre: rule.genre,
+      favoritesOnly: rule.favoritesOnly,
+      minimumPlayCount: rule.minimumPlayCount,
+      matchMode: CustomSmartPlaylistMatchMode.all,
+      sortMode: rule.sortMode,
+      limit: rule.limit,
+    );
+    expect(
+      persisted.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['mira-jazz'],
+    );
+  });
+
   test('filters custom smart playlists by duration bounds', () async {
     final store = LibraryStore();
     await store.load();
@@ -3472,6 +3539,7 @@ void main() {
       album: 'Album',
       favoritesOnly: false,
       minimumPlayCount: 0,
+      matchMode: CustomSmartPlaylistMatchMode.all,
       sortMode: CustomSmartPlaylistSortMode.title,
       limit: 3,
     );
