@@ -216,13 +216,11 @@ void main() {
     expect(find.byTooltip('Pause'), findsOneWidget);
     expect(find.byTooltip('Next'), findsOneWidget);
 
-    final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
+    final seekSlider = tester.widget<Slider>(
+      find.byKey(const Key('player-bar-seek')),
+    );
     expect(
-      tester
-          .getSemantics(find.byKey(const Key('player-bar-seek')))
-          .getSemanticsData()
-          .value,
+      seekSlider.semanticFormatterCallback!(0),
       'Playback position 0:00 of 3:20',
     );
 

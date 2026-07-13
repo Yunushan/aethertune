@@ -262,6 +262,7 @@ class _NowPlayingArtwork extends StatelessWidget {
             image: true,
             label: 'Artwork for ${track.title}',
             hint: 'Use increase for next track or decrease for previous track.',
+            value: 'Current track ${track.title}',
             increasedValue: onNext == null ? null : 'Next track',
             decreasedValue: onPrevious == null ? null : 'Previous track',
             onIncrease: onNext,
