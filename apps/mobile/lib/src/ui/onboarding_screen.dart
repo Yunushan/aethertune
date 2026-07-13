@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.onFinished});
@@ -22,9 +23,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await widget.onFinished(destination);
     } catch (_) {
       if (mounted) {
+        final localizations = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not save setup. Please try again.'),
+          SnackBar(
+            content: Text(localizations.setupSaveError),
           ),
         );
         setState(() => _submitting = false);
@@ -35,6 +37,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final localizations = AppLocalizations.of(context)!;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -47,45 +50,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Icons.graphic_eq,
                   size: 56,
                   color: colorScheme.primary,
-                  semanticLabel: 'AetherTune',
+                  semanticLabel: localizations.appTitle,
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Welcome to AetherTune',
+                  localizations.welcomeTitle,
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Start with music you control, or choose a legal source. You can change every choice later in Options.',
+                  localizations.welcomeDescription,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 24),
                 _SetupChoice(
                   icon: Icons.folder_open_outlined,
-                  title: 'Set up a local library',
-                  description:
-                      'Import audio files or a folder, then keep watched folders in sync while the app is open.',
-                  actionLabel: 'Open Library',
+                  title: localizations.localLibraryTitle,
+                  description: localizations.localLibraryDescription,
+                  actionLabel: localizations.openLibrary,
                   enabled: !_submitting,
                   onPressed: () => _finish(1),
                 ),
                 const SizedBox(height: 12),
                 _SetupChoice(
                   icon: Icons.extension_outlined,
-                  title: 'Explore legal sources',
-                  description:
-                      'Add podcast RSS feeds, browse Radio Browser, Internet Archive, or connect your own supported media server.',
-                  actionLabel: 'Open Sources',
+                  title: localizations.legalSourcesTitle,
+                  description: localizations.legalSourcesDescription,
+                  actionLabel: localizations.openSources,
                   enabled: !_submitting,
                   onPressed: () => _finish(4),
                 ),
                 const SizedBox(height: 12),
                 _SetupChoice(
                   icon: Icons.shield_outlined,
-                  title: 'Privacy first',
-                  description:
-                      'AetherTune has no telemetry. Network providers disclose the domains they contact before use.',
-                  actionLabel: 'Start at Home',
+                  title: localizations.privacyFirstTitle,
+                  description: localizations.privacyFirstDescription,
+                  actionLabel: localizations.startAtHome,
                   enabled: !_submitting,
                   onPressed: () => _finish(0),
                 ),
@@ -94,7 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: _submitting ? null : () => _finish(0),
-                    child: const Text('Skip setup'),
+                    child: Text(localizations.skipSetup),
                   ),
                 ),
               ],

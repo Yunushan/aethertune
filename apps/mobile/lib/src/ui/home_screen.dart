@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -77,39 +78,39 @@ class _AetherTuneNavigationDestination {
 
   final IconData icon;
   final IconData selectedIcon;
-  final String label;
+  final String Function(AppLocalizations localizations) label;
 }
 
-const _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
+final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
   _AetherTuneNavigationDestination(
     icon: Icons.home_outlined,
     selectedIcon: Icons.home,
-    label: 'Home',
+    label: (localizations) => localizations.home,
   ),
   _AetherTuneNavigationDestination(
     icon: Icons.my_library_music_outlined,
     selectedIcon: Icons.my_library_music,
-    label: 'Library',
+    label: (localizations) => localizations.library,
   ),
   _AetherTuneNavigationDestination(
     icon: Icons.playlist_play_outlined,
     selectedIcon: Icons.playlist_play,
-    label: 'Playlists',
+    label: (localizations) => localizations.playlists,
   ),
   _AetherTuneNavigationDestination(
     icon: Icons.history_outlined,
     selectedIcon: Icons.history,
-    label: 'History',
+    label: (localizations) => localizations.history,
   ),
   _AetherTuneNavigationDestination(
     icon: Icons.extension_outlined,
     selectedIcon: Icons.extension,
-    label: 'Sources',
+    label: (localizations) => localizations.sources,
   ),
   _AetherTuneNavigationDestination(
     icon: Icons.tune_outlined,
     selectedIcon: Icons.tune,
-    label: 'Options',
+    label: (localizations) => localizations.options,
   ),
 ];
 
@@ -117,22 +118,26 @@ final _playlistArtworkFileStore = PlaylistArtworkFileStore();
 final _trackArtworkFileStore = TrackArtworkFileStore();
 const _platformTextShareService = SharePlusTextShareService();
 
-List<NavigationDestination> _navigationBarDestinations() {
+List<NavigationDestination> _navigationBarDestinations(
+  AppLocalizations localizations,
+) {
   return _aetherTuneNavigationDestinations.map((destination) {
     return NavigationDestination(
       icon: Icon(destination.icon),
       selectedIcon: Icon(destination.selectedIcon),
-      label: destination.label,
+      label: destination.label(localizations),
     );
   }).toList(growable: false);
 }
 
-List<NavigationRailDestination> _navigationRailDestinations() {
+List<NavigationRailDestination> _navigationRailDestinations(
+  AppLocalizations localizations,
+) {
   return _aetherTuneNavigationDestinations.map((destination) {
     return NavigationRailDestination(
       icon: Icon(destination.icon),
       selectedIcon: Icon(destination.selectedIcon),
-      label: Text(destination.label),
+      label: Text(destination.label(localizations)),
     );
   }).toList(growable: false);
 }
@@ -276,6 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
     final useNavigationRail = usesDesktopNavigationRail(
       MediaQuery.of(context).size.width,
     );
@@ -367,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final scaffold = Scaffold(
       appBar: AppBar(
-        title: const Text('AetherTune'),
+        title: Text(localizations.appTitle),
         actions: <Widget>[
           IconButton(
             tooltip: 'Import local audio',
@@ -397,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     minWidth: 88,
                     groupAlignment: -0.85,
                     scrollable: true,
-                    destinations: _navigationRailDestinations(),
+                    destinations: _navigationRailDestinations(localizations),
                   ),
                   const VerticalDivider(width: 1),
                   Expanded(child: tabContent),
@@ -426,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : NavigationBar(
               selectedIndex: _tabIndex,
               onDestinationSelected: _selectTab,
-              destinations: _navigationBarDestinations(),
+              destinations: _navigationBarDestinations(localizations),
             ),
     );
 

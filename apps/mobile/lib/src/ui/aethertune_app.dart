@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
@@ -72,8 +73,11 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
           child: Consumer2<LibraryStore, PlayerController>(
           builder: (context, library, player, _) {
             return MaterialApp(
-              title: 'AetherTune',
+              onGenerateTitle: (context) =>
+                  AppLocalizations.of(context)!.appTitle,
               debugShowCheckedModeBanner: false,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               themeMode: _themeModeForPreference(library.themePreference),
               theme: _lightTheme(library.accentColor),
               darkTheme: _darkThemeForPreference(
@@ -175,8 +179,13 @@ class _AppLoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+    final localizations = AppLocalizations.of(context)!;
+    return Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(
+          semanticsLabel: localizations.loading,
+        ),
+      ),
     );
   }
 }

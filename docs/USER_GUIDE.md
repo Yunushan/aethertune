@@ -27,6 +27,8 @@ dart run bin/server.dart
 
 ## First-run setup
 
+AetherTune follows the device language for the application title, main navigation, and first-run setup. English, Turkish, and Arabic are available today; Arabic automatically uses right-to-left layout. Most feature screens remain English while the localization catalog is expanded.
+
 On first launch, choose **Open Library** to begin importing local audio, **Open Sources** to set up supported legal catalogs and user-owned servers, or **Start at Home** to explore first. Setup never enables a network provider by itself and can be skipped. Use **Run setup again** in Options whenever you want to revisit these choices.
 
 ## Import local music
