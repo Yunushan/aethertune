@@ -2818,8 +2818,8 @@ void main() {
     expect(processingPause!.status, OfflineCacheEntryStatus.paused);
     expect(processingPause.reason, 'Paused by user.');
 
-    final resumed = await store.resumeOfflineCacheEntry(queued.id);
-    expect(resumed!.status, OfflineCacheEntryStatus.queued);
+    final resumedEntry = await store.resumeOfflineCacheEntry(queued.id);
+    expect(resumedEntry!.status, OfflineCacheEntryStatus.queued);
 
     final resumedProcessing = await store.markOfflineCacheEntryProcessing(
       queued.id,

@@ -140,11 +140,11 @@ void main() {
         if (startsAt > 0) {
           request.response.statusCode = HttpStatus.partialContent;
         }
-        request.response.add(bytes.take(2));
+        request.response.add(bytes.take(2).toList());
         await request.response.flush();
         firstChunkSent.complete();
         await Future<void>.delayed(const Duration(seconds: 1));
-        request.response.add(bytes.skip(2));
+        request.response.add(bytes.skip(2).toList());
         await request.response.close();
       } on Object {
         // The client deliberately closes the request after cancellation.
