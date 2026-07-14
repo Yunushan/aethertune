@@ -1297,6 +1297,7 @@ class LibraryStore extends ChangeNotifier {
     String rootPath, {
     required Iterable<Track> tracks,
     required Map<String, String> sidecarLyricsByTrackId,
+    Map<String, String> embeddedLyricsByTrackId = const <String, String>{},
     required bool pruneMissing,
   }) async {
     final root = _normalizeWatchedLocalFolderPath(rootPath);
@@ -1349,6 +1350,24 @@ class LibraryStore extends ChangeNotifier {
       _lyricsByTrackId[entry.key] = TrackLyrics(
         trackId: entry.key,
         plainText: entry.value.trim(),
+        sourceId: 'sidecar',
+        sourceName: 'Local lyric sidecar',
+        updatedAt: _clock(),
+      );
+      changed = true;
+    }
+
+    for (final entry in embeddedLyricsByTrackId.entries) {
+      if (_lyricsByTrackId.containsKey(entry.key) ||
+          !_tracks.any((track) => track.id == entry.key) ||
+          entry.value.trim().isEmpty) {
+        continue;
+      }
+      _lyricsByTrackId[entry.key] = TrackLyrics(
+        trackId: entry.key,
+        plainText: entry.value.trim(),
+        sourceId: 'embedded',
+        sourceName: 'Embedded ID3 lyrics',
         updatedAt: _clock(),
       );
       changed = true;

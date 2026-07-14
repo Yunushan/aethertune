@@ -69,6 +69,7 @@ class LocalFolderWatchStore extends ChangeNotifier {
         rootPath,
         tracks: result.tracks,
         sidecarLyricsByTrackId: result.sidecarLyricsByTrackId,
+        embeddedLyricsByTrackId: result.embeddedLyricsByTrackId,
         pruneMissing: result.inaccessibleDirectoryCount == 0,
       );
       _lastRefreshedAt[rootPath] = DateTime.now();

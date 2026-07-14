@@ -48,12 +48,22 @@ void main() {
       title: 'Newly discovered',
       hash: 'two-hash',
     );
+    final embedded = _track(
+      path: '$root/three.mp3',
+      title: 'Embedded lyrics',
+      hash: 'three-hash',
+    );
     await store.reconcileWatchedLocalFolder(
       root,
-      tracks: <Track>[refreshed, added],
+      tracks: <Track>[refreshed, added, embedded],
       sidecarLyricsByTrackId: <String, String>{
         original.id: 'Sidecar must not overwrite manual lyrics',
         added.id: '[00:01.00]New sidecar lyrics',
+      },
+      embeddedLyricsByTrackId: <String, String>{
+        original.id: 'Embedded must not overwrite manual lyrics',
+        added.id: 'Embedded must not overwrite a sidecar',
+        embedded.id: 'Imported embedded lyric',
       },
       pruneMissing: true,
     );
@@ -73,6 +83,9 @@ void main() {
       store.lyricsForTrack(added.id)?.plainText,
       '[00:01.00]New sidecar lyrics',
     );
+    expect(store.lyricsForTrack(added.id)?.sourceId, 'sidecar');
+    expect(store.lyricsForTrack(embedded.id)?.plainText, 'Imported embedded lyric');
+    expect(store.lyricsForTrack(embedded.id)?.sourceId, 'embedded');
 
     await store.reconcileWatchedLocalFolder(
       root,

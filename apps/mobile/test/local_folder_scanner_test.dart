@@ -241,6 +241,70 @@ void main() {
     );
   });
 
+  test('extracts bounded ID3v2 embedded lyrics for MP3 files', () async {
+    final audioPath = p.join(root.path, 'embedded-lyrics.mp3');
+    await File(audioPath).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Embedded Lyrics',
+        unsynchronizedLyrics: 'First line\r\nSecond line',
+      ),
+      1,
+      2,
+      3,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.sidecarLyricsByTrackId, isEmpty);
+    expect(result.embeddedLyricsCount, 1);
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(audioPath)],
+      'First line\nSecond line',
+    );
+  });
+
+  test('prefers a lyric sidecar over embedded ID3v2 lyrics', () async {
+    final audioPath = p.join(root.path, 'sidecar-wins.mp3');
+    await File(audioPath).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Sidecar Wins',
+        unsynchronizedLyrics: 'Embedded lyrics',
+      ),
+      1,
+      2,
+      3,
+    ]);
+    await File(p.setExtension(audioPath, '.lrc')).writeAsString(
+      '[00:02.00]Sidecar lyrics',
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(
+      result.sidecarLyricsByTrackId[Track.stableLocalId(audioPath)],
+      '[00:02.00]Sidecar lyrics',
+    );
+    expect(result.embeddedLyricsByTrackId, isEmpty);
+  });
+
+  test('ignores oversized ID3v2 embedded lyrics', () async {
+    final audioPath = p.join(root.path, 'oversized-lyrics.mp3');
+    await File(audioPath).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Bounded lyrics',
+        unsynchronizedLyrics: 'x' * (256 * 1024),
+      ),
+      1,
+      2,
+      3,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Bounded lyrics');
+    expect(result.embeddedLyricsByTrackId, isEmpty);
+  });
+
   test('reads ReplayGain from ID3v2 user text metadata', () async {
     await File(p.join(root.path, 'loud.mp3')).writeAsBytes(<int>[
       ..._id3v23Tag(
@@ -598,6 +662,7 @@ List<int> _id3v23Tag({
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
+  String unsynchronizedLyrics = '',
   int encoding = _id3v2EncodingUtf8,
 }) {
   final frames = <int>[
@@ -618,6 +683,8 @@ List<int> _id3v23Tag({
         replayGainAlbumGain,
         encoding,
       ),
+    if (unsynchronizedLyrics.isNotEmpty)
+      ..._id3v23UnsynchronizedLyricsFrame(unsynchronizedLyrics, encoding),
   ];
 
   return <int>[
@@ -629,6 +696,25 @@ List<int> _id3v23Tag({
     0x00,
     ..._id3v2SynchsafeSize(frames.length),
     ...frames,
+  ];
+}
+
+List<int> _id3v23UnsynchronizedLyricsFrame(String lyrics, int encoding) {
+  final terminator = encoding == _id3v2EncodingUtf16
+      ? const <int>[0, 0]
+      : const <int>[0];
+  final payload = <int>[
+    encoding,
+    ...'eng'.codeUnits,
+    ...terminator,
+    ..._id3v2EncodedText(lyrics, encoding),
+  ];
+  return <int>[
+    ...'USLT'.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
   ];
 }
 

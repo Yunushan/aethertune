@@ -1107,7 +1107,20 @@ class _HomeScreenState extends State<HomeScreen> {
       if (scanResult.tracks.isNotEmpty) {
         await library.addTracks(scanResult.tracks);
         for (final entry in scanResult.sidecarLyricsByTrackId.entries) {
-          await library.setLyricsIfAbsent(entry.key, entry.value);
+          await library.setLyricsIfAbsent(
+            entry.key,
+            entry.value,
+            sourceId: 'sidecar',
+            sourceName: 'Local lyric sidecar',
+          );
+        }
+        for (final entry in scanResult.embeddedLyricsByTrackId.entries) {
+          await library.setLyricsIfAbsent(
+            entry.key,
+            entry.value,
+            sourceId: 'embedded',
+            sourceName: 'Embedded ID3 lyrics',
+          );
         }
       }
       await library.watchLocalFolder(folderPath);
@@ -8518,7 +8531,14 @@ String _folderImportSummary(LocalFolderScanResult result) {
     'Imported ${result.tracks.length} audio file(s) from folder.',
   ];
   if (result.sidecarLyricsCount > 0) {
-    details.add('Imported lyrics for ${result.sidecarLyricsCount} track(s).');
+    details.add(
+      'Imported sidecar lyrics for ${result.sidecarLyricsCount} track(s).',
+    );
+  }
+  if (result.embeddedLyricsCount > 0) {
+    details.add(
+      'Imported embedded lyrics for ${result.embeddedLyricsCount} track(s).',
+    );
   }
   if (result.ignoredFileCount > 0) {
     details.add('Skipped ${result.ignoredFileCount} non-audio file(s).');

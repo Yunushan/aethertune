@@ -27,14 +27,17 @@ final class LocalFolderScanResult {
     required this.ignoredFileCount,
     required this.inaccessibleDirectoryCount,
     required this.sidecarLyricsByTrackId,
+    this.embeddedLyricsByTrackId = const <String, String>{},
   });
 
   final List<Track> tracks;
   final int ignoredFileCount;
   final int inaccessibleDirectoryCount;
   final Map<String, String> sidecarLyricsByTrackId;
+  final Map<String, String> embeddedLyricsByTrackId;
 
   int get sidecarLyricsCount => sidecarLyricsByTrackId.length;
+  int get embeddedLyricsCount => embeddedLyricsByTrackId.length;
 }
 
 final class _LocalFileMetadata {
@@ -46,6 +49,7 @@ final class _LocalFileMetadata {
     this.artworkUri,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
+    this.embeddedLyrics,
   });
 
   final String title;
@@ -55,6 +59,17 @@ final class _LocalFileMetadata {
   final Uri? artworkUri;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
+  final String? embeddedLyrics;
+}
+
+final class _ScannedLocalTrack {
+  const _ScannedLocalTrack({
+    required this.track,
+    this.embeddedLyrics,
+  });
+
+  final Track track;
+  final String? embeddedLyrics;
 }
 
 final class LocalFolderScanner {
@@ -87,6 +102,9 @@ final class LocalFolderScanner {
       sidecarLyricsByTrackId: Map.unmodifiable(
         scanState.sidecarLyricsByTrackId,
       ),
+      embeddedLyricsByTrackId: Map.unmodifiable(
+        scanState.embeddedLyricsByTrackId,
+      ),
     );
   }
 }
@@ -103,6 +121,7 @@ final class _LocalFolderScanState {
   final Set<String> supportedExtensions;
   final List<Track> tracks = <Track>[];
   final Map<String, String> sidecarLyricsByTrackId = <String, String>{};
+  final Map<String, String> embeddedLyricsByTrackId = <String, String>{};
   int ignoredFileCount = 0;
   int inaccessibleDirectoryCount = 0;
 
@@ -139,11 +158,14 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      final track = await _trackForFile(entry.path);
+      final scannedTrack = await _trackForFile(entry.path);
+      final track = scannedTrack.track;
       tracks.add(track);
       final sidecarLyrics = await _sidecarLyricsForFile(entry.path);
       if (sidecarLyrics != null) {
         sidecarLyricsByTrackId[track.id] = sidecarLyrics;
+      } else if (scannedTrack.embeddedLyrics != null) {
+        embeddedLyricsByTrackId[track.id] = scannedTrack.embeddedLyrics!;
       }
     }
   }
@@ -181,23 +203,26 @@ final class _LocalFolderScanState {
     );
   }
 
-  Future<Track> _trackForFile(String path) async {
+  Future<_ScannedLocalTrack> _trackForFile(String path) async {
     final metadata = await _metadataForFile(path);
     final contentHash = await _contentHashForFile(path);
 
-    return Track(
-      id: Track.stableLocalId(path),
-      title: metadata.title,
-      artist: metadata.artist,
-      album: metadata.album ?? _albumLabelFor(path),
-      genre: metadata.genre ?? 'Unknown Genre',
-      artworkUri: metadata.artworkUri,
-      localPath: path,
-      contentHash: contentHash,
-      replayGainTrackDb: metadata.replayGainTrackDb,
-      replayGainAlbumDb: metadata.replayGainAlbumDb,
-      sourceId: 'local',
-      addedAt: importedAt,
+    return _ScannedLocalTrack(
+      track: Track(
+        id: Track.stableLocalId(path),
+        title: metadata.title,
+        artist: metadata.artist,
+        album: metadata.album ?? _albumLabelFor(path),
+        genre: metadata.genre ?? 'Unknown Genre',
+        artworkUri: metadata.artworkUri,
+        localPath: path,
+        contentHash: contentHash,
+        replayGainTrackDb: metadata.replayGainTrackDb,
+        replayGainAlbumDb: metadata.replayGainAlbumDb,
+        sourceId: 'local',
+        addedAt: importedAt,
+      ),
+      embeddedLyrics: metadata.embeddedLyrics,
     );
   }
 
@@ -291,6 +316,7 @@ final class _LocalFolderScanState {
       artworkUri: embeddedMetadata.artworkUri ?? fallbackMetadata.artworkUri,
       replayGainTrackDb: embeddedMetadata.replayGainTrackDb,
       replayGainAlbumDb: embeddedMetadata.replayGainAlbumDb,
+      embeddedLyrics: embeddedMetadata.embeddedLyrics,
     );
   }
 
@@ -692,7 +718,8 @@ final class _LocalFolderScanState {
     if (tagData.textFrames.isEmpty &&
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
-        tagData.replayGainAlbumDb == null) {
+        tagData.replayGainAlbumDb == null &&
+        tagData.embeddedLyrics == null) {
       return null;
     }
 
@@ -706,7 +733,8 @@ final class _LocalFolderScanState {
         (genre == null || genre.isEmpty) &&
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
-        tagData.replayGainAlbumDb == null) {
+        tagData.replayGainAlbumDb == null &&
+        tagData.embeddedLyrics == null) {
       return null;
     }
 
@@ -718,6 +746,7 @@ final class _LocalFolderScanState {
       artworkUri: tagData.artworkUri,
       replayGainTrackDb: tagData.replayGainTrackDb,
       replayGainAlbumDb: tagData.replayGainAlbumDb,
+      embeddedLyrics: tagData.embeddedLyrics,
     );
   }
 
@@ -729,6 +758,7 @@ final class _LocalFolderScanState {
     Uri? artworkUri;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
+    String? embeddedLyrics;
     var offset = 0;
     while (offset + 10 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
@@ -770,6 +800,10 @@ final class _LocalFolderScanState {
           bytes.sublist(offset, offset + frameSize),
           'REPLAYGAIN_ALBUM_GAIN',
         );
+      } else if (frameId == 'USLT' && embeddedLyrics == null) {
+        embeddedLyrics = _id3v2UnsynchronizedLyrics(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
@@ -780,6 +814,7 @@ final class _LocalFolderScanState {
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      embeddedLyrics: embeddedLyrics,
     );
   }
 
@@ -788,6 +823,7 @@ final class _LocalFolderScanState {
     Uri? artworkUri;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
+    String? embeddedLyrics;
     var offset = 0;
     while (offset + 6 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(3));
@@ -827,6 +863,10 @@ final class _LocalFolderScanState {
           bytes.sublist(offset, offset + frameSize),
           'REPLAYGAIN_ALBUM_GAIN',
         );
+      } else if (frameId == 'ULT' && embeddedLyrics == null) {
+        embeddedLyrics = _id3v2UnsynchronizedLyrics(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
@@ -837,6 +877,7 @@ final class _LocalFolderScanState {
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      embeddedLyrics: embeddedLyrics,
     );
   }
 
@@ -1265,8 +1306,38 @@ final class _LocalFolderScanState {
     );
   }
 
+  String? _id3v2UnsynchronizedLyrics(List<int> bytes) {
+    if (bytes.length < 5 || bytes.length > _maxEmbeddedLyricsBytes) {
+      return null;
+    }
+
+    final encoding = bytes.first;
+    final terminatorLength = _id3v2TerminatorLength(encoding);
+    var descriptionEnd = 4; // Encoding plus the three-byte language code.
+    while (descriptionEnd < bytes.length) {
+      if (_hasZeroTerminator(bytes, descriptionEnd, terminatorLength)) {
+        break;
+      }
+      descriptionEnd += terminatorLength;
+    }
+    if (descriptionEnd + terminatorLength > bytes.length) {
+      return null;
+    }
+
+    return _normalizeEmbeddedLyrics(
+      _id3v2DecodedRawText(
+        bytes.sublist(descriptionEnd + terminatorLength),
+        encoding,
+      ),
+    );
+  }
+
   String _id3v2DecodedText(List<int> payload, int encoding) {
-    final decoded = switch (encoding) {
+    return _normalizeEmbeddedText(_id3v2DecodedRawText(payload, encoding));
+  }
+
+  String _id3v2DecodedRawText(List<int> payload, int encoding) {
+    return switch (encoding) {
       0 => latin1.decode(_trimTrailingZeroBytes(payload)),
       1 => _decodeUtf16(payload, useBom: true),
       2 => _decodeUtf16(payload, bigEndian: true),
@@ -1279,8 +1350,6 @@ final class _LocalFolderScanState {
           allowMalformed: true,
         ),
     };
-
-    return _normalizeEmbeddedText(decoded);
   }
 
   double? _m4aFreeformReplayGain(
@@ -1568,6 +1637,16 @@ final class _LocalFolderScanState {
         .toList(growable: false);
 
     return parts.join(' / ');
+  }
+
+  String? _normalizeEmbeddedLyrics(String value) {
+    final normalized = value
+        .replaceAll('﻿', '')
+        .replaceAll('\u0000', '')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .trim();
+    return normalized.isEmpty ? null : normalized;
   }
 
   List<int> _trimTrailingZeroBytes(List<int> bytes) {
@@ -1869,12 +1948,14 @@ final class _Id3v2TagData {
     this.artworkUri,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
+    this.embeddedLyrics,
   });
 
   final Map<String, String> textFrames;
   final Uri? artworkUri;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
+  final String? embeddedLyrics;
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;
@@ -1883,6 +1964,7 @@ const _maxOggMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
+const _maxEmbeddedLyricsBytes = 256 * 1024;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
 const _maxWavChunks = 2048;
