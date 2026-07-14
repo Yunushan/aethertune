@@ -57,6 +57,33 @@ void main() {
     await expectLater(restoredController.setVolume(1.1), throwsArgumentError);
   });
 
+  test('applies persisted ReplayGain normalization for queue transitions',
+      () async {
+    final firstEngine = _FakePlaybackAudioEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+    final tracks = <Track>[
+      _track('quiet', replayGainTrackDb: -6),
+      _track('loud', replayGainTrackDb: 6),
+    ];
+
+    await firstController.setVolume(0.5);
+    await firstController.playTrack(tracks.first, queue: tracks);
+    await firstController.setLoudnessNormalizationEnabled(true);
+
+    expect(firstEngine.volumeValue, closeTo(0.25059, 0.0001));
+    firstEngine.emitAutomaticIndex(1);
+    await _flushAsyncWork();
+    expect(firstEngine.volumeValue, closeTo(0.99763, 0.0001));
+    firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.loudnessNormalizationEnabled, isTrue);
+  });
+
   test('persists skip intervals and clamps skip seeks to track bounds',
       () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -460,12 +487,14 @@ Track _track(
   String id, {
   String? localPath,
   String? streamUrl,
+  double? replayGainTrackDb,
 }) {
   return Track(
     id: id,
     title: 'Track $id',
     localPath: localPath ?? '/music/$id.mp3',
     streamUrl: streamUrl,
+    replayGainTrackDb: replayGainTrackDb,
   );
 }
 

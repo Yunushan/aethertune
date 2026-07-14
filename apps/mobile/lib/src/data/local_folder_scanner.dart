@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../domain/lyrics_document.dart';
+import '../domain/replay_gain.dart';
 import '../domain/track.dart';
 
 const supportedLocalAudioExtensions = <String>{
@@ -43,6 +44,7 @@ final class _LocalFileMetadata {
     this.album,
     this.genre,
     this.artworkUri,
+    this.replayGainTrackDb,
   });
 
   final String title;
@@ -50,6 +52,7 @@ final class _LocalFileMetadata {
   final String? album;
   final String? genre;
   final Uri? artworkUri;
+  final double? replayGainTrackDb;
 }
 
 final class LocalFolderScanner {
@@ -189,6 +192,7 @@ final class _LocalFolderScanState {
       artworkUri: metadata.artworkUri,
       localPath: path,
       contentHash: contentHash,
+      replayGainTrackDb: metadata.replayGainTrackDb,
       sourceId: 'local',
       addedAt: importedAt,
     );
@@ -282,6 +286,7 @@ final class _LocalFolderScanState {
       album: embeddedMetadata.album ?? fallbackMetadata.album,
       genre: embeddedMetadata.genre ?? fallbackMetadata.genre,
       artworkUri: embeddedMetadata.artworkUri ?? fallbackMetadata.artworkUri,
+      replayGainTrackDb: embeddedMetadata.replayGainTrackDb,
     );
   }
 
@@ -431,6 +436,7 @@ final class _LocalFolderScanState {
           album: metadata?.album,
           genre: metadata?.genre,
           artworkUri: artworkUri,
+          replayGainTrackDb: metadata?.replayGainTrackDb,
         );
       } finally {
         await access.close();
@@ -503,6 +509,7 @@ final class _LocalFolderScanState {
           album: metadata?.album,
           genre: metadata?.genre,
           artworkUri: artworkUri,
+          replayGainTrackDb: metadata?.replayGainTrackDb,
         );
       } finally {
         await access.close();
@@ -870,10 +877,14 @@ final class _LocalFolderScanState {
     final artist = _joinedVorbisComment(comments, 'ARTIST') ?? '';
     final album = _firstVorbisComment(comments, 'ALBUM');
     final genre = _joinedVorbisComment(comments, 'GENRE');
+    final replayGainTrackDb = parseReplayGainDb(
+      _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN'),
+    );
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
-        (genre == null || genre.isEmpty)) {
+        (genre == null || genre.isEmpty) &&
+        replayGainTrackDb == null) {
       return null;
     }
 
@@ -882,6 +893,7 @@ final class _LocalFolderScanState {
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
+      replayGainTrackDb: replayGainTrackDb,
     );
   }
 

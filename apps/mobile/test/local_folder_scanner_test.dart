@@ -288,6 +288,7 @@ void main() {
           'ARTIST': <String>['Ogg Artist'],
           'ALBUM': <String>['Ogg Album'],
           'GENRE': <String>['Shoegaze'],
+          'REPLAYGAIN_TRACK_GAIN': <String>['-7.20 dB'],
         },
       ),
     );
@@ -311,6 +312,7 @@ void main() {
     expect(tracksByTitle['Ogg Title']!.artist, 'Ogg Artist');
     expect(tracksByTitle['Ogg Title']!.album, 'Ogg Album');
     expect(tracksByTitle['Ogg Title']!.genre, 'Shoegaze');
+    expect(tracksByTitle['Ogg Title']!.replayGainTrackDb, -7.2);
     expect(tracksByTitle['Opus Title']!.artist, 'Opus Artist');
     expect(tracksByTitle['Opus Title']!.album, 'Opus Album');
     expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');

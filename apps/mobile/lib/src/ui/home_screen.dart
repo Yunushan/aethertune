@@ -11476,6 +11476,16 @@ class _SettingsTab extends StatelessWidget {
           ),
           trailing: Text(PlayerController.formatVolume(player.volume)),
         ),
+        SwitchListTile(
+          secondary: const Icon(Icons.graphic_eq_outlined),
+          title: const Text('Loudness normalization'),
+          subtitle: const Text('Use native ReplayGain tags when available.'),
+          value: player.loudnessNormalizationEnabled,
+          onChanged: player.isSleepFadeActive
+              ? null
+              : (enabled) =>
+                    unawaited(player.setLoudnessNormalizationEnabled(enabled)),
+        ),
         if (library.watchedLocalFolderPaths.isNotEmpty) ...<Widget>[
           const Divider(),
           Text(

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/sleep_timer_duration.dart';
 import '../domain/playback_speed.dart';
+import '../domain/replay_gain.dart';
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
 import 'offline_playback_policy.dart';
@@ -75,6 +76,7 @@ class PlayerController extends ChangeNotifier {
   int _playbackStartSerial = 0;
   double? _sleepFadeStartVolume;
   double _volume = maxVolume;
+  bool _loudnessNormalizationEnabled = false;
   double _defaultPlaybackSpeed = 1;
   Duration _skipBackwardInterval = const Duration(seconds: 10);
   Duration _skipForwardInterval = const Duration(seconds: 30);
@@ -90,6 +92,7 @@ class PlayerController extends ChangeNotifier {
   Duration get skipBackwardInterval => _skipBackwardInterval;
   Duration get skipForwardInterval => _skipForwardInterval;
   double get volume => _volume;
+  bool get loudnessNormalizationEnabled => _loudnessNormalizationEnabled;
   Duration get duration => _duration;
   Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
@@ -184,7 +187,9 @@ class PlayerController extends ChangeNotifier {
           fallback: _skipForwardInterval,
         );
         _volume = _volumeFromJson(settings['volume']);
-        await _audio.setVolume(_volume);
+        _loudnessNormalizationEnabled =
+            settings['loudnessNormalizationEnabled'] as bool? ?? false;
+        await _applyOutputVolume();
       } catch (_) {
         await prefs.remove(_playbackSettingsKey);
       }
@@ -220,6 +225,7 @@ class PlayerController extends ChangeNotifier {
       preparedTrack,
       initialPosition: initialPosition ?? Duration.zero,
     );
+    await _applyOutputVolume();
     unawaited(_audio.play());
     _playbackStartSerial += 1;
     notifyListeners();
@@ -252,6 +258,7 @@ class PlayerController extends ChangeNotifier {
         await _saveQueueSnapshot();
         await _loadQueue(preparedTrack);
       }
+      await _applyOutputVolume();
 
       unawaited(_audio.play());
       if (!wasLoaded) {
@@ -524,13 +531,20 @@ class PlayerController extends ChangeNotifier {
   Future<void> previewVolume(double volume) async {
     _validateVolume(volume);
     _volume = volume;
-    await _audio.setVolume(volume);
+    await _applyOutputVolume();
     notifyListeners();
   }
 
   Future<void> setVolume(double volume) async {
     await previewVolume(volume);
     await _savePlaybackSettings();
+  }
+
+  Future<void> setLoudnessNormalizationEnabled(bool enabled) async {
+    _loudnessNormalizationEnabled = enabled;
+    await _applyOutputVolume();
+    await _savePlaybackSettings();
+    notifyListeners();
   }
 
   static String formatVolume(double volume) {
@@ -609,6 +623,7 @@ class PlayerController extends ChangeNotifier {
 
     _current = track;
     _playbackStartSerial += 1;
+    unawaited(_applyOutputVolume());
     unawaited(_saveQueueSnapshot());
     notifyListeners();
   }
@@ -627,9 +642,9 @@ class PlayerController extends ChangeNotifier {
     _sleepFadeStepTimer = Timer.periodic(stepInterval, (timer) {
       step += 1;
       unawaited(
-        _audio.setVolume(
-          sleepTimerFadeVolume(
-            startVolume: _sleepFadeStartVolume ?? _audio.volume,
+        _applyOutputVolume(
+          baseVolume: sleepTimerFadeVolume(
+            startVolume: _sleepFadeStartVolume ?? _volume,
             step: step,
           ),
         ),
@@ -647,7 +662,7 @@ class PlayerController extends ChangeNotifier {
     _cancelSleepFade(restoreVolume: false);
     await _audio.stop();
     if (restoreVolume && startVolume != null) {
-      await _audio.setVolume(startVolume);
+      await _applyOutputVolume(baseVolume: startVolume);
     }
     notifyListeners();
   }
@@ -673,7 +688,7 @@ class PlayerController extends ChangeNotifier {
     final startVolume = _sleepFadeStartVolume;
     _sleepFadeStartVolume = null;
     if (restoreVolume && startVolume != null) {
-      unawaited(_audio.setVolume(startVolume));
+      unawaited(_applyOutputVolume(baseVolume: startVolume));
     }
   }
 
@@ -840,6 +855,7 @@ class PlayerController extends ChangeNotifier {
           'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
           'skipForwardSeconds': _skipForwardInterval.inSeconds,
           'volume': _volume,
+          'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
         },
       ),
     );
@@ -919,6 +935,16 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return maxVolume;
+  }
+
+  Future<void> _applyOutputVolume({double? baseVolume}) {
+    return _audio.setVolume(
+      replayGainAdjustedVolume(
+        baseVolume: baseVolume ?? _volume,
+        enabled: _loudnessNormalizationEnabled,
+        gainDb: _current?.replayGainTrackDb,
+      ),
+    );
   }
 
   void _validateVolume(double volume) {
