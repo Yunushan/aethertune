@@ -877,6 +877,123 @@ void main() {
     expect(secondStore.playCountForTrack('keep'), 2);
   });
 
+  test('undoes the last duplicate merge with all rewritten state restored',
+      () async {
+    var now = DateTime.utc(2026, 7, 14, 6);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'keep',
+        title: 'Undo me',
+        artist: 'Mira',
+        duration: const Duration(minutes: 3),
+      ),
+      _track(
+        'duplicate',
+        title: 'Undo me',
+        artist: 'Mira',
+        duration: const Duration(minutes: 3),
+      ),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Undo merge',
+      trackIds: <String>['duplicate', 'keep'],
+    );
+    await store.setLyrics('keep', 'keeper lyrics');
+    now = now.add(const Duration(minutes: 1));
+    await store.setLyrics('duplicate', 'duplicate lyrics');
+    await store.recordPlayback('duplicate');
+    await store.recordPlaybackProgress(
+      'duplicate',
+      const Duration(minutes: 2),
+      const Duration(minutes: 3),
+    );
+    await store.setTrackPlaybackSpeed('duplicate', 1.5);
+    await store.toggleFavorite('duplicate');
+
+    expect(
+      await store.resolveDuplicateTracks(
+        keepTrackId: 'keep',
+        duplicateTrackIds: <String>['duplicate'],
+      ),
+      1,
+    );
+    expect(store.canUndoDuplicateResolution, isTrue);
+    expect(store.playbackSpeedForTrack('keep'), 1.5);
+    expect(store.playbackSpeedForTrack('duplicate'), isNull);
+
+    expect(await store.undoLastDuplicateResolution(), isTrue);
+    expect(store.canUndoDuplicateResolution, isFalse);
+    expect(store.tracks.map((track) => track.id), containsAll(<String>[
+      'keep',
+      'duplicate',
+    ]));
+    expect(store.playlistById(playlist.id)!.trackIds, <String>[
+      'duplicate',
+      'keep',
+    ]);
+    expect(
+      store.playbackHistory.map((entry) => entry.trackId),
+      <String>['duplicate'],
+    );
+    expect(store.lyricsForTrack('keep')!.plainText, 'keeper lyrics');
+    expect(store.lyricsForTrack('duplicate')!.plainText, 'duplicate lyrics');
+    expect(store.playbackProgressForTrack('keep'), isNull);
+    expect(
+      store.playbackProgressForTrack('duplicate')!.position,
+      const Duration(minutes: 2),
+    );
+    expect(store.playbackSpeedForTrack('keep'), isNull);
+    expect(store.playbackSpeedForTrack('duplicate'), 1.5);
+    expect(
+      store.tracks.firstWhere((track) => track.id == 'keep').isFavorite,
+      isFalse,
+    );
+    expect(
+      store.tracks.firstWhere((track) => track.id == 'duplicate').isFavorite,
+      isTrue,
+    );
+    expect(store.duplicateTrackGroups(), isNotEmpty);
+    expect(await store.undoLastDuplicateResolution(), isFalse);
+
+    final restored = LibraryStore(clock: () => now);
+    await restored.load();
+    expect(restored.playlistById(playlist.id)!.trackIds, <String>[
+      'duplicate',
+      'keep',
+    ]);
+    expect(restored.playbackSpeedForTrack('duplicate'), 1.5);
+  });
+
+  test('expires duplicate merge undo after a later library change', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('keep', title: 'Same', duration: const Duration(minutes: 1)),
+      _track(
+        'duplicate',
+        title: 'Same',
+        duration: const Duration(minutes: 1),
+      ),
+    ]);
+
+    await store.resolveDuplicateTracks(
+      keepTrackId: 'keep',
+      duplicateTrackIds: <String>['duplicate'],
+    );
+    expect(store.canUndoDuplicateResolution, isTrue);
+
+    await store.addTracks(<Track>[_track('later')]);
+    expect(store.canUndoDuplicateResolution, isFalse);
+    expect(await store.undoLastDuplicateResolution(), isFalse);
+    expect(store.tracks.map((track) => track.id), containsAll(<String>[
+      'keep',
+      'later',
+    ]));
+    expect(store.tracks.map((track) => track.id), isNot(contains('duplicate')));
+  });
+
   test('persists playlists across store instances', () async {
     DateTime clock() => DateTime.utc(2026, 1, 4);
     final firstStore = LibraryStore(clock: clock);

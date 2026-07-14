@@ -159,6 +159,38 @@ class DuplicateTrackGroup {
   final List<Track> tracks;
 }
 
+class _DuplicateResolutionSnapshot {
+  const _DuplicateResolutionSnapshot({
+    required this.tracks,
+    required this.playlists,
+    required this.history,
+    required this.progressByTrackId,
+    required this.lyricsByTrackId,
+    required this.playbackSpeedOverrides,
+    required this.stateRevision,
+  });
+
+  final List<Track> tracks;
+  final List<Playlist> playlists;
+  final List<PlaybackHistoryEntry> history;
+  final Map<String, PlaybackProgressEntry> progressByTrackId;
+  final Map<String, TrackLyrics> lyricsByTrackId;
+  final Map<String, double> playbackSpeedOverrides;
+  final int stateRevision;
+
+  _DuplicateResolutionSnapshot withStateRevision(int stateRevision) {
+    return _DuplicateResolutionSnapshot(
+      tracks: tracks,
+      playlists: playlists,
+      history: history,
+      progressByTrackId: progressByTrackId,
+      lyricsByTrackId: lyricsByTrackId,
+      playbackSpeedOverrides: playbackSpeedOverrides,
+      stateRevision: stateRevision,
+    );
+  }
+}
+
 class LibraryBrowseGroup {
   const LibraryBrowseGroup({
     required this.type,
@@ -905,9 +937,15 @@ class LibraryStore extends ChangeNotifier {
   bool _onboardingCompleted = false;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
   final Map<String, int> _offlineCacheProviderLimitMegabytes = <String, int>{};
+  _DuplicateResolutionSnapshot? _lastDuplicateResolution;
+  int _stateRevision = 0;
   bool _loaded = false;
 
   bool get loaded => _loaded;
+  bool get canUndoDuplicateResolution {
+    final resolution = _lastDuplicateResolution;
+    return resolution != null && resolution.stateRevision == _stateRevision;
+  }
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
   List<String> get playlistFolders {
@@ -1332,6 +1370,19 @@ class LibraryStore extends ChangeNotifier {
       return 0;
     }
 
+    final previousState = _DuplicateResolutionSnapshot(
+      tracks: List<Track>.from(_tracks),
+      playlists: List<Playlist>.from(_playlists),
+      history: List<PlaybackHistoryEntry>.from(_history),
+      progressByTrackId: Map<String, PlaybackProgressEntry>.from(
+        _progressByTrackId,
+      ),
+      lyricsByTrackId: Map<String, TrackLyrics>.from(_lyricsByTrackId),
+      playbackSpeedOverrides: Map<String, double>.from(
+        _trackPlaybackSpeedOverrides,
+      ),
+      stateRevision: _stateRevision,
+    );
     final duplicateIds = <String>{keepTrackId, ...removeIds};
     final shouldFavorite = _tracks
         .where((track) => duplicateIds.contains(track.id))
@@ -1344,6 +1395,7 @@ class LibraryStore extends ChangeNotifier {
     _rewriteHistoryDuplicateReferences(keepTrackId, removeIds);
     _mergeDuplicateProgress(keepTrackId, removeIds);
     _mergeDuplicateLyrics(keepTrackId, removeIds);
+    _mergeDuplicatePlaybackSpeed(keepTrackId, removeIds);
     _tracks.removeWhere((track) => removeIds.contains(track.id));
 
     _sortTracks();
@@ -1351,9 +1403,42 @@ class LibraryStore extends ChangeNotifier {
     _sortHistory();
     _trimHistory();
     await _save();
+    _lastDuplicateResolution = previousState.withStateRevision(_stateRevision);
     notifyListeners();
 
     return removeIds.length;
+  }
+
+  Future<bool> undoLastDuplicateResolution() async {
+    final previousState = _lastDuplicateResolution;
+    if (previousState == null ||
+        previousState.stateRevision != _stateRevision) {
+      return false;
+    }
+
+    _tracks
+      ..clear()
+      ..addAll(previousState.tracks);
+    _playlists
+      ..clear()
+      ..addAll(previousState.playlists);
+    _history
+      ..clear()
+      ..addAll(previousState.history);
+    _progressByTrackId
+      ..clear()
+      ..addAll(previousState.progressByTrackId);
+    _lyricsByTrackId
+      ..clear()
+      ..addAll(previousState.lyricsByTrackId);
+    _trackPlaybackSpeedOverrides
+      ..clear()
+      ..addAll(previousState.playbackSpeedOverrides);
+
+    await _save();
+    _lastDuplicateResolution = null;
+    notifyListeners();
+    return true;
   }
 
   Future<void> clear() async {
@@ -6092,6 +6177,26 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  void _mergeDuplicatePlaybackSpeed(String keepTrackId, Set<String> removeIds) {
+    final keepSpeed = _trackPlaybackSpeedOverrides[keepTrackId];
+    double? duplicateSpeed;
+    for (final trackId in removeIds) {
+      final speed = _trackPlaybackSpeedOverrides[trackId];
+      if (speed != null) {
+        duplicateSpeed = speed;
+        break;
+      }
+    }
+
+    for (final trackId in removeIds) {
+      _trackPlaybackSpeedOverrides.remove(trackId);
+    }
+
+    if (keepSpeed == null && duplicateSpeed != null) {
+      _trackPlaybackSpeedOverrides[keepTrackId] = duplicateSpeed;
+    }
+  }
+
   bool _listEquals(List<String> a, List<String> b) {
     if (a.length != b.length) {
       return false;
@@ -7322,6 +7427,7 @@ class LibraryStore extends ChangeNotifier {
       _watchedLocalFolderPathsKey,
       _watchedLocalFolderPaths,
     );
+    _stateRevision += 1;
   }
 
   String _normalizeWatchedLocalFolderPath(String rootPath) {

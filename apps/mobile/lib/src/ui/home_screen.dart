@@ -10925,6 +10925,17 @@ class _DuplicateResolverSheet extends StatelessWidget {
                 subtitle: Text('${groups.length} duplicate group(s)'),
               ),
               const Divider(height: 1),
+              if (library.canUndoDuplicateResolution)
+                ListTile(
+                  leading: const Icon(Icons.undo_outlined),
+                  title: const Text('Undo last merge'),
+                  subtitle: const Text(
+                    'Restore the tracks and library state from the last duplicate merge.',
+                  ),
+                  onTap: () => unawaited(
+                    _undoLastDuplicateResolution(context, library),
+                  ),
+                ),
               if (groups.isEmpty)
                 const ListTile(
                   leading: Icon(Icons.check_circle_outline),
@@ -10990,6 +11001,26 @@ class _DuplicateResolverSheet extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Merged $removed duplicate(s) into ${keepTrack.title}.'),
+      ),
+    );
+  }
+
+  Future<void> _undoLastDuplicateResolution(
+    BuildContext context,
+    LibraryStore library,
+  ) async {
+    final restored = await library.undoLastDuplicateResolution();
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          restored
+              ? 'Restored the last duplicate merge.'
+              : 'The last duplicate merge can no longer be undone.',
+        ),
       ),
     );
   }
