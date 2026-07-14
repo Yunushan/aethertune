@@ -170,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   final _radioClickProvider = RadioBrowserProvider();
   final _lyricsProvider = LrcLibLyricsProvider();
+  final _lyricsCacheSettings = LyricsSearchCacheSettingsStore();
   late int _tabIndex;
   bool _favoritesOnly = false;
   bool _offlineLibraryOnly = false;
@@ -182,11 +183,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Duration _lastRecordedProgressPosition = Duration.zero;
   int _lastRecordedPlaybackSerial = 0;
   double? _desktopQueuePaneDragWidth;
+  Duration _lyricsSearchCacheLifetime = defaultLyricsSearchCacheLifetime;
 
   @override
   void initState() {
     super.initState();
     _tabIndex = widget.initialTab;
+    unawaited(_loadLyricsSearchCacheLifetime());
   }
 
   @override
@@ -304,6 +307,37 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _loadLyricsSearchCacheLifetime() async {
+    final retention = await _lyricsCacheSettings.loadRetention();
+    if (!mounted) {
+      return;
+    }
+    _lyricsProvider.setCacheLifetime(retention);
+    setState(() => _lyricsSearchCacheLifetime = retention);
+  }
+
+  Future<void> _setLyricsSearchCacheLifetime(
+    BuildContext context,
+    Duration retention,
+  ) async {
+    try {
+      await _lyricsCacheSettings.saveRetention(retention);
+    } on Object {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save lyrics cache retention.')),
+      );
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    _lyricsProvider.setCacheLifetime(retention);
+    setState(() => _lyricsSearchCacheLifetime = retention);
+  }
+
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context)!;
@@ -384,6 +418,10 @@ class _HomeScreenState extends State<HomeScreen> {
               _SettingsTab(
                 onRestartOnboarding: widget.onRestartOnboarding,
                 onClearLyricsSearchCache: () => _clearLyricsSearchCache(context),
+                lyricsSearchCacheLifetime: _lyricsSearchCacheLifetime,
+                onLyricsSearchCacheLifetimeChanged: (retention) {
+                  unawaited(_setLyricsSearchCacheLifetime(context, retention));
+                },
               ),
             ],
           ),
@@ -11353,10 +11391,14 @@ class _SettingsTab extends StatelessWidget {
   const _SettingsTab({
     this.onRestartOnboarding,
     this.onClearLyricsSearchCache,
+    required this.lyricsSearchCacheLifetime,
+    this.onLyricsSearchCacheLifetimeChanged,
   });
 
   final VoidCallback? onRestartOnboarding;
   final Future<void> Function()? onClearLyricsSearchCache;
+  final Duration lyricsSearchCacheLifetime;
+  final ValueChanged<Duration>? onLyricsSearchCacheLifetimeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -11705,7 +11747,7 @@ class _SettingsTab extends StatelessWidget {
           leading: const Icon(Icons.lyrics_outlined),
           title: const Text('Cached lyrics searches'),
           subtitle: const Text(
-            'Offline LRCLIB search results expire after 30 days.',
+            'Clear stored LRCLIB search results from this device.',
           ),
           trailing: IconButton(
             tooltip: 'Clear cached lyrics searches',
@@ -11713,6 +11755,28 @@ class _SettingsTab extends StatelessWidget {
                 ? null
                 : () => unawaited(onClearLyricsSearchCache!()),
             icon: const Icon(Icons.delete_sweep_outlined),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.timer_outlined),
+          title: const Text('Lyrics cache retention'),
+          subtitle: const Text('How long cached searches remain available offline.'),
+          trailing: DropdownButton<Duration>(
+            value: lyricsSearchCacheLifetime,
+            items: <DropdownMenuItem<Duration>>[
+              for (final retention in supportedLyricsSearchCacheLifetimes)
+                DropdownMenuItem<Duration>(
+                  value: retention,
+                  child: Text('${retention.inDays} day(s)'),
+                ),
+            ],
+            onChanged: onLyricsSearchCacheLifetimeChanged == null
+                ? null
+                : (retention) {
+                    if (retention != null) {
+                      onLyricsSearchCacheLifetimeChanged!(retention);
+                    }
+                  },
           ),
         ),
         SwitchListTile(

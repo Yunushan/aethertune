@@ -12,6 +12,15 @@ typedef LrcLibResponseLoader = Future<String> Function(
   Map<String, String> headers,
 );
 
+const defaultLyricsSearchCacheLifetime = Duration(days: 30);
+const supportedLyricsSearchCacheLifetimes = <Duration>[
+  Duration(days: 1),
+  Duration(days: 7),
+  defaultLyricsSearchCacheLifetime,
+  Duration(days: 90),
+  Duration(days: 180),
+];
+
 class LrcLibCachedSearch {
   const LrcLibCachedSearch({
     required this.responseBody,
@@ -20,6 +29,28 @@ class LrcLibCachedSearch {
 
   final String responseBody;
   final DateTime savedAt;
+}
+
+class LyricsSearchCacheSettingsStore {
+  static const _retentionDaysKey =
+      'aethertune.lrclib.search_cache_retention_days.v1';
+
+  Future<Duration> loadRetention() async {
+    final prefs = await SharedPreferences.getInstance();
+    final retention = Duration(
+      days: prefs.getInt(_retentionDaysKey) ??
+          defaultLyricsSearchCacheLifetime.inDays,
+    );
+    return supportedLyricsSearchCacheLifetimes.contains(retention)
+        ? retention
+        : defaultLyricsSearchCacheLifetime;
+  }
+
+  Future<void> saveRetention(Duration retention) async {
+    _requireSupportedLyricsSearchCacheLifetime(retention);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_retentionDaysKey, retention.inDays);
+  }
 }
 
 abstract interface class LrcLibSearchCache {
@@ -94,7 +125,7 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
     LrcLibResponseLoader? responseLoader,
     LrcLibSearchCache? searchCache,
     DateTime Function()? clock,
-    Duration cacheLifetime = const Duration(days: 30),
+    Duration cacheLifetime = defaultLyricsSearchCacheLifetime,
   })  : baseUri = baseUri ?? Uri.parse('https://lrclib.net'),
         _responseLoader = responseLoader ?? _loadLrcLibResponse,
         _searchCache = searchCache ?? SharedPreferencesLrcLibSearchCache(),
@@ -108,9 +139,13 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
   final LrcLibResponseLoader _responseLoader;
   final LrcLibSearchCache _searchCache;
   final DateTime Function() _clock;
-  final Duration _cacheLifetime;
+  Duration _cacheLifetime;
 
   Duration get cacheLifetime => _cacheLifetime;
+
+  void setCacheLifetime(Duration cacheLifetime) {
+    _cacheLifetime = _validateCacheLifetime(cacheLifetime);
+  }
 
   @override
   String get id => 'lrclib';
@@ -236,6 +271,16 @@ Duration _validateCacheLifetime(Duration value) {
     throw ArgumentError.value(value, 'cacheLifetime', 'Must not be negative.');
   }
   return value;
+}
+
+void _requireSupportedLyricsSearchCacheLifetime(Duration value) {
+  if (!supportedLyricsSearchCacheLifetimes.contains(value)) {
+    throw ArgumentError.value(
+      value,
+      'retention',
+      'Must be one of the supported lyric search cache lifetimes.',
+    );
+  }
 }
 
 List<LyricsSearchResult> parseLrcLibSearchResults(

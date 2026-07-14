@@ -64,6 +64,54 @@ void main() {
     );
   });
 
+  test('updates the active cache lifetime safely', () async {
+    final cache = _MemorySearchCache();
+    final savedAt = DateTime.utc(2026, 7, 14, 10);
+    var now = savedAt;
+    final provider = LrcLibLyricsProvider(
+      searchCache: cache,
+      clock: () => now,
+      responseLoader: (uri, headers) async => _searchResponse,
+    );
+    const query = LyricsSearchQuery(keywords: 'signal');
+
+    await provider.search(query);
+    provider.setCacheLifetime(const Duration(days: 1));
+    now = savedAt.add(const Duration(days: 2));
+
+    await expectLater(provider.searchOffline(query), throwsStateError);
+    expect(() => provider.setCacheLifetime(const Duration(days: -1)),
+        throwsArgumentError);
+  });
+
+  test('persists a supported lyrics cache retention preference', () async {
+    final settings = LyricsSearchCacheSettingsStore();
+
+    expect(await settings.loadRetention(), defaultLyricsSearchCacheLifetime);
+    await settings.saveRetention(const Duration(days: 90));
+
+    final restored = LyricsSearchCacheSettingsStore();
+    expect(await restored.loadRetention(), const Duration(days: 90));
+    await expectLater(
+      settings.saveRetention(const Duration(days: 2)),
+      throwsArgumentError,
+    );
+  });
+
+  test('falls back to the default for an unsupported stored retention',
+      () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      'aethertune.lrclib.search_cache_retention_days.v1',
+      2,
+    );
+
+    expect(
+      await LyricsSearchCacheSettingsStore().loadRetention(),
+      defaultLyricsSearchCacheLifetime,
+    );
+  });
+
   test('clears every cached lyrics search on request', () async {
     final cache = _MemorySearchCache();
     final provider = LrcLibLyricsProvider(
