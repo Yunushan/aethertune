@@ -4687,9 +4687,14 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       return;
     }
     try {
-      final artworkUri = await _playlistArtworkFileStore.save(
-        await file.readAsBytes(),
-      );
+      final bytes = await file.readAsBytes();
+      if (!context.mounted) {
+        return;
+      }
+      final artworkUri = await _playlistArtworkFileStore.save(bytes);
+      if (!context.mounted) {
+        return;
+      }
       final updated = await context
           .read<LibraryStore>()
           .updateCustomSmartPlaylistArtwork(rule.id, artworkUri);
@@ -6224,6 +6229,13 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
               ),
             ),
             PopupMenuItem(
+              value: _CustomSmartPlaylistAction.artwork,
+              child: ListTile(
+                leading: Icon(Icons.image_outlined),
+                title: Text('Artwork'),
+              ),
+            ),
+            PopupMenuItem(
               value: _CustomSmartPlaylistAction.delete,
               child: ListTile(
                 leading: Icon(Icons.delete_outline),
@@ -6333,13 +6345,6 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.ios_share),
                 title: Text('Copy share text'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _CustomSmartPlaylistAction.artwork,
-              child: ListTile(
-                leading: Icon(Icons.image_outlined),
-                title: Text('Artwork'),
               ),
             ),
             PopupMenuItem(
