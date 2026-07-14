@@ -22,6 +22,10 @@ enum LibrarySortMode { recentlyAdded, title, artist, album }
 
 enum PlaylistDocumentFormat { json, m3u, csv }
 
+const _playlistImportLinkScheme = 'aethertune';
+const _playlistImportLinkHost = 'playlist';
+const _maxPlaylistImportLinkBytes = 48 * 1024;
+
 enum LibraryStatsExportFormat { json, csv }
 
 enum LibraryBrowseType { artist, album, genre, source, folder }
@@ -3408,6 +3412,64 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return buffer.toString().trimRight();
+  }
+
+  String? playlistImportLink(String playlistId) {
+    final playlist = playlistById(playlistId);
+    if (playlist == null) {
+      return null;
+    }
+    final document = <String, Object?>{
+      'type': 'aethertune.playlist',
+      'version': _playlistDocumentVersion,
+      'playlist': _portablePlaylistJson(playlist),
+      'tracks': tracksForPlaylist(playlist.id)
+          .map(_portableSyncTrackJson)
+          .toList(growable: false),
+    };
+    final payload = utf8.encode(jsonEncode(document));
+    if (payload.length > _maxPlaylistImportLinkBytes) {
+      return null;
+    }
+    return Uri(
+      scheme: _playlistImportLinkScheme,
+      host: _playlistImportLinkHost,
+      queryParameters: <String, String>{
+        'data': base64Url.encode(payload),
+      },
+    ).toString();
+  }
+
+  Future<Playlist> importPlaylistLink(String link) async {
+    final uri = Uri.tryParse(link.trim());
+    if (uri == null ||
+        uri.scheme != _playlistImportLinkScheme ||
+        uri.host != _playlistImportLinkHost) {
+      throw const FormatException('Enter a valid AetherTune playlist link.');
+    }
+    final encoded = uri.queryParameters['data'];
+    if (encoded == null || encoded.isEmpty) {
+      throw const FormatException('The AetherTune playlist link has no data.');
+    }
+    late List<int> bytes;
+    try {
+      bytes = base64Url.decode(encoded);
+    } on FormatException {
+      throw const FormatException('The AetherTune playlist link is malformed.');
+    }
+    if (bytes.length > _maxPlaylistImportLinkBytes) {
+      throw const FormatException('The AetherTune playlist link is too large.');
+    }
+    late Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+    } on FormatException {
+      throw const FormatException('The AetherTune playlist link is malformed.');
+    }
+    if (decoded is! Map || decoded['type'] != 'aethertune.playlist') {
+      throw const FormatException('The AetherTune playlist link is unsupported.');
+    }
+    return importPlaylistJson(jsonEncode(decoded));
   }
 
   List<String> lyricsShareLines(String trackId, {String? plainText}) {

@@ -4074,6 +4074,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onShare: () => unawaited(
                 _copyPlaylistShareText(context, library, playlist),
               ),
+              onCopyImportLink: () => unawaited(
+                _copyPlaylistImportLink(context, library, playlist),
+              ),
               onShareCard: () => unawaited(
                 _showPlaylistShareCard(context, playlist),
               ),
@@ -4104,6 +4107,15 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                     await _importPlaylist(context, format);
                   },
                 ),
+              ListTile(
+                leading: const Icon(Icons.link_outlined),
+                title: const Text('Paste AetherTune playlist link'),
+                subtitle: const Text('Import a portable playlist shared from AetherTune.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _importPlaylistLink(context);
+                },
+              ),
             ],
           ),
         );
@@ -4237,6 +4249,53 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       messenger.showSnackBar(
         SnackBar(content: Text(error.message)),
       );
+    }
+  }
+
+  Future<void> _importPlaylistLink(BuildContext context) async {
+    final controller = TextEditingController();
+    try {
+      final link = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Import AetherTune playlist link'),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Playlist link'),
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || link == null) {
+        return;
+      }
+      final playlist = await context.read<LibraryStore>().importPlaylistLink(link);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported ${playlist.name}.')),
+        );
+      }
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      controller.dispose();
     }
   }
 
@@ -6256,6 +6315,7 @@ class _PlaylistCard extends StatelessWidget {
     required this.onOpen,
     required this.onExport,
     required this.onShare,
+    required this.onCopyImportLink,
     required this.onShareCard,
     required this.onArtwork,
     required this.onRename,
@@ -6268,6 +6328,7 @@ class _PlaylistCard extends StatelessWidget {
   final VoidCallback onOpen;
   final ValueChanged<PlaylistDocumentFormat> onExport;
   final VoidCallback onShare;
+  final VoidCallback onCopyImportLink;
   final VoidCallback onShareCard;
   final VoidCallback onArtwork;
   final VoidCallback onRename;
@@ -6300,6 +6361,9 @@ class _PlaylistCard extends StatelessWidget {
                 break;
               case _PlaylistAction.share:
                 onShare();
+                break;
+              case _PlaylistAction.copyImportLink:
+                onCopyImportLink();
                 break;
               case _PlaylistAction.shareCard:
                 onShareCard();
@@ -6345,6 +6409,13 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.ios_share),
                 title: Text('Copy share text'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.copyImportLink,
+              child: ListTile(
+                leading: Icon(Icons.link_outlined),
+                title: Text('Copy import link'),
               ),
             ),
             PopupMenuItem(
@@ -6433,6 +6504,7 @@ enum _PlaylistAction {
   exportM3u,
   exportCsv,
   share,
+  copyImportLink,
   shareCard,
   rename,
   folder,
@@ -7727,6 +7799,20 @@ Future<void> _copyPlaylistShareText(
     library.sharePlaylistText(playlist.id),
     copiedMessage: 'Copied share text for ${playlist.name}.',
     unavailableMessage: 'Share text is unavailable for ${playlist.name}.',
+  );
+}
+
+Future<void> _copyPlaylistImportLink(
+  BuildContext context,
+  LibraryStore library,
+  Playlist playlist,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.playlistImportLink(playlist.id),
+    copiedMessage: 'Copied import link for ${playlist.name}.',
+    unavailableMessage:
+        'This playlist is too large to share as an import link. Export a file instead.',
   );
 }
 

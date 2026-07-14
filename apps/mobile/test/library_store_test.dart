@@ -945,6 +945,42 @@ void main() {
     expect(snapshotPlaylist['artworkUri'], isNull);
   });
 
+  test('shares and imports portable playlist links without local paths',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('one', title: 'One', artist: 'Mira', album: 'Dawn'),
+      _track('two', title: 'Two', artist: 'Mira', album: 'Dawn'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Link mix',
+      trackIds: const <String>['one', 'two'],
+    );
+
+    final link = store.playlistImportLink(playlist.id);
+    expect(link, startsWith('aethertune://playlist?data='));
+
+    final uri = Uri.parse(link!);
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(uri.queryParameters['data']!)),
+    ) as Map<String, dynamic>;
+    final sharedTrack = (payload['tracks'] as List<dynamic>).first
+        as Map<String, dynamic>;
+    expect(sharedTrack['localPath'], isNull);
+    expect(sharedTrack['streamUrl'], isNull);
+
+    final imported = await store.importPlaylistLink(link);
+    expect(imported.name, 'Link mix');
+    expect(imported.trackIds, const <String>['one', 'two']);
+
+    expect(store.playlistImportLink('missing'), isNull);
+    await expectLater(
+      store.importPlaylistLink('https://example.test/playlist'),
+      throwsFormatException,
+    );
+  });
+
   test('keeps private user track artwork on-device and restores source artwork',
       () async {
     final store = LibraryStore();
