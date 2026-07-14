@@ -3752,6 +3752,7 @@ class LibraryStore extends ChangeNotifier {
     final playlistData = Map<String, Object?>.from(rawPlaylist);
     final name = (playlistData['name'] as String?)?.trim();
     final artworkUri = _parseOptionalUri(playlistData['artworkUri'] as String?);
+    final artworkCrop = ArtworkCrop.fromJson(playlistData['artworkCrop']);
     final rawTracks = root['tracks'];
     if (rawTracks is! List) {
       throw const FormatException('Playlist JSON is missing track data.');
@@ -3779,6 +3780,7 @@ class LibraryStore extends ChangeNotifier {
       name == null || name.isEmpty ? fallbackName : name,
       trackIds: matchedTrackIds,
       artworkUri: artworkUri,
+      artworkCrop: artworkCrop,
     );
   }
 
@@ -5410,6 +5412,7 @@ class LibraryStore extends ChangeNotifier {
     String name, {
     Iterable<String> trackIds = const <String>[],
     Uri? artworkUri,
+    ArtworkCrop artworkCrop = ArtworkCrop.centered,
     String folder = '',
   }) async {
     final normalizedName = name.trim();
@@ -5429,6 +5432,13 @@ class LibraryStore extends ChangeNotifier {
       trackIds: filteredTrackIds,
       folder: folder.trim(),
       artworkUri: artworkUri,
+      artworkCrop: artworkUri == null
+          ? ArtworkCrop.centered
+          : ArtworkCrop.normalized(
+              alignmentX: artworkCrop.alignmentX,
+              alignmentY: artworkCrop.alignmentY,
+              zoom: artworkCrop.zoom,
+            ),
       createdAt: now,
       updatedAt: now,
     );

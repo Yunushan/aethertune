@@ -40,7 +40,7 @@ class _ArtworkCropEditorDialogState extends State<_ArtworkCropEditorDialog> {
     return AlertDialog(
       title: const Text('Crop artwork'),
       content: SizedBox(
-        width: 288,
+        width: 260,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
