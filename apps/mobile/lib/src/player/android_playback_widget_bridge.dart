@@ -5,7 +5,12 @@ import 'package:flutter/services.dart';
 import '../domain/track.dart';
 
 abstract interface class PlaybackWidgetBridge {
-  Future<void> update({Track? track, required bool isPlaying});
+  Future<void> update({
+    Track? track,
+    required bool isPlaying,
+    required Duration position,
+    Duration? duration,
+  });
 }
 
 class AndroidPlaybackWidgetBridge implements PlaybackWidgetBridge {
@@ -19,7 +24,12 @@ class AndroidPlaybackWidgetBridge implements PlaybackWidgetBridge {
   final MethodChannel _channel;
 
   @override
-  Future<void> update({Track? track, required bool isPlaying}) async {
+  Future<void> update({
+    Track? track,
+    required bool isPlaying,
+    required Duration position,
+    Duration? duration,
+  }) async {
     if (!Platform.isAndroid) {
       return;
     }
@@ -28,6 +38,8 @@ class AndroidPlaybackWidgetBridge implements PlaybackWidgetBridge {
         'title': track?.title ?? 'AetherTune',
         'artist': track?.artist ?? '',
         'isPlaying': isPlaying,
+        'positionMillis': position.inMilliseconds.clamp(0, 2147483647),
+        'durationMillis': duration?.inMilliseconds.clamp(0, 2147483647) ?? 0,
       });
     } on MissingPluginException {
       // Platform wrappers are generated at build time; non-generated dev runs

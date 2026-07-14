@@ -73,6 +73,16 @@ _WIDGET_LAYOUT_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
             android:maxLines=\"1\"
             android:textColor=\"@android:color/darker_gray\"
             android:textSize=\"12sp\" />
+
+        <ProgressBar
+            android:id=\"@+id/aethertune_widget_progress\"
+            style=\"?android:attr/progressBarStyleHorizontal\"
+            android:layout_width=\"match_parent\"
+            android:layout_height=\"4dp\"
+            android:layout_marginTop=\"4dp\"
+            android:indeterminate=\"false\"
+            android:max=\"1\"
+            android:progress=\"0\" />
     </LinearLayout>
 
     <ImageButton
@@ -183,6 +193,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.view.KeyEvent
+import android.view.View
 import android.widget.RemoteViews
 
 class AetherTunePlaybackWidget : AppWidgetProvider() {
@@ -210,6 +221,8 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
         private const val stateTitle = "title"
         private const val stateArtist = "artist"
         private const val stateIsPlaying = "isPlaying"
+        private const val statePositionMillis = "positionMillis"
+        private const val stateDurationMillis = "durationMillis"
         private const val actionPrevious =
             "dev.aethertune.aethertune.widget.PREVIOUS"
         private const val actionPlayPause =
@@ -221,12 +234,16 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
             title: String,
             artist: String,
             isPlaying: Boolean,
+            positionMillis: Long,
+            durationMillis: Long,
         ) {
             context.getSharedPreferences(statePreferences, Context.MODE_PRIVATE)
                 .edit()
                 .putString(stateTitle, title)
                 .putString(stateArtist, artist)
                 .putBoolean(stateIsPlaying, isPlaying)
+                .putLong(statePositionMillis, positionMillis.coerceAtLeast(0L))
+                .putLong(stateDurationMillis, durationMillis.coerceAtLeast(0L))
                 .apply()
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, AetherTunePlaybackWidget::class.java)
@@ -248,6 +265,10 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
             val title = state.getString(stateTitle, "AetherTune") ?: "AetherTune"
             val artist = state.getString(stateArtist, "") ?: ""
             val isPlaying = state.getBoolean(stateIsPlaying, false)
+            val durationMillis = state.getLong(stateDurationMillis, 0L)
+                .coerceAtLeast(0L)
+            val positionMillis = state.getLong(statePositionMillis, 0L)
+                .coerceIn(0L, durationMillis)
             views.setTextViewText(R.id.aethertune_widget_title, title)
             views.setTextViewText(R.id.aethertune_widget_artist, artist)
             views.setImageViewResource(
@@ -259,6 +280,19 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
                 R.id.aethertune_widget_play_pause,
                 if (isPlaying) "Pause" else "Play",
             )
+            if (durationMillis > 0L) {
+                val max = durationMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                val progress = positionMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                views.setViewVisibility(R.id.aethertune_widget_progress, View.VISIBLE)
+                views.setProgressBar(
+                    R.id.aethertune_widget_progress,
+                    max,
+                    progress,
+                    false,
+                )
+            } else {
+                views.setViewVisibility(R.id.aethertune_widget_progress, View.GONE)
+            }
             views.setOnClickPendingIntent(
                 R.id.aethertune_widget_previous,
                 actionIntent(context, actionPrevious, 1),
@@ -354,6 +388,8 @@ class MainActivity : AudioServiceActivity() {
                 call.argument<String>("title") ?: "AetherTune",
                 call.argument<String>("artist") ?: "",
                 call.argument<Boolean>("isPlaying") ?: false,
+                call.argument<Number>("positionMillis")?.toLong() ?: 0L,
+                call.argument<Number>("durationMillis")?.toLong() ?: 0L,
             )
             result.success(null)
         }

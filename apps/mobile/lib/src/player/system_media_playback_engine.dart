@@ -30,9 +30,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     _durationSubscription = _engine.durationStream.listen((duration) {
       _runtimeDuration = duration;
       _publishQueueAndCurrentItem();
+      _publishWidgetState();
     });
+    _positionSubscription = _engine.positionStream.listen(
+      _publishWidgetProgress,
+    );
     _publishState();
   }
+
+  static const _widgetProgressUpdateInterval = Duration(seconds: 1);
 
   final PlaybackAudioEngine _engine;
   final PlaybackWidgetBridge _playbackWidgetBridge;
@@ -41,8 +47,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   StreamSubscription<ProcessingState>? _processingSubscription;
   StreamSubscription<int?>? _indexSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
   int? _currentIndex;
   Duration? _runtimeDuration;
+  Duration? _lastWidgetProgressPosition;
   ProcessingState _processingState = ProcessingState.idle;
 
   @override
@@ -235,6 +243,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     await _processingSubscription?.cancel();
     await _indexSubscription?.cancel();
     await _durationSubscription?.cancel();
+    await _positionSubscription?.cancel();
     await _engine.dispose();
   }
 
@@ -282,14 +291,40 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
             : AudioServiceShuffleMode.none,
       ),
     );
+    _publishWidgetState();
+  }
+
+  void _publishWidgetProgress(Duration position) {
+    final lastPosition = _lastWidgetProgressPosition;
+    if (!_engine.playing ||
+        (lastPosition != null &&
+            (position - lastPosition).abs() <
+                _widgetProgressUpdateInterval)) {
+      return;
+    }
+    _publishWidgetState(position: position);
+  }
+
+  void _publishWidgetState({Duration? position}) {
     final index = _currentIndex;
     final currentTrack = index != null && index >= 0 && index < _tracks.length
         ? _tracks[index]
         : null;
+    final runtimeDuration = _runtimeDuration;
+    final trackDuration = currentTrack?.duration ?? Duration.zero;
+    final duration = runtimeDuration != null && runtimeDuration > Duration.zero
+        ? runtimeDuration
+        : trackDuration > Duration.zero
+        ? trackDuration
+        : null;
+    final currentPosition = position ?? _engine.position;
+    _lastWidgetProgressPosition = currentPosition;
     unawaited(
       _playbackWidgetBridge.update(
         track: currentTrack,
         isPlaying: _engine.playing,
+        position: currentPosition,
+        duration: duration,
       ),
     );
   }

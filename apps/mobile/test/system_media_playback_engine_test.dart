@@ -109,24 +109,61 @@ void main() {
     widget.updates.clear();
 
     await engine.setQueue(
-      <Track>[_track('one'), _track('two')],
-      initialIndex: 1,
+      <Track>[
+        _track('one', duration: const Duration(minutes: 3)),
+        _track('two'),
+      ],
+      initialIndex: 0,
     );
     expect(
       widget.updates.last,
-      const _WidgetUpdate('Track two', 'Artist two', false),
+      const _WidgetUpdate(
+        'Track one',
+        'Artist one',
+        false,
+        Duration.zero,
+        Duration(minutes: 3),
+      ),
     );
 
     delegate.emitPlaying(true);
     expect(
       widget.updates.last,
-      const _WidgetUpdate('Track two', 'Artist two', true),
+      const _WidgetUpdate(
+        'Track one',
+        'Artist one',
+        true,
+        Duration.zero,
+        Duration(minutes: 3),
+      ),
     );
 
-    await engine.seek(Duration.zero, index: 0);
+    final updatesBeforeShortProgress = widget.updates.length;
+    delegate.emitPosition(const Duration(milliseconds: 500));
+    expect(widget.updates, hasLength(updatesBeforeShortProgress));
+
+    delegate.emitPosition(const Duration(seconds: 1));
     expect(
       widget.updates.last,
-      const _WidgetUpdate('Track one', 'Artist one', true),
+      const _WidgetUpdate(
+        'Track one',
+        'Artist one',
+        true,
+        Duration(seconds: 1),
+        Duration(minutes: 3),
+      ),
+    );
+
+    await engine.seek(Duration.zero, index: 1);
+    expect(
+      widget.updates.last,
+      const _WidgetUpdate(
+        'Track two',
+        'Artist two',
+        true,
+        Duration.zero,
+        null,
+      ),
     );
   });
 
@@ -263,6 +300,11 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     _durationController.add(duration);
   }
 
+  void emitPosition(Duration position) {
+    positionValue = position;
+    _positionController.add(position);
+  }
+
   void emitProcessingState(ProcessingState state) {
     _processingController.add(state);
   }
@@ -327,33 +369,55 @@ class _FakePlaybackWidgetBridge implements PlaybackWidgetBridge {
   final List<_WidgetUpdate> updates = <_WidgetUpdate>[];
 
   @override
-  Future<void> update({Track? track, required bool isPlaying}) {
+  Future<void> update({
+    Track? track,
+    required bool isPlaying,
+    required Duration position,
+    Duration? duration,
+  }) {
     updates.add(
-      _WidgetUpdate(track?.title ?? 'AetherTune', track?.artist ?? '', isPlaying),
+      _WidgetUpdate(
+        track?.title ?? 'AetherTune',
+        track?.artist ?? '',
+        isPlaying,
+        position,
+        duration,
+      ),
     );
     return Future<void>.value();
   }
 }
 
 class _WidgetUpdate {
-  const _WidgetUpdate(this.title, this.artist, this.isPlaying);
+  const _WidgetUpdate(
+    this.title,
+    this.artist,
+    this.isPlaying,
+    this.position,
+    this.duration,
+  );
 
   final String title;
   final String artist;
   final bool isPlaying;
+  final Duration position;
+  final Duration? duration;
 
   @override
   bool operator ==(Object other) {
     return other is _WidgetUpdate &&
         title == other.title &&
         artist == other.artist &&
-        isPlaying == other.isPlaying;
+        isPlaying == other.isPlaying &&
+        position == other.position &&
+        duration == other.duration;
   }
 
   @override
-  int get hashCode => Object.hash(title, artist, isPlaying);
+  int get hashCode => Object.hash(title, artist, isPlaying, position, duration);
 
   @override
   String toString() =>
-      '_WidgetUpdate(title: $title, artist: $artist, isPlaying: $isPlaying)';
+      '_WidgetUpdate(title: $title, artist: $artist, isPlaying: $isPlaying, '
+      'position: $position, duration: $duration)';
 }

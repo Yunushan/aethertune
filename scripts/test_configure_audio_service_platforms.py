@@ -66,10 +66,26 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 / "AetherTunePlaybackWidget.kt"
             )
             self.assertIn("KEYCODE_MEDIA_PLAY_PAUSE", widget_source.read_text())
+            widget_text = widget_source.read_text(encoding="utf-8")
+            self.assertIn("statePositionMillis", widget_text)
+            self.assertIn("stateDurationMillis", widget_text)
+            self.assertIn("setProgressBar", widget_text)
             activity_source = widget_source.with_name("MainActivity.kt")
             self.assertIn(
                 "updatePlaybackWidgets",
                 activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'call.argument<Number>("positionMillis")',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            widget_layout = (
+                widget_source.parents[4]
+                / "res/layout/aethertune_playback_widget.xml"
+            )
+            self.assertIn(
+                "aethertune_widget_progress",
+                widget_layout.read_text(encoding="utf-8"),
             )
             shortcuts = (
                 app_dir
