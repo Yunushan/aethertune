@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
+import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/offline_cache_entry.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
@@ -1157,6 +1158,21 @@ void main() {
     expect(updated.updatedAt, now);
     expect(firstStore.playlistById(playlist.id)!.artworkUri, artworkUri);
 
+    final crop = ArtworkCrop.normalized(
+      alignmentX: 0.4,
+      alignmentY: -0.25,
+      zoom: 1.8,
+    );
+    now = DateTime.utc(2026, 1, 4, 5, 1, 30);
+    final cropped = await firstStore.updatePlaylistArtworkCrop(
+      playlist.id,
+      crop,
+    );
+    expect(cropped!.artworkCrop.alignmentX, 0.4);
+    expect(cropped.artworkCrop.alignmentY, -0.25);
+    expect(cropped.artworkCrop.zoom, 1.8);
+    expect(cropped.updatedAt, now);
+
     final playlistDocument = firstStore.exportPlaylistJson(playlist.id);
     final decoded = jsonDecode(playlistDocument) as Map<String, dynamic>;
 
@@ -1164,21 +1180,36 @@ void main() {
       (decoded['playlist'] as Map<String, dynamic>)['artworkUri'],
       artworkUri.toString(),
     );
+    expect(
+      ((decoded['playlist'] as Map<String, dynamic>)['artworkCrop']
+          as Map<String, dynamic>)['zoom'],
+      1.8,
+    );
 
     final secondStore = LibraryStore(clock: clock);
     await secondStore.load();
 
     expect(secondStore.playlistById(playlist.id)!.artworkUri, artworkUri);
+    expect(secondStore.playlistById(playlist.id)!.artworkCrop.zoom, 1.8);
 
     await secondStore.deletePlaylist(playlist.id);
     final imported = await secondStore.importPlaylistJson(playlistDocument);
 
     expect(imported.artworkUri, artworkUri);
+    expect(imported.artworkCrop.alignmentX, 0.4);
+
+    now = DateTime.utc(2026, 1, 4, 5, 1, 45);
+    final replacement = await secondStore.updatePlaylistArtwork(
+      imported.id,
+      Uri.parse('https://media.example.test/replacement.jpg'),
+    );
+    expect(replacement!.artworkCrop.isCentered, isTrue);
 
     now = DateTime.utc(2026, 1, 4, 5, 2);
     final cleared = await secondStore.updatePlaylistArtwork(imported.id, null);
 
     expect(cleared!.artworkUri, isNull);
+    expect(cleared.artworkCrop.isCentered, isTrue);
     expect(cleared.updatedAt, now);
     expect(secondStore.playlistById(imported.id)!.artworkUri, isNull);
     expect(

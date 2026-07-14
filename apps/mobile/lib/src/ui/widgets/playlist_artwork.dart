@@ -22,6 +22,7 @@ class PlaylistArtwork extends StatelessWidget {
     if (artworkUri != null) {
       return TrackArtwork(
         artworkUri: artworkUri,
+        artworkCrop: playlist.artworkCrop,
         size: size,
         borderRadius: 10,
         fallbackIcon: Icons.queue_music,

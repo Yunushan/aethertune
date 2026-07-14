@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/self_hosted_provider_store.dart';
+import '../../domain/artwork_crop.dart';
 
 typedef ProviderArtworkLoader = Future<Uint8List?> Function(int maxWidth);
 
@@ -15,6 +16,7 @@ class TrackArtwork extends StatelessWidget {
     this.providerArtworkId,
     this.providerArtworkVersion,
     this.loadProviderArtwork,
+    this.artworkCrop = ArtworkCrop.centered,
     this.size = 44,
     this.borderRadius = 8,
     this.fallbackIcon = Icons.music_note,
@@ -26,6 +28,7 @@ class TrackArtwork extends StatelessWidget {
   final String? providerArtworkId;
   final String? providerArtworkVersion;
   final ProviderArtworkLoader? loadProviderArtwork;
+  final ArtworkCrop artworkCrop;
   final double size;
   final double borderRadius;
   final IconData fallbackIcon;
@@ -72,6 +75,7 @@ class TrackArtwork extends StatelessWidget {
           loadProviderArtwork: loader,
           maxWidth: maxWidth,
           fallbackIcon: fallbackIcon,
+          artworkCrop: artworkCrop,
         ),
       ),
     );
@@ -85,6 +89,7 @@ class _TrackArtworkContent extends StatefulWidget {
     required this.loadProviderArtwork,
     required this.maxWidth,
     required this.fallbackIcon,
+    required this.artworkCrop,
   });
 
   final Uri? artworkUri;
@@ -92,6 +97,7 @@ class _TrackArtworkContent extends StatefulWidget {
   final ProviderArtworkLoader? loadProviderArtwork;
   final int maxWidth;
   final IconData fallbackIcon;
+  final ArtworkCrop artworkCrop;
 
   @override
   State<_TrackArtworkContent> createState() => _TrackArtworkContentState();
@@ -144,13 +150,24 @@ class _TrackArtworkContentState extends State<_TrackArtworkContent> {
   }
 
   Widget _artworkImage(ImageProvider imageProvider) {
-    return Image(
-      image: imageProvider,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) {
-        return _TrackArtworkFallback(icon: widget.fallbackIcon);
-      },
+    return Transform.scale(
+      scale: widget.artworkCrop.zoom,
+      alignment: Alignment(
+        widget.artworkCrop.alignmentX,
+        widget.artworkCrop.alignmentY,
+      ),
+      child: Image(
+        image: imageProvider,
+        fit: BoxFit.cover,
+        alignment: Alignment(
+          widget.artworkCrop.alignmentX,
+          widget.artworkCrop.alignmentY,
+        ),
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) {
+          return _TrackArtworkFallback(icon: widget.fallbackIcon);
+        },
+      ),
     );
   }
 }

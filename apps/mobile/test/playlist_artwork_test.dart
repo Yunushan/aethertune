@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/domain/playlist.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/ui/widgets/playlist_artwork.dart';
@@ -41,6 +42,11 @@ void main() {
       id: 'custom',
       name: 'Custom mix',
       artworkUri: Uri.parse('https://media.example.test/cover.png'),
+      artworkCrop: ArtworkCrop.normalized(
+        alignmentX: 0.5,
+        alignmentY: -0.25,
+        zoom: 1.5,
+      ),
     );
 
     await tester.pumpWidget(
@@ -54,6 +60,10 @@ void main() {
       findsNothing,
     );
     expect(find.byType(TrackArtwork), findsOneWidget);
+    final artwork = tester.widget<TrackArtwork>(find.byType(TrackArtwork));
+    expect(artwork.artworkCrop.alignmentX, 0.5);
+    expect(artwork.artworkCrop.alignmentY, -0.25);
+    expect(artwork.artworkCrop.zoom, 1.5);
   });
 
   testWidgets('uses the queue fallback for an empty artwork-free playlist', (

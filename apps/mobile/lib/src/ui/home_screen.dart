@@ -59,6 +59,7 @@ import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
+import 'widgets/artwork_crop_editor.dart';
 import 'widgets/collection_share_card.dart';
 import 'widgets/listening_heatmap.dart';
 import 'widgets/listening_stats_bar_chart.dart';
@@ -4701,6 +4702,15 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ),
               if (playlist.artworkUri != null)
                 ListTile(
+                  leading: const Icon(Icons.crop_outlined),
+                  title: const Text('Crop and position'),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await _editPlaylistArtworkCrop(context, playlist);
+                  },
+                ),
+              if (playlist.artworkUri != null)
+                ListTile(
                   leading: const Icon(Icons.delete_outline),
                   title: const Text('Remove artwork'),
                   onTap: () async {
@@ -4818,6 +4828,33 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Removed artwork for ${updated.name}.')),
+    );
+  }
+
+  Future<void> _editPlaylistArtworkCrop(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final artworkUri = playlist.artworkUri;
+    if (artworkUri == null) {
+      return;
+    }
+    final crop = await showArtworkCropEditor(
+      context,
+      artworkUri: artworkUri,
+      initialCrop: playlist.artworkCrop,
+    );
+    if (!context.mounted || crop == null) {
+      return;
+    }
+    final updated = await context
+        .read<LibraryStore>()
+        .updatePlaylistArtworkCrop(playlist.id, crop);
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Updated artwork crop for ${updated.name}.')),
     );
   }
 

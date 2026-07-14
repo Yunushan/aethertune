@@ -1,3 +1,5 @@
+import 'artwork_crop.dart';
+
 /// A user-managed list of tracks.
 class Playlist {
   Playlist({
@@ -6,6 +8,7 @@ class Playlist {
     List<String> trackIds = const <String>[],
     this.folder = '',
     this.artworkUri,
+    this.artworkCrop = ArtworkCrop.centered,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : trackIds = List.unmodifiable(trackIds),
@@ -17,6 +20,7 @@ class Playlist {
   final List<String> trackIds;
   final String folder;
   final Uri? artworkUri;
+  final ArtworkCrop artworkCrop;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -30,6 +34,7 @@ class Playlist {
     String? folder,
     Uri? artworkUri,
     bool clearArtworkUri = false,
+    ArtworkCrop? artworkCrop,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -39,6 +44,7 @@ class Playlist {
       trackIds: trackIds ?? this.trackIds,
       folder: folder ?? this.folder,
       artworkUri: clearArtworkUri ? null : artworkUri ?? this.artworkUri,
+      artworkCrop: artworkCrop ?? this.artworkCrop,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -51,6 +57,7 @@ class Playlist {
       'trackIds': trackIds,
       'folder': folder,
       'artworkUri': artworkUri?.toString(),
+      if (!artworkCrop.isCentered) 'artworkCrop': artworkCrop.toJson(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -65,6 +72,7 @@ class Playlist {
       trackIds: rawTrackIds.whereType<String>().toList(growable: false),
       folder: json['folder'] as String? ?? '',
       artworkUri: _parseUri(json['artworkUri'] as String?),
+      artworkCrop: ArtworkCrop.fromJson(json['artworkCrop']),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??

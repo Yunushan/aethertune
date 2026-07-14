@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/artwork_crop.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_cancellation.dart';
@@ -5495,9 +5496,13 @@ class LibraryStore extends ChangeNotifier {
       return null;
     }
 
-    final updated = _playlists[index].copyWith(
+    final current = _playlists[index];
+    final updated = current.copyWith(
       artworkUri: artworkUri,
       clearArtworkUri: artworkUri == null,
+      artworkCrop: artworkUri == null || artworkUri != current.artworkUri
+          ? ArtworkCrop.centered
+          : current.artworkCrop,
       updatedAt: _clock(),
     );
     _playlists[index] = updated;
@@ -5780,6 +5785,34 @@ class LibraryStore extends ChangeNotifier {
     );
     _customSmartPlaylists[index] = updated;
     _sortCustomSmartPlaylists();
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<Playlist?> updatePlaylistArtworkCrop(
+    String playlistId,
+    ArtworkCrop artworkCrop,
+  ) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return null;
+    }
+
+    final current = _playlists[index];
+    if (current.artworkUri == null) {
+      return current;
+    }
+    final updated = current.copyWith(
+      artworkCrop: ArtworkCrop.normalized(
+        alignmentX: artworkCrop.alignmentX,
+        alignmentY: artworkCrop.alignmentY,
+        zoom: artworkCrop.zoom,
+      ),
+      updatedAt: _clock(),
+    );
+    _playlists[index] = updated;
+    _sortPlaylists();
     await _save();
     notifyListeners();
     return updated;
