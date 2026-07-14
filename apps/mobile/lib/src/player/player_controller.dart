@@ -77,6 +77,7 @@ class PlayerController extends ChangeNotifier {
   double? _sleepFadeStartVolume;
   double _volume = maxVolume;
   bool _loudnessNormalizationEnabled = false;
+  ReplayGainMode _replayGainMode = ReplayGainMode.track;
   double _defaultPlaybackSpeed = 1;
   Duration _skipBackwardInterval = const Duration(seconds: 10);
   Duration _skipForwardInterval = const Duration(seconds: 30);
@@ -93,6 +94,7 @@ class PlayerController extends ChangeNotifier {
   Duration get skipForwardInterval => _skipForwardInterval;
   double get volume => _volume;
   bool get loudnessNormalizationEnabled => _loudnessNormalizationEnabled;
+  ReplayGainMode get replayGainMode => _replayGainMode;
   Duration get duration => _duration;
   Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
@@ -189,6 +191,7 @@ class PlayerController extends ChangeNotifier {
         _volume = _volumeFromJson(settings['volume']);
         _loudnessNormalizationEnabled =
             settings['loudnessNormalizationEnabled'] as bool? ?? false;
+        _replayGainMode = _replayGainModeFromJson(settings['replayGainMode']);
         await _applyOutputVolume();
       } catch (_) {
         await prefs.remove(_playbackSettingsKey);
@@ -547,6 +550,13 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setReplayGainMode(ReplayGainMode mode) async {
+    _replayGainMode = mode;
+    await _applyOutputVolume();
+    await _savePlaybackSettings();
+    notifyListeners();
+  }
+
   static String formatVolume(double volume) {
     final percent = (volume.clamp(minVolume, maxVolume) * 100).round();
     return '$percent%';
@@ -856,6 +866,7 @@ class PlayerController extends ChangeNotifier {
           'skipForwardSeconds': _skipForwardInterval.inSeconds,
           'volume': _volume,
           'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
+          'replayGainMode': _replayGainMode.name,
         },
       ),
     );
@@ -942,9 +953,20 @@ class PlayerController extends ChangeNotifier {
       replayGainAdjustedVolume(
         baseVolume: baseVolume ?? _volume,
         enabled: _loudnessNormalizationEnabled,
-        gainDb: _current?.replayGainTrackDb,
+        gainDb: replayGainForMode(
+          mode: _replayGainMode,
+          trackGainDb: _current?.replayGainTrackDb,
+          albumGainDb: _current?.replayGainAlbumDb,
+        ),
       ),
     );
+  }
+
+  ReplayGainMode _replayGainModeFromJson(Object? value) {
+    return switch (value) {
+      'album' => ReplayGainMode.album,
+      _ => ReplayGainMode.track,
+    };
   }
 
   void _validateVolume(double volume) {

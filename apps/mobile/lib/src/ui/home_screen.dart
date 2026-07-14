@@ -33,6 +33,7 @@ import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
+import '../domain/replay_gain.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_cancellation.dart';
 import '../domain/offline_cache_entry.dart';
@@ -11485,6 +11486,32 @@ class _SettingsTab extends StatelessWidget {
               ? null
               : (enabled) =>
                     unawaited(player.setLoudnessNormalizationEnabled(enabled)),
+        ),
+        ListTile(
+          leading: const Icon(Icons.album_outlined),
+          title: const Text('ReplayGain source'),
+          subtitle: const Text('Album gain keeps each album\'s dynamics.'),
+          trailing: DropdownButton<ReplayGainMode>(
+            value: player.replayGainMode,
+            items: const <DropdownMenuItem<ReplayGainMode>>[
+              DropdownMenuItem(
+                value: ReplayGainMode.track,
+                child: Text('Track'),
+              ),
+              DropdownMenuItem(
+                value: ReplayGainMode.album,
+                child: Text('Album'),
+              ),
+            ],
+            onChanged:
+                !player.loudnessNormalizationEnabled || player.isSleepFadeActive
+                ? null
+                : (mode) {
+                    if (mode != null) {
+                      unawaited(player.setReplayGainMode(mode));
+                    }
+                  },
+          ),
         ),
         if (library.watchedLocalFolderPaths.isNotEmpty) ...<Widget>[
           const Divider(),

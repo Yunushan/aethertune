@@ -13,6 +13,8 @@ void main() {
       duration: const Duration(seconds: 42),
       localPath: '/music/song.mp3',
       contentHash: 'fnv64-0011223344556677',
+      replayGainTrackDb: -6.2,
+      replayGainAlbumDb: -4.7,
       sourceId: 'local',
       isFavorite: true,
       addedAt: DateTime.utc(2026),
@@ -28,6 +30,8 @@ void main() {
     expect(decoded.duration, track.duration);
     expect(decoded.localPath, track.localPath);
     expect(decoded.contentHash, track.contentHash);
+    expect(decoded.replayGainTrackDb, -6.2);
+    expect(decoded.replayGainAlbumDb, -4.7);
     expect(decoded.isFavorite, isTrue);
   });
 

@@ -45,6 +45,7 @@ final class _LocalFileMetadata {
     this.genre,
     this.artworkUri,
     this.replayGainTrackDb,
+    this.replayGainAlbumDb,
   });
 
   final String title;
@@ -53,6 +54,7 @@ final class _LocalFileMetadata {
   final String? genre;
   final Uri? artworkUri;
   final double? replayGainTrackDb;
+  final double? replayGainAlbumDb;
 }
 
 final class LocalFolderScanner {
@@ -193,6 +195,7 @@ final class _LocalFolderScanState {
       localPath: path,
       contentHash: contentHash,
       replayGainTrackDb: metadata.replayGainTrackDb,
+      replayGainAlbumDb: metadata.replayGainAlbumDb,
       sourceId: 'local',
       addedAt: importedAt,
     );
@@ -287,6 +290,7 @@ final class _LocalFolderScanState {
       genre: embeddedMetadata.genre ?? fallbackMetadata.genre,
       artworkUri: embeddedMetadata.artworkUri ?? fallbackMetadata.artworkUri,
       replayGainTrackDb: embeddedMetadata.replayGainTrackDb,
+      replayGainAlbumDb: embeddedMetadata.replayGainAlbumDb,
     );
   }
 
@@ -437,6 +441,7 @@ final class _LocalFolderScanState {
           genre: metadata?.genre,
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
+          replayGainAlbumDb: metadata?.replayGainAlbumDb,
         );
       } finally {
         await access.close();
@@ -510,6 +515,7 @@ final class _LocalFolderScanState {
           genre: metadata?.genre,
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
+          replayGainAlbumDb: metadata?.replayGainAlbumDb,
         );
       } finally {
         await access.close();
@@ -685,7 +691,8 @@ final class _LocalFolderScanState {
         : _id3v23Or24TagData(tagBytes, majorVersion);
     if (tagData.textFrames.isEmpty &&
         tagData.artworkUri == null &&
-        tagData.replayGainTrackDb == null) {
+        tagData.replayGainTrackDb == null &&
+        tagData.replayGainAlbumDb == null) {
       return null;
     }
 
@@ -698,7 +705,8 @@ final class _LocalFolderScanState {
         (album == null || album.isEmpty) &&
         (genre == null || genre.isEmpty) &&
         tagData.artworkUri == null &&
-        tagData.replayGainTrackDb == null) {
+        tagData.replayGainTrackDb == null &&
+        tagData.replayGainAlbumDb == null) {
       return null;
     }
 
@@ -709,6 +717,7 @@ final class _LocalFolderScanState {
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: tagData.artworkUri,
       replayGainTrackDb: tagData.replayGainTrackDb,
+      replayGainAlbumDb: tagData.replayGainAlbumDb,
     );
   }
 
@@ -719,6 +728,7 @@ final class _LocalFolderScanState {
     final textFrames = <String, String>{};
     Uri? artworkUri;
     double? replayGainTrackDb;
+    double? replayGainAlbumDb;
     var offset = 0;
     while (offset + 10 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
@@ -749,6 +759,16 @@ final class _LocalFolderScanState {
       } else if (frameId == 'TXXX' && replayGainTrackDb == null) {
         replayGainTrackDb = _id3v2ReplayGainUserText(
           bytes.sublist(offset, offset + frameSize),
+          'REPLAYGAIN_TRACK_GAIN',
+        );
+        replayGainAlbumDb ??= _id3v2ReplayGainUserText(
+          bytes.sublist(offset, offset + frameSize),
+          'REPLAYGAIN_ALBUM_GAIN',
+        );
+      } else if (frameId == 'TXXX' && replayGainAlbumDb == null) {
+        replayGainAlbumDb = _id3v2ReplayGainUserText(
+          bytes.sublist(offset, offset + frameSize),
+          'REPLAYGAIN_ALBUM_GAIN',
         );
       }
 
@@ -759,6 +779,7 @@ final class _LocalFolderScanState {
       textFrames: textFrames,
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb,
     );
   }
 
@@ -766,6 +787,7 @@ final class _LocalFolderScanState {
     final textFrames = <String, String>{};
     Uri? artworkUri;
     double? replayGainTrackDb;
+    double? replayGainAlbumDb;
     var offset = 0;
     while (offset + 6 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(3));
@@ -794,6 +816,16 @@ final class _LocalFolderScanState {
       } else if (frameId == 'TXX' && replayGainTrackDb == null) {
         replayGainTrackDb = _id3v2ReplayGainUserText(
           bytes.sublist(offset, offset + frameSize),
+          'REPLAYGAIN_TRACK_GAIN',
+        );
+        replayGainAlbumDb ??= _id3v2ReplayGainUserText(
+          bytes.sublist(offset, offset + frameSize),
+          'REPLAYGAIN_ALBUM_GAIN',
+        );
+      } else if (frameId == 'TXX' && replayGainAlbumDb == null) {
+        replayGainAlbumDb = _id3v2ReplayGainUserText(
+          bytes.sublist(offset, offset + frameSize),
+          'REPLAYGAIN_ALBUM_GAIN',
         );
       }
 
@@ -804,6 +836,7 @@ final class _LocalFolderScanState {
       textFrames: textFrames,
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb,
     );
   }
 
@@ -902,11 +935,15 @@ final class _LocalFolderScanState {
     final replayGainTrackDb = parseReplayGainDb(
       _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN'),
     );
+    final replayGainAlbumDb = parseReplayGainDb(
+      _firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN'),
+    );
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
         (genre == null || genre.isEmpty) &&
-        replayGainTrackDb == null) {
+        replayGainTrackDb == null &&
+        replayGainAlbumDb == null) {
       return null;
     }
 
@@ -916,6 +953,7 @@ final class _LocalFolderScanState {
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
       replayGainTrackDb: replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb,
     );
   }
 
@@ -1027,6 +1065,7 @@ final class _LocalFolderScanState {
     final fields = <String, List<String>>{};
     Uri? artworkUri;
     double? replayGainTrackDb;
+    double? replayGainAlbumDb;
     for (final atom in _mp4Atoms(ilst)) {
       if (_matchesAscii(atom.typeBytes, 'covr') && artworkUri == null) {
         artworkUri = _m4aDataAtomArtworkUri(
@@ -1042,6 +1081,23 @@ final class _LocalFolderScanState {
           ilst,
           atom.payloadOffset,
           atom.payloadEnd,
+          'REPLAYGAIN_TRACK_GAIN',
+        );
+        replayGainAlbumDb ??= _m4aFreeformReplayGain(
+          ilst,
+          atom.payloadOffset,
+          atom.payloadEnd,
+          'REPLAYGAIN_ALBUM_GAIN',
+        );
+        continue;
+      }
+
+      if (_matchesAscii(atom.typeBytes, '----') && replayGainAlbumDb == null) {
+        replayGainAlbumDb = _m4aFreeformReplayGain(
+          ilst,
+          atom.payloadOffset,
+          atom.payloadEnd,
+          'REPLAYGAIN_ALBUM_GAIN',
         );
         continue;
       }
@@ -1068,7 +1124,8 @@ final class _LocalFolderScanState {
         (album == null || album.isEmpty) &&
         (genre == null || genre.isEmpty) &&
         artworkUri == null &&
-        replayGainTrackDb == null) {
+        replayGainTrackDb == null &&
+        replayGainAlbumDb == null) {
       return null;
     }
 
@@ -1079,6 +1136,7 @@ final class _LocalFolderScanState {
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb,
     );
   }
 
@@ -1173,7 +1231,7 @@ final class _LocalFolderScanState {
     return _id3v2DecodedText(bytes.sublist(1), bytes.first);
   }
 
-  double? _id3v2ReplayGainUserText(List<int> bytes) {
+  double? _id3v2ReplayGainUserText(List<int> bytes, String expectedKey) {
     if (bytes.length < 3) {
       return null;
     }
@@ -1195,7 +1253,7 @@ final class _LocalFolderScanState {
       bytes.sublist(1, descriptionEnd),
       encoding,
     );
-    if (description.toUpperCase() != 'REPLAYGAIN_TRACK_GAIN') {
+    if (description.toUpperCase() != expectedKey) {
       return null;
     }
 
@@ -1229,6 +1287,7 @@ final class _LocalFolderScanState {
     List<int> bytes,
     int startOffset,
     int endOffset,
+    String expectedKey,
   ) {
     String? name;
     for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
@@ -1239,7 +1298,7 @@ final class _LocalFolderScanState {
       }
     }
 
-    if (name?.toUpperCase() != 'REPLAYGAIN_TRACK_GAIN') {
+    if (name?.toUpperCase() != expectedKey) {
       return null;
     }
     return parseReplayGainDb(
@@ -1809,11 +1868,13 @@ final class _Id3v2TagData {
     required this.textFrames,
     this.artworkUri,
     this.replayGainTrackDb,
+    this.replayGainAlbumDb,
   });
 
   final Map<String, String> textFrames;
   final Uri? artworkUri;
   final double? replayGainTrackDb;
+  final double? replayGainAlbumDb;
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;

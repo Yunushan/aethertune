@@ -24,6 +24,7 @@ class Track {
     this.localPath,
     this.contentHash,
     this.replayGainTrackDb,
+    this.replayGainAlbumDb,
     this.streamUrl,
     this.streamUrlIsEphemeral = false,
     this.sourceId = 'local',
@@ -52,6 +53,7 @@ class Track {
   final String? localPath;
   final String? contentHash;
   final double? replayGainTrackDb;
+  final double? replayGainAlbumDb;
   final String? streamUrl;
   final bool streamUrlIsEphemeral;
   final String sourceId;
@@ -82,6 +84,7 @@ class Track {
     String? localPath,
     String? contentHash,
     double? replayGainTrackDb,
+    double? replayGainAlbumDb,
     String? streamUrl,
     bool? streamUrlIsEphemeral,
     String? sourceId,
@@ -111,6 +114,7 @@ class Track {
       localPath: localPath ?? this.localPath,
       contentHash: contentHash ?? this.contentHash,
       replayGainTrackDb: replayGainTrackDb ?? this.replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb ?? this.replayGainAlbumDb,
       streamUrl: streamUrl ?? this.streamUrl,
       streamUrlIsEphemeral: streamUrlIsEphemeral ?? this.streamUrlIsEphemeral,
       sourceId: sourceId ?? this.sourceId,
@@ -140,6 +144,7 @@ class Track {
       localPath: localPath,
       contentHash: contentHash,
       replayGainTrackDb: replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb,
       streamUrl: streamUrlIsEphemeral ? null : streamUrl,
       sourceId: sourceId,
       externalId: externalId,
@@ -165,6 +170,7 @@ class Track {
       'localPath': localPath,
       'contentHash': contentHash,
       if (replayGainTrackDb != null) 'replayGainTrackDb': replayGainTrackDb,
+      if (replayGainAlbumDb != null) 'replayGainAlbumDb': replayGainAlbumDb,
       'streamUrl': streamUrlIsEphemeral ? null : streamUrl,
       'sourceId': sourceId,
       'externalId': externalId,
@@ -192,6 +198,9 @@ class Track {
       contentHash: json['contentHash'] as String?,
       replayGainTrackDb: sanitizeReplayGainDb(
         (json['replayGainTrackDb'] as num?)?.toDouble(),
+      ),
+      replayGainAlbumDb: sanitizeReplayGainDb(
+        (json['replayGainAlbumDb'] as num?)?.toDouble(),
       ),
       streamUrl: json['streamUrl'] as String?,
       sourceId: json['sourceId'] as String? ?? 'local',

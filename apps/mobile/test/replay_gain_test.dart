@@ -27,4 +27,22 @@ void main() {
       0.8,
     );
   });
+
+  test('selects an album gain with a safe track fallback', () {
+    expect(
+      replayGainForMode(
+        mode: ReplayGainMode.album,
+        trackGainDb: -6,
+        albumGainDb: -3,
+      ),
+      -3,
+    );
+    expect(
+      replayGainForMode(
+        mode: ReplayGainMode.album,
+        trackGainDb: -6,
+      ),
+      -6,
+    );
+  });
 }

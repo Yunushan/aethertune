@@ -3,6 +3,8 @@ import 'dart:math' as math;
 const minReplayGainDb = -24.0;
 const maxReplayGainDb = 24.0;
 
+enum ReplayGainMode { track, album }
+
 /// Returns a bounded ReplayGain value suitable for a player volume multiplier.
 double? sanitizeReplayGainDb(double? value) {
   if (value == null ||
@@ -29,6 +31,19 @@ double replayGainMultiplier(double? gainDb) {
     return 1;
   }
   return math.pow(10, normalizedGain / 20).toDouble();
+}
+
+double? replayGainForMode({
+  required ReplayGainMode mode,
+  double? trackGainDb,
+  double? albumGainDb,
+}) {
+  return switch (mode) {
+    ReplayGainMode.track =>
+      sanitizeReplayGainDb(trackGainDb) ?? sanitizeReplayGainDb(albumGainDb),
+    ReplayGainMode.album =>
+      sanitizeReplayGainDb(albumGainDb) ?? sanitizeReplayGainDb(trackGainDb),
+  };
 }
 
 double replayGainAdjustedVolume({

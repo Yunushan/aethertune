@@ -246,6 +246,7 @@ void main() {
       ..._id3v23Tag(
         title: 'ID3 Gain',
         replayGainTrackGain: '-5.10 dB',
+        replayGainAlbumGain: '-3.10 dB',
       ),
       1,
       2,
@@ -256,6 +257,7 @@ void main() {
 
     expect(result.tracks.single.title, 'ID3 Gain');
     expect(result.tracks.single.replayGainTrackDb, -5.1);
+    expect(result.tracks.single.replayGainAlbumDb, -3.1);
   });
 
   test('merges partial UTF-16 ID3v2 tags with filename metadata', () async {
@@ -306,6 +308,7 @@ void main() {
           'ALBUM': <String>['Ogg Album'],
           'GENRE': <String>['Shoegaze'],
           'REPLAYGAIN_TRACK_GAIN': <String>['-7.20 dB'],
+          'REPLAYGAIN_ALBUM_GAIN': <String>['-5.20 dB'],
         },
       ),
     );
@@ -330,6 +333,7 @@ void main() {
     expect(tracksByTitle['Ogg Title']!.album, 'Ogg Album');
     expect(tracksByTitle['Ogg Title']!.genre, 'Shoegaze');
     expect(tracksByTitle['Ogg Title']!.replayGainTrackDb, -7.2);
+    expect(tracksByTitle['Ogg Title']!.replayGainAlbumDb, -5.2);
     expect(tracksByTitle['Opus Title']!.artist, 'Opus Artist');
     expect(tracksByTitle['Opus Title']!.album, 'Opus Album');
     expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');
@@ -443,6 +447,7 @@ void main() {
       _m4aWithMetadata(
         title: 'M4A Gain',
         replayGainTrackGain: '-4.50 dB',
+        replayGainAlbumGain: '-2.50 dB',
       ),
     );
 
@@ -450,6 +455,7 @@ void main() {
 
     expect(result.tracks.single.title, 'M4A Gain');
     expect(result.tracks.single.replayGainTrackDb, -4.5);
+    expect(result.tracks.single.replayGainAlbumDb, -2.5);
   });
 
   test('merges partial M4A metadata atoms with filename metadata', () async {
@@ -591,6 +597,7 @@ List<int> _id3v23Tag({
   String genre = '',
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
+  String replayGainAlbumGain = '',
   int encoding = _id3v2EncodingUtf8,
 }) {
   final frames = <int>[
@@ -603,6 +610,12 @@ List<int> _id3v23Tag({
       ..._id3v23UserTextFrame(
         'REPLAYGAIN_TRACK_GAIN',
         replayGainTrackGain,
+        encoding,
+      ),
+    if (replayGainAlbumGain.isNotEmpty)
+      ..._id3v23UserTextFrame(
+        'REPLAYGAIN_ALBUM_GAIN',
+        replayGainAlbumGain,
         encoding,
       ),
   ];
@@ -903,6 +916,7 @@ List<int> _m4aWithMetadata({
   String genre = '',
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
+  String replayGainAlbumGain = '',
 }) {
   final items = <int>[
     if (title.isNotEmpty) ..._m4aTextItem(_m4aTitleAtomType, title),
@@ -912,6 +926,11 @@ List<int> _m4aWithMetadata({
     if (artworkBytes != null) ..._m4aArtworkItem(artworkBytes),
     if (replayGainTrackGain.isNotEmpty)
       ..._m4aReplayGainFreeformItem(replayGainTrackGain),
+    if (replayGainAlbumGain.isNotEmpty)
+      ..._m4aReplayGainFreeformItem(
+        replayGainAlbumGain,
+        name: 'REPLAYGAIN_ALBUM_GAIN',
+      ),
   ];
   final ilst = _mp4Atom('ilst', items);
   final meta = _mp4Atom('meta', <int>[0, 0, 0, 0, ...ilst]);
@@ -960,7 +979,10 @@ List<int> _m4aArtworkItem(List<int> artworkBytes) {
   );
 }
 
-List<int> _m4aReplayGainFreeformItem(String value) {
+List<int> _m4aReplayGainFreeformItem(
+  String value, {
+  String name = 'REPLAYGAIN_TRACK_GAIN',
+}) {
   return _mp4Atom(
     '----',
     <int>[
@@ -970,7 +992,7 @@ List<int> _m4aReplayGainFreeformItem(String value) {
       ),
       ..._mp4Atom(
         'name',
-        <int>[0, 0, 0, 0, ...'REPLAYGAIN_TRACK_GAIN'.codeUnits],
+        <int>[0, 0, 0, 0, ...name.codeUnits],
       ),
       ..._mp4Atom(
         'data',

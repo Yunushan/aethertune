@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:aethertune/src/domain/replay_gain.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
@@ -63,7 +64,7 @@ void main() {
     final firstController = PlayerController(audioEngine: firstEngine);
     final tracks = <Track>[
       _track('quiet', replayGainTrackDb: -6),
-      _track('loud', replayGainTrackDb: 6),
+      _track('loud', replayGainTrackDb: 6, replayGainAlbumDb: -3),
     ];
 
     await firstController.setVolume(0.5);
@@ -74,6 +75,8 @@ void main() {
     firstEngine.emitAutomaticIndex(1);
     await _flushAsyncWork();
     expect(firstEngine.volumeValue, closeTo(0.99763, 0.0001));
+    await firstController.setReplayGainMode(ReplayGainMode.album);
+    expect(firstEngine.volumeValue, closeTo(0.35397, 0.0001));
     firstController.dispose();
 
     final restoredEngine = _FakePlaybackAudioEngine();
@@ -82,6 +85,7 @@ void main() {
     await restoredController.loadPersistedPlaybackSettings();
 
     expect(restoredController.loudnessNormalizationEnabled, isTrue);
+    expect(restoredController.replayGainMode, ReplayGainMode.album);
   });
 
   test('persists skip intervals and clamps skip seeks to track bounds',
@@ -488,6 +492,7 @@ Track _track(
   String? localPath,
   String? streamUrl,
   double? replayGainTrackDb,
+  double? replayGainAlbumDb,
 }) {
   return Track(
     id: id,
@@ -495,6 +500,7 @@ Track _track(
     localPath: localPath ?? '/music/$id.mp3',
     streamUrl: streamUrl,
     replayGainTrackDb: replayGainTrackDb,
+    replayGainAlbumDb: replayGainAlbumDb,
   );
 }
 
