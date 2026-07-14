@@ -217,7 +217,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Linux desktop packaging | Roadmap | Desktop players | AppImage/Flatpak/deb workflow. |
 | Windows packaging | Roadmap | Desktop players | MSIX/zip installer and signing. |
 | macOS packaging | Roadmap | Desktop players | Notarization, dmg/pkg, signing. |
-| Desktop tray / menu bar | Roadmap | Desktop players | Platform menu/tray plugin. |
+| Desktop tray / menu bar | Scaffolded | Desktop players | Linux, macOS, and Windows initialize a native tray/menu-bar icon generated locally at runtime. The menu shows/focuses the app, routes previous/play-pause/next transport actions, and closes the app on Quit. The Windows icon is a locally generated PNG embedded in a valid ICO container; no network or track artwork is used. Command routing, platform eligibility, and ICO header/payload tests are covered. Needed next: physical desktop-host fixtures, minimize-to-tray policy, and user-configurable menu actions. |
 | Global hotkeys | Scaffolded | Desktop players | Windows, macOS, and Linux register system-wide media play/pause, previous, and next keys through the native hotkey manager. Each key registration is isolated so an OS-reserved media key does not disable the remaining transport keys, and shutdown unregisters only AetherTune's keys. Controller tests cover routing, failure isolation, cleanup, and platform eligibility; physical-host conflict and permissions fixtures remain. |
 | Cast / Chromecast | Roadmap | YouTube Music | Cast integration where legal/provider-supported. |
 | Wear OS / watch controls | Roadmap | YouTube Music | Companion app or media session support. |

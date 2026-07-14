@@ -18,6 +18,7 @@ import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
 import 'widgets/desktop_global_hotkeys.dart';
 import 'widgets/offline_cache_foreground_worker.dart';
+import 'widgets/desktop_tray_controls.dart';
 
 class AetherTuneApp extends StatefulWidget {
   const AetherTuneApp({super.key, this.audioEngine});
@@ -76,11 +77,15 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             builder: (lightDynamic, darkDynamic) =>
                 Consumer2<LibraryStore, PlayerController>(
               builder: (context, library, player, _) {
-                return DesktopGlobalHotkeys(
+                return DesktopTrayControls(
                   onTogglePlayPause: player.togglePlayPause,
                   onPrevious: player.previous,
                   onNext: player.next,
-                  child: MaterialApp(
+                  child: DesktopGlobalHotkeys(
+                    onTogglePlayPause: player.togglePlayPause,
+                    onPrevious: player.previous,
+                    onNext: player.next,
+                    child: MaterialApp(
                     locale: localeForLanguagePreference(
                       library.languagePreference,
                     ),
@@ -139,6 +144,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                                     ),
                             ),
                           ),
+                    ),
                   ),
                 );
               },
