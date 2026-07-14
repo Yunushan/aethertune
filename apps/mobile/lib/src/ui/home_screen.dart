@@ -22,6 +22,7 @@ import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
 import '../data/m4a_metadata_writer.dart';
 import '../data/mp3_id3v1_tag_writer.dart';
+import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
@@ -1429,6 +1430,14 @@ Future<void> _showTrackMetadataEditor(
           );
         } else if (_isLocalM4a(updated)) {
           await const M4aMetadataWriter().write(
+            path: updated.localPath!,
+            title: updated.title,
+            artist: updated.artist,
+            album: updated.album,
+            genre: updated.genre,
+          );
+        } else if (_isLocalOggOrOpus(updated)) {
+          await const OggVorbisCommentWriter().write(
             path: updated.localPath!,
             title: updated.title,
             artist: updated.artist,
@@ -3742,6 +3751,7 @@ bool _canWriteEmbeddedMetadata(Track track) {
   return _isLocalMp3(track) ||
       _isLocalFlac(track) ||
       _isLocalM4a(track) ||
+      _isLocalOggOrOpus(track) ||
       _isLocalWav(track);
 }
 
@@ -3757,6 +3767,11 @@ bool _isLocalM4a(Track track) {
   return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.m4a');
 }
 
+bool _isLocalOggOrOpus(Track track) {
+  final path = (track.localPath?.trim() ?? '').toLowerCase();
+  return path.endsWith('.ogg') || path.endsWith('.oga') || path.endsWith('.opus');
+}
+
 bool _isLocalWav(Track track) {
   return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.wav');
 }
@@ -3768,6 +3783,8 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
       ? 'FLAC'
       : _isLocalM4a(track)
       ? 'M4A'
+      : _isLocalOggOrOpus(track)
+      ? 'Ogg/Opus'
       : 'WAV';
   return showDialog<bool>(
     context: context,
