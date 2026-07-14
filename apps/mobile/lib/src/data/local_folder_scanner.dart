@@ -683,7 +683,9 @@ final class _LocalFolderScanState {
     final tagData = majorVersion == 2
         ? _id3v22TagData(tagBytes)
         : _id3v23Or24TagData(tagBytes, majorVersion);
-    if (tagData.textFrames.isEmpty && tagData.artworkUri == null) {
+    if (tagData.textFrames.isEmpty &&
+        tagData.artworkUri == null &&
+        tagData.replayGainTrackDb == null) {
       return null;
     }
 
@@ -695,7 +697,8 @@ final class _LocalFolderScanState {
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
         (genre == null || genre.isEmpty) &&
-        tagData.artworkUri == null) {
+        tagData.artworkUri == null &&
+        tagData.replayGainTrackDb == null) {
       return null;
     }
 
@@ -705,6 +708,7 @@ final class _LocalFolderScanState {
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: tagData.artworkUri,
+      replayGainTrackDb: tagData.replayGainTrackDb,
     );
   }
 
@@ -714,6 +718,7 @@ final class _LocalFolderScanState {
   ) {
     final textFrames = <String, String>{};
     Uri? artworkUri;
+    double? replayGainTrackDb;
     var offset = 0;
     while (offset + 10 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
@@ -741,17 +746,26 @@ final class _LocalFolderScanState {
         artworkUri = _id3v23PictureArtworkUri(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'TXXX' && replayGainTrackDb == null) {
+        replayGainTrackDb = _id3v2ReplayGainUserText(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
     }
 
-    return _Id3v2TagData(textFrames: textFrames, artworkUri: artworkUri);
+    return _Id3v2TagData(
+      textFrames: textFrames,
+      artworkUri: artworkUri,
+      replayGainTrackDb: replayGainTrackDb,
+    );
   }
 
   _Id3v2TagData _id3v22TagData(List<int> bytes) {
     final textFrames = <String, String>{};
     Uri? artworkUri;
+    double? replayGainTrackDb;
     var offset = 0;
     while (offset + 6 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(3));
@@ -777,12 +791,20 @@ final class _LocalFolderScanState {
         artworkUri = _id3v22PictureArtworkUri(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'TXX' && replayGainTrackDb == null) {
+        replayGainTrackDb = _id3v2ReplayGainUserText(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
     }
 
-    return _Id3v2TagData(textFrames: textFrames, artworkUri: artworkUri);
+    return _Id3v2TagData(
+      textFrames: textFrames,
+      artworkUri: artworkUri,
+      replayGainTrackDb: replayGainTrackDb,
+    );
   }
 
   _LocalFileMetadata? _id3v1Metadata(List<int> bytes) {
@@ -1004,9 +1026,19 @@ final class _LocalFolderScanState {
 
     final fields = <String, List<String>>{};
     Uri? artworkUri;
+    double? replayGainTrackDb;
     for (final atom in _mp4Atoms(ilst)) {
       if (_matchesAscii(atom.typeBytes, 'covr') && artworkUri == null) {
         artworkUri = _m4aDataAtomArtworkUri(
+          ilst,
+          atom.payloadOffset,
+          atom.payloadEnd,
+        );
+        continue;
+      }
+
+      if (_matchesAscii(atom.typeBytes, '----') && replayGainTrackDb == null) {
+        replayGainTrackDb = _m4aFreeformReplayGain(
           ilst,
           atom.payloadOffset,
           atom.payloadEnd,
@@ -1035,7 +1067,8 @@ final class _LocalFolderScanState {
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
         (genre == null || genre.isEmpty) &&
-        artworkUri == null) {
+        artworkUri == null &&
+        replayGainTrackDb == null) {
       return null;
     }
 
@@ -1045,6 +1078,7 @@ final class _LocalFolderScanState {
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: artworkUri,
+      replayGainTrackDb: replayGainTrackDb,
     );
   }
 
@@ -1136,8 +1170,44 @@ final class _LocalFolderScanState {
       return '';
     }
 
+    return _id3v2DecodedText(bytes.sublist(1), bytes.first);
+  }
+
+  double? _id3v2ReplayGainUserText(List<int> bytes) {
+    if (bytes.length < 3) {
+      return null;
+    }
+
     final encoding = bytes.first;
-    final payload = bytes.skip(1).toList(growable: false);
+    final terminatorLength = _id3v2TerminatorLength(encoding);
+    var descriptionEnd = 1;
+    while (descriptionEnd < bytes.length) {
+      if (_hasZeroTerminator(bytes, descriptionEnd, terminatorLength)) {
+        break;
+      }
+      descriptionEnd += 1;
+    }
+    if (descriptionEnd + terminatorLength >= bytes.length) {
+      return null;
+    }
+
+    final description = _id3v2DecodedText(
+      bytes.sublist(1, descriptionEnd),
+      encoding,
+    );
+    if (description.toUpperCase() != 'REPLAYGAIN_TRACK_GAIN') {
+      return null;
+    }
+
+    return parseReplayGainDb(
+      _id3v2DecodedText(
+        bytes.sublist(descriptionEnd + terminatorLength),
+        encoding,
+      ),
+    );
+  }
+
+  String _id3v2DecodedText(List<int> payload, int encoding) {
     final decoded = switch (encoding) {
       0 => latin1.decode(_trimTrailingZeroBytes(payload)),
       1 => _decodeUtf16(payload, useBom: true),
@@ -1153,6 +1223,37 @@ final class _LocalFolderScanState {
     };
 
     return _normalizeEmbeddedText(decoded);
+  }
+
+  double? _m4aFreeformReplayGain(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+  ) {
+    String? name;
+    for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
+      final atomStart = startOffset + atom.payloadOffset;
+      final atomEnd = startOffset + atom.payloadEnd;
+      if (_matchesAscii(atom.typeBytes, 'name')) {
+        name = _m4aFreeformHeaderText(bytes.sublist(atomStart, atomEnd));
+      }
+    }
+
+    if (name?.toUpperCase() != 'REPLAYGAIN_TRACK_GAIN') {
+      return null;
+    }
+    return parseReplayGainDb(
+      _m4aDataAtomText(bytes, startOffset, endOffset),
+    );
+  }
+
+  String? _m4aFreeformHeaderText(List<int> payload) {
+    if (payload.length <= 4) {
+      return null;
+    }
+    return _normalizeEmbeddedText(
+      utf8.decode(payload.sublist(4), allowMalformed: true),
+    );
   }
 
   Uri? _id3v23PictureArtworkUri(List<int> bytes) {
@@ -1707,10 +1808,12 @@ final class _Id3v2TagData {
   const _Id3v2TagData({
     required this.textFrames,
     this.artworkUri,
+    this.replayGainTrackDb,
   });
 
   final Map<String, String> textFrames;
   final Uri? artworkUri;
+  final double? replayGainTrackDb;
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;

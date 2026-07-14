@@ -241,6 +241,23 @@ void main() {
     );
   });
 
+  test('reads ReplayGain from ID3v2 user text metadata', () async {
+    await File(p.join(root.path, 'loud.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'ID3 Gain',
+        replayGainTrackGain: '-5.10 dB',
+      ),
+      1,
+      2,
+      3,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'ID3 Gain');
+    expect(result.tracks.single.replayGainTrackDb, -5.1);
+  });
+
   test('merges partial UTF-16 ID3v2 tags with filename metadata', () async {
     await File(
       p.join(root.path, '06 Filename Artist - Filename Title.mp3'),
@@ -421,6 +438,20 @@ void main() {
     );
   });
 
+  test('reads ReplayGain from M4A freeform metadata', () async {
+    await File(p.join(root.path, 'gain.m4a')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'M4A Gain',
+        replayGainTrackGain: '-4.50 dB',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'M4A Gain');
+    expect(result.tracks.single.replayGainTrackDb, -4.5);
+  });
+
   test('merges partial M4A metadata atoms with filename metadata', () async {
     await File(
       p.join(root.path, '10 Filename Artist - Filename Title.m4a'),
@@ -559,6 +590,7 @@ List<int> _id3v23Tag({
   String album = '',
   String genre = '',
   List<int>? artworkBytes,
+  String replayGainTrackGain = '',
   int encoding = _id3v2EncodingUtf8,
 }) {
   final frames = <int>[
@@ -567,6 +599,12 @@ List<int> _id3v23Tag({
     if (album.isNotEmpty) ..._id3v23TextFrame('TALB', album, encoding),
     if (genre.isNotEmpty) ..._id3v23TextFrame('TCON', genre, encoding),
     if (artworkBytes != null) ..._id3v23PictureFrame(artworkBytes),
+    if (replayGainTrackGain.isNotEmpty)
+      ..._id3v23UserTextFrame(
+        'REPLAYGAIN_TRACK_GAIN',
+        replayGainTrackGain,
+        encoding,
+      ),
   ];
 
   return <int>[
@@ -608,6 +646,30 @@ List<int> _id3v23TextFrame(String id, String value, int encoding) {
 
   return <int>[
     ...id.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
+  ];
+}
+
+List<int> _id3v23UserTextFrame(
+  String description,
+  String value,
+  int encoding,
+) {
+  final terminator = encoding == _id3v2EncodingUtf16
+      ? const <int>[0, 0]
+      : const <int>[0];
+  final payload = <int>[
+    encoding,
+    ..._id3v2EncodedText(description, encoding),
+    ...terminator,
+    ..._id3v2EncodedText(value, encoding),
+  ];
+
+  return <int>[
+    ...'TXXX'.codeUnits,
     ..._uint32Size(payload.length),
     0x00,
     0x00,
@@ -840,6 +902,7 @@ List<int> _m4aWithMetadata({
   String album = '',
   String genre = '',
   List<int>? artworkBytes,
+  String replayGainTrackGain = '',
 }) {
   final items = <int>[
     if (title.isNotEmpty) ..._m4aTextItem(_m4aTitleAtomType, title),
@@ -847,6 +910,8 @@ List<int> _m4aWithMetadata({
     if (album.isNotEmpty) ..._m4aTextItem(_m4aAlbumAtomType, album),
     if (genre.isNotEmpty) ..._m4aTextItem(_m4aGenreAtomType, genre),
     if (artworkBytes != null) ..._m4aArtworkItem(artworkBytes),
+    if (replayGainTrackGain.isNotEmpty)
+      ..._m4aReplayGainFreeformItem(replayGainTrackGain),
   ];
   final ilst = _mp4Atom('ilst', items);
   final meta = _mp4Atom('meta', <int>[0, 0, 0, 0, ...ilst]);
@@ -892,6 +957,33 @@ List<int> _m4aArtworkItem(List<int> artworkBytes) {
         ...artworkBytes,
       ],
     ),
+  );
+}
+
+List<int> _m4aReplayGainFreeformItem(String value) {
+  return _mp4Atom(
+    '----',
+    <int>[
+      ..._mp4Atom(
+        'mean',
+        <int>[0, 0, 0, 0, ...'com.apple.iTunes'.codeUnits],
+      ),
+      ..._mp4Atom(
+        'name',
+        <int>[0, 0, 0, 0, ...'REPLAYGAIN_TRACK_GAIN'.codeUnits],
+      ),
+      ..._mp4Atom(
+        'data',
+        <int>[
+          ..._uint32Size(1),
+          0,
+          0,
+          0,
+          0,
+          ...value.codeUnits,
+        ],
+      ),
+    ],
   );
 }
 
