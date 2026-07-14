@@ -41,6 +41,11 @@ class PlayerController extends ChangeNotifier {
     TrackPlaybackResolver? trackResolver,
   })  : _audio = audioEngine ?? JustAudioPlaybackEngine(),
         _trackResolver = trackResolver {
+    final crossfadeEngine = _audio;
+    if (crossfadeEngine is CrossfadePlaybackAudioEngine &&
+        crossfadeEngine.supportsCrossfade) {
+      crossfadeEngine.setCrossfadeTrackVolumeResolver(_outputVolumeForTrack);
+    }
     _playerStateSub = _audio.stateChanges.listen((_) => notifyListeners());
     _durationSub = _audio.durationStream.listen((duration) {
       _duration = duration ?? Duration.zero;
@@ -989,15 +994,17 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _applyOutputVolume({double? baseVolume}) {
-    return _audio.setVolume(
-      replayGainAdjustedVolume(
-        baseVolume: baseVolume ?? _volume,
-        enabled: _loudnessNormalizationEnabled,
-        gainDb: replayGainForMode(
-          mode: _replayGainMode,
-          trackGainDb: _current?.replayGainTrackDb,
-          albumGainDb: _current?.replayGainAlbumDb,
-        ),
+    return _audio.setVolume(_outputVolumeForTrack(_current, baseVolume));
+  }
+
+  double _outputVolumeForTrack(Track? track, [double? baseVolume]) {
+    return replayGainAdjustedVolume(
+      baseVolume: baseVolume ?? _volume,
+      enabled: _loudnessNormalizationEnabled,
+      gainDb: replayGainForMode(
+        mode: _replayGainMode,
+        trackGainDb: track?.replayGainTrackDb,
+        albumGainDb: track?.replayGainAlbumDb,
       ),
     );
   }

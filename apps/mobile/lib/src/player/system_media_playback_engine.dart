@@ -205,6 +205,16 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   Future<void> setVolume(double volume) => _engine.setVolume(volume);
 
   @override
+  void setCrossfadeTrackVolumeResolver(
+    CrossfadeTrackVolumeResolver? resolver,
+  ) {
+    final engine = _engine;
+    if (engine is CrossfadePlaybackAudioEngine) {
+      engine.setCrossfadeTrackVolumeResolver(resolver);
+    }
+  }
+
+  @override
   Future<void> setCrossfadeDuration(Duration duration) {
     final engine = _engine;
     if (engine is! CrossfadePlaybackAudioEngine || !engine.supportsCrossfade) {

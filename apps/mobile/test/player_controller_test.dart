@@ -122,6 +122,23 @@ void main() {
     expect(restoredController.replayGainMode, ReplayGainMode.album);
   });
 
+  test('uses each track ReplayGain envelope during crossfade', () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final tracks = <Track>[
+      _track('quiet', replayGainTrackDb: -6),
+      _track('loud', replayGainTrackDb: 6),
+    ];
+
+    await controller.setVolume(0.5);
+    await controller.setLoudnessNormalizationEnabled(true);
+    await controller.playTrack(tracks.first, queue: tracks);
+
+    expect(engine.crossfadeVolumeFor(tracks.first), closeTo(0.25059, 0.0001));
+    expect(engine.crossfadeVolumeFor(tracks.last), closeTo(0.99763, 0.0001));
+  });
+
   test('persists skip intervals and clamps skip seeks to track bounds',
       () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -557,6 +574,7 @@ class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
   double volumeValue = 1;
   double speedValue = 1;
   Duration crossfadeDurationValue = Duration.zero;
+  CrossfadeTrackVolumeResolver? crossfadeTrackVolumeResolver;
   int currentIndex = 0;
   int setQueueCalls = 0;
   int seekToNextCalls = 0;
@@ -702,6 +720,16 @@ class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
   Future<void> setVolume(double volume) async {
     volumeValue = volume;
   }
+
+  @override
+  void setCrossfadeTrackVolumeResolver(
+    CrossfadeTrackVolumeResolver? resolver,
+  ) {
+    crossfadeTrackVolumeResolver = resolver;
+  }
+
+  double crossfadeVolumeFor(Track track) =>
+      crossfadeTrackVolumeResolver?.call(track) ?? volumeValue;
 
   @override
   Future<void> setCrossfadeDuration(Duration duration) async {

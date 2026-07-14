@@ -4,6 +4,8 @@ import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
 
+typedef CrossfadeTrackVolumeResolver = double Function(Track track);
+
 abstract interface class PlaybackAudioEngine {
   Stream<Object?> get stateChanges;
   Stream<Duration?> get durationStream;
@@ -45,6 +47,9 @@ abstract interface class CrossfadePlaybackAudioEngine
   bool get supportsCrossfade;
   Duration get crossfadeDuration;
 
+  void setCrossfadeTrackVolumeResolver(
+    CrossfadeTrackVolumeResolver? resolver,
+  );
   Future<void> setCrossfadeDuration(Duration duration);
 }
 
@@ -73,6 +78,7 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
   Timer? _crossfadeStepTimer;
   Duration _crossfadeDuration = Duration.zero;
   double _requestedVolume = 1;
+  CrossfadeTrackVolumeResolver? _crossfadeTrackVolumeResolver;
   bool _crossfadeActive = false;
 
   static const _crossfadeStepInterval = Duration(milliseconds: 50);
@@ -242,6 +248,13 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
   }
 
   @override
+  void setCrossfadeTrackVolumeResolver(
+    CrossfadeTrackVolumeResolver? resolver,
+  ) {
+    _crossfadeTrackVolumeResolver = resolver;
+  }
+
+  @override
   Future<void> setCrossfadeDuration(Duration duration) async {
     if (duration < Duration.zero) {
       throw ArgumentError.value(duration, 'duration', 'Must not be negative.');
@@ -323,9 +336,11 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
 
     _crossfadeActive = true;
     final startedAt = DateTime.now();
+    final outgoingTrack = _queue[expectedIndex];
+    final incomingTrack = _queue[nextIndex];
     try {
       await _crossfadePlayer.stop();
-      await _crossfadePlayer.setAudioSource(_audioSourceForTrack(_queue[nextIndex]));
+      await _crossfadePlayer.setAudioSource(_audioSourceForTrack(incomingTrack));
       await _crossfadePlayer.setSpeed(_player.speed);
       await _crossfadePlayer.setVolume(0);
       unawaited(_crossfadePlayer.play());
@@ -335,30 +350,36 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
                 _crossfadeDuration.inMicroseconds)
             .clamp(0, 1)
             .toDouble();
-        unawaited(_player.setVolume(_requestedVolume * (1 - ratio)));
-        unawaited(_crossfadePlayer.setVolume(_requestedVolume * ratio));
+        unawaited(
+          _player.setVolume(_crossfadeVolumeFor(outgoingTrack) * (1 - ratio)),
+        );
+        unawaited(
+          _crossfadePlayer.setVolume(
+            _crossfadeVolumeFor(incomingTrack) * ratio,
+          ),
+        );
         if (ratio >= 1) {
           timer.cancel();
           _crossfadeStepTimer = null;
-          unawaited(_completeCrossfade(nextIndex));
+          unawaited(_completeCrossfade(nextIndex, incomingTrack));
         }
       });
     } on Object {
       _cancelCrossfade();
       await _crossfadePlayer.stop();
-      await _player.setVolume(_requestedVolume);
+      await _player.setVolume(_crossfadeVolumeFor(outgoingTrack));
       _scheduleCrossfade();
     }
   }
 
-  Future<void> _completeCrossfade(int nextIndex) async {
+  Future<void> _completeCrossfade(int nextIndex, Track incomingTrack) async {
     final position = Duration(
       microseconds: (_crossfadeDuration.inMicroseconds * _player.speed).round(),
     );
     _crossfadeActive = false;
     try {
       await _player.seek(position, index: nextIndex);
-      await _player.setVolume(_requestedVolume);
+      await _player.setVolume(_crossfadeVolumeFor(incomingTrack));
       if (!_player.playing) {
         unawaited(_player.play());
       }
@@ -368,6 +389,9 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
       _scheduleCrossfade();
     }
   }
+
+  double _crossfadeVolumeFor(Track track) =>
+      _crossfadeTrackVolumeResolver?.call(track) ?? _requestedVolume;
 
   void _cancelCrossfade() {
     _crossfadeStartTimer?.cancel();
