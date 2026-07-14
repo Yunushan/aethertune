@@ -4019,6 +4019,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onOpen: () => _showCustomSmartPlaylist(context, rule.id),
               onEdit: () => _editCustomSmartPlaylist(context, rule),
               onArtwork: () => _editCustomSmartPlaylistArtwork(context, rule),
+              onCopyImportLink: () => unawaited(
+                _copyCustomSmartPlaylistImportLink(context, library, rule),
+              ),
               onDelete: () => _deleteCustomSmartPlaylist(context, rule),
             ),
         const SizedBox(height: 16),
@@ -4114,6 +4117,15 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _importPlaylistLink(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.filter_alt_outlined),
+                title: const Text('Paste AetherTune smart playlist link'),
+                subtitle: const Text('Import portable smart-playlist rules from AetherTune.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _importCustomSmartPlaylistLink(context);
                 },
               ),
             ],
@@ -4283,6 +4295,55 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         return;
       }
       final playlist = await context.read<LibraryStore>().importPlaylistLink(link);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported ${playlist.name}.')),
+        );
+      }
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _importCustomSmartPlaylistLink(BuildContext context) async {
+    final controller = TextEditingController();
+    try {
+      final link = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Import AetherTune smart playlist link'),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Smart playlist link'),
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || link == null) {
+        return;
+      }
+      final playlist = await context
+          .read<LibraryStore>()
+          .importCustomSmartPlaylistLink(link);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Imported ${playlist.name}.')),
@@ -6246,6 +6307,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
     required this.onOpen,
     required this.onEdit,
     required this.onArtwork,
+    required this.onCopyImportLink,
     required this.onDelete,
   });
 
@@ -6254,6 +6316,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onArtwork;
+  final VoidCallback onCopyImportLink;
   final VoidCallback onDelete;
 
   @override
@@ -6272,6 +6335,9 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 break;
               case _CustomSmartPlaylistAction.artwork:
                 onArtwork();
+                break;
+              case _CustomSmartPlaylistAction.copyImportLink:
+                onCopyImportLink();
                 break;
               case _CustomSmartPlaylistAction.delete:
                 onDelete();
@@ -6292,6 +6358,13 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.image_outlined),
                 title: Text('Artwork'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _CustomSmartPlaylistAction.copyImportLink,
+              child: ListTile(
+                leading: Icon(Icons.link_outlined),
+                title: Text('Copy import link'),
               ),
             ),
             PopupMenuItem(
@@ -6512,7 +6585,7 @@ enum _PlaylistAction {
   delete,
 }
 
-enum _CustomSmartPlaylistAction { edit, artwork, delete }
+enum _CustomSmartPlaylistAction { edit, artwork, copyImportLink, delete }
 
 enum _PlaylistTrackAction { moveUp, moveDown, editMetadata, remove }
 
@@ -7813,6 +7886,20 @@ Future<void> _copyPlaylistImportLink(
     copiedMessage: 'Copied import link for ${playlist.name}.',
     unavailableMessage:
         'This playlist is too large to share as an import link. Export a file instead.',
+  );
+}
+
+Future<void> _copyCustomSmartPlaylistImportLink(
+  BuildContext context,
+  LibraryStore library,
+  CustomSmartPlaylist playlist,
+) {
+  return _copyTextToClipboard(
+    context,
+    library.customSmartPlaylistImportLink(playlist.id),
+    copiedMessage: 'Copied import link for ${playlist.name}.',
+    unavailableMessage:
+        'This smart playlist is too large to share as an import link.',
   );
 }
 

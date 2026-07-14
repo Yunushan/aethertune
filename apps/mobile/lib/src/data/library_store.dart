@@ -24,6 +24,7 @@ enum PlaylistDocumentFormat { json, m3u, csv }
 
 const _playlistImportLinkScheme = 'aethertune';
 const _playlistImportLinkHost = 'playlist';
+const _customSmartPlaylistImportLinkHost = 'smart-playlist';
 const _maxPlaylistImportLinkBytes = 48 * 1024;
 
 enum LibraryStatsExportFormat { json, csv }
@@ -3470,6 +3471,91 @@ class LibraryStore extends ChangeNotifier {
       throw const FormatException('The AetherTune playlist link is unsupported.');
     }
     return importPlaylistJson(jsonEncode(decoded));
+  }
+
+  String? customSmartPlaylistImportLink(String id) {
+    final rule = customSmartPlaylistById(id);
+    if (rule == null) {
+      return null;
+    }
+    final document = <String, Object?>{
+      'type': 'aethertune.smart-playlist',
+      'version': 1,
+      'rule': _portableCustomSmartPlaylistJson(rule),
+    };
+    final payload = utf8.encode(jsonEncode(document));
+    if (payload.length > _maxPlaylistImportLinkBytes) {
+      return null;
+    }
+    return Uri(
+      scheme: _playlistImportLinkScheme,
+      host: _customSmartPlaylistImportLinkHost,
+      queryParameters: <String, String>{
+        'data': base64Url.encode(payload),
+      },
+    ).toString();
+  }
+
+  Future<CustomSmartPlaylist> importCustomSmartPlaylistLink(String link) async {
+    final uri = Uri.tryParse(link.trim());
+    if (uri == null ||
+        uri.scheme != _playlistImportLinkScheme ||
+        uri.host != _customSmartPlaylistImportLinkHost) {
+      throw const FormatException('Enter a valid AetherTune smart playlist link.');
+    }
+    final encoded = uri.queryParameters['data'];
+    if (encoded == null || encoded.isEmpty) {
+      throw const FormatException('The AetherTune smart playlist link has no data.');
+    }
+    late List<int> bytes;
+    try {
+      bytes = base64Url.decode(encoded);
+    } on FormatException {
+      throw const FormatException('The AetherTune smart playlist link is malformed.');
+    }
+    if (bytes.length > _maxPlaylistImportLinkBytes) {
+      throw const FormatException('The AetherTune smart playlist link is too large.');
+    }
+    late Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+    } on FormatException {
+      throw const FormatException('The AetherTune smart playlist link is malformed.');
+    }
+    if (decoded is! Map || decoded['type'] != 'aethertune.smart-playlist') {
+      throw const FormatException('The AetherTune smart playlist link is unsupported.');
+    }
+    final rawRule = decoded['rule'];
+    if (rawRule is! Map) {
+      throw const FormatException('The AetherTune smart playlist link has no rule.');
+    }
+    final rule = CustomSmartPlaylist.fromJson(
+      Map<String, Object?>.from(rawRule),
+    );
+    final imported = await createCustomSmartPlaylist(
+      name: rule.name,
+      query: rule.query,
+      sourceId: rule.sourceId,
+      artist: rule.artist,
+      album: rule.album,
+      genre: rule.genre,
+      minimumDurationSeconds: rule.minimumDurationSeconds,
+      maximumDurationSeconds: rule.maximumDurationSeconds,
+      favoritesOnly: rule.favoritesOnly,
+      minimumPlayCount: rule.minimumPlayCount,
+      minimumDaysSinceLastPlayed: rule.minimumDaysSinceLastPlayed,
+      matchMode: rule.matchMode,
+      ruleGroups: rule.ruleGroups,
+      sortMode: rule.sortMode,
+      limit: rule.limit,
+    );
+    final artworkUri = rule.artworkUri;
+    if (artworkUri != null &&
+        (artworkUri.scheme == 'http' || artworkUri.scheme == 'https')) {
+      return (await updateCustomSmartPlaylistArtwork(imported.id, artworkUri)) ??
+          imported;
+    }
+    return imported;
   }
 
   List<String> lyricsShareLines(String trackId, {String? plainText}) {

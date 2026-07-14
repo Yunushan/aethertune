@@ -411,6 +411,73 @@ void main() {
     );
   });
 
+  test('shares and imports nested smart playlist links without local artwork',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    final rule = await store.createCustomSmartPlaylist(
+      name: 'Shared Mira rules',
+      artist: 'Mira',
+      sortMode: CustomSmartPlaylistSortMode.title,
+      limit: 20,
+      ruleGroups: <CustomSmartPlaylistRuleGroup>[
+        CustomSmartPlaylistRuleGroup(
+          matchMode: CustomSmartPlaylistMatchMode.any,
+          rules: const <CustomSmartPlaylistRule>[
+            CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.genre,
+              value: 'Jazz',
+            ),
+          ],
+          groups: <CustomSmartPlaylistRuleGroup>[
+            CustomSmartPlaylistRuleGroup(
+              rules: const <CustomSmartPlaylistRule>[
+                CustomSmartPlaylistRule(
+                  field: CustomSmartPlaylistRuleField.minimumPlayCount,
+                  value: '2',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    await store.updateCustomSmartPlaylistArtwork(
+      rule.id,
+      Uri.file('/private/shared-rules.png'),
+    );
+
+    final link = store.customSmartPlaylistImportLink(rule.id);
+    expect(link, startsWith('aethertune://smart-playlist?data='));
+
+    final uri = Uri.parse(link!);
+    final document = jsonDecode(
+      utf8.decode(base64Url.decode(uri.queryParameters['data']!)),
+    ) as Map<String, dynamic>;
+    final exportedRule = document['rule'] as Map<String, dynamic>;
+    expect(exportedRule['artworkUri'], isNull);
+    expect(exportedRule['ruleGroups'], isA<List<dynamic>>());
+
+    final imported = await store.importCustomSmartPlaylistLink(link);
+    expect(imported.id, isNot(rule.id));
+    expect(imported.name, rule.name);
+    expect(imported.artist, rule.artist);
+    expect(imported.sortMode, rule.sortMode);
+    expect(imported.limit, rule.limit);
+    expect(imported.artworkUri, isNull);
+    expect(imported.ruleGroups, hasLength(1));
+    expect(imported.ruleGroups.single.groups, hasLength(1));
+    expect(
+      imported.ruleGroups.single.groups.single.rules.single.field,
+      CustomSmartPlaylistRuleField.minimumPlayCount,
+    );
+
+    await expectLater(
+      store.importCustomSmartPlaylistLink('https://example.test/not-a-link'),
+      throwsFormatException,
+    );
+  });
+
   test('filters custom smart playlists by duration bounds', () async {
     final store = LibraryStore();
     await store.load();
