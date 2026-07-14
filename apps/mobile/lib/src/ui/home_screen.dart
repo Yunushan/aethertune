@@ -11432,7 +11432,9 @@ class _AccentColorDropdownLabel extends StatelessWidget {
       children: <Widget>[
         DecoratedBox(
           decoration: BoxDecoration(
-            color: seedColorForAccent(accentColor),
+            color: usesSystemAccent(accentColor)
+                ? Theme.of(context).colorScheme.primary
+                : seedColorForAccent(accentColor),
             borderRadius: BorderRadius.circular(99),
             border: Border.all(color: Theme.of(context).dividerColor),
           ),

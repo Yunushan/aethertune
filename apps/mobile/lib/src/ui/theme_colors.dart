@@ -4,6 +4,8 @@ import '../data/library_store.dart';
 
 Color seedColorForAccent(AppAccentColor accentColor) {
   switch (accentColor) {
+    case AppAccentColor.system:
+      return Colors.indigo;
     case AppAccentColor.indigo:
       return Colors.indigo;
     case AppAccentColor.teal:
@@ -17,4 +19,34 @@ Color seedColorForAccent(AppAccentColor accentColor) {
     case AppAccentColor.green:
       return Colors.green;
   }
+}
+
+bool usesSystemAccent(AppAccentColor accentColor) {
+  return accentColor == AppAccentColor.system;
+}
+
+ColorScheme lightColorSchemeForAccent(
+  AppAccentColor accentColor, {
+  ColorScheme? dynamicColorScheme,
+}) {
+  if (usesSystemAccent(accentColor) && dynamicColorScheme != null) {
+    return dynamicColorScheme;
+  }
+  return ColorScheme.fromSeed(
+    seedColor: seedColorForAccent(accentColor),
+    brightness: Brightness.light,
+  );
+}
+
+ColorScheme darkColorSchemeForAccent(
+  AppAccentColor accentColor, {
+  ColorScheme? dynamicColorScheme,
+}) {
+  if (usesSystemAccent(accentColor) && dynamicColorScheme != null) {
+    return dynamicColorScheme;
+  }
+  return ColorScheme.fromSeed(
+    seedColor: seedColorForAccent(accentColor),
+    brightness: Brightness.dark,
+  );
 }

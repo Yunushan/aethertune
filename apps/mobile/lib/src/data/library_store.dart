@@ -100,7 +100,7 @@ enum CustomSmartPlaylistRuleField {
 
 enum AppThemePreference { system, light, dark, amoled }
 
-enum AppAccentColor { indigo, teal, rose, amber, violet, green }
+enum AppAccentColor { system, indigo, teal, rose, amber, violet, green }
 
 enum AppLanguagePreference { system, english, turkish, arabic }
 
@@ -122,6 +122,8 @@ extension AppThemePreferenceLabel on AppThemePreference {
 extension AppAccentColorLabel on AppAccentColor {
   String get label {
     switch (this) {
+      case AppAccentColor.system:
+        return 'System colors';
       case AppAccentColor.indigo:
         return 'Indigo';
       case AppAccentColor.teal:
@@ -857,7 +859,7 @@ AppThemePreference _appThemePreferenceFromName(String? value) {
 AppAccentColor _appAccentColorFromName(String? value) {
   return AppAccentColor.values.firstWhere(
     (accent) => accent.name == value,
-    orElse: () => AppAccentColor.indigo,
+    orElse: () => AppAccentColor.system,
   );
 }
 
@@ -952,7 +954,7 @@ class LibraryStore extends ChangeNotifier {
   bool _offlineModeEnabled = false;
   bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
-  AppAccentColor _accentColor = AppAccentColor.indigo;
+  AppAccentColor _accentColor = AppAccentColor.system;
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _onboardingCompleted = false;
@@ -3903,7 +3905,7 @@ class LibraryStore extends ChangeNotifier {
     var restoredPauseListeningHistory = false;
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
-    var restoredAccentColor = AppAccentColor.indigo;
+    var restoredAccentColor = AppAccentColor.system;
     var restoredLanguagePreference = AppLanguagePreference.system;
     var restoredOfflineCacheLimitMegabytes =
         defaultOfflineCacheLimitMegabytes;

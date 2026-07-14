@@ -3079,7 +3079,7 @@ void main() {
     expect(firstStore.offlineModeEnabled, isFalse);
     expect(firstStore.pauseListeningHistory, isFalse);
     expect(firstStore.themePreference, AppThemePreference.system);
-    expect(firstStore.accentColor, AppAccentColor.indigo);
+    expect(firstStore.accentColor, AppAccentColor.system);
     expect(firstStore.languagePreference, AppLanguagePreference.system);
     expect(
       firstStore.desktopQueuePaneWidth,
@@ -3161,7 +3161,7 @@ void main() {
     expect(secondStore.offlineModeEnabled, isFalse);
     expect(secondStore.pauseListeningHistory, isFalse);
     expect(secondStore.themePreference, AppThemePreference.system);
-    expect(secondStore.accentColor, AppAccentColor.indigo);
+    expect(secondStore.accentColor, AppAccentColor.system);
     expect(secondStore.languagePreference, AppLanguagePreference.system);
     expect(
       secondStore.offlineCacheLimitMegabytes,
@@ -3181,6 +3181,19 @@ void main() {
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
       256,
     );
+  });
+
+  test('persists returning from a named accent to System colors', () async {
+    final firstStore = LibraryStore();
+    await firstStore.load();
+
+    await firstStore.setAccentColor(AppAccentColor.rose);
+    await firstStore.setAccentColor(AppAccentColor.system);
+
+    final restoredStore = LibraryStore();
+    await restoredStore.load();
+
+    expect(restoredStore.accentColor, AppAccentColor.system);
   });
 
   test('clamps offline cache limit setting and restored backups', () async {

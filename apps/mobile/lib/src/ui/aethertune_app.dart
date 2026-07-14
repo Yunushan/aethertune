@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:aethertune/l10n/app_localizations.dart';
@@ -70,60 +71,70 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
       ],
       child: OfflineCacheForegroundWorker(
         child: LibrarySyncAutomaticUpload(
-          child: Consumer2<LibraryStore, PlayerController>(
-          builder: (context, library, player, _) {
-            return MaterialApp(
-              locale: localeForLanguagePreference(
-                library.languagePreference,
-              ),
-              onGenerateTitle: (context) =>
-                  AppLocalizations.of(context)!.appTitle,
-              debugShowCheckedModeBanner: false,
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              themeMode: _themeModeForPreference(library.themePreference),
-              theme: _lightTheme(library.accentColor),
-              darkTheme: _darkThemeForPreference(
-                library.themePreference,
-                library.accentColor,
-              ),
-              home: !library.loaded
-                  ? const _AppLoadingScreen()
-                  : CallbackShortcuts(
-                      bindings: <ShortcutActivator, VoidCallback>{
-                        const SingleActivator(LogicalKeyboardKey.mediaPlayPause):
-                            () => unawaited(player.togglePlayPause()),
-                        const SingleActivator(LogicalKeyboardKey.mediaTrackNext):
-                            () => unawaited(player.next()),
-                        const SingleActivator(
-                          LogicalKeyboardKey.mediaTrackPrevious,
-                        ): () => unawaited(player.previous()),
-                        const SingleActivator(
-                          LogicalKeyboardKey.keyK,
-                          control: true,
-                        ): () => unawaited(player.togglePlayPause()),
-                      },
-                      child: Focus(
-                        autofocus: true,
-                        child: library.onboardingCompleted
-                            ? HomeScreen(
-                                initialTab: _onboardingDestination,
-                                onRestartOnboarding: () => unawaited(
-                                  library.setOnboardingCompleted(false),
-                                ),
-                              )
-                            : OnboardingScreen(
-                                onFinished: (destination) async {
-                                  setState(() {
-                                    _onboardingDestination = destination;
-                                  });
-                                  await library.setOnboardingCompleted(true);
-                                },
-                              ),
-                      ),
-                    ),
-            );
-          },
+          child: DynamicColorBuilder(
+            builder: (lightDynamic, darkDynamic) =>
+                Consumer2<LibraryStore, PlayerController>(
+              builder: (context, library, player, _) {
+                return MaterialApp(
+                  locale: localeForLanguagePreference(
+                    library.languagePreference,
+                  ),
+                  onGenerateTitle: (context) =>
+                      AppLocalizations.of(context)!.appTitle,
+                  debugShowCheckedModeBanner: false,
+                  localizationsDelegates:
+                      AppLocalizations.localizationsDelegates,
+                  supportedLocales: AppLocalizations.supportedLocales,
+                  themeMode: _themeModeForPreference(library.themePreference),
+                  theme: _lightTheme(
+                    library.accentColor,
+                    dynamicColorScheme: lightDynamic,
+                  ),
+                  darkTheme: _darkThemeForPreference(
+                    library.themePreference,
+                    library.accentColor,
+                    dynamicColorScheme: darkDynamic,
+                  ),
+                  home: !library.loaded
+                      ? const _AppLoadingScreen()
+                      : CallbackShortcuts(
+                          bindings: <ShortcutActivator, VoidCallback>{
+                            const SingleActivator(
+                              LogicalKeyboardKey.mediaPlayPause,
+                            ): () => unawaited(player.togglePlayPause()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.mediaTrackNext,
+                            ): () => unawaited(player.next()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.mediaTrackPrevious,
+                            ): () => unawaited(player.previous()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyK,
+                              control: true,
+                            ): () => unawaited(player.togglePlayPause()),
+                          },
+                          child: Focus(
+                            autofocus: true,
+                            child: library.onboardingCompleted
+                                ? HomeScreen(
+                                    initialTab: _onboardingDestination,
+                                    onRestartOnboarding: () => unawaited(
+                                      library.setOnboardingCompleted(false),
+                                    ),
+                                  )
+                                : OnboardingScreen(
+                                    onFinished: (destination) async {
+                                      setState(() {
+                                        _onboardingDestination = destination;
+                                      });
+                                      await library.setOnboardingCompleted(true);
+                                    },
+                                  ),
+                          ),
+                        ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -156,23 +167,33 @@ ThemeMode _themeModeForPreference(AppThemePreference preference) {
   }
 }
 
-ThemeData _lightTheme(AppAccentColor accentColor) {
+ThemeData _lightTheme(
+  AppAccentColor accentColor, {
+  ColorScheme? dynamicColorScheme,
+}) {
   return ThemeData(
     useMaterial3: true,
-    colorSchemeSeed: seedColorForAccent(accentColor),
+    colorScheme: lightColorSchemeForAccent(
+      accentColor,
+      dynamicColorScheme: dynamicColorScheme,
+    ),
     brightness: Brightness.light,
   );
 }
 
 ThemeData _darkThemeForPreference(
   AppThemePreference preference,
-  AppAccentColor accentColor,
-) {
-  final seedColor = seedColorForAccent(accentColor);
+  AppAccentColor accentColor, {
+  ColorScheme? dynamicColorScheme,
+}) {
+  final colorScheme = darkColorSchemeForAccent(
+    accentColor,
+    dynamicColorScheme: dynamicColorScheme,
+  );
   if (preference == AppThemePreference.amoled) {
     return ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: seedColor,
+      colorScheme: colorScheme,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: Colors.black,
       canvasColor: Colors.black,
@@ -185,7 +206,7 @@ ThemeData _darkThemeForPreference(
 
   return ThemeData(
     useMaterial3: true,
-    colorSchemeSeed: seedColor,
+    colorScheme: colorScheme,
     brightness: Brightness.dark,
   );
 }

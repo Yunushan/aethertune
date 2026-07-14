@@ -28,6 +28,7 @@ dependencies:
   crypto: ^3.0.7
   xml: ^6.5.0
   share_plus: ^13.2.0
+  dynamic_color: ^1.8.1
 
 dev_dependencies:
   flutter_test:
