@@ -8733,6 +8733,9 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
   List<Track> _radioTracks = <Track>[];
   List<RadioBrowserStation> _radioStations = <RadioBrowserStation>[];
+  int _radioNextOffset = 0;
+  int _radioRequestSerial = 0;
+  bool _radioHasMore = false;
   List<InternetArchiveFacet> _archiveFacets = <InternetArchiveFacet>[];
   int _archivePage = 0;
   int? _archiveTotalResults;
@@ -8746,7 +8749,9 @@ class _SourcesTabState extends State<_SourcesTab> {
   bool _providerSearchLoading = false;
   String? _providerSearchMessage;
   bool _radioLoading = false;
+  bool _radioLoadingMore = false;
   String? _radioError;
+  String? _radioLoadMoreError;
 
   @override
   void initState() {
@@ -9313,7 +9318,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search stations',
-              onPressed: _radioLoading || offlineModeEnabled
+              onPressed: _radioLoading || _radioLoadingMore || offlineModeEnabled
                   ? null
                   : _searchRadioStations,
               icon: const Icon(Icons.search),
@@ -9398,6 +9403,38 @@ class _SourcesTabState extends State<_SourcesTab> {
               onTap: () => _openRadioStation(context, station),
               trailing: const Icon(Icons.chevron_right),
             ),
+        ],
+        if (_radioLoadingMore) ...<Widget>[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ],
+        if (_radioLoadMoreError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Could not load more stations'),
+            subtitle: Text(_radioLoadMoreError!),
+            trailing: IconButton(
+              tooltip: 'Retry loading stations',
+              onPressed: _radioLoadingMore || offlineModeEnabled
+                  ? null
+                  : _loadMoreRadioStations,
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        ],
+        if (_radioStations.isNotEmpty && _radioHasMore) ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _radioLoading || _radioLoadingMore || offlineModeEnabled
+                  ? null
+                  : _loadMoreRadioStations,
+              icon: const Icon(Icons.expand_more),
+              label: const Text('Load more stations'),
+            ),
+          ),
         ],
         const SizedBox(height: 16),
         Text(
@@ -10743,19 +10780,31 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _searchRadioStations() async {
+    if (_radioLoading || _radioLoadingMore) {
+      return;
+    }
+
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
+        _radioRequestSerial += 1;
         _radioTracks = <Track>[];
         _radioStations = <RadioBrowserStation>[];
+        _radioNextOffset = 0;
+        _radioHasMore = false;
         _radioLoading = false;
+        _radioLoadingMore = false;
         _radioError = 'Offline mode is on.';
+        _radioLoadMoreError = null;
       });
       return;
     }
 
+    final requestSerial = ++_radioRequestSerial;
     setState(() {
       _radioLoading = true;
       _radioError = null;
+      _radioLoadMoreError = null;
+      _radioHasMore = false;
     });
 
     try {
@@ -10763,27 +10812,99 @@ class _SourcesTabState extends State<_SourcesTab> {
         _radioSearchController.text,
         filters: _radioFilters(),
       );
-      if (!mounted) {
+      if (!mounted || requestSerial != _radioRequestSerial) {
         return;
       }
 
       setState(() {
         _radioTracks = page.tracks;
         _radioStations = page.stations;
+        _radioNextOffset = page.nextOffset;
+        _radioHasMore = page.hasMore;
         _radioLoading = false;
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestSerial != _radioRequestSerial) {
         return;
       }
 
       setState(() {
         _radioTracks = <Track>[];
         _radioStations = <RadioBrowserStation>[];
+        _radioNextOffset = 0;
+        _radioHasMore = false;
         _radioLoading = false;
         _radioError = error.toString();
       });
     }
+  }
+
+  Future<void> _loadMoreRadioStations() async {
+    if (_radioLoading || _radioLoadingMore || !_radioHasMore) {
+      return;
+    }
+
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() => _radioLoadMoreError = 'Offline mode is on.');
+      return;
+    }
+
+    final requestSerial = _radioRequestSerial;
+    final offset = _radioNextOffset;
+    final query = _radioSearchController.text;
+    final filters = _radioFilters();
+    setState(() {
+      _radioLoadingMore = true;
+      _radioLoadMoreError = null;
+    });
+
+    try {
+      final page = await _radioProvider.searchStationPage(
+        query,
+        filters: filters,
+        offset: offset,
+      );
+      if (!mounted || requestSerial != _radioRequestSerial) {
+        return;
+      }
+
+      setState(() {
+        _radioStations = _mergeRadioStations(_radioStations, page.stations);
+        _radioTracks = _mergeRadioTracks(_radioTracks, page.tracks);
+        _radioNextOffset = page.nextOffset;
+        _radioHasMore = page.hasMore;
+        _radioLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || requestSerial != _radioRequestSerial) {
+        return;
+      }
+
+      setState(() {
+        _radioLoadingMore = false;
+        _radioLoadMoreError = error.toString();
+      });
+    }
+  }
+
+  List<RadioBrowserStation> _mergeRadioStations(
+    List<RadioBrowserStation> current,
+    List<RadioBrowserStation> incoming,
+  ) {
+    final keys = current
+        .map((station) => '${station.stationUuid}|${station.streamUri}')
+        .toSet();
+    return <RadioBrowserStation>[
+      ...current,
+      ...incoming.where(
+        (station) => keys.add('${station.stationUuid}|${station.streamUri}'),
+      ),
+    ];
+  }
+
+  List<Track> _mergeRadioTracks(List<Track> current, List<Track> incoming) {
+    final ids = current.map((track) => track.id).toSet();
+    return <Track>[...current, ...incoming.where((track) => ids.add(track.id))];
   }
 
   Future<void> _playRadioStation(BuildContext context, Track track) async {

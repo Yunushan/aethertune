@@ -66,10 +66,14 @@ final class RadioBrowserStationSearchPage {
   const RadioBrowserStationSearchPage({
     required this.stations,
     required this.tracks,
+    required this.nextOffset,
+    required this.hasMore,
   });
 
   final List<RadioBrowserStation> stations;
   final List<Track> tracks;
+  final int nextOffset;
+  final bool hasMore;
 }
 
 class RadioBrowserProvider implements MusicSourceProvider {
@@ -151,12 +155,19 @@ class RadioBrowserProvider implements MusicSourceProvider {
   Future<RadioBrowserStationSearchPage> searchStationPage(
     String query, {
     RadioBrowserSearchFilters filters = const RadioBrowserSearchFilters(),
+    int offset = 0,
   }) async {
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'must not be negative');
+    }
+
     final normalized = query.trim();
     final baseUri = await _resolvedBaseUri();
-    final stations = parseRadioBrowserStations(
-      await _searchLoader(_searchUri(baseUri, normalized, filters)),
+    final response = await _searchLoader(
+      _searchUri(baseUri, normalized, filters, offset),
     );
+    final returnedStationCount = _radioBrowserResponseCount(response);
+    final stations = parseRadioBrowserStations(response);
 
     final matchingStations = stations
         .where(
@@ -170,6 +181,8 @@ class RadioBrowserProvider implements MusicSourceProvider {
       tracks: matchingStations
           .map((station) => station.toTrack(sourceId: id))
           .toList(growable: false),
+      nextOffset: offset + returnedStationCount,
+      hasMore: returnedStationCount >= limit,
     );
   }
 
@@ -236,6 +249,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
     Uri baseUri,
     String query,
     RadioBrowserSearchFilters filters,
+    int offset,
   ) {
     final countryCode = _nonEmpty(filters.countryCode)?.toUpperCase();
     final language = _nonEmpty(filters.language);
@@ -258,6 +272,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
           'bitrateMax': maxBitrateKbps.toString(),
         'hidebroken': 'true',
         'limit': limit.toString(),
+        'offset': offset.toString(),
         'order': 'clickcount',
         'reverse': 'true',
       },
@@ -273,6 +288,11 @@ class RadioBrowserProvider implements MusicSourceProvider {
       queryParameters: const <String, String>{},
     );
   }
+}
+
+int _radioBrowserResponseCount(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  return decoded is List<dynamic> ? decoded.length : 0;
 }
 
 List<Uri> parseRadioBrowserMirrors(String jsonText) {

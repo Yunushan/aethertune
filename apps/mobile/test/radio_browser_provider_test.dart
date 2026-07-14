@@ -73,6 +73,7 @@ void main() {
       expect(capturedUri!.queryParameters['name'], 'aether');
       expect(capturedUri!.queryParameters['hidebroken'], 'true');
       expect(capturedUri!.queryParameters['limit'], '12');
+      expect(capturedUri!.queryParameters['offset'], '0');
       expect(capturedUri!.queryParameters['order'], 'clickcount');
       expect(capturedUri!.queryParameters['reverse'], 'true');
       expect(
@@ -216,6 +217,63 @@ void main() {
     expect(capturedUri!.queryParameters['codec'], 'AAC');
     expect(capturedUri!.queryParameters['bitrateMin'], '64');
     expect(capturedUri!.queryParameters['bitrateMax'], '192');
+  });
+
+  test('search station page provides an offset cursor for continuation', () async {
+    Uri? capturedUri;
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      limit: 1,
+      searchLoader: (uri) async {
+        capturedUri = uri;
+        return _singleStationJson;
+      },
+    );
+
+    final page = await provider.searchStationPage('aether', offset: 20);
+
+    expect(capturedUri!.queryParameters['offset'], '20');
+    expect(page.nextOffset, 21);
+    expect(page.hasMore, isTrue);
+  });
+
+  test('search station page advances past locally filtered server rows', () async {
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      limit: 2,
+      searchLoader: (_) async => _sampleStationsJson,
+    );
+
+    final page = await provider.searchStationPage('aether');
+
+    expect(page.stations, hasLength(1));
+    expect(page.nextOffset, 2);
+    expect(page.hasMore, isTrue);
+  });
+
+  test('search station page stops after a short server page', () async {
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      limit: 2,
+      searchLoader: (_) async => _singleStationJson,
+    );
+
+    final page = await provider.searchStationPage('aether');
+
+    expect(page.nextOffset, 1);
+    expect(page.hasMore, isFalse);
+  });
+
+  test('search station page rejects a negative offset', () async {
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (_) async => _singleStationJson,
+    );
+
+    await expectLater(
+      provider.searchStationPage('aether', offset: -1),
+      throwsArgumentError,
+    );
   });
 
   test('search station page retains station metadata with playable tracks', () async {
