@@ -105,9 +105,9 @@ class PlayerController extends ChangeNotifier {
   ReplayGainMode get replayGainMode => _replayGainMode;
   bool get supportsCrossfade =>
       _audio is CrossfadePlaybackAudioEngine &&
-      (_audio as CrossfadePlaybackAudioEngine).supportsCrossfade;
+      _audio.supportsCrossfade;
   Duration get crossfadeDuration => _audio is CrossfadePlaybackAudioEngine
-      ? (_audio as CrossfadePlaybackAudioEngine).crossfadeDuration
+      ? _audio.crossfadeDuration
       : Duration.zero;
   Duration get duration => _duration;
   Duration get position => _audio.position;

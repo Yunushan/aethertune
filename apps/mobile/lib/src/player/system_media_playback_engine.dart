@@ -85,11 +85,11 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   @override
   bool get supportsCrossfade =>
       _engine is CrossfadePlaybackAudioEngine &&
-      (_engine as CrossfadePlaybackAudioEngine).supportsCrossfade;
+      _engine.supportsCrossfade;
 
   @override
   Duration get crossfadeDuration => _engine is CrossfadePlaybackAudioEngine
-      ? (_engine as CrossfadePlaybackAudioEngine).crossfadeDuration
+      ? _engine.crossfadeDuration
       : Duration.zero;
 
   @override
