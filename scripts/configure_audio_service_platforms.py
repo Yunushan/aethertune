@@ -101,6 +101,79 @@ _WIDGET_LAYOUT_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
 </LinearLayout>
 """
 
+_SHORTCUTS_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<shortcuts xmlns:android=\"http://schemas.android.com/apk/res/android\">
+    <shortcut
+        android:shortcutId=\"previous\"
+        android:enabled=\"true\"
+        android:icon=\"@drawable/aethertune_shortcut_previous\"
+        android:shortcutShortLabel=\"@string/aethertune_shortcut_previous\">
+        <intent
+            android:action=\"dev.aethertune.aethertune.shortcut.PREVIOUS\"
+            android:targetPackage=\"dev.aethertune.aethertune\"
+            android:targetClass=\"dev.aethertune.aethertune.MainActivity\" />
+    </shortcut>
+    <shortcut
+        android:shortcutId=\"play_pause\"
+        android:enabled=\"true\"
+        android:icon=\"@drawable/aethertune_shortcut_play_pause\"
+        android:shortcutShortLabel=\"@string/aethertune_shortcut_play_pause\">
+        <intent
+            android:action=\"dev.aethertune.aethertune.shortcut.PLAY_PAUSE\"
+            android:targetPackage=\"dev.aethertune.aethertune\"
+            android:targetClass=\"dev.aethertune.aethertune.MainActivity\" />
+    </shortcut>
+    <shortcut
+        android:shortcutId=\"next\"
+        android:enabled=\"true\"
+        android:icon=\"@drawable/aethertune_shortcut_next\"
+        android:shortcutShortLabel=\"@string/aethertune_shortcut_next\">
+        <intent
+            android:action=\"dev.aethertune.aethertune.shortcut.NEXT\"
+            android:targetPackage=\"dev.aethertune.aethertune\"
+            android:targetClass=\"dev.aethertune.aethertune.MainActivity\" />
+    </shortcut>
+</shortcuts>
+"""
+
+_SHORTCUT_STRINGS_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<resources>
+    <string name=\"aethertune_shortcut_previous\">Previous track</string>
+    <string name=\"aethertune_shortcut_play_pause\">Play or pause</string>
+    <string name=\"aethertune_shortcut_next\">Next track</string>
+</resources>
+"""
+
+_SHORTCUT_PREVIOUS_VECTOR_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"
+    android:width=\"24dp\"
+    android:height=\"24dp\"
+    android:viewportWidth=\"24\"
+    android:viewportHeight=\"24\">
+    <path android:fillColor=\"#FFFFFFFF\" android:pathData=\"M6,6h2v12H6zM18,6v12l-8,-6z\" />
+</vector>
+"""
+
+_SHORTCUT_PLAY_PAUSE_VECTOR_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"
+    android:width=\"24dp\"
+    android:height=\"24dp\"
+    android:viewportWidth=\"24\"
+    android:viewportHeight=\"24\">
+    <path android:fillColor=\"#FFFFFFFF\" android:pathData=\"M8,5v14l11,-7z\" />
+</vector>
+"""
+
+_SHORTCUT_NEXT_VECTOR_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"
+    android:width=\"24dp\"
+    android:height=\"24dp\"
+    android:viewportWidth=\"24\"
+    android:viewportHeight=\"24\">
+    <path android:fillColor=\"#FFFFFFFF\" android:pathData=\"M16,6h2v12h-2zM6,6v12l8,-6z\" />
+</vector>
+"""
+
 _WIDGET_KOTLIN = """package dev.aethertune.aethertune
 
 import android.app.PendingIntent
@@ -223,7 +296,7 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        private fun sendMediaButton(context: Context, keyCode: Int) {
+        fun sendMediaButton(context: Context, keyCode: Int) {
             val receiverIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
                 .setClassName(
                     context.packageName,
@@ -248,11 +321,24 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
 
 _MAIN_ACTIVITY_KOTLIN = """package dev.aethertune.aethertune
 
+import android.content.Intent
+import android.os.Bundle
+import android.view.KeyEvent
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        dispatchLauncherShortcut(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        dispatchLauncherShortcut(intent)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
@@ -270,6 +356,26 @@ class MainActivity : AudioServiceActivity() {
                 call.argument<Boolean>("isPlaying") ?: false,
             )
             result.success(null)
+        }
+    }
+
+    private fun dispatchLauncherShortcut(intent: Intent) {
+        when (intent.action) {
+            "dev.aethertune.aethertune.shortcut.PREVIOUS" ->
+                AetherTunePlaybackWidget.sendMediaButton(
+                    applicationContext,
+                    KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                )
+            "dev.aethertune.aethertune.shortcut.PLAY_PAUSE" ->
+                AetherTunePlaybackWidget.sendMediaButton(
+                    applicationContext,
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                )
+            "dev.aethertune.aethertune.shortcut.NEXT" ->
+                AetherTunePlaybackWidget.sendMediaButton(
+                    applicationContext,
+                    KeyEvent.KEYCODE_MEDIA_NEXT,
+                )
         }
     }
 }
@@ -295,6 +401,21 @@ def _ensure_action(parent: ET.Element, action_name: str) -> None:
     ET.SubElement(intent_filter, "action", {f"{ANDROID}name": action_name})
 
 
+def _ensure_metadata(parent: ET.Element, name: str, resource: str) -> None:
+    for metadata in parent.findall("meta-data"):
+        if metadata.get(f"{ANDROID}name") == name:
+            metadata.set(f"{ANDROID}resource", resource)
+            return
+    ET.SubElement(
+        parent,
+        "meta-data",
+        {
+            f"{ANDROID}name": name,
+            f"{ANDROID}resource": resource,
+        },
+    )
+
+
 def _widget_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path]:
     app_dir = manifest_path.parents[2]
     resources = app_dir / "src/main/res"
@@ -307,15 +428,38 @@ def _widget_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path]:
     )
 
 
+def _shortcut_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path, Path]:
+    resources = manifest_path.parents[2] / "src/main/res"
+    return (
+        resources / "xml/aethertune_launcher_shortcuts.xml",
+        resources / "values/aethertune_shortcuts.xml",
+        resources / "drawable/aethertune_shortcut_previous.xml",
+        resources / "drawable/aethertune_shortcut_play_pause.xml",
+        resources / "drawable/aethertune_shortcut_next.xml",
+    )
+
+
 def _write_android_playback_widget(manifest_path: Path) -> None:
     widget_info, widget_layout, widget_source, activity_source = _widget_paths(
         manifest_path
     )
+    (
+        shortcuts_xml,
+        shortcut_strings,
+        shortcut_previous,
+        shortcut_play_pause,
+        shortcut_next,
+    ) = _shortcut_paths(manifest_path)
     for path, content in (
         (widget_info, _WIDGET_INFO_XML),
         (widget_layout, _WIDGET_LAYOUT_XML),
         (widget_source, _WIDGET_KOTLIN),
         (activity_source, _MAIN_ACTIVITY_KOTLIN),
+        (shortcuts_xml, _SHORTCUTS_XML),
+        (shortcut_strings, _SHORTCUT_STRINGS_XML),
+        (shortcut_previous, _SHORTCUT_PREVIOUS_VECTOR_XML),
+        (shortcut_play_pause, _SHORTCUT_PLAY_PAUSE_VECTOR_XML),
+        (shortcut_next, _SHORTCUT_NEXT_VECTOR_XML),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
@@ -347,6 +491,11 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
     if activity is None:
         raise RuntimeError(f"No <activity> in {manifest_path}")
     activity.set(f"{ANDROID}name", ACTIVITY_NAME)
+    _ensure_metadata(
+        activity,
+        "android.app.shortcuts",
+        "@xml/aethertune_launcher_shortcuts",
+    )
 
     service = _find_named(application, "service", SERVICE_NAME)
     if service is None:
@@ -518,6 +667,20 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     activity = application.find("activity")
     if activity is None or activity.get(f"{ANDROID}name") != ACTIVITY_NAME:
         raise RuntimeError("Android activity is not connected to audio_service")
+    shortcut_metadata = next(
+        (
+            metadata
+            for metadata in activity.findall("meta-data")
+            if metadata.get(f"{ANDROID}name") == "android.app.shortcuts"
+        ),
+        None,
+    )
+    if (
+        shortcut_metadata is None
+        or shortcut_metadata.get(f"{ANDROID}resource")
+        != "@xml/aethertune_launcher_shortcuts"
+    ):
+        raise RuntimeError("Android launcher shortcuts metadata is missing")
     if _find_named(application, "service", SERVICE_NAME) is None:
         raise RuntimeError("Android audio_service service is missing")
     if _find_named(application, "receiver", RECEIVER_NAME) is None:
@@ -575,6 +738,44 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     )
     if not all(snippet in activity_source_text for snippet in required_activity_snippets):
         raise RuntimeError("Android playback widget state bridge is missing")
+    (
+        shortcuts_xml,
+        shortcut_strings,
+        shortcut_previous,
+        shortcut_play_pause,
+        shortcut_next,
+    ) = _shortcut_paths(manifest_path)
+    if not all(
+        path.is_file()
+        for path in (
+            shortcuts_xml,
+            shortcut_strings,
+            shortcut_previous,
+            shortcut_play_pause,
+            shortcut_next,
+        )
+    ):
+        raise RuntimeError("Android launcher shortcut resources are missing")
+    shortcuts_root = ET.parse(shortcuts_xml).getroot()
+    shortcuts = shortcuts_root.findall("shortcut")
+    shortcut_ids = {shortcut.get(f"{ANDROID}shortcutId") for shortcut in shortcuts}
+    expected_shortcut_ids = {"previous", "play_pause", "next"}
+    if shortcut_ids != expected_shortcut_ids:
+        raise RuntimeError("Android launcher shortcut IDs are unexpected")
+    shortcut_actions = {
+        intent.get(f"{ANDROID}action")
+        for shortcut in shortcuts
+        if (intent := shortcut.find("intent")) is not None
+    }
+    expected_shortcut_actions = {
+        "dev.aethertune.aethertune.shortcut.PREVIOUS",
+        "dev.aethertune.aethertune.shortcut.PLAY_PAUSE",
+        "dev.aethertune.aethertune.shortcut.NEXT",
+    }
+    if shortcut_actions != expected_shortcut_actions:
+        raise RuntimeError("Android launcher shortcut actions are unexpected")
+    if not all(action in activity_source_text for action in shortcut_actions):
+        raise RuntimeError("Android launcher shortcuts are not routed by MainActivity")
     gradle = gradle_path.read_text(encoding="utf-8")
     if not re.search(
         rf"(?:minSdk\s*=|minSdkVersion)\s*{ANDROID_MIN_SDK}\b", gradle

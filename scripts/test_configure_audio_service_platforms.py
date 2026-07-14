@@ -71,6 +71,16 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 "updatePlaybackWidgets",
                 activity_source.read_text(encoding="utf-8"),
             )
+            shortcuts = (
+                app_dir
+                / "android/app/src/main/res/xml/aethertune_launcher_shortcuts.xml"
+            )
+            shortcut_root = ET.parse(shortcuts).getroot()
+            shortcut_ids = {
+                shortcut.get(f"{platform_config.ANDROID}shortcutId")
+                for shortcut in shortcut_root.findall("shortcut")
+            }
+            self.assertEqual(shortcut_ids, {"previous", "play_pause", "next"})
 
 
 if __name__ == "__main__":

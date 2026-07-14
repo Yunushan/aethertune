@@ -33,6 +33,42 @@ void main() {
     ).readAsStringSync();
     expect(activity, contains('class MainActivity : AudioServiceActivity()'));
     expect(activity, contains('dev.aethertune/playback_widget'));
+    for (final action in <String>[
+      'dev.aethertune.aethertune.shortcut.PREVIOUS',
+      'dev.aethertune.aethertune.shortcut.PLAY_PAUSE',
+      'dev.aethertune.aethertune.shortcut.NEXT',
+    ]) {
+      expect(activity, contains(action));
+    }
+    final shortcuts = XmlDocument.parse(
+      File('android/app/src/main/res/xml/aethertune_launcher_shortcuts.xml')
+          .readAsStringSync(),
+    );
+    final shortcutElements = shortcuts.findAllElements('shortcut').toList();
+    expect(
+      shortcutElements
+          .map(
+            (element) =>
+                element.getAttribute('shortcutId', namespace: _androidNamespace),
+          )
+          .toSet(),
+      <String?>{'previous', 'play_pause', 'next'},
+    );
+    expect(
+      shortcutElements
+          .map(
+            (element) => element
+                .findElements('intent')
+                .single
+                .getAttribute('action', namespace: _androidNamespace),
+          )
+          .toSet(),
+      <String?>{
+        'dev.aethertune.aethertune.shortcut.PREVIOUS',
+        'dev.aethertune.aethertune.shortcut.PLAY_PAUSE',
+        'dev.aethertune.aethertune.shortcut.NEXT',
+      },
+    );
     expect(
       _componentNames(document, 'service'),
       contains('com.ryanheise.audioservice.AudioService'),
