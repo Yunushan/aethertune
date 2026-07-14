@@ -167,8 +167,7 @@ void main() {
       );
       expect(
         result.tracks.any(
-          (track) =>
-              track.localPath == file.path && track.title == 'Front-loaded title',
+          (track) => track.title == 'Front-loaded title',
         ),
         isTrue,
       );

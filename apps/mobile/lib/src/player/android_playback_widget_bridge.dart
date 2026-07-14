@@ -19,7 +19,9 @@ String? localArtworkPathForWidget(Track? track) {
     return null;
   }
   try {
-    final path = artworkUri.toFilePath(windows: Platform.isWindows);
+    // This value crosses the Android platform channel, so it must retain
+    // Android/POSIX separators even when a host-side test runs on Windows.
+    final path = artworkUri.toFilePath(windows: false);
     return path.isEmpty ? null : path;
   } on Object {
     return null;
