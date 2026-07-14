@@ -284,6 +284,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _clearLyricsSearchCache(BuildContext context) async {
+    try {
+      await _lyricsProvider.clearCachedSearchResults();
+    } on Object {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not clear cached lyrics searches.')),
+      );
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cached lyrics searches cleared.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context)!;
@@ -363,6 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _SourcesTab(archiveProvider: widget.internetArchiveProvider),
               _SettingsTab(
                 onRestartOnboarding: widget.onRestartOnboarding,
+                onClearLyricsSearchCache: () => _clearLyricsSearchCache(context),
               ),
             ],
           ),
@@ -11329,9 +11350,13 @@ String _languagePreferenceLabel(
 }
 
 class _SettingsTab extends StatelessWidget {
-  const _SettingsTab({this.onRestartOnboarding});
+  const _SettingsTab({
+    this.onRestartOnboarding,
+    this.onClearLyricsSearchCache,
+  });
 
   final VoidCallback? onRestartOnboarding;
+  final Future<void> Function()? onClearLyricsSearchCache;
 
   @override
   Widget build(BuildContext context) {
@@ -11675,6 +11700,20 @@ class _SettingsTab extends StatelessWidget {
           onChanged: (value) {
             unawaited(library.setPauseListeningHistory(value));
           },
+        ),
+        ListTile(
+          leading: const Icon(Icons.lyrics_outlined),
+          title: const Text('Cached lyrics searches'),
+          subtitle: const Text(
+            'Offline LRCLIB search results expire after 30 days.',
+          ),
+          trailing: IconButton(
+            tooltip: 'Clear cached lyrics searches',
+            onPressed: onClearLyricsSearchCache == null
+                ? null
+                : () => unawaited(onClearLyricsSearchCache!()),
+            icon: const Icon(Icons.delete_sweep_outlined),
+          ),
         ),
         SwitchListTile(
           secondary: const Icon(Icons.cloud_off_outlined),

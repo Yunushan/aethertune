@@ -37,6 +37,63 @@ void main() {
     expect(cached.single.trackName, 'Cached Song');
   });
 
+  test('expires cached results after the configured lifetime', () async {
+    final cache = _MemorySearchCache();
+    final savedAt = DateTime.utc(2026, 7, 14, 10);
+    var now = savedAt;
+    final provider = LrcLibLyricsProvider(
+      searchCache: cache,
+      clock: () => now,
+      cacheLifetime: const Duration(days: 30),
+      responseLoader: (uri, headers) async => _searchResponse,
+    );
+    const query = LyricsSearchQuery(keywords: 'signal');
+
+    await provider.search(query);
+    now = savedAt.add(const Duration(days: 31));
+
+    await expectLater(
+      provider.searchOffline(query),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('expired'),
+        ),
+      ),
+    );
+  });
+
+  test('clears every cached lyrics search on request', () async {
+    final cache = _MemorySearchCache();
+    final provider = LrcLibLyricsProvider(
+      searchCache: cache,
+      responseLoader: (uri, headers) async => _searchResponse,
+    );
+
+    await provider.search(const LyricsSearchQuery(keywords: 'signal'));
+    await provider.search(const LyricsSearchQuery(keywords: 'other'));
+    await provider.clearCachedSearchResults();
+
+    expect(cache.values, isEmpty);
+  });
+
+  test('clears persisted cached searches without affecting a new search',
+      () async {
+    final provider = LrcLibLyricsProvider(
+      responseLoader: (uri, headers) async => _searchResponse,
+    );
+    const firstQuery = LyricsSearchQuery(keywords: 'signal');
+    const secondQuery = LyricsSearchQuery(keywords: 'other');
+
+    await provider.search(firstQuery);
+    await provider.clearCachedSearchResults();
+
+    await expectLater(provider.searchOffline(firstQuery), throwsStateError);
+    await provider.search(secondQuery);
+    expect((await provider.searchOffline(secondQuery)).first.externalId, '42');
+  });
+
   test('does not persist malformed provider responses', () async {
     final cache = _MemorySearchCache();
     final provider = LrcLibLyricsProvider(
@@ -137,15 +194,19 @@ void main() {
 }
 
 class _MemorySearchCache implements LrcLibSearchCache {
-  final Map<String, String> values = <String, String>{};
+  final Map<String, LrcLibCachedSearch> values =
+      <String, LrcLibCachedSearch>{};
 
   @override
-  Future<String?> read(String key) async => values[key];
+  Future<LrcLibCachedSearch?> read(String key) async => values[key];
 
   @override
-  Future<void> write(String key, String responseBody) async {
-    values[key] = responseBody;
+  Future<void> write(String key, LrcLibCachedSearch entry) async {
+    values[key] = entry;
   }
+
+  @override
+  Future<void> clear() async => values.clear();
 }
 
 const _searchResponse = '''

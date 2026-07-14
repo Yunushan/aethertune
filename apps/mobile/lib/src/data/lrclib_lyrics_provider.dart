@@ -12,24 +12,79 @@ typedef LrcLibResponseLoader = Future<String> Function(
   Map<String, String> headers,
 );
 
+class LrcLibCachedSearch {
+  const LrcLibCachedSearch({
+    required this.responseBody,
+    required this.savedAt,
+  });
+
+  final String responseBody;
+  final DateTime savedAt;
+}
+
 abstract interface class LrcLibSearchCache {
-  Future<String?> read(String key);
-  Future<void> write(String key, String responseBody);
+  Future<LrcLibCachedSearch?> read(String key);
+  Future<void> write(String key, LrcLibCachedSearch entry);
+  Future<void> clear();
 }
 
 class SharedPreferencesLrcLibSearchCache implements LrcLibSearchCache {
   static const _prefix = 'aethertune.lrclib.search.v1.';
 
   @override
-  Future<String?> read(String key) async {
+  Future<LrcLibCachedSearch?> read(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('$_prefix$key');
+    final raw = prefs.getString('$_prefix$key');
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+      final record = Map<String, Object?>.from(decoded);
+      final responseBody = record['responseBody'];
+      final savedAtMilliseconds = record['savedAtMilliseconds'];
+      if (responseBody is! String ||
+          responseBody.isEmpty ||
+          savedAtMilliseconds is! num ||
+          !savedAtMilliseconds.isFinite) {
+        return null;
+      }
+      return LrcLibCachedSearch(
+        responseBody: responseBody,
+        savedAt: DateTime.fromMillisecondsSinceEpoch(
+          savedAtMilliseconds.round(),
+        ),
+      );
+    } on FormatException {
+      return null;
+    }
   }
 
   @override
-  Future<void> write(String key, String responseBody) async {
+  Future<void> write(String key, LrcLibCachedSearch entry) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_prefix$key', responseBody);
+    await prefs.setString(
+      '$_prefix$key',
+      jsonEncode(<String, Object?>{
+        'responseBody': entry.responseBody,
+        'savedAtMilliseconds': entry.savedAt.millisecondsSinceEpoch,
+      }),
+    );
+  }
+
+  @override
+  Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(_prefix))
+        .toList(growable: false);
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 }
 
@@ -38,9 +93,13 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
     Uri? baseUri,
     LrcLibResponseLoader? responseLoader,
     LrcLibSearchCache? searchCache,
+    DateTime Function()? clock,
+    Duration cacheLifetime = const Duration(days: 30),
   })  : baseUri = baseUri ?? Uri.parse('https://lrclib.net'),
         _responseLoader = responseLoader ?? _loadLrcLibResponse,
-        _searchCache = searchCache ?? SharedPreferencesLrcLibSearchCache();
+        _searchCache = searchCache ?? SharedPreferencesLrcLibSearchCache(),
+        _clock = clock ?? DateTime.now,
+        _cacheLifetime = _validateCacheLifetime(cacheLifetime);
 
   static const userAgent =
       'AetherTune/0.1.0 (+https://github.com/Yunushan/aethertune)';
@@ -48,6 +107,10 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
   final Uri baseUri;
   final LrcLibResponseLoader _responseLoader;
   final LrcLibSearchCache _searchCache;
+  final DateTime Function() _clock;
+  final Duration _cacheLifetime;
+
+  Duration get cacheLifetime => _cacheLifetime;
 
   @override
   String get id => 'lrclib';
@@ -81,7 +144,10 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
       },
     );
     final results = _parseAndRank(response, query);
-    await _searchCache.write(_cacheKey(query), response);
+    await _searchCache.write(
+      _cacheKey(query),
+      LrcLibCachedSearch(responseBody: response, savedAt: _clock()),
+    );
     return results;
   }
 
@@ -89,11 +155,18 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
   Future<List<LyricsSearchResult>> searchOffline(LyricsSearchQuery query) async {
     _validateQuery(query);
     final cached = await _searchCache.read(_cacheKey(query));
-    if (cached == null || cached.isEmpty) {
+    if (cached == null) {
       throw StateError('No cached lyrics results are available for this search.');
     }
-    return _parseAndRank(cached, query);
+    if (_isExpired(cached)) {
+      throw StateError(
+        'Cached lyrics results have expired. Connect to refresh this search.',
+      );
+    }
+    return _parseAndRank(cached.responseBody, query);
   }
+
+  Future<void> clearCachedSearchResults() => _searchCache.clear();
 
   List<LyricsSearchResult> _parseAndRank(
     String response,
@@ -131,6 +204,9 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
     }
   }
 
+  bool _isExpired(LrcLibCachedSearch cached) =>
+      _clock().difference(cached.savedAt) > _cacheLifetime;
+
   Uri _searchUri(LyricsSearchQuery query) {
     final keywords = query.keywords.trim();
     final parameters = <String, String>{};
@@ -153,6 +229,13 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
       queryParameters: parameters,
     );
   }
+}
+
+Duration _validateCacheLifetime(Duration value) {
+  if (value < Duration.zero) {
+    throw ArgumentError.value(value, 'cacheLifetime', 'Must not be negative.');
+  }
+  return value;
 }
 
 List<LyricsSearchResult> parseLrcLibSearchResults(
