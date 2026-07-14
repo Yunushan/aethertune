@@ -13,6 +13,19 @@ abstract interface class PlaybackWidgetBridge {
   });
 }
 
+String? localArtworkPathForWidget(Track? track) {
+  final artworkUri = track?.artworkUri;
+  if (artworkUri == null || artworkUri.scheme.toLowerCase() != 'file') {
+    return null;
+  }
+  try {
+    final path = artworkUri.toFilePath(windows: Platform.isWindows);
+    return path.isEmpty ? null : path;
+  } on Object {
+    return null;
+  }
+}
+
 class AndroidPlaybackWidgetBridge implements PlaybackWidgetBridge {
   const AndroidPlaybackWidgetBridge({MethodChannel? channel})
       : _channel = channel ?? _defaultChannel;
@@ -40,6 +53,7 @@ class AndroidPlaybackWidgetBridge implements PlaybackWidgetBridge {
         'isPlaying': isPlaying,
         'positionMillis': position.inMilliseconds.clamp(0, 2147483647),
         'durationMillis': duration?.inMilliseconds.clamp(0, 2147483647) ?? 0,
+        'artworkPath': localArtworkPathForWidget(track),
       });
     } on MissingPluginException {
       // Platform wrappers are generated at build time; non-generated dev runs

@@ -48,6 +48,15 @@ _WIDGET_LAYOUT_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
     android:orientation=\"horizontal\"
     android:padding=\"8dp\">
 
+    <ImageView
+        android:id=\"@+id/aethertune_widget_artwork\"
+        android:layout_width=\"40dp\"
+        android:layout_height=\"40dp\"
+        android:layout_marginEnd=\"8dp\"
+        android:contentDescription=\"Album artwork\"
+        android:scaleType=\"centerCrop\"
+        android:visibility=\"gone\" />
+
     <LinearLayout
         android:layout_width=\"0dp\"
         android:layout_height=\"match_parent\"
@@ -192,9 +201,12 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.view.KeyEvent
 import android.view.View
 import android.widget.RemoteViews
+import java.io.File
 
 class AetherTunePlaybackWidget : AppWidgetProvider() {
     override fun onUpdate(
@@ -223,11 +235,15 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
         private const val stateIsPlaying = "isPlaying"
         private const val statePositionMillis = "positionMillis"
         private const val stateDurationMillis = "durationMillis"
+        private const val stateArtworkPath = "artworkPath"
+        private const val maximumArtworkEdgePixels = 192
         private const val actionPrevious =
             "dev.aethertune.aethertune.widget.PREVIOUS"
         private const val actionPlayPause =
             "dev.aethertune.aethertune.widget.PLAY_PAUSE"
         private const val actionNext = "dev.aethertune.aethertune.widget.NEXT"
+        private var cachedArtworkPath: String? = null
+        private var cachedArtwork: Bitmap? = null
 
         fun updatePlaybackWidgets(
             context: Context,
@@ -236,6 +252,7 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
             isPlaying: Boolean,
             positionMillis: Long,
             durationMillis: Long,
+            artworkPath: String?,
         ) {
             context.getSharedPreferences(statePreferences, Context.MODE_PRIVATE)
                 .edit()
@@ -244,6 +261,7 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
                 .putBoolean(stateIsPlaying, isPlaying)
                 .putLong(statePositionMillis, positionMillis.coerceAtLeast(0L))
                 .putLong(stateDurationMillis, durationMillis.coerceAtLeast(0L))
+                .putString(stateArtworkPath, artworkPath)
                 .apply()
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, AetherTunePlaybackWidget::class.java)
@@ -269,8 +287,15 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
                 .coerceAtLeast(0L)
             val positionMillis = state.getLong(statePositionMillis, 0L)
                 .coerceIn(0L, durationMillis)
+            val artwork = artworkBitmap(state.getString(stateArtworkPath, null))
             views.setTextViewText(R.id.aethertune_widget_title, title)
             views.setTextViewText(R.id.aethertune_widget_artist, artist)
+            if (artwork != null) {
+                views.setViewVisibility(R.id.aethertune_widget_artwork, View.VISIBLE)
+                views.setImageViewBitmap(R.id.aethertune_widget_artwork, artwork)
+            } else {
+                views.setViewVisibility(R.id.aethertune_widget_artwork, View.GONE)
+            }
             views.setImageViewResource(
                 R.id.aethertune_widget_play_pause,
                 if (isPlaying) android.R.drawable.ic_media_pause
@@ -317,6 +342,43 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
                 )
             }
             appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        private fun artworkBitmap(path: String?): Bitmap? {
+            if (path == cachedArtworkPath) {
+                return cachedArtwork
+            }
+            cachedArtworkPath = path
+            cachedArtwork = path?.let(::decodeArtwork)
+            return cachedArtwork
+        }
+
+        private fun decodeArtwork(path: String): Bitmap? {
+            val file = File(path)
+            if (!file.isFile) {
+                return null
+            }
+            val bounds = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(path, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return null
+            }
+            var sampleSize = 1
+            while (
+                bounds.outWidth / sampleSize > maximumArtworkEdgePixels ||
+                    bounds.outHeight / sampleSize > maximumArtworkEdgePixels
+            ) {
+                sampleSize *= 2
+            }
+            return BitmapFactory.decodeFile(
+                path,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                },
+            )
         }
 
         private fun actionIntent(
@@ -390,6 +452,7 @@ class MainActivity : AudioServiceActivity() {
                 call.argument<Boolean>("isPlaying") ?: false,
                 call.argument<Number>("positionMillis")?.toLong() ?: 0L,
                 call.argument<Number>("durationMillis")?.toLong() ?: 0L,
+                call.argument<String>("artworkPath"),
             )
             result.success(null)
         }
