@@ -26,8 +26,13 @@ void main() {
 
     expect(
       _componentNames(document, 'activity'),
-      contains('com.ryanheise.audioservice.AudioServiceActivity'),
+      contains('dev.aethertune.aethertune.MainActivity'),
     );
+    final activity = File(
+      'android/app/src/main/kotlin/dev/aethertune/aethertune/MainActivity.kt',
+    ).readAsStringSync();
+    expect(activity, contains('class MainActivity : AudioServiceActivity()'));
+    expect(activity, contains('dev.aethertune/playback_widget'));
     expect(
       _componentNames(document, 'service'),
       contains('com.ryanheise.audioservice.AudioService'),
