@@ -112,13 +112,22 @@ void main() {
       <Track>[_track('one'), _track('two')],
       initialIndex: 1,
     );
-    expect(widget.updates.last, _WidgetUpdate('Track two', 'Artist two', false));
+    expect(
+      widget.updates.last,
+      const _WidgetUpdate('Track two', 'Artist two', false),
+    );
 
     delegate.emitPlaying(true);
-    expect(widget.updates.last, _WidgetUpdate('Track two', 'Artist two', true));
+    expect(
+      widget.updates.last,
+      const _WidgetUpdate('Track two', 'Artist two', true),
+    );
 
     await engine.seek(Duration.zero, index: 0);
-    expect(widget.updates.last, _WidgetUpdate('Track one', 'Artist one', true));
+    expect(
+      widget.updates.last,
+      const _WidgetUpdate('Track one', 'Artist one', true),
+    );
   });
 
   test('routes system transport, repeat, and shuffle commands', () async {
