@@ -20,6 +20,9 @@ jobs:
         with:
           channel: stable
 
+      - name: Verify generated platform wrappers
+        run: python3 scripts/test_configure_audio_service_platforms.py
+
       - name: Generate platform wrappers
         run: bash ./scripts/bootstrap_client.sh
 

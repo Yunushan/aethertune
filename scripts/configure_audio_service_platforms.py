@@ -23,9 +23,170 @@ ANDROID_PERMISSIONS = (
 ACTIVITY_NAME = "com.ryanheise.audioservice.AudioServiceActivity"
 SERVICE_NAME = "com.ryanheise.audioservice.AudioService"
 RECEIVER_NAME = "com.ryanheise.audioservice.MediaButtonReceiver"
+WIDGET_PROVIDER_NAME = "dev.aethertune.aethertune.AetherTunePlaybackWidget"
 IOS_DEPLOYMENT_TARGET = "14.0"
 ANDROID_MIN_SDK = 23
 KEYCHAIN_ACCESS_GROUPS = "keychain-access-groups"
+
+_WIDGET_INFO_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<appwidget-provider xmlns:android=\"http://schemas.android.com/apk/res/android\"
+    android:initialLayout=\"@layout/aethertune_playback_widget\"
+    android:minWidth=\"180dp\"
+    android:minHeight=\"72dp\"
+    android:resizeMode=\"horizontal\"
+    android:updatePeriodMillis=\"0\"
+    android:widgetCategory=\"home_screen\" />
+"""
+
+_WIDGET_LAYOUT_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<LinearLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"
+    android:id=\"@+id/aethertune_playback_widget\"
+    android:layout_width=\"match_parent\"
+    android:layout_height=\"match_parent\"
+    android:background=\"@android:drawable/dialog_holo_dark_frame\"
+    android:gravity=\"center_vertical\"
+    android:orientation=\"horizontal\"
+    android:padding=\"8dp\">
+
+    <TextView
+        android:id=\"@+id/aethertune_widget_title\"
+        android:layout_width=\"0dp\"
+        android:layout_height=\"wrap_content\"
+        android:layout_weight=\"1\"
+        android:ellipsize=\"end\"
+        android:maxLines=\"1\"
+        android:text=\"AetherTune\"
+        android:textColor=\"@android:color/white\"
+        android:textSize=\"16sp\" />
+
+    <ImageButton
+        android:id=\"@+id/aethertune_widget_previous\"
+        android:layout_width=\"48dp\"
+        android:layout_height=\"48dp\"
+        android:background=\"@android:color/transparent\"
+        android:contentDescription=\"Previous track\"
+        android:src=\"@android:drawable/ic_media_previous\" />
+
+    <ImageButton
+        android:id=\"@+id/aethertune_widget_play_pause\"
+        android:layout_width=\"48dp\"
+        android:layout_height=\"48dp\"
+        android:background=\"@android:color/transparent\"
+        android:contentDescription=\"Play or pause\"
+        android:src=\"@android:drawable/ic_media_play\" />
+
+    <ImageButton
+        android:id=\"@+id/aethertune_widget_next\"
+        android:layout_width=\"48dp\"
+        android:layout_height=\"48dp\"
+        android:background=\"@android:color/transparent\"
+        android:contentDescription=\"Next track\"
+        android:src=\"@android:drawable/ic_media_next\" />
+</LinearLayout>
+"""
+
+_WIDGET_KOTLIN = """package dev.aethertune.aethertune
+
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.Context
+import android.content.Intent
+import android.view.KeyEvent
+import android.widget.RemoteViews
+
+class AetherTunePlaybackWidget : AppWidgetProvider() {
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        appWidgetIds.forEach { appWidgetId ->
+            updateWidget(context, appWidgetManager, appWidgetId)
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            actionPrevious -> sendMediaButton(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            actionPlayPause -> sendMediaButton(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            actionNext -> sendMediaButton(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+        }
+        super.onReceive(context, intent)
+    }
+
+    companion object {
+        private const val actionPrevious =
+            "dev.aethertune.aethertune.widget.PREVIOUS"
+        private const val actionPlayPause =
+            "dev.aethertune.aethertune.widget.PLAY_PAUSE"
+        private const val actionNext = "dev.aethertune.aethertune.widget.NEXT"
+
+        private fun updateWidget(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+        ) {
+            val views = RemoteViews(context.packageName, R.layout.aethertune_playback_widget)
+            views.setOnClickPendingIntent(
+                R.id.aethertune_widget_previous,
+                actionIntent(context, actionPrevious, 1),
+            )
+            views.setOnClickPendingIntent(
+                R.id.aethertune_widget_play_pause,
+                actionIntent(context, actionPlayPause, 2),
+            )
+            views.setOnClickPendingIntent(
+                R.id.aethertune_widget_next,
+                actionIntent(context, actionNext, 3),
+            )
+            context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+                views.setOnClickPendingIntent(
+                    R.id.aethertune_widget_title,
+                    PendingIntent.getActivity(
+                        context,
+                        4,
+                        it,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
+            }
+            appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        private fun actionIntent(
+            context: Context,
+            action: String,
+            requestCode: Int,
+        ): PendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            Intent(context, AetherTunePlaybackWidget::class.java).setAction(action),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        private fun sendMediaButton(context: Context, keyCode: Int) {
+            val receiverIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
+                .setClassName(
+                    context.packageName,
+                    "com.ryanheise.audioservice.MediaButtonReceiver",
+                )
+            context.sendBroadcast(
+                receiverIntent.putExtra(
+                    Intent.EXTRA_KEY_EVENT,
+                    KeyEvent(KeyEvent.ACTION_DOWN, keyCode),
+                ),
+            )
+            context.sendBroadcast(
+                receiverIntent.putExtra(
+                    Intent.EXTRA_KEY_EVENT,
+                    KeyEvent(KeyEvent.ACTION_UP, keyCode),
+                ),
+            )
+        }
+    }
+}
+"""
 
 
 def _find_named(
@@ -45,6 +206,28 @@ def _ensure_action(parent: ET.Element, action_name: str) -> None:
         if action.get(f"{ANDROID}name") == action_name:
             return
     ET.SubElement(intent_filter, "action", {f"{ANDROID}name": action_name})
+
+
+def _widget_paths(manifest_path: Path) -> tuple[Path, Path, Path]:
+    app_dir = manifest_path.parents[2]
+    resources = app_dir / "src/main/res"
+    return (
+        resources / "xml/aethertune_playback_widget_info.xml",
+        resources / "layout/aethertune_playback_widget.xml",
+        app_dir
+        / "src/main/kotlin/dev/aethertune/aethertune/AetherTunePlaybackWidget.kt",
+    )
+
+
+def _write_android_playback_widget(manifest_path: Path) -> None:
+    widget_info, widget_layout, widget_source = _widget_paths(manifest_path)
+    for path, content in (
+        (widget_info, _WIDGET_INFO_XML),
+        (widget_layout, _WIDGET_LAYOUT_XML),
+        (widget_source, _WIDGET_KOTLIN),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
 
 
 def configure_android(manifest_path: Path, gradle_path: Path) -> None:
@@ -98,6 +281,27 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
         }
     )
     _ensure_action(receiver, "android.intent.action.MEDIA_BUTTON")
+
+    widget = _find_named(application, "receiver", WIDGET_PROVIDER_NAME)
+    if widget is None:
+        widget = ET.SubElement(application, "receiver")
+    widget.attrib.update(
+        {
+            f"{ANDROID}name": WIDGET_PROVIDER_NAME,
+            f"{ANDROID}exported": "true",
+        }
+    )
+    _ensure_action(widget, "android.appwidget.action.APPWIDGET_UPDATE")
+    widget_metadata = widget.find("meta-data")
+    if widget_metadata is None:
+        widget_metadata = ET.SubElement(widget, "meta-data")
+    widget_metadata.attrib.update(
+        {
+            f"{ANDROID}name": "android.appwidget.provider",
+            f"{ANDROID}resource": "@xml/aethertune_playback_widget_info",
+        }
+    )
+    _write_android_playback_widget(manifest_path)
 
     ET.indent(tree, space="    ")
     tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
@@ -227,6 +431,42 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         raise RuntimeError("Android audio_service service is missing")
     if _find_named(application, "receiver", RECEIVER_NAME) is None:
         raise RuntimeError("Android media-button receiver is missing")
+    widget = _find_named(application, "receiver", WIDGET_PROVIDER_NAME)
+    if widget is None:
+        raise RuntimeError("Android playback widget receiver is missing")
+    if widget.get(f"{ANDROID}exported") != "true":
+        raise RuntimeError("Android playback widget receiver is not exported")
+    metadata = widget.find("meta-data")
+    if (
+        metadata is None
+        or metadata.get(f"{ANDROID}name") != "android.appwidget.provider"
+        or metadata.get(f"{ANDROID}resource")
+        != "@xml/aethertune_playback_widget_info"
+    ):
+        raise RuntimeError("Android playback widget metadata is missing")
+    widget_info, widget_layout, widget_source = _widget_paths(manifest_path)
+    if not all(path.is_file() for path in (widget_info, widget_layout, widget_source)):
+        raise RuntimeError("Android playback widget resources are missing")
+    widget_info_root = ET.parse(widget_info).getroot()
+    if widget_info_root.get(f"{ANDROID}initialLayout") != "@layout/aethertune_playback_widget":
+        raise RuntimeError("Android playback widget layout is not configured")
+    layout = widget_layout.read_text(encoding="utf-8")
+    required_layout_ids = (
+        "aethertune_widget_previous",
+        "aethertune_widget_play_pause",
+        "aethertune_widget_next",
+    )
+    if not all(identifier in layout for identifier in required_layout_ids):
+        raise RuntimeError("Android playback widget controls are missing")
+    source = widget_source.read_text(encoding="utf-8")
+    required_source_snippets = (
+        "KEYCODE_MEDIA_PREVIOUS",
+        "KEYCODE_MEDIA_PLAY_PAUSE",
+        "KEYCODE_MEDIA_NEXT",
+        "MediaButtonReceiver",
+    )
+    if not all(snippet in source for snippet in required_source_snippets):
+        raise RuntimeError("Android playback widget media actions are missing")
     gradle = gradle_path.read_text(encoding="utf-8")
     if not re.search(
         rf"(?:minSdk\s*=|minSdkVersion)\s*{ANDROID_MIN_SDK}\b", gradle
