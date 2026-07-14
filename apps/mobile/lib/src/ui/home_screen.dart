@@ -11477,6 +11477,35 @@ class _SettingsTab extends StatelessWidget {
           ),
           trailing: Text(PlayerController.formatVolume(player.volume)),
         ),
+        if (player.supportsCrossfade)
+          ListTile(
+            leading: const Icon(Icons.swap_calls_outlined),
+            title: const Text('Crossfade'),
+            subtitle: const Text(
+              'Blends consecutive tracks when shuffle is off and duration is known.',
+            ),
+            trailing: DropdownButton<Duration>(
+              value: player.crossfadeDuration,
+              items: <DropdownMenuItem<Duration>>[
+                for (final duration in PlayerController.supportedCrossfadeDurations)
+                  DropdownMenuItem<Duration>(
+                    value: duration,
+                    child: Text(
+                      duration == Duration.zero
+                          ? 'Off'
+                          : '${duration.inSeconds}s',
+                    ),
+                  ),
+              ],
+              onChanged: player.isSleepFadeActive
+                  ? null
+                  : (duration) {
+                      if (duration != null) {
+                        unawaited(player.setCrossfadeDuration(duration));
+                      }
+                    },
+            ),
+          ),
         SwitchListTile(
           secondary: const Icon(Icons.graphic_eq_outlined),
           title: const Text('Loudness normalization'),

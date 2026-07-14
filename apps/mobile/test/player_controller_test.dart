@@ -58,6 +58,40 @@ void main() {
     await expectLater(restoredController.setVolume(1.1), throwsArgumentError);
   });
 
+  test('persists supported crossfade durations for capable engines', () async {
+    final firstEngine = _FakePlaybackAudioEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+
+    await firstController.setCrossfadeDuration(const Duration(seconds: 3));
+
+    expect(firstController.supportsCrossfade, isTrue);
+    expect(firstController.crossfadeDuration, const Duration(seconds: 3));
+    await expectLater(
+      firstController.setCrossfadeDuration(const Duration(seconds: 4)),
+      throwsArgumentError,
+    );
+    firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.crossfadeDuration, const Duration(seconds: 3));
+  });
+
+  test('rejects crossfade when the audio backend does not support it',
+      () async {
+    final controller = PlayerController(audioEngine: _NoCrossfadeAudioEngine());
+    addTearDown(controller.dispose);
+
+    expect(controller.supportsCrossfade, isFalse);
+    await expectLater(
+      controller.setCrossfadeDuration(const Duration(seconds: 3)),
+      throwsA(isA<UnsupportedError>()),
+    );
+  });
+
   test('applies persisted ReplayGain normalization for queue transitions',
       () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -504,7 +538,7 @@ Track _track(
   );
 }
 
-class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
+class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
   final _durationController =
       StreamController<Duration?>.broadcast(sync: true);
@@ -522,6 +556,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   LoopMode loopModeValue = LoopMode.off;
   double volumeValue = 1;
   double speedValue = 1;
+  Duration crossfadeDurationValue = Duration.zero;
   int currentIndex = 0;
   int setQueueCalls = 0;
   int seekToNextCalls = 0;
@@ -570,6 +605,12 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   bool get hasPrevious => currentIndex > 0;
+
+  @override
+  bool get supportsCrossfade => true;
+
+  @override
+  Duration get crossfadeDuration => crossfadeDurationValue;
 
   @override
   Future<void> setQueue(
@@ -663,6 +704,11 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   }
 
   @override
+  Future<void> setCrossfadeDuration(Duration duration) async {
+    crossfadeDurationValue = duration;
+  }
+
+  @override
   Future<void> dispose() async {
     await _stateController.close();
     await _durationController.close();
@@ -670,4 +716,9 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     await _processingController.close();
     await _indexController.close();
   }
+}
+
+class _NoCrossfadeAudioEngine extends _FakePlaybackAudioEngine {
+  @override
+  bool get supportsCrossfade => false;
 }

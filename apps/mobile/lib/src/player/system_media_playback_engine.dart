@@ -9,7 +9,7 @@ import 'playback_audio_engine.dart';
 /// Adds operating-system media controls around the app's playback engine.
 class SystemMediaPlaybackEngine extends BaseAudioHandler
     with SeekHandler
-    implements PlaybackAudioEngine {
+    implements CrossfadePlaybackAudioEngine {
   SystemMediaPlaybackEngine(this._engine) {
     _stateSubscription = _engine.stateChanges.listen((_) => _publishState());
     _processingSubscription = _engine.processingStateStream.listen((state) {
@@ -81,6 +81,16 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   bool get hasPrevious => _engine.hasPrevious;
+
+  @override
+  bool get supportsCrossfade =>
+      _engine is CrossfadePlaybackAudioEngine &&
+      (_engine as CrossfadePlaybackAudioEngine).supportsCrossfade;
+
+  @override
+  Duration get crossfadeDuration => _engine is CrossfadePlaybackAudioEngine
+      ? (_engine as CrossfadePlaybackAudioEngine).crossfadeDuration
+      : Duration.zero;
 
   @override
   Future<void> setQueue(
@@ -193,6 +203,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   Future<void> setVolume(double volume) => _engine.setVolume(volume);
+
+  @override
+  Future<void> setCrossfadeDuration(Duration duration) {
+    final engine = _engine;
+    if (engine is! CrossfadePlaybackAudioEngine || !engine.supportsCrossfade) {
+      throw UnsupportedError('Crossfade is unavailable for this audio backend.');
+    }
+    return engine.setCrossfadeDuration(duration);
+  }
 
   @override
   Future<void> dispose() async {

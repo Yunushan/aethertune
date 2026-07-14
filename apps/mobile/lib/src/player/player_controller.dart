@@ -27,6 +27,14 @@ class PlayerController extends ChangeNotifier {
     Duration(seconds: 45),
     Duration(seconds: 60),
   ];
+  static const supportedCrossfadeDurations = <Duration>[
+    Duration.zero,
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 3),
+    Duration(seconds: 5),
+    Duration(seconds: 8),
+  ];
 
   PlayerController({
     PlaybackAudioEngine? audioEngine,
@@ -95,6 +103,12 @@ class PlayerController extends ChangeNotifier {
   double get volume => _volume;
   bool get loudnessNormalizationEnabled => _loudnessNormalizationEnabled;
   ReplayGainMode get replayGainMode => _replayGainMode;
+  bool get supportsCrossfade =>
+      _audio is CrossfadePlaybackAudioEngine &&
+      (_audio as CrossfadePlaybackAudioEngine).supportsCrossfade;
+  Duration get crossfadeDuration => _audio is CrossfadePlaybackAudioEngine
+      ? (_audio as CrossfadePlaybackAudioEngine).crossfadeDuration
+      : Duration.zero;
   Duration get duration => _duration;
   Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
@@ -192,6 +206,13 @@ class PlayerController extends ChangeNotifier {
         _loudnessNormalizationEnabled =
             settings['loudnessNormalizationEnabled'] as bool? ?? false;
         _replayGainMode = _replayGainModeFromJson(settings['replayGainMode']);
+        final crossfadeDuration = _crossfadeDurationFromJson(
+          settings['crossfadeMilliseconds'],
+        );
+        if (supportsCrossfade) {
+          await (_audio as CrossfadePlaybackAudioEngine)
+              .setCrossfadeDuration(crossfadeDuration);
+        }
         await _applyOutputVolume();
       } catch (_) {
         await prefs.remove(_playbackSettingsKey);
@@ -557,6 +578,24 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setCrossfadeDuration(Duration duration) async {
+    if (!supportedCrossfadeDurations.contains(duration)) {
+      throw ArgumentError.value(
+        duration,
+        'duration',
+        'Crossfade duration is not supported.',
+      );
+    }
+    if (!supportsCrossfade) {
+      throw UnsupportedError('Crossfade is unavailable for this audio backend.');
+    }
+    await (_audio as CrossfadePlaybackAudioEngine).setCrossfadeDuration(
+      duration,
+    );
+    await _savePlaybackSettings();
+    notifyListeners();
+  }
+
   static String formatVolume(double volume) {
     final percent = (volume.clamp(minVolume, maxVolume) * 100).round();
     return '$percent%';
@@ -867,6 +906,7 @@ class PlayerController extends ChangeNotifier {
           'volume': _volume,
           'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
           'replayGainMode': _replayGainMode.name,
+          'crossfadeMilliseconds': crossfadeDuration.inMilliseconds,
         },
       ),
     );
@@ -967,6 +1007,16 @@ class PlayerController extends ChangeNotifier {
       'album' => ReplayGainMode.album,
       _ => ReplayGainMode.track,
     };
+  }
+
+  Duration _crossfadeDurationFromJson(Object? value) {
+    if (value is num) {
+      final duration = Duration(milliseconds: value.round());
+      if (supportedCrossfadeDurations.contains(duration)) {
+        return duration;
+      }
+    }
+    return Duration.zero;
   }
 
   void _validateVolume(double volume) {

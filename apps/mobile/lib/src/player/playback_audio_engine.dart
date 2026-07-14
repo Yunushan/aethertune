@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
@@ -38,11 +40,42 @@ abstract interface class PlaybackAudioEngine {
   Future<void> dispose();
 }
 
-class JustAudioPlaybackEngine implements PlaybackAudioEngine {
+abstract interface class CrossfadePlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  bool get supportsCrossfade;
+  Duration get crossfadeDuration;
+
+  Future<void> setCrossfadeDuration(Duration duration);
+}
+
+class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
   JustAudioPlaybackEngine({AudioPlayer? player})
-      : _player = player ?? AudioPlayer();
+      : _player = player ?? AudioPlayer(),
+        _crossfadePlayer = AudioPlayer() {
+    _durationSubscription = _player.durationStream.listen(
+      (_) => _scheduleCrossfade(),
+    );
+    _indexSubscription = _player.currentIndexStream.listen(
+      (_) => _scheduleCrossfade(),
+    );
+    _stateSubscription = _player.playerStateStream.listen((_) {
+      _scheduleCrossfade();
+    });
+  }
 
   final AudioPlayer _player;
+  final AudioPlayer _crossfadePlayer;
+  final List<Track> _queue = <Track>[];
+  StreamSubscription<Duration?>? _durationSubscription;
+  StreamSubscription<int?>? _indexSubscription;
+  StreamSubscription<PlayerState>? _stateSubscription;
+  Timer? _crossfadeStartTimer;
+  Timer? _crossfadeStepTimer;
+  Duration _crossfadeDuration = Duration.zero;
+  double _requestedVolume = 1;
+  bool _crossfadeActive = false;
+
+  static const _crossfadeStepInterval = Duration(milliseconds: 50);
 
   @override
   Stream<Object?> get stateChanges => _player.playerStateStream;
@@ -88,6 +121,12 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
   bool get hasPrevious => _player.hasPrevious;
 
   @override
+  bool get supportsCrossfade => true;
+
+  @override
+  Duration get crossfadeDuration => _crossfadeDuration;
+
+  @override
   Future<void> setQueue(
     List<Track> tracks, {
     required int initialIndex,
@@ -100,6 +139,11 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
       throw RangeError.index(initialIndex, tracks, 'initialIndex');
     }
 
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    _queue
+      ..clear()
+      ..addAll(tracks);
     final playlist = ConcatenatingAudioSource(
       useLazyPreparation: true,
       children: tracks.map(_audioSourceForTrack).toList(growable: false),
@@ -109,6 +153,7 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
       initialIndex: initialIndex,
       initialPosition: initialPosition,
     );
+    _scheduleCrossfade();
   }
 
   AudioSource _audioSourceForTrack(Track track) {
@@ -122,39 +167,213 @@ class JustAudioPlaybackEngine implements PlaybackAudioEngine {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() {
+    unawaited(_player.play());
+    _scheduleCrossfade();
+    return Future<void>.value();
+  }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.pause();
+  }
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() async {
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.stop();
+  }
 
   @override
-  Future<void> seek(Duration position, {int? index}) =>
-      _player.seek(position, index: index);
+  Future<void> seek(Duration position, {int? index}) async {
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.seek(position, index: index);
+    _scheduleCrossfade();
+  }
 
   @override
-  Future<void> seekToNext() => _player.seekToNext();
+  Future<void> seekToNext() async {
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.seekToNext();
+    _scheduleCrossfade();
+  }
 
   @override
-  Future<void> seekToPrevious() => _player.seekToPrevious();
+  Future<void> seekToPrevious() async {
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.seekToPrevious();
+    _scheduleCrossfade();
+  }
 
   @override
-  Future<void> setShuffleModeEnabled(bool enabled) =>
-      _player.setShuffleModeEnabled(enabled);
+  Future<void> setShuffleModeEnabled(bool enabled) async {
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.setShuffleModeEnabled(enabled);
+  }
 
   @override
-  Future<void> setLoopMode(LoopMode mode) => _player.setLoopMode(mode);
+  Future<void> setLoopMode(LoopMode mode) async {
+    await _player.setLoopMode(mode);
+    _scheduleCrossfade();
+  }
 
   @override
-  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+  Future<void> setSpeed(double speed) async {
+    await _player.setSpeed(speed);
+    await _crossfadePlayer.setSpeed(speed);
+    _scheduleCrossfade();
+  }
 
   @override
-  Future<void> setVolume(double volume) => _player.setVolume(volume);
+  Future<void> setVolume(double volume) async {
+    _requestedVolume = volume;
+    if (_crossfadeActive) {
+      return;
+    }
+    await _player.setVolume(volume);
+    await _crossfadePlayer.setVolume(volume);
+  }
+
+  @override
+  Future<void> setCrossfadeDuration(Duration duration) async {
+    if (duration < Duration.zero) {
+      throw ArgumentError.value(duration, 'duration', 'Must not be negative.');
+    }
+    _crossfadeDuration = duration;
+    _cancelCrossfade();
+    await _crossfadePlayer.stop();
+    await _player.setVolume(_requestedVolume);
+    _scheduleCrossfade();
+  }
 
   @override
   Future<void> dispose() async {
+    _cancelCrossfade();
+    await _durationSubscription?.cancel();
+    await _indexSubscription?.cancel();
+    await _stateSubscription?.cancel();
+    await _crossfadePlayer.dispose();
     await _player.dispose();
+  }
+
+  void _scheduleCrossfade() {
+    _crossfadeStartTimer?.cancel();
+    _crossfadeStartTimer = null;
+    if (_crossfadeActive ||
+        _crossfadeDuration <= Duration.zero ||
+        !_player.playing ||
+        _player.shuffleModeEnabled ||
+        _player.loopMode == LoopMode.one) {
+      return;
+    }
+
+    final currentIndex = _player.currentIndex;
+    final duration = _player.duration;
+    if (currentIndex == null || duration == null || duration <= Duration.zero) {
+      return;
+    }
+    final nextIndex = _nextIndex(currentIndex);
+    if (nextIndex == null) {
+      return;
+    }
+
+    final fadeAudioDuration = Duration(
+      microseconds: (_crossfadeDuration.inMicroseconds * _player.speed).round(),
+    );
+    final remainingAudio = duration - _player.position;
+    if (remainingAudio <= fadeAudioDuration) {
+      return;
+    }
+    final delay = Duration(
+      microseconds:
+          ((remainingAudio - fadeAudioDuration).inMicroseconds / _player.speed)
+              .round(),
+    );
+    _crossfadeStartTimer = Timer(delay, () {
+      unawaited(_beginCrossfade(currentIndex, nextIndex));
+    });
+  }
+
+  int? _nextIndex(int currentIndex) {
+    if (currentIndex + 1 < _queue.length) {
+      return currentIndex + 1;
+    }
+    if (_player.loopMode == LoopMode.all && _queue.isNotEmpty) {
+      return 0;
+    }
+    return null;
+  }
+
+  Future<void> _beginCrossfade(int expectedIndex, int nextIndex) async {
+    _crossfadeStartTimer = null;
+    if (_crossfadeActive ||
+        !_player.playing ||
+        _player.currentIndex != expectedIndex ||
+        nextIndex < 0 ||
+        nextIndex >= _queue.length) {
+      return;
+    }
+
+    _crossfadeActive = true;
+    final startedAt = DateTime.now();
+    try {
+      await _crossfadePlayer.stop();
+      await _crossfadePlayer.setAudioSource(_audioSourceForTrack(_queue[nextIndex]));
+      await _crossfadePlayer.setSpeed(_player.speed);
+      await _crossfadePlayer.setVolume(0);
+      unawaited(_crossfadePlayer.play());
+
+      _crossfadeStepTimer = Timer.periodic(_crossfadeStepInterval, (timer) {
+        final ratio = (DateTime.now().difference(startedAt).inMicroseconds /
+                _crossfadeDuration.inMicroseconds)
+            .clamp(0, 1)
+            .toDouble();
+        unawaited(_player.setVolume(_requestedVolume * (1 - ratio)));
+        unawaited(_crossfadePlayer.setVolume(_requestedVolume * ratio));
+        if (ratio >= 1) {
+          timer.cancel();
+          _crossfadeStepTimer = null;
+          unawaited(_completeCrossfade(nextIndex));
+        }
+      });
+    } on Object {
+      _cancelCrossfade();
+      await _crossfadePlayer.stop();
+      await _player.setVolume(_requestedVolume);
+      _scheduleCrossfade();
+    }
+  }
+
+  Future<void> _completeCrossfade(int nextIndex) async {
+    final position = Duration(
+      microseconds: (_crossfadeDuration.inMicroseconds * _player.speed).round(),
+    );
+    _crossfadeActive = false;
+    try {
+      await _player.seek(position, index: nextIndex);
+      await _player.setVolume(_requestedVolume);
+      if (!_player.playing) {
+        unawaited(_player.play());
+      }
+    } finally {
+      await _crossfadePlayer.stop();
+      await _crossfadePlayer.setVolume(_requestedVolume);
+      _scheduleCrossfade();
+    }
+  }
+
+  void _cancelCrossfade() {
+    _crossfadeStartTimer?.cancel();
+    _crossfadeStartTimer = null;
+    _crossfadeStepTimer?.cancel();
+    _crossfadeStepTimer = null;
+    _crossfadeActive = false;
   }
 }
