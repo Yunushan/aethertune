@@ -16,6 +16,7 @@ import 'home_screen.dart';
 import 'onboarding_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
+import 'widgets/desktop_global_hotkeys.dart';
 import 'widgets/offline_cache_foreground_worker.dart';
 
 class AetherTuneApp extends StatefulWidget {
@@ -75,63 +76,70 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             builder: (lightDynamic, darkDynamic) =>
                 Consumer2<LibraryStore, PlayerController>(
               builder: (context, library, player, _) {
-                return MaterialApp(
-                  locale: localeForLanguagePreference(
-                    library.languagePreference,
-                  ),
-                  onGenerateTitle: (context) =>
-                      AppLocalizations.of(context)!.appTitle,
-                  debugShowCheckedModeBanner: false,
-                  localizationsDelegates:
-                      AppLocalizations.localizationsDelegates,
-                  supportedLocales: AppLocalizations.supportedLocales,
-                  themeMode: _themeModeForPreference(library.themePreference),
-                  theme: _lightTheme(
-                    library.accentColor,
-                    dynamicColorScheme: lightDynamic,
-                  ),
-                  darkTheme: _darkThemeForPreference(
-                    library.themePreference,
-                    library.accentColor,
-                    dynamicColorScheme: darkDynamic,
-                  ),
-                  home: !library.loaded
-                      ? const _AppLoadingScreen()
-                      : CallbackShortcuts(
-                          bindings: <ShortcutActivator, VoidCallback>{
-                            const SingleActivator(
-                              LogicalKeyboardKey.mediaPlayPause,
-                            ): () => unawaited(player.togglePlayPause()),
-                            const SingleActivator(
-                              LogicalKeyboardKey.mediaTrackNext,
-                            ): () => unawaited(player.next()),
-                            const SingleActivator(
-                              LogicalKeyboardKey.mediaTrackPrevious,
-                            ): () => unawaited(player.previous()),
-                            const SingleActivator(
-                              LogicalKeyboardKey.keyK,
-                              control: true,
-                            ): () => unawaited(player.togglePlayPause()),
-                          },
-                          child: Focus(
-                            autofocus: true,
-                            child: library.onboardingCompleted
-                                ? HomeScreen(
-                                    initialTab: _onboardingDestination,
-                                    onRestartOnboarding: () => unawaited(
-                                      library.setOnboardingCompleted(false),
+                return DesktopGlobalHotkeys(
+                  onTogglePlayPause: player.togglePlayPause,
+                  onPrevious: player.previous,
+                  onNext: player.next,
+                  child: MaterialApp(
+                    locale: localeForLanguagePreference(
+                      library.languagePreference,
+                    ),
+                    onGenerateTitle: (context) =>
+                        AppLocalizations.of(context)!.appTitle,
+                    debugShowCheckedModeBanner: false,
+                    localizationsDelegates:
+                        AppLocalizations.localizationsDelegates,
+                    supportedLocales: AppLocalizations.supportedLocales,
+                    themeMode: _themeModeForPreference(library.themePreference),
+                    theme: _lightTheme(
+                      library.accentColor,
+                      dynamicColorScheme: lightDynamic,
+                    ),
+                    darkTheme: _darkThemeForPreference(
+                      library.themePreference,
+                      library.accentColor,
+                      dynamicColorScheme: darkDynamic,
+                    ),
+                    home: !library.loaded
+                        ? const _AppLoadingScreen()
+                        : CallbackShortcuts(
+                            bindings: <ShortcutActivator, VoidCallback>{
+                              const SingleActivator(
+                                LogicalKeyboardKey.mediaPlayPause,
+                              ): () => unawaited(player.togglePlayPause()),
+                              const SingleActivator(
+                                LogicalKeyboardKey.mediaTrackNext,
+                              ): () => unawaited(player.next()),
+                              const SingleActivator(
+                                LogicalKeyboardKey.mediaTrackPrevious,
+                              ): () => unawaited(player.previous()),
+                              const SingleActivator(
+                                LogicalKeyboardKey.keyK,
+                                control: true,
+                              ): () => unawaited(player.togglePlayPause()),
+                            },
+                            child: Focus(
+                              autofocus: true,
+                              child: library.onboardingCompleted
+                                  ? HomeScreen(
+                                      initialTab: _onboardingDestination,
+                                      onRestartOnboarding: () => unawaited(
+                                        library.setOnboardingCompleted(false),
+                                      ),
+                                    )
+                                  : OnboardingScreen(
+                                      onFinished: (destination) async {
+                                        setState(() {
+                                          _onboardingDestination = destination;
+                                        });
+                                        await library.setOnboardingCompleted(
+                                          true,
+                                        );
+                                      },
                                     ),
-                                  )
-                                : OnboardingScreen(
-                                    onFinished: (destination) async {
-                                      setState(() {
-                                        _onboardingDestination = destination;
-                                      });
-                                      await library.setOnboardingCompleted(true);
-                                    },
-                                  ),
+                            ),
                           ),
-                        ),
+                  ),
                 );
               },
             ),

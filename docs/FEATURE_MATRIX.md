@@ -218,7 +218,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Windows packaging | Roadmap | Desktop players | MSIX/zip installer and signing. |
 | macOS packaging | Roadmap | Desktop players | Notarization, dmg/pkg, signing. |
 | Desktop tray / menu bar | Roadmap | Desktop players | Platform menu/tray plugin. |
-| Global hotkeys | Roadmap | Desktop players | Focused-window transport shortcuts are implemented; OS-level global shortcut registration remains platform-specific work. |
+| Global hotkeys | Scaffolded | Desktop players | Windows, macOS, and Linux register system-wide media play/pause, previous, and next keys through the native hotkey manager. Each key registration is isolated so an OS-reserved media key does not disable the remaining transport keys, and shutdown unregisters only AetherTune's keys. Controller tests cover routing, failure isolation, cleanup, and platform eligibility; physical-host conflict and permissions fixtures remain. |
 | Cast / Chromecast | Roadmap | YouTube Music | Cast integration where legal/provider-supported. |
 | Wear OS / watch controls | Roadmap | YouTube Music | Companion app or media session support. |
 
