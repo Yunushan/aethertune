@@ -280,6 +280,42 @@ void main() {
     expect(result.tracks.single.genre, 'Ambient / Drone');
   });
 
+  test('reads Ogg Vorbis and Opus comment metadata', () async {
+    await File(p.join(root.path, 'vorbis.ogg')).writeAsBytes(
+      _oggWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Ogg Title'],
+          'ARTIST': <String>['Ogg Artist'],
+          'ALBUM': <String>['Ogg Album'],
+          'GENRE': <String>['Shoegaze'],
+        },
+      ),
+    );
+    await File(p.join(root.path, 'spoken.opus')).writeAsBytes(
+      _oggWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Opus Title'],
+          'ARTIST': <String>['Opus Artist'],
+          'ALBUM': <String>['Opus Album'],
+          'GENRE': <String>['Spoken Word'],
+        },
+        opus: true,
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final tracksByTitle = <String, Track>{
+      for (final track in result.tracks) track.title: track,
+    };
+
+    expect(tracksByTitle['Ogg Title']!.artist, 'Ogg Artist');
+    expect(tracksByTitle['Ogg Title']!.album, 'Ogg Album');
+    expect(tracksByTitle['Ogg Title']!.genre, 'Shoegaze');
+    expect(tracksByTitle['Opus Title']!.artist, 'Opus Artist');
+    expect(tracksByTitle['Opus Title']!.album, 'Opus Album');
+    expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');
+  });
+
   test('extracts FLAC picture block artwork', () async {
     await File(p.join(root.path, 'picture.flac')).writeAsBytes(
       _flacWithVorbisComments(
@@ -648,6 +684,48 @@ List<int> _vorbisCommentBlock(Map<String, List<String>> comments) {
       ..._uint32LittleEndianSize(comment.codeUnits.length),
       ...comment.codeUnits,
     ],
+  ];
+}
+
+List<int> _oggWithVorbisComments(
+  Map<String, List<String>> comments, {
+  bool opus = false,
+}) {
+  final commentPacket = _vorbisCommentBlock(comments);
+  final identificationPacket = opus
+      ? <int>[...'OpusHead'.codeUnits, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+      : <int>[1, ...'vorbis'.codeUnits, 0, 0, 0, 0];
+  final commentsPacket = opus
+      ? <int>[...'OpusTags'.codeUnits, ...commentPacket]
+      : <int>[3, ...'vorbis'.codeUnits, ...commentPacket];
+
+  return <int>[
+    ..._oggPage(identificationPacket, serial: 1, sequence: 0, bos: true),
+    ..._oggPage(commentsPacket, serial: 1, sequence: 1),
+  ];
+}
+
+List<int> _oggPage(
+  List<int> packet, {
+  required int serial,
+  required int sequence,
+  bool bos = false,
+}) {
+  if (packet.length > 255) {
+    throw ArgumentError.value(packet.length, 'packet', 'Packet is too large.');
+  }
+
+  return <int>[
+    ...'OggS'.codeUnits,
+    0,
+    bos ? 0x02 : 0,
+    ...List<int>.filled(8, 0),
+    ..._uint32LittleEndianSize(serial),
+    ..._uint32LittleEndianSize(sequence),
+    ...List<int>.filled(4, 0),
+    1,
+    packet.length,
+    ...packet,
   ];
 }
 

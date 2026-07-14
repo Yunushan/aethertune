@@ -322,6 +322,10 @@ final class _LocalFolderScanState {
         return _mp3MetadataForFile(path);
       case '.flac':
         return _flacMetadataForFile(path);
+      case '.ogg':
+      case '.oga':
+      case '.opus':
+        return _oggMetadataForFile(path);
       case '.m4a':
         return _m4aMetadataForFile(path);
       case '.wav':
@@ -417,6 +421,78 @@ final class _LocalFolderScanState {
           }
         }
 
+        if (metadata == null && artworkUri == null) {
+          return null;
+        }
+
+        return _LocalFileMetadata(
+          title: metadata?.title ?? '',
+          artist: metadata?.artist ?? '',
+          album: metadata?.album,
+          genre: metadata?.genre,
+          artworkUri: artworkUri,
+        );
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Future<_LocalFileMetadata?> _oggMetadataForFile(String path) async {
+    try {
+      final file = File(path);
+      final length = await file.length();
+      if (length < 27) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        final bytes = await access.read(
+          length > _maxOggMetadataBytes ? _maxOggMetadataBytes : length,
+        );
+        final packets = _oggPackets(bytes);
+        if (packets.length < 2) {
+          return null;
+        }
+
+        final firstPacket = packets.first;
+        final isVorbis = _startsWithBytes(
+          firstPacket,
+          const <int>[1, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73],
+        );
+        final isOpus = _startsWithAscii(firstPacket, 'OpusHead');
+        if (!isVorbis && !isOpus) {
+          return null;
+        }
+
+        List<int>? commentBytes;
+        for (final packet in packets.skip(1)) {
+          if (isVorbis &&
+              _startsWithBytes(
+                packet,
+                const <int>[3, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73],
+              )) {
+            commentBytes = packet.sublist(7);
+            break;
+          }
+          if (isOpus && _startsWithAscii(packet, 'OpusTags')) {
+            commentBytes = packet.sublist(8);
+            break;
+          }
+        }
+        if (commentBytes == null) {
+          return null;
+        }
+
+        final comments = _vorbisComments(commentBytes);
+        if (comments == null) {
+          return null;
+        }
+        final metadata = _vorbisCommentMetadataFromComments(comments);
+        final artworkUri = _vorbisCommentArtworkUri(comments);
         if (metadata == null && artworkUri == null) {
           return null;
         }
@@ -725,7 +801,15 @@ final class _LocalFolderScanState {
   }
 
   _LocalFileMetadata? _vorbisCommentMetadata(List<int> bytes) {
+    final comments = _vorbisComments(bytes);
+    return comments == null ? null : _vorbisCommentMetadataFromComments(comments);
+  }
+
+  Map<String, List<String>>? _vorbisComments(List<int> bytes) {
     var offset = 0;
+    if (offset + 4 > bytes.length) {
+      return null;
+    }
     final vendorLength = _uint32LittleEndian(bytes, offset);
     offset += 4;
     if (vendorLength < 0 || offset + vendorLength > bytes.length) {
@@ -733,9 +817,12 @@ final class _LocalFolderScanState {
     }
 
     offset += vendorLength;
+    if (offset + 4 > bytes.length) {
+      return null;
+    }
     final commentCount = _uint32LittleEndian(bytes, offset);
     offset += 4;
-    if (commentCount < 0) {
+    if (commentCount < 0 || commentCount > _maxVorbisComments) {
       return null;
     }
 
@@ -773,6 +860,12 @@ final class _LocalFolderScanState {
       comments.putIfAbsent(key, () => <String>[]).add(value);
     }
 
+    return comments;
+  }
+
+  _LocalFileMetadata? _vorbisCommentMetadataFromComments(
+    Map<String, List<String>> comments,
+  ) {
     final title = _firstVorbisComment(comments, 'TITLE') ?? '';
     final artist = _joinedVorbisComment(comments, 'ARTIST') ?? '';
     final album = _firstVorbisComment(comments, 'ALBUM');
@@ -790,6 +883,95 @@ final class _LocalFolderScanState {
       album: album == null || album.isEmpty ? null : album,
       genre: genre == null || genre.isEmpty ? null : genre,
     );
+  }
+
+  Uri? _vorbisCommentArtworkUri(Map<String, List<String>> comments) {
+    final picture = _firstVorbisComment(comments, 'METADATA_BLOCK_PICTURE');
+    if (picture != null && picture.isNotEmpty) {
+      try {
+        final artworkUri = _flacPictureArtworkUri(base64.decode(picture));
+        if (artworkUri != null) {
+          return artworkUri;
+        }
+      } on FormatException {
+        // Try the older COVERART form below.
+      }
+    }
+
+    final coverArt = _firstVorbisComment(comments, 'COVERART');
+    if (coverArt == null || coverArt.isEmpty) {
+      return null;
+    }
+    try {
+      final bytes = base64.decode(coverArt);
+      return _artworkDataUri(
+        bytes,
+        mimeType: _firstVorbisComment(comments, 'COVERARTMIME') ??
+            _inferArtworkMimeType(bytes),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  List<List<int>> _oggPackets(List<int> bytes) {
+    final packets = <List<int>>[];
+    final packet = <int>[];
+    var offset = 0;
+    var pageCount = 0;
+    var isContinuingPacket = false;
+
+    while (offset + 27 <= bytes.length && pageCount < _maxOggPages) {
+      if (!_matchesAscii(bytes.sublist(offset, offset + 4), 'OggS') ||
+          bytes[offset + 4] != 0) {
+        return const <List<int>>[];
+      }
+      pageCount += 1;
+      final segmentCount = bytes[offset + 26];
+      final segmentTableStart = offset + 27;
+      final bodyStart = segmentTableStart + segmentCount;
+      if (bodyStart > bytes.length) {
+        return const <List<int>>[];
+      }
+
+      var bodyLength = 0;
+      for (var index = 0; index < segmentCount; index += 1) {
+        bodyLength += bytes[segmentTableStart + index];
+      }
+      final bodyEnd = bodyStart + bodyLength;
+      if (bodyEnd > bytes.length) {
+        return const <List<int>>[];
+      }
+
+      final pageContinuesPacket = (bytes[offset + 5] & 0x01) != 0;
+      if (pageContinuesPacket != isContinuingPacket) {
+        return const <List<int>>[];
+      }
+
+      var bodyOffset = bodyStart;
+      for (var index = 0; index < segmentCount; index += 1) {
+        final segmentLength = bytes[segmentTableStart + index];
+        packet.addAll(bytes.sublist(bodyOffset, bodyOffset + segmentLength));
+        bodyOffset += segmentLength;
+        if (packet.length > _maxOggPacketBytes) {
+          return const <List<int>>[];
+        }
+        if (segmentLength < 255) {
+          packets.add(List<int>.unmodifiable(packet));
+          packet.clear();
+          isContinuingPacket = false;
+          if (packets.length >= _maxOggPackets) {
+            return packets;
+          }
+        } else {
+          isContinuingPacket = true;
+        }
+      }
+
+      offset = bodyEnd;
+    }
+
+    return packets;
   }
 
   _LocalFileMetadata? _m4aMetadata(List<int> moovPayload) {
@@ -1262,6 +1444,20 @@ final class _LocalFolderScanState {
     return true;
   }
 
+  bool _startsWithAscii(List<int> bytes, String value) {
+    if (bytes.length < value.length) {
+      return false;
+    }
+
+    for (var index = 0; index < value.length; index += 1) {
+      if (bytes[index] != value.codeUnitAt(index)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   String? _firstVorbisComment(
     Map<String, List<String>> comments,
     String key,
@@ -1457,6 +1653,20 @@ final class _LocalFolderScanState {
 
     return true;
   }
+
+  bool _startsWithBytes(List<int> bytes, List<int> expected) {
+    if (bytes.length < expected.length) {
+      return false;
+    }
+
+    for (var index = 0; index < expected.length; index += 1) {
+      if (bytes[index] != expected[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }
 
 String localFileContentHash(List<int> bytes) {
@@ -1493,12 +1703,17 @@ final class _Id3v2TagData {
 
 const _maxId3v2TagBytes = 1024 * 1024;
 const _maxFlacMetadataBytes = 1024 * 1024;
+const _maxOggMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
 const _maxWavChunks = 2048;
+const _maxOggPages = 128;
+const _maxOggPackets = 8;
+const _maxOggPacketBytes = 512 * 1024;
+const _maxVorbisComments = 2048;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
 const _sidecarLyricsExtensionsByPreference = <String>['.lrc', '.txt'];
