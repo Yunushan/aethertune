@@ -4015,9 +4015,10 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           for (final rule in customSmartPlaylists)
             _CustomSmartPlaylistCard(
               rule: rule,
-              trackCount: library.tracksForCustomSmartPlaylist(rule.id).length,
+              tracks: library.tracksForCustomSmartPlaylist(rule.id),
               onOpen: () => _showCustomSmartPlaylist(context, rule.id),
               onEdit: () => _editCustomSmartPlaylist(context, rule),
+              onArtwork: () => _editCustomSmartPlaylistArtwork(context, rule),
               onDelete: () => _deleteCustomSmartPlaylist(context, rule),
             ),
         const SizedBox(height: 16),
@@ -4382,6 +4383,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     final messenger = ScaffoldMessenger.of(context);
 
     await library.deleteCustomSmartPlaylist(rule.id);
+    await _playlistArtworkFileStore.delete(rule.artworkUri);
 
     if (!context.mounted) {
       return;
@@ -4626,6 +4628,143 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     messenger.showSnackBar(
       SnackBar(content: Text('Deleted ${playlist.name}.')),
     );
+  }
+
+  Future<void> _editCustomSmartPlaylistArtwork(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose image file'),
+              subtitle: const Text('Store a private PNG, JPEG, GIF, or WebP image.'),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await _pickCustomSmartPlaylistArtworkFile(context, rule);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link_outlined),
+              title: const Text('Set image URL'),
+              subtitle: const Text('Use an http or https image URL.'),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await _setCustomSmartPlaylistArtworkUrl(context, rule);
+              },
+            ),
+            if (rule.artworkUri != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Remove artwork'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _removeCustomSmartPlaylistArtwork(context, rule);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickCustomSmartPlaylistArtworkFile(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final file = await FilePicker.pickFile(
+      type: FileType.image,
+      dialogTitle: 'Choose smart playlist artwork',
+    );
+    if (!context.mounted || file == null) {
+      return;
+    }
+    try {
+      final artworkUri = await _playlistArtworkFileStore.save(
+        await file.readAsBytes(),
+      );
+      final updated = await context
+          .read<LibraryStore>()
+          .updateCustomSmartPlaylistArtwork(rule.id, artworkUri);
+      if (!context.mounted || updated == null) {
+        return;
+      }
+      await _playlistArtworkFileStore.delete(rule.artworkUri);
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Updated artwork for ${updated.name}.')),
+        );
+      }
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } on Exception catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not save artwork: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _setCustomSmartPlaylistArtworkUrl(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final initialValue = rule.artworkUri != null &&
+            _isNetworkImageUri(rule.artworkUri!)
+        ? rule.artworkUri!.toString()
+        : '';
+    final value = await _promptForPlaylistArtwork(context, initialValue);
+    if (!context.mounted || value == null) {
+      return;
+    }
+    final artworkUri = Uri.tryParse(value.trim());
+    if (artworkUri == null || !_isNetworkImageUri(artworkUri)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter an http or https image URL.')),
+      );
+      return;
+    }
+    final updated = await context
+        .read<LibraryStore>()
+        .updateCustomSmartPlaylistArtwork(rule.id, artworkUri);
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    await _playlistArtworkFileStore.delete(rule.artworkUri);
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Updated artwork for ${updated.name}.')),
+      );
+    }
+  }
+
+  Future<void> _removeCustomSmartPlaylistArtwork(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final updated = await context
+        .read<LibraryStore>()
+        .updateCustomSmartPlaylistArtwork(rule.id, null);
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    await _playlistArtworkFileStore.delete(rule.artworkUri);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Removed artwork for ${updated.name}.')),
+      );
+    }
   }
 
   Future<void> _showPlaylistShareCard(
@@ -6003,34 +6142,72 @@ class _SmartPlaylistCard extends StatelessWidget {
   }
 }
 
+class _CustomSmartPlaylistArtwork extends StatelessWidget {
+  const _CustomSmartPlaylistArtwork({required this.rule, required this.tracks});
+
+  final CustomSmartPlaylist rule;
+  final List<Track> tracks;
+
+  @override
+  Widget build(BuildContext context) {
+    final artworkUri = rule.artworkUri;
+    if (artworkUri != null) {
+      return TrackArtwork(
+        artworkUri: artworkUri,
+        size: 40,
+        borderRadius: 10,
+        fallbackIcon: Icons.filter_alt_outlined,
+      );
+    }
+    if (tracks.isNotEmpty) {
+      final track = tracks.first;
+      return TrackArtwork(
+        artworkUri: track.artworkUri,
+        providerId: track.sourceId,
+        providerArtworkId: track.providerArtworkId,
+        providerArtworkVersion: track.providerArtworkVersion,
+        size: 40,
+        borderRadius: 10,
+        fallbackIcon: Icons.filter_alt_outlined,
+      );
+    }
+    return const Icon(Icons.filter_alt_outlined);
+  }
+}
+
 class _CustomSmartPlaylistCard extends StatelessWidget {
   const _CustomSmartPlaylistCard({
     required this.rule,
-    required this.trackCount,
+    required this.tracks,
     required this.onOpen,
     required this.onEdit,
+    required this.onArtwork,
     required this.onDelete,
   });
 
   final CustomSmartPlaylist rule;
-  final int trackCount;
+  final List<Track> tracks;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
+  final VoidCallback onArtwork;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
-        leading: const Icon(Icons.filter_alt_outlined),
+        leading: _CustomSmartPlaylistArtwork(rule: rule, tracks: tracks),
         title: Text(rule.name),
-        subtitle: Text(_customSmartPlaylistSubtitle(rule, trackCount)),
+        subtitle: Text(_customSmartPlaylistSubtitle(rule, tracks.length)),
         onTap: onOpen,
         trailing: PopupMenuButton<_CustomSmartPlaylistAction>(
           onSelected: (action) {
             switch (action) {
               case _CustomSmartPlaylistAction.edit:
                 onEdit();
+                break;
+              case _CustomSmartPlaylistAction.artwork:
+                onArtwork();
                 break;
               case _CustomSmartPlaylistAction.delete:
                 onDelete();
@@ -6159,6 +6336,13 @@ class _PlaylistCard extends StatelessWidget {
               ),
             ),
             PopupMenuItem(
+              value: _CustomSmartPlaylistAction.artwork,
+              child: ListTile(
+                leading: Icon(Icons.image_outlined),
+                title: Text('Artwork'),
+              ),
+            ),
+            PopupMenuItem(
               value: _PlaylistAction.shareCard,
               child: ListTile(
                 leading: Icon(Icons.image_outlined),
@@ -6251,7 +6435,7 @@ enum _PlaylistAction {
   delete,
 }
 
-enum _CustomSmartPlaylistAction { edit, delete }
+enum _CustomSmartPlaylistAction { edit, artwork, delete }
 
 enum _PlaylistTrackAction { moveUp, moveDown, editMetadata, remove }
 

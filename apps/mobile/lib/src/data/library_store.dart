@@ -423,6 +423,7 @@ class CustomSmartPlaylist {
     this.minimumDaysSinceLastPlayed = 0,
     this.matchMode = CustomSmartPlaylistMatchMode.all,
     this.ruleGroups = const <CustomSmartPlaylistRuleGroup>[],
+    this.artworkUri,
     this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
     this.limit = 50,
     DateTime? createdAt,
@@ -444,6 +445,7 @@ class CustomSmartPlaylist {
   final int minimumDaysSinceLastPlayed;
   final CustomSmartPlaylistMatchMode matchMode;
   final List<CustomSmartPlaylistRuleGroup> ruleGroups;
+  final Uri? artworkUri;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
   final DateTime createdAt;
@@ -464,6 +466,8 @@ class CustomSmartPlaylist {
     int? minimumDaysSinceLastPlayed,
     CustomSmartPlaylistMatchMode? matchMode,
     List<CustomSmartPlaylistRuleGroup>? ruleGroups,
+    Uri? artworkUri,
+    bool clearArtworkUri = false,
     CustomSmartPlaylistSortMode? sortMode,
     int? limit,
     DateTime? createdAt,
@@ -487,6 +491,7 @@ class CustomSmartPlaylist {
           minimumDaysSinceLastPlayed ?? this.minimumDaysSinceLastPlayed,
       matchMode: matchMode ?? this.matchMode,
       ruleGroups: ruleGroups ?? this.ruleGroups,
+      artworkUri: clearArtworkUri ? null : artworkUri ?? this.artworkUri,
       sortMode: sortMode ?? this.sortMode,
       limit: limit ?? this.limit,
       createdAt: createdAt ?? this.createdAt,
@@ -510,6 +515,7 @@ class CustomSmartPlaylist {
       'minimumDaysSinceLastPlayed': minimumDaysSinceLastPlayed,
       'matchMode': matchMode.name,
       'ruleGroups': ruleGroups.map((group) => group.toJson()).toList(),
+      'artworkUri': artworkUri?.toString(),
       'sortMode': sortMode.name,
       'limit': limit,
       'createdAt': createdAt.toIso8601String(),
@@ -536,6 +542,7 @@ class CustomSmartPlaylist {
         json['matchMode'] as String?,
       ),
       ruleGroups: _ruleGroupsFromJson(json['ruleGroups']),
+      artworkUri: _parseArtworkUri(json['artworkUri']),
       sortMode: _customSmartPlaylistSortModeFromName(
         json['sortMode'] as String?,
       ),
@@ -557,6 +564,13 @@ class CustomSmartPlaylist {
         .map(CustomSmartPlaylistRuleGroup.tryFromJson)
         .whereType<CustomSmartPlaylistRuleGroup>()
         .toList(growable: false);
+  }
+
+  static Uri? _parseArtworkUri(Object? raw) {
+    if (raw is! String || raw.trim().isEmpty) {
+      return null;
+    }
+    return Uri.tryParse(raw.trim());
   }
 }
 
@@ -3141,7 +3155,9 @@ class LibraryStore extends ChangeNotifier {
           .map(_portablePlaylistJson)
           .toList(growable: false),
       'customSmartPlaylists':
-          _customSmartPlaylists.map((rule) => rule.toJson()).toList(),
+          _customSmartPlaylists
+              .map(_portableCustomSmartPlaylistJson)
+              .toList(growable: false),
       'savedHistoryViews':
           _savedHistoryViews.map((view) => view.toJson()).toList(),
       'podcastSubscriptions':
@@ -5470,6 +5486,36 @@ class LibraryStore extends ChangeNotifier {
     return json;
   }
 
+  Future<CustomSmartPlaylist?> updateCustomSmartPlaylistArtwork(
+    String id,
+    Uri? artworkUri,
+  ) async {
+    final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
+    if (index == -1) {
+      return null;
+    }
+    if (artworkUri != null &&
+        artworkUri.scheme != 'file' &&
+        artworkUri.scheme != 'http' &&
+        artworkUri.scheme != 'https') {
+      throw ArgumentError.value(
+        artworkUri,
+        'artworkUri',
+        'Artwork must use a file, http, or https URI.',
+      );
+    }
+    final updated = _customSmartPlaylists[index].copyWith(
+      artworkUri: artworkUri,
+      clearArtworkUri: artworkUri == null,
+      updatedAt: _clock(),
+    );
+    _customSmartPlaylists[index] = updated;
+    _sortCustomSmartPlaylists();
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
   Map<String, Object?> _portableTrackArtworkJson(Track track) {
     final json = track.toJson();
     final portableArtwork = _portableSyncUri(
@@ -6824,6 +6870,17 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return values;
+  }
+
+  Map<String, Object?> _portableCustomSmartPlaylistJson(
+    CustomSmartPlaylist playlist,
+  ) {
+    final json = playlist.toJson();
+    json['artworkUri'] = _portableSyncUri(
+      json['artworkUri'] as String?,
+      allowData: false,
+    );
+    return json;
   }
 
   String _followedArtistKey(String artist) => artist.trim().toLowerCase();

@@ -359,6 +359,58 @@ void main() {
     );
   });
 
+  test('persists smart playlist artwork and keeps local files private',
+      () async {
+    var now = DateTime.utc(2026, 7, 14, 5);
+    DateTime clock() => now;
+    final store = LibraryStore(clock: clock);
+    await store.load();
+    final rule = await store.createCustomSmartPlaylist(name: 'Artwork rules');
+    final webArtwork = Uri.parse('https://media.example.test/rules.jpg');
+
+    now = now.add(const Duration(minutes: 1));
+    final updated = await store.updateCustomSmartPlaylistArtwork(
+      rule.id,
+      webArtwork,
+    );
+    expect(updated!.artworkUri, webArtwork);
+    expect(updated.updatedAt, now);
+
+    final persisted = LibraryStore(clock: clock);
+    await persisted.load();
+    expect(persisted.customSmartPlaylists.single.artworkUri, webArtwork);
+
+    final privateArtwork = Uri.file('/private/smart-playlist-artwork.png');
+    await persisted.updateCustomSmartPlaylistArtwork(rule.id, privateArtwork);
+    expect(
+      persisted.customSmartPlaylists.single.artworkUri,
+      privateArtwork,
+    );
+
+    final backup = jsonDecode(persisted.exportBackupJson())
+        as Map<String, dynamic>;
+    final backupRule = (backup['customSmartPlaylists'] as List<dynamic>).single
+        as Map<String, dynamic>;
+    expect(backupRule['artworkUri'], isNull);
+
+    final snapshot = jsonDecode(persisted.exportSyncSnapshotJson())
+        as Map<String, dynamic>;
+    final snapshotRule =
+        (snapshot['customSmartPlaylists'] as List<dynamic>).single
+            as Map<String, dynamic>;
+    expect(snapshotRule['artworkUri'], isNull);
+
+    final cleared = await persisted.updateCustomSmartPlaylistArtwork(
+      rule.id,
+      null,
+    );
+    expect(cleared!.artworkUri, isNull);
+    expect(
+      await persisted.updateCustomSmartPlaylistArtwork('missing', webArtwork),
+      isNull,
+    );
+  });
+
   test('filters custom smart playlists by duration bounds', () async {
     final store = LibraryStore();
     await store.load();
