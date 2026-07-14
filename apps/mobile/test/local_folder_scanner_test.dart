@@ -236,7 +236,7 @@ void main() {
 
     expect(result.tracks.single.title, 'Artwork Title');
     expect(
-      result.tracks.single.artworkUri.toString(),
+      result.tracks.single.artworkUri!.toString(),
       'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
     );
   });
@@ -314,6 +314,37 @@ void main() {
     expect(tracksByTitle['Opus Title']!.artist, 'Opus Artist');
     expect(tracksByTitle['Opus Title']!.album, 'Opus Album');
     expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');
+  });
+
+  test('extracts embedded Ogg Vorbis comment artwork', () async {
+    final artwork = <int>[
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+    ];
+    await File(p.join(root.path, 'cover.ogg')).writeAsBytes(
+      _oggWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Ogg cover'],
+          'METADATA_BLOCK_PICTURE': <String>[
+            base64.encode(_flacPictureBlock(artwork)),
+          ],
+        },
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'Ogg cover');
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      startsWith('data:image/png;base64,'),
+    );
   });
 
   test('extracts FLAC picture block artwork', () async {
