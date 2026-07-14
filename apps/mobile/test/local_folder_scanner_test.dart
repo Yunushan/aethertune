@@ -305,6 +305,60 @@ void main() {
     expect(result.embeddedLyricsByTrackId, isEmpty);
   });
 
+  test('extracts embedded lyrics from FLAC, Ogg, Opus, and M4A metadata',
+      () async {
+    final flacPath = p.join(root.path, 'flac-lyrics.flac');
+    final oggPath = p.join(root.path, 'ogg-lyrics.ogg');
+    final opusPath = p.join(root.path, 'opus-lyrics.opus');
+    final m4aPath = p.join(root.path, 'm4a-lyrics.m4a');
+    await File(flacPath).writeAsBytes(
+      _flacWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['FLAC lyrics'],
+        'LYRICS': <String>['FLAC first\r\nFLAC second'],
+      }),
+    );
+    await File(oggPath).writeAsBytes(
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Ogg lyrics'],
+        'UNSYNCEDLYRICS': <String>['Ogg first\nOgg second'],
+      }),
+    );
+    await File(opusPath).writeAsBytes(
+      _oggWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Opus lyrics'],
+          'LYRICS': <String>['Opus first\nOpus second'],
+        },
+        opus: true,
+      ),
+    );
+    await File(m4aPath).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'M4A lyrics',
+        lyrics: 'M4A first\r\nM4A second',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(flacPath)],
+      'FLAC first\nFLAC second',
+    );
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(oggPath)],
+      'Ogg first\nOgg second',
+    );
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(opusPath)],
+      'Opus first\nOpus second',
+    );
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(m4aPath)],
+      'M4A first\nM4A second',
+    );
+  });
+
   test('reads ReplayGain from ID3v2 user text metadata', () async {
     await File(p.join(root.path, 'loud.mp3')).writeAsBytes(<int>[
       ..._id3v23Tag(
@@ -1000,6 +1054,7 @@ List<int> _m4aWithMetadata({
   String artist = '',
   String album = '',
   String genre = '',
+  String lyrics = '',
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
@@ -1009,6 +1064,7 @@ List<int> _m4aWithMetadata({
     if (artist.isNotEmpty) ..._m4aTextItem(_m4aArtistAtomType, artist),
     if (album.isNotEmpty) ..._m4aTextItem(_m4aAlbumAtomType, album),
     if (genre.isNotEmpty) ..._m4aTextItem(_m4aGenreAtomType, genre),
+    if (lyrics.isNotEmpty) ..._m4aTextItem(_m4aLyricsAtomType, lyrics),
     if (artworkBytes != null) ..._m4aArtworkItem(artworkBytes),
     if (replayGainTrackGain.isNotEmpty)
       ..._m4aReplayGainFreeformItem(replayGainTrackGain),
@@ -1111,6 +1167,7 @@ const _m4aTitleAtomType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _m4aArtistAtomType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _m4aAlbumAtomType = <int>[0xa9, 0x61, 0x6c, 0x62];
 const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
+const _m4aLyricsAtomType = <int>[0xa9, 0x6c, 0x79, 0x72];
 
 const _tinyPngBytes = <int>[
   0x89,

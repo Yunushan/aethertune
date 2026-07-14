@@ -468,6 +468,7 @@ final class _LocalFolderScanState {
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
+          embeddedLyrics: metadata?.embeddedLyrics,
         );
       } finally {
         await access.close();
@@ -530,7 +531,8 @@ final class _LocalFolderScanState {
         }
         final metadata = _vorbisCommentMetadataFromComments(comments);
         final artworkUri = _vorbisCommentArtworkUri(comments);
-        if (metadata == null && artworkUri == null) {
+        final embeddedLyrics = _vorbisCommentLyrics(comments);
+        if (metadata == null && artworkUri == null && embeddedLyrics == null) {
           return null;
         }
 
@@ -542,6 +544,7 @@ final class _LocalFolderScanState {
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
+          embeddedLyrics: embeddedLyrics,
         );
       } finally {
         await access.close();
@@ -905,7 +908,23 @@ final class _LocalFolderScanState {
 
   _LocalFileMetadata? _vorbisCommentMetadata(List<int> bytes) {
     final comments = _vorbisComments(bytes);
-    return comments == null ? null : _vorbisCommentMetadataFromComments(comments);
+    if (comments == null) {
+      return null;
+    }
+    final metadata = _vorbisCommentMetadataFromComments(comments);
+    final embeddedLyrics = _vorbisCommentLyrics(comments);
+    if (metadata == null && embeddedLyrics == null) {
+      return null;
+    }
+    return _LocalFileMetadata(
+      title: metadata?.title ?? '',
+      artist: metadata?.artist ?? '',
+      album: metadata?.album,
+      genre: metadata?.genre,
+      replayGainTrackDb: metadata?.replayGainTrackDb,
+      replayGainAlbumDb: metadata?.replayGainAlbumDb,
+      embeddedLyrics: embeddedLyrics,
+    );
   }
 
   Map<String, List<String>>? _vorbisComments(List<int> bytes) {
@@ -953,10 +972,10 @@ final class _LocalFolderScanState {
       }
 
       final key = rawComment.substring(0, separatorIndex).toUpperCase();
-      final value = _normalizeEmbeddedText(
-        rawComment.substring(separatorIndex + 1),
-      );
-      if (value.isEmpty) {
+      final value = _isVorbisLyricsKey(key)
+          ? _normalizeEmbeddedLyrics(rawComment.substring(separatorIndex + 1))
+          : _normalizeEmbeddedText(rawComment.substring(separatorIndex + 1));
+      if (value == null || value.isEmpty) {
         continue;
       }
 
@@ -997,6 +1016,14 @@ final class _LocalFolderScanState {
       replayGainAlbumDb: replayGainAlbumDb,
     );
   }
+
+  String? _vorbisCommentLyrics(Map<String, List<String>> comments) {
+    return _firstVorbisComment(comments, 'LYRICS') ??
+        _firstVorbisComment(comments, 'UNSYNCEDLYRICS');
+  }
+
+  bool _isVorbisLyricsKey(String key) =>
+      key == 'LYRICS' || key == 'UNSYNCEDLYRICS';
 
   Uri? _vorbisCommentArtworkUri(Map<String, List<String>> comments) {
     final picture = _firstVorbisComment(comments, 'METADATA_BLOCK_PICTURE');
@@ -1148,7 +1175,17 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      final value = _m4aDataAtomText(ilst, atom.payloadOffset, atom.payloadEnd);
+      final value = key == 'lyrics'
+          ? _m4aDataAtomRawText(
+              ilst,
+              atom.payloadOffset,
+              atom.payloadEnd,
+            )
+          : _m4aDataAtomText(
+              ilst,
+              atom.payloadOffset,
+              atom.payloadEnd,
+            );
       if (value == null || value.isEmpty) {
         continue;
       }
@@ -1160,13 +1197,17 @@ final class _LocalFolderScanState {
     final artist = _joinedVorbisComment(fields, 'artist') ?? '';
     final album = _firstVorbisComment(fields, 'album');
     final genre = _joinedVorbisComment(fields, 'genre');
+    final embeddedLyrics = _normalizeEmbeddedLyrics(
+      _firstVorbisComment(fields, 'lyrics') ?? '',
+    );
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
         (genre == null || genre.isEmpty) &&
         artworkUri == null &&
         replayGainTrackDb == null &&
-        replayGainAlbumDb == null) {
+        replayGainAlbumDb == null &&
+        embeddedLyrics == null) {
       return null;
     }
 
@@ -1178,6 +1219,7 @@ final class _LocalFolderScanState {
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      embeddedLyrics: embeddedLyrics,
     );
   }
 
@@ -1640,6 +1682,9 @@ final class _LocalFolderScanState {
   }
 
   String? _normalizeEmbeddedLyrics(String value) {
+    if (value.length > _maxEmbeddedLyricsBytes) {
+      return null;
+    }
     final normalized = value
         .replaceAll('﻿', '')
         .replaceAll('\u0000', '')
@@ -1804,12 +1849,36 @@ final class _LocalFolderScanState {
         return null;
       }
 
-      final rawText = utf8.decode(
-        payload.sublist(8),
-        allowMalformed: true,
+      return _normalizeEmbeddedText(
+        utf8.decode(payload.sublist(8), allowMalformed: true),
       );
+    }
 
-      return _normalizeEmbeddedText(rawText);
+    return null;
+  }
+
+  String? _m4aDataAtomRawText(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+  ) {
+    for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
+      if (!_matchesAscii(atom.typeBytes, 'data')) {
+        continue;
+      }
+
+      final payload = bytes.sublist(
+        startOffset + atom.payloadOffset,
+        startOffset + atom.payloadEnd,
+      );
+      if (payload.length <= 8 || payload.length - 8 > _maxEmbeddedLyricsBytes) {
+        return null;
+      }
+      final dataType = _uint32(payload, 0);
+      if (dataType != 0 && dataType != 1) {
+        return null;
+      }
+      return utf8.decode(payload.sublist(8), allowMalformed: true);
     }
 
     return null;
@@ -1828,6 +1897,9 @@ final class _LocalFolderScanState {
     }
     if (_matchesBytes(typeBytes, const <int>[0xa9, 0x67, 0x65, 0x6e])) {
       return 'genre';
+    }
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x6c, 0x79, 0x72])) {
+      return 'lyrics';
     }
 
     return null;
