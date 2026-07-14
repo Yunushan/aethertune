@@ -251,6 +251,114 @@ void main() {
     );
   });
 
+  test('evaluates and persists nested custom smart playlist rule groups',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'mira-jazz',
+        title: 'Alpha',
+        artist: 'Mira',
+        genre: 'Jazz',
+        duration: const Duration(seconds: 60),
+      ),
+      _track(
+        'mira-rock-long',
+        title: 'Beta',
+        artist: 'Mira',
+        genre: 'Rock',
+        duration: const Duration(seconds: 180),
+      ),
+      _track(
+        'mira-rock-short',
+        title: 'Charlie',
+        artist: 'Mira',
+        genre: 'Rock',
+        duration: const Duration(seconds: 30),
+      ),
+      _track(
+        'other-rock-long',
+        title: 'Delta',
+        artist: 'Other',
+        genre: 'Rock',
+        duration: const Duration(seconds: 180),
+      ),
+    ]);
+    final rule = await store.createCustomSmartPlaylist(
+      name: 'Mira jazz or long rock',
+      artist: 'Mira',
+      sortMode: CustomSmartPlaylistSortMode.title,
+      ruleGroups: <CustomSmartPlaylistRuleGroup>[
+        CustomSmartPlaylistRuleGroup(
+          matchMode: CustomSmartPlaylistMatchMode.any,
+          rules: const <CustomSmartPlaylistRule>[
+            CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.genre,
+              value: 'Jazz',
+            ),
+          ],
+          groups: <CustomSmartPlaylistRuleGroup>[
+            CustomSmartPlaylistRuleGroup(
+              rules: const <CustomSmartPlaylistRule>[
+                CustomSmartPlaylistRule(
+                  field: CustomSmartPlaylistRuleField.genre,
+                  value: 'Rock',
+                ),
+                CustomSmartPlaylistRule(
+                  field:
+                      CustomSmartPlaylistRuleField.minimumDurationSeconds,
+                  value: '120',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(
+      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['mira-jazz', 'mira-rock-long'],
+    );
+
+    final persisted = LibraryStore();
+    await persisted.load();
+    final restored = persisted.customSmartPlaylists.single;
+    expect(restored.ruleGroups, hasLength(1));
+    expect(restored.ruleGroups.single.groups, hasLength(1));
+    expect(
+      persisted.tracksForCustomSmartPlaylist(restored.id)
+          .map((track) => track.id),
+      <String>['mira-jazz', 'mira-rock-long'],
+    );
+  });
+
+  test('ignores malformed nested custom smart playlist rules from storage', () {
+    final rule = CustomSmartPlaylist.fromJson(<String, Object?>{
+      'id': 'nested-rules',
+      'name': 'Nested rules',
+      'ruleGroups': <Object?>[
+        <String, Object?>{
+          'matchMode': 'any',
+          'rules': <Object?>[
+            <String, Object?>{'field': 'genre', 'value': 'Rock'},
+            <String, Object?>{'field': 'minimumPlayCount', 'value': 'nope'},
+          ],
+          'groups': <Object?>['invalid'],
+        },
+        'invalid',
+      ],
+    });
+
+    expect(rule.ruleGroups, hasLength(1));
+    expect(rule.ruleGroups.single.rules, hasLength(1));
+    expect(
+      rule.ruleGroups.single.rules.single.field,
+      CustomSmartPlaylistRuleField.genre,
+    );
+  });
+
   test('filters custom smart playlists by duration bounds', () async {
     final store = LibraryStore();
     await store.load();

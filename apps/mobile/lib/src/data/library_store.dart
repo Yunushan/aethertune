@@ -79,6 +79,19 @@ enum CustomSmartPlaylistSortMode {
 
 enum CustomSmartPlaylistMatchMode { all, any }
 
+enum CustomSmartPlaylistRuleField {
+  searchText,
+  sourceId,
+  artist,
+  album,
+  genre,
+  minimumDurationSeconds,
+  maximumDurationSeconds,
+  favoritesOnly,
+  minimumPlayCount,
+  minimumDaysSinceLastPlayed,
+}
+
 enum AppThemePreference { system, light, dark, amoled }
 
 enum AppAccentColor { indigo, teal, rose, amber, violet, green }
@@ -239,6 +252,161 @@ class SimilarTrackMatch {
   final int score;
 }
 
+class CustomSmartPlaylistRule {
+  const CustomSmartPlaylistRule({required this.field, required this.value});
+
+  final CustomSmartPlaylistRuleField field;
+  final String value;
+
+  bool get isActive {
+    final normalized = value.trim();
+    return switch (field) {
+      CustomSmartPlaylistRuleField.favoritesOnly => normalized == 'true',
+      CustomSmartPlaylistRuleField.minimumDurationSeconds ||
+      CustomSmartPlaylistRuleField.maximumDurationSeconds ||
+      CustomSmartPlaylistRuleField.minimumPlayCount ||
+      CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed =>
+        (int.tryParse(normalized) ?? 0) > 0,
+      _ => normalized.isNotEmpty,
+    };
+  }
+
+  CustomSmartPlaylistRule? normalized() {
+    final normalizedValue = value.trim();
+    if (field == CustomSmartPlaylistRuleField.favoritesOnly) {
+      return normalizedValue == 'true'
+          ? const CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.favoritesOnly,
+              value: 'true',
+            )
+          : null;
+    }
+    if (field == CustomSmartPlaylistRuleField.minimumDurationSeconds ||
+        field == CustomSmartPlaylistRuleField.maximumDurationSeconds ||
+        field == CustomSmartPlaylistRuleField.minimumPlayCount ||
+        field == CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed) {
+      final value = int.tryParse(normalizedValue) ?? 0;
+      return value > 0
+          ? CustomSmartPlaylistRule(field: field, value: value.toString())
+          : null;
+    }
+    return normalizedValue.isEmpty
+        ? null
+        : CustomSmartPlaylistRule(field: field, value: normalizedValue);
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'field': field.name,
+        'value': value,
+      };
+
+  static CustomSmartPlaylistRule? tryFromJson(Object? raw) {
+    if (raw is! Map) {
+      return null;
+    }
+    final fieldName = raw['field'];
+    final value = raw['value'];
+    if (fieldName is! String || value is! String) {
+      return null;
+    }
+    final field = CustomSmartPlaylistRuleField.values.firstWhere(
+      (candidate) => candidate.name == fieldName,
+      orElse: () => CustomSmartPlaylistRuleField.searchText,
+    );
+    if (!CustomSmartPlaylistRuleField.values.any(
+      (candidate) => candidate.name == fieldName,
+    )) {
+      return null;
+    }
+    return CustomSmartPlaylistRule(field: field, value: value).normalized();
+  }
+}
+
+class CustomSmartPlaylistRuleGroup {
+  CustomSmartPlaylistRuleGroup({
+    this.matchMode = CustomSmartPlaylistMatchMode.all,
+    List<CustomSmartPlaylistRule> rules = const <CustomSmartPlaylistRule>[],
+    List<CustomSmartPlaylistRuleGroup> groups =
+        const <CustomSmartPlaylistRuleGroup>[],
+  })  : rules = List.unmodifiable(rules),
+        groups = List.unmodifiable(groups);
+
+  final CustomSmartPlaylistMatchMode matchMode;
+  final List<CustomSmartPlaylistRule> rules;
+  final List<CustomSmartPlaylistRuleGroup> groups;
+
+  bool get isEmpty => rules.isEmpty && groups.isEmpty;
+
+  CustomSmartPlaylistRuleGroup? normalized({int depth = 0}) {
+    if (depth >= 8) {
+      return null;
+    }
+    final normalizedRules = rules
+        .map((rule) => rule.normalized())
+        .whereType<CustomSmartPlaylistRule>()
+        .take(50)
+        .toList(growable: false);
+    final normalizedGroups = groups
+        .map((group) => group.normalized(depth: depth + 1))
+        .whereType<CustomSmartPlaylistRuleGroup>()
+        .take(25)
+        .toList(growable: false);
+    if (normalizedRules.isEmpty && normalizedGroups.isEmpty) {
+      return null;
+    }
+    return CustomSmartPlaylistRuleGroup(
+      matchMode: matchMode,
+      rules: normalizedRules,
+      groups: normalizedGroups,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'matchMode': matchMode.name,
+        'rules': rules.map((rule) => rule.toJson()).toList(growable: false),
+        'groups': groups.map((group) => group.toJson()).toList(growable: false),
+      };
+
+  static CustomSmartPlaylistRuleGroup? tryFromJson(
+    Object? raw, {
+    int depth = 0,
+  }) {
+    if (raw is! Map || depth >= 8) {
+      return null;
+    }
+    final modeName = raw['matchMode'];
+    final matchMode = _customSmartPlaylistMatchModeFromName(
+      modeName is String ? modeName : null,
+    );
+    final rawRules = raw['rules'];
+    final rawGroups = raw['groups'];
+    final rules = rawRules is List
+        ? rawRules
+            .map(CustomSmartPlaylistRule.tryFromJson)
+            .whereType<CustomSmartPlaylistRule>()
+            .take(50)
+            .toList(growable: false)
+        : const <CustomSmartPlaylistRule>[];
+    final groups = rawGroups is List
+        ? rawGroups
+            .map(
+              (group) => CustomSmartPlaylistRuleGroup.tryFromJson(
+                group,
+                depth: depth + 1,
+              ),
+            )
+            .whereType<CustomSmartPlaylistRuleGroup>()
+            .take(25)
+            .toList(growable: false)
+        : const <CustomSmartPlaylistRuleGroup>[];
+    return CustomSmartPlaylistRuleGroup(
+      matchMode: matchMode,
+      rules: rules,
+      groups: groups,
+    ).normalized(depth: depth);
+  }
+}
+
 class CustomSmartPlaylist {
   CustomSmartPlaylist({
     required this.id,
@@ -254,6 +422,7 @@ class CustomSmartPlaylist {
     this.minimumPlayCount = 0,
     this.minimumDaysSinceLastPlayed = 0,
     this.matchMode = CustomSmartPlaylistMatchMode.all,
+    this.ruleGroups = const <CustomSmartPlaylistRuleGroup>[],
     this.sortMode = CustomSmartPlaylistSortMode.recentlyAdded,
     this.limit = 50,
     DateTime? createdAt,
@@ -274,6 +443,7 @@ class CustomSmartPlaylist {
   final int minimumPlayCount;
   final int minimumDaysSinceLastPlayed;
   final CustomSmartPlaylistMatchMode matchMode;
+  final List<CustomSmartPlaylistRuleGroup> ruleGroups;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
   final DateTime createdAt;
@@ -293,6 +463,7 @@ class CustomSmartPlaylist {
     int? minimumPlayCount,
     int? minimumDaysSinceLastPlayed,
     CustomSmartPlaylistMatchMode? matchMode,
+    List<CustomSmartPlaylistRuleGroup>? ruleGroups,
     CustomSmartPlaylistSortMode? sortMode,
     int? limit,
     DateTime? createdAt,
@@ -315,6 +486,7 @@ class CustomSmartPlaylist {
       minimumDaysSinceLastPlayed:
           minimumDaysSinceLastPlayed ?? this.minimumDaysSinceLastPlayed,
       matchMode: matchMode ?? this.matchMode,
+      ruleGroups: ruleGroups ?? this.ruleGroups,
       sortMode: sortMode ?? this.sortMode,
       limit: limit ?? this.limit,
       createdAt: createdAt ?? this.createdAt,
@@ -337,6 +509,7 @@ class CustomSmartPlaylist {
       'minimumPlayCount': minimumPlayCount,
       'minimumDaysSinceLastPlayed': minimumDaysSinceLastPlayed,
       'matchMode': matchMode.name,
+      'ruleGroups': ruleGroups.map((group) => group.toJson()).toList(),
       'sortMode': sortMode.name,
       'limit': limit,
       'createdAt': createdAt.toIso8601String(),
@@ -362,6 +535,7 @@ class CustomSmartPlaylist {
       matchMode: _customSmartPlaylistMatchModeFromName(
         json['matchMode'] as String?,
       ),
+      ruleGroups: _ruleGroupsFromJson(json['ruleGroups']),
       sortMode: _customSmartPlaylistSortModeFromName(
         json['sortMode'] as String?,
       ),
@@ -371,6 +545,18 @@ class CustomSmartPlaylist {
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
+  }
+
+  static List<CustomSmartPlaylistRuleGroup> _ruleGroupsFromJson(
+    Object? raw,
+  ) {
+    if (raw is! List) {
+      return const <CustomSmartPlaylistRuleGroup>[];
+    }
+    return raw
+        .map(CustomSmartPlaylistRuleGroup.tryFromJson)
+        .whereType<CustomSmartPlaylistRuleGroup>()
+        .toList(growable: false);
   }
 }
 
@@ -2478,7 +2664,8 @@ class LibraryStore extends ChangeNotifier {
 
     final searchQuery = SearchQuery.parse(rule.query);
     final lastPlayedByTrack = <String, DateTime>{};
-    if (rule.minimumDaysSinceLastPlayed > 0) {
+    if (rule.minimumDaysSinceLastPlayed > 0 ||
+        rule.ruleGroups.any(_customSmartPlaylistGroupUsesLastPlayed)) {
       for (final entry in _history) {
         final current = lastPlayedByTrack[entry.trackId];
         if (current == null || entry.playedAt.isAfter(current)) {
@@ -2532,6 +2719,13 @@ class LibraryStore extends ChangeNotifier {
       if (rule.maximumDurationSeconds > 0)
         track.duration.inSeconds <= rule.maximumDurationSeconds,
       if (!searchQuery.isEmpty) _trackMatchesQuery(track, searchQuery),
+      for (final group in rule.ruleGroups)
+        _matchesCustomSmartPlaylistRuleGroup(
+          track,
+          group,
+          lastPlayedAt: lastPlayedAt,
+          now: now,
+        ),
     ];
     if (matches.isEmpty) {
       return true;
@@ -2540,6 +2734,80 @@ class LibraryStore extends ChangeNotifier {
     return switch (rule.matchMode) {
       CustomSmartPlaylistMatchMode.all => matches.every((match) => match),
       CustomSmartPlaylistMatchMode.any => matches.any((match) => match),
+    };
+  }
+
+  bool _customSmartPlaylistGroupUsesLastPlayed(
+    CustomSmartPlaylistRuleGroup group,
+  ) {
+    return group.rules.any(
+          (rule) =>
+              rule.field ==
+              CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed,
+        ) ||
+        group.groups.any(_customSmartPlaylistGroupUsesLastPlayed);
+  }
+
+  bool _matchesCustomSmartPlaylistRuleGroup(
+    Track track,
+    CustomSmartPlaylistRuleGroup group, {
+    required DateTime? lastPlayedAt,
+    required DateTime now,
+  }) {
+    final matches = <bool>[
+      for (final rule in group.rules)
+        _matchesCustomSmartPlaylistCondition(
+          track,
+          rule,
+          lastPlayedAt: lastPlayedAt,
+          now: now,
+        ),
+      for (final nestedGroup in group.groups)
+        _matchesCustomSmartPlaylistRuleGroup(
+          track,
+          nestedGroup,
+          lastPlayedAt: lastPlayedAt,
+          now: now,
+        ),
+    ];
+    if (matches.isEmpty) {
+      return true;
+    }
+    return switch (group.matchMode) {
+      CustomSmartPlaylistMatchMode.all => matches.every((match) => match),
+      CustomSmartPlaylistMatchMode.any => matches.any((match) => match),
+    };
+  }
+
+  bool _matchesCustomSmartPlaylistCondition(
+    Track track,
+    CustomSmartPlaylistRule rule, {
+    required DateTime? lastPlayedAt,
+    required DateTime now,
+  }) {
+    final value = rule.value.trim();
+    return switch (rule.field) {
+      CustomSmartPlaylistRuleField.searchText =>
+        _trackMatchesQuery(track, SearchQuery.parse(value)),
+      CustomSmartPlaylistRuleField.sourceId =>
+        track.sourceId.toLowerCase() == value.toLowerCase(),
+      CustomSmartPlaylistRuleField.artist =>
+        track.artist.toLowerCase() == value.toLowerCase(),
+      CustomSmartPlaylistRuleField.album =>
+        track.album.toLowerCase() == value.toLowerCase(),
+      CustomSmartPlaylistRuleField.genre =>
+        track.genre.toLowerCase() == value.toLowerCase(),
+      CustomSmartPlaylistRuleField.minimumDurationSeconds =>
+        track.duration.inSeconds >= (int.tryParse(value) ?? 0),
+      CustomSmartPlaylistRuleField.maximumDurationSeconds =>
+        track.duration.inSeconds <= (int.tryParse(value) ?? 0),
+      CustomSmartPlaylistRuleField.favoritesOnly => track.isFavorite,
+      CustomSmartPlaylistRuleField.minimumPlayCount =>
+        playCountForTrack(track.id) >= (int.tryParse(value) ?? 0),
+      CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed =>
+        lastPlayedAt == null ||
+            now.difference(lastPlayedAt) >=
+                Duration(days: int.tryParse(value) ?? 0),
     };
   }
 
@@ -4688,6 +4956,8 @@ class LibraryStore extends ChangeNotifier {
     int minimumPlayCount = 0,
     int minimumDaysSinceLastPlayed = 0,
     CustomSmartPlaylistMatchMode matchMode = CustomSmartPlaylistMatchMode.all,
+    List<CustomSmartPlaylistRuleGroup> ruleGroups =
+        const <CustomSmartPlaylistRuleGroup>[],
     CustomSmartPlaylistSortMode sortMode =
         CustomSmartPlaylistSortMode.recentlyAdded,
     int limit = 50,
@@ -4709,6 +4979,7 @@ class LibraryStore extends ChangeNotifier {
       minimumDaysSinceLastPlayed:
           _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
       matchMode: matchMode,
+      ruleGroups: _normalizeCustomSmartPlaylistRuleGroups(ruleGroups),
       sortMode: sortMode,
       limit: _sanitizeCustomSmartPlaylistLimit(limit),
       createdAt: now,
@@ -4737,6 +5008,7 @@ class LibraryStore extends ChangeNotifier {
     required int minimumPlayCount,
     int? minimumDaysSinceLastPlayed,
     required CustomSmartPlaylistMatchMode matchMode,
+    List<CustomSmartPlaylistRuleGroup>? ruleGroups,
     required CustomSmartPlaylistSortMode sortMode,
     required int limit,
   }) async {
@@ -4764,6 +5036,9 @@ class LibraryStore extends ChangeNotifier {
           ? null
           : _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
       matchMode: matchMode,
+      ruleGroups: ruleGroups == null
+          ? null
+          : _normalizeCustomSmartPlaylistRuleGroups(ruleGroups),
       sortMode: sortMode,
       limit: _sanitizeCustomSmartPlaylistLimit(limit),
       updatedAt: _clock(),
@@ -6598,11 +6873,22 @@ class LibraryStore extends ChangeNotifier {
         minimumDaysSinceLastPlayed:
             _sanitizeMinimumPlayCount(rule.minimumDaysSinceLastPlayed),
         matchMode: rule.matchMode,
+        ruleGroups: _normalizeCustomSmartPlaylistRuleGroups(rule.ruleGroups),
         limit: _sanitizeCustomSmartPlaylistLimit(rule.limit),
       );
     }
 
     return byId.values.toList(growable: false);
+  }
+
+  List<CustomSmartPlaylistRuleGroup> _normalizeCustomSmartPlaylistRuleGroups(
+    Iterable<CustomSmartPlaylistRuleGroup> groups,
+  ) {
+    return groups
+        .map((group) => group.normalized())
+        .whereType<CustomSmartPlaylistRuleGroup>()
+        .take(25)
+        .toList(growable: false);
   }
 
   List<SavedHistoryView> _dedupeSavedHistoryViews(

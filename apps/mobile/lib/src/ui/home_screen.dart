@@ -3773,6 +3773,47 @@ String _customSmartPlaylistMatchModeLabel(
   };
 }
 
+String _customSmartPlaylistRuleFieldLabel(
+  CustomSmartPlaylistRuleField field,
+) {
+  return switch (field) {
+    CustomSmartPlaylistRuleField.searchText => 'Search text',
+    CustomSmartPlaylistRuleField.sourceId => 'Exact source ID',
+    CustomSmartPlaylistRuleField.artist => 'Exact artist',
+    CustomSmartPlaylistRuleField.album => 'Exact album',
+    CustomSmartPlaylistRuleField.genre => 'Exact genre',
+    CustomSmartPlaylistRuleField.minimumDurationSeconds =>
+      'Minimum duration',
+    CustomSmartPlaylistRuleField.maximumDurationSeconds =>
+      'Maximum duration',
+    CustomSmartPlaylistRuleField.favoritesOnly => 'Favorites only',
+    CustomSmartPlaylistRuleField.minimumPlayCount => 'Minimum plays',
+    CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed =>
+      'Not played in at least (days)',
+  };
+}
+
+String _customSmartPlaylistRuleSummary(CustomSmartPlaylistRule rule) {
+  if (rule.field == CustomSmartPlaylistRuleField.favoritesOnly) {
+    return _customSmartPlaylistRuleFieldLabel(rule.field);
+  }
+  return '${_customSmartPlaylistRuleFieldLabel(rule.field)}: ${rule.value}';
+}
+
+String _customSmartPlaylistRuleGroupSummary(
+  CustomSmartPlaylistRuleGroup group,
+) {
+  final parts = <String>[_customSmartPlaylistMatchModeLabel(group.matchMode)];
+  parts.addAll(group.rules.take(2).map(_customSmartPlaylistRuleSummary));
+  if (group.rules.length > 2) {
+    parts.add('+${group.rules.length - 2} rules');
+  }
+  if (group.groups.isNotEmpty) {
+    parts.add('${group.groups.length} nested group(s)');
+  }
+  return parts.join(' - ');
+}
+
 String _customSmartPlaylistSubtitle(
   CustomSmartPlaylist rule,
   int trackCount,
@@ -3809,6 +3850,9 @@ String _customSmartPlaylistSubtitle(
   if (rule.minimumDaysSinceLastPlayed > 0) {
     parts.add('${rule.minimumDaysSinceLastPlayed}+ days since played');
   }
+  if (rule.ruleGroups.isNotEmpty) {
+    parts.add('${rule.ruleGroups.length} nested group(s)');
+  }
   parts.add(_customSmartPlaylistSortLabel(rule.sortMode));
   parts.add('Limit ${rule.limit}');
 
@@ -3829,6 +3873,7 @@ class _CustomSmartPlaylistDraft {
     required this.minimumPlayCount,
     required this.minimumDaysSinceLastPlayed,
     required this.matchMode,
+    required this.ruleGroups,
     required this.sortMode,
     required this.limit,
   });
@@ -3845,6 +3890,7 @@ class _CustomSmartPlaylistDraft {
   final int minimumPlayCount;
   final int minimumDaysSinceLastPlayed;
   final CustomSmartPlaylistMatchMode matchMode;
+  final List<CustomSmartPlaylistRuleGroup> ruleGroups;
   final CustomSmartPlaylistSortMode sortMode;
   final int limit;
 }
@@ -4266,6 +4312,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       minimumPlayCount: draft.minimumPlayCount,
       minimumDaysSinceLastPlayed: draft.minimumDaysSinceLastPlayed,
       matchMode: draft.matchMode,
+      ruleGroups: draft.ruleGroups,
       sortMode: draft.sortMode,
       limit: draft.limit,
     );
@@ -4306,6 +4353,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       minimumPlayCount: draft.minimumPlayCount,
       minimumDaysSinceLastPlayed: draft.minimumDaysSinceLastPlayed,
       matchMode: draft.matchMode,
+      ruleGroups: draft.ruleGroups,
       sortMode: draft.sortMode,
       limit: draft.limit,
     );
@@ -4878,6 +4926,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     var favoritesOnly = initialRule?.favoritesOnly ?? false;
     var matchMode =
         initialRule?.matchMode ?? CustomSmartPlaylistMatchMode.all;
+    var ruleGroups = List<CustomSmartPlaylistRuleGroup>.from(
+      initialRule?.ruleGroups ?? const <CustomSmartPlaylistRuleGroup>[],
+    );
     var sortMode =
         initialRule?.sortMode ?? CustomSmartPlaylistSortMode.recentlyAdded;
 
@@ -4914,6 +4965,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                       ) ??
                           0,
                   matchMode: matchMode,
+                  ruleGroups: ruleGroups,
                   sortMode: sortMode,
                   limit: int.tryParse(limitController.text.trim()) ?? 50,
                 );
@@ -4962,6 +5014,88 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             setDialogState(() => matchMode = selection.first);
                           },
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                'Nested rule groups',
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Add rule group',
+                              icon: const Icon(Icons.account_tree_outlined),
+                              onPressed: () async {
+                                final group =
+                                    await _promptForCustomSmartPlaylistRuleGroup(
+                                  context,
+                                );
+                                if (group != null) {
+                                  setDialogState(() {
+                                    ruleGroups = <CustomSmartPlaylistRuleGroup>[
+                                      ...ruleGroups,
+                                      group,
+                                    ];
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                        if (ruleGroups.isEmpty)
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('No nested groups.'),
+                          )
+                        else
+                          for (var index = 0;
+                              index < ruleGroups.length;
+                              index += 1)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.account_tree_outlined),
+                              title: Text(
+                                _customSmartPlaylistRuleGroupSummary(
+                                  ruleGroups[index],
+                                ),
+                              ),
+                              trailing: IconButton(
+                                tooltip: 'Remove rule group',
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    ruleGroups = <CustomSmartPlaylistRuleGroup>[
+                                      for (var itemIndex = 0;
+                                          itemIndex < ruleGroups.length;
+                                          itemIndex += 1)
+                                        if (itemIndex != index)
+                                          ruleGroups[itemIndex],
+                                    ];
+                                  });
+                                },
+                              ),
+                              onTap: () async {
+                                final group =
+                                    await _promptForCustomSmartPlaylistRuleGroup(
+                                  context,
+                                  initialGroup: ruleGroups[index],
+                                );
+                                if (group != null) {
+                                  setDialogState(() {
+                                    ruleGroups = <CustomSmartPlaylistRuleGroup>[
+                                      for (var itemIndex = 0;
+                                          itemIndex < ruleGroups.length;
+                                          itemIndex += 1)
+                                        if (itemIndex == index)
+                                          group
+                                        else
+                                          ruleGroups[itemIndex],
+                                    ];
+                                  });
+                                }
+                              },
+                            ),
                         TextField(
                           controller: queryController,
                           decoration: const InputDecoration(
@@ -5101,6 +5235,291 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       minimumPlayCountController.dispose();
       minimumDaysSinceLastPlayedController.dispose();
       limitController.dispose();
+    }
+  }
+
+  Future<CustomSmartPlaylistRuleGroup?>
+      _promptForCustomSmartPlaylistRuleGroup(
+    BuildContext context, {
+    CustomSmartPlaylistRuleGroup? initialGroup,
+  }) async {
+    var matchMode =
+        initialGroup?.matchMode ?? CustomSmartPlaylistMatchMode.all;
+    var rules = List<CustomSmartPlaylistRule>.from(
+      initialGroup?.rules ?? const <CustomSmartPlaylistRule>[],
+    );
+    var groups = List<CustomSmartPlaylistRuleGroup>.from(
+      initialGroup?.groups ?? const <CustomSmartPlaylistRuleGroup>[],
+    );
+
+    return showDialog<CustomSmartPlaylistRuleGroup>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Rule group'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      SegmentedButton<CustomSmartPlaylistMatchMode>(
+                        segments: const <
+                          ButtonSegment<CustomSmartPlaylistMatchMode>
+                        >[
+                          ButtonSegment<CustomSmartPlaylistMatchMode>(
+                            value: CustomSmartPlaylistMatchMode.all,
+                            label: Text('Match all'),
+                          ),
+                          ButtonSegment<CustomSmartPlaylistMatchMode>(
+                            value: CustomSmartPlaylistMatchMode.any,
+                            label: Text('Match any'),
+                          ),
+                        ],
+                        selected: <CustomSmartPlaylistMatchMode>{matchMode},
+                        onSelectionChanged: (selection) {
+                          setDialogState(() => matchMode = selection.first);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Rules',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      if (rules.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text('Add at least one rule or nested group.'),
+                        )
+                      else
+                        for (var index = 0; index < rules.length; index += 1)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(_customSmartPlaylistRuleSummary(rules[index])),
+                            trailing: IconButton(
+                              tooltip: 'Remove rule',
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                setDialogState(() {
+                                  rules = <CustomSmartPlaylistRule>[
+                                    for (var itemIndex = 0;
+                                        itemIndex < rules.length;
+                                        itemIndex += 1)
+                                      if (itemIndex != index) rules[itemIndex],
+                                  ];
+                                });
+                              },
+                            ),
+                            onTap: () async {
+                              final rule =
+                                  await _promptForCustomSmartPlaylistCondition(
+                                context,
+                                initialRule: rules[index],
+                              );
+                              if (rule != null) {
+                                setDialogState(() => rules[index] = rule);
+                              }
+                            },
+                          ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final rule =
+                              await _promptForCustomSmartPlaylistCondition(
+                            context,
+                          );
+                          if (rule != null) {
+                            setDialogState(
+                              () => rules = <CustomSmartPlaylistRule>[
+                                ...rules,
+                                rule,
+                              ],
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add rule'),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Nested groups',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      for (var index = 0; index < groups.length; index += 1)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.account_tree_outlined),
+                          title: Text(
+                            _customSmartPlaylistRuleGroupSummary(groups[index]),
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Remove nested group',
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              setDialogState(() {
+                                groups = <CustomSmartPlaylistRuleGroup>[
+                                  for (var itemIndex = 0;
+                                      itemIndex < groups.length;
+                                      itemIndex += 1)
+                                    if (itemIndex != index) groups[itemIndex],
+                                ];
+                              });
+                            },
+                          ),
+                          onTap: () async {
+                            final group =
+                                await _promptForCustomSmartPlaylistRuleGroup(
+                              context,
+                              initialGroup: groups[index],
+                            );
+                            if (group != null) {
+                              setDialogState(() => groups[index] = group);
+                            }
+                          },
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final group =
+                              await _promptForCustomSmartPlaylistRuleGroup(
+                            context,
+                          );
+                          if (group != null) {
+                            setDialogState(
+                              () => groups = <CustomSmartPlaylistRuleGroup>[
+                                ...groups,
+                                group,
+                              ],
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.account_tree_outlined),
+                        label: const Text('Add nested group'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: rules.isEmpty && groups.isEmpty
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(
+                            CustomSmartPlaylistRuleGroup(
+                              matchMode: matchMode,
+                              rules: rules,
+                              groups: groups,
+                            ),
+                          ),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<CustomSmartPlaylistRule?> _promptForCustomSmartPlaylistCondition(
+    BuildContext context, {
+    CustomSmartPlaylistRule? initialRule,
+  }) async {
+    var field = initialRule?.field ?? CustomSmartPlaylistRuleField.artist;
+    final valueController = TextEditingController(text: initialRule?.value ?? '');
+    try {
+      return showDialog<CustomSmartPlaylistRule>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final isFavoriteRule =
+                  field == CustomSmartPlaylistRuleField.favoritesOnly;
+              return AlertDialog(
+                title: const Text('Rule'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    DropdownButtonFormField<CustomSmartPlaylistRuleField>(
+                      initialValue: field,
+                      decoration: const InputDecoration(labelText: 'Field'),
+                      items: CustomSmartPlaylistRuleField.values
+                          .map(
+                            (candidate) => DropdownMenuItem(
+                              value: candidate,
+                              child: Text(
+                                _customSmartPlaylistRuleFieldLabel(candidate),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => field = value);
+                        }
+                      },
+                    ),
+                    if (isFavoriteRule)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 16),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Matches favorite tracks.'),
+                        ),
+                      )
+                    else
+                      TextField(
+                        controller: valueController,
+                        decoration: InputDecoration(
+                          labelText: _customSmartPlaylistRuleFieldLabel(field),
+                        ),
+                        keyboardType: field ==
+                                    CustomSmartPlaylistRuleField
+                                        .minimumDurationSeconds ||
+                                field ==
+                                    CustomSmartPlaylistRuleField
+                                        .maximumDurationSeconds ||
+                                field ==
+                                    CustomSmartPlaylistRuleField
+                                        .minimumPlayCount ||
+                                field ==
+                                    CustomSmartPlaylistRuleField
+                                        .minimumDaysSinceLastPlayed
+                            ? TextInputType.number
+                            : TextInputType.text,
+                      ),
+                  ],
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final rule = CustomSmartPlaylistRule(
+                        field: field,
+                        value: isFavoriteRule ? 'true' : valueController.text,
+                      ).normalized();
+                      if (rule != null) {
+                        Navigator.of(dialogContext).pop(rule);
+                      }
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      valueController.dispose();
     }
   }
 }
@@ -7121,7 +7540,6 @@ Future<void> _copyLyricsSelectedRangeShareText(
     );
     return;
   }
-
   final range = await _promptForLyricsShareRange(context, lines: lines);
   if (!context.mounted || range == null) {
     return;
