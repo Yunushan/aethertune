@@ -10971,37 +10971,52 @@ class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
                 )
               else
                 for (final group in groups) ...<Widget>[
-                  CheckboxListTile(
-                    value: _selectedGroupKeys.contains(group.key),
-                    onChanged: (selected) => _toggleGroupSelection(
-                      context,
-                      group,
-                      groups,
-                      selected ?? false,
-                    ),
-                    secondary: const Icon(Icons.merge_type_outlined),
-                    title: Text(_duplicateMatchLabel(group.type)),
-                    subtitle: Text('${group.tracks.length} matching tracks'),
-                  ),
-                  for (final track in group.tracks)
-                    RadioListTile<String>(
-                      dense: true,
-                      value: track.id,
-                      groupValue: _keepTrackIdFor(group),
-                      onChanged: (_) => _selectKeeper(
+                  RadioGroup<String>(
+                    groupValue: _keepTrackIdFor(group),
+                    onChanged: (trackId) {
+                      if (trackId == null) {
+                        return;
+                      }
+                      _selectKeeper(
                         context,
                         group,
-                        track,
+                        group.tracks.firstWhere(
+                          (track) => track.id == trackId,
+                        ),
                         groups,
-                      ),
-                      title: Text(track.title),
-                      subtitle: Text(
-                        _duplicateTrackSubtitle(track),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      );
+                    },
+                    child: Column(
+                      children: <Widget>[
+                        CheckboxListTile(
+                          value: _selectedGroupKeys.contains(group.key),
+                          onChanged: (selected) => _toggleGroupSelection(
+                            context,
+                            group,
+                            groups,
+                            selected ?? false,
+                          ),
+                          secondary: const Icon(Icons.merge_type_outlined),
+                          title: Text(_duplicateMatchLabel(group.type)),
+                          subtitle: Text(
+                            '${group.tracks.length} matching tracks',
+                          ),
+                        ),
+                        for (final track in group.tracks)
+                          RadioListTile<String>(
+                            dense: true,
+                            value: track.id,
+                            title: Text(track.title),
+                            subtitle: Text(
+                              _duplicateTrackSubtitle(track),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        const Divider(height: 1),
+                      ],
                     ),
-                  const Divider(height: 1),
+                  ),
                 ],
             ],
           );
