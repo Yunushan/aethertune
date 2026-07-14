@@ -10901,13 +10901,24 @@ String _providerDisclosureSummary(ProviderPrivacyDisclosure disclosure) {
   return parts.join(' · ');
 }
 
-class _DuplicateResolverSheet extends StatelessWidget {
+class _DuplicateResolverSheet extends StatefulWidget {
   const _DuplicateResolverSheet();
+
+  @override
+  State<_DuplicateResolverSheet> createState() => _DuplicateResolverSheetState();
+}
+
+class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
+  final Set<String> _selectedGroupKeys = <String>{};
+  final Map<String, String> _keepTrackIdByGroupKey = <String, String>{};
 
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final groups = library.duplicateTrackGroups();
+    final selectedGroups = groups
+        .where((group) => _selectedGroupKeys.contains(group.key))
+        .toList(growable: false);
 
     return SafeArea(
       child: DraggableScrollableSheet(
@@ -10922,7 +10933,24 @@ class _DuplicateResolverSheet extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.merge_type_outlined),
                 title: const Text('Duplicate resolver'),
-                subtitle: Text('${groups.length} duplicate group(s)'),
+                subtitle: Text(
+                  selectedGroups.isEmpty
+                      ? '${groups.length} duplicate group(s)'
+                      : '${selectedGroups.length} group(s) selected',
+                ),
+                trailing: selectedGroups.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Merge selected groups',
+                        icon: const Icon(Icons.merge_type_outlined),
+                        onPressed: () => unawaited(
+                          _mergeSelectedGroups(
+                            context,
+                            library,
+                            selectedGroups,
+                          ),
+                        ),
+                      ),
               ),
               const Divider(height: 1),
               if (library.canUndoDuplicateResolution)
@@ -10943,33 +10971,34 @@ class _DuplicateResolverSheet extends StatelessWidget {
                 )
               else
                 for (final group in groups) ...<Widget>[
-                  ListTile(
-                    leading: const Icon(Icons.merge_type_outlined),
+                  CheckboxListTile(
+                    value: _selectedGroupKeys.contains(group.key),
+                    onChanged: (selected) => _toggleGroupSelection(
+                      context,
+                      group,
+                      groups,
+                      selected ?? false,
+                    ),
+                    secondary: const Icon(Icons.merge_type_outlined),
                     title: Text(_duplicateMatchLabel(group.type)),
                     subtitle: Text('${group.tracks.length} matching tracks'),
                   ),
                   for (final track in group.tracks)
-                    ListTile(
+                    RadioListTile<String>(
                       dense: true,
-                      leading: const Icon(Icons.music_note_outlined),
+                      value: track.id,
+                      groupValue: _keepTrackIdFor(group),
+                      onChanged: (_) => _selectKeeper(
+                        context,
+                        group,
+                        track,
+                        groups,
+                      ),
                       title: Text(track.title),
                       subtitle: Text(
                         _duplicateTrackSubtitle(track),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: TextButton(
-                        onPressed: () {
-                          unawaited(
-                            _keepDuplicateTrack(
-                              context,
-                              library,
-                              group,
-                              track,
-                            ),
-                          );
-                        },
-                        child: const Text('Keep'),
                       ),
                     ),
                   const Divider(height: 1),
@@ -10981,26 +11010,100 @@ class _DuplicateResolverSheet extends StatelessWidget {
     );
   }
 
-  Future<void> _keepDuplicateTrack(
+  String _keepTrackIdFor(DuplicateTrackGroup group) {
+    final selected = _keepTrackIdByGroupKey[group.key];
+    if (selected != null && group.tracks.any((track) => track.id == selected)) {
+      return selected;
+    }
+    return group.tracks.first.id;
+  }
+
+  void _toggleGroupSelection(
+    BuildContext context,
+    DuplicateTrackGroup group,
+    List<DuplicateTrackGroup> groups,
+    bool selected,
+  ) {
+    if (!selected) {
+      setState(() => _selectedGroupKeys.remove(group.key));
+      return;
+    }
+
+    final selectedGroups = groups.where(
+      (candidate) => _selectedGroupKeys.contains(candidate.key),
+    );
+    final overlaps = selectedGroups.any(
+      (candidate) => candidate.tracks.any(
+        (candidateTrack) => group.tracks.any(
+          (groupTrack) => groupTrack.id == candidateTrack.id,
+        ),
+      ),
+    );
+    if (overlaps) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Review overlapping duplicate groups one at a time.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedGroupKeys.add(group.key);
+      _keepTrackIdByGroupKey.putIfAbsent(
+        group.key,
+        () => group.tracks.first.id,
+      );
+    });
+  }
+
+  void _selectKeeper(
+    BuildContext context,
+    DuplicateTrackGroup group,
+    Track track,
+    List<DuplicateTrackGroup> groups,
+  ) {
+    if (!_selectedGroupKeys.contains(group.key)) {
+      _toggleGroupSelection(context, group, groups, true);
+    }
+    if (!_selectedGroupKeys.contains(group.key)) {
+      return;
+    }
+    setState(() => _keepTrackIdByGroupKey[group.key] = track.id);
+  }
+
+  Future<void> _mergeSelectedGroups(
     BuildContext context,
     LibraryStore library,
-    DuplicateTrackGroup group,
-    Track keepTrack,
+    List<DuplicateTrackGroup> groups,
   ) async {
-    final removed = await library.resolveDuplicateTracks(
-      keepTrackId: keepTrack.id,
-      duplicateTrackIds: group.tracks
-          .where((track) => track.id != keepTrack.id)
-          .map((track) => track.id),
-    );
-
+    final resolutions = groups
+        .map(
+          (group) {
+            final keepTrackId = _keepTrackIdFor(group);
+            return DuplicateTrackResolution(
+              keepTrackId: keepTrackId,
+              duplicateTrackIds: group.tracks
+                  .where((track) => track.id != keepTrackId)
+                  .map((track) => track.id),
+            );
+          },
+        )
+        .toList(growable: false);
+    final removed = await library.resolveDuplicateTrackBatch(resolutions);
     if (!context.mounted) {
       return;
     }
 
+    setState(() {
+      for (final group in groups) {
+        _selectedGroupKeys.remove(group.key);
+        _keepTrackIdByGroupKey.remove(group.key);
+      }
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Merged $removed duplicate(s) into ${keepTrack.title}.'),
+        content: Text('Merged $removed duplicate(s) from ${groups.length} group(s).'),
       ),
     );
   }

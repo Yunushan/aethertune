@@ -994,6 +994,93 @@ void main() {
     expect(store.tracks.map((track) => track.id), isNot(contains('duplicate')));
   });
 
+  test('merges disjoint duplicate groups as one undoable batch', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('keep-a', title: 'A', duration: const Duration(minutes: 1)),
+      _track('duplicate-a', title: 'A', duration: const Duration(minutes: 1)),
+      _track('keep-b', title: 'B', duration: const Duration(minutes: 2)),
+      _track('duplicate-b', title: 'B', duration: const Duration(minutes: 2)),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Batch merge',
+      trackIds: <String>[
+        'duplicate-a',
+        'duplicate-b',
+        'keep-a',
+        'keep-b',
+      ],
+    );
+
+    final removed = await store.resolveDuplicateTrackBatch(
+      <DuplicateTrackResolution>[
+        DuplicateTrackResolution(
+          keepTrackId: 'keep-a',
+          duplicateTrackIds: <String>['duplicate-a'],
+        ),
+        DuplicateTrackResolution(
+          keepTrackId: 'keep-b',
+          duplicateTrackIds: <String>['duplicate-b'],
+        ),
+      ],
+    );
+
+    expect(removed, 2);
+    expect(store.canUndoDuplicateResolution, isTrue);
+    expect(store.tracks.map((track) => track.id), containsAll(<String>[
+      'keep-a',
+      'keep-b',
+    ]));
+    expect(store.tracks.map((track) => track.id), isNot(contains('duplicate-a')));
+    expect(store.tracks.map((track) => track.id), isNot(contains('duplicate-b')));
+    expect(store.playlistById(playlist.id)!.trackIds, <String>[
+      'keep-a',
+      'keep-b',
+    ]);
+
+    expect(await store.undoLastDuplicateResolution(), isTrue);
+    expect(store.playlistById(playlist.id)!.trackIds, <String>[
+      'duplicate-a',
+      'duplicate-b',
+      'keep-a',
+      'keep-b',
+    ]);
+    expect(store.tracks.map((track) => track.id), containsAll(<String>[
+      'keep-a',
+      'duplicate-a',
+      'keep-b',
+      'duplicate-b',
+    ]));
+  });
+
+  test('skips overlapping duplicate resolutions in a batch', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('a', title: 'A', duration: const Duration(minutes: 1)),
+      _track('b', title: 'B', duration: const Duration(minutes: 1)),
+      _track('c', title: 'C', duration: const Duration(minutes: 1)),
+    ]);
+
+    final removed = await store.resolveDuplicateTrackBatch(
+      <DuplicateTrackResolution>[
+        DuplicateTrackResolution(
+          keepTrackId: 'a',
+          duplicateTrackIds: <String>['b'],
+        ),
+        DuplicateTrackResolution(
+          keepTrackId: 'b',
+          duplicateTrackIds: <String>['c'],
+        ),
+      ],
+    );
+
+    expect(removed, 1);
+    expect(store.tracks.map((track) => track.id), containsAll(<String>['a', 'c']));
+    expect(store.tracks.map((track) => track.id), isNot(contains('b')));
+  });
+
   test('persists playlists across store instances', () async {
     DateTime clock() => DateTime.utc(2026, 1, 4);
     final firstStore = LibraryStore(clock: clock);

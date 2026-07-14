@@ -159,6 +159,26 @@ class DuplicateTrackGroup {
   final List<Track> tracks;
 }
 
+class DuplicateTrackResolution {
+  DuplicateTrackResolution({
+    required this.keepTrackId,
+    required Iterable<String> duplicateTrackIds,
+  }) : duplicateTrackIds = List<String>.unmodifiable(duplicateTrackIds);
+
+  final String keepTrackId;
+  final List<String> duplicateTrackIds;
+}
+
+class _DuplicateResolutionPlan {
+  const _DuplicateResolutionPlan({
+    required this.keepTrackId,
+    required this.removeIds,
+  });
+
+  final String keepTrackId;
+  final Set<String> removeIds;
+}
+
 class _DuplicateResolutionSnapshot {
   const _DuplicateResolutionSnapshot({
     required this.tracks,
@@ -1356,17 +1376,20 @@ class LibraryStore extends ChangeNotifier {
   Future<int> resolveDuplicateTracks({
     required String keepTrackId,
     required Iterable<String> duplicateTrackIds,
-  }) async {
-    final keepIndex = _tracks.indexWhere((track) => track.id == keepTrackId);
-    if (keepIndex == -1) {
-      return 0;
-    }
+  }) {
+    return resolveDuplicateTrackBatch(<DuplicateTrackResolution>[
+      DuplicateTrackResolution(
+        keepTrackId: keepTrackId,
+        duplicateTrackIds: duplicateTrackIds,
+      ),
+    ]);
+  }
 
-    final removeIds = duplicateTrackIds
-        .where((trackId) => trackId != keepTrackId)
-        .where((trackId) => _tracks.any((track) => track.id == trackId))
-        .toSet();
-    if (removeIds.isEmpty) {
+  Future<int> resolveDuplicateTrackBatch(
+    Iterable<DuplicateTrackResolution> resolutions,
+  ) async {
+    final plans = _normalizeDuplicateResolutionPlans(resolutions);
+    if (plans.isEmpty) {
       return 0;
     }
 
@@ -1383,20 +1406,14 @@ class LibraryStore extends ChangeNotifier {
       ),
       stateRevision: _stateRevision,
     );
-    final duplicateIds = <String>{keepTrackId, ...removeIds};
-    final shouldFavorite = _tracks
-        .where((track) => duplicateIds.contains(track.id))
-        .any((track) => track.isFavorite);
-    if (shouldFavorite && !_tracks[keepIndex].isFavorite) {
-      _tracks[keepIndex] = _tracks[keepIndex].copyWith(isFavorite: true);
-    }
 
-    _rewritePlaylistDuplicateReferences(keepTrackId, removeIds);
-    _rewriteHistoryDuplicateReferences(keepTrackId, removeIds);
-    _mergeDuplicateProgress(keepTrackId, removeIds);
-    _mergeDuplicateLyrics(keepTrackId, removeIds);
-    _mergeDuplicatePlaybackSpeed(keepTrackId, removeIds);
-    _tracks.removeWhere((track) => removeIds.contains(track.id));
+    var removed = 0;
+    for (final plan in plans) {
+      removed += _resolveDuplicateTracksInMemory(
+        keepTrackId: plan.keepTrackId,
+        removeIds: plan.removeIds,
+      );
+    }
 
     _sortTracks();
     _sortPlaylists();
@@ -1406,7 +1423,7 @@ class LibraryStore extends ChangeNotifier {
     _lastDuplicateResolution = previousState.withStateRevision(_stateRevision);
     notifyListeners();
 
-    return removeIds.length;
+    return removed;
   }
 
   Future<bool> undoLastDuplicateResolution() async {
@@ -6090,6 +6107,69 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return row[index];
+  }
+
+  List<_DuplicateResolutionPlan> _normalizeDuplicateResolutionPlans(
+    Iterable<DuplicateTrackResolution> resolutions,
+  ) {
+    final availableTrackIds = _tracks.map((track) => track.id).toSet();
+    final claimedTrackIds = <String>{};
+    final plans = <_DuplicateResolutionPlan>[];
+
+    for (final resolution in resolutions) {
+      final keepTrackId = resolution.keepTrackId.trim();
+      if (keepTrackId.isEmpty || !availableTrackIds.contains(keepTrackId)) {
+        continue;
+      }
+      final removeIds = resolution.duplicateTrackIds
+          .map((trackId) => trackId.trim())
+          .where((trackId) => trackId.isNotEmpty && trackId != keepTrackId)
+          .where(availableTrackIds.contains)
+          .toSet();
+      if (removeIds.isEmpty) {
+        continue;
+      }
+
+      final trackIds = <String>{keepTrackId, ...removeIds};
+      if (trackIds.any(claimedTrackIds.contains)) {
+        continue;
+      }
+      claimedTrackIds.addAll(trackIds);
+      plans.add(
+        _DuplicateResolutionPlan(
+          keepTrackId: keepTrackId,
+          removeIds: removeIds,
+        ),
+      );
+    }
+
+    return plans;
+  }
+
+  int _resolveDuplicateTracksInMemory({
+    required String keepTrackId,
+    required Set<String> removeIds,
+  }) {
+    final keepIndex = _tracks.indexWhere((track) => track.id == keepTrackId);
+    if (keepIndex == -1 || removeIds.isEmpty) {
+      return 0;
+    }
+
+    final duplicateIds = <String>{keepTrackId, ...removeIds};
+    final shouldFavorite = _tracks
+        .where((track) => duplicateIds.contains(track.id))
+        .any((track) => track.isFavorite);
+    if (shouldFavorite && !_tracks[keepIndex].isFavorite) {
+      _tracks[keepIndex] = _tracks[keepIndex].copyWith(isFavorite: true);
+    }
+
+    _rewritePlaylistDuplicateReferences(keepTrackId, removeIds);
+    _rewriteHistoryDuplicateReferences(keepTrackId, removeIds);
+    _mergeDuplicateProgress(keepTrackId, removeIds);
+    _mergeDuplicateLyrics(keepTrackId, removeIds);
+    _mergeDuplicatePlaybackSpeed(keepTrackId, removeIds);
+    _tracks.removeWhere((track) => removeIds.contains(track.id));
+    return removeIds.length;
   }
 
   void _rewritePlaylistDuplicateReferences(
