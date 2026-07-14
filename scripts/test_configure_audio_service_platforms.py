@@ -54,12 +54,23 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 platform_config.WIDGET_PROVIDER_NAME,
             )
             self.assertIsNotNone(widget)
+            activity = application.find("activity")
+            self.assertIsNotNone(activity)
+            self.assertEqual(
+                activity.get(f"{platform_config.ANDROID}name"),
+                platform_config.ACTIVITY_NAME,
+            )
             widget_source = (
                 app_dir
                 / "android/app/src/main/kotlin/dev/aethertune/aethertune"
                 / "AetherTunePlaybackWidget.kt"
             )
             self.assertIn("KEYCODE_MEDIA_PLAY_PAUSE", widget_source.read_text())
+            activity_source = widget_source.with_name("MainActivity.kt")
+            self.assertIn(
+                "updatePlaybackWidgets",
+                activity_source.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

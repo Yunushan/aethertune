@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/player/android_playback_widget_bridge.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/playback_audio_engine_factory.dart';
 import 'package:aethertune/src/player/system_media_playback_engine.dart';
@@ -94,6 +95,30 @@ void main() {
     await engine.setSpeed(1.5);
     expect(delegate.speedValue, 1.5);
     expect(engine.playbackState.value.speed, 1.5);
+  });
+
+  test('publishes the current title and play state to Android widgets',
+      () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final widget = _FakePlaybackWidgetBridge();
+    final engine = SystemMediaPlaybackEngine(
+      delegate,
+      playbackWidgetBridge: widget,
+    );
+    addTearDown(engine.dispose);
+    widget.updates.clear();
+
+    await engine.setQueue(
+      <Track>[_track('one'), _track('two')],
+      initialIndex: 1,
+    );
+    expect(widget.updates.last, _WidgetUpdate('Track two', 'Artist two', false));
+
+    delegate.emitPlaying(true);
+    expect(widget.updates.last, _WidgetUpdate('Track two', 'Artist two', true));
+
+    await engine.seek(Duration.zero, index: 0);
+    expect(widget.updates.last, _WidgetUpdate('Track one', 'Artist one', true));
   });
 
   test('routes system transport, repeat, and shuffle commands', () async {
@@ -287,4 +312,39 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     await _processingController.close();
     await _indexController.close();
   }
+}
+
+class _FakePlaybackWidgetBridge implements PlaybackWidgetBridge {
+  final List<_WidgetUpdate> updates = <_WidgetUpdate>[];
+
+  @override
+  Future<void> update({Track? track, required bool isPlaying}) {
+    updates.add(
+      _WidgetUpdate(track?.title ?? 'AetherTune', track?.artist ?? '', isPlaying),
+    );
+    return Future<void>.value();
+  }
+}
+
+class _WidgetUpdate {
+  const _WidgetUpdate(this.title, this.artist, this.isPlaying);
+
+  final String title;
+  final String artist;
+  final bool isPlaying;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _WidgetUpdate &&
+        title == other.title &&
+        artist == other.artist &&
+        isPlaying == other.isPlaying;
+  }
+
+  @override
+  int get hashCode => Object.hash(title, artist, isPlaying);
+
+  @override
+  String toString() =>
+      '_WidgetUpdate(title: $title, artist: $artist, isPlaying: $isPlaying)';
 }

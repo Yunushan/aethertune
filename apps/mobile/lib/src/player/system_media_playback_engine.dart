@@ -4,13 +4,18 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
+import 'android_playback_widget_bridge.dart';
 import 'playback_audio_engine.dart';
 
 /// Adds operating-system media controls around the app's playback engine.
 class SystemMediaPlaybackEngine extends BaseAudioHandler
     with SeekHandler
     implements CrossfadePlaybackAudioEngine {
-  SystemMediaPlaybackEngine(this._engine) {
+  SystemMediaPlaybackEngine(
+    this._engine, {
+    PlaybackWidgetBridge? playbackWidgetBridge,
+  }) : _playbackWidgetBridge =
+           playbackWidgetBridge ?? const AndroidPlaybackWidgetBridge() {
     _stateSubscription = _engine.stateChanges.listen((_) => _publishState());
     _processingSubscription = _engine.processingStateStream.listen((state) {
       _processingState = state;
@@ -30,6 +35,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   final PlaybackAudioEngine _engine;
+  final PlaybackWidgetBridge _playbackWidgetBridge;
   final List<Track> _tracks = <Track>[];
   StreamSubscription<Object?>? _stateSubscription;
   StreamSubscription<ProcessingState>? _processingSubscription;
@@ -274,6 +280,16 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         shuffleMode: _engine.shuffleModeEnabled
             ? AudioServiceShuffleMode.all
             : AudioServiceShuffleMode.none,
+      ),
+    );
+    final index = _currentIndex;
+    final currentTrack = index != null && index >= 0 && index < _tracks.length
+        ? _tracks[index]
+        : null;
+    unawaited(
+      _playbackWidgetBridge.update(
+        track: currentTrack,
+        isPlaying: _engine.playing,
       ),
     );
   }
