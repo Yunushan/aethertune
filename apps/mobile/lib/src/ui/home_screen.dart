@@ -57,6 +57,7 @@ import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
+import 'widgets/collection_share_card.dart';
 import 'widgets/listening_heatmap.dart';
 import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/library_sync_panel.dart';
@@ -68,6 +69,7 @@ import 'widgets/playlist_artwork.dart';
 import 'widgets/self_hosted_account_editor.dart';
 import 'widgets/self_hosted_credential_rotation_dialog.dart';
 import 'widgets/track_tile.dart';
+import 'widgets/track_artwork.dart';
 
 class _AetherTuneNavigationDestination {
   const _AetherTuneNavigationDestination({
@@ -3243,6 +3245,16 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.ios_share),
                       ),
+                      if (type == LibraryBrowseType.album)
+                        IconButton(
+                          tooltip: 'Save album share card',
+                          onPressed: tracks.isEmpty
+                              ? null
+                              : () => unawaited(
+                                  _showAlbumShareCard(context, group, tracks),
+                                ),
+                          icon: const Icon(Icons.image_outlined),
+                        ),
                     ],
                   ),
                 );
@@ -4061,6 +4073,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onShare: () => unawaited(
                 _copyPlaylistShareText(context, library, playlist),
               ),
+              onShareCard: () => unawaited(
+                _showPlaylistShareCard(context, playlist),
+              ),
               onArtwork: () => _editPlaylistArtwork(context, playlist),
               onRename: () => _renamePlaylist(context, playlist),
               onMoveToFolder: () => _movePlaylistToFolder(context, playlist),
@@ -4610,6 +4625,28 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
 
     messenger.showSnackBar(
       SnackBar(content: Text('Deleted ${playlist.name}.')),
+    );
+  }
+
+  Future<void> _showPlaylistShareCard(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final tracks = context.read<LibraryStore>().tracksForPlaylist(playlist.id);
+    await _showCollectionShareCard(
+      context,
+      kind: 'playlist',
+      title: playlist.name,
+      subtitle: playlist.folder.trim().isEmpty
+          ? 'Your playlist'
+          : playlist.folder.trim(),
+      itemCount: tracks.length,
+      totalDuration: tracks.fold<Duration>(
+        Duration.zero,
+        (total, track) => total + track.duration,
+      ),
+      artwork: PlaylistArtwork(playlist: playlist, tracks: tracks, size: 184),
+      fileToken: playlist.id,
     );
   }
 
@@ -6030,6 +6067,7 @@ class _PlaylistCard extends StatelessWidget {
     required this.onOpen,
     required this.onExport,
     required this.onShare,
+    required this.onShareCard,
     required this.onArtwork,
     required this.onRename,
     required this.onMoveToFolder,
@@ -6041,6 +6079,7 @@ class _PlaylistCard extends StatelessWidget {
   final VoidCallback onOpen;
   final ValueChanged<PlaylistDocumentFormat> onExport;
   final VoidCallback onShare;
+  final VoidCallback onShareCard;
   final VoidCallback onArtwork;
   final VoidCallback onRename;
   final VoidCallback onMoveToFolder;
@@ -6072,6 +6111,9 @@ class _PlaylistCard extends StatelessWidget {
                 break;
               case _PlaylistAction.share:
                 onShare();
+                break;
+              case _PlaylistAction.shareCard:
+                onShareCard();
                 break;
               case _PlaylistAction.rename:
                 onRename();
@@ -6114,6 +6156,13 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.ios_share),
                 title: Text('Copy share text'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.shareCard,
+              child: ListTile(
+                leading: Icon(Icons.image_outlined),
+                title: Text('Save share card'),
               ),
             ),
             PopupMenuDivider(),
@@ -6195,6 +6244,7 @@ enum _PlaylistAction {
   exportM3u,
   exportCsv,
   share,
+  shareCard,
   rename,
   folder,
   artwork,
@@ -7489,6 +7539,131 @@ Future<void> _copyPlaylistShareText(
     copiedMessage: 'Copied share text for ${playlist.name}.',
     unavailableMessage: 'Share text is unavailable for ${playlist.name}.',
   );
+}
+
+Future<void> _showAlbumShareCard(
+  BuildContext context,
+  LibraryBrowseGroup group,
+  List<Track> tracks,
+) async {
+  if (tracks.isEmpty) {
+    return;
+  }
+  final representative = tracks.first;
+  await _showCollectionShareCard(
+    context,
+    kind: 'album',
+    title: group.label,
+    subtitle: representative.artist.trim().isEmpty
+        ? 'Unknown artist'
+        : representative.artist,
+    itemCount: tracks.length,
+    totalDuration: group.totalDuration,
+    artwork: TrackArtwork(
+      artworkUri: representative.artworkUri,
+      providerId: representative.sourceId,
+      providerArtworkId: representative.providerArtworkId,
+      providerArtworkVersion: representative.providerArtworkVersion,
+      size: 184,
+      borderRadius: 12,
+      fallbackIcon: Icons.album_outlined,
+    ),
+    fileToken: group.key,
+  );
+}
+
+Future<void> _showCollectionShareCard(
+  BuildContext context, {
+  required String kind,
+  required String title,
+  required String subtitle,
+  required int itemCount,
+  required Duration totalDuration,
+  required Widget artwork,
+  required String fileToken,
+}) async {
+  final boundaryKey = GlobalKey();
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('${kind[0].toUpperCase()}${kind.substring(1)} share card'),
+      content: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: RepaintBoundary(
+          key: boundaryKey,
+          child: CollectionShareCard(
+            kind: kind,
+            title: title,
+            subtitle: subtitle,
+            itemCount: itemCount,
+            totalDuration: totalDuration,
+            artwork: artwork,
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
+        FilledButton.icon(
+          onPressed: () => _saveCollectionShareCard(
+            dialogContext,
+            boundaryKey,
+            kind: kind,
+            fileToken: fileToken,
+          ),
+          icon: const Icon(Icons.image_outlined),
+          label: const Text('Save PNG'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _saveCollectionShareCard(
+  BuildContext context,
+  GlobalKey boundaryKey, {
+  required String kind,
+  required String fileToken,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final fileName = 'aethertune-${_shareCardFileToken(kind)}-'
+      '${_shareCardFileToken(fileToken)}.png';
+  try {
+    final bytes = await captureCollectionShareCardPng(boundaryKey);
+    final outputPath = await FilePicker.saveFile(
+      dialogTitle: 'Save $kind share card',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: const <String>['png'],
+      bytes: bytes,
+    );
+    if (outputPath == null || outputPath.isEmpty) {
+      return;
+    }
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      await File(outputPath).writeAsBytes(bytes, flush: true);
+    }
+    if (context.mounted) {
+      messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+    }
+  } on Object catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save $kind share card: $error')),
+      );
+    }
+  }
+}
+
+String _shareCardFileToken(String value) {
+  final normalized = value.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '-');
+  if (normalized.isEmpty) {
+    return 'collection';
+  }
+  final end = normalized.length > 64 ? 64 : normalized.length;
+  return normalized.substring(0, end);
 }
 
 Future<void> _copyLyricsShareText(
