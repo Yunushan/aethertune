@@ -44,8 +44,8 @@ class _ArtworkCropEditorDialogState extends State<_ArtworkCropEditorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            AspectRatio(
-              aspectRatio: 1,
+            SizedBox.square(
+              dimension: 240,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   border: Border.all(color: Theme.of(context).dividerColor),
