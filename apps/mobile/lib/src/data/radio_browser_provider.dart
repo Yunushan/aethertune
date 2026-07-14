@@ -62,6 +62,16 @@ final class RadioBrowserStreamValidation {
   final String? contentType;
 }
 
+final class RadioBrowserStationSearchPage {
+  const RadioBrowserStationSearchPage({
+    required this.stations,
+    required this.tracks,
+  });
+
+  final List<RadioBrowserStation> stations;
+  final List<Track> tracks;
+}
+
 class RadioBrowserProvider implements MusicSourceProvider {
   RadioBrowserProvider({
     Uri? baseUri,
@@ -134,19 +144,33 @@ class RadioBrowserProvider implements MusicSourceProvider {
     String query, {
     RadioBrowserSearchFilters filters = const RadioBrowserSearchFilters(),
   }) async {
+    final page = await searchStationPage(query, filters: filters);
+    return page.tracks;
+  }
+
+  Future<RadioBrowserStationSearchPage> searchStationPage(
+    String query, {
+    RadioBrowserSearchFilters filters = const RadioBrowserSearchFilters(),
+  }) async {
     final normalized = query.trim();
     final baseUri = await _resolvedBaseUri();
     final stations = parseRadioBrowserStations(
       await _searchLoader(_searchUri(baseUri, normalized, filters)),
     );
 
-    return stations
+    final matchingStations = stations
         .where(
           (station) =>
               station.matches(normalized) && station.matchesFilters(filters),
         )
-        .map((station) => station.toTrack(sourceId: id))
         .toList(growable: false);
+
+    return RadioBrowserStationSearchPage(
+      stations: matchingStations,
+      tracks: matchingStations
+          .map((station) => station.toTrack(sourceId: id))
+          .toList(growable: false),
+    );
   }
 
   @override

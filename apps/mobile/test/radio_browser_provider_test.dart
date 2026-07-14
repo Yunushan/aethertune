@@ -218,6 +218,22 @@ void main() {
     expect(capturedUri!.queryParameters['bitrateMax'], '192');
   });
 
+  test('search station page retains station metadata with playable tracks', () async {
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (_) async => _sampleStationsJson,
+    );
+
+    final page = await provider.searchStationPage('aether');
+
+    expect(page.stations.single.stationUuid, 'station-1');
+    expect(
+      page.stations.single.homepageUri,
+      Uri.parse('https://station.example.test'),
+    );
+    expect(page.tracks.single.externalId, page.stations.single.stationUuid);
+  });
+
   test('ignores click accounting for non-radio tracks', () async {
     var clicked = false;
     final provider = RadioBrowserProvider(

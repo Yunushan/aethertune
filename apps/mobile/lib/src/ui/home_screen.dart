@@ -55,6 +55,7 @@ import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
 import 'internet_archive_item_screen.dart';
 import 'platform_text_share.dart';
+import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
@@ -8731,9 +8732,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<ProviderSearchResult> _providerSearchResults = <ProviderSearchResult>[];
   List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
   List<Track> _radioTracks = <Track>[];
-  final Map<String, RadioBrowserStreamValidation> _radioValidationByTrackId =
-      <String, RadioBrowserStreamValidation>{};
-  final Set<String> _radioValidatingTrackIds = <String>{};
+  List<RadioBrowserStation> _radioStations = <RadioBrowserStation>[];
   List<InternetArchiveFacet> _archiveFacets = <InternetArchiveFacet>[];
   int _archivePage = 0;
   int? _archiveTotalResults;
@@ -9379,7 +9378,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             title: const Text('Radio search failed'),
             subtitle: Text(_radioError!),
           ),
-        ] else if (_radioTracks.isEmpty && !_radioLoading) ...<Widget>[
+        ] else if (_radioStations.isEmpty && !_radioLoading) ...<Widget>[
           const SizedBox(height: 8),
           const ListTile(
             leading: Icon(Icons.radio_outlined),
@@ -9391,49 +9390,13 @@ class _SourcesTabState extends State<_SourcesTab> {
           ),
         ] else ...<Widget>[
           const SizedBox(height: 8),
-          for (final track in _radioTracks)
+          for (final station in _radioStations)
             ListTile(
               leading: const Icon(Icons.radio_outlined),
-              title: Text(track.title),
-              subtitle: Text(_radioStationSubtitle(track)),
-              onTap: () => _playRadioStation(context, track),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  IconButton(
-                    tooltip: 'Save station',
-                    onPressed: () => _saveRadioStation(context, track),
-                    icon: const Icon(Icons.library_add_outlined),
-                  ),
-                  IconButton(
-                    tooltip: 'Validate stream',
-                    onPressed: _radioValidatingTrackIds.contains(track.id) ||
-                            offlineModeEnabled
-                        ? null
-                        : () => _validateRadioStation(context, track),
-                    icon: _radioValidatingTrackIds.contains(track.id)
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(_radioValidationIcon(track)),
-                  ),
-                  _offlineQueueMenu(
-                    context: context,
-                    track: track,
-                    decisionFor: (action) =>
-                        _providerSearchCoordinator.offlineDecision(
-                      track,
-                      action,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Play station',
-                    onPressed: () => _playRadioStation(context, track),
-                    icon: const Icon(Icons.play_arrow),
-                  ),
-                ],
-              ),
+              title: Text(station.name),
+              subtitle: Text(_radioStationSummary(station)),
+              onTap: () => _openRadioStation(context, station),
+              trailing: const Icon(Icons.chevron_right),
             ),
         ],
         const SizedBox(height: 16),
@@ -10761,32 +10724,6 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
-  String _radioStationSubtitle(Track track) {
-    final parts = <String>[track.artist, track.genre];
-    if (_radioValidatingTrackIds.contains(track.id)) {
-      parts.add('Validating stream...');
-      return parts.join(' / ');
-    }
-
-    final validation = _radioValidationByTrackId[track.id];
-    if (validation != null) {
-      parts.add(validation.isPlayable ? 'Stream validated' : validation.reason);
-    }
-
-    return parts.join(' / ');
-  }
-
-  IconData _radioValidationIcon(Track track) {
-    final validation = _radioValidationByTrackId[track.id];
-    if (validation == null) {
-      return Icons.fact_check_outlined;
-    }
-
-    return validation.isPlayable
-        ? Icons.check_circle_outline
-        : Icons.error_outline;
-  }
-
   int? _positiveInt(String value) {
     final parsed = int.tryParse(value.trim());
     if (parsed == null || parsed <= 0) {
@@ -10809,8 +10746,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
         _radioTracks = <Track>[];
-        _radioValidationByTrackId.clear();
-        _radioValidatingTrackIds.clear();
+        _radioStations = <RadioBrowserStation>[];
         _radioLoading = false;
         _radioError = 'Offline mode is on.';
       });
@@ -10820,12 +10756,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     setState(() {
       _radioLoading = true;
       _radioError = null;
-      _radioValidationByTrackId.clear();
-      _radioValidatingTrackIds.clear();
     });
 
     try {
-      final tracks = await _radioProvider.searchStations(
+      final page = await _radioProvider.searchStationPage(
         _radioSearchController.text,
         filters: _radioFilters(),
       );
@@ -10834,7 +10768,8 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
 
       setState(() {
-        _radioTracks = tracks;
+        _radioTracks = page.tracks;
+        _radioStations = page.stations;
         _radioLoading = false;
       });
     } catch (error) {
@@ -10844,41 +10779,11 @@ class _SourcesTabState extends State<_SourcesTab> {
 
       setState(() {
         _radioTracks = <Track>[];
-        _radioValidationByTrackId.clear();
-        _radioValidatingTrackIds.clear();
+        _radioStations = <RadioBrowserStation>[];
         _radioLoading = false;
         _radioError = error.toString();
       });
     }
-  }
-
-  Future<void> _validateRadioStation(BuildContext context, Track track) async {
-    if (_offlineModeBlocksSourceNetwork(context)) {
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _radioValidatingTrackIds.add(track.id));
-
-    final validation = await _radioProvider.validateStream(track);
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _radioValidatingTrackIds.remove(track.id);
-      _radioValidationByTrackId[track.id] = validation;
-    });
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          validation.isPlayable
-              ? 'Validated ${track.title}.'
-              : 'Could not validate ${track.title}: ${validation.reason}',
-        ),
-      ),
-    );
   }
 
   Future<void> _playRadioStation(BuildContext context, Track track) async {
@@ -10900,6 +10805,32 @@ class _SourcesTabState extends State<_SourcesTab> {
         SnackBar(content: Text('Could not play ${track.title}.')),
       );
     }
+  }
+
+  String _radioStationSummary(RadioBrowserStation station) {
+    final parts = <String>[
+      if (station.countryCode.isNotEmpty) station.countryCode,
+      if (station.language.isNotEmpty) station.language,
+      if (station.codec.isNotEmpty) station.codec,
+      if (station.bitrateKbps > 0) '${station.bitrateKbps} kbps',
+    ];
+    return parts.isEmpty ? 'Station details' : parts.join(' / ');
+  }
+
+  Future<void> _openRadioStation(
+    BuildContext context,
+    RadioBrowserStation station,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => RadioBrowserStationScreen(
+          station: station,
+          provider: _radioProvider,
+          onPlay: (track) => _playRadioStation(context, track),
+          onSave: (track) => _saveRadioStation(context, track),
+        ),
+      ),
+    );
   }
 
   Future<void> _saveRadioStation(BuildContext context, Track track) async {
