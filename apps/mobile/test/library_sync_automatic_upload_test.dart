@@ -90,4 +90,11 @@ class _SyncGateway implements LibrarySyncGateway {
     pushCalls += 1;
     return LibrarySyncRemoteSnapshot(revision: baseRevision + 1);
   }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> delete({
+    required int baseRevision,
+  }) async {
+    return LibrarySyncRemoteSnapshot(revision: baseRevision + 1);
+  }
 }

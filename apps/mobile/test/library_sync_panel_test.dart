@@ -220,6 +220,60 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('deletes the remote snapshot only after confirmation', (
+    tester,
+  ) async {
+    _setPhoneSize(tester);
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[Track(id: 'local', title: 'Local track')]);
+    final gateway = _FakeSyncGateway(
+      remote: LibrarySyncRemoteSnapshot(
+        revision: 2,
+        updatedAt: DateTime.utc(2026, 7, 10),
+        updatedByDevice: 'Desktop',
+        checksum: 'checksum',
+        snapshot: <String, Object?>{
+          'syncVersion': 1,
+          'version': 1,
+          'tracks': <Object?>[],
+          'offlineCacheQueue': <Object?>[],
+        },
+      ),
+      deleteResults: <Object>[
+        LibrarySyncRemoteSnapshot(
+          revision: 3,
+          updatedAt: DateTime.utc(2026, 7, 11),
+          updatedByDevice: 'Phone',
+        ),
+      ],
+    );
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    await sync.setAutomaticUploadEnabled(true);
+    await tester.pumpWidget(_harness(library: library, sync: sync));
+
+    await tester.tap(find.byKey(const Key('library-sync-delete-remote')));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete server snapshot?'), findsOneWidget);
+    expect(library.tracks.single.id, 'local');
+
+    await tester.tap(
+      find.byKey(const Key('library-sync-confirm-delete-remote')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.deletedBaseRevisions, <int>[2]);
+    expect(library.tracks.single.id, 'local');
+    expect(sync.automaticUploadEnabled, isFalse);
+    expect(find.textContaining('Deleted server snapshot at revision 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('offline mode disables every network sync control', (
     tester,
   ) async {
@@ -307,12 +361,16 @@ class _FakeSyncGateway implements LibrarySyncGateway {
   _FakeSyncGateway({
     required this.remote,
     List<Object> pushResults = const <Object>[],
-  }) : pushResults = List<Object>.from(pushResults);
+    List<Object> deleteResults = const <Object>[],
+  })  : pushResults = List<Object>.from(pushResults),
+        deleteResults = List<Object>.from(deleteResults);
 
   LibrarySyncRemoteSnapshot remote;
   final List<Object> pushResults;
+  final List<Object> deleteResults;
   int fetchCalls = 0;
   final List<int> pushedBaseRevisions = <int>[];
+  final List<int> deletedBaseRevisions = <int>[];
 
   @override
   Future<LibrarySyncRemoteSnapshot> fetch() async {
@@ -338,6 +396,25 @@ class _FakeSyncGateway implements LibrarySyncGateway {
       updatedAt: DateTime.utc(2026, 7, 10),
       updatedByDevice: 'Phone',
       checksum: 'checksum',
+    );
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> delete({
+    required int baseRevision,
+  }) async {
+    deletedBaseRevisions.add(baseRevision);
+    if (deleteResults.isNotEmpty) {
+      final result = deleteResults.removeAt(0);
+      if (result is Exception) {
+        throw result;
+      }
+      return result as LibrarySyncRemoteSnapshot;
+    }
+    return LibrarySyncRemoteSnapshot(
+      revision: baseRevision + 1,
+      updatedAt: DateTime.utc(2026, 7, 10),
+      updatedByDevice: 'Phone',
     );
   }
 }

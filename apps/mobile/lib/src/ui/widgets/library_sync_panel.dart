@@ -16,7 +16,8 @@ class LibrarySyncPanel extends StatelessWidget {
     final sync = context.watch<LibrarySyncStore>();
     final library = context.watch<LibraryStore>();
     final account = sync.account;
-    final actionsEnabled = sync.loaded && !sync.busy && !library.offlineModeEnabled;
+    final actionsEnabled =
+        sync.loaded && !sync.busy && !library.offlineModeEnabled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -24,13 +25,17 @@ class LibrarySyncPanel extends StatelessWidget {
         ListTile(
           key: const Key('library-sync-status'),
           leading: Icon(
-            sync.isConfigured ? Icons.cloud_done_outlined : Icons.cloud_outlined,
+            sync.isConfigured
+                ? Icons.cloud_done_outlined
+                : Icons.cloud_outlined,
           ),
           title: const Text('Cross-device library sync'),
           subtitle: Text(_statusText(sync)),
           trailing: IconButton(
             key: const Key('library-sync-configure'),
-            tooltip: sync.isConfigured ? 'Edit sync server' : 'Configure sync server',
+            tooltip: sync.isConfigured
+                ? 'Edit sync server'
+                : 'Configure sync server',
             onPressed: actionsEnabled
                 ? () => _configure(context, account: account)
                 : null,
@@ -57,6 +62,15 @@ class LibrarySyncPanel extends StatelessWidget {
                   tooltip: 'Download server snapshot',
                   onPressed: actionsEnabled ? () => _download(context) : null,
                   icon: const Icon(Icons.cloud_download_outlined),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  key: const Key('library-sync-delete-remote'),
+                  tooltip: 'Delete server snapshot',
+                  onPressed: actionsEnabled
+                      ? () => _deleteRemoteSnapshot(context)
+                      : null,
+                  icon: const Icon(Icons.delete_outline),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
@@ -132,9 +146,9 @@ class LibrarySyncPanel extends StatelessWidget {
     if (!context.mounted || configured != true) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sync server configured.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Sync server configured.')));
   }
 
   static Future<void> _upload(BuildContext context) async {
@@ -221,8 +235,8 @@ class LibrarySyncPanel extends StatelessWidget {
     }
     try {
       final result = await context.read<LibrarySyncStore>().pull(
-            context.read<LibraryStore>(),
-          );
+        context.read<LibraryStore>(),
+      );
       if (context.mounted) {
         _showSuccess(context, 'Downloaded server revision ${result.revision}.');
       }
@@ -239,6 +253,55 @@ class LibrarySyncPanel extends StatelessWidget {
   ) async {
     try {
       await context.read<LibrarySyncStore>().setAutomaticUploadEnabled(enabled);
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, error);
+      }
+    }
+  }
+
+  static Future<void> _deleteRemoteSnapshot(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete server snapshot?'),
+        content: const Text(
+          'This removes the stored server library but keeps this device unchanged. The server records the reset as a new revision, and automatic uploads will be turned off.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            key: const Key('library-sync-confirm-delete-remote'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Delete server copy'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    try {
+      final result = await context
+          .read<LibrarySyncStore>()
+          .deleteRemoteSnapshot(context.read<LibraryStore>());
+      if (context.mounted) {
+        _showSuccess(
+          context,
+          'Deleted server snapshot at revision ${result.revision}.',
+        );
+      }
+    } on LibrarySyncConflictException catch (conflict) {
+      if (context.mounted) {
+        _showError(
+          context,
+          'The server changed at revision ${conflict.currentRevision}. Refresh before deleting it.',
+        );
+      }
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, error);
@@ -267,25 +330,25 @@ class LibrarySyncPanel extends StatelessWidget {
           ),
           OutlinedButton.icon(
             key: const Key('library-sync-use-server'),
-            onPressed: () => Navigator.of(dialogContext).pop(
-              _LibrarySyncConflictChoice.server,
-            ),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_LibrarySyncConflictChoice.server),
             icon: const Icon(Icons.cloud_download_outlined),
             label: const Text('Use server copy'),
           ),
           OutlinedButton.icon(
             key: const Key('library-sync-merge'),
-            onPressed: () => Navigator.of(dialogContext).pop(
-              _LibrarySyncConflictChoice.merge,
-            ),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_LibrarySyncConflictChoice.merge),
             icon: const Icon(Icons.merge_type),
             label: const Text('Merge both'),
           ),
           FilledButton.icon(
             key: const Key('library-sync-use-local'),
-            onPressed: () => Navigator.of(dialogContext).pop(
-              _LibrarySyncConflictChoice.local,
-            ),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_LibrarySyncConflictChoice.local),
             icon: const Icon(Icons.cloud_upload_outlined),
             label: const Text('Use this device'),
           ),
@@ -331,15 +394,15 @@ class LibrarySyncPanel extends StatelessWidget {
   }
 
   static void _showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   static void _showError(BuildContext context, Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.toString())),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error.toString())));
   }
 }
 
@@ -386,8 +449,8 @@ class _LibrarySyncConfigurationDialogState
   @override
   Widget build(BuildContext context) {
     final usesHttp = _urlController.text.trim().toLowerCase().startsWith(
-          'http://',
-        );
+      'http://',
+    );
     return AlertDialog(
       title: const Text('Configure library sync'),
       content: SizedBox(
@@ -426,9 +489,7 @@ class _LibrarySyncConfigurationDialogState
                     tooltip: _obscureToken ? 'Show token' : 'Hide token',
                     onPressed: _saving
                         ? null
-                        : () => setState(
-                              () => _obscureToken = !_obscureToken,
-                            ),
+                        : () => setState(() => _obscureToken = !_obscureToken),
                     icon: Icon(
                       _obscureToken ? Icons.visibility : Icons.visibility_off,
                     ),
@@ -443,13 +504,14 @@ class _LibrarySyncConfigurationDialogState
                   key: const Key('library-sync-insecure-http'),
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Allow insecure HTTP'),
-                  subtitle: const Text('The sync token will be sent without TLS.'),
+                  subtitle: const Text(
+                    'The sync token will be sent without TLS.',
+                  ),
                   value: _allowInsecureHttp,
                   onChanged: _saving
                       ? null
-                      : (value) => setState(
-                            () => _allowInsecureHttp = value ?? false,
-                          ),
+                      : (value) =>
+                            setState(() => _allowInsecureHttp = value ?? false),
                 ),
               if (_error != null) ...<Widget>[
                 const SizedBox(height: 12),
@@ -502,10 +564,10 @@ class _LibrarySyncConfigurationDialogState
         allowInsecureHttp: _allowInsecureHttp,
       );
       await context.read<LibrarySyncStore>().testAndSave(
-            context.read<LibraryStore>(),
-            account,
-            token,
-          );
+        context.read<LibraryStore>(),
+        account,
+        token,
+      );
       if (mounted) {
         Navigator.of(context).pop(true);
       }

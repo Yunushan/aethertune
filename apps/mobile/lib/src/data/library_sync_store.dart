@@ -9,24 +9,20 @@ import 'library_sync_client.dart';
 import 'library_sync_credential_vault.dart';
 import 'provider_error.dart';
 
-typedef LibrarySyncClientFactory = LibrarySyncGateway Function(
-  LibrarySyncAccount account,
-  String token,
-);
+typedef LibrarySyncClientFactory =
+    LibrarySyncGateway Function(LibrarySyncAccount account, String token);
 
 class LibrarySyncStore extends ChangeNotifier {
   LibrarySyncStore({
     LibrarySyncCredentialVault? credentialVault,
     LibrarySyncClientFactory? clientFactory,
     DateTime Function()? clock,
-  })  : _credentialVault =
-            credentialVault ?? SecureLibrarySyncCredentialVault(),
-        _clientFactory = clientFactory ??
-            ((account, token) => LibrarySyncClient(
-                  account: account,
-                  token: token,
-                )),
-        _clock = clock ?? DateTime.now;
+  }) : _credentialVault = credentialVault ?? SecureLibrarySyncCredentialVault(),
+       _clientFactory =
+           clientFactory ??
+           ((account, token) =>
+               LibrarySyncClient(account: account, token: token)),
+       _clock = clock ?? DateTime.now;
 
   static const _metadataKey = 'aethertune.library_sync.metadata.v1';
   static const automaticUploadInterval = Duration(minutes: 15);
@@ -84,9 +80,7 @@ class LibrarySyncStore extends ChangeNotifier {
         _account = LibrarySyncAccount.fromJson(
           Map<String, Object?>.from(rawAccount),
         );
-        _lastKnownRevision = _nonNegativeInt(
-          metadata['lastKnownRevision'],
-        );
+        _lastKnownRevision = _nonNegativeInt(metadata['lastKnownRevision']);
         _remoteRevision = _nonNegativeInt(metadata['remoteRevision']);
         _lastSyncAt = _optionalDate(metadata['lastSyncAt']);
         _remoteUpdatedAt = _optionalDate(metadata['remoteUpdatedAt']);
@@ -263,7 +257,9 @@ class LibrarySyncStore extends ChangeNotifier {
       _requireOnline(library);
       final remote = await _requireClient().fetch();
       if (!remote.hasSnapshot) {
-        throw StateError('The sync server does not have a library snapshot yet.');
+        throw StateError(
+          'The sync server does not have a library snapshot yet.',
+        );
       }
       await library.restoreSyncSnapshotJson(jsonEncode(remote.snapshot));
       _lastKnownRevision = remote.revision;
@@ -281,7 +277,9 @@ class LibrarySyncStore extends ChangeNotifier {
       final client = _requireClient();
       final remote = await client.fetch();
       if (!remote.hasSnapshot) {
-        throw StateError('The sync server does not have a library snapshot yet.');
+        throw StateError(
+          'The sync server does not have a library snapshot yet.',
+        );
       }
       final localBeforeMerge = library.exportSyncSnapshotJson();
       var remoteAcceptedMerge = false;
@@ -289,7 +287,9 @@ class LibrarySyncStore extends ChangeNotifier {
         await library.mergeSyncSnapshotJson(jsonEncode(remote.snapshot));
         final decoded = jsonDecode(library.exportSyncSnapshotJson());
         if (decoded is! Map) {
-          throw const FormatException('Merged portable library snapshot is invalid.');
+          throw const FormatException(
+            'Merged portable library snapshot is invalid.',
+          );
         }
         final result = await client.push(
           baseRevision: remote.revision,
@@ -306,6 +306,30 @@ class LibrarySyncStore extends ChangeNotifier {
         if (!remoteAcceptedMerge) {
           await library.restoreSyncSnapshotJson(localBeforeMerge);
         }
+        rethrow;
+      }
+    });
+  }
+
+  Future<LibrarySyncRemoteSnapshot> deleteRemoteSnapshot(LibraryStore library) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      try {
+        final result = await client.delete(baseRevision: _remoteRevision);
+        _lastKnownRevision = result.revision;
+        _applyRemoteMetadata(result);
+        _lastSyncAt = _clock().toUtc();
+        _automaticUploadEnabled = false;
+        _conflict = null;
+        await _saveMetadata();
+        return result;
+      } on LibrarySyncConflictException catch (error) {
+        _conflict = error;
+        _remoteRevision = error.currentRevision;
+        _remoteUpdatedAt = error.updatedAt;
+        _remoteUpdatedByDevice = error.updatedByDevice;
+        await _saveMetadata();
         rethrow;
       }
     });
@@ -396,8 +420,8 @@ class LibrarySyncStore extends ChangeNotifier {
         'remoteUpdatedAt': _remoteUpdatedAt?.toIso8601String(),
         'remoteUpdatedByDevice': _remoteUpdatedByDevice,
         'automaticUploadEnabled': _automaticUploadEnabled,
-        'lastAutomaticUploadAttemptAt':
-            _lastAutomaticUploadAttemptAt?.toIso8601String(),
+        'lastAutomaticUploadAttemptAt': _lastAutomaticUploadAttemptAt
+            ?.toIso8601String(),
         'lastAutomaticUploadAt': _lastAutomaticUploadAt?.toIso8601String(),
       }),
     );

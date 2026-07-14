@@ -153,34 +153,62 @@ Future<Response> _handleLibrarySync(
     case 'PUT':
       try {
         final body = await _readBoundedJson(request);
-        final baseRevision = body['baseRevision'];
-        final rawDeviceId = body['deviceId'];
+        final mutation = _syncMutationFields(body);
         final rawSnapshot = body['snapshot'];
-        if (baseRevision is! int || baseRevision < 0) {
-          throw const FormatException(
-            'baseRevision must be a non-negative integer.',
-          );
-        }
-        if (rawDeviceId is! String || rawDeviceId.trim().isEmpty) {
-          throw const FormatException('deviceId is required.');
-        }
-        final deviceId = rawDeviceId.trim();
-        if (deviceId.length > 128) {
-          throw const FormatException('deviceId is too long.');
-        }
         if (rawSnapshot is! Map) {
           throw const FormatException('snapshot must be an object.');
         }
         final snapshot = Map<String, Object?>.from(rawSnapshot);
         _validateSyncSnapshot(snapshot);
         final canonicalSnapshot = jsonEncode(snapshot);
-        final checksum = sha256.convert(utf8.encode(canonicalSnapshot)).toString();
+        final checksum =
+            sha256.convert(utf8.encode(canonicalSnapshot)).toString();
         final result = await snapshots.write(
           userId: userId,
-          baseRevision: baseRevision,
-          deviceId: deviceId,
+          baseRevision: mutation.baseRevision,
+          deviceId: mutation.deviceId,
           snapshot: snapshot,
           checksum: checksum,
+          updatedAt: now().toUtc(),
+        );
+        if (result.isConflict) {
+          final current = result.snapshot;
+          return _jsonResponse(
+            409,
+            <String, Object?>{
+              'error': 'sync_conflict',
+              'currentRevision': current?.revision ?? 0,
+              'updatedAt': current?.updatedAt.toIso8601String(),
+              'updatedByDevice': current?.updatedByDevice,
+              'checksum': current?.checksum,
+            },
+          );
+        }
+        return _jsonResponse(200, result.snapshot!.toMetadataJson());
+      } on _PayloadTooLarge {
+        return _jsonResponse(
+          413,
+          <String, Object?>{
+            'error': 'payload_too_large',
+            'maxBytes': maxSyncSnapshotBytes,
+          },
+        );
+      } on FormatException catch (error) {
+        return _jsonResponse(
+          400,
+          <String, Object?>{
+            'error': 'invalid_sync_snapshot',
+            'message': error.message,
+          },
+        );
+      }
+    case 'DELETE':
+      try {
+        final mutation = _syncMutationFields(await _readBoundedJson(request));
+        final result = await snapshots.delete(
+          userId: userId,
+          baseRevision: mutation.baseRevision,
+          deviceId: mutation.deviceId,
           updatedAt: now().toUtc(),
         );
         if (result.isConflict) {
@@ -217,6 +245,24 @@ Future<Response> _handleLibrarySync(
     default:
       return _methodNotAllowed(request);
   }
+}
+
+({int baseRevision, String deviceId}) _syncMutationFields(
+  Map<String, Object?> body,
+) {
+  final baseRevision = body['baseRevision'];
+  final rawDeviceId = body['deviceId'];
+  if (baseRevision is! int || baseRevision < 0) {
+    throw const FormatException('baseRevision must be a non-negative integer.');
+  }
+  if (rawDeviceId is! String || rawDeviceId.trim().isEmpty) {
+    throw const FormatException('deviceId is required.');
+  }
+  final deviceId = rawDeviceId.trim();
+  if (deviceId.length > 128) {
+    throw const FormatException('deviceId is too long.');
+  }
+  return (baseRevision: baseRevision, deviceId: deviceId);
 }
 
 Future<Map<String, Object?>> _readBoundedJson(Request request) async {
@@ -332,7 +378,9 @@ class StaticSyncAuthenticator implements SyncAuthenticator {
     }
     final decoded = jsonDecode(rawUsers);
     if (decoded is! Map) {
-      throw const FormatException('AETHERTUNE_SYNC_USERS must be a JSON object.');
+      throw const FormatException(
+        'AETHERTUNE_SYNC_USERS must be a JSON object.',
+      );
     }
     return StaticSyncAuthenticator(
       decoded.map(
@@ -392,15 +440,22 @@ class LibrarySyncSnapshot {
     required this.revision,
     required this.updatedAt,
     required this.updatedByDevice,
-    required this.checksum,
-    required this.snapshot,
-  });
+    this.checksum,
+    this.snapshot,
+  }) : assert((checksum == null) == (snapshot == null));
+
+  const LibrarySyncSnapshot.deleted({
+    required this.revision,
+    required this.updatedAt,
+    required this.updatedByDevice,
+  })  : checksum = null,
+        snapshot = null;
 
   final int revision;
   final DateTime updatedAt;
   final String updatedByDevice;
-  final String checksum;
-  final Map<String, Object?> snapshot;
+  final String? checksum;
+  final Map<String, Object?>? snapshot;
 
   Map<String, Object?> toMetadataJson() {
     return <String, Object?>{
@@ -429,15 +484,29 @@ class LibrarySyncSnapshot {
     if (revision is! int ||
         revision <= 0 ||
         updatedAt == null ||
-        updatedByDevice is! String ||
-        checksum is! String ||
-        rawSnapshot is! Map) {
+        updatedByDevice is! String) {
+      throw const FormatException('Stored sync snapshot is invalid.');
+    }
+    if (rawSnapshot == null) {
+      if (checksum != null) {
+        throw const FormatException('Stored sync deletion is invalid.');
+      }
+      return LibrarySyncSnapshot.deleted(
+        revision: revision,
+        updatedAt: updatedAt.toUtc(),
+        updatedByDevice: updatedByDevice,
+      );
+    }
+    if (checksum is! String || rawSnapshot is! Map) {
       throw const FormatException('Stored sync snapshot is invalid.');
     }
     final snapshot = Map<String, Object?>.from(rawSnapshot);
-    final actualChecksum = sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
+    final actualChecksum =
+        sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
     if (actualChecksum != checksum) {
-      throw const FormatException('Stored sync snapshot checksum does not match.');
+      throw const FormatException(
+        'Stored sync snapshot checksum does not match.',
+      );
     }
     return LibrarySyncSnapshot(
       revision: revision,
@@ -478,6 +547,13 @@ abstract interface class LibrarySyncSnapshotStore {
     required String checksum,
     required DateTime updatedAt,
   });
+
+  Future<LibrarySyncWriteResult> delete({
+    required String userId,
+    required int baseRevision,
+    required String deviceId,
+    required DateTime updatedAt,
+  });
 }
 
 class MemoryLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
@@ -509,6 +585,26 @@ class MemoryLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
     );
     _snapshots[userId] = saved;
     return LibrarySyncWriteResult.saved(saved);
+  }
+
+  @override
+  Future<LibrarySyncWriteResult> delete({
+    required String userId,
+    required int baseRevision,
+    required String deviceId,
+    required DateTime updatedAt,
+  }) async {
+    final current = _snapshots[userId];
+    if ((current?.revision ?? 0) != baseRevision) {
+      return LibrarySyncWriteResult.conflict(current);
+    }
+    final deleted = LibrarySyncSnapshot.deleted(
+      revision: baseRevision + 1,
+      updatedAt: updatedAt.toUtc(),
+      updatedByDevice: deviceId,
+    );
+    _snapshots[userId] = deleted;
+    return LibrarySyncWriteResult.saved(deleted);
   }
 }
 
@@ -545,37 +641,66 @@ class FileLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
         checksum: checksum,
         snapshot: Map<String, Object?>.from(snapshot),
       );
-      final directory = _userDirectory(userId);
-      await directory.create(recursive: true);
-      final finalFile = File(
-        p.join(directory.path, 'snapshot-${saved.revision}.json'),
-      );
-      final temporaryFile = File(
-        p.join(
-          directory.path,
-          '.snapshot-${saved.revision}-${DateTime.now().microsecondsSinceEpoch}.tmp',
-        ),
-      );
-      await temporaryFile.writeAsString(
-        jsonEncode(saved.toStorageJson()),
-        flush: true,
-      );
-      await temporaryFile.rename(finalFile.path);
-
-      await for (final entity in directory.list()) {
-        if (entity is File &&
-            entity.path != finalFile.path &&
-            p.basename(entity.path).startsWith('snapshot-') &&
-            p.extension(entity.path) == '.json') {
-          try {
-            await entity.delete();
-          } on FileSystemException {
-            // The newest complete revision is already durable.
-          }
-        }
-      }
+      await _writeUnlocked(userId, saved);
       return LibrarySyncWriteResult.saved(saved);
     });
+  }
+
+  @override
+  Future<LibrarySyncWriteResult> delete({
+    required String userId,
+    required int baseRevision,
+    required String deviceId,
+    required DateTime updatedAt,
+  }) {
+    return _serialized(userId, () async {
+      final current = await _readUnlocked(userId);
+      if ((current?.revision ?? 0) != baseRevision) {
+        return LibrarySyncWriteResult.conflict(current);
+      }
+      final deleted = LibrarySyncSnapshot.deleted(
+        revision: baseRevision + 1,
+        updatedAt: updatedAt.toUtc(),
+        updatedByDevice: deviceId,
+      );
+      await _writeUnlocked(userId, deleted);
+      return LibrarySyncWriteResult.saved(deleted);
+    });
+  }
+
+  Future<void> _writeUnlocked(
+    String userId,
+    LibrarySyncSnapshot saved,
+  ) async {
+    final directory = _userDirectory(userId);
+    await directory.create(recursive: true);
+    final finalFile = File(
+      p.join(directory.path, 'snapshot-${saved.revision}.json'),
+    );
+    final temporaryFile = File(
+      p.join(
+        directory.path,
+        '.snapshot-${saved.revision}-${DateTime.now().microsecondsSinceEpoch}.tmp',
+      ),
+    );
+    await temporaryFile.writeAsString(
+      jsonEncode(saved.toStorageJson()),
+      flush: true,
+    );
+    await temporaryFile.rename(finalFile.path);
+
+    await for (final entity in directory.list()) {
+      if (entity is File &&
+          entity.path != finalFile.path &&
+          p.basename(entity.path).startsWith('snapshot-') &&
+          p.extension(entity.path) == '.json') {
+        try {
+          await entity.delete();
+        } on FileSystemException {
+          // The newest complete revision is already durable.
+        }
+      }
+    }
   }
 
   Future<LibrarySyncSnapshot?> _readUnlocked(String userId) async {

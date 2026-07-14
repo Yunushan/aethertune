@@ -8,18 +8,16 @@ import 'provider_error.dart';
 
 const maxLibrarySyncResponseBytes = 9 * 1024 * 1024;
 
-typedef LibrarySyncHttpExecutor = Future<LibrarySyncHttpResponse> Function(
-  String method,
-  Uri uri, {
-  required Map<String, String> headers,
-  String? body,
-});
+typedef LibrarySyncHttpExecutor =
+    Future<LibrarySyncHttpResponse> Function(
+      String method,
+      Uri uri, {
+      required Map<String, String> headers,
+      String? body,
+    });
 
 class LibrarySyncHttpResponse {
-  const LibrarySyncHttpResponse({
-    required this.statusCode,
-    required this.body,
-  });
+  const LibrarySyncHttpResponse({required this.statusCode, required this.body});
 
   final int statusCode;
   final String body;
@@ -69,6 +67,8 @@ abstract interface class LibrarySyncGateway {
     required int baseRevision,
     required Map<String, Object?> snapshot,
   });
+
+  Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision});
 }
 
 class LibrarySyncClient implements LibrarySyncGateway {
@@ -92,7 +92,9 @@ class LibrarySyncClient implements LibrarySyncGateway {
     final snapshot = result.snapshot;
     if (snapshot != null) {
       final expected = result.checksum;
-      final actual = sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
+      final actual = sha256
+          .convert(utf8.encode(jsonEncode(snapshot)))
+          .toString();
       if (expected == null || expected != actual) {
         throw const ProviderRequestException(
           'Library sync response checksum does not match.',
@@ -113,6 +115,42 @@ class LibrarySyncClient implements LibrarySyncGateway {
         'baseRevision': baseRevision,
         'deviceId': account.deviceId,
         'snapshot': snapshot,
+      }),
+    );
+    if (response.statusCode == 409) {
+      final body = _jsonObject(response.body);
+      throw LibrarySyncConflictException(
+        currentRevision: body['currentRevision'] as int? ?? 0,
+        updatedAt: _optionalDate(body['updatedAt']),
+        updatedByDevice: _optionalString(body['updatedByDevice']),
+        checksum: _optionalString(body['checksum']),
+      );
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final body = _jsonObject(response.body);
+    final revision = body['revision'];
+    if (revision is! int || revision <= baseRevision) {
+      throw const ProviderRequestException(
+        'Library sync returned an invalid revision.',
+      );
+    }
+    return LibrarySyncRemoteSnapshot(
+      revision: revision,
+      updatedAt: _optionalDate(body['updatedAt']),
+      updatedByDevice: _optionalString(body['updatedByDevice']),
+      checksum: _optionalString(body['checksum']),
+    );
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision}) async {
+    final response = await _execute(
+      'DELETE',
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
       }),
     );
     if (response.statusCode == 409) {
@@ -176,8 +214,8 @@ class LibrarySyncClient implements LibrarySyncGateway {
     String? detail;
     try {
       final body = _jsonObject(response.body);
-      detail = _optionalString(body['message']) ??
-          _optionalString(body['error']);
+      detail =
+          _optionalString(body['message']) ?? _optionalString(body['error']);
     } on FormatException {
       detail = null;
     }
@@ -204,8 +242,15 @@ LibrarySyncRemoteSnapshot _parseRemoteSnapshot(String rawBody) {
     throw const FormatException('Library sync revision is invalid.');
   }
   final rawSnapshot = body['snapshot'];
-  if (revision == 0 && rawSnapshot == null) {
-    return const LibrarySyncRemoteSnapshot(revision: 0);
+  if (rawSnapshot == null) {
+    if (body['checksum'] != null) {
+      throw const FormatException('Library sync deletion metadata is invalid.');
+    }
+    return LibrarySyncRemoteSnapshot(
+      revision: revision,
+      updatedAt: _optionalDate(body['updatedAt']),
+      updatedByDevice: _optionalString(body['updatedByDevice']),
+    );
   }
   if (rawSnapshot is! Map) {
     throw const FormatException('Library sync snapshot is invalid.');

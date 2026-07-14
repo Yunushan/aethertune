@@ -229,6 +229,70 @@ void main() {
       expect((await _json(resolved))['revision'], 2);
     });
 
+    test('deletes a snapshot as a revisioned tombstone', () async {
+      final handler = createServerHandler(
+        clock: () => DateTime.utc(2026, 7, 10, 14),
+        syncAuthenticator: authenticator,
+        syncStore: store,
+      );
+      final uploaded = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/library',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'phone',
+            'snapshot': _syncSnapshot(),
+          },
+        ),
+      );
+      expect(uploaded.statusCode, 200);
+
+      final deleted = await handler(
+        _request(
+          'DELETE',
+          '/api/v1/sync/library',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 1,
+            'deviceId': 'desktop',
+          },
+        ),
+      );
+      final deletedBody = await _json(deleted);
+      expect(deleted.statusCode, 200);
+      expect(deletedBody['revision'], 2);
+      expect(deletedBody['checksum'], isNull);
+      expect(deletedBody['updatedByDevice'], 'desktop');
+
+      final fetched = await handler(
+        _request('GET', '/api/v1/sync/library', token: token),
+      );
+      final fetchedBody = await _json(fetched);
+      expect(fetched.statusCode, 200);
+      expect(fetchedBody['revision'], 2);
+      expect(fetchedBody['snapshot'], isNull);
+      expect(fetchedBody['checksum'], isNull);
+
+      final staleWrite = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/library',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 1,
+            'deviceId': 'phone',
+            'snapshot': _syncSnapshot(title: 'Stale copy'),
+          },
+        ),
+      );
+      final staleBody = await _json(staleWrite);
+      expect(staleWrite.statusCode, 409);
+      expect(staleBody['currentRevision'], 2);
+      expect(staleBody['checksum'], isNull);
+    });
+
     test('rejects local paths, device cache jobs, and oversized requests',
         () async {
       final handler = createServerHandler(
@@ -313,7 +377,7 @@ void main() {
     final restartedStore = FileLibrarySyncSnapshotStore(root);
     final restored = await restartedStore.read('private-user-name');
     expect(restored?.revision, 1);
-    expect(restored?.snapshot['name'], 'Revision one');
+    expect(restored?.snapshot?['name'], 'Revision one');
 
     final conflict = await restartedStore.write(
       userId: 'private-user-name',
@@ -337,13 +401,39 @@ void main() {
     );
     expect(second.snapshot?.revision, 2);
 
+    final deleted = await restartedStore.delete(
+      userId: 'private-user-name',
+      baseRevision: 2,
+      deviceId: 'desktop',
+      updatedAt: DateTime.utc(2026, 7, 10, 16),
+    );
+    expect(deleted.isConflict, isFalse);
+    expect(deleted.snapshot?.revision, 3);
+    expect(deleted.snapshot?.snapshot, isNull);
+
+    final afterDeletionRestart = FileLibrarySyncSnapshotStore(root);
+    final tombstone = await afterDeletionRestart.read('private-user-name');
+    expect(tombstone?.revision, 3);
+    expect(tombstone?.snapshot, isNull);
+
+    final staleAfterDeletion = await afterDeletionRestart.write(
+      userId: 'private-user-name',
+      baseRevision: 2,
+      deviceId: 'phone',
+      snapshot: _syncSnapshot(title: 'Stale after deletion'),
+      checksum: _checksum(_syncSnapshot(title: 'Stale after deletion')),
+      updatedAt: DateTime.utc(2026, 7, 10, 17),
+    );
+    expect(staleAfterDeletion.isConflict, isTrue);
+    expect(staleAfterDeletion.snapshot?.revision, 3);
+
     final files = await root
         .list(recursive: true)
         .where((entity) => entity is File)
         .cast<File>()
         .toList();
     expect(files, hasLength(1));
-    expect(files.single.path, endsWith('snapshot-2.json'));
+    expect(files.single.path, endsWith('snapshot-3.json'));
     expect(files.single.path, isNot(contains('private-user-name')));
   });
 

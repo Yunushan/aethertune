@@ -179,6 +179,64 @@ void main() {
     expect(requestBody?['deviceId'], 'Test device');
     expect(requestBody?['snapshot'], snapshot);
   });
+
+  test('deletes a remote snapshot with the current revision', () async {
+    String? method;
+    Map<String, Object?>? requestBody;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (capturedMethod, uri, {required headers, body}) async {
+        method = capturedMethod;
+        requestBody = jsonDecode(body!) as Map<String, Object?>;
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 5,
+            'updatedAt': '2026-07-10T15:00:00.000Z',
+            'updatedByDevice': 'Test device',
+            'checksum': null,
+          }),
+        );
+      },
+    );
+
+    final result = await client.delete(baseRevision: 4);
+
+    expect(method, 'DELETE');
+    expect(requestBody, <String, Object?>{
+      'baseRevision': 4,
+      'deviceId': 'Test device',
+    });
+    expect(result.revision, 5);
+    expect(result.hasSnapshot, isFalse);
+    expect(result.checksum, isNull);
+  });
+
+  test('accepts a revisioned remote deletion during fetch', () async {
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 6,
+            'updatedAt': '2026-07-10T16:00:00.000Z',
+            'updatedByDevice': 'Desktop',
+            'checksum': null,
+            'snapshot': null,
+          }),
+        );
+      },
+    );
+
+    final result = await client.fetch();
+
+    expect(result.revision, 6);
+    expect(result.hasSnapshot, isFalse);
+    expect(result.updatedByDevice, 'Desktop');
+  });
 }
 
 LibrarySyncAccount _account() {

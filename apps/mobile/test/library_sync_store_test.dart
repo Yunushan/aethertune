@@ -210,6 +210,45 @@ void main() {
     expect(sync.conflict, isNull);
   });
 
+  test('deletes only the remote snapshot and disables automatic upload',
+      () async {
+    final gateway = _FakeSyncGateway(
+      remote: LibrarySyncRemoteSnapshot(
+        revision: 4,
+        updatedAt: DateTime.utc(2026, 7, 10),
+        updatedByDevice: 'Desktop',
+        checksum: 'checksum',
+        snapshot: _emptySnapshot(),
+      ),
+    )
+      ..deleteResult = LibrarySyncRemoteSnapshot(
+        revision: 5,
+        updatedAt: DateTime.utc(2026, 7, 11),
+        updatedByDevice: 'Test device',
+      );
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+      clock: () => DateTime.utc(2026, 7, 11),
+    );
+    await library.load();
+    await library.addTracks(<Track>[Track(id: 'local', title: 'Local')]);
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    await sync.setAutomaticUploadEnabled(true);
+
+    final result = await sync.deleteRemoteSnapshot(library);
+
+    expect(gateway.deletedBaseRevisions, <int>[4]);
+    expect(result.revision, 5);
+    expect(result.hasSnapshot, isFalse);
+    expect(sync.lastKnownRevision, 5);
+    expect(sync.remoteRevision, 5);
+    expect(sync.automaticUploadEnabled, isFalse);
+    expect(library.tracks.single.id, 'local');
+  });
+
   test('merge and push keeps the accepted merged library', () async {
     final remoteSnapshot = _emptySnapshot()
       ..['tracks'] = <Object?>[
@@ -409,8 +448,11 @@ class _FakeSyncGateway implements LibrarySyncGateway {
   Object? fetchError;
   Object? pushError;
   LibrarySyncRemoteSnapshot? pushResult;
+  Object? deleteError;
+  LibrarySyncRemoteSnapshot? deleteResult;
   int pushCalls = 0;
   final List<int> pushedBaseRevisions = <int>[];
+  final List<int> deletedBaseRevisions = <int>[];
   final List<Map<String, Object?>> pushedSnapshots =
       <Map<String, Object?>>[];
 
@@ -439,6 +481,22 @@ class _FakeSyncGateway implements LibrarySyncGateway {
           updatedAt: DateTime.utc(2026, 7, 10),
           updatedByDevice: 'Test device',
           checksum: 'checksum',
+        );
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> delete({
+    required int baseRevision,
+  }) async {
+    deletedBaseRevisions.add(baseRevision);
+    if (deleteError != null) {
+      throw deleteError!;
+    }
+    return deleteResult ??
+        LibrarySyncRemoteSnapshot(
+          revision: baseRevision + 1,
+          updatedAt: DateTime.utc(2026, 7, 10),
+          updatedByDevice: 'Test device',
         );
   }
 }
