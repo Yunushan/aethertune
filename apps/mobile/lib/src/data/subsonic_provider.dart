@@ -19,7 +19,8 @@ class SubsonicProvider
     implements
         MusicCatalogDiscoveryProvider,
         MusicCatalogPagingProvider,
-        MusicPlaylistMutationProvider {
+        MusicPlaylistMutationProvider,
+        MusicSourceSearchPagingProvider {
   SubsonicProvider({
     required this.baseUri,
     required this.username,
@@ -101,19 +102,38 @@ class SubsonicProvider
   }
 
   Future<List<Track>> searchSongs(String query) async {
+    final page = await searchPage(query, limit: limit);
+    return page.tracks;
+  }
+
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    final offset = _subsonicSearchOffset(cursor);
     final normalizedQuery = query.trim();
     if (normalizedQuery.isEmpty) {
-      return const <Track>[];
+      return const MusicSourceSearchPage(tracks: <Track>[]);
     }
-
+    final boundedLimit = limit.clamp(1, 500);
     return _guardRequest(() async {
-      final songs = parseSubsonicSearchResponse(
-        await _requestLoader(_searchUri(normalizedQuery)),
+      return parseSubsonicSearchPageResponse(
+        await _requestLoader(
+          _searchUri(
+            normalizedQuery,
+            offset: offset,
+            limit: boundedLimit,
+          ),
+        ),
+        sourceId: id,
+        requestOffset: offset,
+        requestLimit: boundedLimit,
       );
-      return songs
-          .take(limit)
-          .map((song) => song.toTrack(sourceId: id))
-          .toList(growable: false);
     });
   }
 
@@ -455,7 +475,11 @@ class SubsonicProvider
     );
   }
 
-  Uri _searchUri(String query) {
+  Uri _searchUri(
+    String query, {
+    required int offset,
+    required int limit,
+  }) {
     return _requestUri(
       '/rest/search3.view',
       <String, String>{
@@ -463,6 +487,7 @@ class SubsonicProvider
         'artistCount': '0',
         'albumCount': '0',
         'songCount': limit.toString(),
+        'songOffset': offset.toString(),
       },
     );
   }
@@ -562,6 +587,31 @@ List<SubsonicSong> parseSubsonicSearchResponse(String jsonText) {
       .map((song) => _songFromJson(song.cast<String, Object?>()))
       .whereType<SubsonicSong>()
       .toList(growable: false);
+}
+
+MusicSourceSearchPage parseSubsonicSearchPageResponse(
+  String jsonText, {
+  required String sourceId,
+  required int requestOffset,
+  required int requestLimit,
+}) {
+  final response = _subsonicResponse(jsonText);
+  final searchResult = response['searchResult3'];
+  final rawSongs = searchResult is Map<dynamic, dynamic>
+      ? _jsonList(searchResult['song'])
+      : const <Object?>[];
+  final tracks = rawSongs
+      .whereType<Map<dynamic, dynamic>>()
+      .map((song) => _songFromJson(song.cast<String, Object?>()))
+      .whereType<SubsonicSong>()
+      .map((song) => song.toTrack(sourceId: sourceId))
+      .toList(growable: false);
+  final nextOffset = requestOffset + rawSongs.length;
+  final hasMore = rawSongs.isNotEmpty && rawSongs.length >= requestLimit;
+  return MusicSourceSearchPage(
+    tracks: List<Track>.unmodifiable(tracks),
+    nextCursor: hasMore ? nextOffset.toString() : null,
+  );
 }
 
 List<MusicCatalogCollection> parseSubsonicArtistsResponse(String jsonText) {
@@ -871,4 +921,15 @@ int _intValue(Object? value) {
   }
 
   return int.tryParse(_stringValue(value)) ?? 0;
+}
+
+int _subsonicSearchOffset(String? cursor) {
+  if (cursor == null) {
+    return 0;
+  }
+  final offset = int.tryParse(cursor);
+  if (offset == null || offset < 0) {
+    throw ArgumentError.value(cursor, 'cursor', 'Invalid search cursor.');
+  }
+  return offset;
 }

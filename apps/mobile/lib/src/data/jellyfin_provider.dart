@@ -20,7 +20,8 @@ class JellyfinProvider
     implements
         MusicCatalogDiscoveryProvider,
         MusicCatalogPagingProvider,
-        MusicPlaylistMutationProvider {
+        MusicPlaylistMutationProvider,
+        MusicSourceSearchPagingProvider {
   JellyfinProvider({
     required this.baseUri,
     required this.userId,
@@ -98,20 +99,38 @@ class JellyfinProvider
   }
 
   Future<List<Track>> searchAudio(String query) async {
+    final page = await searchPage(query, limit: limit);
+    return page.tracks;
+  }
+
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    final offset = _jellyfinSearchOffset(cursor);
     final normalizedQuery = query.trim();
     if (normalizedQuery.isEmpty) {
-      return const <Track>[];
+      return const MusicSourceSearchPage(tracks: <Track>[]);
     }
-
+    final boundedLimit = limit.clamp(1, 500);
     return _guardRequest(() async {
-      final items = parseJellyfinItemsResponse(
-        await _requestLoader(_searchUri(normalizedQuery)),
+      return parseJellyfinSearchPageResponse(
+        await _requestLoader(
+          _searchUri(
+            normalizedQuery,
+            offset: offset,
+            limit: boundedLimit,
+          ),
+        ),
+        sourceId: id,
+        requestOffset: offset,
+        requestLimit: boundedLimit,
       );
-
-      return items
-          .take(limit)
-          .map((item) => item.toTrack(sourceId: id))
-          .toList(growable: false);
     });
   }
 
@@ -463,7 +482,11 @@ class JellyfinProvider
     );
   }
 
-  Uri _searchUri(String query) {
+  Uri _searchUri(
+    String query, {
+    required int offset,
+    required int limit,
+  }) {
     return _requestUri(
       '/Users/$userId/Items',
       <String, String>{
@@ -474,7 +497,9 @@ class JellyfinProvider
         'EnableImages': 'true',
         'EnableImageTypes': 'Primary',
         'ImageTypeLimit': '1',
+        'StartIndex': offset.toString(),
         'Limit': limit.toString(),
+        'EnableTotalRecordCount': 'true',
       },
     );
   }
@@ -610,6 +635,41 @@ List<JellyfinAudioItem> parseJellyfinItemsResponse(String jsonText) {
       .map((item) => _audioItemFromJson(item.cast<String, Object?>()))
       .whereType<JellyfinAudioItem>()
       .toList(growable: false);
+}
+
+MusicSourceSearchPage parseJellyfinSearchPageResponse(
+  String jsonText, {
+  required String sourceId,
+  required int requestOffset,
+  required int requestLimit,
+}) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('Jellyfin response must be a JSON object.');
+  }
+
+  final rawItems = _jsonList(decoded['Items']);
+  final tracks = rawItems
+      .whereType<Map<dynamic, dynamic>>()
+      .map((item) => _audioItemFromJson(item.cast<String, Object?>()))
+      .whereType<JellyfinAudioItem>()
+      .map((item) => item.toTrack(sourceId: sourceId))
+      .toList(growable: false);
+  final reportedStart = _optionalNonNegativeInt(decoded['StartIndex']);
+  final startIndex = reportedStart == null || reportedStart < requestOffset
+      ? requestOffset
+      : reportedStart;
+  final totalCount = _optionalNonNegativeInt(decoded['TotalRecordCount']);
+  final nextOffset = startIndex + rawItems.length;
+  final hasMore = rawItems.isNotEmpty &&
+      (totalCount == null
+          ? rawItems.length >= requestLimit
+          : nextOffset < totalCount);
+  return MusicSourceSearchPage(
+    tracks: List<Track>.unmodifiable(tracks),
+    nextCursor: hasMore ? nextOffset.toString() : null,
+    totalCount: totalCount,
+  );
 }
 
 List<MusicCatalogCollection> parseJellyfinCollectionsResponse(
@@ -910,4 +970,15 @@ int? _optionalNonNegativeInt(Object? value) {
   }
   final parsed = _intValue(value);
   return parsed < 0 ? null : parsed;
+}
+
+int _jellyfinSearchOffset(String? cursor) {
+  if (cursor == null) {
+    return 0;
+  }
+  final offset = int.tryParse(cursor);
+  if (offset == null || offset < 0) {
+    throw ArgumentError.value(cursor, 'cursor', 'Invalid search cursor.');
+  }
+  return offset;
 }

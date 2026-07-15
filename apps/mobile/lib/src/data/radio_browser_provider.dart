@@ -76,7 +76,7 @@ final class RadioBrowserStationSearchPage {
   final bool hasMore;
 }
 
-class RadioBrowserProvider implements MusicSourceProvider {
+class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
   RadioBrowserProvider({
     Uri? baseUri,
     Uri? mirrorDirectoryUri,
@@ -152,19 +152,55 @@ class RadioBrowserProvider implements MusicSourceProvider {
     return page.tracks;
   }
 
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final offset = _radioSearchOffset(cursor);
+    final page = await searchStationPage(
+      query,
+      offset: offset,
+      pageSize: limit.clamp(1, 500),
+    );
+    return MusicSourceSearchPage(
+      tracks: List<Track>.unmodifiable(page.tracks),
+      nextCursor: page.hasMore ? page.nextOffset.toString() : null,
+    );
+  }
+
   Future<RadioBrowserStationSearchPage> searchStationPage(
     String query, {
     RadioBrowserSearchFilters filters = const RadioBrowserSearchFilters(),
     int offset = 0,
+    int? pageSize,
   }) async {
     if (offset < 0) {
       throw ArgumentError.value(offset, 'offset', 'must not be negative');
+    }
+    final effectiveLimit = pageSize ?? limit;
+    if (effectiveLimit <= 0) {
+      throw ArgumentError.value(
+        effectiveLimit,
+        'pageSize',
+        'must be positive',
+      );
     }
 
     final normalized = query.trim();
     final baseUri = await _resolvedBaseUri();
     final response = await _searchLoader(
-      _searchUri(baseUri, normalized, filters, offset),
+      _searchUri(
+        baseUri,
+        normalized,
+        filters,
+        offset,
+        effectiveLimit,
+      ),
     );
     final returnedStationCount = _radioBrowserResponseCount(response);
     final stations = parseRadioBrowserStations(response);
@@ -182,7 +218,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
           .map((station) => station.toTrack(sourceId: id))
           .toList(growable: false),
       nextOffset: offset + returnedStationCount,
-      hasMore: returnedStationCount >= limit,
+      hasMore: returnedStationCount >= effectiveLimit,
     );
   }
 
@@ -250,6 +286,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
     String query,
     RadioBrowserSearchFilters filters,
     int offset,
+    int pageSize,
   ) {
     final countryCode = _nonEmpty(filters.countryCode)?.toUpperCase();
     final language = _nonEmpty(filters.language);
@@ -271,7 +308,7 @@ class RadioBrowserProvider implements MusicSourceProvider {
         if (maxBitrateKbps != null && maxBitrateKbps > 0)
           'bitrateMax': maxBitrateKbps.toString(),
         'hidebroken': 'true',
-        'limit': limit.toString(),
+        'limit': pageSize.toString(),
         'offset': offset.toString(),
         'order': 'clickcount',
         'reverse': 'true',
@@ -288,6 +325,17 @@ class RadioBrowserProvider implements MusicSourceProvider {
       queryParameters: const <String, String>{},
     );
   }
+}
+
+int _radioSearchOffset(String? cursor) {
+  if (cursor == null) {
+    return 0;
+  }
+  final offset = int.tryParse(cursor);
+  if (offset == null || offset < 0) {
+    throw ArgumentError.value(cursor, 'cursor', 'Invalid search cursor.');
+  }
+  return offset;
 }
 
 int _radioBrowserResponseCount(String jsonText) {

@@ -208,6 +208,94 @@ void main() {
     ]);
   });
 
+  test('continues local library search without dropping results', () async {
+    final coordinator = ProviderSearchCoordinator(
+      <MusicSourceProvider>[
+        LocalLibraryProvider(
+          tracks: <Track>[
+            Track(id: 'one', title: 'Aether One'),
+            Track(id: 'two', title: 'Aether Two'),
+            Track(id: 'three', title: 'Aether Three'),
+          ],
+        ),
+      ],
+      maxResultsPerProvider: 2,
+    );
+
+    final first = await coordinator.search('aether');
+    final second = await coordinator.continueSearch(
+      'aether',
+      first.continuations,
+    );
+    final merged = mergeProviderSearchResults(first.results, second.results);
+
+    expect(first.results, hasLength(2));
+    expect(first.continuations, <String, String>{
+      LocalLibraryProvider.providerId: '2',
+    });
+    expect(second.successfulProviderIds, <String>{
+      LocalLibraryProvider.providerId,
+    });
+    expect(second.continuations, isEmpty);
+    expect(merged.map((result) => result.track.id).toSet(), <String>{
+      'one',
+      'two',
+      'three',
+    });
+  });
+
+  test('retries failed cursors and stops non-progressing providers', () async {
+    var continuationAttempts = 0;
+    final provider = _FakePagedProvider(
+      pageLoader: (query, cursor, limit) async {
+        if (cursor == null) {
+          return MusicSourceSearchPage(
+            tracks: <Track>[
+              Track(id: 'first', title: 'Aether First', sourceId: 'paged'),
+            ],
+            nextCursor: 'next',
+          );
+        }
+        continuationAttempts += 1;
+        if (continuationAttempts == 1) {
+          throw StateError('temporary continuation failure');
+        }
+        return MusicSourceSearchPage(
+          tracks: <Track>[
+            Track(id: 'first', title: 'Aether First', sourceId: 'paged'),
+            Track(id: 'second', title: 'Aether', sourceId: 'paged'),
+          ],
+          nextCursor: cursor,
+        );
+      },
+    );
+    final coordinator = ProviderSearchCoordinator(
+      <MusicSourceProvider>[provider],
+      maxResultsPerProvider: 2,
+    );
+
+    final first = await coordinator.search('aether');
+    final failed = await coordinator.continueSearch(
+      'aether',
+      first.continuations,
+    );
+    final retried = await coordinator.continueSearch(
+      'aether',
+      first.continuations,
+    );
+    final merged = mergeProviderSearchResults(first.results, retried.results);
+
+    expect(provider.searchCount, 0);
+    expect(provider.cursors, <String?>[null, 'next', 'next']);
+    expect(provider.limits, everyElement(2));
+    expect(failed.errors.single.providerId, 'paged');
+    expect(failed.successfulProviderIds, isEmpty);
+    expect(retried.successfulProviderIds, <String>{'paged'});
+    expect(retried.continuations, isEmpty);
+    expect(merged, hasLength(2));
+    expect(merged.first.track.id, 'second');
+  });
+
   test('resolves metadata-only provider results when supported', () async {
     final track = Track(
       id: 'resolved-track',
@@ -317,6 +405,56 @@ void main() {
       contains('does not declare Offline cache'),
     );
   });
+}
+
+final class _FakePagedProvider implements MusicSourceSearchPagingProvider {
+  _FakePagedProvider({required this.pageLoader});
+
+  final Future<MusicSourceSearchPage> Function(
+    String query,
+    String? cursor,
+    int limit,
+  ) pageLoader;
+  final List<String?> cursors = <String?>[];
+  final List<int> limits = <int>[];
+  int searchCount = 0;
+
+  @override
+  String get id => 'paged';
+
+  @override
+  String get name => 'Paged';
+
+  @override
+  String get description => name;
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{MusicSourceCapability.metadataSearch};
+
+  @override
+  ProviderPrivacyDisclosure get disclosure =>
+      const ProviderPrivacyDisclosure();
+
+  @override
+  Future<List<Track>> search(String query) async {
+    searchCount += 1;
+    return const <Track>[];
+  }
+
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) {
+    cursors.add(cursor);
+    limits.add(limit);
+    return pageLoader(query, cursor, limit);
+  }
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
 }
 
 final class _FakeProvider implements MusicSourceProvider {

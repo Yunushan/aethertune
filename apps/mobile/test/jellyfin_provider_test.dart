@@ -39,7 +39,9 @@ void main() {
     expect(capturedUri!.queryParameters['SearchTerm'], 'aether');
     expect(capturedUri!.queryParameters['Fields'], contains('Genres'));
     expect(capturedUri!.queryParameters['Fields'], isNot(contains('ImageTags')));
+    expect(capturedUri!.queryParameters['StartIndex'], '0');
     expect(capturedUri!.queryParameters['Limit'], '3');
+    expect(capturedUri!.queryParameters['EnableTotalRecordCount'], 'true');
 
     expect(tracks, hasLength(1));
     final track = tracks.single;
@@ -60,6 +62,49 @@ void main() {
     expect(streamUri.queryParameters['api_key'], 'api-secret');
     expect(streamUri.queryParameters['UserId'], 'user-1');
     expect(streamUri.queryParameters['static'], 'true');
+  });
+
+  test('pages Jellyfin searches with server totals', () async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _jellyfinSearchPageJson;
+      },
+    );
+
+    final page = await provider.searchPage(
+      ' glass ',
+      cursor: '3',
+      limit: 1,
+    );
+
+    expect(provider, isA<MusicSourceSearchPagingProvider>());
+    expect(page.tracks.single.title, 'Sea Glass');
+    expect(page.nextCursor, '4');
+    expect(page.totalCount, 5);
+    expect(page.hasMore, isTrue);
+    expect(requests.single.path, '/jellyfin/Users/user-1/Items');
+    expect(requests.single.queryParameters['SearchTerm'], 'glass');
+    expect(requests.single.queryParameters['StartIndex'], '3');
+    expect(requests.single.queryParameters['Limit'], '1');
+    expect(
+      requests.single.queryParameters['EnableTotalRecordCount'],
+      'true',
+    );
+
+    await expectLater(
+      provider.searchPage('glass', cursor: 'invalid'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.searchPage('glass', limit: 0),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(1));
   });
 
   test('redacts authenticated request URLs from provider errors', () async {
@@ -504,6 +549,23 @@ const _jellyfinItemsJson = '''
     }
   ],
   "TotalRecordCount": 1
+}
+''';
+
+const _jellyfinSearchPageJson = '''
+{
+  "Items": [
+    {
+      "Id": "song-1",
+      "Name": "Sea Glass",
+      "Artists": ["Mira Sol", "Yunus Bay"],
+      "Album": "Blue Rooms",
+      "Genres": ["Ambient"],
+      "RunTimeTicks": 2450000000
+    }
+  ],
+  "StartIndex": 3,
+  "TotalRecordCount": 5
 }
 ''';
 

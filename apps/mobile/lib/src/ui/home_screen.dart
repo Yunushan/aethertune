@@ -161,6 +161,7 @@ class HomeScreen extends StatefulWidget {
     this.initialTab = 0,
     this.onRestartOnboarding,
     this.internetArchiveProvider,
+    this.providerSearchProviders,
   }) : assert(
          initialTab >= 0 &&
              initialTab < _aetherTuneNavigationDestinationCount,
@@ -169,6 +170,7 @@ class HomeScreen extends StatefulWidget {
   final int initialTab;
   final VoidCallback? onRestartOnboarding;
   final InternetArchiveProvider? internetArchiveProvider;
+  final List<MusicSourceProvider>? providerSearchProviders;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -422,7 +424,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const _HistoryTab(),
-              _SourcesTab(archiveProvider: widget.internetArchiveProvider),
+              _SourcesTab(
+                archiveProvider: widget.internetArchiveProvider,
+                providerSearchProviders: widget.providerSearchProviders,
+              ),
               _SettingsTab(
                 onRestartOnboarding: widget.onRestartOnboarding,
                 onClearLyricsSearchCache: () => _clearLyricsSearchCache(context),
@@ -10105,9 +10110,13 @@ class _EmptyLibrary extends StatelessWidget {
 enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
 class _SourcesTab extends StatefulWidget {
-  const _SourcesTab({this.archiveProvider});
+  const _SourcesTab({
+    this.archiveProvider,
+    this.providerSearchProviders,
+  });
 
   final InternetArchiveProvider? archiveProvider;
+  final List<MusicSourceProvider>? providerSearchProviders;
 
   @override
   State<_SourcesTab> createState() => _SourcesTabState();
@@ -10136,6 +10145,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<Track> _podcastEpisodeTracks = <Track>[];
   List<ProviderSearchResult> _providerSearchResults = <ProviderSearchResult>[];
   List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
+  List<ProviderSearchError> _providerSearchLoadMoreErrors =
+      <ProviderSearchError>[];
+  Map<String, String> _providerSearchContinuations = <String, String>{};
+  Map<String, String> _providerSearchFailedContinuations = <String, String>{};
   List<Track> _radioTracks = <Track>[];
   List<RadioBrowserStation> _radioStations = <RadioBrowserStation>[];
   int _radioNextOffset = 0;
@@ -10152,6 +10165,10 @@ class _SourcesTabState extends State<_SourcesTab> {
   String? _podcastError;
   String? _selectedPodcastSubscriptionId;
   bool _providerSearchLoading = false;
+  bool _providerSearchLoadingMore = false;
+  bool _providerSearchLocalOnly = false;
+  int _providerSearchRequestSerial = 0;
+  String _providerSearchQuery = '';
   String? _providerSearchMessage;
   bool _radioLoading = false;
   bool _radioLoadingMore = false;
@@ -10465,7 +10482,9 @@ class _SourcesTabState extends State<_SourcesTab> {
         ),
         if (_providerSearchLoading) ...<Widget>[
           const SizedBox(height: 12),
-          const LinearProgressIndicator(),
+          const LinearProgressIndicator(
+            key: ValueKey<String>('provider-search-progress'),
+          ),
         ],
         if (_providerSearchMessage != null) ...<Widget>[
           const SizedBox(height: 8),
@@ -10500,6 +10519,9 @@ class _SourcesTabState extends State<_SourcesTab> {
           const SizedBox(height: 8),
           for (final result in _providerSearchResults)
             ListTile(
+              key: ValueKey<String>(
+                'provider-search-result-${result.providerId}-${result.track.id}',
+              ),
               leading: Icon(_providerSearchIcon(result.providerId)),
               title: Text(result.track.title),
               subtitle: Text(
@@ -10541,6 +10563,61 @@ class _SourcesTabState extends State<_SourcesTab> {
                 ],
               ),
             ),
+        ],
+        if (_providerSearchLoadingMore) ...<Widget>[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(
+            key: ValueKey<String>('provider-search-load-more-progress'),
+          ),
+        ],
+        for (final error in _providerSearchLoadMoreErrors) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            key: ValueKey<String>(
+              'provider-search-load-more-error-${error.providerId}',
+            ),
+            leading: const Icon(Icons.warning_amber_outlined),
+            title: Text('Could not load more from ${error.providerName}'),
+            subtitle: Text(error.message),
+          ),
+        ],
+        if (!_providerSearchLoadingMore &&
+            _providerSearchLoadMoreErrors.isNotEmpty &&
+            _providerSearchFailedContinuations.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.center,
+            child: OutlinedButton.icon(
+              key: const ValueKey<String>(
+                'provider-search-load-more-retry',
+              ),
+              onPressed: offlineModeEnabled && !_providerSearchLocalOnly
+                  ? null
+                  : () => unawaited(
+                        _continueProviderCatalogSearch(
+                          continuations:
+                              _providerSearchFailedContinuations,
+                        ),
+                      ),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry failed providers'),
+            ),
+          ),
+        ] else if (!_providerSearchLoadingMore &&
+            _providerSearchLoadMoreErrors.isEmpty &&
+            _providerSearchContinuations.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.center,
+            child: OutlinedButton.icon(
+              key: const ValueKey<String>('provider-search-load-more'),
+              onPressed: offlineModeEnabled && !_providerSearchLocalOnly
+                  ? null
+                  : () => unawaited(_continueProviderCatalogSearch()),
+              icon: const Icon(Icons.expand_more),
+              label: const Text('Load more provider results'),
+            ),
+          ),
         ],
         const SizedBox(height: 16),
         Text(
@@ -11089,10 +11166,21 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (!context.mounted) {
       return;
     }
+    _providerSearchRequestSerial += 1;
     setState(() {
+      _providerSearchLoading = false;
+      _providerSearchLoadingMore = false;
       _providerSearchResults.removeWhere(
         (result) => result.providerId == account.providerId,
       );
+      _providerSearchErrors.removeWhere(
+        (error) => error.providerId == account.providerId,
+      );
+      _providerSearchLoadMoreErrors.removeWhere(
+        (error) => error.providerId == account.providerId,
+      );
+      _providerSearchContinuations.remove(account.providerId);
+      _providerSearchFailedContinuations.remove(account.providerId);
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Removed ${account.name}.')),
@@ -11116,10 +11204,21 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (!context.mounted || rotated != true) {
       return;
     }
+    _providerSearchRequestSerial += 1;
     setState(() {
+      _providerSearchLoading = false;
+      _providerSearchLoadingMore = false;
       _providerSearchResults.removeWhere(
         (result) => result.providerId == account.providerId,
       );
+      _providerSearchErrors.removeWhere(
+        (error) => error.providerId == account.providerId,
+      );
+      _providerSearchLoadMoreErrors.removeWhere(
+        (error) => error.providerId == account.providerId,
+      );
+      _providerSearchContinuations.remove(account.providerId);
+      _providerSearchFailedContinuations.remove(account.providerId);
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Rotated credential for ${account.name}.')),
@@ -11127,6 +11226,18 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   List<MusicSourceProvider> _providerSearchSources({bool localOnly = false}) {
+    final override = widget.providerSearchProviders;
+    if (override != null) {
+      if (!localOnly) {
+        return List<MusicSourceProvider>.unmodifiable(override);
+      }
+      return override
+          .where(
+            (provider) => provider.id == LocalLibraryProvider.providerId,
+          )
+          .toList(growable: false);
+    }
+
     final library = context.read<LibraryStore>();
     final localLibraryProvider = LocalLibraryProvider(
       searchTracks: (query) => library.search(query),
@@ -11295,43 +11406,59 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   Future<void> _searchProviderCatalogs() async {
     final query = _providerSearchController.text.trim();
+    final requestSerial = ++_providerSearchRequestSerial;
     if (query.isEmpty) {
       setState(() {
+        _providerSearchQuery = '';
         _providerSearchResults = <ProviderSearchResult>[];
         _providerSearchErrors = <ProviderSearchError>[];
+        _providerSearchLoadMoreErrors = <ProviderSearchError>[];
+        _providerSearchContinuations = <String, String>{};
+        _providerSearchFailedContinuations = <String, String>{};
         _providerSearchLoading = false;
+        _providerSearchLoadingMore = false;
         _providerSearchMessage = 'Enter a search term.';
       });
       return;
     }
 
+    final localOnly = context.read<LibraryStore>().offlineModeEnabled;
     setState(() {
+      _providerSearchQuery = query;
+      _providerSearchLocalOnly = localOnly;
       _providerSearchLoading = true;
+      _providerSearchLoadingMore = false;
       _providerSearchMessage = null;
       _providerSearchErrors = <ProviderSearchError>[];
+      _providerSearchLoadMoreErrors = <ProviderSearchError>[];
       _providerSearchResults = <ProviderSearchResult>[];
+      _providerSearchContinuations = <String, String>{};
+      _providerSearchFailedContinuations = <String, String>{};
     });
 
     try {
-      final localOnly = context.read<LibraryStore>().offlineModeEnabled;
       final response = await _providerSearchCoordinatorFor(
         localOnly: localOnly,
       ).search(query);
-      if (!mounted) {
+      if (!mounted || requestSerial != _providerSearchRequestSerial) {
         return;
       }
 
       setState(() {
         _providerSearchResults = response.results;
         _providerSearchErrors = response.errors;
+        _providerSearchContinuations = Map<String, String>.of(
+          response.continuations,
+        );
         _providerSearchLoading = false;
         _providerSearchMessage = _providerSearchCompletionMessage(
           hasResults: response.results.isNotEmpty,
+          hasMore: response.hasMore,
           localOnly: localOnly,
         );
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestSerial != _providerSearchRequestSerial) {
         return;
       }
 
@@ -11340,6 +11467,82 @@ class _SourcesTabState extends State<_SourcesTab> {
         _providerSearchErrors = <ProviderSearchError>[];
         _providerSearchLoading = false;
         _providerSearchMessage = error.toString();
+      });
+    }
+  }
+
+  Future<void> _continueProviderCatalogSearch({
+    Map<String, String>? continuations,
+  }) async {
+    if (_providerSearchLoading || _providerSearchLoadingMore) {
+      return;
+    }
+    if (context.read<LibraryStore>().offlineModeEnabled &&
+        !_providerSearchLocalOnly) {
+      return;
+    }
+    final requested = Map<String, String>.of(
+      continuations ?? _providerSearchContinuations,
+    );
+    final query = _providerSearchQuery;
+    if (query.isEmpty || requested.isEmpty) {
+      return;
+    }
+
+    final requestSerial = _providerSearchRequestSerial;
+    setState(() {
+      _providerSearchLoadingMore = true;
+      _providerSearchLoadMoreErrors = <ProviderSearchError>[];
+      _providerSearchFailedContinuations = <String, String>{};
+    });
+
+    try {
+      final response = await _providerSearchCoordinatorFor(
+        localOnly: _providerSearchLocalOnly,
+      ).continueSearch(query, requested);
+      if (!mounted || requestSerial != _providerSearchRequestSerial) {
+        return;
+      }
+
+      final updatedContinuations = Map<String, String>.of(
+        _providerSearchContinuations,
+      );
+      for (final providerId in response.successfulProviderIds) {
+        updatedContinuations.remove(providerId);
+      }
+      updatedContinuations.addAll(response.continuations);
+      final failedContinuations = <String, String>{};
+      for (final error in response.errors) {
+        final cursor = requested[error.providerId];
+        if (cursor != null) {
+          failedContinuations[error.providerId] = cursor;
+        }
+      }
+
+      setState(() {
+        _providerSearchResults = mergeProviderSearchResults(
+          _providerSearchResults,
+          response.results,
+        );
+        _providerSearchContinuations = updatedContinuations;
+        _providerSearchFailedContinuations = failedContinuations;
+        _providerSearchLoadMoreErrors = response.errors;
+        _providerSearchLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || requestSerial != _providerSearchRequestSerial) {
+        return;
+      }
+      setState(() {
+        _providerSearchFailedContinuations = requested;
+        _providerSearchLoadMoreErrors = <ProviderSearchError>[
+          ProviderSearchError(
+            providerId: 'provider-search',
+            providerName: 'Provider search',
+            message: error.toString(),
+          ),
+        ];
+        _providerSearchLoadingMore = false;
       });
     }
   }
@@ -11433,8 +11636,14 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   String? _providerSearchCompletionMessage({
     required bool hasResults,
+    required bool hasMore,
     required bool localOnly,
   }) {
+    if (hasMore) {
+      return localOnly
+          ? 'Offline mode: showing local library results only.'
+          : null;
+    }
     if (!hasResults) {
       return localOnly
           ? 'No local library results found while offline.'

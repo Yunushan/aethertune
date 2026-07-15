@@ -256,6 +256,47 @@ void main() {
     expect(third.items.single.identifier, 'fifth');
   });
 
+  test('adapts Archive page numbers to shared search cursors', () async {
+    final searchUris = <Uri>[];
+    final provider = InternetArchiveProvider(
+      baseUri: Uri.parse('https://archive.org'),
+      searchLoader: (uri) async {
+        searchUris.add(uri);
+        return _paginationSearchJson(
+          totalResults: 3,
+          identifiers: <String>['second'],
+        );
+      },
+      metadataLoader: (uri) async {
+        return _paginationMetadataJson(uri.pathSegments.last);
+      },
+    );
+
+    final page = await provider.searchPage(
+      'ambient',
+      cursor: '2',
+      limit: 1,
+    );
+
+    expect(provider, isA<MusicSourceSearchPagingProvider>());
+    expect(page.tracks.single.title, 'Archive second');
+    expect(page.nextCursor, '3');
+    expect(page.totalCount, 3);
+    expect(searchUris.single.queryParameters['page'], '2');
+    expect(searchUris.single.queryParameters['rows'], '1');
+    expect(searchUris.single.queryParametersAll.containsKey('facet[]'), isFalse);
+
+    await expectLater(
+      provider.searchPage('ambient', cursor: '0'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.searchPage('ambient', limit: 0),
+      throwsArgumentError,
+    );
+    expect(searchUris, hasLength(1));
+  });
+
   test('rejects archive page zero before issuing a request', () async {
     final provider = InternetArchiveProvider(
       searchLoader: (_) async => throw StateError('Must not load.'),

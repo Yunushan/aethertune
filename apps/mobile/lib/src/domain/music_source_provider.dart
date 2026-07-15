@@ -237,6 +237,20 @@ final class OfflineMediaPolicy {
   }
 }
 
+final class MusicSourceSearchPage {
+  const MusicSourceSearchPage({
+    required this.tracks,
+    this.nextCursor,
+    this.totalCount,
+  });
+
+  final List<Track> tracks;
+  final String? nextCursor;
+  final int? totalCount;
+
+  bool get hasMore => nextCursor != null;
+}
+
 /// Implement this contract to add a legal source adapter.
 ///
 /// Examples: local files, user-owned Jellyfin/Navidrome server, podcasts,
@@ -254,4 +268,17 @@ abstract interface class MusicSourceProvider {
   /// Resolve a playable URI. Providers can return null when the track is only
   /// metadata or when user authorization is required.
   Future<Uri?> resolveStream(Track track);
+}
+
+/// Optional search extension for providers with documented continuation.
+///
+/// Cursors are opaque to callers so adapters can represent offsets, page
+/// numbers, or server-issued tokens without leaking protocol details.
+abstract interface class MusicSourceSearchPagingProvider
+    implements MusicSourceProvider {
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  });
 }

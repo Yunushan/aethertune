@@ -53,7 +53,7 @@ final class InternetArchiveAudioSearchPage {
   }
 }
 
-class InternetArchiveProvider implements MusicSourceProvider {
+class InternetArchiveProvider implements MusicSourceSearchPagingProvider {
   InternetArchiveProvider({
     Uri? baseUri,
     InternetArchiveSearchLoader? searchLoader,
@@ -119,14 +119,46 @@ class InternetArchiveProvider implements MusicSourceProvider {
     return page.tracks;
   }
 
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final requestedPage = _archiveSearchPage(cursor);
+    final page = await searchAudioPage(
+      query,
+      includeFacets: false,
+      page: requestedPage,
+      pageSize: limit.clamp(1, 50),
+    );
+    return MusicSourceSearchPage(
+      tracks: List<Track>.unmodifiable(page.tracks),
+      nextCursor: page.hasMore ? (page.page + 1).toString() : null,
+      totalCount: page.totalResults,
+    );
+  }
+
   Future<InternetArchiveAudioSearchPage> searchAudioPage(
     String query, {
     InternetArchiveSearchFilters filters = const InternetArchiveSearchFilters(),
     bool? includeFacets,
     int page = 1,
+    int? pageSize,
   }) async {
     if (page < 1) {
       throw ArgumentError.value(page, 'page', 'Must be at least 1.');
+    }
+    final effectiveLimit = pageSize ?? limit;
+    if (effectiveLimit <= 0) {
+      throw ArgumentError.value(
+        effectiveLimit,
+        'pageSize',
+        'Must be positive.',
+      );
     }
 
     final results = parseInternetArchiveSearchPage(
@@ -136,13 +168,14 @@ class InternetArchiveProvider implements MusicSourceProvider {
           filters,
           includeFacets: includeFacets ?? page == 1,
           page: page,
+          rowLimit: effectiveLimit,
         ),
       ),
     );
     final items = <InternetArchiveItem>[];
     final tracks = <Track>[];
 
-    for (final result in results.results.take(limit)) {
+    for (final result in results.results.take(effectiveLimit)) {
       final item = await fetchItem(result.identifier);
       items.add(item);
       tracks.addAll(item.toTracks(sourceId: id, baseUri: baseUri));
@@ -154,7 +187,11 @@ class InternetArchiveProvider implements MusicSourceProvider {
       facets: results.facets,
       page: page,
       totalResults: results.totalResults,
-      hasMore: _hasMoreResults(results, page: page, limit: limit),
+      hasMore: _hasMoreResults(
+        results,
+        page: page,
+        limit: effectiveLimit,
+      ),
     );
   }
 
@@ -193,6 +230,7 @@ class InternetArchiveProvider implements MusicSourceProvider {
     InternetArchiveSearchFilters filters, {
     required bool includeFacets,
     required int page,
+    required int rowLimit,
   }) {
     final archiveQuery = _searchQuery(query, filters);
     final queryParameters = <String, dynamic>{
@@ -209,7 +247,7 @@ class InternetArchiveProvider implements MusicSourceProvider {
         'downloads',
       ],
       'sort[]': const <String>['downloads desc'],
-      'rows': limit.toString(),
+      'rows': rowLimit.toString(),
       'page': page.toString(),
       'output': 'json',
     };
@@ -236,6 +274,17 @@ class InternetArchiveProvider implements MusicSourceProvider {
       ),
     );
   }
+}
+
+int _archiveSearchPage(String? cursor) {
+  if (cursor == null) {
+    return 1;
+  }
+  final page = int.tryParse(cursor);
+  if (page == null || page < 1) {
+    throw ArgumentError.value(cursor, 'cursor', 'Invalid search cursor.');
+  }
+  return page;
 }
 
 final class InternetArchiveSearchPage {

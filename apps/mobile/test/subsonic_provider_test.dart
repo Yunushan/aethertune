@@ -59,6 +59,7 @@ void main() {
     expect(capturedUri!.queryParameters['artistCount'], '0');
     expect(capturedUri!.queryParameters['albumCount'], '0');
     expect(capturedUri!.queryParameters['songCount'], '3');
+    expect(capturedUri!.queryParameters['songOffset'], '0');
     expect(tracks, hasLength(2));
     expect(tracks.first.title, 'Aether Session');
     expect(tracks.first.artist, 'Open Artist');
@@ -87,6 +88,49 @@ void main() {
         },
       ),
     );
+  });
+
+  test('pages Subsonic search3 songs with songOffset', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _searchResponseJson;
+      },
+    );
+
+    final page = await provider.searchPage(
+      'aether',
+      cursor: '7',
+      limit: 2,
+    );
+
+    expect(provider, isA<MusicSourceSearchPagingProvider>());
+    expect(page.tracks, hasLength(2));
+    expect(page.nextCursor, '9');
+    expect(page.totalCount, isNull);
+    expect(page.hasMore, isTrue);
+    expect(requests.single.path, '/navidrome/rest/search3.view');
+    expect(requests.single.queryParameters['query'], 'aether');
+    expect(requests.single.queryParameters['songCount'], '2');
+    expect(requests.single.queryParameters['songOffset'], '7');
+    expect(requests.single.queryParameters['artistCount'], '0');
+    expect(requests.single.queryParameters['albumCount'], '0');
+    expect(requests.single.queryParameters['t'], _secretToken);
+
+    await expectLater(
+      provider.searchPage('aether', cursor: '-1'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.searchPage('aether', limit: 0),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(1));
   });
 
   test('redacts salted authentication tokens from provider errors', () async {

@@ -4,7 +4,7 @@ import '../domain/track.dart';
 
 typedef LocalLibraryTrackSearch = List<Track> Function(String query);
 
-class LocalLibraryProvider implements MusicSourceProvider {
+class LocalLibraryProvider implements MusicSourceSearchPagingProvider {
   const LocalLibraryProvider({
     this.tracks = const <Track>[],
     LocalLibraryTrackSearch? searchTracks,
@@ -52,6 +52,32 @@ class LocalLibraryProvider implements MusicSourceProvider {
   }
 
   @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final offset = _localSearchOffset(cursor);
+    final matches = await search(query);
+    if (offset >= matches.length) {
+      return MusicSourceSearchPage(
+        tracks: const <Track>[],
+        totalCount: matches.length,
+      );
+    }
+    final requestedEnd = offset + limit;
+    final end = requestedEnd < matches.length ? requestedEnd : matches.length;
+    return MusicSourceSearchPage(
+      tracks: List<Track>.unmodifiable(matches.sublist(offset, end)),
+      nextCursor: end < matches.length ? end.toString() : null,
+      totalCount: matches.length,
+    );
+  }
+
+  @override
   Future<Uri?> resolveStream(Track track) async {
     final streamUrl = track.streamUrl;
     if (streamUrl != null && streamUrl.trim().isNotEmpty) {
@@ -65,6 +91,17 @@ class LocalLibraryProvider implements MusicSourceProvider {
 
     return null;
   }
+}
+
+int _localSearchOffset(String? cursor) {
+  if (cursor == null) {
+    return 0;
+  }
+  final offset = int.tryParse(cursor);
+  if (offset == null || offset < 0) {
+    throw ArgumentError.value(cursor, 'cursor', 'Invalid search cursor.');
+  }
+  return offset;
 }
 
 bool _trackMatchesQuery(Track track, SearchQuery query) {

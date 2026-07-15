@@ -6,7 +6,7 @@ final class ProviderSearchCoordinator {
   const ProviderSearchCoordinator(
     this.providers, {
     this.maxResultsPerProvider = 10,
-  });
+  }) : assert(maxResultsPerProvider > 0);
 
   final List<MusicSourceProvider> providers;
   final int maxResultsPerProvider;
@@ -85,19 +85,78 @@ final class ProviderSearchCoordinator {
           ),
         )
         .toList(growable: false);
+    return _searchProviders(
+      normalizedQuery,
+      searchQuery,
+      <_ProviderSearchTarget>[
+        for (var index = 0; index < searchableProviders.length; index += 1)
+          _ProviderSearchTarget(
+            provider: searchableProviders[index],
+            providerIndex: index,
+          ),
+      ],
+    );
+  }
+
+  Future<ProviderSearchResponse> continueSearch(
+    String query,
+    Map<String, String> continuations,
+  ) async {
+    final normalizedQuery = query.trim();
+    final searchQuery = SearchQuery.parse(normalizedQuery);
+    if (searchQuery.isEmpty || continuations.isEmpty) {
+      return ProviderSearchResponse(
+        query: normalizedQuery,
+        results: const <ProviderSearchResult>[],
+        errors: const <ProviderSearchError>[],
+      );
+    }
+
+    final targets = <_ProviderSearchTarget>[];
+    var providerIndex = 0;
+    for (final provider in providers) {
+      if (!provider.capabilities.contains(
+            MusicSourceCapability.metadataSearch,
+          )) {
+        continue;
+      }
+      final cursor = continuations[provider.id];
+      if (cursor != null && provider is MusicSourceSearchPagingProvider) {
+        targets.add(
+          _ProviderSearchTarget(
+            provider: provider,
+            providerIndex: providerIndex,
+            cursor: cursor,
+          ),
+        );
+      }
+      providerIndex += 1;
+    }
+
+    return _searchProviders(normalizedQuery, searchQuery, targets);
+  }
+
+  Future<ProviderSearchResponse> _searchProviders(
+    String query,
+    SearchQuery searchQuery,
+    List<_ProviderSearchTarget> targets,
+  ) async {
     final outcomes = await Future.wait(
       <Future<_ProviderSearchOutcome>>[
-        for (var index = 0; index < searchableProviders.length; index += 1)
+        for (final target in targets)
           _searchProvider(
-            searchableProviders[index],
-            normalizedQuery,
+            target.provider,
+            query,
             searchQuery,
-            index,
+            target.providerIndex,
+            cursor: target.cursor,
           ),
       ],
     );
     final results = <ProviderSearchResult>[];
     final errors = <ProviderSearchError>[];
+    final continuations = <String, String>{};
+    final successfulProviderIds = <String>{};
 
     for (final outcome in outcomes) {
       if (outcome.error != null) {
@@ -106,14 +165,21 @@ final class ProviderSearchCoordinator {
       }
 
       results.addAll(outcome.results);
+      successfulProviderIds.add(outcome.providerId);
+      final nextCursor = outcome.nextCursor;
+      if (nextCursor != null) {
+        continuations[outcome.providerId] = nextCursor;
+      }
     }
 
     results.sort(_compareProviderSearchResults);
 
     return ProviderSearchResponse(
-      query: normalizedQuery,
+      query: query,
       results: results,
       errors: errors,
+      continuations: Map<String, String>.unmodifiable(continuations),
+      successfulProviderIds: Set<String>.unmodifiable(successfulProviderIds),
     );
   }
 
@@ -121,13 +187,30 @@ final class ProviderSearchCoordinator {
     MusicSourceProvider provider,
     String query,
     SearchQuery searchQuery,
-    int providerIndex,
-  ) async {
+    int providerIndex, {
+    String? cursor,
+  }) async {
     try {
-      final tracks = await provider.search(query);
-      return _ProviderSearchOutcome(
-        results: tracks
+      final List<Track> tracks;
+      String? nextCursor;
+      if (provider is MusicSourceSearchPagingProvider) {
+        final page = await provider.searchPage(
+          query,
+          cursor: cursor,
+          limit: maxResultsPerProvider,
+        );
+        tracks = page.tracks;
+        if (page.nextCursor != cursor) {
+          nextCursor = page.nextCursor;
+        }
+      } else {
+        tracks = (await provider.search(query))
             .take(maxResultsPerProvider)
+            .toList(growable: false);
+      }
+      return _ProviderSearchOutcome(
+        providerId: provider.id,
+        results: tracks
             .map(
               (track) => ProviderSearchResult(
                 providerId: provider.id,
@@ -138,9 +221,11 @@ final class ProviderSearchCoordinator {
               ),
             )
             .toList(growable: false),
+        nextCursor: nextCursor,
       );
     } catch (error) {
       return _ProviderSearchOutcome(
+        providerId: provider.id,
         results: const <ProviderSearchResult>[],
         error: ProviderSearchError(
           providerId: provider.id,
@@ -157,13 +242,18 @@ final class ProviderSearchResponse {
     required this.query,
     required this.results,
     required this.errors,
+    this.continuations = const <String, String>{},
+    this.successfulProviderIds = const <String>{},
   });
 
   final String query;
   final List<ProviderSearchResult> results;
   final List<ProviderSearchError> errors;
+  final Map<String, String> continuations;
+  final Set<String> successfulProviderIds;
 
   bool get hasErrors => errors.isNotEmpty;
+  bool get hasMore => continuations.isNotEmpty;
 }
 
 final class ProviderSearchResult {
@@ -196,12 +286,44 @@ final class ProviderSearchError {
 
 final class _ProviderSearchOutcome {
   const _ProviderSearchOutcome({
+    required this.providerId,
     required this.results,
+    this.nextCursor,
     this.error,
   });
 
+  final String providerId;
   final List<ProviderSearchResult> results;
+  final String? nextCursor;
   final ProviderSearchError? error;
+}
+
+final class _ProviderSearchTarget {
+  const _ProviderSearchTarget({
+    required this.provider,
+    required this.providerIndex,
+    this.cursor,
+  });
+
+  final MusicSourceProvider provider;
+  final int providerIndex;
+  final String? cursor;
+}
+
+List<ProviderSearchResult> mergeProviderSearchResults(
+  Iterable<ProviderSearchResult> existing,
+  Iterable<ProviderSearchResult> additional,
+) {
+  final merged = <String, ProviderSearchResult>{};
+  for (final result in <ProviderSearchResult>[...existing, ...additional]) {
+    merged.putIfAbsent(
+      '${result.providerId}\u0000${result.track.id}',
+      () => result,
+    );
+  }
+  final ranked = merged.values.toList(growable: false);
+  ranked.sort(_compareProviderSearchResults);
+  return List<ProviderSearchResult>.unmodifiable(ranked);
 }
 
 int _compareProviderSearchResults(

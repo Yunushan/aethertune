@@ -237,6 +237,40 @@ void main() {
     expect(page.hasMore, isTrue);
   });
 
+  test('adapts Radio Browser offsets to shared search cursors', () async {
+    final requests = <Uri>[];
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (uri) async {
+        requests.add(uri);
+        return _singleStationJson;
+      },
+    );
+
+    final page = await provider.searchPage(
+      'aether',
+      cursor: '20',
+      limit: 1,
+    );
+
+    expect(provider, isA<MusicSourceSearchPagingProvider>());
+    expect(page.tracks.single.title, 'Aether Radio');
+    expect(page.nextCursor, '21');
+    expect(page.hasMore, isTrue);
+    expect(requests.single.queryParameters['offset'], '20');
+    expect(requests.single.queryParameters['limit'], '1');
+
+    await expectLater(
+      provider.searchPage('aether', cursor: 'bad'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.searchPage('aether', limit: 0),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(1));
+  });
+
   test('search station page advances past locally filtered server rows', () async {
     final provider = RadioBrowserProvider(
       baseUri: Uri.parse('https://de1.api.radio-browser.info'),
