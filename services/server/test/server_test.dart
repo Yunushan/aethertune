@@ -57,6 +57,50 @@ void main() {
       expect(jsonEncode(body), isNot(contains('test-token')));
     });
 
+    test('metrics supports constant-time raw and digest bearer protection',
+        () async {
+      const token = 'private-operations-token';
+      final rawHandler = createServerHandler(
+        operationsAuthenticator: StaticOperationsAuthenticator(token),
+      );
+
+      final missing = await rawHandler(_request('GET', '/api/v1/metrics'));
+      final rejected = await rawHandler(
+        _request('GET', '/api/v1/metrics', token: 'wrong-token'),
+      );
+      final accepted = await rawHandler(
+        _request('GET', '/api/v1/metrics', token: token),
+      );
+
+      expect(missing.statusCode, 401);
+      expect(missing.headers['www-authenticate'], 'Bearer');
+      expect(rejected.statusCode, 401);
+      expect(await rejected.readAsString(), isNot(contains('wrong-token')));
+      expect(accepted.statusCode, 200);
+      expect((await _json(accepted))['requestsTotal'], 3);
+
+      final digest = sha256.convert(utf8.encode(token)).toString();
+      final digestHandler = createServerHandler(
+        operationsAuthenticator:
+            StaticOperationsAuthenticator('sha256:$digest'),
+      );
+      expect(
+        (await digestHandler(
+          _request('GET', '/api/v1/metrics', token: token),
+        ))
+            .statusCode,
+        200,
+      );
+      expect(
+        () => StaticOperationsAuthenticator('sha256:not-a-digest'),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => StaticOperationsAuthenticator('   '),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('writes safe structured request logs without disrupting requests',
         () async {
       final entries = <ServerRequestLogEntry>[];

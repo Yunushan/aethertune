@@ -13,9 +13,15 @@ Future<void> main() async {
   final syncAuthenticator = StaticSyncAuthenticator.fromJson(
     Platform.environment['AETHERTUNE_SYNC_USERS'],
   );
+  final operationsToken = Platform.environment['AETHERTUNE_OPS_TOKEN'];
+  final operationsAuthenticator =
+      operationsToken == null || operationsToken.isEmpty
+          ? const DisabledOperationsAuthenticator()
+          : StaticOperationsAuthenticator(operationsToken);
   final server = await shelf_io.serve(
     createServerHandler(
       syncAuthenticator: syncAuthenticator,
+      operationsAuthenticator: operationsAuthenticator,
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
       requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
     ),

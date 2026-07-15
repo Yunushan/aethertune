@@ -30,6 +30,8 @@ the app. For deployments with a managed secret store, a value can instead be
 it to that digest without keeping the raw value in memory. Invalid digest
 values stop startup with a configuration error. Compose refuses to start when
 the variable is absent, and `.env` is ignored by the image build context.
+`AETHERTUNE_OPS_TOKEN` configures a separate bearer token for operational
+metrics and accepts the same raw or `sha256:` form. Docker Compose requires it.
 
 Compose binds to `127.0.0.1` by default. Use the supplied
 [`deploy/Caddyfile`](deploy/Caddyfile) for HTTPS and see
@@ -68,8 +70,10 @@ service rejects local file paths and device cache jobs from portable snapshots.
 time, uptime, total request count, and whether library sync is configured. It
 does not record or expose users, bearer tokens, request paths, addresses, or
 payloads. The count includes the metrics request itself and resets when the
-server restarts. Keep the endpoint behind the same private network or proxy
-access policy as the rest of the service.
+server restarts. When `AETHERTUNE_OPS_TOKEN` is set, requests require
+`Authorization: Bearer <operations-token>` and rejected tokens are never
+echoed. Keep the endpoint behind the same private network or proxy access
+policy as the rest of the service.
 
 The server executable writes one JSON log line for each handled request with
 only a timestamp, HTTP method, normalized known route (or `/not-found`), status

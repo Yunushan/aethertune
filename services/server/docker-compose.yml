@@ -7,6 +7,7 @@ services:
       PORT: 8080
       AETHERTUNE_DATA_DIR: /data
       AETHERTUNE_SYNC_USERS: "${AETHERTUNE_SYNC_USERS:?Set AETHERTUNE_SYNC_USERS in .env}"
+      AETHERTUNE_OPS_TOKEN: "${AETHERTUNE_OPS_TOKEN:?Set AETHERTUNE_OPS_TOKEN in .env}"
     volumes:
       - aethertune-server-data:/data
     restart: unless-stopped

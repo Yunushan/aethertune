@@ -68,11 +68,14 @@ const _tracks = <CatalogTrack>[
 Handler createServerHandler({
   DateTime Function()? clock,
   SyncAuthenticator? syncAuthenticator,
+  OperationsAuthenticator? operationsAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
   ServerRequestLogger? requestLogger,
 }) {
   final now = clock ?? DateTime.now;
   final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
+  final operations =
+      operationsAuthenticator ?? const DisabledOperationsAuthenticator();
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
   final startedAt = now().toUtc();
   var requestsTotal = 0;
@@ -94,6 +97,12 @@ Handler createServerHandler({
       case 'api/v1/metrics':
         if (request.method != 'GET') {
           return _methodNotAllowed(request);
+        }
+        if (operations.isConfigured) {
+          final token = _bearerToken(request.headers['authorization'] ?? '');
+          if (token == null || !operations.authenticate(token)) {
+            return _unauthorizedResponse();
+          }
         }
         final uptime = now().toUtc().difference(startedAt);
         return _jsonResponse(
@@ -238,11 +247,7 @@ Future<Response> _handleLibrarySync(
   final token = _bearerToken(authorization);
   final userId = token == null ? null : authenticator.authenticate(token);
   if (userId == null) {
-    return _jsonResponse(
-      401,
-      <String, Object?>{'error': 'unauthorized'},
-      headers: const <String, String>{'www-authenticate': 'Bearer'},
-    );
+    return _unauthorizedResponse();
   }
 
   switch (request.method) {
@@ -427,6 +432,14 @@ String? _bearerToken(String authorization) {
   return match?.group(1);
 }
 
+Response _unauthorizedResponse() {
+  return _jsonResponse(
+    401,
+    <String, Object?>{'error': 'unauthorized'},
+    headers: const <String, String>{'www-authenticate': 'Bearer'},
+  );
+}
+
 List<CatalogTrack> searchCatalog(String query) {
   final normalized = query.trim().toLowerCase();
   if (normalized.isEmpty) {
@@ -461,6 +474,42 @@ Response _jsonResponse(
 abstract interface class SyncAuthenticator {
   bool get isConfigured;
   String? authenticate(String token);
+}
+
+abstract interface class OperationsAuthenticator {
+  bool get isConfigured;
+  bool authenticate(String token);
+}
+
+class DisabledOperationsAuthenticator implements OperationsAuthenticator {
+  const DisabledOperationsAuthenticator();
+
+  @override
+  bool get isConfigured => false;
+
+  @override
+  bool authenticate(String token) => false;
+}
+
+class StaticOperationsAuthenticator implements OperationsAuthenticator {
+  StaticOperationsAuthenticator(String configuredToken)
+      : _tokenHash = _configuredTokenHash(
+          configuredToken,
+          configurationName: 'AETHERTUNE_OPS_TOKEN',
+        );
+
+  final List<int> _tokenHash;
+
+  @override
+  bool get isConfigured => true;
+
+  @override
+  bool authenticate(String token) {
+    return _constantTimeEquals(
+      sha256.convert(utf8.encode(token)).bytes,
+      _tokenHash,
+    );
+  }
 }
 
 class DisabledSyncAuthenticator implements SyncAuthenticator {
@@ -515,7 +564,16 @@ class StaticSyncAuthenticator implements SyncAuthenticator {
   }
 }
 
-List<int> _configuredTokenHash(String configuredToken) {
+List<int> _configuredTokenHash(
+  String configuredToken, {
+  String configurationName = 'AETHERTUNE_SYNC_USERS',
+}) {
+  if (configuredToken.isEmpty || RegExp(r'\s').hasMatch(configuredToken)) {
+    throw FormatException(
+      '$configurationName tokens must be non-empty and contain no whitespace.',
+    );
+  }
+
   const prefix = 'sha256:';
   if (!configuredToken.startsWith(prefix)) {
     return sha256.convert(utf8.encode(configuredToken)).bytes;
@@ -523,8 +581,8 @@ List<int> _configuredTokenHash(String configuredToken) {
 
   final hex = configuredToken.substring(prefix.length);
   if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hex)) {
-    throw const FormatException(
-      'AETHERTUNE_SYNC_USERS SHA-256 token digests must contain 64 hex characters.',
+    throw FormatException(
+      '$configurationName SHA-256 token digests must contain 64 hex characters.',
     );
   }
   return <int>[

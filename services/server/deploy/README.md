@@ -7,8 +7,9 @@ portable library snapshots. Back up its state before host or image changes.
 ## Docker and Caddy
 
 1. Copy `services/server/.env.example` to `services/server/.env` and set one
-   long, unique bearer token per client account in `AETHERTUNE_SYNC_USERS`.
-   Keep `AETHERTUNE_BIND_ADDRESS=127.0.0.1`.
+   long, unique bearer token per client account in `AETHERTUNE_SYNC_USERS`,
+   plus a separate `AETHERTUNE_OPS_TOKEN`. Keep
+   `AETHERTUNE_BIND_ADDRESS=127.0.0.1`.
 2. Start the service with `docker compose up --build -d` from
    `services/server`.
 3. Copy `deploy/Caddyfile` to the Caddy configuration directory, replace
@@ -24,6 +25,8 @@ portable library snapshots. Back up its state before host or image changes.
    ```bash
    curl --fail http://127.0.0.1:8080/health
    curl --fail https://sync.example.com/health
+   curl --fail -H 'Authorization: Bearer your-operations-token' \
+     https://sync.example.com/api/v1/metrics
    ```
 
 Do not change `AETHERTUNE_BIND_ADDRESS` to a public interface when using this
@@ -53,8 +56,9 @@ the systemd-managed `/var/lib/aethertune` state directory. Place the supplied
 
 ## Tokens, Backups, and Updates
 
-Generate bearer tokens outside shell history. For a hash-only server
-configuration, hash a token before placing it in `/etc/aethertune/server.env`:
+Generate separate sync and operations bearer tokens outside shell history. For
+a hash-only server configuration, hash each token before placing it in
+`/etc/aethertune/server.env`:
 
 ```bash
 printf '%s' 'replace-with-a-secret-token' | sha256sum | awk '{print "sha256:" $1}'
