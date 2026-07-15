@@ -298,8 +298,80 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'retains paged catalog results and retries a failed continuation',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.reset);
+
+      final provider = _FakePagedCatalogProvider(
+        continuationFailuresRemaining: 1,
+      );
+      final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+      addTearDown(player.dispose);
+      await tester.pumpWidget(
+        _testApp(
+          provider: provider,
+          library: LibraryStore(),
+          player: player,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Open Artist'), findsOneWidget);
+      expect(find.text('Ambient Artist'), findsNothing);
+      expect(
+        find.byKey(const Key('catalog-load-more-artist')),
+        findsOneWidget,
+      );
+      expect(provider.pageCalls, <String>['artist:0:100']);
+
+      await tester.tap(
+        find.byKey(const Key('catalog-load-more-artist')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Open Artist'), findsOneWidget);
+      expect(find.text('Ambient Artist'), findsNothing);
+      expect(
+        find.byKey(const Key('catalog-load-more-error-artist')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Continuation request failed'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const Key('catalog-load-more-retry-artist')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Open Artist'), findsOneWidget);
+      expect(find.text('Ambient Artist'), findsOneWidget);
+      expect(
+        find.byKey(const Key('catalog-load-more-artist')),
+        findsNothing,
+      );
+      expect(
+        provider.pageCalls,
+        <String>['artist:0:100', 'artist:1:100', 'artist:1:100'],
+      );
+      expect(
+        provider.browseCalls,
+        containsAll(<MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.album,
+          MusicCatalogCollectionKind.playlist,
+        ]),
+      );
+      expect(
+        provider.browseCalls,
+        isNot(contains(MusicCatalogCollectionKind.artist)),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('offline mode performs no catalog requests', (tester) async {
-    final provider = _FakeCatalogProvider();
+    final provider = _FakePagedCatalogProvider();
     final library = LibraryStore();
     await library.setOfflineModeEnabled(true);
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
@@ -315,6 +387,7 @@ void main() {
       findsOneWidget,
     );
     expect(provider.browseCalls, isEmpty);
+    expect(provider.pageCalls, isEmpty);
   });
 
   testWidgets('offline collection details defer their provider request', (
@@ -715,6 +788,64 @@ class _FakeCatalogProvider
       sourceId: id,
       externalId: externalId,
       providerArtworkId: 'album-cover-1',
+    );
+  }
+}
+
+class _FakePagedCatalogProvider extends _FakeCatalogProvider
+    implements MusicCatalogPagingProvider {
+  _FakePagedCatalogProvider({this.continuationFailuresRemaining = 0});
+
+  int continuationFailuresRemaining;
+  final List<String> pageCalls = <String>[];
+
+  @override
+  Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+      };
+
+  @override
+  Future<MusicCatalogCollectionPage> browseCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
+    pageCalls.add('${kind.name}:$offset:$limit');
+    if (kind != MusicCatalogCollectionKind.artist) {
+      throw UnsupportedError('Only artists are paged by this fixture.');
+    }
+    if (offset == 0) {
+      return const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[
+          MusicCatalogCollection(
+            id: 'artist-1',
+            title: 'Open Artist',
+            kind: MusicCatalogCollectionKind.artist,
+            subtitle: '2 albums',
+          ),
+        ],
+        nextOffset: 1,
+        hasMore: true,
+        totalCount: 2,
+      );
+    }
+    if (continuationFailuresRemaining > 0) {
+      continuationFailuresRemaining -= 1;
+      throw StateError('Continuation request failed.');
+    }
+    return const MusicCatalogCollectionPage(
+      collections: <MusicCatalogCollection>[
+        MusicCatalogCollection(
+          id: 'artist-2',
+          title: 'Ambient Artist',
+          kind: MusicCatalogCollectionKind.artist,
+          subtitle: '1 album',
+        ),
+      ],
+      nextOffset: 2,
+      hasMore: false,
+      totalCount: 2,
     );
   }
 }

@@ -11,6 +11,8 @@ import '../domain/track.dart';
 import '../player/player_controller.dart';
 import 'widgets/track_artwork.dart';
 
+const int _catalogPageSize = 100;
+
 class SelfHostedBrowseScreen extends StatefulWidget {
   const SelfHostedBrowseScreen({
     required this.provider,
@@ -25,9 +27,9 @@ class SelfHostedBrowseScreen extends StatefulWidget {
 }
 
 class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
-  final Map<MusicCatalogCollectionKind, Future<List<MusicCatalogCollection>>>
+  final Map<MusicCatalogCollectionKind, Future<MusicCatalogCollectionPage>>
       _requests =
-      <MusicCatalogCollectionKind, Future<List<MusicCatalogCollection>>>{};
+      <MusicCatalogCollectionKind, Future<MusicCatalogCollectionPage>>{};
   bool _requestsStarted = false;
 
   @override
@@ -37,7 +39,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
     if (!offline && !_requestsStarted) {
       _requestsStarted = true;
       for (final kind in MusicCatalogCollectionKind.values) {
-        _requests[kind] = widget.provider.browseCollections(kind);
+        _requests[kind] = _browseInitialPage(kind);
       }
     }
   }
@@ -78,7 +80,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
   }
 
   Future<void> _refresh(MusicCatalogCollectionKind kind) async {
-    final request = widget.provider.browseCollections(kind);
+    final request = _browseInitialPage(kind);
     setState(() {
       _requests[kind] = request;
     });
@@ -87,6 +89,26 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
     } on Object {
       // FutureBuilder renders the provider's redacted error and retry action.
     }
+  }
+
+  Future<MusicCatalogCollectionPage> _browseInitialPage(
+    MusicCatalogCollectionKind kind,
+  ) async {
+    final provider = widget.provider;
+    if (provider is MusicCatalogPagingProvider &&
+        provider.pagedCollectionKinds.contains(kind)) {
+      return provider.browseCollectionsPage(
+        kind,
+        limit: _catalogPageSize,
+      );
+    }
+    final collections = await provider.browseCollections(kind);
+    return MusicCatalogCollectionPage(
+      collections: collections,
+      nextOffset: collections.length,
+      hasMore: false,
+      totalCount: collections.length,
+    );
   }
 
   Future<void> _openCollection(MusicCatalogCollection collection) {
@@ -113,7 +135,7 @@ class _CatalogCollectionList extends StatefulWidget {
 
   final MusicCatalogProvider provider;
   final MusicCatalogCollectionKind kind;
-  final Future<List<MusicCatalogCollection>> request;
+  final Future<MusicCatalogCollectionPage> request;
   final Future<void> Function() onRefresh;
   final ValueChanged<MusicCatalogCollection> onOpen;
 
@@ -124,8 +146,26 @@ class _CatalogCollectionList extends StatefulWidget {
 
 class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   final TextEditingController _filterController = TextEditingController();
+  final List<MusicCatalogCollection> _additionalCollections =
+      <MusicCatalogCollection>[];
   String _query = '';
   bool _playlistMutationInProgress = false;
+  bool _loadingMore = false;
+  Object? _loadMoreError;
+  bool? _hasMoreOverride;
+  int? _nextOffsetOverride;
+
+  @override
+  void didUpdateWidget(covariant _CatalogCollectionList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.request, widget.request)) {
+      _additionalCollections.clear();
+      _loadingMore = false;
+      _loadMoreError = null;
+      _hasMoreOverride = null;
+      _nextOffsetOverride = null;
+    }
+  }
 
   @override
   void dispose() {
@@ -135,7 +175,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<MusicCatalogCollection>>(
+    return FutureBuilder<MusicCatalogCollectionPage>(
       future: widget.request,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -147,7 +187,13 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
             onRetry: widget.onRefresh,
           );
         }
-        final collections = snapshot.data ?? const <MusicCatalogCollection>[];
+        final page = snapshot.data!;
+        final collections = _mergeCatalogCollections(
+          page.collections,
+          _additionalCollections,
+        );
+        final hasMore = _hasMoreOverride ?? page.hasMore;
+        final nextOffset = _nextOffsetOverride ?? page.nextOffset;
         final playlistMutator = widget.provider.capabilities.contains(
                   MusicSourceCapability.playlistMutation,
                 ) &&
@@ -169,6 +215,11 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                           .contains(normalizedQuery),
                 )
                 .toList(growable: false);
+        final showEmpty = visible.isEmpty;
+        final contentCount = showEmpty ? 1 : visible.length;
+        final showContinuation =
+            hasMore || _loadingMore || _loadMoreError != null;
+        final continuationIndex = contentCount + 1;
 
         return RefreshIndicator(
           onRefresh: widget.onRefresh,
@@ -176,7 +227,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
             key: PageStorageKey<String>('catalog-${widget.kind.name}'),
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            itemCount: visible.isEmpty ? 2 : visible.length + 1,
+            itemCount: 1 + contentCount + (showContinuation ? 1 : 0),
             separatorBuilder: (_, index) => index == 0
                 ? const SizedBox(height: 12)
                 : const Divider(height: 1),
@@ -221,7 +272,14 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                   ],
                 );
               }
-              if (index == 1 && visible.isEmpty) {
+              if (showContinuation && index == continuationIndex) {
+                return _buildContinuation(
+                  collections,
+                  nextOffset: nextOffset,
+                  hasMore: hasMore,
+                );
+              }
+              if (showEmpty) {
                 return _CatalogEmptyState(
                   label: normalizedQuery.isEmpty
                       ? 'No ${_kindPlural(widget.kind).toLowerCase()} found.'
@@ -303,6 +361,105 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         );
       },
     );
+  }
+
+  Widget _buildContinuation(
+    List<MusicCatalogCollection> existingCollections, {
+    required int nextOffset,
+    required bool hasMore,
+  }) {
+    if (_loadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox.square(
+            dimension: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    final error = _loadMoreError;
+    if (error != null) {
+      return ListTile(
+        key: Key('catalog-load-more-error-${widget.kind.name}'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.warning_amber_outlined),
+        title: Text('Could not load more ${_kindPlural(widget.kind).toLowerCase()}.'),
+        subtitle: Text(error.toString()),
+        trailing: TextButton.icon(
+          key: Key('catalog-load-more-retry-${widget.kind.name}'),
+          onPressed: () => unawaited(
+            _loadMore(existingCollections, nextOffset: nextOffset),
+          ),
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
+        ),
+      );
+    }
+    if (!hasMore) {
+      return const SizedBox.shrink();
+    }
+    return Align(
+      alignment: Alignment.center,
+      child: OutlinedButton.icon(
+        key: Key('catalog-load-more-${widget.kind.name}'),
+        onPressed: () => unawaited(
+          _loadMore(existingCollections, nextOffset: nextOffset),
+        ),
+        icon: const Icon(Icons.expand_more),
+        label: Text('Load more ${_kindPlural(widget.kind).toLowerCase()}'),
+      ),
+    );
+  }
+
+  Future<void> _loadMore(
+    List<MusicCatalogCollection> existingCollections, {
+    required int nextOffset,
+  }) async {
+    final provider = widget.provider;
+    if (_loadingMore ||
+        provider is! MusicCatalogPagingProvider ||
+        !provider.pagedCollectionKinds.contains(widget.kind)) {
+      return;
+    }
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
+    final initialRequest = widget.request;
+    try {
+      final page = await provider.browseCollectionsPage(
+        widget.kind,
+        offset: nextOffset,
+        limit: _catalogPageSize,
+      );
+      if (!mounted || !identical(initialRequest, widget.request)) {
+        return;
+      }
+      final knownIds = existingCollections
+          .map((collection) => collection.id)
+          .toSet();
+      final unique = page.collections
+          .where((collection) => knownIds.add(collection.id))
+          .toList(growable: false);
+      final progressed = page.nextOffset > nextOffset;
+      setState(() {
+        _additionalCollections.addAll(unique);
+        _nextOffsetOverride = progressed ? page.nextOffset : nextOffset;
+        _hasMoreOverride =
+            page.hasMore && progressed && page.collections.isNotEmpty;
+        _loadingMore = false;
+      });
+    } on Object catch (error) {
+      if (!mounted || !identical(initialRequest, widget.request)) {
+        return;
+      }
+      setState(() {
+        _loadMoreError = error;
+        _loadingMore = false;
+      });
+    }
   }
 
   Future<void> _createPlaylist(
@@ -1163,6 +1320,23 @@ class _CatalogEmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+List<MusicCatalogCollection> _mergeCatalogCollections(
+  Iterable<MusicCatalogCollection> first,
+  Iterable<MusicCatalogCollection> second,
+) {
+  final merged = <MusicCatalogCollection>[];
+  final ids = <String>{};
+  for (final collection in <Iterable<MusicCatalogCollection>>[first, second]
+      .expand((collections) => collections)) {
+    final id = collection.id.trim();
+    if (id.isEmpty || !ids.add('${collection.kind.name}|$id')) {
+      continue;
+    }
+    merged.add(collection);
+  }
+  return List<MusicCatalogCollection>.unmodifiable(merged);
 }
 
 const _newRemotePlaylistSelection = '__aethertune_new_playlist__';

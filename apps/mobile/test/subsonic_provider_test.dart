@@ -166,6 +166,59 @@ void main() {
     );
   });
 
+  test('pages Subsonic albums with documented size and offset', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _albumListResponseJson;
+      },
+    );
+
+    final page = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.album,
+      offset: 7,
+      limit: 1,
+    );
+
+    expect(provider.pagedCollectionKinds, <MusicCatalogCollectionKind>{
+      MusicCatalogCollectionKind.album,
+    });
+    expect(page.collections.single.id, 'album-1');
+    expect(page.nextOffset, 8);
+    expect(page.totalCount, isNull);
+    expect(page.hasMore, isTrue);
+    expect(requests.single.path, '/navidrome/rest/getAlbumList2.view');
+    expect(requests.single.queryParameters['type'], 'alphabeticalByName');
+    expect(requests.single.queryParameters['size'], '1');
+    expect(requests.single.queryParameters['offset'], '7');
+    expect(requests.single.queryParameters['t'], _secretToken);
+
+    await expectLater(
+      provider.browseCollectionsPage(MusicCatalogCollectionKind.artist),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      provider.browseCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        offset: -1,
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.browseCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(1));
+  });
+
   test('loads documented Subsonic album discovery lists', () async {
     final requests = <Uri>[];
     final provider = SubsonicProvider(

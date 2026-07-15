@@ -37,6 +37,20 @@ final class MusicCatalogDetail {
   final List<Track> tracks;
 }
 
+final class MusicCatalogCollectionPage {
+  const MusicCatalogCollectionPage({
+    required this.collections,
+    required this.nextOffset,
+    required this.hasMore,
+    this.totalCount,
+  });
+
+  final List<MusicCatalogCollection> collections;
+  final int nextOffset;
+  final bool hasMore;
+  final int? totalCount;
+}
+
 abstract interface class MusicCatalogProvider implements MusicSourceProvider {
   Future<List<MusicCatalogCollection>> browseCollections(
     MusicCatalogCollectionKind kind,
@@ -50,6 +64,17 @@ abstract interface class MusicCatalogProvider implements MusicSourceProvider {
     String artworkId, {
     String? version,
     int maxWidth = 512,
+  });
+}
+
+abstract interface class MusicCatalogPagingProvider
+    implements MusicCatalogProvider {
+  Set<MusicCatalogCollectionKind> get pagedCollectionKinds;
+
+  Future<MusicCatalogCollectionPage> browseCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    int offset = 0,
+    int limit = 100,
   });
 }
 

@@ -17,7 +17,10 @@ typedef JellyfinMutationLoader = Future<void> Function(
 );
 
 class JellyfinProvider
-    implements MusicCatalogDiscoveryProvider, MusicPlaylistMutationProvider {
+    implements
+        MusicCatalogDiscoveryProvider,
+        MusicCatalogPagingProvider,
+        MusicPlaylistMutationProvider {
   JellyfinProvider({
     required this.baseUri,
     required this.userId,
@@ -159,6 +162,70 @@ class JellyfinProvider
       return parseJellyfinCollectionsResponse(
         await _requestLoader(uri),
         kind,
+      );
+    });
+  }
+
+  @override
+  Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+        MusicCatalogCollectionKind.album,
+        MusicCatalogCollectionKind.playlist,
+      };
+
+  @override
+  Future<MusicCatalogCollectionPage> browseCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    int offset = 0,
+    int limit = 100,
+  }) {
+    if (offset < 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 500);
+    return _guardRequest(() async {
+      final pageParameters = <String, String>{
+        'StartIndex': offset.toString(),
+        'Limit': boundedLimit.toString(),
+        'EnableTotalRecordCount': 'true',
+      };
+      final uri = switch (kind) {
+        MusicCatalogCollectionKind.artist => _requestUri(
+            '/Artists',
+            <String, String>{
+              'UserId': userId,
+              'IncludeItemTypes': 'Audio',
+              'SortBy': 'SortName',
+              'SortOrder': 'Ascending',
+              'Fields': 'Genres,RecursiveItemCount',
+              'EnableImages': 'true',
+              'EnableImageTypes': 'Primary',
+              'ImageTypeLimit': '1',
+              ...pageParameters,
+            },
+          ),
+        MusicCatalogCollectionKind.album => _itemsUri(
+            itemType: 'MusicAlbum',
+            extra: pageParameters,
+          ),
+        MusicCatalogCollectionKind.playlist => _itemsUri(
+            itemType: 'Playlist',
+            extra: pageParameters,
+          ),
+      };
+      return parseJellyfinCollectionPageResponse(
+        await _requestLoader(uri),
+        kind,
+        requestOffset: offset,
+        requestLimit: boundedLimit,
       );
     });
   }
@@ -562,6 +629,42 @@ List<MusicCatalogCollection> parseJellyfinCollectionsResponse(
       .toList(growable: false);
 }
 
+MusicCatalogCollectionPage parseJellyfinCollectionPageResponse(
+  String jsonText,
+  MusicCatalogCollectionKind kind, {
+  required int requestOffset,
+  required int requestLimit,
+}) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('Jellyfin response must be a JSON object.');
+  }
+
+  final rawItems = _jsonList(decoded['Items']);
+  final collections = rawItems
+      .whereType<Map<dynamic, dynamic>>()
+      .map((item) => item.cast<String, Object?>())
+      .map((item) => _jellyfinCollection(item, kind))
+      .whereType<MusicCatalogCollection>()
+      .toList(growable: false);
+  final reportedStart = _optionalNonNegativeInt(decoded['StartIndex']);
+  final startIndex = reportedStart == null || reportedStart < requestOffset
+      ? requestOffset
+      : reportedStart;
+  final totalCount = _optionalNonNegativeInt(decoded['TotalRecordCount']);
+  final nextOffset = startIndex + rawItems.length;
+  final hasMore = rawItems.isNotEmpty &&
+      (totalCount == null
+          ? rawItems.length >= requestLimit
+          : nextOffset < totalCount);
+  return MusicCatalogCollectionPage(
+    collections: List<MusicCatalogCollection>.unmodifiable(collections),
+    nextOffset: nextOffset,
+    hasMore: hasMore,
+    totalCount: totalCount,
+  );
+}
+
 List<MusicCatalogCollection> parseJellyfinLatestCollectionsResponse(
   String jsonText,
 ) {
@@ -799,4 +902,12 @@ int _intValue(Object? value) {
   }
 
   return int.tryParse(_stringValue(value)) ?? 0;
+}
+
+int? _optionalNonNegativeInt(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  final parsed = _intValue(value);
+  return parsed < 0 ? null : parsed;
 }

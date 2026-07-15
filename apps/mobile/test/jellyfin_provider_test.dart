@@ -145,6 +145,87 @@ void main() {
     );
   });
 
+  test('pages Jellyfin artists albums and playlists with server totals',
+      () async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        if (uri.path.endsWith('/Artists')) {
+          return _jellyfinArtistPageJson;
+        }
+        return switch (uri.queryParameters['IncludeItemTypes']) {
+          'MusicAlbum' => _jellyfinAlbumPageJson,
+          'Playlist' => _jellyfinPlaylistPageJson,
+          _ => throw StateError('Unexpected request: $uri'),
+        };
+      },
+    );
+
+    final artists = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      offset: 2,
+      limit: 1,
+    );
+    final albums = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.album,
+      offset: 2,
+      limit: 1,
+    );
+    final playlists = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.playlist,
+      offset: 2,
+      limit: 1,
+    );
+
+    expect(
+      provider.pagedCollectionKinds,
+      MusicCatalogCollectionKind.values.toSet(),
+    );
+    expect(artists.collections.single.id, 'artist-page');
+    expect(artists.nextOffset, 3);
+    expect(artists.totalCount, 5);
+    expect(artists.hasMore, isTrue);
+    expect(albums.collections.single.id, 'album-page');
+    expect(albums.nextOffset, 3);
+    expect(albums.totalCount, 3);
+    expect(albums.hasMore, isFalse);
+    expect(playlists.collections.single.id, 'playlist-page');
+    expect(playlists.totalCount, 10);
+    expect(playlists.hasMore, isTrue);
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters['StartIndex'] == '2' &&
+            request.queryParameters['Limit'] == '1' &&
+            request.queryParameters['EnableTotalRecordCount'] == 'true' &&
+            request.queryParameters['api_key'] == 'api-secret',
+      ),
+      isTrue,
+    );
+    expect(requests.first.path, '/jellyfin/Artists');
+    expect(requests[1].path, '/jellyfin/Users/user-1/Items');
+
+    await expectLater(
+      provider.browseCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        offset: -1,
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.browseCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(3));
+  });
+
   test('loads Jellyfin recently added albums from latest media', () async {
     Uri? capturedUri;
     final provider = JellyfinProvider(
@@ -477,5 +558,47 @@ const _jellyfinPlaylistsJson = '''
       "ImageTags": {"Primary": "playlist-image-tag"}
     }
   ]
+}
+''';
+
+const _jellyfinArtistPageJson = '''
+{
+  "Items": [
+    {
+      "Id": "artist-page",
+      "Name": "Paged Artist",
+      "RecursiveItemCount": 4
+    }
+  ],
+  "StartIndex": 2,
+  "TotalRecordCount": 5
+}
+''';
+
+const _jellyfinAlbumPageJson = '''
+{
+  "Items": [
+    {
+      "Id": "album-page",
+      "Name": "Paged Album",
+      "AlbumArtist": "Paged Artist"
+    }
+  ],
+  "StartIndex": 2,
+  "TotalRecordCount": 3
+}
+''';
+
+const _jellyfinPlaylistPageJson = '''
+{
+  "Items": [
+    {
+      "Id": "playlist-page",
+      "Name": "Paged Playlist",
+      "ChildCount": 3
+    }
+  ],
+  "StartIndex": 2,
+  "TotalRecordCount": 10
 }
 ''';

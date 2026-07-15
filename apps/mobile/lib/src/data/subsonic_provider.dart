@@ -16,7 +16,10 @@ typedef SubsonicRequestLoader = Future<String> Function(Uri requestUri);
 typedef SubsonicSaltGenerator = String Function();
 
 class SubsonicProvider
-    implements MusicCatalogDiscoveryProvider, MusicPlaylistMutationProvider {
+    implements
+        MusicCatalogDiscoveryProvider,
+        MusicCatalogPagingProvider,
+        MusicPlaylistMutationProvider {
   SubsonicProvider({
     required this.baseUri,
     required this.username,
@@ -162,6 +165,52 @@ class SubsonicProvider
             ),
           );
       }
+    });
+  }
+
+  @override
+  Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.album,
+      };
+
+  @override
+  Future<MusicCatalogCollectionPage> browseCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    int offset = 0,
+    int limit = 100,
+  }) {
+    if (!pagedCollectionKinds.contains(kind)) {
+      return Future<MusicCatalogCollectionPage>.error(
+        UnsupportedError('Subsonic catalog kind is not pageable.'),
+      );
+    }
+    if (offset < 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 500);
+    return _guardRequest(() async {
+      return parseSubsonicAlbumListPageResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/getAlbumList2.view',
+            <String, String>{
+              'type': 'alphabeticalByName',
+              'size': boundedLimit.toString(),
+              'offset': offset.toString(),
+            },
+          ),
+        ),
+        requestOffset: offset,
+        requestLimit: boundedLimit,
+      );
     });
   }
 
@@ -542,6 +591,28 @@ List<MusicCatalogCollection> parseSubsonicAlbumListResponse(String jsonText) {
   return _subsonicCollections(
     list['album'],
     MusicCatalogCollectionKind.album,
+  );
+}
+
+MusicCatalogCollectionPage parseSubsonicAlbumListPageResponse(
+  String jsonText, {
+  required int requestOffset,
+  required int requestLimit,
+}) {
+  final response = _subsonicResponse(jsonText);
+  final list = response['albumList2'];
+  final rawAlbums = list is Map<dynamic, dynamic>
+      ? _jsonList(list['album'])
+      : const <Object?>[];
+  final collections = _subsonicCollections(
+    rawAlbums,
+    MusicCatalogCollectionKind.album,
+  );
+  final nextOffset = requestOffset + rawAlbums.length;
+  return MusicCatalogCollectionPage(
+    collections: List<MusicCatalogCollection>.unmodifiable(collections),
+    nextOffset: nextOffset,
+    hasMore: rawAlbums.isNotEmpty && rawAlbums.length >= requestLimit,
   );
 }
 
