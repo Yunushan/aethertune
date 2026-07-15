@@ -18,6 +18,7 @@ typedef SubsonicSaltGenerator = String Function();
 class SubsonicProvider
     implements
         MusicCatalogDiscoveryProvider,
+        MusicCatalogDiscoveryPagingProvider,
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
@@ -247,10 +248,36 @@ class SubsonicProvider
       ];
 
   @override
+  Set<MusicCatalogDiscoveryKind> get pagedDiscoveryKinds =>
+      Set<MusicCatalogDiscoveryKind>.unmodifiable(discoveryKinds);
+
+  @override
   Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
     MusicCatalogDiscoveryKind kind, {
     int limit = 6,
+  }) async {
+    return (await browseDiscoveryCollectionsPage(
+      kind,
+      limit: limit.clamp(1, 500),
+    )).collections;
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> browseDiscoveryCollectionsPage(
+    MusicCatalogDiscoveryKind kind, {
+    int offset = 0,
+    int limit = 6,
   }) {
+    if (offset < 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
     final listType = switch (kind) {
       MusicCatalogDiscoveryKind.recentlyAdded => 'newest',
       MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequent',
@@ -259,17 +286,19 @@ class SubsonicProvider
     };
     final boundedLimit = limit.clamp(1, 500);
     return _guardRequest(() async {
-      return parseSubsonicAlbumListResponse(
+      return parseSubsonicAlbumListPageResponse(
         await _requestLoader(
           _requestUri(
             '/rest/getAlbumList2.view',
             <String, String>{
               'type': listType,
               'size': boundedLimit.toString(),
-              'offset': '0',
+              'offset': offset.toString(),
             },
           ),
         ),
+        requestOffset: offset,
+        requestLimit: boundedLimit,
       );
     });
   }

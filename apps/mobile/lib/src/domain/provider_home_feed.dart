@@ -7,12 +7,16 @@ final class ProviderHomeSection {
     required this.kind,
     required this.collections,
     this.discoveryKind,
+    this.nextOffset = 0,
+    this.hasMore = false,
   });
 
   final MusicCatalogProvider provider;
   final MusicCatalogCollectionKind kind;
   final List<MusicCatalogCollection> collections;
   final MusicCatalogDiscoveryKind? discoveryKind;
+  final int nextOffset;
+  final bool hasMore;
 }
 
 final class ProviderHomeFeedError {
@@ -39,6 +43,13 @@ final class ProviderHomeFeed {
   final List<ProviderHomeFeedError> errors;
 
   bool get hasContent => sections.isNotEmpty;
+}
+
+final class ProviderHomeDiscoveryContinuation {
+  const ProviderHomeDiscoveryContinuation({this.section, this.error});
+
+  final ProviderHomeSection? section;
+  final ProviderHomeFeedError? error;
 }
 
 final class ProviderHomeFeedCoordinator {
@@ -100,6 +111,57 @@ final class ProviderHomeFeedCoordinator {
       sections: List<ProviderHomeSection>.unmodifiable(sections),
       errors: List<ProviderHomeFeedError>.unmodifiable(errors),
     );
+  }
+
+  Future<ProviderHomeDiscoveryContinuation> loadMore(
+    ProviderHomeSection section, {
+    int limit = 6,
+  }) async {
+    final provider = section.provider;
+    final discoveryKind = section.discoveryKind;
+    if (limit <= 0 ||
+        !section.hasMore ||
+        discoveryKind == null ||
+        provider is! MusicCatalogDiscoveryPagingProvider ||
+        !provider.pagedDiscoveryKinds.contains(discoveryKind)) {
+      return const ProviderHomeDiscoveryContinuation();
+    }
+
+    try {
+      final page = await provider.browseDiscoveryCollectionsPage(
+        discoveryKind,
+        offset: section.nextOffset,
+        limit: limit,
+      );
+      final additional = _visibleCollections(
+        page.collections,
+        MusicCatalogCollectionKind.album,
+        limit: limit,
+        excludingIds: section.collections.map((collection) => collection.id),
+      );
+      final canContinue = page.hasMore && page.nextOffset > section.nextOffset;
+      return ProviderHomeDiscoveryContinuation(
+        section: ProviderHomeSection(
+          provider: provider,
+          kind: MusicCatalogCollectionKind.album,
+          collections: List<MusicCatalogCollection>.unmodifiable(<
+            MusicCatalogCollection
+          >[...section.collections, ...additional]),
+          discoveryKind: discoveryKind,
+          nextOffset: canContinue ? page.nextOffset : section.nextOffset,
+          hasMore: canContinue,
+        ),
+      );
+    } on Object {
+      return ProviderHomeDiscoveryContinuation(
+        error: ProviderHomeFeedError(
+          providerId: provider.id,
+          providerName: provider.name,
+          kind: MusicCatalogCollectionKind.album,
+          discoveryKind: discoveryKind,
+        ),
+      );
+    }
   }
 
   Future<List<_ProviderHomeLoadResult>> _loadProvider(
@@ -178,6 +240,31 @@ final class ProviderHomeFeedCoordinator {
     required int limit,
   }) async {
     try {
+      if (provider is MusicCatalogDiscoveryPagingProvider &&
+          provider.pagedDiscoveryKinds.contains(discoveryKind)) {
+        final page = await provider.browseDiscoveryCollectionsPage(
+          discoveryKind,
+          limit: limit,
+        );
+        final visible = _visibleCollections(
+          page.collections,
+          MusicCatalogCollectionKind.album,
+          limit: limit,
+        );
+        final canContinue = page.hasMore && page.nextOffset > 0;
+        return _ProviderHomeLoadResult(
+          section: visible.isEmpty
+              ? null
+              : ProviderHomeSection(
+                  provider: provider,
+                  kind: MusicCatalogCollectionKind.album,
+                  collections: visible,
+                  discoveryKind: discoveryKind,
+                  nextOffset: canContinue ? page.nextOffset : 0,
+                  hasMore: canContinue,
+                ),
+        );
+      }
       final visible = _visibleCollections(
         await provider.browseDiscoveryCollections(
           discoveryKind,
@@ -213,9 +300,10 @@ List<MusicCatalogCollection> _visibleCollections(
   Iterable<MusicCatalogCollection> collections,
   MusicCatalogCollectionKind kind, {
   required int limit,
+  Iterable<String> excludingIds = const <String>[],
 }) {
   final visible = <MusicCatalogCollection>[];
-  final collectionIds = <String>{};
+  final collectionIds = excludingIds.map((id) => id.trim()).toSet();
   for (final collection in collections) {
     final id = collection.id.trim();
     if (collection.kind != kind ||

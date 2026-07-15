@@ -2445,6 +2445,8 @@ class _HomeTabState extends State<_HomeTab> {
   ProviderHomeFeed? _providerHomeFeed;
   String? _providerHomeSignature;
   bool _providerHomeLoading = false;
+  final Set<String> _providerHomeLoadingMoreSections = <String>{};
+  final Set<String> _providerHomeLoadMoreFailures = <String>{};
   int _providerHomeRequest = 0;
 
   @override
@@ -2457,6 +2459,8 @@ class _HomeTabState extends State<_HomeTab> {
       _providerHomeRequest += 1;
       _providerHomeFeed = null;
       _providerHomeLoading = false;
+      _providerHomeLoadingMoreSections.clear();
+      _providerHomeLoadMoreFailures.clear();
     }
     _providerHomeSignature = signature;
   }
@@ -2504,6 +2508,9 @@ class _HomeTabState extends State<_HomeTab> {
             loading: _providerHomeLoading,
             offline: library.offlineModeEnabled,
             onRefresh: _loadProviderHome,
+            onLoadMore: _loadMoreProviderHome,
+            loadingMoreSectionKeys: _providerHomeLoadingMoreSections,
+            failedLoadMoreSectionKeys: _providerHomeLoadMoreFailures,
             onOpen: (provider, collection) => unawaited(
               _openProviderHomeCollection(provider, collection),
             ),
@@ -2698,6 +2705,59 @@ class _HomeTabState extends State<_HomeTab> {
     setState(() {
       _providerHomeFeed = feed;
       _providerHomeLoading = false;
+      _providerHomeLoadingMoreSections.clear();
+      _providerHomeLoadMoreFailures.clear();
+    });
+  }
+
+  Future<void> _loadMoreProviderHome(ProviderHomeSection section) async {
+    final library = context.read<LibraryStore>();
+    final sectionKey = _providerHomeSectionKey(section);
+    if (library.offlineModeEnabled ||
+        !section.hasMore ||
+        _providerHomeLoading ||
+        _providerHomeLoadingMoreSections.contains(sectionKey)) {
+      return;
+    }
+
+    final providerStore = context.read<SelfHostedProviderStore>();
+    final signature = _providerHomeStoreSignature(providerStore);
+    final request = _providerHomeRequest;
+    setState(() {
+      _providerHomeLoadingMoreSections.add(sectionKey);
+      _providerHomeLoadMoreFailures.remove(sectionKey);
+    });
+    final continuation = await _providerHomeCoordinator.loadMore(section);
+    if (!mounted ||
+        request != _providerHomeRequest ||
+        signature != _providerHomeStoreSignature(
+          context.read<SelfHostedProviderStore>(),
+        )) {
+      return;
+    }
+
+    setState(() {
+      _providerHomeLoadingMoreSections.remove(sectionKey);
+      final updated = continuation.section;
+      if (updated == null) {
+        _providerHomeLoadMoreFailures.add(sectionKey);
+        return;
+      }
+      _providerHomeLoadMoreFailures.remove(sectionKey);
+      final feed = _providerHomeFeed;
+      if (feed == null) {
+        return;
+      }
+      _providerHomeFeed = ProviderHomeFeed(
+        sections: feed.sections
+            .map(
+              (candidate) => _providerHomeSectionKey(candidate) == sectionKey
+                  ? updated
+                  : candidate,
+            )
+            .toList(growable: false),
+        errors: feed.errors,
+      );
     });
   }
 
@@ -2729,6 +2789,11 @@ List<MusicCatalogProvider> _providerHomeCatalogs(
   return providers;
 }
 
+String _providerHomeSectionKey(ProviderHomeSection section) {
+  return '${section.provider.id}:${section.kind.name}:'
+      '${section.discoveryKind?.name ?? ''}';
+}
+
 String _providerHomeStoreSignature(SelfHostedProviderStore store) {
   final accounts = store.accounts.map(
     (account) => <Object?>[
@@ -2751,6 +2816,9 @@ class _ProviderHomeDiscovery extends StatelessWidget {
     required this.loading,
     required this.offline,
     required this.onRefresh,
+    required this.onLoadMore,
+    required this.loadingMoreSectionKeys,
+    required this.failedLoadMoreSectionKeys,
     required this.onOpen,
   });
 
@@ -2759,6 +2827,9 @@ class _ProviderHomeDiscovery extends StatelessWidget {
   final bool loading;
   final bool offline;
   final VoidCallback onRefresh;
+  final ValueChanged<ProviderHomeSection> onLoadMore;
+  final Set<String> loadingMoreSectionKeys;
+  final Set<String> failedLoadMoreSectionKeys;
   final void Function(
     MusicCatalogProvider provider,
     MusicCatalogCollection collection,
@@ -2818,6 +2889,13 @@ class _ProviderHomeDiscovery extends StatelessWidget {
           _ProviderHomeSectionShelf(
             section: section,
             onOpen: (collection) => onOpen(section.provider, collection),
+            onLoadMore: offline ? null : () => onLoadMore(section),
+            loadingMore: loadingMoreSectionKeys.contains(
+              _providerHomeSectionKey(section),
+            ),
+            loadMoreFailed: failedLoadMoreSectionKeys.contains(
+              _providerHomeSectionKey(section),
+            ),
           ),
       ],
     );
@@ -2828,10 +2906,16 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
   const _ProviderHomeSectionShelf({
     required this.section,
     required this.onOpen,
+    required this.onLoadMore,
+    required this.loadingMore,
+    required this.loadMoreFailed,
   });
 
   final ProviderHomeSection section;
   final ValueChanged<MusicCatalogCollection> onOpen;
+  final VoidCallback? onLoadMore;
+  final bool loadingMore;
+  final bool loadMoreFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -2873,6 +2957,29 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
             },
           ),
         ),
+        if (section.hasMore)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: ValueKey<String>(
+                'provider-home-load-more-${section.provider.id}-'
+                '${discoveryKind?.name ?? section.kind.name}',
+              ),
+              onPressed: loadingMore ? null : onLoadMore,
+              icon: loadingMore
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more),
+              label: Text(loadingMore ? 'Loading more' : 'Load more'),
+            ),
+          ),
+        if (loadMoreFailed)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text('Unable to load more. Try again.'),
+          ),
         const SizedBox(height: 8),
       ],
     );

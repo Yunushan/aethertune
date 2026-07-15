@@ -143,6 +143,41 @@ void main() {
     expect(provider.browseCalls, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('loads more from a paged server discovery shelf', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final provider = _FakePagedProviderHomeDiscoveryCatalog();
+    final fixture = await _HomeFixture.create(provider: provider);
+    addTearDown(fixture.dispose);
+    await _pumpHome(tester, fixture);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('provider-home-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('First Server Album'), findsOneWidget);
+    expect(find.text('Second Server Album'), findsNothing);
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>(
+          'provider-home-load-more-test-provider-recentlyAdded',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.discoveryPageCalls, <String>[
+      'recentlyAdded:0:6',
+      'recentlyAdded:1:6',
+    ]);
+    expect(find.text('Second Server Album'), findsOneWidget);
+    expect(find.text('Load more'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpHome(WidgetTester tester, _HomeFixture fixture) async {
@@ -365,6 +400,63 @@ final class _FakeProviderHomeDiscoveryCatalog
         itemCount: 1,
       ),
     ];
+  }
+}
+
+final class _FakePagedProviderHomeDiscoveryCatalog
+    extends _FakeProviderHomeCatalog
+    implements MusicCatalogDiscoveryPagingProvider {
+  final List<String> discoveryPageCalls = <String>[];
+
+  @override
+  List<MusicCatalogDiscoveryKind> get discoveryKinds =>
+      const <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      ];
+
+  @override
+  Set<MusicCatalogDiscoveryKind> get pagedDiscoveryKinds =>
+      const <MusicCatalogDiscoveryKind>{
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      };
+
+  @override
+  Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
+    MusicCatalogDiscoveryKind kind, {
+    int limit = 6,
+  }) async => const <MusicCatalogCollection>[];
+
+  @override
+  Future<MusicCatalogCollectionPage> browseDiscoveryCollectionsPage(
+    MusicCatalogDiscoveryKind kind, {
+    int offset = 0,
+    int limit = 6,
+  }) async {
+    discoveryPageCalls.add('${kind.name}:$offset:$limit');
+    return switch (offset) {
+      0 => const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[
+          MusicCatalogCollection(
+            id: 'first-server-album',
+            title: 'First Server Album',
+            kind: MusicCatalogCollectionKind.album,
+          ),
+        ],
+        nextOffset: 1,
+        hasMore: true,
+      ),
+      _ => const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[
+          MusicCatalogCollection(
+            id: 'second-server-album',
+            title: 'Second Server Album',
+            kind: MusicCatalogCollectionKind.album,
+          ),
+        ],
+        nextOffset: 2,
+        hasMore: false,
+      ),
+    };
   }
 }
 

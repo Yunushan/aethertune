@@ -231,10 +231,75 @@ void main() {
     );
     expect(provider.browseCalls, isEmpty);
   });
+
+  test('continues a paged discovery shelf without duplicate albums', () async {
+    final provider = _FakeHomeCatalogProvider(
+      id: 'paged',
+      name: 'Paged Server',
+      discoveryKinds: const <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      ],
+      pagedDiscoveryKinds: const <MusicCatalogDiscoveryKind>{
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      },
+      discoveryPages: <String, MusicCatalogCollectionPage>{
+        'recentlyAdded:0': const MusicCatalogCollectionPage(
+          collections: <MusicCatalogCollection>[
+            MusicCatalogCollection(
+              id: 'album-1',
+              title: 'First Album',
+              kind: MusicCatalogCollectionKind.album,
+            ),
+            MusicCatalogCollection(
+              id: 'album-2',
+              title: 'Second Album',
+              kind: MusicCatalogCollectionKind.album,
+            ),
+          ],
+          nextOffset: 2,
+          hasMore: true,
+        ),
+        'recentlyAdded:2': const MusicCatalogCollectionPage(
+          collections: <MusicCatalogCollection>[
+            MusicCatalogCollection(
+              id: 'album-2',
+              title: 'Duplicate Album',
+              kind: MusicCatalogCollectionKind.album,
+            ),
+            MusicCatalogCollection(
+              id: 'album-3',
+              title: 'Third Album',
+              kind: MusicCatalogCollectionKind.album,
+            ),
+          ],
+          nextOffset: 4,
+          hasMore: false,
+        ),
+      },
+    );
+    const coordinator = ProviderHomeFeedCoordinator();
+
+    final initial = await coordinator.load(<MusicCatalogProvider>[provider]);
+    expect(initial.sections.single.hasMore, isTrue);
+    expect(initial.sections.single.nextOffset, 2);
+    expect(provider.discoveryPageCalls, <String>['recentlyAdded:0:6']);
+    expect(provider.discoveryCalls, isEmpty);
+
+    final continuation = await coordinator.loadMore(initial.sections.single);
+    expect(
+      continuation.section!.collections.map((collection) => collection.id),
+      <String>['album-1', 'album-2', 'album-3'],
+    );
+    expect(continuation.section!.hasMore, isFalse);
+    expect(provider.discoveryPageCalls, <String>[
+      'recentlyAdded:0:6',
+      'recentlyAdded:2:6',
+    ]);
+  });
 }
 
 final class _FakeHomeCatalogProvider
-    implements MusicCatalogDiscoveryProvider {
+    implements MusicCatalogDiscoveryPagingProvider {
   _FakeHomeCatalogProvider({
     required this.id,
     required this.name,
@@ -246,6 +311,8 @@ final class _FakeHomeCatalogProvider
         MusicCatalogDiscoveryKind,
         List<MusicCatalogCollection>>{},
     this.failDiscoveryKinds = const <MusicCatalogDiscoveryKind>{},
+    this.pagedDiscoveryKinds = const <MusicCatalogDiscoveryKind>{},
+    this.discoveryPages = const <String, MusicCatalogCollectionPage>{},
   });
 
   @override
@@ -262,10 +329,14 @@ final class _FakeHomeCatalogProvider
   final Map<MusicCatalogDiscoveryKind, List<MusicCatalogCollection>>
       discoveryCollections;
   final Set<MusicCatalogDiscoveryKind> failDiscoveryKinds;
+  @override
+  final Set<MusicCatalogDiscoveryKind> pagedDiscoveryKinds;
+  final Map<String, MusicCatalogCollectionPage> discoveryPages;
   final List<MusicCatalogCollectionKind> browseCalls =
       <MusicCatalogCollectionKind>[];
   final List<MusicCatalogDiscoveryKind> discoveryCalls =
       <MusicCatalogDiscoveryKind>[];
+  final List<String> discoveryPageCalls = <String>[];
 
   @override
   String get description => 'Test catalog';
@@ -307,6 +378,21 @@ final class _FakeHomeCatalogProvider
       throw StateError('private-discovery-error');
     }
     return discoveryCollections[kind] ?? const <MusicCatalogCollection>[];
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> browseDiscoveryCollectionsPage(
+    MusicCatalogDiscoveryKind kind, {
+    int offset = 0,
+    int limit = 6,
+  }) async {
+    discoveryPageCalls.add('${kind.name}:$offset:$limit');
+    return discoveryPages['${kind.name}:$offset'] ??
+        const MusicCatalogCollectionPage(
+          collections: <MusicCatalogCollection>[],
+          nextOffset: 0,
+          hasMore: false,
+        );
   }
 
   @override

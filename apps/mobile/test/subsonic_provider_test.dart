@@ -307,6 +307,41 @@ void main() {
     );
   });
 
+  test('pages Subsonic discovery lists with the requested offset', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _albumListResponseJson;
+      },
+    );
+
+    final page = await provider.browseDiscoveryCollectionsPage(
+      MusicCatalogDiscoveryKind.recentlyAdded,
+      offset: 9,
+      limit: 1,
+    );
+
+    expect(provider.pagedDiscoveryKinds, containsAll(provider.discoveryKinds));
+    expect(page.collections.single.id, 'album-1');
+    expect(page.nextOffset, 10);
+    expect(page.hasMore, isTrue);
+    expect(requests.single.queryParameters['type'], 'newest');
+    expect(requests.single.queryParameters['offset'], '9');
+    expect(requests.single.queryParameters['size'], '1');
+    await expectLater(
+      provider.browseDiscoveryCollectionsPage(
+        MusicCatalogDiscoveryKind.random,
+        offset: -1,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('loads Subsonic track album and ID3 artist radio', () async {
     final requests = <Uri>[];
     final provider = SubsonicProvider(
