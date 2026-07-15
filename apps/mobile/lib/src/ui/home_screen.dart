@@ -5268,6 +5268,34 @@ class _CustomSmartPlaylistDraft {
   final int limit;
 }
 
+class _TextEditingControllerOwner extends StatefulWidget {
+  const _TextEditingControllerOwner({
+    required this.controllers,
+    required this.child,
+  });
+
+  final List<TextEditingController> controllers;
+  final Widget child;
+
+  @override
+  State<_TextEditingControllerOwner> createState() =>
+      _TextEditingControllerOwnerState();
+}
+
+class _TextEditingControllerOwnerState
+    extends State<_TextEditingControllerOwner> {
+  @override
+  void dispose() {
+    for (final controller in widget.controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class _PlaylistsTab extends StatefulWidget {
   const _PlaylistsTab({
     required this.onAddToPlaylist,
@@ -5337,6 +5365,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             ),
             const SizedBox(width: 8),
             IconButton.filledTonal(
+              key: const Key('smart-playlist-create'),
               tooltip: 'Create smart playlist',
               onPressed: () => _createCustomSmartPlaylist(context),
               icon: const Icon(Icons.filter_alt_outlined),
@@ -6630,11 +6659,24 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     var sortMode =
         initialRule?.sortMode ?? CustomSmartPlaylistSortMode.recentlyAdded;
 
-    try {
-      return showDialog<_CustomSmartPlaylistDraft>(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
+    return showDialog<_CustomSmartPlaylistDraft>(
+      context: context,
+      builder: (dialogContext) {
+        return _TextEditingControllerOwner(
+          controllers: <TextEditingController>[
+            nameController,
+            queryController,
+            sourceIdController,
+            artistController,
+            albumController,
+            genreController,
+            minimumDurationController,
+            maximumDurationController,
+            minimumPlayCountController,
+            minimumDaysSinceLastPlayedController,
+            limitController,
+          ],
+          child: StatefulBuilder(
             builder: (context, setDialogState) {
               _CustomSmartPlaylistDraft? draftFromControllers() {
                 final name = nameController.text.trim();
@@ -6670,6 +6712,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               }
 
               return AlertDialog(
+                key: const Key('smart-playlist-dialog'),
                 title: Text(title),
                 content: SizedBox(
                   width: double.maxFinite,
@@ -6678,6 +6721,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         TextField(
+                          key: const Key('smart-playlist-name'),
                           autofocus: true,
                           controller: nameController,
                           decoration: const InputDecoration(
@@ -6722,22 +6766,30 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                               ),
                             ),
                             IconButton(
-                              tooltip: 'Add rule group',
+                              key: const Key('smart-playlist-add-rule-group'),
+                              tooltip: ruleGroups.length >=
+                                      maxCustomSmartPlaylistGroupsPerGroup
+                                  ? 'Rule group limit reached'
+                                  : 'Add rule group',
                               icon: const Icon(Icons.account_tree_outlined),
-                              onPressed: () async {
-                                final group =
-                                    await _promptForCustomSmartPlaylistRuleGroup(
-                                  context,
-                                );
-                                if (group != null) {
-                                  setDialogState(() {
-                                    ruleGroups = <CustomSmartPlaylistRuleGroup>[
-                                      ...ruleGroups,
-                                      group,
-                                    ];
-                                  });
-                                }
-                              },
+                              onPressed: ruleGroups.length >=
+                                      maxCustomSmartPlaylistGroupsPerGroup
+                                  ? null
+                                  : () async {
+                                      final group =
+                                          await _promptForCustomSmartPlaylistRuleGroup(
+                                        context,
+                                      );
+                                      if (group != null) {
+                                        setDialogState(() {
+                                          ruleGroups =
+                                              <CustomSmartPlaylistRuleGroup>[
+                                            ...ruleGroups,
+                                            group,
+                                          ];
+                                        });
+                                      }
+                                    },
                             ),
                           ],
                         ),
@@ -6751,6 +6803,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                               index < ruleGroups.length;
                               index += 1)
                             ListTile(
+                              key: ValueKey<String>(
+                                'smart-playlist-rule-group-$index',
+                              ),
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.account_tree_outlined),
                               title: Text(
@@ -6870,6 +6925,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           textInputAction: TextInputAction.next,
                         ),
                         DropdownButtonFormField<CustomSmartPlaylistSortMode>(
+                          isExpanded: true,
                           initialValue: sortMode,
                           decoration: const InputDecoration(
                             labelText: 'Sort by',
@@ -6907,6 +6963,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                     child: const Text('Cancel'),
                   ),
                   FilledButton(
+                    key: const Key('smart-playlist-save'),
                     onPressed: () {
                       final draft = draftFromControllers();
                       if (draft != null) {
@@ -6918,29 +6975,19 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 ],
               );
             },
-          );
-        },
-      );
-    } finally {
-      nameController.dispose();
-      queryController.dispose();
-      sourceIdController.dispose();
-      artistController.dispose();
-      albumController.dispose();
-      genreController.dispose();
-      minimumDurationController.dispose();
-      maximumDurationController.dispose();
-      minimumPlayCountController.dispose();
-      minimumDaysSinceLastPlayedController.dispose();
-      limitController.dispose();
-    }
+          ),
+        );
+      },
+    );
   }
 
   Future<CustomSmartPlaylistRuleGroup?>
       _promptForCustomSmartPlaylistRuleGroup(
     BuildContext context, {
     CustomSmartPlaylistRuleGroup? initialGroup,
+    int depth = 0,
   }) async {
+    assert(depth >= 0 && depth < maxCustomSmartPlaylistRuleGroupDepth);
     var matchMode =
         initialGroup?.matchMode ?? CustomSmartPlaylistMatchMode.all;
     var rules = List<CustomSmartPlaylistRule>.from(
@@ -6955,7 +7002,14 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final canAddRule =
+                rules.length < maxCustomSmartPlaylistRulesPerGroup;
+            final atMaximumDepth =
+                depth + 1 >= maxCustomSmartPlaylistRuleGroupDepth;
+            final canAddNestedGroup = !atMaximumDepth &&
+                groups.length < maxCustomSmartPlaylistGroupsPerGroup;
             return AlertDialog(
+              key: ValueKey<String>('smart-playlist-rule-group-dialog-$depth'),
               title: const Text('Rule group'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -6965,6 +7019,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       SegmentedButton<CustomSmartPlaylistMatchMode>(
+                        key: ValueKey<String>(
+                          'smart-playlist-rule-group-match-mode-$depth',
+                        ),
                         segments: const <
                           ButtonSegment<CustomSmartPlaylistMatchMode>
                         >[
@@ -6995,6 +7052,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                       else
                         for (var index = 0; index < rules.length; index += 1)
                           ListTile(
+                            key: ValueKey<String>(
+                              'smart-playlist-rule-$depth-$index',
+                            ),
                             contentPadding: EdgeInsets.zero,
                             title: Text(_customSmartPlaylistRuleSummary(rules[index])),
                             trailing: IconButton(
@@ -7023,22 +7083,29 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             },
                           ),
                       OutlinedButton.icon(
-                        onPressed: () async {
-                          final rule =
-                              await _promptForCustomSmartPlaylistCondition(
-                            context,
-                          );
-                          if (rule != null) {
-                            setDialogState(
-                              () => rules = <CustomSmartPlaylistRule>[
-                                ...rules,
-                                rule,
-                              ],
-                            );
-                          }
-                        },
+                        key: ValueKey<String>(
+                          'smart-playlist-add-rule-$depth',
+                        ),
+                        onPressed: canAddRule
+                            ? () async {
+                                final rule =
+                                    await _promptForCustomSmartPlaylistCondition(
+                                  context,
+                                );
+                                if (rule != null) {
+                                  setDialogState(
+                                    () => rules = <CustomSmartPlaylistRule>[
+                                      ...rules,
+                                      rule,
+                                    ],
+                                  );
+                                }
+                              }
+                            : null,
                         icon: const Icon(Icons.add),
-                        label: const Text('Add rule'),
+                        label: Text(
+                          canAddRule ? 'Add rule' : 'Rule limit reached',
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -7047,6 +7114,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                       ),
                       for (var index = 0; index < groups.length; index += 1)
                         ListTile(
+                          key: ValueKey<String>(
+                            'smart-playlist-nested-group-$depth-$index',
+                          ),
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.account_tree_outlined),
                           title: Text(
@@ -7071,6 +7141,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                                 await _promptForCustomSmartPlaylistRuleGroup(
                               context,
                               initialGroup: groups[index],
+                              depth: depth + 1,
                             );
                             if (group != null) {
                               setDialogState(() => groups[index] = group);
@@ -7078,22 +7149,35 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           },
                         ),
                       OutlinedButton.icon(
-                        onPressed: () async {
-                          final group =
-                              await _promptForCustomSmartPlaylistRuleGroup(
-                            context,
-                          );
-                          if (group != null) {
-                            setDialogState(
-                              () => groups = <CustomSmartPlaylistRuleGroup>[
-                                ...groups,
-                                group,
-                              ],
-                            );
-                          }
-                        },
+                        key: ValueKey<String>(
+                          'smart-playlist-add-nested-group-$depth',
+                        ),
+                        onPressed: canAddNestedGroup
+                            ? () async {
+                                final group =
+                                    await _promptForCustomSmartPlaylistRuleGroup(
+                                  context,
+                                  depth: depth + 1,
+                                );
+                                if (group != null) {
+                                  setDialogState(
+                                    () => groups =
+                                        <CustomSmartPlaylistRuleGroup>[
+                                      ...groups,
+                                      group,
+                                    ],
+                                  );
+                                }
+                              }
+                            : null,
                         icon: const Icon(Icons.account_tree_outlined),
-                        label: const Text('Add nested group'),
+                        label: Text(
+                          atMaximumDepth
+                              ? 'Maximum nesting depth reached'
+                              : canAddNestedGroup
+                                  ? 'Add nested group'
+                                  : 'Nested group limit reached',
+                        ),
                       ),
                     ],
                   ),
@@ -7105,6 +7189,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
+                  key: ValueKey<String>(
+                    'smart-playlist-rule-group-save-$depth',
+                  ),
                   onPressed: rules.isEmpty && groups.isEmpty
                       ? null
                       : () => Navigator.of(dialogContext).pop(
@@ -7130,20 +7217,24 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   }) async {
     var field = initialRule?.field ?? CustomSmartPlaylistRuleField.artist;
     final valueController = TextEditingController(text: initialRule?.value ?? '');
-    try {
-      return showDialog<CustomSmartPlaylistRule>(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
+    return showDialog<CustomSmartPlaylistRule>(
+      context: context,
+      builder: (dialogContext) {
+        return _TextEditingControllerOwner(
+          controllers: <TextEditingController>[valueController],
+          child: StatefulBuilder(
             builder: (context, setDialogState) {
               final isFavoriteRule =
                   field == CustomSmartPlaylistRuleField.favoritesOnly;
               return AlertDialog(
+                key: const Key('smart-playlist-rule-dialog'),
                 title: const Text('Rule'),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     DropdownButtonFormField<CustomSmartPlaylistRuleField>(
+                      key: const Key('smart-playlist-rule-field'),
+                      isExpanded: true,
                       initialValue: field,
                       decoration: const InputDecoration(labelText: 'Field'),
                       items: CustomSmartPlaylistRuleField.values
@@ -7172,6 +7263,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                       )
                     else
                       TextField(
+                        key: const Key('smart-playlist-rule-value'),
                         controller: valueController,
                         decoration: InputDecoration(
                           labelText: _customSmartPlaylistRuleFieldLabel(field),
@@ -7199,6 +7291,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                     child: const Text('Cancel'),
                   ),
                   FilledButton(
+                    key: const Key('smart-playlist-rule-save'),
                     onPressed: () {
                       final rule = CustomSmartPlaylistRule(
                         field: field,
@@ -7213,12 +7306,10 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 ],
               );
             },
-          );
-        },
-      );
-    } finally {
-      valueController.dispose();
-    }
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -7725,6 +7816,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
         subtitle: Text(_customSmartPlaylistSubtitle(rule, tracks.length)),
         onTap: onOpen,
         trailing: PopupMenuButton<_CustomSmartPlaylistAction>(
+          key: ValueKey<String>('smart-playlist-actions-${rule.id}'),
           onSelected: (action) {
             switch (action) {
               case _CustomSmartPlaylistAction.edit:

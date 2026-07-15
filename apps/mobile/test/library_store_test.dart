@@ -360,6 +360,63 @@ void main() {
     );
   });
 
+  test('enforces custom smart playlist rule tree limits', () async {
+    const leafRule = CustomSmartPlaylistRule(
+      field: CustomSmartPlaylistRuleField.genre,
+      value: 'Rock',
+    );
+    final leafGroup = CustomSmartPlaylistRuleGroup(
+      rules: const <CustomSmartPlaylistRule>[leafRule],
+    );
+    final overfull = CustomSmartPlaylistRuleGroup(
+      rules: List<CustomSmartPlaylistRule>.filled(
+        maxCustomSmartPlaylistRulesPerGroup + 1,
+        leafRule,
+      ),
+      groups: List<CustomSmartPlaylistRuleGroup>.filled(
+        maxCustomSmartPlaylistGroupsPerGroup + 1,
+        leafGroup,
+      ),
+    ).normalized()!;
+
+    expect(overfull.rules, hasLength(maxCustomSmartPlaylistRulesPerGroup));
+    expect(overfull.groups, hasLength(maxCustomSmartPlaylistGroupsPerGroup));
+
+    var deepGroup = leafGroup;
+    for (var depth = 0;
+        depth < maxCustomSmartPlaylistRuleGroupDepth + 2;
+        depth += 1) {
+      deepGroup = CustomSmartPlaylistRuleGroup(
+        rules: const <CustomSmartPlaylistRule>[leafRule],
+        groups: <CustomSmartPlaylistRuleGroup>[deepGroup],
+      );
+    }
+    var normalizedDepth = 0;
+    var current = deepGroup.normalized()!;
+    while (true) {
+      normalizedDepth += 1;
+      if (current.groups.isEmpty) {
+        break;
+      }
+      current = current.groups.single;
+    }
+    expect(normalizedDepth, maxCustomSmartPlaylistRuleGroupDepth);
+
+    final store = LibraryStore();
+    await store.load();
+    final playlist = await store.createCustomSmartPlaylist(
+      name: 'Bounded rules',
+      ruleGroups: List<CustomSmartPlaylistRuleGroup>.filled(
+        maxCustomSmartPlaylistGroupsPerGroup + 1,
+        leafGroup,
+      ),
+    );
+    expect(
+      playlist.ruleGroups,
+      hasLength(maxCustomSmartPlaylistGroupsPerGroup),
+    );
+  });
+
   test('persists smart playlist artwork and keeps local files private',
       () async {
     var now = DateTime.utc(2026, 7, 14, 5);

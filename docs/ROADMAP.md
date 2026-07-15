@@ -60,7 +60,7 @@
 - [x] Playlist import/export JSON/M3U/CSV
 - [x] Built-in smart playlists
 - [x] Custom rule smart playlists
-- [ ] Nested smart playlist rule builder
+- [x] Nested smart playlist rule builder
 - [x] Playlist artwork URL display/editing
 - [ ] Playlist artwork picker, cropper, generated collage, and sync
 - [x] Backup/restore JSON

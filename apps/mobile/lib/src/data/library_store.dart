@@ -108,6 +108,10 @@ enum CustomSmartPlaylistSortMode {
 
 enum CustomSmartPlaylistMatchMode { all, any }
 
+const maxCustomSmartPlaylistRuleGroupDepth = 8;
+const maxCustomSmartPlaylistRulesPerGroup = 50;
+const maxCustomSmartPlaylistGroupsPerGroup = 25;
+
 enum CustomSmartPlaylistRuleField {
   searchText,
   sourceId,
@@ -445,18 +449,18 @@ class CustomSmartPlaylistRuleGroup {
   bool get isEmpty => rules.isEmpty && groups.isEmpty;
 
   CustomSmartPlaylistRuleGroup? normalized({int depth = 0}) {
-    if (depth >= 8) {
+    if (depth >= maxCustomSmartPlaylistRuleGroupDepth) {
       return null;
     }
     final normalizedRules = rules
         .map((rule) => rule.normalized())
         .whereType<CustomSmartPlaylistRule>()
-        .take(50)
+        .take(maxCustomSmartPlaylistRulesPerGroup)
         .toList(growable: false);
     final normalizedGroups = groups
         .map((group) => group.normalized(depth: depth + 1))
         .whereType<CustomSmartPlaylistRuleGroup>()
-        .take(25)
+        .take(maxCustomSmartPlaylistGroupsPerGroup)
         .toList(growable: false);
     if (normalizedRules.isEmpty && normalizedGroups.isEmpty) {
       return null;
@@ -478,7 +482,7 @@ class CustomSmartPlaylistRuleGroup {
     Object? raw, {
     int depth = 0,
   }) {
-    if (raw is! Map || depth >= 8) {
+    if (raw is! Map || depth >= maxCustomSmartPlaylistRuleGroupDepth) {
       return null;
     }
     final modeName = raw['matchMode'];
@@ -491,7 +495,7 @@ class CustomSmartPlaylistRuleGroup {
         ? rawRules
             .map(CustomSmartPlaylistRule.tryFromJson)
             .whereType<CustomSmartPlaylistRule>()
-            .take(50)
+            .take(maxCustomSmartPlaylistRulesPerGroup)
             .toList(growable: false)
         : const <CustomSmartPlaylistRule>[];
     final groups = rawGroups is List
@@ -503,7 +507,7 @@ class CustomSmartPlaylistRuleGroup {
               ),
             )
             .whereType<CustomSmartPlaylistRuleGroup>()
-            .take(25)
+            .take(maxCustomSmartPlaylistGroupsPerGroup)
             .toList(growable: false)
         : const <CustomSmartPlaylistRuleGroup>[];
     return CustomSmartPlaylistRuleGroup(
@@ -7937,7 +7941,7 @@ class LibraryStore extends ChangeNotifier {
     return groups
         .map((group) => group.normalized())
         .whereType<CustomSmartPlaylistRuleGroup>()
-        .take(25)
+        .take(maxCustomSmartPlaylistGroupsPerGroup)
         .toList(growable: false);
   }
 
