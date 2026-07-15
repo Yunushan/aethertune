@@ -111,7 +111,8 @@
 - [x] Windows/Linux global media key support
 - [x] Desktop navigation rail at wide widths
 - [x] Wide desktop queue split pane with persisted resizing, queue selection, removal, and reordering
-- [ ] Tray/menu bar and installer polish
+- [x] Persisted Comfortable/Compact desktop density control
+- [ ] Installer packaging and desktop host-fixture polish
 
 ## 0.4.x: Server foundation
 

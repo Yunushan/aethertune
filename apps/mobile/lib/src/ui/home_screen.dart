@@ -13323,6 +13323,31 @@ class _SettingsTab extends StatelessWidget {
             onChanged: (enabled) =>
                 unawaited(library.setDesktopMinimizeToTray(enabled)),
           ),
+        if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
+          ListTile(
+            key: const Key('desktop-density-preference'),
+            leading: const Icon(Icons.density_medium_outlined),
+            title: const Text('Desktop density'),
+            subtitle: const Text(
+              'Choose how much space desktop controls and lists use.',
+            ),
+            trailing: DropdownButton<DesktopDensityPreference>(
+              value: library.desktopDensityPreference,
+              items: DesktopDensityPreference.values
+                  .map(
+                    (preference) => DropdownMenuItem<DesktopDensityPreference>(
+                      value: preference,
+                      child: Text(preference.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (preference) {
+                if (preference != null) {
+                  unawaited(library.setDesktopDensityPreference(preference));
+                }
+              },
+            ),
+          ),
         ListTile(
           title: const Text('Repeat mode'),
           subtitle: Text(player.loopMode.name),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:aethertune/l10n/app_localizations.dart';
@@ -100,11 +101,19 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                     theme: _lightTheme(
                       library.accentColor,
                       dynamicColorScheme: lightDynamic,
+                      visualDensity: visualDensityForDesktopPreference(
+                        library.desktopDensityPreference,
+                        defaultTargetPlatform,
+                      ),
                     ),
                     darkTheme: _darkThemeForPreference(
                       library.themePreference,
                       library.accentColor,
                       dynamicColorScheme: darkDynamic,
+                      visualDensity: visualDensityForDesktopPreference(
+                        library.desktopDensityPreference,
+                        defaultTargetPlatform,
+                      ),
                     ),
                     home: !library.loaded
                         ? const _AppLoadingScreen()
@@ -185,6 +194,7 @@ ThemeMode _themeModeForPreference(AppThemePreference preference) {
 ThemeData _lightTheme(
   AppAccentColor accentColor, {
   ColorScheme? dynamicColorScheme,
+  VisualDensity visualDensity = VisualDensity.standard,
 }) {
   return ThemeData(
     useMaterial3: true,
@@ -193,6 +203,7 @@ ThemeData _lightTheme(
       dynamicColorScheme: dynamicColorScheme,
     ),
     brightness: Brightness.light,
+    visualDensity: visualDensity,
   );
 }
 
@@ -200,6 +211,7 @@ ThemeData _darkThemeForPreference(
   AppThemePreference preference,
   AppAccentColor accentColor, {
   ColorScheme? dynamicColorScheme,
+  VisualDensity visualDensity = VisualDensity.standard,
 }) {
   final colorScheme = darkColorSchemeForAccent(
     accentColor,
@@ -216,6 +228,7 @@ ThemeData _darkThemeForPreference(
       navigationBarTheme: const NavigationBarThemeData(
         backgroundColor: Colors.black,
       ),
+      visualDensity: visualDensity,
     );
   }
 
@@ -223,7 +236,22 @@ ThemeData _darkThemeForPreference(
     useMaterial3: true,
     colorScheme: colorScheme,
     brightness: Brightness.dark,
+    visualDensity: visualDensity,
   );
+}
+
+VisualDensity visualDensityForDesktopPreference(
+  DesktopDensityPreference preference,
+  TargetPlatform platform,
+) {
+  final isDesktop =
+      platform == TargetPlatform.linux ||
+      platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows;
+  if (!isDesktop || preference == DesktopDensityPreference.comfortable) {
+    return VisualDensity.standard;
+  }
+  return VisualDensity.compact;
 }
 
 class _AppLoadingScreen extends StatelessWidget {

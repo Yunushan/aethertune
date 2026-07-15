@@ -133,6 +133,8 @@ enum AppAccentColor { system, indigo, teal, rose, amber, violet, green }
 
 enum AppLanguagePreference { system, english, turkish, arabic }
 
+enum DesktopDensityPreference { comfortable, compact }
+
 extension AppThemePreferenceLabel on AppThemePreference {
   String get label {
     switch (this) {
@@ -180,6 +182,17 @@ extension ListeningRecapVisualThemeLabel on ListeningRecapVisualTheme {
         return 'Signal';
       case ListeningRecapVisualTheme.monochrome:
         return 'Monochrome';
+    }
+  }
+}
+
+extension DesktopDensityPreferenceLabel on DesktopDensityPreference {
+  String get label {
+    switch (this) {
+      case DesktopDensityPreference.comfortable:
+        return 'Comfortable';
+      case DesktopDensityPreference.compact:
+        return 'Compact';
     }
   }
 }
@@ -998,6 +1011,13 @@ ListeningRecapVisualTheme _listeningRecapVisualThemeFromName(String? value) {
   );
 }
 
+DesktopDensityPreference _desktopDensityPreferenceFromName(String? value) {
+  return DesktopDensityPreference.values.firstWhere(
+    (preference) => preference.name == value,
+    orElse: () => DesktopDensityPreference.comfortable,
+  );
+}
+
 CustomSmartPlaylistMatchMode _customSmartPlaylistMatchModeFromName(
   String? value,
 ) {
@@ -1053,6 +1073,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.desktop_queue_pane_width.v1';
   static const _desktopMinimizeToTrayKey =
       'aethertune.desktop_minimize_to_tray.v1';
+  static const _desktopDensityPreferenceKey =
+      'aethertune.desktop_density_preference.v1';
   static const _onboardingCompletedKey =
       'aethertune.onboarding_completed.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
@@ -1105,6 +1127,8 @@ class LibraryStore extends ChangeNotifier {
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _desktopMinimizeToTray = false;
+  DesktopDensityPreference _desktopDensityPreference =
+      DesktopDensityPreference.comfortable;
   bool _onboardingCompleted = false;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
   final Map<String, int> _offlineCacheProviderLimitMegabytes = <String, int>{};
@@ -1164,6 +1188,8 @@ class LibraryStore extends ChangeNotifier {
   AppLanguagePreference get languagePreference => _languagePreference;
   double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
   bool get desktopMinimizeToTray => _desktopMinimizeToTray;
+  DesktopDensityPreference get desktopDensityPreference =>
+      _desktopDensityPreference;
   bool get onboardingCompleted => _onboardingCompleted;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
   int get offlineCacheLimitBytes => _offlineCacheLimitMegabytes * 1024 * 1024;
@@ -1370,6 +1396,9 @@ class LibraryStore extends ChangeNotifier {
     );
     _desktopMinimizeToTray =
         prefs.getBool(_desktopMinimizeToTrayKey) ?? false;
+    _desktopDensityPreference = _desktopDensityPreferenceFromName(
+      prefs.getString(_desktopDensityPreferenceKey),
+    );
     _onboardingCompleted = prefs.getBool(_onboardingCompletedKey) ?? false;
     _offlineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
       prefs.getInt(_offlineCacheLimitMegabytesKey) ??
@@ -1781,6 +1810,18 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _desktopMinimizeToTray = enabled;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setDesktopDensityPreference(
+    DesktopDensityPreference preference,
+  ) async {
+    if (_desktopDensityPreference == preference) {
+      return;
+    }
+
+    _desktopDensityPreference = preference;
     await _save();
     notifyListeners();
   }
@@ -8222,6 +8263,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
     await prefs.setBool(_desktopMinimizeToTrayKey, _desktopMinimizeToTray);
+    await prefs.setString(
+      _desktopDensityPreferenceKey,
+      _desktopDensityPreference.name,
+    );
     await prefs.setBool(_onboardingCompletedKey, _onboardingCompleted);
     await prefs.setInt(
       _offlineCacheLimitMegabytesKey,

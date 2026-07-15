@@ -3265,6 +3265,10 @@ void main() {
     );
     expect(firstStore.desktopMinimizeToTray, isFalse);
     expect(
+      firstStore.desktopDensityPreference,
+      DesktopDensityPreference.comfortable,
+    );
+    expect(
       firstStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
     );
@@ -3282,6 +3286,7 @@ void main() {
     await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
     await firstStore.setDesktopQueuePaneWidth(410);
     await firstStore.setDesktopMinimizeToTray(true);
+    await firstStore.setDesktopDensityPreference(DesktopDensityPreference.compact);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
       ' Internet-Archive ',
@@ -3301,6 +3306,7 @@ void main() {
     expect(firstStore.languagePreference, AppLanguagePreference.arabic);
     expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.desktopMinimizeToTray, isTrue);
+    expect(firstStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
     expect(
@@ -3328,6 +3334,7 @@ void main() {
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.desktopQueuePaneWidth, 410);
     expect(secondStore.desktopMinimizeToTray, isTrue);
+    expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -3394,6 +3401,7 @@ void main() {
     );
     expect(secondStore.languagePreference, AppLanguagePreference.system);
     expect(secondStore.desktopMinimizeToTray, isTrue);
+    expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(
       secondStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
@@ -3413,6 +3421,7 @@ void main() {
       ListeningRecapVisualTheme.signal,
     );
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
+    expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -3444,6 +3453,20 @@ void main() {
     expect(
       store.listeningRecapVisualTheme,
       ListeningRecapVisualTheme.midnight,
+    );
+  });
+
+  test('falls back from an unknown persisted desktop density preference', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.desktop_density_preference.v1': 'unknown',
+    });
+
+    final store = LibraryStore();
+    await store.load();
+
+    expect(
+      store.desktopDensityPreference,
+      DesktopDensityPreference.comfortable,
     );
   });
 
