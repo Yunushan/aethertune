@@ -3117,6 +3117,20 @@ Future<void> _showLibraryBrowseTracks(
   required ValueChanged<Track> onAddToPlaylist,
   required ValueChanged<Track> onLyrics,
 }) async {
+  if (type == LibraryBrowseType.artist || type == LibraryBrowseType.album) {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => _LibraryCollectionDetailScreen(
+          type: type,
+          group: group,
+          onAddToPlaylist: onAddToPlaylist,
+          onLyrics: onLyrics,
+        ),
+      ),
+    );
+    return;
+  }
+
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -3385,6 +3399,7 @@ class _LibraryBrowseGroupsSheet extends StatelessWidget {
           else
             for (final group in groups)
               ListTile(
+                key: ValueKey<String>('browse-${type.name}-${group.key}'),
                 leading: Icon(_libraryBrowseTypeIcon(type)),
                 title: Text(group.label),
                 subtitle: Text(_libraryBrowseGroupSubtitle(group)),
@@ -3576,6 +3591,543 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _LibraryCollectionDetailScreen extends StatelessWidget {
+  const _LibraryCollectionDetailScreen({
+    required this.type,
+    required this.group,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final LibraryBrowseType type;
+  final LibraryBrowseGroup group;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final tracks = library.tracksForBrowseGroup(type, group.key);
+    final playableTracks = tracks
+        .where((track) => track.isPlayable)
+        .toList(growable: false);
+    final representative = _collectionRepresentativeTrack(tracks);
+    final artistNames = _collectionMetadataValues(
+      tracks.map((track) => track.artist),
+    );
+    final genreNames = _collectionMetadataValues(
+      tracks.map((track) => track.genre),
+    );
+    final artistAlbums = type == LibraryBrowseType.artist
+        ? library.albumGroupsForArtist(group.key)
+        : const <LibraryBrowseGroup>[];
+    final related = library.relatedBrowseGroups(type, group.key);
+    final albumArtistGroup = type == LibraryBrowseType.album
+        ? _singleAlbumArtistGroup(library, artistNames)
+        : null;
+    final isFollowed = library.isArtistFollowed(group.label);
+    final canFollowArtist =
+        type == LibraryBrowseType.artist &&
+        library.canFollowArtist(group.label);
+    final kind = type == LibraryBrowseType.artist ? 'Artist' : 'Album';
+    final metadata = type == LibraryBrowseType.artist
+        ? (genreNames.isEmpty ? 'Local artist' : genreNames.take(3).join(' · '))
+        : _albumArtistLabel(artistNames);
+    final totalDuration = tracks.fold<Duration>(
+      Duration.zero,
+      (total, track) => total + track.duration,
+    );
+    final favoriteCount = tracks.where((track) => track.isFavorite).length;
+    final playCount = tracks.fold<int>(
+      0,
+      (total, track) => total + library.playCountForTrack(track.id),
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(group.label),
+        actions: <Widget>[
+          if (canFollowArtist)
+            IconButton(
+              tooltip: isFollowed ? 'Unfollow artist' : 'Follow artist',
+              onPressed: () => unawaited(
+                library.setArtistFollowed(group.label, !isFollowed),
+              ),
+              icon: Icon(
+                isFollowed
+                    ? Icons.person_remove_outlined
+                    : Icons.person_add_alt_1_outlined,
+              ),
+            ),
+          IconButton(
+            tooltip: 'Copy share text',
+            onPressed: tracks.isEmpty
+                ? null
+                : () => unawaited(
+                      _copyBrowseGroupShareText(
+                        context,
+                        library,
+                        type,
+                        group,
+                      ),
+                    ),
+            icon: const Icon(Icons.ios_share),
+          ),
+          IconButton(
+            tooltip: 'Save ${kind.toLowerCase()} share card',
+            onPressed: tracks.isEmpty
+                ? null
+                : () => unawaited(
+                      _showBrowseGroupShareCard(context, type, group, tracks),
+                    ),
+            icon: const Icon(Icons.image_outlined),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: <Widget>[
+          _LibraryCollectionDetailHeader(
+            kind: kind,
+            title: group.label,
+            metadata: metadata,
+            stats: _collectionStatsLabel(
+              trackCount: tracks.length,
+              favoriteCount: favoriteCount,
+              playCount: playCount,
+              totalDuration: totalDuration,
+            ),
+            representative: representative,
+            onPlay: playableTracks.isEmpty
+                ? null
+                : () => unawaited(
+                      _playLibraryCollection(
+                        context,
+                        player,
+                        library,
+                        playableTracks,
+                        shuffle: false,
+                      ),
+                    ),
+            onShuffle: playableTracks.isEmpty
+                ? null
+                : () => unawaited(
+                      _playLibraryCollection(
+                        context,
+                        player,
+                        library,
+                        playableTracks,
+                        shuffle: true,
+                      ),
+                    ),
+            onSavePlaylist: tracks.isEmpty
+                ? null
+                : () => unawaited(_saveLibraryCollection(context, library)),
+          ),
+          if (albumArtistGroup != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const ValueKey<String>('view-album-artist'),
+                onPressed: () => unawaited(
+                  _showLibraryBrowseTracks(
+                    context,
+                    type: LibraryBrowseType.artist,
+                    group: albumArtistGroup,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
+                icon: const Icon(Icons.person_outline),
+                label: Text('View ${albumArtistGroup.label}'),
+              ),
+            ),
+          ],
+          if (artistAlbums.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 20),
+            _LibraryCollectionSectionHeader(
+              title: 'Albums',
+              subtitle: '${artistAlbums.length} local album(s)',
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 174,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: artistAlbums.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final album = artistAlbums[index];
+                  final albumTracks = library.tracksForBrowseGroup(
+                    LibraryBrowseType.album,
+                    album.key,
+                  );
+                  return _LibraryAlbumTile(
+                    group: album,
+                    representative: _collectionRepresentativeTrack(albumTracks),
+                    onTap: () => unawaited(
+                      _showLibraryBrowseTracks(
+                        context,
+                        type: LibraryBrowseType.album,
+                        group: album,
+                        onAddToPlaylist: onAddToPlaylist,
+                        onLyrics: onLyrics,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          _LibraryCollectionSectionHeader(
+            title: type == LibraryBrowseType.artist ? 'Tracks' : 'Track list',
+            subtitle: '${tracks.length} in this ${kind.toLowerCase()}',
+          ),
+          const SizedBox(height: 6),
+          if (tracks.isEmpty)
+            const ListTile(
+              leading: Icon(Icons.music_off_outlined),
+              title: Text('No tracks remain in this collection'),
+            )
+          else
+            for (var index = 0; index < tracks.length; index += 1) ...<Widget>[
+              if (index > 0) const Divider(height: 1),
+              _collectionTrackTile(
+                context,
+                library,
+                player,
+                tracks[index],
+                tracks,
+              ),
+            ],
+          if (related.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 24),
+            _LibraryCollectionSectionHeader(
+              title: type == LibraryBrowseType.artist
+                  ? 'Related artists'
+                  : 'Related albums',
+              subtitle: 'Matched from local library metadata',
+            ),
+            const SizedBox(height: 6),
+            for (final match in related)
+              ListTile(
+                key: ValueKey<String>(
+                  'related-${type.name}-${match.group.key}',
+                ),
+                leading: Icon(_libraryBrowseTypeIcon(type)),
+                title: Text(match.group.label),
+                subtitle: Text(
+                  '${_collectionSimilarityLabel(match.reasons)} · '
+                  '${_libraryBrowseGroupSubtitle(match.group)}',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => unawaited(
+                  _showLibraryBrowseTracks(
+                    context,
+                    type: type,
+                    group: match.group,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _collectionTrackTile(
+    BuildContext context,
+    LibraryStore library,
+    PlayerController player,
+    Track track,
+    List<Track> tracks,
+  ) {
+    return TrackTile(
+      track: track,
+      onPlay: () => _playTrackWithResume(
+        context,
+        player,
+        library,
+        track,
+        queue: tracks,
+      ),
+      onStartRadio: () => unawaited(
+        _startTrackRadio(context, player, library, track),
+      ),
+      onSimilarTracks: () => unawaited(
+        _showSimilarTracks(
+          context,
+          track,
+          onAddToPlaylist: onAddToPlaylist,
+          onLyrics: onLyrics,
+        ),
+      ),
+      onShare: () => unawaited(
+        _copyTrackShareText(context, library, track),
+      ),
+      onFavorite: () => library.toggleFavorite(track.id),
+      onAddToPlaylist: () => onAddToPlaylist(track),
+      onLyrics: () => onLyrics(track),
+      onEditMetadata: () => unawaited(
+        _showTrackMetadataEditor(context, track),
+      ),
+      onEditArtwork: track.sourceId == 'local'
+          ? () => unawaited(_editTrackArtwork(context, track))
+          : null,
+      onRemove: () => library.removeTrack(track.id),
+    );
+  }
+
+  LibraryBrowseGroup? _singleAlbumArtistGroup(
+    LibraryStore library,
+    List<String> artistNames,
+  ) {
+    if (artistNames.length != 1) {
+      return null;
+    }
+
+    final key = artistNames.single.toLowerCase();
+    for (final group in library.browseGroups(LibraryBrowseType.artist)) {
+      if (group.key == key) {
+        return group;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _saveLibraryCollection(
+    BuildContext context,
+    LibraryStore library,
+  ) async {
+    final playlist = await library.saveBrowseGroupAsPlaylist(type, group.key);
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          playlist == null
+              ? '${group.label} has no tracks to save.'
+              : 'Saved ${playlist.trackIds.length} tracks as ${playlist.name}.',
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryCollectionDetailHeader extends StatelessWidget {
+  const _LibraryCollectionDetailHeader({
+    required this.kind,
+    required this.title,
+    required this.metadata,
+    required this.stats,
+    required this.representative,
+    required this.onPlay,
+    required this.onShuffle,
+    required this.onSavePlaylist,
+  });
+
+  final String kind;
+  final String title;
+  final String metadata;
+  final String stats;
+  final Track? representative;
+  final VoidCallback? onPlay;
+  final VoidCallback? onShuffle;
+  final VoidCallback? onSavePlaylist;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 640;
+        final artworkSize = wide ? 176.0 : 112.0;
+        final track = representative;
+        final artwork = TrackArtwork(
+          artworkUri: track?.artworkUri,
+          providerId: track?.sourceId,
+          providerArtworkId: track?.providerArtworkId,
+          providerArtworkVersion: track?.providerArtworkVersion,
+          size: artworkSize,
+          borderRadius: 8,
+          fallbackIcon: kind == 'Artist'
+              ? Icons.person_outline
+              : Icons.album_outlined,
+        );
+        final titleBlock = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              kind,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.secondary,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              metadata,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              stats,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        );
+        final actions = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            FilledButton.icon(
+              onPressed: onPlay,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Play'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onShuffle,
+              icon: const Icon(Icons.shuffle),
+              label: const Text('Shuffle'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onSavePlaylist,
+              icon: const Icon(Icons.playlist_add),
+              label: const Text('Save playlist'),
+            ),
+          ],
+        );
+
+        if (wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              artwork,
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    titleBlock,
+                    const SizedBox(height: 18),
+                    actions,
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                artwork,
+                const SizedBox(width: 14),
+                Expanded(child: titleBlock),
+              ],
+            ),
+            const SizedBox(height: 14),
+            actions,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LibraryCollectionSectionHeader extends StatelessWidget {
+  const _LibraryCollectionSectionHeader({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 2),
+        Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _LibraryAlbumTile extends StatelessWidget {
+  const _LibraryAlbumTile({
+    required this.group,
+    required this.representative,
+    required this.onTap,
+  });
+
+  final LibraryBrowseGroup group;
+  final Track? representative;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final track = representative;
+    return SizedBox(
+      key: ValueKey<String>('artist-album-${group.key}'),
+      width: 124,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            TrackArtwork(
+              artworkUri: track?.artworkUri,
+              providerId: track?.sourceId,
+              providerArtworkId: track?.providerArtworkId,
+              providerArtworkVersion: track?.providerArtworkVersion,
+              size: 124,
+              borderRadius: 8,
+              fallbackIcon: Icons.album_outlined,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              group.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            Text(
+              '${group.trackCount} track(s)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3929,6 +4481,79 @@ String _formatBrowseDuration(Duration duration) {
   }
 
   return '${minutes}m';
+}
+
+Track? _collectionRepresentativeTrack(List<Track> tracks) {
+  for (final track in tracks) {
+    if (track.artworkUri != null ||
+        (track.providerArtworkId?.trim().isNotEmpty ?? false)) {
+      return track;
+    }
+  }
+  return tracks.isEmpty ? null : tracks.first;
+}
+
+List<String> _collectionMetadataValues(Iterable<String> rawValues) {
+  final valuesByKey = <String, String>{};
+  for (final rawValue in rawValues) {
+    final value = rawValue.trim();
+    final key = value.toLowerCase();
+    if (key.isEmpty || key == 'unknown' || key.startsWith('unknown ')) {
+      continue;
+    }
+    valuesByKey.putIfAbsent(key, () => value);
+  }
+
+  final values = valuesByKey.values.toList(growable: false);
+  values.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return values;
+}
+
+String _albumArtistLabel(List<String> artistNames) {
+  if (artistNames.isEmpty) {
+    return 'Unknown artist';
+  }
+  if (artistNames.length == 1) {
+    return artistNames.single;
+  }
+  return '${artistNames.length} artists';
+}
+
+String _collectionStatsLabel({
+  required int trackCount,
+  required int favoriteCount,
+  required int playCount,
+  required Duration totalDuration,
+}) {
+  final parts = <String>['$trackCount track(s)'];
+  if (totalDuration > Duration.zero) {
+    parts.add(_formatBrowseDuration(totalDuration));
+  }
+  if (favoriteCount > 0) {
+    parts.add('$favoriteCount favorite(s)');
+  }
+  if (playCount > 0) {
+    parts.add('$playCount play(s)');
+  }
+  return parts.join(' · ');
+}
+
+String _collectionSimilarityLabel(
+  List<LibraryCollectionSimilarityReason> reasons,
+) {
+  final labels = reasons
+      .map((reason) {
+        switch (reason) {
+          case LibraryCollectionSimilarityReason.artist:
+            return 'artist';
+          case LibraryCollectionSimilarityReason.album:
+            return 'album';
+          case LibraryCollectionSimilarityReason.genre:
+            return 'genre';
+        }
+      })
+      .toList(growable: false);
+  return 'Shared ${labels.join(', ')}';
 }
 
 String _librarySortLabel(LibrarySortMode sortMode) {
@@ -8094,6 +8719,30 @@ bool _tracksPodcastProgress(Track track) {
       track.sourceId.startsWith('podcast-');
 }
 
+Future<void> _playLibraryCollection(
+  BuildContext context,
+  PlayerController player,
+  LibraryStore library,
+  List<Track> tracks, {
+  required bool shuffle,
+}) async {
+  if (tracks.isEmpty) {
+    return;
+  }
+
+  await player.setShuffleEnabled(shuffle);
+  if (!context.mounted) {
+    return;
+  }
+  await _playTrackWithResume(
+    context,
+    player,
+    library,
+    tracks.first,
+    queue: tracks,
+  );
+}
+
 Future<void> _playTrackWithResume(
   BuildContext context,
   PlayerController player,
@@ -8293,19 +8942,43 @@ Future<void> _showAlbumShareCard(
   LibraryBrowseGroup group,
   List<Track> tracks,
 ) async {
+  await _showBrowseGroupShareCard(
+    context,
+    LibraryBrowseType.album,
+    group,
+    tracks,
+  );
+}
+
+Future<void> _showBrowseGroupShareCard(
+  BuildContext context,
+  LibraryBrowseType type,
+  LibraryBrowseGroup group,
+  List<Track> tracks,
+) async {
   if (tracks.isEmpty) {
     return;
   }
-  final representative = tracks.first;
+  final representative = _collectionRepresentativeTrack(tracks)!;
+  final kind = type == LibraryBrowseType.artist ? 'artist' : 'album';
+  final metadata = type == LibraryBrowseType.artist
+      ? _collectionMetadataValues(
+          tracks.map((track) => track.genre),
+        ).take(3).join(' · ')
+      : _albumArtistLabel(
+          _collectionMetadataValues(tracks.map((track) => track.artist)),
+        );
+  final totalDuration = tracks.fold<Duration>(
+    Duration.zero,
+    (total, track) => total + track.duration,
+  );
   await _showCollectionShareCard(
     context,
-    kind: 'album',
+    kind: kind,
     title: group.label,
-    subtitle: representative.artist.trim().isEmpty
-        ? 'Unknown artist'
-        : representative.artist,
+    subtitle: metadata.isEmpty ? 'Local $kind' : metadata,
     itemCount: tracks.length,
-    totalDuration: group.totalDuration,
+    totalDuration: totalDuration,
     artwork: TrackArtwork(
       artworkUri: representative.artworkUri,
       providerId: representative.sourceId,
@@ -8313,9 +8986,11 @@ Future<void> _showAlbumShareCard(
       providerArtworkVersion: representative.providerArtworkVersion,
       size: 184,
       borderRadius: 12,
-      fallbackIcon: Icons.album_outlined,
+      fallbackIcon: type == LibraryBrowseType.artist
+          ? Icons.person_outline
+          : Icons.album_outlined,
     ),
-    fileToken: group.key,
+    fileToken: '${type.name}-${group.key}',
   );
 }
 

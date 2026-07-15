@@ -171,9 +171,176 @@ void main() {
     expect(library.recommendationHistorySignalsEnabled, isFalse);
     expect(tester.widget<SwitchListTile>(historyTile).value, isFalse);
   });
+
+  testWidgets('opens full artist and album pages with collection actions', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[
+      Track(
+        id: 'ari-dawn',
+        title: 'Morning Signal',
+        artist: 'Ari',
+        album: 'Dawn',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 3),
+        localPath: '/music/Ari/Dawn/morning.mp3',
+      ),
+      Track(
+        id: 'ari-dusk',
+        title: 'Evening Signal',
+        artist: 'Ari',
+        album: 'Dusk',
+        genre: 'Ambient',
+        duration: const Duration(minutes: 4),
+        localPath: '/music/Ari/Dusk/evening.mp3',
+      ),
+      Track(
+        id: 'mia-dawn',
+        title: 'Blue Dawn',
+        artist: 'Mia',
+        album: 'Dawn',
+        genre: 'Jazz',
+        duration: const Duration(minutes: 5),
+        localPath: '/music/Mia/Dawn/blue.mp3',
+      ),
+    ]);
+    addTearDown(library.dispose);
+
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final audioEngine = _TestPlaybackAudioEngine();
+    final player = PlayerController(audioEngine: audioEngine);
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Artists'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('browse-artist-ari')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Artist'), findsOneWidget);
+    expect(find.text('Albums'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Shuffle'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Save playlist'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Play'));
+    await tester.pumpAndSettle();
+    expect(player.current?.id, 'ari-dawn');
+    expect(player.queue.map((track) => track.id), <String>[
+      'ari-dawn',
+      'ari-dusk',
+    ]);
+    expect(audioEngine.playCalled, isTrue);
+    expect(player.shuffleEnabled, isFalse);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Shuffle'));
+    await tester.pumpAndSettle();
+    expect(player.shuffleEnabled, isTrue);
+    expect(player.queue.map((track) => track.id), <String>[
+      'ari-dawn',
+      'ari-dusk',
+    ]);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Save playlist'));
+    await tester.pumpAndSettle();
+    expect(library.playlists, hasLength(1));
+    expect(library.playlists.single.name, 'Ari');
+
+    final relatedArtist = find.byKey(
+      const ValueKey<String>('related-artist-mia'),
+    );
+    await tester.scrollUntilVisible(
+      relatedArtist,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Related artists'), findsOneWidget);
+    expect(relatedArtist, findsOneWidget);
+    expect(find.textContaining('Shared album'), findsOneWidget);
+
+    final duskAlbum = find.byKey(const ValueKey<String>('artist-album-dusk'));
+    await tester.scrollUntilVisible(
+      duskAlbum,
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(duskAlbum);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Album'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('view-album-artist')),
+      findsOneWidget,
+    );
+    final relatedAlbum = find.byKey(
+      const ValueKey<String>('related-album-dawn'),
+    );
+    await tester.scrollUntilVisible(
+      relatedAlbum,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(relatedAlbum, findsOneWidget);
+    expect(find.textContaining('Shared artist, genre'), findsOneWidget);
+
+    final albumPlayButton = find.widgetWithText(FilledButton, 'Play');
+    await tester.scrollUntilVisible(
+      albumPlayButton,
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    tester.view.physicalSize = const Size(1100, 800);
+    await tester.pumpAndSettle();
+    expect(albumPlayButton, findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Save playlist'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
+  bool playCalled = false;
+  bool _shuffleModeEnabled = false;
+
   @override
   Stream<Object?> get stateChanges => const Stream<Object?>.empty();
 
@@ -194,7 +361,7 @@ class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
   bool get playing => false;
 
   @override
-  bool get shuffleModeEnabled => false;
+  bool get shuffleModeEnabled => _shuffleModeEnabled;
 
   @override
   LoopMode get loopMode => LoopMode.off;
@@ -225,7 +392,9 @@ class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
   }) async {}
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    playCalled = true;
+  }
 
   @override
   Future<void> pause() async {}
@@ -243,7 +412,9 @@ class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
   Future<void> seekToPrevious() async {}
 
   @override
-  Future<void> setShuffleModeEnabled(bool enabled) async {}
+  Future<void> setShuffleModeEnabled(bool enabled) async {
+    _shuffleModeEnabled = enabled;
+  }
 
   @override
   Future<void> setLoopMode(LoopMode mode) async {}

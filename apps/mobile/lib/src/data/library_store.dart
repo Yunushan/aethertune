@@ -86,6 +86,8 @@ enum LibraryRecommendationReason {
 
 enum LibrarySimilarityReason { artist, album, genre, folder, source }
 
+enum LibraryCollectionSimilarityReason { artist, album, genre }
+
 enum CustomSmartPlaylistSortMode {
   recentlyAdded,
   title,
@@ -333,6 +335,18 @@ class SimilarTrackMatch {
 
   final Track track;
   final List<LibrarySimilarityReason> reasons;
+  final int score;
+}
+
+class RelatedLibraryCollectionMatch {
+  const RelatedLibraryCollectionMatch({
+    required this.group,
+    required this.reasons,
+    required this.score,
+  });
+
+  final LibraryBrowseGroup group;
+  final List<LibraryCollectionSimilarityReason> reasons;
   final int score;
 }
 
@@ -2316,41 +2330,7 @@ class LibraryStore extends ChangeNotifier {
     LibraryBrowseType type, {
     String query = '',
   }) {
-    final groupsByKey = <String, _MutableBrowseGroup>{};
-
-    for (final track in _tracks) {
-      final label = _browseLabelForTrack(track, type);
-      final key = _browseKey(label);
-      final group = groupsByKey.putIfAbsent(
-        key,
-        () => _MutableBrowseGroup(
-          type: type,
-          key: key,
-          label: label,
-        ),
-      );
-      group.add(track);
-    }
-
-    final searchQuery = SearchQuery.parse(query);
-    final groups = groupsByKey.values
-        .where(
-          (group) => searchQuery.isEmpty ||
-              searchTextMatches(group.label, searchQuery),
-        )
-        .map((group) => group.toBrowseGroup())
-        .toList(growable: false);
-
-    groups.sort((a, b) {
-      final byLabel = _compareText(a.label, b.label);
-      if (byLabel != 0) {
-        return byLabel;
-      }
-
-      return b.trackCount.compareTo(a.trackCount);
-    });
-
-    return groups;
+    return _buildBrowseGroups(type, _tracks, query: query);
   }
 
   List<Track> tracksForBrowseGroup(
@@ -2366,6 +2346,112 @@ class LibraryStore extends ChangeNotifier {
         .toList(growable: false);
 
     return _sortTrackResults(tracks, sortMode);
+  }
+
+  List<LibraryBrowseGroup> albumGroupsForArtist(String artistKey) {
+    return _buildBrowseGroups(
+      LibraryBrowseType.album,
+      tracksForBrowseGroup(LibraryBrowseType.artist, artistKey),
+    );
+  }
+
+  List<RelatedLibraryCollectionMatch> relatedBrowseGroups(
+    LibraryBrowseType type,
+    String key, {
+    int limit = 8,
+  }) {
+    if (limit <= 0 ||
+        (type != LibraryBrowseType.artist && type != LibraryBrowseType.album)) {
+      return <RelatedLibraryCollectionMatch>[];
+    }
+
+    final seedTracks = tracksForBrowseGroup(type, key);
+    if (seedTracks.isEmpty) {
+      return <RelatedLibraryCollectionMatch>[];
+    }
+
+    Set<String> knownKeys(Iterable<String> values) {
+      return values.map(_knownMetadataKey).whereType<String>().toSet();
+    }
+
+    final seedArtists = knownKeys(seedTracks.map((track) => track.artist));
+    final seedAlbums = knownKeys(seedTracks.map((track) => track.album));
+    final seedGenres = knownKeys(seedTracks.map((track) => track.genre));
+    final normalizedSeedKey = _browseKey(key);
+    final tracksByGroupKey = <String, List<Track>>{};
+    for (final track in _tracks) {
+      final groupKey = _browseKey(_browseLabelForTrack(track, type));
+      tracksByGroupKey.putIfAbsent(groupKey, () => <Track>[]).add(track);
+    }
+    final matches = <RelatedLibraryCollectionMatch>[];
+
+    for (final group in browseGroups(type)) {
+      if (group.key == normalizedSeedKey) {
+        continue;
+      }
+
+      final candidateTracks = tracksByGroupKey[group.key] ?? const <Track>[];
+      final sharedArtistCount = seedArtists
+          .intersection(knownKeys(candidateTracks.map((track) => track.artist)))
+          .length;
+      final sharedAlbumCount = seedAlbums
+          .intersection(knownKeys(candidateTracks.map((track) => track.album)))
+          .length;
+      final sharedGenreCount = seedGenres
+          .intersection(knownKeys(candidateTracks.map((track) => track.genre)))
+          .length;
+      final reasons = <LibraryCollectionSimilarityReason>[
+        if (sharedArtistCount > 0)
+          LibraryCollectionSimilarityReason.artist,
+        if (sharedAlbumCount > 0) LibraryCollectionSimilarityReason.album,
+        if (sharedGenreCount > 0) LibraryCollectionSimilarityReason.genre,
+      ];
+      if (reasons.isEmpty) {
+        continue;
+      }
+
+      matches.add(
+        RelatedLibraryCollectionMatch(
+          group: group,
+          reasons: List<LibraryCollectionSimilarityReason>.unmodifiable(
+            reasons,
+          ),
+          score:
+              sharedArtistCount * 40 +
+              sharedAlbumCount * 28 +
+              sharedGenreCount * 18,
+        ),
+      );
+    }
+
+    matches.sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      if (byScore != 0) {
+        return byScore;
+      }
+
+      return _compareText(a.group.label, b.group.label);
+    });
+    return matches.take(limit).toList(growable: false);
+  }
+
+  Future<Playlist?> saveBrowseGroupAsPlaylist(
+    LibraryBrowseType type,
+    String key, {
+    String? name,
+  }) async {
+    final tracks = tracksForBrowseGroup(type, key);
+    if (tracks.isEmpty) {
+      return null;
+    }
+
+    final normalizedName = name?.trim();
+    return createPlaylist(
+      normalizedName == null || normalizedName.isEmpty
+          ? _browseLabelForTrack(tracks.first, type)
+          : normalizedName,
+      trackIds: tracks.map((track) => track.id),
+    );
   }
 
   List<LibraryFolderNode> folderTree({String query = ''}) {
@@ -7030,6 +7116,42 @@ class LibraryStore extends ChangeNotifier {
     statsGroups.sort(_compareLibraryStatsGroup);
 
     return statsGroups.take(limit).toList(growable: false);
+  }
+
+  List<LibraryBrowseGroup> _buildBrowseGroups(
+    LibraryBrowseType type,
+    Iterable<Track> tracks, {
+    String query = '',
+  }) {
+    final groupsByKey = <String, _MutableBrowseGroup>{};
+
+    for (final track in tracks) {
+      final label = _browseLabelForTrack(track, type);
+      final key = _browseKey(label);
+      final group = groupsByKey.putIfAbsent(
+        key,
+        () => _MutableBrowseGroup(type: type, key: key, label: label),
+      );
+      group.add(track);
+    }
+
+    final searchQuery = SearchQuery.parse(query);
+    final groups = groupsByKey.values
+        .where(
+          (group) => searchQuery.isEmpty ||
+              searchTextMatches(group.label, searchQuery),
+        )
+        .map((group) => group.toBrowseGroup())
+        .toList(growable: false);
+    groups.sort((a, b) {
+      final byLabel = _compareText(a.label, b.label);
+      if (byLabel != 0) {
+        return byLabel;
+      }
+
+      return b.trackCount.compareTo(a.trackCount);
+    });
+    return groups;
   }
 
   String _browseLabelForTrack(Track track, LibraryBrowseType type) {

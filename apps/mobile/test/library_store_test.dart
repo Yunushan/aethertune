@@ -4320,6 +4320,63 @@ void main() {
           .map((track) => track.id),
       <String>['1', '2'],
     );
+
+    final artistAlbums = store.albumGroupsForArtist('ari');
+    expect(artistAlbums.map((group) => group.label), <String>[
+      'Dawn',
+      'Dusk',
+    ]);
+    expect(artistAlbums.map((group) => group.trackCount), <int>[1, 1]);
+
+    final relatedArtists = store.relatedBrowseGroups(
+      LibraryBrowseType.artist,
+      'ari',
+    );
+    expect(relatedArtists.map((match) => match.group.label), <String>['Mia']);
+    expect(
+      relatedArtists.single.reasons,
+      const <LibraryCollectionSimilarityReason>[
+        LibraryCollectionSimilarityReason.album,
+      ],
+    );
+    expect(relatedArtists.single.score, 28);
+
+    final relatedAlbums = store.relatedBrowseGroups(
+      LibraryBrowseType.album,
+      'dawn',
+    );
+    expect(relatedAlbums.map((match) => match.group.label), <String>['Dusk']);
+    expect(
+      relatedAlbums.single.reasons,
+      const <LibraryCollectionSimilarityReason>[
+        LibraryCollectionSimilarityReason.artist,
+        LibraryCollectionSimilarityReason.genre,
+      ],
+    );
+    expect(relatedAlbums.single.score, 58);
+    expect(
+      store.relatedBrowseGroups(LibraryBrowseType.genre, 'ambient'),
+      isEmpty,
+    );
+    expect(
+      store.relatedBrowseGroups(LibraryBrowseType.artist, 'ari', limit: 0),
+      isEmpty,
+    );
+
+    final savedArtist = await store.saveBrowseGroupAsPlaylist(
+      LibraryBrowseType.artist,
+      'ari',
+    );
+    expect(savedArtist, isNotNull);
+    expect(savedArtist!.name, 'Ari');
+    expect(savedArtist.trackIds, <String>['1', '2']);
+    expect(
+      await store.saveBrowseGroupAsPlaylist(
+        LibraryBrowseType.album,
+        'missing',
+      ),
+      isNull,
+    );
   });
 
   test('builds recursive folder tree and opens descendant tracks', () async {

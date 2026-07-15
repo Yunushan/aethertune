@@ -89,6 +89,7 @@
 - [x] Local search suggestions
 - [x] Persisted search query history
 - [x] Artist/album/genre/source browse
+- [x] Full-screen local artist/album pages with related collections
 - [x] Similar local track browser
 
 ## 0.3.x: Platform audio
