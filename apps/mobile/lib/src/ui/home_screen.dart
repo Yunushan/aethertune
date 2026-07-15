@@ -7947,6 +7947,33 @@ Future<void> _startTrackRadio(
         'Started ${radioQueue.tracks.length}-track radio from '
         '${seedTrack.title}.',
       ),
+      action: SnackBarAction(
+        label: 'Save playlist',
+        onPressed: () => unawaited(
+          _saveTrackRadioPlaylist(context, library, seedTrack),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _saveTrackRadioPlaylist(
+  BuildContext context,
+  LibraryStore library,
+  Track seedTrack,
+) async {
+  final playlist = await library.saveTrackRadioPlaylist(seedTrack.id);
+  if (!context.mounted) {
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        playlist == null
+            ? 'No playable radio queue for ${seedTrack.title}.'
+            : 'Saved radio as ${playlist.name}.',
+      ),
     ),
   );
 }

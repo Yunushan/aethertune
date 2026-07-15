@@ -3834,6 +3834,36 @@ void main() {
     },
   );
 
+  test('saves generated track radio queues as editable playlists', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'seed',
+        title: 'Seed Signal',
+        artist: 'Mira',
+        album: 'Dawn',
+        genre: 'Ambient',
+      ),
+      _track(
+        'match',
+        title: 'Ambient Field',
+        artist: 'Ari',
+        album: 'Clouds',
+        genre: 'Ambient',
+      ),
+      _track('unrelated', genre: 'Jazz'),
+    ]);
+
+    final playlist = await store.saveTrackRadioPlaylist('seed');
+
+    expect(playlist, isNotNull);
+    expect(playlist!.name, 'Seed Signal Radio');
+    expect(playlist.trackIds, <String>['seed', 'match']);
+    expect(store.playlistById(playlist.id), playlist);
+    expect(await store.saveTrackRadioPlaylist('missing'), isNull);
+  });
+
   test('builds local home feed sections from library activity', () async {
     var now = DateTime.utc(2026, 1, 14, 14);
     final store = LibraryStore(clock: () => now);

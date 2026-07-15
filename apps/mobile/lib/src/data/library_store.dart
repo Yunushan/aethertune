@@ -3018,6 +3018,25 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  Future<Playlist?> saveTrackRadioPlaylist(
+    String seedTrackId, {
+    int limit = 50,
+    String? name,
+  }) async {
+    final radioQueue = radioQueueForTrack(seedTrackId, limit: limit);
+    if (radioQueue == null || radioQueue.tracks.isEmpty) {
+      return null;
+    }
+
+    final normalizedName = name?.trim();
+    return createPlaylist(
+      normalizedName == null || normalizedName.isEmpty
+          ? '${radioQueue.seedTrack.title} Radio'
+          : normalizedName,
+      trackIds: radioQueue.tracks.map((track) => track.id),
+    );
+  }
+
   LibraryStatsSummary libraryStats({
     int limit = 5,
     DateTime? from,

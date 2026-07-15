@@ -135,7 +135,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Playlist import/export | Done | Spotube, YouTube Music migration needs | JSON, M3U, and CSV native file import/export plus view/paste fallbacks are implemented for tracks already in the local library. Files are strict UTF-8 text and use safe playlist filenames. |
 | Find in playlist | Done | YouTube Music | Search box filters playlist tracks by title, artist, album, or locally saved lyrics while preserving playlist order. |
 | Save queue as playlist | Done | Common player feature | Bulk queue actions and sync. |
-| Radio queue generation | Scaffolded | YouTube Music, RiMusic | Local seed-based queue builder is implemented for playable library tracks and starts playback with the seed first. Needed next: provider recommendation adapters, richer ranking, and saved/generated radio playlists. |
+| Radio queue generation | Scaffolded | YouTube Music, RiMusic | Local seed-based queue builder is implemented for playable library tracks, starts playback with the seed first, and can save the generated queue as an editable playlist. Needed next: provider recommendation adapters and richer ranking. |
 
 ### Lyrics
 
