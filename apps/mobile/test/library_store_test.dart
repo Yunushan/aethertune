@@ -3254,6 +3254,10 @@ void main() {
     expect(firstStore.recommendationHistorySignalsEnabled, isTrue);
     expect(firstStore.themePreference, AppThemePreference.system);
     expect(firstStore.accentColor, AppAccentColor.system);
+    expect(
+      firstStore.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.midnight,
+    );
     expect(firstStore.languagePreference, AppLanguagePreference.system);
     expect(
       firstStore.desktopQueuePaneWidth,
@@ -3272,6 +3276,9 @@ void main() {
     await firstStore.setRecommendationHistorySignalsEnabled(false);
     await firstStore.setThemePreference(AppThemePreference.amoled);
     await firstStore.setAccentColor(AppAccentColor.rose);
+    await firstStore.setListeningRecapVisualTheme(
+      ListeningRecapVisualTheme.signal,
+    );
     await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
     await firstStore.setDesktopQueuePaneWidth(410);
     await firstStore.setDesktopMinimizeToTray(true);
@@ -3287,6 +3294,10 @@ void main() {
     expect(firstStore.recommendationHistorySignalsEnabled, isFalse);
     expect(firstStore.themePreference, AppThemePreference.amoled);
     expect(firstStore.accentColor, AppAccentColor.rose);
+    expect(
+      firstStore.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.signal,
+    );
     expect(firstStore.languagePreference, AppLanguagePreference.arabic);
     expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.desktopMinimizeToTray, isTrue);
@@ -3310,6 +3321,10 @@ void main() {
     expect(secondStore.recommendationHistorySignalsEnabled, isFalse);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
+    expect(
+      secondStore.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.signal,
+    );
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.desktopQueuePaneWidth, 410);
     expect(secondStore.desktopMinimizeToTray, isTrue);
@@ -3327,11 +3342,31 @@ void main() {
     expect(backup['recommendationHistorySignalsEnabled'], isFalse);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
     expect(backup['accentColor'], AppAccentColor.rose.name);
+    expect(
+      backup['listeningRecapVisualTheme'],
+      ListeningRecapVisualTheme.signal.name,
+    );
     expect(backup['languagePreference'], AppLanguagePreference.arabic.name);
     expect(backup['offlineCacheLimitMegabytes'], 2048);
     expect(
       backup['offlineCacheProviderLimitMegabytes'],
       <String, dynamic>{'internet-archive': 256},
+    );
+    final syncSnapshot = jsonDecode(secondStore.exportSyncSnapshotJson())
+        as Map<String, dynamic>;
+    expect(
+      syncSnapshot['listeningRecapVisualTheme'],
+      ListeningRecapVisualTheme.signal.name,
+    );
+    final syncStore = LibraryStore();
+    await syncStore.load();
+    await syncStore.setListeningRecapVisualTheme(
+      ListeningRecapVisualTheme.daylight,
+    );
+    await syncStore.restoreSyncSnapshotJson(jsonEncode(syncSnapshot));
+    expect(
+      syncStore.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.signal,
     );
 
     final legacyBackup = Map<String, dynamic>.from(backup)
@@ -3341,6 +3376,7 @@ void main() {
       ..remove('recommendationHistorySignalsEnabled')
       ..remove('themePreference')
       ..remove('accentColor')
+      ..remove('listeningRecapVisualTheme')
       ..remove('languagePreference')
       ..remove('offlineCacheLimitMegabytes')
       ..remove('offlineCacheProviderLimitMegabytes');
@@ -3352,6 +3388,10 @@ void main() {
     expect(secondStore.recommendationHistorySignalsEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.system);
     expect(secondStore.accentColor, AppAccentColor.system);
+    expect(
+      secondStore.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.midnight,
+    );
     expect(secondStore.languagePreference, AppLanguagePreference.system);
     expect(secondStore.desktopMinimizeToTray, isTrue);
     expect(
@@ -3368,6 +3408,10 @@ void main() {
     expect(secondStore.recommendationHistorySignalsEnabled, isFalse);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
+    expect(
+      secondStore.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.signal,
+    );
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
@@ -3387,6 +3431,20 @@ void main() {
     await restoredStore.load();
 
     expect(restoredStore.accentColor, AppAccentColor.system);
+  });
+
+  test('falls back from an unknown persisted recap visual theme', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.listening_recap_visual_theme.v1': 'unknown',
+    });
+
+    final store = LibraryStore();
+    await store.load();
+
+    expect(
+      store.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.midnight,
+    );
   });
 
   test('clamps offline cache limit setting and restored backups', () async {

@@ -68,6 +68,8 @@ enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
 enum LibraryRecapPeriod { month, year }
 
+enum ListeningRecapVisualTheme { midnight, daylight, signal, monochrome }
+
 enum ListeningHistoryRange { all, sevenDays, thirtyDays, year }
 
 enum LibraryMoodMixType { focus, energy, chill, workout, sleep }
@@ -163,6 +165,21 @@ extension AppAccentColorLabel on AppAccentColor {
         return 'Violet';
       case AppAccentColor.green:
         return 'Green';
+    }
+  }
+}
+
+extension ListeningRecapVisualThemeLabel on ListeningRecapVisualTheme {
+  String get label {
+    switch (this) {
+      case ListeningRecapVisualTheme.midnight:
+        return 'Midnight';
+      case ListeningRecapVisualTheme.daylight:
+        return 'Daylight';
+      case ListeningRecapVisualTheme.signal:
+        return 'Signal';
+      case ListeningRecapVisualTheme.monochrome:
+        return 'Monochrome';
     }
   }
 }
@@ -974,6 +991,13 @@ AppAccentColor _appAccentColorFromName(String? value) {
   );
 }
 
+ListeningRecapVisualTheme _listeningRecapVisualThemeFromName(String? value) {
+  return ListeningRecapVisualTheme.values.firstWhere(
+    (theme) => theme.name == value,
+    orElse: () => ListeningRecapVisualTheme.midnight,
+  );
+}
+
 CustomSmartPlaylistMatchMode _customSmartPlaylistMatchModeFromName(
   String? value,
 ) {
@@ -1020,6 +1044,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.automatic_offline_queue.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
+  static const _listeningRecapVisualThemeKey =
+      'aethertune.listening_recap_visual_theme.v1';
   static const _languagePreferenceKey = 'aethertune.language_preference.v1';
   static const _trackPlaybackSpeedOverridesKey =
       'aethertune.track_playback_speed_overrides.v1';
@@ -1074,6 +1100,8 @@ class LibraryStore extends ChangeNotifier {
   bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.system;
+  ListeningRecapVisualTheme _listeningRecapVisualTheme =
+      ListeningRecapVisualTheme.midnight;
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _desktopMinimizeToTray = false;
@@ -1131,6 +1159,8 @@ class LibraryStore extends ChangeNotifier {
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
+  ListeningRecapVisualTheme get listeningRecapVisualTheme =>
+      _listeningRecapVisualTheme;
   AppLanguagePreference get languagePreference => _languagePreference;
   double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
   bool get desktopMinimizeToTray => _desktopMinimizeToTray;
@@ -1320,6 +1350,9 @@ class LibraryStore extends ChangeNotifier {
     );
     _accentColor = _appAccentColorFromName(
       prefs.getString(_accentColorKey),
+    );
+    _listeningRecapVisualTheme = _listeningRecapVisualThemeFromName(
+      prefs.getString(_listeningRecapVisualThemeKey),
     );
     _languagePreference = _appLanguagePreferenceFromName(
       prefs.getString(_languagePreferenceKey),
@@ -1663,6 +1696,18 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _accentColor = accentColor;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setListeningRecapVisualTheme(
+    ListeningRecapVisualTheme theme,
+  ) async {
+    if (_listeningRecapVisualTheme == theme) {
+      return;
+    }
+
+    _listeningRecapVisualTheme = theme;
     await _save();
     notifyListeners();
   }
@@ -3754,6 +3799,7 @@ class LibraryStore extends ChangeNotifier {
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
       'accentColor': _accentColor.name,
+      'listeningRecapVisualTheme': _listeningRecapVisualTheme.name,
       'languagePreference': _languagePreference.name,
       'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
       'offlineCacheProviderLimitMegabytes':
@@ -4387,6 +4433,8 @@ class LibraryStore extends ChangeNotifier {
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
     var restoredAccentColor = AppAccentColor.system;
+    var restoredListeningRecapVisualTheme =
+        ListeningRecapVisualTheme.midnight;
     var restoredLanguagePreference = AppLanguagePreference.system;
     var restoredOfflineCacheLimitMegabytes =
         defaultOfflineCacheLimitMegabytes;
@@ -4420,6 +4468,9 @@ class LibraryStore extends ChangeNotifier {
       );
       restoredAccentColor = _appAccentColorFromName(
         _jsonOptionalString(backup, 'accentColor'),
+      );
+      restoredListeningRecapVisualTheme = _listeningRecapVisualThemeFromName(
+        _jsonOptionalString(backup, 'listeningRecapVisualTheme'),
       );
       restoredLanguagePreference = _appLanguagePreferenceFromName(
         _jsonOptionalString(backup, 'languagePreference'),
@@ -4587,6 +4638,7 @@ class LibraryStore extends ChangeNotifier {
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
     _accentColor = restoredAccentColor;
+    _listeningRecapVisualTheme = restoredListeningRecapVisualTheme;
     _languagePreference = restoredLanguagePreference;
     _offlineCacheLimitMegabytes = restoredOfflineCacheLimitMegabytes;
     _offlineCacheProviderLimitMegabytes
@@ -8156,6 +8208,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);
+    await prefs.setString(
+      _listeningRecapVisualThemeKey,
+      _listeningRecapVisualTheme.name,
+    );
     await prefs.setString(
       _languagePreferenceKey,
       _languagePreference.name,

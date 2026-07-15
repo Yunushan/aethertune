@@ -86,7 +86,7 @@
 - [x] Yearly/monthly calendar recap cards
 - [x] Saveable monthly/yearly PNG recap cards
 - [x] Responsive top-track/top-artist recap bar charts
-- [ ] Calendar heatmaps and saved visual themes
+- [x] Calendar heatmaps and saved visual themes
 - [x] Recently added view
 - [x] Local search suggestions
 - [x] Persisted search query history

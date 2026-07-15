@@ -347,6 +347,125 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('previews and persists a listening recap visual theme', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[
+      Track(
+        id: 'recap-track',
+        title: 'Recap Track',
+        artist: 'Mira',
+        album: 'Signals',
+        genre: 'Rock',
+        duration: const Duration(minutes: 4),
+        localPath: '/music/recap-track.mp3',
+      ),
+    ]);
+    await library.recordPlayback('recap-track');
+    final monthlyRecap = library.listeningRecaps(
+      period: LibraryRecapPeriod.month,
+      limit: 1,
+    ).single;
+    addTearDown(library.dispose);
+
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 3),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final recapButton = find.byKey(
+      ValueKey<String>(
+        'listening-recap-preview-month-'
+        '${monthlyRecap.start.year}-'
+        '${monthlyRecap.start.month}',
+      ),
+    );
+    await tester.scrollUntilVisible(
+      recapButton,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(recapButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('listening-recap-preview-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('listening-recap-card-midnight'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('listening-recap-theme-signal')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      library.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.signal,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('listening-recap-card-signal')),
+      findsOneWidget,
+    );
+    final restored = LibraryStore();
+    await restored.load();
+    addTearDown(restored.dispose);
+    expect(
+      restored.listeningRecapVisualTheme,
+      ListeningRecapVisualTheme.signal,
+    );
+    tester.view.physicalSize = const Size(1200, 800);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('listening-recap-card-signal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('listening-recap-save-png')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _TestPlaybackAudioEngine implements PlaybackAudioEngine {

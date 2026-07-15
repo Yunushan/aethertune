@@ -8646,30 +8646,65 @@ class _HistoryTabState extends State<_HistoryTab> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('${listeningRecapLabel(recap)} recap'),
-          content: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: RepaintBoundary(
-              key: boundaryKey,
-              child: ListeningRecapCard(recap: recap),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
-            ),
-            FilledButton.icon(
-              onPressed: () => _saveListeningRecapPng(
-                dialogContext,
-                recap: recap,
-                boundaryKey: boundaryKey,
+        return Consumer<LibraryStore>(
+          builder: (context, library, child) {
+            final visualTheme = library.listeningRecapVisualTheme;
+            return AlertDialog(
+              key: const Key('listening-recap-preview-dialog'),
+              title: Text('${listeningRecapLabel(recap)} recap'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Visual theme',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      ListeningRecapThemePicker(
+                        selectedTheme: visualTheme,
+                        onChanged: (theme) {
+                          unawaited(
+                            library.setListeningRecapVisualTheme(theme),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: RepaintBoundary(
+                          key: boundaryKey,
+                          child: ListeningRecapCard(
+                            recap: recap,
+                            visualTheme: visualTheme,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('Save PNG'),
-            ),
-          ],
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Close'),
+                ),
+                FilledButton.icon(
+                  key: const Key('listening-recap-save-png'),
+                  onPressed: () => _saveListeningRecapPng(
+                    dialogContext,
+                    recap: recap,
+                    boundaryKey: boundaryKey,
+                  ),
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('Save PNG'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -9040,6 +9075,12 @@ class _ListeningRecapSection extends StatelessWidget {
                               ),
                             ),
                             IconButton(
+                              key: ValueKey<String>(
+                                'listening-recap-preview-'
+                                '${recap.period.name}-'
+                                '${recap.start.year}-'
+                                '${recap.start.month}',
+                              ),
                               tooltip: 'Save recap image',
                               onPressed: () => onShare(recap),
                               icon: const Icon(Icons.image_outlined),

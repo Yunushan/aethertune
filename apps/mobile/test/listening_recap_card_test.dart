@@ -63,6 +63,81 @@ void main() {
     ]);
   });
 
+  testWidgets('renders every listening recap visual theme', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final recap = _recap(LibraryRecapPeriod.month);
+    final backgrounds = <Color>{};
+
+    for (final visualTheme in ListeningRecapVisualTheme.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ListeningRecapCard(
+                recap: recap,
+                visualTheme: visualTheme,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final card = tester.widget<DecoratedBox>(
+        find.byKey(
+          ValueKey<String>('listening-recap-card-${visualTheme.name}'),
+        ),
+      );
+      backgrounds.add((card.decoration as BoxDecoration).color!);
+      expect(listeningRecapThemeSwatch(visualTheme), hasLength(3));
+      expect(tester.takeException(), isNull);
+    }
+
+    expect(backgrounds, hasLength(ListeningRecapVisualTheme.values.length));
+  });
+
+  testWidgets('selects recap themes from labeled color swatches', (
+    tester,
+  ) async {
+    var selectedTheme = ListeningRecapVisualTheme.midnight;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return ListeningRecapThemePicker(
+                selectedTheme: selectedTheme,
+                onChanged: (theme) {
+                  setState(() => selectedTheme = theme);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('listening-recap-theme-daylight')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(selectedTheme, ListeningRecapVisualTheme.daylight);
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.byKey(
+              const ValueKey<String>('listening-recap-theme-daylight'),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+    expect(find.text('Daylight'), findsOneWidget);
+  });
+
   test('builds stable recap labels, durations, and PNG names', () {
     final monthly = _recap(LibraryRecapPeriod.month);
     final yearly = LibraryListeningRecap(
@@ -78,6 +153,8 @@ void main() {
     expect(listeningRecapPngFileName(yearly), 'aethertune-recap-2026.png');
     expect(formatListeningRecapDuration(const Duration(minutes: 42)), '42 min');
     expect(formatListeningRecapDuration(const Duration(hours: 2)), '2 hr');
+    expect(ListeningRecapVisualTheme.midnight.label, 'Midnight');
+    expect(ListeningRecapVisualTheme.monochrome.label, 'Monochrome');
   });
 
   test('rejects invalid recap capture pixel ratios', () async {
