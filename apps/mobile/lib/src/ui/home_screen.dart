@@ -65,6 +65,7 @@ import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/artwork_crop_editor.dart';
+import 'widgets/audio_effects_settings.dart';
 import 'widgets/collection_share_card.dart';
 import 'widgets/listening_heatmap.dart';
 import 'widgets/listening_stats_bar_chart.dart';
@@ -13326,6 +13327,8 @@ class _SettingsTab extends StatelessWidget {
                     },
             ),
           ),
+        if (player.supportsEqualizer || player.supportsLoudnessEnhancer)
+          AudioEffectsSettingsTile(player: player),
         SwitchListTile(
           secondary: const Icon(Icons.graphic_eq_outlined),
           title: const Text('Loudness normalization'),

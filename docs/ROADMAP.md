@@ -99,6 +99,10 @@
 - [x] Android notification controls and media-button receiver
 - [x] Queue metadata, artwork, position, repeat, and shuffle media-session state
 - [x] Android foreground media playback service configuration
+- [x] Android device-adaptive equalizer presets and persisted custom bands
+- [x] Android native loudness enhancement mirrored through crossfade
+- [ ] Physical-device audio-effect and acoustic transition fixtures
+- [ ] iOS and desktop DSP backends plus Android virtualizer
 - [ ] Android Auto
 - [x] iOS Control Center and lock-screen controls
 - [x] iOS background music audio session and wrapper mode

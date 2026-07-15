@@ -11,8 +11,15 @@ bool supportsSystemMediaSession(TargetPlatform platform) {
       platform == TargetPlatform.macOS;
 }
 
+bool supportsAndroidAudioEffects(TargetPlatform platform) {
+  return platform == TargetPlatform.android;
+}
+
 Future<PlaybackAudioEngine> createPlaybackAudioEngine() async {
-  final engine = JustAudioPlaybackEngine();
+  final engine = JustAudioPlaybackEngine(
+    enableAndroidAudioEffects:
+        !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
+  );
   if (kIsWeb || !supportsSystemMediaSession(defaultTargetPlatform)) {
     return engine;
   }

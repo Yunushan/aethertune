@@ -5,12 +5,13 @@ import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
 import 'android_playback_widget_bridge.dart';
+import 'playback_audio_effects.dart';
 import 'playback_audio_engine.dart';
 
 /// Adds operating-system media controls around the app's playback engine.
 class SystemMediaPlaybackEngine extends BaseAudioHandler
     with SeekHandler
-    implements CrossfadePlaybackAudioEngine {
+    implements CrossfadePlaybackAudioEngine, AudioEffectsPlaybackAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
     PlaybackWidgetBridge? playbackWidgetBridge,
@@ -105,6 +106,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   Duration get crossfadeDuration => _engine is CrossfadePlaybackAudioEngine
       ? _engine.crossfadeDuration
       : Duration.zero;
+
+  @override
+  bool get supportsEqualizer =>
+      _engine is AudioEffectsPlaybackAudioEngine && _engine.supportsEqualizer;
+
+  @override
+  bool get supportsLoudnessEnhancer =>
+      _engine is AudioEffectsPlaybackAudioEngine &&
+      _engine.supportsLoudnessEnhancer;
 
   @override
   Future<void> setQueue(
@@ -235,6 +245,60 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       throw UnsupportedError('Crossfade is unavailable for this audio backend.');
     }
     return engine.setCrossfadeDuration(duration);
+  }
+
+  @override
+  Future<void> setEqualizerEnabled(bool enabled) {
+    final engine = _engine;
+    if (engine is! AudioEffectsPlaybackAudioEngine ||
+        !engine.supportsEqualizer) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    return engine.setEqualizerEnabled(enabled);
+  }
+
+  @override
+  Future<void> setEqualizerProfile(PlaybackEqualizerProfile profile) {
+    final engine = _engine;
+    if (engine is! AudioEffectsPlaybackAudioEngine ||
+        !engine.supportsEqualizer) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    return engine.setEqualizerProfile(profile);
+  }
+
+  @override
+  Future<List<PlaybackEqualizerBand>> loadEqualizerBands() {
+    final engine = _engine;
+    if (engine is! AudioEffectsPlaybackAudioEngine ||
+        !engine.supportsEqualizer) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    return engine.loadEqualizerBands();
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerEnabled(bool enabled) {
+    final engine = _engine;
+    if (engine is! AudioEffectsPlaybackAudioEngine ||
+        !engine.supportsLoudnessEnhancer) {
+      throw UnsupportedError(
+        'Loudness enhancer is unavailable for this audio backend.',
+      );
+    }
+    return engine.setLoudnessEnhancerEnabled(enabled);
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerTargetGain(double gainDb) {
+    final engine = _engine;
+    if (engine is! AudioEffectsPlaybackAudioEngine ||
+        !engine.supportsLoudnessEnhancer) {
+      throw UnsupportedError(
+        'Loudness enhancer is unavailable for this audio backend.',
+      );
+    }
+    return engine.setLoudnessEnhancerTargetGain(gainDb);
   }
 
   @override

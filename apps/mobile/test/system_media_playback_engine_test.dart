@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/android_playback_widget_bridge.dart';
+import 'package:aethertune/src/player/playback_audio_effects.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/playback_audio_engine_factory.dart';
 import 'package:aethertune/src/player/system_media_playback_engine.dart';
@@ -196,12 +197,38 @@ void main() {
     );
   });
 
+  test('forwards native audio effects through the system media wrapper',
+      () async {
+    final delegate = _FakeAudioEffectsPlaybackEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+    const profile = PlaybackEqualizerProfile(
+      preset: PlaybackEqualizerPreset.bassBoost,
+    );
+
+    expect(engine.supportsEqualizer, isTrue);
+    expect(engine.supportsLoudnessEnhancer, isTrue);
+    await engine.setEqualizerEnabled(true);
+    await engine.setEqualizerProfile(profile);
+    await engine.setLoudnessEnhancerTargetGain(4.5);
+    await engine.setLoudnessEnhancerEnabled(true);
+
+    expect(delegate.equalizerEnabledValue, isTrue);
+    expect(delegate.equalizerProfileValue, same(profile));
+    expect(delegate.loudnessEnhancerTargetGainValue, 4.5);
+    expect(delegate.loudnessEnhancerEnabledValue, isTrue);
+    expect(await engine.loadEqualizerBands(), delegate.bands);
+  });
+
   test('enables native media sessions only on supported platforms', () {
     expect(supportsSystemMediaSession(TargetPlatform.android), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.iOS), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.macOS), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.linux), isFalse);
     expect(supportsSystemMediaSession(TargetPlatform.windows), isFalse);
+    expect(supportsAndroidAudioEffects(TargetPlatform.android), isTrue);
+    expect(supportsAndroidAudioEffects(TargetPlatform.iOS), isFalse);
+    expect(supportsAndroidAudioEffects(TargetPlatform.windows), isFalse);
   });
 }
 
@@ -362,6 +389,55 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     await _positionController.close();
     await _processingController.close();
     await _indexController.close();
+  }
+}
+
+class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
+    implements AudioEffectsPlaybackAudioEngine {
+  bool equalizerEnabledValue = false;
+  PlaybackEqualizerProfile equalizerProfileValue =
+      const PlaybackEqualizerProfile(
+        preset: PlaybackEqualizerPreset.flat,
+      );
+  bool loudnessEnhancerEnabledValue = false;
+  double loudnessEnhancerTargetGainValue = 0;
+  final List<PlaybackEqualizerBand> bands = const <PlaybackEqualizerBand>[
+    PlaybackEqualizerBand(
+      index: 0,
+      centerFrequencyHz: 60,
+      gainDb: 0,
+      minGainDb: -12,
+      maxGainDb: 12,
+    ),
+  ];
+
+  @override
+  bool get supportsEqualizer => true;
+
+  @override
+  bool get supportsLoudnessEnhancer => true;
+
+  @override
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    equalizerEnabledValue = enabled;
+  }
+
+  @override
+  Future<void> setEqualizerProfile(PlaybackEqualizerProfile profile) async {
+    equalizerProfileValue = profile;
+  }
+
+  @override
+  Future<List<PlaybackEqualizerBand>> loadEqualizerBands() async => bands;
+
+  @override
+  Future<void> setLoudnessEnhancerEnabled(bool enabled) async {
+    loudnessEnhancerEnabledValue = enabled;
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
+    loudnessEnhancerTargetGainValue = gainDb;
   }
 }
 

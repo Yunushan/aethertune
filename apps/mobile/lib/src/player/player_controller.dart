@@ -11,6 +11,7 @@ import '../domain/replay_gain.dart';
 import '../domain/track.dart';
 import '../domain/track_queue.dart';
 import 'offline_playback_policy.dart';
+import 'playback_audio_effects.dart';
 import 'playback_audio_engine.dart';
 
 typedef TrackPlaybackResolver = Future<Track> Function(Track track);
@@ -35,6 +36,8 @@ class PlayerController extends ChangeNotifier {
     Duration(seconds: 5),
     Duration(seconds: 8),
   ];
+  static const minLoudnessEnhancerGainDb = 0.0;
+  static const maxLoudnessEnhancerGainDb = 12.0;
 
   PlayerController({
     PlaybackAudioEngine? audioEngine,
@@ -91,6 +94,14 @@ class PlayerController extends ChangeNotifier {
   double _volume = maxVolume;
   bool _loudnessNormalizationEnabled = false;
   ReplayGainMode _replayGainMode = ReplayGainMode.track;
+  bool _equalizerEnabled = false;
+  PlaybackEqualizerPreset _equalizerPreset = PlaybackEqualizerPreset.flat;
+  List<PlaybackEqualizerPoint> _customEqualizerPoints =
+      <PlaybackEqualizerPoint>[];
+  List<PlaybackEqualizerBand> _equalizerBands = <PlaybackEqualizerBand>[];
+  bool _equalizerBandsLoading = false;
+  bool _loudnessEnhancerEnabled = false;
+  double _loudnessEnhancerTargetGainDb = 0;
   double _defaultPlaybackSpeed = 1;
   Duration _skipBackwardInterval = const Duration(seconds: 10);
   Duration _skipForwardInterval = const Duration(seconds: 30);
@@ -108,6 +119,19 @@ class PlayerController extends ChangeNotifier {
   double get volume => _volume;
   bool get loudnessNormalizationEnabled => _loudnessNormalizationEnabled;
   ReplayGainMode get replayGainMode => _replayGainMode;
+  bool get supportsEqualizer =>
+      _audio is AudioEffectsPlaybackAudioEngine && _audio.supportsEqualizer;
+  bool get supportsLoudnessEnhancer =>
+      _audio is AudioEffectsPlaybackAudioEngine &&
+      _audio.supportsLoudnessEnhancer;
+  bool get equalizerEnabled => _equalizerEnabled;
+  PlaybackEqualizerPreset get equalizerPreset => _equalizerPreset;
+  List<PlaybackEqualizerBand> get equalizerBands =>
+      List<PlaybackEqualizerBand>.unmodifiable(_equalizerBands);
+  bool get hasCustomEqualizerProfile => _customEqualizerPoints.isNotEmpty;
+  bool get equalizerBandsLoading => _equalizerBandsLoading;
+  bool get loudnessEnhancerEnabled => _loudnessEnhancerEnabled;
+  double get loudnessEnhancerTargetGainDb => _loudnessEnhancerTargetGainDb;
   bool get supportsCrossfade =>
       _audio is CrossfadePlaybackAudioEngine &&
       _audio.supportsCrossfade;
@@ -211,12 +235,45 @@ class PlayerController extends ChangeNotifier {
         _loudnessNormalizationEnabled =
             settings['loudnessNormalizationEnabled'] as bool? ?? false;
         _replayGainMode = _replayGainModeFromJson(settings['replayGainMode']);
+        _equalizerEnabled = settings['equalizerEnabled'] as bool? ?? false;
+        _equalizerPreset = _equalizerPresetFromJson(
+          settings['equalizerPreset'],
+        );
+        _customEqualizerPoints = _equalizerPointsFromJson(
+          settings['equalizerCustomPoints'],
+        );
+        if (_equalizerPreset == PlaybackEqualizerPreset.custom &&
+            _customEqualizerPoints.isEmpty) {
+          _equalizerPreset = PlaybackEqualizerPreset.flat;
+        }
+        _loudnessEnhancerEnabled =
+            settings['loudnessEnhancerEnabled'] as bool? ?? false;
+        _loudnessEnhancerTargetGainDb = _loudnessEnhancerGainFromJson(
+          settings['loudnessEnhancerTargetGainDb'],
+        );
         final crossfadeDuration = _crossfadeDurationFromJson(
           settings['crossfadeMilliseconds'],
         );
         if (supportsCrossfade) {
           await (_audio as CrossfadePlaybackAudioEngine)
               .setCrossfadeDuration(crossfadeDuration);
+        }
+        final audioEffectsEngine = _audioEffectsEngine;
+        if (audioEffectsEngine != null &&
+            audioEffectsEngine.supportsEqualizer) {
+          await audioEffectsEngine.setEqualizerProfile(
+            _currentEqualizerProfile,
+          );
+          await audioEffectsEngine.setEqualizerEnabled(_equalizerEnabled);
+        }
+        if (audioEffectsEngine != null &&
+            audioEffectsEngine.supportsLoudnessEnhancer) {
+          await audioEffectsEngine.setLoudnessEnhancerTargetGain(
+            _loudnessEnhancerTargetGainDb,
+          );
+          await audioEffectsEngine.setLoudnessEnhancerEnabled(
+            _loudnessEnhancerEnabled,
+          );
         }
         await _applyOutputVolume();
       } catch (_) {
@@ -601,6 +658,134 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    final engine = _requireEqualizerEngine();
+    if (_equalizerEnabled == enabled) {
+      return;
+    }
+    final previous = _equalizerEnabled;
+    _equalizerEnabled = enabled;
+    notifyListeners();
+    try {
+      await engine.setEqualizerEnabled(enabled);
+      await _savePlaybackSettings();
+    } on Object {
+      _equalizerEnabled = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setEqualizerPreset(PlaybackEqualizerPreset preset) async {
+    final engine = _requireEqualizerEngine();
+    if (preset == PlaybackEqualizerPreset.custom &&
+        _customEqualizerPoints.isEmpty) {
+      throw StateError('Custom equalizer bands are not available yet.');
+    }
+    if (_equalizerPreset == preset) {
+      return;
+    }
+    final previous = _equalizerPreset;
+    _equalizerPreset = preset;
+    notifyListeners();
+    try {
+      await engine.setEqualizerProfile(_currentEqualizerProfile);
+      await _refreshEqualizerBands(notify: false);
+      await _savePlaybackSettings();
+      notifyListeners();
+    } on Object {
+      _equalizerPreset = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> refreshEqualizerBands() {
+    return _refreshEqualizerBands(notify: true);
+  }
+
+  Future<void> previewEqualizerBandGain(int bandIndex, double gainDb) async {
+    final engine = _requireEqualizerEngine();
+    final index = _equalizerBands.indexWhere((band) => band.index == bandIndex);
+    if (index == -1) {
+      throw RangeError.value(bandIndex, 'bandIndex', 'Unknown equalizer band.');
+    }
+    final band = _equalizerBands[index];
+    if (!gainDb.isFinite ||
+        gainDb < band.minGainDb ||
+        gainDb > band.maxGainDb) {
+      throw ArgumentError.value(
+        gainDb,
+        'gainDb',
+        'Gain is outside the device band range.',
+      );
+    }
+
+    final previousBands = List<PlaybackEqualizerBand>.from(_equalizerBands);
+    final previousPreset = _equalizerPreset;
+    final previousPoints = _customEqualizerPoints;
+    _equalizerBands[index] = band.copyWith(gainDb: gainDb);
+    _equalizerPreset = PlaybackEqualizerPreset.custom;
+    _customEqualizerPoints = _equalizerBands
+        .map(
+          (item) => PlaybackEqualizerPoint(
+            frequencyHz: item.centerFrequencyHz,
+            gainDb: item.gainDb,
+          ),
+        )
+        .toList(growable: false);
+    notifyListeners();
+    try {
+      await engine.setEqualizerProfile(_currentEqualizerProfile);
+    } on Object {
+      _equalizerBands = previousBands;
+      _equalizerPreset = previousPreset;
+      _customEqualizerPoints = previousPoints;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> persistEqualizerBandGains() => _savePlaybackSettings();
+
+  Future<void> setLoudnessEnhancerEnabled(bool enabled) async {
+    final engine = _requireLoudnessEnhancerEngine();
+    if (_loudnessEnhancerEnabled == enabled) {
+      return;
+    }
+    final previous = _loudnessEnhancerEnabled;
+    _loudnessEnhancerEnabled = enabled;
+    notifyListeners();
+    try {
+      await engine.setLoudnessEnhancerEnabled(enabled);
+      await _savePlaybackSettings();
+    } on Object {
+      _loudnessEnhancerEnabled = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> previewLoudnessEnhancerTargetGain(double gainDb) async {
+    final engine = _requireLoudnessEnhancerEngine();
+    _validateLoudnessEnhancerGain(gainDb);
+    final previous = _loudnessEnhancerTargetGainDb;
+    _loudnessEnhancerTargetGainDb = gainDb;
+    notifyListeners();
+    try {
+      await engine.setLoudnessEnhancerTargetGain(gainDb);
+    } on Object {
+      _loudnessEnhancerTargetGainDb = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
+    await previewLoudnessEnhancerTargetGain(gainDb);
+    await _savePlaybackSettings();
+  }
+
   static String formatVolume(double volume) {
     final percent = (volume.clamp(minVolume, maxVolume) * 100).round();
     return '$percent%';
@@ -773,6 +958,7 @@ class PlayerController extends ChangeNotifier {
         initialIndex: index,
         initialPosition: initialPosition,
       );
+      await _refreshEqualizerBands(notify: false);
       _loadedTrackId = track.id;
     } on Object {
       _loadedPlaybackQueue.clear();
@@ -873,6 +1059,7 @@ class PlayerController extends ChangeNotifier {
         initialIndex: 0,
         initialPosition: position,
       );
+      await _refreshEqualizerBands(notify: false);
       if (wasPlaying) {
         unawaited(_audio.play());
       }
@@ -912,6 +1099,13 @@ class PlayerController extends ChangeNotifier {
           'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
           'replayGainMode': _replayGainMode.name,
           'crossfadeMilliseconds': crossfadeDuration.inMilliseconds,
+          'equalizerEnabled': _equalizerEnabled,
+          'equalizerPreset': _equalizerPreset.name,
+          'equalizerCustomPoints': _customEqualizerPoints
+              .map((point) => point.toJson())
+              .toList(growable: false),
+          'loudnessEnhancerEnabled': _loudnessEnhancerEnabled,
+          'loudnessEnhancerTargetGainDb': _loudnessEnhancerTargetGainDb,
         },
       ),
     );
@@ -1024,6 +1218,131 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return Duration.zero;
+  }
+
+  AudioEffectsPlaybackAudioEngine? get _audioEffectsEngine {
+    final engine = _audio;
+    return engine is AudioEffectsPlaybackAudioEngine ? engine : null;
+  }
+
+  PlaybackEqualizerProfile get _currentEqualizerProfile =>
+      PlaybackEqualizerProfile(
+        preset: _equalizerPreset,
+        customPoints: _customEqualizerPoints,
+      );
+
+  AudioEffectsPlaybackAudioEngine _requireEqualizerEngine() {
+    final engine = _audioEffectsEngine;
+    if (engine == null || !engine.supportsEqualizer) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    return engine;
+  }
+
+  AudioEffectsPlaybackAudioEngine _requireLoudnessEnhancerEngine() {
+    final engine = _audioEffectsEngine;
+    if (engine == null || !engine.supportsLoudnessEnhancer) {
+      throw UnsupportedError(
+        'Loudness enhancer is unavailable for this audio backend.',
+      );
+    }
+    return engine;
+  }
+
+  Future<void> _refreshEqualizerBands({required bool notify}) async {
+    final engine = _audioEffectsEngine;
+    if (engine == null || !engine.supportsEqualizer) {
+      if (_equalizerBands.isNotEmpty) {
+        _equalizerBands = <PlaybackEqualizerBand>[];
+        if (notify) {
+          notifyListeners();
+        }
+      }
+      return;
+    }
+
+    _equalizerBandsLoading = true;
+    if (notify) {
+      notifyListeners();
+    }
+    try {
+      _equalizerBands = await engine.loadEqualizerBands();
+    } finally {
+      _equalizerBandsLoading = false;
+      if (notify) {
+        notifyListeners();
+      }
+    }
+  }
+
+  PlaybackEqualizerPreset _equalizerPresetFromJson(Object? value) {
+    return switch (value) {
+      'bassBoost' => PlaybackEqualizerPreset.bassBoost,
+      'vocal' => PlaybackEqualizerPreset.vocal,
+      'treble' => PlaybackEqualizerPreset.treble,
+      'custom' => PlaybackEqualizerPreset.custom,
+      _ => PlaybackEqualizerPreset.flat,
+    };
+  }
+
+  List<PlaybackEqualizerPoint> _equalizerPointsFromJson(Object? value) {
+    if (value is! List) {
+      return <PlaybackEqualizerPoint>[];
+    }
+    final points = <PlaybackEqualizerPoint>[];
+    for (final entry in value) {
+      if (entry is! Map) {
+        continue;
+      }
+      final frequency = entry['frequencyHz'];
+      final gain = entry['gainDb'];
+      if (frequency is! num || gain is! num) {
+        continue;
+      }
+      final frequencyHz = frequency.toDouble();
+      final gainDb = gain.toDouble();
+      if (!frequencyHz.isFinite ||
+          frequencyHz <= 0 ||
+          !gainDb.isFinite ||
+          gainDb < -24 ||
+          gainDb > 24) {
+        continue;
+      }
+      points.add(
+        PlaybackEqualizerPoint(
+          frequencyHz: frequencyHz,
+          gainDb: gainDb,
+        ),
+      );
+    }
+    points.sort(
+      (left, right) => left.frequencyHz.compareTo(right.frequencyHz),
+    );
+    return points;
+  }
+
+  double _loudnessEnhancerGainFromJson(Object? value) {
+    if (value is num) {
+      final gain = value.toDouble();
+      if (gain.isFinite &&
+          gain >= minLoudnessEnhancerGainDb &&
+          gain <= maxLoudnessEnhancerGainDb) {
+        return gain;
+      }
+    }
+    return minLoudnessEnhancerGainDb;
+  }
+
+  void _validateLoudnessEnhancerGain(double gainDb) {
+    if (!gainDb.isFinite ||
+        gainDb < minLoudnessEnhancerGainDb ||
+        gainDb > maxLoudnessEnhancerGainDb) {
+      throw ArgumentError.value(
+        gainDb,
+        'gainDb',
+        'Loudness enhancer gain must be between 0 and 12 dB.',
+      );
+    }
   }
 
   void _validateVolume(double volume) {

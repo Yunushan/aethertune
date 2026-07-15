@@ -152,10 +152,23 @@ provides:
 - artwork swipe navigation, live seek/time labels, favorite, lyrics, and queue actions
 - shuffle
 - repeat mode
+- optional Android device-band equalizer profiles and custom gains
+- optional Android loudness enhancement, independently persisted from ReplayGain
 - sleep timer with optional fade-out
 - Android media notification and headset controls
 - iOS/macOS Control Center and lock-screen controls
 - Android/iOS background music audio-session configuration
+
+`AudioEffectsPlaybackAudioEngine` is an optional capability rather than part
+of the universal playback contract. The Android factory creates separate
+`AndroidEqualizer` and `AndroidLoudnessEnhancer` instances for the primary and
+crossfade `AudioPlayer` pipelines because one effect instance cannot be shared
+between players. Presets are logarithmically interpolated by frequency and
+clamped to the gain range reported by the current device, so a persisted curve
+does not assume a fixed number of bands. Settings can be queued before a source
+activates; actual bands become available after activation and the same profile
+is serialized across both players. `SystemMediaPlaybackEngine` forwards this
+capability without advertising it on unsupported backends.
 
 The same wrapper configuration step sets Android API 23 plus disabled auto
 backup for encrypted storage, creates iOS/macOS Keychain entitlements, and is

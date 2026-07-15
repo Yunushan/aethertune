@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:aethertune/src/domain/replay_gain.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/player/playback_audio_effects.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,6 +90,104 @@ void main() {
     await expectLater(
       controller.setCrossfadeDuration(const Duration(seconds: 3)),
       throwsA(isA<UnsupportedError>()),
+    );
+  });
+
+  test('persists and restores Android audio effect settings', () async {
+    final firstEngine = _FakeAudioEffectsEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+
+    await firstController.setEqualizerEnabled(true);
+    await firstController.setEqualizerPreset(
+      PlaybackEqualizerPreset.bassBoost,
+    );
+    await firstController.setLoudnessEnhancerEnabled(true);
+    await firstController.setLoudnessEnhancerTargetGain(5.5);
+
+    expect(firstEngine.equalizerEnabledValue, isTrue);
+    expect(
+      firstEngine.equalizerProfileValue.preset,
+      PlaybackEqualizerPreset.bassBoost,
+    );
+    expect(firstEngine.loudnessEnhancerEnabledValue, isTrue);
+    expect(firstEngine.loudnessEnhancerTargetGainValue, 5.5);
+    firstController.dispose();
+
+    final restoredEngine = _FakeAudioEffectsEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.equalizerEnabled, isTrue);
+    expect(
+      restoredController.equalizerPreset,
+      PlaybackEqualizerPreset.bassBoost,
+    );
+    expect(restoredController.loudnessEnhancerEnabled, isTrue);
+    expect(restoredController.loudnessEnhancerTargetGainDb, 5.5);
+    expect(restoredEngine.equalizerEnabledValue, isTrue);
+    expect(restoredEngine.loudnessEnhancerEnhancerSetCalls, 1);
+  });
+
+  test('loads device bands and persists a custom equalizer curve', () async {
+    final firstEngine = _FakeAudioEffectsEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+    await firstController.playTrack(_track('one'));
+
+    expect(firstController.equalizerBands, hasLength(3));
+    await firstController.setEqualizerEnabled(true);
+    await firstController.previewEqualizerBandGain(0, 4.5);
+    await firstController.persistEqualizerBandGains();
+
+    expect(
+      firstController.equalizerPreset,
+      PlaybackEqualizerPreset.custom,
+    );
+    expect(firstController.equalizerBands.first.gainDb, 4.5);
+    expect(firstController.hasCustomEqualizerProfile, isTrue);
+    expect(
+      firstEngine.equalizerProfileValue.customPoints.first.gainDb,
+      4.5,
+    );
+    firstController.dispose();
+
+    final restoredEngine = _FakeAudioEffectsEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(
+      restoredEngine.equalizerProfileValue.preset,
+      PlaybackEqualizerPreset.custom,
+    );
+    expect(
+      restoredEngine.equalizerProfileValue.customPoints.first.frequencyHz,
+      60,
+    );
+    expect(
+      restoredEngine.equalizerProfileValue.customPoints.first.gainDb,
+      4.5,
+    );
+  });
+
+  test('rejects audio effects on unsupported engines and invalid gain',
+      () async {
+    final unsupported = PlayerController(
+      audioEngine: _NoCrossfadeAudioEngine(),
+    );
+    addTearDown(unsupported.dispose);
+
+    expect(unsupported.supportsEqualizer, isFalse);
+    await expectLater(
+      unsupported.setEqualizerEnabled(true),
+      throwsA(isA<UnsupportedError>()),
+    );
+
+    final supported = PlayerController(audioEngine: _FakeAudioEffectsEngine());
+    addTearDown(supported.dispose);
+    await expectLater(
+      supported.setLoudnessEnhancerTargetGain(12.5),
+      throwsArgumentError,
     );
   });
 
@@ -749,4 +848,80 @@ class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
 class _NoCrossfadeAudioEngine extends _FakePlaybackAudioEngine {
   @override
   bool get supportsCrossfade => false;
+}
+
+class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
+    implements AudioEffectsPlaybackAudioEngine {
+  bool equalizerEnabledValue = false;
+  PlaybackEqualizerProfile equalizerProfileValue =
+      const PlaybackEqualizerProfile(
+        preset: PlaybackEqualizerPreset.flat,
+      );
+  bool loudnessEnhancerEnabledValue = false;
+  double loudnessEnhancerTargetGainValue = 0;
+  int loudnessEnhancerEnhancerSetCalls = 0;
+  List<PlaybackEqualizerBand> bands = const <PlaybackEqualizerBand>[
+    PlaybackEqualizerBand(
+      index: 0,
+      centerFrequencyHz: 60,
+      gainDb: 0,
+      minGainDb: -12,
+      maxGainDb: 12,
+    ),
+    PlaybackEqualizerBand(
+      index: 1,
+      centerFrequencyHz: 1000,
+      gainDb: 0,
+      minGainDb: -12,
+      maxGainDb: 12,
+    ),
+    PlaybackEqualizerBand(
+      index: 2,
+      centerFrequencyHz: 12000,
+      gainDb: 0,
+      minGainDb: -12,
+      maxGainDb: 12,
+    ),
+  ];
+
+  @override
+  bool get supportsEqualizer => true;
+
+  @override
+  bool get supportsLoudnessEnhancer => true;
+
+  @override
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    equalizerEnabledValue = enabled;
+  }
+
+  @override
+  Future<void> setEqualizerProfile(PlaybackEqualizerProfile profile) async {
+    equalizerProfileValue = profile;
+    bands = <PlaybackEqualizerBand>[
+      for (final band in bands)
+        band.copyWith(
+          gainDb: equalizerGainForFrequency(
+            profile,
+            band.centerFrequencyHz,
+          ).clamp(band.minGainDb, band.maxGainDb).toDouble(),
+        ),
+    ];
+  }
+
+  @override
+  Future<List<PlaybackEqualizerBand>> loadEqualizerBands() async {
+    return List<PlaybackEqualizerBand>.from(bands);
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerEnabled(bool enabled) async {
+    loudnessEnhancerEnabledValue = enabled;
+    loudnessEnhancerEnhancerSetCalls += 1;
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
+    loudnessEnhancerTargetGainValue = gainDb;
+  }
 }

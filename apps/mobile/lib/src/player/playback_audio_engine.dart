@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
+import 'playback_audio_effects.dart';
 
 typedef CrossfadeTrackVolumeResolver = double Function(Track track);
 
@@ -53,10 +54,72 @@ abstract interface class CrossfadePlaybackAudioEngine
   Future<void> setCrossfadeDuration(Duration duration);
 }
 
-class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
-  JustAudioPlaybackEngine({AudioPlayer? player})
-      : _player = player ?? AudioPlayer(),
-        _crossfadePlayer = AudioPlayer() {
+abstract interface class AudioEffectsPlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  bool get supportsEqualizer;
+  bool get supportsLoudnessEnhancer;
+
+  Future<void> setEqualizerEnabled(bool enabled);
+  Future<void> setEqualizerProfile(PlaybackEqualizerProfile profile);
+  Future<List<PlaybackEqualizerBand>> loadEqualizerBands();
+  Future<void> setLoudnessEnhancerEnabled(bool enabled);
+  Future<void> setLoudnessEnhancerTargetGain(double gainDb);
+}
+
+class JustAudioPlaybackEngine
+    implements CrossfadePlaybackAudioEngine, AudioEffectsPlaybackAudioEngine {
+  factory JustAudioPlaybackEngine({
+    AudioPlayer? player,
+    bool enableAndroidAudioEffects = false,
+  }) {
+    if (player != null || !enableAndroidAudioEffects) {
+      return JustAudioPlaybackEngine._(
+        player: player ?? AudioPlayer(),
+        crossfadePlayer: AudioPlayer(),
+      );
+    }
+
+    final equalizer = AndroidEqualizer();
+    final loudnessEnhancer = AndroidLoudnessEnhancer();
+    final crossfadeEqualizer = AndroidEqualizer();
+    final crossfadeLoudnessEnhancer = AndroidLoudnessEnhancer();
+    return JustAudioPlaybackEngine._(
+      player: AudioPlayer(
+        audioPipeline: AudioPipeline(
+          androidAudioEffects: <AndroidAudioEffect>[
+            loudnessEnhancer,
+            equalizer,
+          ],
+        ),
+      ),
+      crossfadePlayer: AudioPlayer(
+        audioPipeline: AudioPipeline(
+          androidAudioEffects: <AndroidAudioEffect>[
+            crossfadeLoudnessEnhancer,
+            crossfadeEqualizer,
+          ],
+        ),
+      ),
+      equalizer: equalizer,
+      crossfadeEqualizer: crossfadeEqualizer,
+      loudnessEnhancer: loudnessEnhancer,
+      crossfadeLoudnessEnhancer: crossfadeLoudnessEnhancer,
+    );
+  }
+
+  JustAudioPlaybackEngine._({
+    required AudioPlayer player,
+    required AudioPlayer crossfadePlayer,
+    AndroidEqualizer? equalizer,
+    AndroidEqualizer? crossfadeEqualizer,
+    AndroidLoudnessEnhancer? loudnessEnhancer,
+    AndroidLoudnessEnhancer? crossfadeLoudnessEnhancer,
+  })  : _player = player,
+        _crossfadePlayer = crossfadePlayer,
+        _equalizer = equalizer,
+        _crossfadeEqualizer = crossfadeEqualizer,
+        _loudnessEnhancer = loudnessEnhancer,
+        _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer {
     _durationSubscription = _player.durationStream.listen(
       (_) => _scheduleCrossfade(),
     );
@@ -70,6 +133,10 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
 
   final AudioPlayer _player;
   final AudioPlayer _crossfadePlayer;
+  final AndroidEqualizer? _equalizer;
+  final AndroidEqualizer? _crossfadeEqualizer;
+  final AndroidLoudnessEnhancer? _loudnessEnhancer;
+  final AndroidLoudnessEnhancer? _crossfadeLoudnessEnhancer;
   final List<Track> _queue = <Track>[];
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<int?>? _indexSubscription;
@@ -80,6 +147,11 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
   double _requestedVolume = 1;
   CrossfadeTrackVolumeResolver? _crossfadeTrackVolumeResolver;
   bool _crossfadeActive = false;
+  bool _mainSourceLoaded = false;
+  bool _crossfadeSourceLoaded = false;
+  PlaybackEqualizerProfile _equalizerProfile =
+      const PlaybackEqualizerProfile(preset: PlaybackEqualizerPreset.flat);
+  Future<void> _equalizerApplyTail = Future<void>.value();
 
   static const _crossfadeStepInterval = Duration(milliseconds: 50);
 
@@ -130,6 +202,12 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
   bool get supportsCrossfade => true;
 
   @override
+  bool get supportsEqualizer => _equalizer != null;
+
+  @override
+  bool get supportsLoudnessEnhancer => _loudnessEnhancer != null;
+
+  @override
   Duration get crossfadeDuration => _crossfadeDuration;
 
   @override
@@ -147,6 +225,7 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
 
     _cancelCrossfade();
     await _crossfadePlayer.stop();
+    _mainSourceLoaded = false;
     _queue
       ..clear()
       ..addAll(tracks);
@@ -159,6 +238,8 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
       initialIndex: initialIndex,
       initialPosition: initialPosition,
     );
+    _mainSourceLoaded = true;
+    await _scheduleEqualizerProfileApply();
     _scheduleCrossfade();
   }
 
@@ -245,6 +326,76 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
     }
     await _player.setVolume(volume);
     await _crossfadePlayer.setVolume(volume);
+  }
+
+  @override
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    final equalizer = _equalizer;
+    final crossfadeEqualizer = _crossfadeEqualizer;
+    if (equalizer == null || crossfadeEqualizer == null) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    await equalizer.setEnabled(enabled);
+    await crossfadeEqualizer.setEnabled(enabled);
+  }
+
+  @override
+  Future<void> setEqualizerProfile(PlaybackEqualizerProfile profile) {
+    if (!supportsEqualizer) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    _equalizerProfile = profile;
+    return _scheduleEqualizerProfileApply();
+  }
+
+  @override
+  Future<List<PlaybackEqualizerBand>> loadEqualizerBands() async {
+    final equalizer = _equalizer;
+    if (equalizer == null) {
+      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+    }
+    if (!_mainSourceLoaded) {
+      return const <PlaybackEqualizerBand>[];
+    }
+
+    final parameters = await equalizer.parameters;
+    return parameters.bands
+        .map(
+          (band) => PlaybackEqualizerBand(
+            index: band.index,
+            centerFrequencyHz: band.centerFrequency,
+            gainDb: band.gain,
+            minGainDb: parameters.minDecibels,
+            maxGainDb: parameters.maxDecibels,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerEnabled(bool enabled) async {
+    final enhancer = _loudnessEnhancer;
+    final crossfadeEnhancer = _crossfadeLoudnessEnhancer;
+    if (enhancer == null || crossfadeEnhancer == null) {
+      throw UnsupportedError(
+        'Loudness enhancer is unavailable for this audio backend.',
+      );
+    }
+    await enhancer.setEnabled(enabled);
+    await crossfadeEnhancer.setEnabled(enabled);
+  }
+
+  @override
+  Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
+    final enhancer = _loudnessEnhancer;
+    final crossfadeEnhancer = _crossfadeLoudnessEnhancer;
+    if (enhancer == null || crossfadeEnhancer == null) {
+      throw UnsupportedError(
+        'Loudness enhancer is unavailable for this audio backend.',
+      );
+    }
+    await enhancer.setTargetGain(gainDb);
+    await crossfadeEnhancer.setTargetGain(gainDb);
   }
 
   @override
@@ -341,6 +492,8 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
     try {
       await _crossfadePlayer.stop();
       await _crossfadePlayer.setAudioSource(_audioSourceForTrack(incomingTrack));
+      _crossfadeSourceLoaded = true;
+      await _scheduleEqualizerProfileApply();
       await _crossfadePlayer.setSpeed(_player.speed);
       await _crossfadePlayer.setVolume(0);
       unawaited(_crossfadePlayer.play());
@@ -399,5 +552,39 @@ class JustAudioPlaybackEngine implements CrossfadePlaybackAudioEngine {
     _crossfadeStepTimer?.cancel();
     _crossfadeStepTimer = null;
     _crossfadeActive = false;
+  }
+
+  Future<void> _scheduleEqualizerProfileApply() {
+    final operation = _applyEqualizerProfileAfter(_equalizerApplyTail);
+    _equalizerApplyTail = operation;
+    return operation;
+  }
+
+  Future<void> _applyEqualizerProfileAfter(Future<void> previous) async {
+    try {
+      await previous;
+    } on Object {
+      // A later profile should still be applied after an earlier native error.
+    }
+    if (_mainSourceLoaded) {
+      await _applyEqualizerProfileTo(_equalizer);
+    }
+    if (_crossfadeSourceLoaded) {
+      await _applyEqualizerProfileTo(_crossfadeEqualizer);
+    }
+  }
+
+  Future<void> _applyEqualizerProfileTo(AndroidEqualizer? equalizer) async {
+    if (equalizer == null) {
+      return;
+    }
+    final parameters = await equalizer.parameters;
+    for (final band in parameters.bands) {
+      final gain = equalizerGainForFrequency(
+        _equalizerProfile,
+        band.centerFrequency,
+      ).clamp(parameters.minDecibels, parameters.maxDecibels).toDouble();
+      await band.setGain(gain);
+    }
   }
 }
