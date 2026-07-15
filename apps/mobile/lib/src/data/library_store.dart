@@ -2648,6 +2648,25 @@ class LibraryStore extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  Future<Playlist?> saveMoodMixAsPlaylist(
+    LibraryMoodMixType type, {
+    int limit = 50,
+    String? name,
+  }) async {
+    final tracks = tracksForMoodMix(type, limit: limit);
+    if (tracks.isEmpty) {
+      return null;
+    }
+
+    final normalizedName = name?.trim();
+    return createPlaylist(
+      normalizedName == null || normalizedName.isEmpty
+          ? _moodMixName(type)
+          : normalizedName,
+      trackIds: tracks.map((track) => track.id),
+    );
+  }
+
   List<Track> personalizedRecommendations({int limit = 12}) {
     if (limit <= 0) {
       return <Track>[];

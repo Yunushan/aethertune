@@ -2234,6 +2234,23 @@ void main() {
       isNot(contains('metadata-only')),
     );
     expect(store.localMoodMixes(limit: 0), isEmpty);
+
+    final playlist = await store.saveMoodMixAsPlaylist(
+      LibraryMoodMixType.focus,
+      limit: 2,
+    );
+    expect(playlist, isNotNull);
+    expect(playlist!.name, 'Focus mix');
+    expect(playlist.trackIds, <String>['focus-favorite', 'focus-long']);
+    expect(store.playlistById(playlist.id), playlist);
+
+    expect(
+      await store.saveMoodMixAsPlaylist(
+        LibraryMoodMixType.focus,
+        limit: 0,
+      ),
+      isNull,
+    );
   });
 
   test('builds personalized local recommendations from taste signals', () async {

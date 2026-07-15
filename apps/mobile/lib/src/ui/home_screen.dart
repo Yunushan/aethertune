@@ -2474,6 +2474,14 @@ class _HomeTabState extends State<_HomeTab> {
             title: mix.name,
             subtitle: mix.description,
             tracks: mix.tracks,
+            onOpen: () => unawaited(
+              _showMoodMix(
+                context,
+                mix,
+                onAddToPlaylist: widget.onAddToPlaylist,
+                onLyrics: widget.onLyrics,
+              ),
+            ),
           ),
         for (final section in sections) ...[
           _HomeSectionHeader(section: section),
@@ -2535,6 +2543,7 @@ class _HomeTabState extends State<_HomeTab> {
     required String title,
     required String subtitle,
     required List<Track> tracks,
+    VoidCallback? onOpen,
   }) {
     if (tracks.isEmpty) {
       return <Widget>[];
@@ -2546,7 +2555,14 @@ class _HomeTabState extends State<_HomeTab> {
         leading: Icon(icon),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: Text('${tracks.length}'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text('${tracks.length}'),
+            if (onOpen != null) const Icon(Icons.chevron_right),
+          ],
+        ),
+        onTap: onOpen,
       ),
       const SizedBox(height: 4),
       for (final track in tracks)
@@ -3059,6 +3075,26 @@ Future<void> _showLibraryBrowseGroups(
   );
 }
 
+Future<void> _showMoodMix(
+  BuildContext context,
+  LibraryMoodMix mix, {
+  required ValueChanged<Track> onAddToPlaylist,
+  required ValueChanged<Track> onLyrics,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (_) {
+      return _MoodMixSheet(
+        mix: mix,
+        onAddToPlaylist: onAddToPlaylist,
+        onLyrics: onLyrics,
+      );
+    },
+  );
+}
+
 Future<void> _showLibraryBrowseTracks(
   BuildContext context, {
   required LibraryBrowseType type,
@@ -3122,6 +3158,147 @@ Future<void> _showSimilarTracks(
       );
     },
   );
+}
+
+class _MoodMixSheet extends StatelessWidget {
+  const _MoodMixSheet({
+    required this.mix,
+    required this.onAddToPlaylist,
+    required this.onLyrics,
+  });
+
+  final LibraryMoodMix mix;
+  final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onLyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final player = context.read<PlayerController>();
+    final tracks = library.tracksForMoodMix(mix.type);
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) {
+          return ListView.separated(
+            controller: controller,
+            itemCount: tracks.isEmpty ? 2 : tracks.length + 1,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  leading: Icon(_moodMixIcon(mix.type)),
+                  title: Text(mix.name),
+                  subtitle: Text(
+                    '${mix.description} · ${tracks.length} generated track(s)',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      IconButton(
+                        tooltip: 'Play mix',
+                        onPressed: tracks.isEmpty
+                            ? null
+                            : () => unawaited(
+                                  _playTrackWithResume(
+                                    context,
+                                    player,
+                                    library,
+                                    tracks.first,
+                                    queue: tracks,
+                                  ),
+                                ),
+                        icon: const Icon(Icons.play_arrow),
+                      ),
+                      IconButton(
+                        tooltip: 'Save mix as playlist',
+                        onPressed: tracks.isEmpty
+                            ? null
+                            : () => unawaited(
+                                  _saveMoodMix(context, library),
+                                ),
+                        icon: const Icon(Icons.playlist_add),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              if (tracks.isEmpty) {
+                return const ListTile(
+                  leading: Icon(Icons.music_off_outlined),
+                  title: Text('No matching local tracks'),
+                  subtitle: Text(
+                    'Import or edit track metadata to rebuild this mix.',
+                  ),
+                );
+              }
+
+              final track = tracks[index - 1];
+              return TrackTile(
+                track: track,
+                onPlay: () => _playTrackWithResume(
+                  context,
+                  player,
+                  library,
+                  track,
+                  queue: tracks,
+                ),
+                onStartRadio: () => unawaited(
+                  _startTrackRadio(context, player, library, track),
+                ),
+                onSimilarTracks: () => unawaited(
+                  _showSimilarTracks(
+                    context,
+                    track,
+                    onAddToPlaylist: onAddToPlaylist,
+                    onLyrics: onLyrics,
+                  ),
+                ),
+                onShare: () => unawaited(
+                  _copyTrackShareText(context, library, track),
+                ),
+                onFavorite: () => library.toggleFavorite(track.id),
+                onAddToPlaylist: () => onAddToPlaylist(track),
+                onLyrics: () => onLyrics(track),
+                onEditMetadata: () => unawaited(
+                  _showTrackMetadataEditor(context, track),
+                ),
+                onEditArtwork: track.sourceId == 'local'
+                    ? () => unawaited(_editTrackArtwork(context, track))
+                    : null,
+                onRemove: () => library.removeTrack(track.id),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _saveMoodMix(
+    BuildContext context,
+    LibraryStore library,
+  ) async {
+    final playlist = await library.saveMoodMixAsPlaylist(mix.type);
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          playlist == null
+              ? '${mix.name} has no playable tracks.'
+              : 'Saved ${playlist.trackIds.length} tracks as ${playlist.name}.',
+        ),
+      ),
+    );
+  }
 }
 
 class _LibraryBrowseGroupsSheet extends StatelessWidget {
