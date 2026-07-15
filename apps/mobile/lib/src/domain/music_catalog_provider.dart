@@ -5,6 +5,18 @@ import 'track.dart';
 
 enum MusicCatalogCollectionKind { artist, album, playlist }
 
+enum MusicCatalogRadioSeedKind { track, artist, album }
+
+final class MusicCatalogRadioSeed {
+  const MusicCatalogRadioSeed({
+    required this.kind,
+    required this.id,
+  });
+
+  final MusicCatalogRadioSeedKind kind;
+  final String id;
+}
+
 final class MusicCatalogCollection {
   const MusicCatalogCollection({
     required this.id,
@@ -75,6 +87,18 @@ abstract interface class MusicCatalogPagingProvider
     MusicCatalogCollectionKind kind, {
     int offset = 0,
     int limit = 100,
+  });
+}
+
+/// Optional extension for providers with a documented radio or similar-items
+/// endpoint.
+abstract interface class MusicCatalogRadioProvider
+    implements MusicCatalogProvider {
+  Set<MusicCatalogRadioSeedKind> get radioSeedKinds;
+
+  Future<List<Track>> loadRadio(
+    MusicCatalogRadioSeed seed, {
+    int limit = 50,
   });
 }
 

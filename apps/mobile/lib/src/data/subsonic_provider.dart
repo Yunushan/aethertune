@@ -19,6 +19,7 @@ class SubsonicProvider
     implements
         MusicCatalogDiscoveryProvider,
         MusicCatalogPagingProvider,
+        MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
         MusicSourceSearchPagingProvider {
   SubsonicProvider({
@@ -49,6 +50,7 @@ class SubsonicProvider
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
     MusicSourceCapability.downloads,
+    MusicSourceCapability.recommendations,
     MusicSourceCapability.authentication,
   };
 
@@ -86,6 +88,7 @@ class SubsonicProvider
           'song search query',
           'artist, album, and playlist browse identifiers',
           'Home discovery list selection and result limit',
+          'radio seed item identifier and result limit',
           'playlist names, membership, and track order changes',
           'song stream identifier',
           'cover art identifier',
@@ -343,6 +346,52 @@ class SubsonicProvider
             tracks: tracks,
           );
       }
+    });
+  }
+
+  @override
+  Set<MusicCatalogRadioSeedKind> get radioSeedKinds =>
+      MusicCatalogRadioSeedKind.values.toSet();
+
+  @override
+  Future<List<Track>> loadRadio(
+    MusicCatalogRadioSeed seed, {
+    int limit = 50,
+  }) {
+    final normalizedId = seed.id.trim();
+    if (normalizedId.isEmpty) {
+      return Future<List<Track>>.error(
+        ArgumentError.value(seed.id, 'seed.id', 'Seed ID cannot be empty.'),
+      );
+    }
+    if (!radioSeedKinds.contains(seed.kind)) {
+      return Future<List<Track>>.error(
+        UnsupportedError('Subsonic radio seed kind is not supported.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<List<Track>>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 500);
+    final id3Response = seed.kind == MusicCatalogRadioSeedKind.artist;
+    return _guardRequest(() async {
+      return parseSubsonicSimilarSongsResponse(
+        await _requestLoader(
+          _requestUri(
+            id3Response
+                ? '/rest/getSimilarSongs2.view'
+                : '/rest/getSimilarSongs.view',
+            <String, Object?>{
+              'id': normalizedId,
+              'count': boundedLimit.toString(),
+            },
+          ),
+        ),
+        sourceId: id,
+        id3Response: id3Response,
+      );
     });
   }
 
@@ -714,6 +763,21 @@ List<Track> parseSubsonicPlaylistTracksResponse(
     return const <Track>[];
   }
   return _subsonicTracks(playlist['entry'], sourceId: sourceId);
+}
+
+List<Track> parseSubsonicSimilarSongsResponse(
+  String jsonText, {
+  required String sourceId,
+  required bool id3Response,
+}) {
+  final response = _subsonicResponse(jsonText);
+  final similarSongs = response[
+    id3Response ? 'similarSongs2' : 'similarSongs'
+  ];
+  if (similarSongs is! Map<dynamic, dynamic>) {
+    return const <Track>[];
+  }
+  return _subsonicTracks(similarSongs['song'], sourceId: sourceId);
 }
 
 List<MusicCatalogCollection> _subsonicCollections(

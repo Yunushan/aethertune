@@ -599,6 +599,7 @@ class _SelfHostedCollectionScreenState
   final TextEditingController _filterController = TextEditingController();
   String _query = '';
   bool _playlistMutationInProgress = false;
+  bool _radioInProgress = false;
 
   @override
   void didChangeDependencies() {
@@ -646,6 +647,12 @@ class _SelfHostedCollectionScreenState
   }
 
   Widget _buildNestedCollections(List<MusicCatalogCollection> collections) {
+    final radioProvider = _radioProvider;
+    final radioSeedKind = _radioSeedKind(widget.collection.kind);
+    final canStartRadio = radioProvider != null &&
+        radioSeedKind != null &&
+        radioProvider.radioSeedKinds.contains(radioSeedKind) &&
+        widget.collection.id.trim().isNotEmpty;
     final normalizedQuery = _query.trim().toLowerCase();
     final visible = normalizedQuery.isEmpty
         ? collections
@@ -662,7 +669,23 @@ class _SelfHostedCollectionScreenState
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         if (index == 0) {
-          return _filterField('Filter albums');
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (canStartRadio) ...<Widget>[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _startRadioButton(
+                    radioProvider,
+                    radioSeedKind,
+                    widget.collection.title,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              _filterField('Filter albums'),
+            ],
+          );
         }
         if (index == 1 && visible.isEmpty) {
           return const _CatalogEmptyState(label: 'No albums found.');
@@ -702,6 +725,16 @@ class _SelfHostedCollectionScreenState
   }
 
   Widget _buildTracks(List<Track> tracks) {
+    final radioProvider = _radioProvider;
+    final collectionRadioSeedKind = _radioSeedKind(widget.collection.kind);
+    final canStartCollectionRadio = radioProvider != null &&
+        collectionRadioSeedKind != null &&
+        radioProvider.radioSeedKinds.contains(collectionRadioSeedKind) &&
+        widget.collection.id.trim().isNotEmpty;
+    final canStartTrackRadio = radioProvider != null &&
+        radioProvider.radioSeedKinds.contains(
+          MusicCatalogRadioSeedKind.track,
+        );
     final playlistMutator = widget.provider.capabilities.contains(
               MusicSourceCapability.playlistMutation,
             ) &&
@@ -745,6 +778,12 @@ class _SelfHostedCollectionScreenState
                     icon: const Icon(Icons.library_add_outlined),
                     label: const Text('Save all'),
                   ),
+                  if (canStartCollectionRadio)
+                    _startRadioButton(
+                      radioProvider,
+                      collectionRadioSeedKind,
+                      widget.collection.title,
+                    ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -809,6 +848,16 @@ class _SelfHostedCollectionScreenState
                   title: Text('Play'),
                 ),
               ),
+              if (canStartTrackRadio &&
+                  (track.externalId?.trim().isNotEmpty ?? false))
+                const PopupMenuItem<_CatalogTrackAction>(
+                  value: _CatalogTrackAction.startRadio,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.radio_outlined),
+                    title: Text('Start radio'),
+                  ),
+                ),
               const PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.save,
                 child: ListTile(
@@ -880,6 +929,46 @@ class _SelfHostedCollectionScreenState
     );
   }
 
+  MusicCatalogRadioProvider? get _radioProvider {
+    final provider = widget.provider;
+    if (!provider.capabilities.contains(
+          MusicSourceCapability.recommendations,
+        ) ||
+        provider is! MusicCatalogRadioProvider) {
+      return null;
+    }
+    return provider;
+  }
+
+  Widget _startRadioButton(
+    MusicCatalogRadioProvider provider,
+    MusicCatalogRadioSeedKind seedKind,
+    String label,
+  ) {
+    return OutlinedButton.icon(
+      key: ValueKey<String>('catalog-start-radio-${seedKind.name}'),
+      onPressed: _radioInProgress
+          ? null
+          : () => unawaited(
+                _startRadio(
+                  provider,
+                  MusicCatalogRadioSeed(
+                    kind: seedKind,
+                    id: widget.collection.id,
+                  ),
+                  label: label,
+                ),
+              ),
+      icon: _radioInProgress
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.radio_outlined),
+      label: const Text('Start radio'),
+    );
+  }
+
   Widget _filterField(String label) {
     return TextField(
       key: const Key('catalog-detail-filter'),
@@ -936,6 +1025,61 @@ class _SelfHostedCollectionScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Saved ${track.title}.')),
     );
+  }
+
+  Future<void> _startRadio(
+    MusicCatalogRadioProvider provider,
+    MusicCatalogRadioSeed seed, {
+    required String label,
+    Track? seedTrack,
+  }) async {
+    if (_radioInProgress ||
+        !provider.radioSeedKinds.contains(seed.kind) ||
+        seed.id.trim().isEmpty) {
+      return;
+    }
+    final library = context.read<LibraryStore>();
+    if (library.offlineModeEnabled) {
+      _showMessage('Self-hosted radio is unavailable in offline mode.');
+      return;
+    }
+    final player = context.read<PlayerController>();
+    setState(() => _radioInProgress = true);
+    try {
+      final recommendations = _deduplicateRadioTracks(
+        await provider.loadRadio(seed),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (library.offlineModeEnabled) {
+        _showMessage('Self-hosted radio is unavailable in offline mode.');
+        return;
+      }
+      final queue = _deduplicateRadioTracks(<Track>[
+        if (seedTrack != null) seedTrack,
+        ...recommendations,
+      ]);
+      if (recommendations.isEmpty ||
+          (seedTrack != null && queue.length == 1)) {
+        _showMessage('No radio tracks found for $label.');
+        return;
+      }
+      await player.playTrack(queue.first, queue: queue);
+      if (mounted) {
+        _showMessage(
+          'Started radio for $label with ${queue.length} track(s).',
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _radioInProgress = false);
+      }
+    }
   }
 
   Future<void> _queueOffline(
@@ -1185,6 +1329,22 @@ class _SelfHostedCollectionScreenState
     switch (action) {
       case _CatalogTrackAction.play:
         unawaited(_play(track, queue));
+      case _CatalogTrackAction.startRadio:
+        final radioProvider = _radioProvider;
+        final externalId = track.externalId?.trim() ?? '';
+        if (radioProvider != null && externalId.isNotEmpty) {
+          unawaited(
+            _startRadio(
+              radioProvider,
+              MusicCatalogRadioSeed(
+                kind: MusicCatalogRadioSeedKind.track,
+                id: externalId,
+              ),
+              label: track.title,
+              seedTrack: track,
+            ),
+          );
+        }
       case _CatalogTrackAction.save:
         unawaited(_save(track));
       case _CatalogTrackAction.addToRemotePlaylist:
@@ -1234,6 +1394,7 @@ class _SelfHostedCollectionScreenState
 
 enum _CatalogTrackAction {
   play,
+  startRadio,
   save,
   addToRemotePlaylist,
   cache,
@@ -1241,6 +1402,31 @@ enum _CatalogTrackAction {
   moveUp,
   moveDown,
   removeFromRemotePlaylist,
+}
+
+MusicCatalogRadioSeedKind? _radioSeedKind(
+  MusicCatalogCollectionKind kind,
+) {
+  return switch (kind) {
+    MusicCatalogCollectionKind.artist => MusicCatalogRadioSeedKind.artist,
+    MusicCatalogCollectionKind.album => MusicCatalogRadioSeedKind.album,
+    MusicCatalogCollectionKind.playlist => null,
+  };
+}
+
+List<Track> _deduplicateRadioTracks(Iterable<Track> tracks) {
+  final seen = <String>{};
+  final result = <Track>[];
+  for (final track in tracks) {
+    final externalId = track.externalId?.trim() ?? '';
+    final identity = externalId.isEmpty
+        ? '${track.sourceId}|${track.id}'
+        : '${track.sourceId}|$externalId';
+    if (seen.add(identity)) {
+      result.add(track);
+    }
+  }
+  return List<Track>.unmodifiable(result);
 }
 
 class _CatalogOfflineState extends StatelessWidget {

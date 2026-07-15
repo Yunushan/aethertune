@@ -121,6 +121,127 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('starts provider artist album and track radio queues', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final provider = _FakeCatalogProvider();
+    final engine = _FakePlaybackAudioEngine();
+    final player = PlayerController(
+      audioEngine: engine,
+      trackResolver: (track) async {
+        final stream = await provider.resolveStream(track);
+        return track.copyWith(
+          streamUrl: stream?.toString(),
+          streamUrlIsEphemeral: true,
+        );
+      },
+    );
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Artist'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('catalog-start-radio-artist')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.radioCalls, <String>['artist:artist-1:50']);
+    expect(engine.queue.map((track) => track.title), <String>[
+      'Radio Signal',
+      'Night Current',
+    ]);
+    expect(engine.queue.first.streamUrl, contains('/stream/radio-1'));
+
+    await tester.tap(find.text('Blue Rooms'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('catalog-start-radio-album')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.radioCalls.last, 'album:album-1:50');
+    expect(engine.queue, hasLength(2));
+
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Start radio'));
+    await tester.pumpAndSettle();
+
+    expect(provider.radioCalls.last, 'track:song-1:50');
+    expect(engine.queue.map((track) => track.title), <String>[
+      'Aether Session',
+      'Radio Signal',
+      'Night Current',
+    ]);
+    expect(engine.queue.first.streamUrl, contains('/stream/song-1'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('radio failures preserve the catalog and allow retry', (
+    tester,
+  ) async {
+    final provider = _FakeCatalogProvider(radioFailuresRemaining: 1);
+    final engine = _FakePlaybackAudioEngine();
+    final player = PlayerController(
+      audioEngine: engine,
+      trackResolver: (track) async {
+        final stream = await provider.resolveStream(track);
+        return track.copyWith(streamUrl: stream?.toString());
+      },
+    );
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Blue Rooms'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('catalog-start-radio-album')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Remote radio request failed'),
+      findsOneWidget,
+    );
+    expect(find.text('Aether Session'), findsOneWidget);
+    expect(engine.queue, isEmpty);
+
+    await tester.tap(
+      find.byKey(const Key('catalog-start-radio-album')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.radioCalls, <String>[
+      'album:album-1:50',
+      'album:album-1:50',
+    ]);
+    expect(engine.queue, hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('creates renames and deletes remote playlists', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
@@ -388,6 +509,7 @@ void main() {
     );
     expect(provider.browseCalls, isEmpty);
     expect(provider.pageCalls, isEmpty);
+    expect(provider.radioCalls, isEmpty);
   });
 
   testWidgets('offline collection details defer their provider request', (
@@ -508,11 +630,15 @@ Widget _testApp({
 }
 
 class _FakeCatalogProvider
-    implements MusicCatalogProvider, MusicPlaylistMutationProvider {
+    implements
+        MusicCatalogProvider,
+        MusicCatalogRadioProvider,
+        MusicPlaylistMutationProvider {
   _FakeCatalogProvider({
     this.artistFailuresRemaining = 0,
     this.albumFailuresRemaining = 0,
     this.mutationFailuresRemaining = 0,
+    this.radioFailuresRemaining = 0,
   }) {
     _playlistTracks['playlist-1'] = <Track>[
       _track('song-3', 'Playlist Cut'),
@@ -523,11 +649,13 @@ class _FakeCatalogProvider
   int artistFailuresRemaining;
   int albumFailuresRemaining;
   int mutationFailuresRemaining;
+  int radioFailuresRemaining;
   final List<MusicCatalogCollectionKind> browseCalls =
       <MusicCatalogCollectionKind>[];
   final List<MusicCatalogCollection> loadCalls = <MusicCatalogCollection>[];
   final List<String> artworkCalls = <String>[];
   final List<String> mutationCalls = <String>[];
+  final List<String> radioCalls = <String>[];
   final List<MusicCatalogCollection> _playlists =
       <MusicCatalogCollection>[
     const MusicCatalogCollection(
@@ -561,6 +689,7 @@ class _FakeCatalogProvider
         MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
+        MusicSourceCapability.recommendations,
         MusicSourceCapability.authentication,
       };
 
@@ -669,6 +798,27 @@ class _FakeCatalogProvider
     return Uri.parse(
       'https://music.example.test/stream/${track.externalId}',
     );
+  }
+
+  @override
+  Set<MusicCatalogRadioSeedKind> get radioSeedKinds =>
+      MusicCatalogRadioSeedKind.values.toSet();
+
+  @override
+  Future<List<Track>> loadRadio(
+    MusicCatalogRadioSeed seed, {
+    int limit = 50,
+  }) async {
+    radioCalls.add('${seed.kind.name}:${seed.id}:$limit');
+    if (radioFailuresRemaining > 0) {
+      radioFailuresRemaining -= 1;
+      throw StateError('Remote radio request failed.');
+    }
+    return <Track>[
+      _track('radio-1', 'Radio Signal'),
+      _track('radio-1', 'Duplicate Signal'),
+      _track('radio-2', 'Night Current'),
+    ];
   }
 
   @override

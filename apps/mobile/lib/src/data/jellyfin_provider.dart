@@ -20,6 +20,7 @@ class JellyfinProvider
     implements
         MusicCatalogDiscoveryProvider,
         MusicCatalogPagingProvider,
+        MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
         MusicSourceSearchPagingProvider {
   JellyfinProvider({
@@ -48,6 +49,7 @@ class JellyfinProvider
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
     MusicSourceCapability.downloads,
+    MusicSourceCapability.recommendations,
     MusicSourceCapability.authentication,
   };
 
@@ -83,6 +85,7 @@ class JellyfinProvider
           'audio search query',
           'artist, album, and playlist browse identifiers',
           'Home discovery list selection and result limit',
+          'radio seed item identifier and result limit',
           'playlist names, membership, and track order changes',
           'audio item stream identifier',
           'cover art item identifier',
@@ -341,6 +344,56 @@ class JellyfinProvider
             tracks: tracks,
           );
       }
+    });
+  }
+
+  @override
+  Set<MusicCatalogRadioSeedKind> get radioSeedKinds =>
+      MusicCatalogRadioSeedKind.values.toSet();
+
+  @override
+  Future<List<Track>> loadRadio(
+    MusicCatalogRadioSeed seed, {
+    int limit = 50,
+  }) {
+    final normalizedId = seed.id.trim();
+    if (normalizedId.isEmpty) {
+      return Future<List<Track>>.error(
+        ArgumentError.value(seed.id, 'seed.id', 'Seed ID cannot be empty.'),
+      );
+    }
+    if (!radioSeedKinds.contains(seed.kind)) {
+      return Future<List<Track>>.error(
+        UnsupportedError('Jellyfin radio seed kind is not supported.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<List<Track>>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 500);
+    final endpoint = switch (seed.kind) {
+      MusicCatalogRadioSeedKind.track => '/Songs/$normalizedId/InstantMix',
+      MusicCatalogRadioSeedKind.artist => '/Artists/$normalizedId/InstantMix',
+      MusicCatalogRadioSeedKind.album => '/Albums/$normalizedId/InstantMix',
+    };
+    return _guardRequest(() async {
+      return parseJellyfinItemsResponse(
+        await _requestLoader(
+          _requestUri(
+            endpoint,
+            <String, String>{
+              'userId': userId,
+              'limit': boundedLimit.toString(),
+              'fields': 'Genres',
+              'enableImages': 'true',
+              'enableImageTypes': 'Primary',
+              'imageTypeLimit': '1',
+            },
+          ),
+        ),
+      ).map((item) => item.toTrack(sourceId: id)).toList(growable: false);
     });
   }
 

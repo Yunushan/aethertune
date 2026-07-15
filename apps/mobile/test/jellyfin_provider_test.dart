@@ -293,7 +293,7 @@ void main() {
     ]);
     expect(
       provider.capabilities,
-      isNot(contains(MusicSourceCapability.recommendations)),
+      contains(MusicSourceCapability.recommendations),
     );
     expect(albums.single.id, 'album-latest');
     expect(albums.single.title, 'Latest Rooms');
@@ -311,6 +311,96 @@ void main() {
       ),
       throwsUnsupportedError,
     );
+  });
+
+  test('loads Jellyfin instant-mix radio for track artist and album seeds',
+      () async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _jellyfinItemsJson;
+      },
+    );
+
+    final trackRadio = await provider.loadRadio(
+      const MusicCatalogRadioSeed(
+        kind: MusicCatalogRadioSeedKind.track,
+        id: ' song-1 ',
+      ),
+      limit: 7,
+    );
+    final artistRadio = await provider.loadRadio(
+      const MusicCatalogRadioSeed(
+        kind: MusicCatalogRadioSeedKind.artist,
+        id: 'artist-1',
+      ),
+      limit: 8,
+    );
+    final albumRadio = await provider.loadRadio(
+      const MusicCatalogRadioSeed(
+        kind: MusicCatalogRadioSeedKind.album,
+        id: 'album-1',
+      ),
+      limit: 9,
+    );
+
+    expect(provider, isA<MusicCatalogRadioProvider>());
+    expect(
+      provider.radioSeedKinds,
+      MusicCatalogRadioSeedKind.values.toSet(),
+    );
+    expect(trackRadio.single.title, 'Sea Glass');
+    expect(artistRadio.single.sourceId, provider.id);
+    expect(albumRadio.single.streamUrl, isNull);
+    expect(
+      requests.map((request) => request.path),
+      <String>[
+        '/jellyfin/Songs/song-1/InstantMix',
+        '/jellyfin/Artists/artist-1/InstantMix',
+        '/jellyfin/Albums/album-1/InstantMix',
+      ],
+    );
+    expect(
+      requests.map((request) => request.queryParameters['limit']),
+      <String>['7', '8', '9'],
+    );
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters['userId'] == 'user-1' &&
+            request.queryParameters['fields'] == 'Genres' &&
+            request.queryParameters['enableImages'] == 'true' &&
+            request.queryParameters['enableImageTypes'] == 'Primary' &&
+            request.queryParameters['imageTypeLimit'] == '1' &&
+            request.queryParameters['api_key'] == 'api-secret',
+      ),
+      isTrue,
+    );
+
+    await expectLater(
+      provider.loadRadio(
+        const MusicCatalogRadioSeed(
+          kind: MusicCatalogRadioSeedKind.album,
+          id: ' ',
+        ),
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.loadRadio(
+        const MusicCatalogRadioSeed(
+          kind: MusicCatalogRadioSeedKind.artist,
+          id: 'artist-1',
+        ),
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(3));
   });
 
   test('loads Jellyfin artist albums, album tracks, and playlist tracks',

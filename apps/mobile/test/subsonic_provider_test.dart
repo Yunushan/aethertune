@@ -303,8 +303,102 @@ void main() {
     );
     expect(
       provider.capabilities,
-      isNot(contains(MusicSourceCapability.recommendations)),
+      contains(MusicSourceCapability.recommendations),
     );
+  });
+
+  test('loads Subsonic track album and ID3 artist radio', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return uri.path.endsWith('/getSimilarSongs2.view')
+            ? _similarSongs2ResponseJson
+            : _similarSongsResponseJson;
+      },
+    );
+
+    final trackRadio = await provider.loadRadio(
+      const MusicCatalogRadioSeed(
+        kind: MusicCatalogRadioSeedKind.track,
+        id: ' song-1 ',
+      ),
+      limit: 7,
+    );
+    final albumRadio = await provider.loadRadio(
+      const MusicCatalogRadioSeed(
+        kind: MusicCatalogRadioSeedKind.album,
+        id: 'album-1',
+      ),
+      limit: 8,
+    );
+    final artistRadio = await provider.loadRadio(
+      const MusicCatalogRadioSeed(
+        kind: MusicCatalogRadioSeedKind.artist,
+        id: 'artist-1',
+      ),
+      limit: 9,
+    );
+
+    expect(provider, isA<MusicCatalogRadioProvider>());
+    expect(
+      provider.radioSeedKinds,
+      MusicCatalogRadioSeedKind.values.toSet(),
+    );
+    expect(trackRadio.single.title, 'Radio Signal');
+    expect(albumRadio.single.externalId, 'radio-song-1');
+    expect(artistRadio.single.title, 'Artist Signal');
+    expect(artistRadio.single.sourceId, provider.id);
+    expect(
+      requests.map((request) => request.path.split('/').last),
+      <String>[
+        'getSimilarSongs.view',
+        'getSimilarSongs.view',
+        'getSimilarSongs2.view',
+      ],
+    );
+    expect(
+      requests.map((request) => request.queryParameters['id']),
+      <String>['song-1', 'album-1', 'artist-1'],
+    );
+    expect(
+      requests.map((request) => request.queryParameters['count']),
+      <String>['7', '8', '9'],
+    );
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters['t'] == _secretToken &&
+            request.queryParameters['s'] == _fixedSalt &&
+            !request.queryParameters.containsKey('p'),
+      ),
+      isTrue,
+    );
+
+    await expectLater(
+      provider.loadRadio(
+        const MusicCatalogRadioSeed(
+          kind: MusicCatalogRadioSeedKind.track,
+          id: '',
+        ),
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.loadRadio(
+        const MusicCatalogRadioSeed(
+          kind: MusicCatalogRadioSeedKind.album,
+          id: 'album-1',
+        ),
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+    expect(requests, hasLength(3));
   });
 
   test('loads Subsonic artist albums, album tracks, and playlist entries',
@@ -562,6 +656,46 @@ const _failedResponseJson = '''
     "error": {
       "code": 40,
       "message": "Wrong username or password."
+    }
+  }
+}
+''';
+
+const _similarSongsResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "similarSongs": {
+      "song": [
+        {
+          "id": "radio-song-1",
+          "title": "Radio Signal",
+          "artist": "Similar Artist",
+          "album": "Related Rooms",
+          "genre": "Ambient",
+          "duration": 210,
+          "coverArt": "radio-cover-1"
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _similarSongs2ResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "similarSongs2": {
+      "song": [
+        {
+          "id": "artist-radio-song-1",
+          "title": "Artist Signal",
+          "artist": "Related Artist",
+          "album": "Artist Radio",
+          "duration": 180
+        }
+      ]
     }
   }
 }
