@@ -79,6 +79,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.textContaining('Because of a recent addition'),
+      findsNWidgets(2),
+    );
+
     await tester.tap(find.text('Focus mix').first);
     await tester.pumpAndSettle();
 

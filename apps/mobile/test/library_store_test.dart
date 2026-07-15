@@ -2295,18 +2295,51 @@ void main() {
       ),
     ]);
 
+    final fallback = store.personalizedRecommendationMatches(limit: 1);
+    expect(fallback, hasLength(1));
+    expect(
+      fallback.single.reasons,
+      const <LibraryRecommendationReason>[
+        LibraryRecommendationReason.recentlyAdded,
+      ],
+    );
+
     await store.toggleFavorite('seed');
     await store.recordPlayback('seed');
     now = DateTime.utc(2026, 2, 3, 12, 1);
     await store.recordPlayback('unrelated');
 
+    final matches = store.personalizedRecommendationMatches(limit: 3);
     final recommendations = store.personalizedRecommendations(limit: 3);
 
     expect(
       recommendations.map((track) => track.id),
       <String>['same-artist', 'same-genre', 'same-album'],
     );
+    expect(
+      matches.map((match) => match.track.id),
+      <String>['same-artist', 'same-genre', 'same-album'],
+    );
+    expect(
+      matches.first.reasons,
+      containsAll(<LibraryRecommendationReason>[
+        LibraryRecommendationReason.favoriteArtist,
+        LibraryRecommendationReason.favoriteGenre,
+        LibraryRecommendationReason.recentlyPlayedArtist,
+        LibraryRecommendationReason.recentlyPlayedGenre,
+        LibraryRecommendationReason.unplayed,
+      ]),
+    );
+    expect(
+      matches.last.reasons,
+      containsAll(<LibraryRecommendationReason>[
+        LibraryRecommendationReason.favoriteAlbum,
+        LibraryRecommendationReason.recentlyPlayedAlbum,
+      ]),
+    );
+    expect(matches.first.score, greaterThan(matches.last.score));
     expect(store.personalizedRecommendations(limit: 0), isEmpty);
+    expect(store.personalizedRecommendationMatches(limit: 0), isEmpty);
   });
 
   test('builds similar local tracks from artist album and genre', () async {

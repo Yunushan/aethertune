@@ -72,6 +72,18 @@ enum ListeningHistoryRange { all, sevenDays, thirtyDays, year }
 
 enum LibraryMoodMixType { focus, energy, chill, workout, sleep }
 
+enum LibraryRecommendationReason {
+  favoriteArtist,
+  favoriteAlbum,
+  favoriteGenre,
+  recentlyPlayedArtist,
+  recentlyPlayedAlbum,
+  recentlyPlayedGenre,
+  favoriteTrack,
+  unplayed,
+  recentlyAdded,
+}
+
 enum LibrarySimilarityReason { artist, album, genre, folder, source }
 
 enum CustomSmartPlaylistSortMode {
@@ -298,6 +310,18 @@ class LibraryMoodMix {
   final String name;
   final String description;
   final List<Track> tracks;
+}
+
+class PersonalizedRecommendationMatch {
+  const PersonalizedRecommendationMatch({
+    required this.track,
+    required this.reasons,
+    required this.score,
+  });
+
+  final Track track;
+  final List<LibraryRecommendationReason> reasons;
+  final int score;
 }
 
 class SimilarTrackMatch {
@@ -812,6 +836,22 @@ final class _DiscoveryCandidate {
   });
 
   final Track track;
+  final int score;
+  final int playCount;
+  final DateTime? lastPlayedAt;
+}
+
+final class _RecommendationCandidate {
+  const _RecommendationCandidate({
+    required this.track,
+    required this.reasons,
+    required this.score,
+    required this.playCount,
+    this.lastPlayedAt,
+  });
+
+  final Track track;
+  final List<LibraryRecommendationReason> reasons;
   final int score;
   final int playCount;
   final DateTime? lastPlayedAt;
@@ -2668,8 +2708,16 @@ class LibraryStore extends ChangeNotifier {
   }
 
   List<Track> personalizedRecommendations({int limit = 12}) {
+    return personalizedRecommendationMatches(limit: limit)
+        .map((match) => match.track)
+        .toList(growable: false);
+  }
+
+  List<PersonalizedRecommendationMatch> personalizedRecommendationMatches({
+    int limit = 12,
+  }) {
     if (limit <= 0) {
-      return <Track>[];
+      return <PersonalizedRecommendationMatch>[];
     }
 
     final byId = <String, Track>{
@@ -2678,6 +2726,12 @@ class LibraryStore extends ChangeNotifier {
     final artistWeights = <String, int>{};
     final albumWeights = <String, int>{};
     final genreWeights = <String, int>{};
+    final favoriteArtists = <String>{};
+    final favoriteAlbums = <String>{};
+    final favoriteGenres = <String>{};
+    final recentlyPlayedArtists = <String>{};
+    final recentlyPlayedAlbums = <String>{};
+    final recentlyPlayedGenres = <String>{};
 
     void addWeight(Map<String, int> weights, String? key, int amount) {
       if (key == null || amount <= 0) {
@@ -2700,6 +2754,9 @@ class LibraryStore extends ChangeNotifier {
 
     for (final track in favorites) {
       addPreference(track, artist: 28, album: 16, genre: 22);
+      _addKnownMetadataKey(favoriteArtists, track.artist);
+      _addKnownMetadataKey(favoriteAlbums, track.album);
+      _addKnownMetadataKey(favoriteGenres, track.genre);
     }
 
     final recentHistoryTrackIds = <String>{};
@@ -2710,6 +2767,9 @@ class LibraryStore extends ChangeNotifier {
       }
 
       recentHistoryTrackIds.add(track.id);
+      _addKnownMetadataKey(recentlyPlayedArtists, track.artist);
+      _addKnownMetadataKey(recentlyPlayedAlbums, track.album);
+      _addKnownMetadataKey(recentlyPlayedGenres, track.genre);
       final firstRecentPlay = recentHistoryTrackIds.length <= 12;
       addPreference(
         track,
@@ -2720,10 +2780,10 @@ class LibraryStore extends ChangeNotifier {
     }
 
     if (artistWeights.isEmpty && albumWeights.isEmpty && genreWeights.isEmpty) {
-      return _recentPlayableTracks(limit: limit);
+      return _fallbackPersonalizedRecommendations(limit: limit);
     }
 
-    final candidates = <_DiscoveryCandidate>[];
+    final candidates = <_RecommendationCandidate>[];
     for (final track in _tracks) {
       if (!track.isPlayable) {
         continue;
@@ -2733,18 +2793,38 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
 
+      final artistKey = _knownMetadataKey(track.artist);
+      final albumKey = _knownMetadataKey(track.album);
+      final genreKey = _knownMetadataKey(track.genre);
+      final reasons = <LibraryRecommendationReason>[
+        if (artistKey != null && favoriteArtists.contains(artistKey))
+          LibraryRecommendationReason.favoriteArtist,
+        if (albumKey != null && favoriteAlbums.contains(albumKey))
+          LibraryRecommendationReason.favoriteAlbum,
+        if (genreKey != null && favoriteGenres.contains(genreKey))
+          LibraryRecommendationReason.favoriteGenre,
+        if (artistKey != null && recentlyPlayedArtists.contains(artistKey))
+          LibraryRecommendationReason.recentlyPlayedArtist,
+        if (albumKey != null && recentlyPlayedAlbums.contains(albumKey))
+          LibraryRecommendationReason.recentlyPlayedAlbum,
+        if (genreKey != null && recentlyPlayedGenres.contains(genreKey))
+          LibraryRecommendationReason.recentlyPlayedGenre,
+      ];
+
       var score = 0;
-      score += artistWeights[_knownMetadataKey(track.artist)] ?? 0;
-      score += albumWeights[_knownMetadataKey(track.album)] ?? 0;
-      score += genreWeights[_knownMetadataKey(track.genre)] ?? 0;
+      score += artistWeights[artistKey] ?? 0;
+      score += albumWeights[albumKey] ?? 0;
+      score += genreWeights[genreKey] ?? 0;
 
       if (track.isFavorite) {
         score += 8;
+        reasons.add(LibraryRecommendationReason.favoriteTrack);
       }
 
       final playCount = playCountForTrack(track.id);
       if (playCount == 0) {
         score += 12;
+        reasons.add(LibraryRecommendationReason.unplayed);
       } else {
         score -= playCount * 2;
       }
@@ -2754,8 +2834,9 @@ class LibraryStore extends ChangeNotifier {
       }
 
       candidates.add(
-        _DiscoveryCandidate(
+        _RecommendationCandidate(
           track: track,
+          reasons: List<LibraryRecommendationReason>.unmodifiable(reasons),
           score: score,
           playCount: playCount,
           lastPlayedAt: lastPlayedAt(track.id),
@@ -2766,11 +2847,17 @@ class LibraryStore extends ChangeNotifier {
     candidates.sort(_compareRecommendationCandidates);
 
     if (candidates.isEmpty) {
-      return _recentPlayableTracks(limit: limit);
+      return _fallbackPersonalizedRecommendations(limit: limit);
     }
 
     return candidates
-        .map((candidate) => candidate.track)
+        .map(
+          (candidate) => PersonalizedRecommendationMatch(
+            track: candidate.track,
+            reasons: candidate.reasons,
+            score: candidate.score,
+          ),
+        )
         .take(limit)
         .toList(growable: false);
   }
@@ -4690,6 +4777,29 @@ class LibraryStore extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  List<PersonalizedRecommendationMatch> _fallbackPersonalizedRecommendations({
+    required int limit,
+  }) {
+    return _recentPlayableTracks(limit: limit)
+        .map(
+          (track) => PersonalizedRecommendationMatch(
+            track: track,
+            reasons: const <LibraryRecommendationReason>[
+              LibraryRecommendationReason.recentlyAdded,
+            ],
+            score: 0,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  void _addKnownMetadataKey(Set<String> keys, String value) {
+    final key = _knownMetadataKey(value);
+    if (key != null) {
+      keys.add(key);
+    }
+  }
+
   List<Track> _continueListeningTracks({required int limit}) {
     if (limit <= 0) {
       return <Track>[];
@@ -6590,8 +6700,8 @@ class LibraryStore extends ChangeNotifier {
   }
 
   int _compareRecommendationCandidates(
-    _DiscoveryCandidate a,
-    _DiscoveryCandidate b,
+    _RecommendationCandidate a,
+    _RecommendationCandidate b,
   ) {
     final byScore = b.score.compareTo(a.score);
     if (byScore != 0) {

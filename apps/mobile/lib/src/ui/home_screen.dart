@@ -2442,7 +2442,16 @@ class _HomeTabState extends State<_HomeTab> {
 
     final sections = library.homeFeedSections();
     final charts = library.localCharts(range: _chartRange);
-    final recommendations = library.personalizedRecommendations(limit: 6);
+    final recommendationMatches = library.personalizedRecommendationMatches(
+      limit: 6,
+    );
+    final recommendations = recommendationMatches
+        .map((match) => match.track)
+        .toList(growable: false);
+    final recommendationReasons = <String, List<LibraryRecommendationReason>>{
+      for (final match in recommendationMatches)
+        match.track.id: match.reasons,
+    };
     final moodMixes = library.localMoodMixes(limit: 5);
     if (sections.isEmpty) {
       return _EmptyHomeFeed(
@@ -2464,6 +2473,10 @@ class _HomeTabState extends State<_HomeTab> {
           title: 'For you',
           subtitle: 'Local recommendations',
           tracks: recommendations,
+          detailTextForTrack: (track) => _recommendationReasonText(
+            recommendationReasons[track.id] ??
+                const <LibraryRecommendationReason>[],
+          ),
         ),
         for (final mix in moodMixes)
           ..._homeTrackPreviewWidgets(
@@ -2544,6 +2557,7 @@ class _HomeTabState extends State<_HomeTab> {
     required String subtitle,
     required List<Track> tracks,
     VoidCallback? onOpen,
+    String? Function(Track track)? detailTextForTrack,
   }) {
     if (tracks.isEmpty) {
       return <Widget>[];
@@ -2568,6 +2582,7 @@ class _HomeTabState extends State<_HomeTab> {
       for (final track in tracks)
         TrackTile(
           track: track,
+          detailText: detailTextForTrack?.call(track),
           onPlay: () => _playTrackWithResume(
             context,
             player,
@@ -3777,6 +3792,42 @@ String _similarityReasonText(List<LibrarySimilarityReason> reasons) {
 
   final labels = reasons.map(_similarityReasonLabel).toList(growable: false);
   return 'Matches ${labels.join(', ')}';
+}
+
+String _recommendationReasonText(
+  List<LibraryRecommendationReason> reasons,
+) {
+  if (reasons.isEmpty) {
+    return 'Selected from your local library';
+  }
+
+  final labels = reasons
+      .map(_recommendationReasonLabel)
+      .toList(growable: false);
+  return 'Because of ${labels.join(', ')}';
+}
+
+String _recommendationReasonLabel(LibraryRecommendationReason reason) {
+  switch (reason) {
+    case LibraryRecommendationReason.favoriteArtist:
+      return 'a favorite artist';
+    case LibraryRecommendationReason.favoriteAlbum:
+      return 'a favorite album';
+    case LibraryRecommendationReason.favoriteGenre:
+      return 'a favorite genre';
+    case LibraryRecommendationReason.recentlyPlayedArtist:
+      return 'an artist you played';
+    case LibraryRecommendationReason.recentlyPlayedAlbum:
+      return 'an album you played';
+    case LibraryRecommendationReason.recentlyPlayedGenre:
+      return 'a genre you played';
+    case LibraryRecommendationReason.favoriteTrack:
+      return 'this favorite';
+    case LibraryRecommendationReason.unplayed:
+      return 'an unplayed track';
+    case LibraryRecommendationReason.recentlyAdded:
+      return 'a recent addition';
+  }
 }
 
 String _similarityReasonLabel(LibrarySimilarityReason reason) {
