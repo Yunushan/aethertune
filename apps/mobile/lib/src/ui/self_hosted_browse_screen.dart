@@ -437,15 +437,20 @@ class SelfHostedCollectionScreen extends StatefulWidget {
 
 class _SelfHostedCollectionScreenState
     extends State<SelfHostedCollectionScreen> {
-  late Future<MusicCatalogDetail> _request;
+  Future<MusicCatalogDetail>? _request;
+  bool _requestStarted = false;
   final TextEditingController _filterController = TextEditingController();
   String _query = '';
   bool _playlistMutationInProgress = false;
 
   @override
-  void initState() {
-    super.initState();
-    _request = widget.provider.loadCollection(widget.collection);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final offline = context.watch<LibraryStore>().offlineModeEnabled;
+    if (!offline && !_requestStarted) {
+      _requestStarted = true;
+      _request = widget.provider.loadCollection(widget.collection);
+    }
   }
 
   @override
@@ -462,7 +467,7 @@ class _SelfHostedCollectionScreenState
       body: offline
           ? const _CatalogOfflineState()
           : FutureBuilder<MusicCatalogDetail>(
-              future: _request,
+              future: _request!,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const Center(child: CircularProgressIndicator());

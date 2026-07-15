@@ -1,0 +1,389 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:aethertune/l10n/app_localizations.dart';
+import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/data/library_sync_store.dart';
+import 'package:aethertune/src/data/local_folder_watch_store.dart';
+import 'package:aethertune/src/data/provider_credential_vault.dart';
+import 'package:aethertune/src/data/self_hosted_provider_store.dart';
+import 'package:aethertune/src/domain/music_catalog_provider.dart';
+import 'package:aethertune/src/domain/music_source_provider.dart';
+import 'package:aethertune/src/domain/self_hosted_provider_account.dart';
+import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/player/playback_audio_engine.dart';
+import 'package:aethertune/src/player/player_controller.dart';
+import 'package:aethertune/src/ui/home_screen.dart';
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets(
+    'loads server discovery explicitly and opens a catalog collection',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.reset);
+
+      final provider = _FakeProviderHomeCatalog();
+      final fixture = await _HomeFixture.create(provider: provider);
+      addTearDown(fixture.dispose);
+      await _pumpHome(tester, fixture);
+
+      expect(find.text('From your servers'), findsOneWidget);
+      expect(find.text('Your local feed is empty'), findsOneWidget);
+      expect(provider.browseCalls, isEmpty);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('provider-home-refresh')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(provider.browseCalls, <MusicCatalogCollectionKind>[
+        MusicCatalogCollectionKind.album,
+        MusicCatalogCollectionKind.playlist,
+      ]);
+      expect(find.text('Test Server albums'), findsOneWidget);
+      expect(find.text('Test Server playlists'), findsOneWidget);
+      expect(find.text('Server Album'), findsOneWidget);
+      expect(find.text('Server Playlist'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('provider-home-errors')),
+        findsNothing,
+      );
+
+      final albumTile = find.byKey(
+        const ValueKey<String>(
+          'provider-home-collection-test-provider-album-album-1',
+        ),
+      );
+      await tester.tap(albumTile);
+      await tester.pumpAndSettle();
+
+      expect(provider.loadCalls.map((collection) => collection.id), <String>[
+        'album-1',
+      ]);
+      expect(find.text('Remote Song'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await fixture.selfHosted.testAndSave(
+        fixture.account.copyWith(name: 'Renamed Server'),
+        'rotated-secret',
+      );
+      await tester.pumpAndSettle();
+
+      expect(albumTile, findsNothing);
+      expect(find.text('From your servers'), findsOneWidget);
+      expect(find.text('Your local feed is empty'), findsOneWidget);
+    },
+  );
+
+  testWidgets('keeps desktop server discovery offline without requests', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 800);
+    addTearDown(tester.view.reset);
+
+    final provider = _FakeProviderHomeCatalog();
+    final fixture = await _HomeFixture.create(provider: provider);
+    addTearDown(fixture.dispose);
+    await fixture.library.setOfflineModeEnabled(true);
+    await _pumpHome(tester, fixture);
+
+    expect(find.text('From your servers'), findsOneWidget);
+    expect(find.text('Offline mode'), findsOneWidget);
+    final refresh = tester.widget<IconButton>(
+      find.byKey(const ValueKey<String>('provider-home-refresh')),
+    );
+    expect(refresh.onPressed, isNull);
+    expect(provider.browseCalls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<void> _pumpHome(WidgetTester tester, _HomeFixture fixture) async {
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<LibraryStore>.value(value: fixture.library),
+        ChangeNotifierProvider<SelfHostedProviderStore>.value(
+          value: fixture.selfHosted,
+        ),
+        ChangeNotifierProvider<LibrarySyncStore>.value(value: fixture.sync),
+        ChangeNotifierProvider<LocalFolderWatchStore>.value(
+          value: fixture.folderWatch,
+        ),
+        ChangeNotifierProvider<PlayerController>.value(value: fixture.player),
+      ],
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: HomeScreen(initialTab: 0),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+final class _HomeFixture {
+  _HomeFixture({
+    required this.library,
+    required this.selfHosted,
+    required this.sync,
+    required this.folderWatch,
+    required this.player,
+    required this.account,
+  });
+
+  final LibraryStore library;
+  final SelfHostedProviderStore selfHosted;
+  final LibrarySyncStore sync;
+  final LocalFolderWatchStore folderWatch;
+  final PlayerController player;
+  final SelfHostedProviderAccount account;
+
+  static Future<_HomeFixture> create({
+    required MusicCatalogProvider provider,
+  }) async {
+    final library = LibraryStore();
+    await library.load();
+    final account = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.jellyfin,
+      name: 'Test Server',
+      baseUrl: 'https://music.example.test',
+      identity: 'user-1',
+      allowInsecureHttp: false,
+    );
+    final selfHosted = SelfHostedProviderStore(
+      credentialVault: _MemoryCredentialVault(),
+      connectionTester: (_, __) async {},
+      providerFactory: (_, __) => provider,
+    );
+    await selfHosted.load();
+    await selfHosted.testAndSave(account, 'secret');
+    final sync = LibrarySyncStore();
+    await sync.load();
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    return _HomeFixture(
+      library: library,
+      selfHosted: selfHosted,
+      sync: sync,
+      folderWatch: folderWatch,
+      player: player,
+      account: account,
+    );
+  }
+
+  Future<void> dispose() async {
+    folderWatch.dispose();
+    sync.dispose();
+    selfHosted.dispose();
+    library.dispose();
+    player.dispose();
+  }
+}
+
+final class _MemoryCredentialVault implements ProviderCredentialVault {
+  final Map<String, String> _values = <String, String>{};
+
+  @override
+  Future<String?> read(String accountId) async => _values[accountId];
+
+  @override
+  Future<void> write(String accountId, String secret) async {
+    _values[accountId] = secret;
+  }
+
+  @override
+  Future<void> delete(String accountId) async {
+    _values.remove(accountId);
+  }
+}
+
+final class _FakeProviderHomeCatalog implements MusicCatalogProvider {
+  final List<MusicCatalogCollectionKind> browseCalls =
+      <MusicCatalogCollectionKind>[];
+  final List<MusicCatalogCollection> loadCalls = <MusicCatalogCollection>[];
+
+  @override
+  String get id => 'test-provider';
+
+  @override
+  String get name => 'Test Server';
+
+  @override
+  String get description => 'Provider Home fixture';
+
+  @override
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.libraryBrowse,
+    MusicSourceCapability.playlists,
+    MusicSourceCapability.streamResolution,
+  };
+
+  @override
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
+    networkDomains: <String>['music.example.test'],
+    dataSent: <String>['catalog request', 'account credential'],
+    requiresUserCredentials: true,
+  );
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) async {
+    browseCalls.add(kind);
+    return switch (kind) {
+      MusicCatalogCollectionKind.album => const <MusicCatalogCollection>[
+        MusicCatalogCollection(
+          id: 'album-1',
+          title: 'Server Album',
+          kind: MusicCatalogCollectionKind.album,
+          subtitle: 'Remote Artist',
+          itemCount: 1,
+        ),
+      ],
+      MusicCatalogCollectionKind.playlist => const <MusicCatalogCollection>[
+        MusicCatalogCollection(
+          id: 'playlist-1',
+          title: 'Server Playlist',
+          kind: MusicCatalogCollectionKind.playlist,
+          itemCount: 1,
+        ),
+      ],
+      MusicCatalogCollectionKind.artist => const <MusicCatalogCollection>[],
+    };
+  }
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) async {
+    loadCalls.add(collection);
+    return MusicCatalogDetail(
+      collection: collection,
+      tracks: <Track>[
+        Track(
+          id: 'remote-song',
+          title: 'Remote Song',
+          artist: 'Remote Artist',
+          album: collection.title,
+          sourceId: id,
+          externalId: 'remote-song',
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<List<Track>> search(String query) async => const <Track>[];
+
+  @override
+  Future<Uri?> resolveStream(Track track) async {
+    return Uri.parse('https://music.example.test/stream/${track.id}');
+  }
+}
+
+final class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
+  @override
+  Stream<Object?> get stateChanges => const Stream<Object?>.empty();
+
+  @override
+  Stream<Duration?> get durationStream => const Stream<Duration?>.empty();
+
+  @override
+  Stream<Duration> get positionStream => const Stream<Duration>.empty();
+
+  @override
+  Stream<ProcessingState> get processingStateStream =>
+      const Stream<ProcessingState>.empty();
+
+  @override
+  Stream<int?> get currentIndexStream => const Stream<int?>.empty();
+
+  @override
+  bool get playing => false;
+
+  @override
+  bool get shuffleModeEnabled => false;
+
+  @override
+  LoopMode get loopMode => LoopMode.off;
+
+  @override
+  Duration get position => Duration.zero;
+
+  @override
+  Duration get bufferedPosition => Duration.zero;
+
+  @override
+  double get speed => 1;
+
+  @override
+  double get volume => 1;
+
+  @override
+  bool get hasNext => false;
+
+  @override
+  bool get hasPrevious => false;
+
+  @override
+  Future<void> setQueue(
+    List<Track> tracks, {
+    required int initialIndex,
+    Duration initialPosition = Duration.zero,
+  }) async {}
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> seek(Duration position, {int? index}) async {}
+
+  @override
+  Future<void> seekToNext() async {}
+
+  @override
+  Future<void> seekToPrevious() async {}
+
+  @override
+  Future<void> setShuffleModeEnabled(bool enabled) async {}
+
+  @override
+  Future<void> setLoopMode(LoopMode mode) async {}
+
+  @override
+  Future<void> setSpeed(double speed) async {}
+
+  @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
+  Future<void> dispose() async {}
+}

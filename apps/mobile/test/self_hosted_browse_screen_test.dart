@@ -317,6 +317,50 @@ void main() {
     expect(provider.browseCalls, isEmpty);
   });
 
+  testWidgets('offline collection details defer their provider request', (
+    tester,
+  ) async {
+    final provider = _FakeCatalogProvider();
+    final library = LibraryStore();
+    await library.setOfflineModeEnabled(true);
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          home: SelfHostedCollectionScreen(
+            provider: provider,
+            collection: const MusicCatalogCollection(
+              id: 'album-1',
+              title: 'Blue Rooms',
+              kind: MusicCatalogCollectionKind.album,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Self-hosted browsing is unavailable in offline mode.'),
+      findsOneWidget,
+    );
+    expect(provider.loadCalls, isEmpty);
+
+    await library.setOfflineModeEnabled(false);
+    await tester.pumpAndSettle();
+
+    expect(provider.loadCalls.map((collection) => collection.id), <String>[
+      'album-1',
+    ]);
+    expect(find.text('Aether Session'), findsOneWidget);
+  });
+
   testWidgets('failed catalog loads can be retried', (tester) async {
     final provider = _FakeCatalogProvider(artistFailuresRemaining: 1);
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());

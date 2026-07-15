@@ -13,6 +13,7 @@
 - [x] Now Playing seek/time, favorite, lyrics, queue, shuffle, and repeat actions
 - [x] Artwork swipe next/previous navigation
 - [x] Local Home feed sections
+- [x] User-refreshed self-hosted album/playlist Home discovery
 - [x] Persisted local artist following and followed-artist updates feed
 - [x] Local charts by playback range
 - [x] Local mood/activity mixes

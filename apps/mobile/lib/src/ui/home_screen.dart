@@ -35,6 +35,7 @@ import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
+import '../domain/music_catalog_provider.dart';
 import '../domain/replay_gain.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_cancellation.dart';
@@ -46,6 +47,7 @@ import '../domain/playlist_export_file.dart';
 import '../domain/podcast_opml.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/provider_search.dart';
+import '../domain/provider_home_feed.dart';
 import '../domain/self_hosted_provider_account.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
@@ -2429,11 +2431,33 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> {
+  static const ProviderHomeFeedCoordinator _providerHomeCoordinator =
+      ProviderHomeFeedCoordinator();
+
   LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
+  ProviderHomeFeed? _providerHomeFeed;
+  String? _providerHomeSignature;
+  bool _providerHomeLoading = false;
+  int _providerHomeRequest = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final providerStore = context.watch<SelfHostedProviderStore>();
+    final signature = _providerHomeStoreSignature(providerStore);
+    if (_providerHomeSignature != null &&
+        _providerHomeSignature != signature) {
+      _providerHomeRequest += 1;
+      _providerHomeFeed = null;
+      _providerHomeLoading = false;
+    }
+    _providerHomeSignature = signature;
+  }
 
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
+    final providerStore = context.watch<SelfHostedProviderStore>();
     final player = context.read<PlayerController>();
 
     if (!library.loaded) {
@@ -2453,7 +2477,8 @@ class _HomeTabState extends State<_HomeTab> {
         match.track.id: match.reasons,
     };
     final moodMixes = library.localMoodMixes(limit: 5);
-    if (sections.isEmpty) {
+    final providerCatalogs = _providerHomeCatalogs(providerStore);
+    if (sections.isEmpty && providerCatalogs.isEmpty) {
       return _EmptyHomeFeed(
         onImport: widget.onImport,
         onImportFolder: widget.onImportFolder,
@@ -2465,6 +2490,26 @@ class _HomeTabState extends State<_HomeTab> {
       children: <Widget>[
         Text('Home', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
+        if (providerCatalogs.isNotEmpty) ...<Widget>[
+          _ProviderHomeDiscovery(
+            providerCount: providerCatalogs.length,
+            feed: _providerHomeFeed,
+            loading: _providerHomeLoading,
+            offline: library.offlineModeEnabled,
+            onRefresh: _loadProviderHome,
+            onOpen: (provider, collection) => unawaited(
+              _openProviderHomeCollection(provider, collection),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (sections.isEmpty)
+          _EmptyHomeFeed(
+            title: 'Your local feed is empty',
+            message: 'Import music to add local recommendations and history.',
+            onImport: widget.onImport,
+            onImportFolder: widget.onImportFolder,
+          ),
         ..._homeTrackPreviewWidgets(
           context: context,
           player: player,
@@ -2618,6 +2663,305 @@ class _HomeTabState extends State<_HomeTab> {
       const SizedBox(height: 12),
     ];
   }
+
+  Future<void> _loadProviderHome() async {
+    final library = context.read<LibraryStore>();
+    if (library.offlineModeEnabled || _providerHomeLoading) {
+      return;
+    }
+
+    final providerStore = context.read<SelfHostedProviderStore>();
+    final providers = _providerHomeCatalogs(providerStore);
+    if (providers.isEmpty) {
+      return;
+    }
+
+    final signature = _providerHomeStoreSignature(providerStore);
+    final request = ++_providerHomeRequest;
+    setState(() => _providerHomeLoading = true);
+    final feed = await _providerHomeCoordinator.load(providers);
+    if (!mounted ||
+        request != _providerHomeRequest ||
+        signature != _providerHomeStoreSignature(
+          context.read<SelfHostedProviderStore>(),
+        )) {
+      return;
+    }
+
+    setState(() {
+      _providerHomeFeed = feed;
+      _providerHomeLoading = false;
+    });
+  }
+
+  Future<void> _openProviderHomeCollection(
+    MusicCatalogProvider provider,
+    MusicCatalogCollection collection,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SelfHostedCollectionScreen(
+          provider: provider,
+          collection: collection,
+        ),
+      ),
+    );
+  }
+}
+
+List<MusicCatalogProvider> _providerHomeCatalogs(
+  SelfHostedProviderStore store,
+) {
+  final providers = <MusicCatalogProvider>[];
+  for (final account in store.accounts) {
+    final provider = store.catalogProviderFor(account.id);
+    if (provider != null) {
+      providers.add(provider);
+    }
+  }
+  return providers;
+}
+
+String _providerHomeStoreSignature(SelfHostedProviderStore store) {
+  final accounts = store.accounts.map(
+    (account) => <Object?>[
+      account.id,
+      account.kind.name,
+      account.name,
+      account.baseUri.toString(),
+      account.identity,
+      account.allowInsecureHttp,
+      store.hasCredential(account.id),
+    ].join(':'),
+  );
+  return '${store.artworkRevision}|${accounts.join('|')}';
+}
+
+class _ProviderHomeDiscovery extends StatelessWidget {
+  const _ProviderHomeDiscovery({
+    required this.providerCount,
+    required this.feed,
+    required this.loading,
+    required this.offline,
+    required this.onRefresh,
+    required this.onOpen,
+  });
+
+  final int providerCount;
+  final ProviderHomeFeed? feed;
+  final bool loading;
+  final bool offline;
+  final VoidCallback onRefresh;
+  final void Function(
+    MusicCatalogProvider provider,
+    MusicCatalogCollection collection,
+  ) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final loadedSections = feed?.sections.length ?? 0;
+    final subtitle = offline
+        ? 'Offline mode'
+        : loadedSections > 0
+            ? '$loadedSections catalog section(s) loaded'
+            : '$providerCount configured server(s)';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ListTile(
+          key: const ValueKey<String>('provider-home-header'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.cloud_outlined),
+          title: const Text('From your servers'),
+          subtitle: Text(subtitle),
+          trailing: loading
+              ? const SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : IconButton(
+                  key: const ValueKey<String>('provider-home-refresh'),
+                  tooltip: offline
+                      ? 'Server discovery unavailable offline'
+                      : 'Refresh server discovery',
+                  onPressed: offline ? null : onRefresh,
+                  icon: const Icon(Icons.refresh),
+                ),
+        ),
+        if (feed != null && !feed!.hasContent && feed!.errors.isEmpty)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.inbox_outlined),
+            title: Text('No server albums or playlists found'),
+          ),
+        if ((feed?.errors.length ?? 0) > 0)
+          ListTile(
+            key: const ValueKey<String>('provider-home-errors'),
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.warning_amber_outlined),
+            title: Text(
+              '${feed!.errors.length} catalog section(s) unavailable',
+            ),
+            subtitle: feed!.hasContent
+                ? const Text('Available server results are shown below.')
+                : const Text('Refresh to retry the configured servers.'),
+          ),
+        for (final section in feed?.sections ?? const <ProviderHomeSection>[])
+          _ProviderHomeSectionShelf(
+            section: section,
+            onOpen: (collection) => onOpen(section.provider, collection),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProviderHomeSectionShelf extends StatelessWidget {
+  const _ProviderHomeSectionShelf({
+    required this.section,
+    required this.onOpen,
+  });
+
+  final ProviderHomeSection section;
+  final ValueChanged<MusicCatalogCollection> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(_providerHomeKindIcon(section.kind)),
+          title: Text(
+            '${section.provider.name} ${_providerHomeKindLabel(section.kind)}',
+          ),
+          subtitle: const Text('Configured self-hosted catalog'),
+          trailing: Text('${section.collections.length}'),
+        ),
+        SizedBox(
+          height: 220,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: section.collections.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final collection = section.collections[index];
+              return _ProviderHomeCollectionTile(
+                provider: section.provider,
+                collection: collection,
+                onTap: () => onOpen(collection),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+class _ProviderHomeCollectionTile extends StatelessWidget {
+  const _ProviderHomeCollectionTile({
+    required this.provider,
+    required this.collection,
+    required this.onTap,
+  });
+
+  final MusicCatalogProvider provider;
+  final MusicCatalogCollection collection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final artworkId = collection.artworkId;
+    final subtitle = collection.subtitle.trim().isNotEmpty
+        ? collection.subtitle.trim()
+        : collection.itemCount > 0
+            ? '${collection.itemCount} item(s)'
+            : _providerHomeKindSingularLabel(collection.kind);
+
+    return SizedBox(
+      width: 148,
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: InkWell(
+          key: ValueKey<String>(
+            'provider-home-collection-${provider.id}-'
+            '${collection.kind.name}-${collection.id}',
+          ),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TrackArtwork(
+                  artworkUri: null,
+                  providerId: provider.id,
+                  providerArtworkId: artworkId,
+                  providerArtworkVersion: collection.artworkVersion,
+                  loadProviderArtwork: artworkId == null
+                      ? null
+                      : (maxWidth) => provider.loadArtwork(
+                            artworkId,
+                            version: collection.artworkVersion,
+                            maxWidth: maxWidth,
+                          ),
+                  size: 130,
+                  borderRadius: 4,
+                  fallbackIcon: _providerHomeKindIcon(collection.kind),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  collection.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _providerHomeKindLabel(MusicCatalogCollectionKind kind) {
+  return switch (kind) {
+    MusicCatalogCollectionKind.artist => 'artists',
+    MusicCatalogCollectionKind.album => 'albums',
+    MusicCatalogCollectionKind.playlist => 'playlists',
+  };
+}
+
+String _providerHomeKindSingularLabel(MusicCatalogCollectionKind kind) {
+  return switch (kind) {
+    MusicCatalogCollectionKind.artist => 'Artist',
+    MusicCatalogCollectionKind.album => 'Album',
+    MusicCatalogCollectionKind.playlist => 'Playlist',
+  };
+}
+
+IconData _providerHomeKindIcon(MusicCatalogCollectionKind kind) {
+  return switch (kind) {
+    MusicCatalogCollectionKind.artist => Icons.people_outline,
+    MusicCatalogCollectionKind.album => Icons.album_outlined,
+    MusicCatalogCollectionKind.playlist => Icons.queue_music_outlined,
+  };
 }
 
 class _HomeSectionHeader extends StatelessWidget {
@@ -2721,10 +3065,14 @@ class _EmptyHomeFeed extends StatelessWidget {
   const _EmptyHomeFeed({
     required this.onImport,
     required this.onImportFolder,
+    this.title = 'Home is empty',
+    this.message = 'Import music to build your local feed.',
   });
 
   final VoidCallback onImport;
   final VoidCallback onImportFolder;
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -2736,10 +3084,10 @@ class _EmptyHomeFeed extends StatelessWidget {
           children: <Widget>[
             const Icon(Icons.home_outlined, size: 56),
             const SizedBox(height: 16),
-            Text('Home is empty', style: Theme.of(context).textTheme.titleLarge),
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            const Text(
-              'Import music to build your local feed.',
+            Text(
+              message,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
