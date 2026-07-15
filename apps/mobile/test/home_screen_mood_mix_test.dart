@@ -255,6 +255,7 @@ void main() {
     expect(find.text('Albums'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Play'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Shuffle'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Radio'), findsOneWidget);
     expect(
       find.widgetWithText(OutlinedButton, 'Save playlist'),
       findsOneWidget,
@@ -277,6 +278,16 @@ void main() {
       'ari-dawn',
       'ari-dusk',
     ]);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Radio'));
+    await tester.pumpAndSettle();
+    expect(player.current?.id, 'ari-dawn');
+    expect(player.queue.map((track) => track.id), <String>[
+      'ari-dawn',
+      'ari-dusk',
+      'mia-dawn',
+    ]);
+    expect(find.text('Started 3-track Ari radio.'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Save playlist'));
     await tester.pumpAndSettle();
@@ -329,6 +340,7 @@ void main() {
     tester.view.physicalSize = const Size(1100, 800);
     await tester.pumpAndSettle();
     expect(albumPlayButton, findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Radio'), findsOneWidget);
     expect(
       find.widgetWithText(OutlinedButton, 'Save playlist'),
       findsOneWidget,

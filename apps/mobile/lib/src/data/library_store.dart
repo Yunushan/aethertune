@@ -88,6 +88,15 @@ enum LibrarySimilarityReason { artist, album, genre, folder, source }
 
 enum LibraryCollectionSimilarityReason { artist, album, genre }
 
+enum LibraryCollectionRadioReason {
+  seedCollection,
+  artist,
+  album,
+  genre,
+  favorite,
+  playHistory,
+}
+
 enum CustomSmartPlaylistSortMode {
   recentlyAdded,
   title,
@@ -829,6 +838,36 @@ class TrackRadioSeedQueue {
   final List<Track> tracks;
 }
 
+class LibraryCollectionRadioMatch {
+  const LibraryCollectionRadioMatch({
+    required this.track,
+    required this.reasons,
+    required this.score,
+  });
+
+  final Track track;
+  final List<LibraryCollectionRadioReason> reasons;
+  final int score;
+}
+
+class LibraryCollectionRadioQueue {
+  const LibraryCollectionRadioQueue({
+    required this.type,
+    required this.key,
+    required this.label,
+    required this.seedTrack,
+    required this.tracks,
+    required this.matches,
+  });
+
+  final LibraryBrowseType type;
+  final String key;
+  final String label;
+  final Track seedTrack;
+  final List<Track> tracks;
+  final List<LibraryCollectionRadioMatch> matches;
+}
+
 final class _TrackRadioCandidate {
   const _TrackRadioCandidate({
     required this.track,
@@ -852,6 +891,20 @@ final class _DiscoveryCandidate {
   final Track track;
   final int score;
   final int playCount;
+  final DateTime? lastPlayedAt;
+}
+
+final class _CollectionRadioCandidate {
+  const _CollectionRadioCandidate({
+    required this.track,
+    required this.reasons,
+    required this.score,
+    this.lastPlayedAt,
+  });
+
+  final Track track;
+  final List<LibraryCollectionRadioReason> reasons;
+  final int score;
   final DateTime? lastPlayedAt;
 }
 
@@ -3269,6 +3322,152 @@ class LibraryStore extends ChangeNotifier {
     return createPlaylist(
       normalizedName == null || normalizedName.isEmpty
           ? '${radioQueue.seedTrack.title} Radio'
+          : normalizedName,
+      trackIds: radioQueue.tracks.map((track) => track.id),
+    );
+  }
+
+  LibraryCollectionRadioQueue? radioQueueForBrowseGroup(
+    LibraryBrowseType type,
+    String key, {
+    int limit = 50,
+  }) {
+    if (limit <= 0 ||
+        (type != LibraryBrowseType.artist && type != LibraryBrowseType.album)) {
+      return null;
+    }
+
+    final seedTracks = tracksForBrowseGroup(type, key)
+        .where((track) => track.isPlayable)
+        .toList(growable: false);
+    if (seedTracks.isEmpty) {
+      return null;
+    }
+    seedTracks.sort(_compareCollectionRadioSeedTracks);
+
+    Set<String> knownKeys(Iterable<String> values) {
+      return values.map(_knownMetadataKey).whereType<String>().toSet();
+    }
+
+    int engagementScore(
+      Track track,
+      List<LibraryCollectionRadioReason> reasons,
+    ) {
+      var score = 0;
+      if (track.isFavorite) {
+        score += 10;
+        reasons.add(LibraryCollectionRadioReason.favorite);
+      }
+      final playCount = playCountForTrack(track.id);
+      if (playCount > 0) {
+        score += (playCount > 10 ? 10 : playCount) * 3;
+        reasons.add(LibraryCollectionRadioReason.playHistory);
+      }
+      return score;
+    }
+
+    final normalizedKey = _browseKey(key);
+    final label = _browseLabelForTrack(seedTracks.first, type);
+    final seedTrackIds = seedTracks.map((track) => track.id).toSet();
+    final seedArtists = knownKeys(seedTracks.map((track) => track.artist));
+    final seedAlbums = knownKeys(seedTracks.map((track) => track.album));
+    final seedGenres = knownKeys(seedTracks.map((track) => track.genre));
+    final anchor = seedTracks.first;
+    final anchorReasons = <LibraryCollectionRadioReason>[
+      LibraryCollectionRadioReason.seedCollection,
+    ];
+    final anchorScore = 160 + engagementScore(anchor, anchorReasons);
+    final anchorCandidate = _CollectionRadioCandidate(
+      track: anchor,
+      reasons: List<LibraryCollectionRadioReason>.unmodifiable(anchorReasons),
+      score: anchorScore,
+      lastPlayedAt: lastPlayedAt(anchor.id),
+    );
+    final candidates = <_CollectionRadioCandidate>[];
+
+    for (final track in _tracks) {
+      if (track.id == anchor.id || !track.isPlayable) {
+        continue;
+      }
+
+      final reasons = <LibraryCollectionRadioReason>[];
+      var score = 0;
+      if (seedTrackIds.contains(track.id)) {
+        score += 160;
+        reasons.add(LibraryCollectionRadioReason.seedCollection);
+      } else {
+        final artistKey = _knownMetadataKey(track.artist);
+        final albumKey = _knownMetadataKey(track.album);
+        final genreKey = _knownMetadataKey(track.genre);
+        if (artistKey != null && seedArtists.contains(artistKey)) {
+          score += 100;
+          reasons.add(LibraryCollectionRadioReason.artist);
+        }
+        if (albumKey != null && seedAlbums.contains(albumKey)) {
+          score += 55;
+          reasons.add(LibraryCollectionRadioReason.album);
+        }
+        if (genreKey != null && seedGenres.contains(genreKey)) {
+          score += 35;
+          reasons.add(LibraryCollectionRadioReason.genre);
+        }
+      }
+      if (score == 0) {
+        continue;
+      }
+
+      score += engagementScore(track, reasons);
+      candidates.add(
+        _CollectionRadioCandidate(
+          track: track,
+          reasons: List<LibraryCollectionRadioReason>.unmodifiable(reasons),
+          score: score,
+          lastPlayedAt: lastPlayedAt(track.id),
+        ),
+      );
+    }
+    candidates.sort(_compareCollectionRadioCandidates);
+
+    final selected = <_CollectionRadioCandidate>[
+      anchorCandidate,
+      ...candidates.take(limit - 1),
+    ];
+    final matches = selected
+        .map(
+          (candidate) => LibraryCollectionRadioMatch(
+            track: candidate.track,
+            reasons: candidate.reasons,
+            score: candidate.score,
+          ),
+        )
+        .toList(growable: false);
+    return LibraryCollectionRadioQueue(
+      type: type,
+      key: normalizedKey,
+      label: label,
+      seedTrack: anchor,
+      tracks: List<Track>.unmodifiable(
+        selected.map((candidate) => candidate.track),
+      ),
+      matches: List<LibraryCollectionRadioMatch>.unmodifiable(matches),
+    );
+  }
+
+  Future<Playlist?> saveBrowseGroupRadioPlaylist(
+    LibraryBrowseType type,
+    String key, {
+    int limit = 50,
+    String? name,
+  }) async {
+    final radioQueue = radioQueueForBrowseGroup(type, key, limit: limit);
+    if (radioQueue == null || radioQueue.tracks.isEmpty) {
+      return null;
+    }
+
+    final normalizedName = name?.trim();
+    return createPlaylist(
+      normalizedName == null || normalizedName.isEmpty
+          ? '${radioQueue.label} Radio'
           : normalizedName,
       trackIds: radioQueue.tracks.map((track) => track.id),
     );
@@ -7025,6 +7224,49 @@ class LibraryStore extends ChangeNotifier {
   int _compareTrackRadioCandidates(
     _TrackRadioCandidate a,
     _TrackRadioCandidate b,
+  ) {
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) {
+      return byScore;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      a.lastPlayedAt,
+      b.lastPlayedAt,
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareText(a.track.title, b.track.title);
+  }
+
+  int _compareCollectionRadioSeedTracks(Track a, Track b) {
+    final byFavorite = (b.isFavorite ? 1 : 0).compareTo(a.isFavorite ? 1 : 0);
+    if (byFavorite != 0) {
+      return byFavorite;
+    }
+
+    final byPlayCount =
+        playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+    if (byPlayCount != 0) {
+      return byPlayCount;
+    }
+
+    final byLastPlayed = _compareNullableDateDesc(
+      lastPlayedAt(a.id),
+      lastPlayedAt(b.id),
+    );
+    if (byLastPlayed != 0) {
+      return byLastPlayed;
+    }
+
+    return _compareText(a.title, b.title);
+  }
+
+  int _compareCollectionRadioCandidates(
+    _CollectionRadioCandidate a,
+    _CollectionRadioCandidate b,
   ) {
     final byScore = b.score.compareTo(a.score);
     if (byScore != 0) {

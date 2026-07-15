@@ -3995,6 +3995,174 @@ void main() {
     expect(await store.saveTrackRadioPlaylist('missing'), isNull);
   });
 
+  test(
+    'builds explainable artist and album radio queues and saves them',
+    () async {
+      var now = DateTime.utc(2026, 1, 14, 15);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'ari-dawn',
+          title: 'Morning Signal',
+          artist: 'Ari',
+          album: 'Dawn',
+          genre: 'Ambient',
+        ),
+        _track(
+          'ari-dusk',
+          title: 'Evening Signal',
+          artist: 'Ari',
+          album: 'Dusk',
+          genre: 'Ambient',
+        ),
+        _track(
+          'mia-dawn',
+          title: 'Blue Dawn',
+          artist: 'Mia',
+          album: 'Dawn',
+          genre: 'Jazz',
+        ),
+        _track(
+          'sol-clouds',
+          title: 'Cloud Field',
+          artist: 'Sol',
+          album: 'Clouds',
+          genre: 'Ambient',
+        ),
+        _track(
+          'ghost',
+          title: 'Metadata Only',
+          artist: 'Ghost',
+          album: 'Silence',
+          genre: 'Classical',
+          localPath: '',
+        ),
+        _track(
+          'unrelated',
+          title: 'Elsewhere',
+          artist: 'Orion',
+          album: 'Night',
+          genre: 'Rock',
+        ),
+      ]);
+      await store.toggleFavorite('ari-dusk');
+      now = DateTime.utc(2026, 1, 14, 15, 1);
+      await store.recordPlayback('ari-dusk');
+
+      final artistRadio = store.radioQueueForBrowseGroup(
+        LibraryBrowseType.artist,
+        'ari',
+      )!;
+
+      expect(artistRadio.type, LibraryBrowseType.artist);
+      expect(artistRadio.key, 'ari');
+      expect(artistRadio.label, 'Ari');
+      expect(artistRadio.seedTrack.id, 'ari-dusk');
+      expect(
+        artistRadio.tracks.map((track) => track.id),
+        <String>['ari-dusk', 'ari-dawn', 'mia-dawn', 'sol-clouds'],
+      );
+      expect(
+        artistRadio.matches.map((match) => match.score),
+        <int>[173, 160, 55, 35],
+      );
+      expect(
+        artistRadio.matches[0].reasons,
+        const <LibraryCollectionRadioReason>[
+          LibraryCollectionRadioReason.seedCollection,
+          LibraryCollectionRadioReason.favorite,
+          LibraryCollectionRadioReason.playHistory,
+        ],
+      );
+      expect(
+        artistRadio.matches[1].reasons,
+        const <LibraryCollectionRadioReason>[
+          LibraryCollectionRadioReason.seedCollection,
+        ],
+      );
+      expect(
+        artistRadio.matches[2].reasons,
+        const <LibraryCollectionRadioReason>[
+          LibraryCollectionRadioReason.album,
+        ],
+      );
+      expect(
+        artistRadio.matches[3].reasons,
+        const <LibraryCollectionRadioReason>[
+          LibraryCollectionRadioReason.genre,
+        ],
+      );
+
+      final albumRadio = store.radioQueueForBrowseGroup(
+        LibraryBrowseType.album,
+        'dusk',
+      )!;
+      expect(
+        albumRadio.tracks.map((track) => track.id),
+        <String>['ari-dusk', 'ari-dawn', 'sol-clouds'],
+      );
+      expect(
+        albumRadio.matches[1].reasons,
+        const <LibraryCollectionRadioReason>[
+          LibraryCollectionRadioReason.artist,
+          LibraryCollectionRadioReason.genre,
+        ],
+      );
+      expect(
+        store
+            .radioQueueForBrowseGroup(
+              LibraryBrowseType.artist,
+              'ari',
+              limit: 2,
+            )!
+            .tracks,
+        hasLength(2),
+      );
+      expect(
+        store.radioQueueForBrowseGroup(LibraryBrowseType.genre, 'ambient'),
+        isNull,
+      );
+      expect(
+        store.radioQueueForBrowseGroup(LibraryBrowseType.artist, 'missing'),
+        isNull,
+      );
+      expect(
+        store.radioQueueForBrowseGroup(LibraryBrowseType.artist, 'ghost'),
+        isNull,
+      );
+      expect(
+        store.radioQueueForBrowseGroup(
+          LibraryBrowseType.artist,
+          'ari',
+          limit: 0,
+        ),
+        isNull,
+      );
+
+      final playlist = await store.saveBrowseGroupRadioPlaylist(
+        LibraryBrowseType.artist,
+        'ari',
+      );
+      expect(playlist, isNotNull);
+      expect(playlist!.name, 'Ari Radio');
+      expect(playlist.trackIds, <String>[
+        'ari-dusk',
+        'ari-dawn',
+        'mia-dawn',
+        'sol-clouds',
+      ]);
+      expect(store.playlistById(playlist.id), playlist);
+      expect(
+        await store.saveBrowseGroupRadioPlaylist(
+          LibraryBrowseType.album,
+          'missing',
+        ),
+        isNull,
+      );
+    },
+  );
+
   test('builds local home feed sections from library activity', () async {
     var now = DateTime.utc(2026, 1, 14, 14);
     final store = LibraryStore(clock: () => now);

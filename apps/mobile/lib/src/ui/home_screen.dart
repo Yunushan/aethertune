@@ -3726,6 +3726,17 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
                         shuffle: true,
                       ),
                     ),
+            onRadio: playableTracks.isEmpty
+                ? null
+                : () => unawaited(
+                      _startBrowseGroupRadio(
+                        context,
+                        player,
+                        library,
+                        type,
+                        group,
+                      ),
+                    ),
             onSavePlaylist: tracks.isEmpty
                 ? null
                 : () => unawaited(_saveLibraryCollection(context, library)),
@@ -3935,6 +3946,7 @@ class _LibraryCollectionDetailHeader extends StatelessWidget {
     required this.representative,
     required this.onPlay,
     required this.onShuffle,
+    required this.onRadio,
     required this.onSavePlaylist,
   });
 
@@ -3945,6 +3957,7 @@ class _LibraryCollectionDetailHeader extends StatelessWidget {
   final Track? representative;
   final VoidCallback? onPlay;
   final VoidCallback? onShuffle;
+  final VoidCallback? onRadio;
   final VoidCallback? onSavePlaylist;
 
   @override
@@ -4010,6 +4023,11 @@ class _LibraryCollectionDetailHeader extends StatelessWidget {
               onPressed: onShuffle,
               icon: const Icon(Icons.shuffle),
               label: const Text('Shuffle'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onRadio,
+              icon: const Icon(Icons.radio),
+              label: const Text('Radio'),
             ),
             OutlinedButton.icon(
               onPressed: onSavePlaylist,
@@ -8849,6 +8867,71 @@ Future<void> _saveTrackRadioPlaylist(
       content: Text(
         playlist == null
             ? 'No playable radio queue for ${seedTrack.title}.'
+            : 'Saved radio as ${playlist.name}.',
+      ),
+    ),
+  );
+}
+
+Future<void> _startBrowseGroupRadio(
+  BuildContext context,
+  PlayerController player,
+  LibraryStore library,
+  LibraryBrowseType type,
+  LibraryBrowseGroup group,
+) async {
+  final radioQueue = library.radioQueueForBrowseGroup(type, group.key);
+  if (radioQueue == null || radioQueue.tracks.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('No playable radio queue for ${group.label}.'),
+      ),
+    );
+    return;
+  }
+
+  final started = await _tryPlayTrackWithResume(
+    context,
+    player,
+    library,
+    radioQueue.seedTrack,
+    queue: radioQueue.tracks,
+  );
+  if (!started || !context.mounted) {
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'Started ${radioQueue.tracks.length}-track ${radioQueue.label} radio.',
+      ),
+      action: SnackBarAction(
+        label: 'Save playlist',
+        onPressed: () => unawaited(
+          _saveBrowseGroupRadioPlaylist(context, library, type, group),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _saveBrowseGroupRadioPlaylist(
+  BuildContext context,
+  LibraryStore library,
+  LibraryBrowseType type,
+  LibraryBrowseGroup group,
+) async {
+  final playlist = await library.saveBrowseGroupRadioPlaylist(type, group.key);
+  if (!context.mounted) {
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        playlist == null
+            ? 'No playable radio queue for ${group.label}.'
             : 'Saved radio as ${playlist.name}.',
       ),
     ),
