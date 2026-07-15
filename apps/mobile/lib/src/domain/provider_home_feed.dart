@@ -1,3 +1,4 @@
+import 'music_catalog_discovery_provider.dart';
 import 'music_catalog_provider.dart';
 
 final class ProviderHomeSection {
@@ -5,11 +6,13 @@ final class ProviderHomeSection {
     required this.provider,
     required this.kind,
     required this.collections,
+    this.discoveryKind,
   });
 
   final MusicCatalogProvider provider;
   final MusicCatalogCollectionKind kind;
   final List<MusicCatalogCollection> collections;
+  final MusicCatalogDiscoveryKind? discoveryKind;
 }
 
 final class ProviderHomeFeedError {
@@ -17,11 +20,13 @@ final class ProviderHomeFeedError {
     required this.providerId,
     required this.providerName,
     required this.kind,
+    this.discoveryKind,
   });
 
   final String providerId;
   final String providerName;
   final MusicCatalogCollectionKind kind;
+  final MusicCatalogDiscoveryKind? discoveryKind;
 }
 
 final class ProviderHomeFeed {
@@ -39,7 +44,7 @@ final class ProviderHomeFeed {
 final class ProviderHomeFeedCoordinator {
   const ProviderHomeFeedCoordinator();
 
-  static const List<MusicCatalogCollectionKind> _supportedKinds =
+  static const List<MusicCatalogCollectionKind> _fallbackKinds =
       <MusicCatalogCollectionKind>[
         MusicCatalogCollectionKind.album,
         MusicCatalogCollectionKind.playlist,
@@ -72,10 +77,9 @@ final class ProviderHomeFeedCoordinator {
 
     final results = await Future.wait<List<_ProviderHomeLoadResult>>(
       uniqueProviders.map(
-        (provider) => Future.wait<_ProviderHomeLoadResult>(
-          _supportedKinds.map(
-            (kind) => _loadSection(provider, kind, limit: limitPerSection),
-          ),
+        (provider) => _loadProvider(
+          provider,
+          limitPerSection: limitPerSection,
         ),
       ),
     );
@@ -98,28 +102,55 @@ final class ProviderHomeFeedCoordinator {
     );
   }
 
+  Future<List<_ProviderHomeLoadResult>> _loadProvider(
+    MusicCatalogProvider provider, {
+    required int limitPerSection,
+  }) {
+    if (provider is MusicCatalogDiscoveryProvider) {
+      final discoveryKinds = <MusicCatalogDiscoveryKind>[];
+      final seenKinds = <MusicCatalogDiscoveryKind>{};
+      for (final kind in provider.discoveryKinds) {
+        if (seenKinds.add(kind)) {
+          discoveryKinds.add(kind);
+        }
+      }
+      if (discoveryKinds.isNotEmpty) {
+        return Future.wait<_ProviderHomeLoadResult>(
+          <Future<_ProviderHomeLoadResult>>[
+            for (final kind in discoveryKinds)
+              _loadDiscoverySection(
+                provider,
+                kind,
+                limit: limitPerSection,
+              ),
+            _loadSection(
+              provider,
+              MusicCatalogCollectionKind.playlist,
+              limit: limitPerSection,
+            ),
+          ],
+        );
+      }
+    }
+
+    return Future.wait<_ProviderHomeLoadResult>(
+      _fallbackKinds.map(
+        (kind) => _loadSection(provider, kind, limit: limitPerSection),
+      ),
+    );
+  }
+
   Future<_ProviderHomeLoadResult> _loadSection(
     MusicCatalogProvider provider,
     MusicCatalogCollectionKind kind, {
     required int limit,
   }) async {
     try {
-      final collections = await provider.browseCollections(kind);
-      final visible = <MusicCatalogCollection>[];
-      final collectionIds = <String>{};
-      for (final collection in collections) {
-        final id = collection.id.trim();
-        if (collection.kind != kind ||
-            id.isEmpty ||
-            collection.title.trim().isEmpty ||
-            !collectionIds.add(id)) {
-          continue;
-        }
-        visible.add(collection);
-        if (visible.length == limit) {
-          break;
-        }
-      }
+      final visible = _visibleCollections(
+        await provider.browseCollections(kind),
+        kind,
+        limit: limit,
+      );
 
       return _ProviderHomeLoadResult(
         section: visible.isEmpty
@@ -127,7 +158,7 @@ final class ProviderHomeFeedCoordinator {
             : ProviderHomeSection(
                 provider: provider,
                 kind: kind,
-                collections: List<MusicCatalogCollection>.unmodifiable(visible),
+                collections: visible,
               ),
       );
     } on Object {
@@ -140,6 +171,65 @@ final class ProviderHomeFeedCoordinator {
       );
     }
   }
+
+  Future<_ProviderHomeLoadResult> _loadDiscoverySection(
+    MusicCatalogDiscoveryProvider provider,
+    MusicCatalogDiscoveryKind discoveryKind, {
+    required int limit,
+  }) async {
+    try {
+      final visible = _visibleCollections(
+        await provider.browseDiscoveryCollections(
+          discoveryKind,
+          limit: limit,
+        ),
+        MusicCatalogCollectionKind.album,
+        limit: limit,
+      );
+      return _ProviderHomeLoadResult(
+        section: visible.isEmpty
+            ? null
+            : ProviderHomeSection(
+                provider: provider,
+                kind: MusicCatalogCollectionKind.album,
+                collections: visible,
+                discoveryKind: discoveryKind,
+              ),
+      );
+    } on Object {
+      return _ProviderHomeLoadResult(
+        error: ProviderHomeFeedError(
+          providerId: provider.id,
+          providerName: provider.name,
+          kind: MusicCatalogCollectionKind.album,
+          discoveryKind: discoveryKind,
+        ),
+      );
+    }
+  }
+}
+
+List<MusicCatalogCollection> _visibleCollections(
+  Iterable<MusicCatalogCollection> collections,
+  MusicCatalogCollectionKind kind, {
+  required int limit,
+}) {
+  final visible = <MusicCatalogCollection>[];
+  final collectionIds = <String>{};
+  for (final collection in collections) {
+    final id = collection.id.trim();
+    if (collection.kind != kind ||
+        id.isEmpty ||
+        collection.title.trim().isEmpty ||
+        !collectionIds.add(id)) {
+      continue;
+    }
+    visible.add(collection);
+    if (visible.length == limit) {
+      break;
+    }
+  }
+  return List<MusicCatalogCollection>.unmodifiable(visible);
 }
 
 final class _ProviderHomeLoadResult {

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/jellyfin_provider.dart';
+import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -141,6 +142,48 @@ void main() {
         (request) => request.queryParameters['api_key'] == 'api-secret',
       ),
       isTrue,
+    );
+  });
+
+  test('loads Jellyfin recently added albums from latest media', () async {
+    Uri? capturedUri;
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        capturedUri = uri;
+        return _jellyfinLatestAlbumsJson;
+      },
+    );
+
+    final albums = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.recentlyAdded,
+      limit: 7,
+    );
+
+    expect(provider.discoveryKinds, <MusicCatalogDiscoveryKind>[
+      MusicCatalogDiscoveryKind.recentlyAdded,
+    ]);
+    expect(
+      provider.capabilities,
+      isNot(contains(MusicSourceCapability.recommendations)),
+    );
+    expect(albums.single.id, 'album-latest');
+    expect(albums.single.title, 'Latest Rooms');
+    expect(albums.single.subtitle, 'Mira Sol · 2026 · 9 item(s)');
+    expect(capturedUri!.path, '/jellyfin/Items/Latest');
+    expect(capturedUri!.queryParameters['userId'], 'user-1');
+    expect(capturedUri!.queryParameters['includeItemTypes'], 'MusicAlbum');
+    expect(capturedUri!.queryParameters['limit'], '7');
+    expect(capturedUri!.queryParameters['groupItems'], 'false');
+    expect(capturedUri!.queryParameters['api_key'], 'api-secret');
+
+    await expectLater(
+      provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.random,
+      ),
+      throwsUnsupportedError,
     );
   });
 
@@ -409,6 +452,19 @@ const _jellyfinAlbumsJson = '''
     }
   ]
 }
+''';
+
+const _jellyfinLatestAlbumsJson = '''
+[
+  {
+    "Id": "album-latest",
+    "Name": "Latest Rooms",
+    "AlbumArtist": "Mira Sol",
+    "ProductionYear": 2026,
+    "ChildCount": 9,
+    "ImageTags": {"Primary": "latest-image-tag"}
+  }
+]
 ''';
 
 const _jellyfinPlaylistsJson = '''

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+import '../domain/music_catalog_discovery_provider.dart';
 import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
@@ -15,7 +16,7 @@ typedef SubsonicRequestLoader = Future<String> Function(Uri requestUri);
 typedef SubsonicSaltGenerator = String Function();
 
 class SubsonicProvider
-    implements MusicCatalogProvider, MusicPlaylistMutationProvider {
+    implements MusicCatalogDiscoveryProvider, MusicPlaylistMutationProvider {
   SubsonicProvider({
     required this.baseUri,
     required this.username,
@@ -80,6 +81,7 @@ class SubsonicProvider
           'salted authentication token',
           'song search query',
           'artist, album, and playlist browse identifiers',
+          'Home discovery list selection and result limit',
           'playlist names, membership, and track order changes',
           'song stream identifier',
           'cover art identifier',
@@ -160,6 +162,43 @@ class SubsonicProvider
             ),
           );
       }
+    });
+  }
+
+  @override
+  List<MusicCatalogDiscoveryKind> get discoveryKinds =>
+      const <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.random,
+      ];
+
+  @override
+  Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
+    MusicCatalogDiscoveryKind kind, {
+    int limit = 6,
+  }) {
+    final listType = switch (kind) {
+      MusicCatalogDiscoveryKind.recentlyAdded => 'newest',
+      MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequent',
+      MusicCatalogDiscoveryKind.recentlyPlayed => 'recent',
+      MusicCatalogDiscoveryKind.random => 'random',
+    };
+    final boundedLimit = limit.clamp(1, 500);
+    return _guardRequest(() async {
+      return parseSubsonicAlbumListResponse(
+        await _requestLoader(
+          _requestUri(
+            '/rest/getAlbumList2.view',
+            <String, String>{
+              'type': listType,
+              'size': boundedLimit.toString(),
+              'offset': '0',
+            },
+          ),
+        ),
+      );
     });
   }
 

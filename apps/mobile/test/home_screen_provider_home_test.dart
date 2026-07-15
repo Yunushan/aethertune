@@ -12,6 +12,7 @@ import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
+import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/self_hosted_provider_account.dart';
@@ -85,6 +86,40 @@ void main() {
       expect(find.text('Your local feed is empty'), findsOneWidget);
     },
   );
+
+  testWidgets('renders provider-specific discovery without an album fallback', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final provider = _FakeProviderHomeDiscoveryCatalog();
+    final fixture = await _HomeFixture.create(provider: provider);
+    addTearDown(fixture.dispose);
+    await _pumpHome(tester, fixture);
+
+    expect(provider.discoveryCalls, isEmpty);
+    expect(provider.browseCalls, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('provider-home-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.discoveryCalls, <MusicCatalogDiscoveryKind>[
+      MusicCatalogDiscoveryKind.recentlyAdded,
+    ]);
+    expect(provider.browseCalls, <MusicCatalogCollectionKind>[
+      MusicCatalogCollectionKind.playlist,
+    ]);
+    expect(find.text('Test Server recently added'), findsOneWidget);
+    expect(find.text('Newest albums reported by this server'), findsOneWidget);
+    expect(find.text('Latest Server Album'), findsOneWidget);
+    expect(find.text('Test Server playlists'), findsOneWidget);
+    expect(find.text('Test Server albums'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('keeps desktop server discovery offline without requests', (
     tester,
@@ -300,6 +335,36 @@ final class _FakeProviderHomeCatalog implements MusicCatalogProvider {
   @override
   Future<Uri?> resolveStream(Track track) async {
     return Uri.parse('https://music.example.test/stream/${track.id}');
+  }
+}
+
+final class _FakeProviderHomeDiscoveryCatalog
+    extends _FakeProviderHomeCatalog
+    implements MusicCatalogDiscoveryProvider {
+  final List<MusicCatalogDiscoveryKind> discoveryCalls =
+      <MusicCatalogDiscoveryKind>[];
+
+  @override
+  List<MusicCatalogDiscoveryKind> get discoveryKinds =>
+      const <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      ];
+
+  @override
+  Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
+    MusicCatalogDiscoveryKind kind, {
+    int limit = 6,
+  }) async {
+    discoveryCalls.add(kind);
+    return const <MusicCatalogCollection>[
+      MusicCatalogCollection(
+        id: 'album-latest',
+        title: 'Latest Server Album',
+        kind: MusicCatalogCollectionKind.album,
+        subtitle: 'Remote Artist',
+        itemCount: 1,
+      ),
+    ];
   }
 }
 

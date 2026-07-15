@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../domain/music_catalog_discovery_provider.dart';
 import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
@@ -16,7 +17,7 @@ typedef JellyfinMutationLoader = Future<void> Function(
 );
 
 class JellyfinProvider
-    implements MusicCatalogProvider, MusicPlaylistMutationProvider {
+    implements MusicCatalogDiscoveryProvider, MusicPlaylistMutationProvider {
   JellyfinProvider({
     required this.baseUri,
     required this.userId,
@@ -77,6 +78,7 @@ class JellyfinProvider
           'Jellyfin user identifier',
           'audio search query',
           'artist, album, and playlist browse identifiers',
+          'Home discovery list selection and result limit',
           'playlist names, membership, and track order changes',
           'audio item stream identifier',
           'cover art item identifier',
@@ -157,6 +159,44 @@ class JellyfinProvider
       return parseJellyfinCollectionsResponse(
         await _requestLoader(uri),
         kind,
+      );
+    });
+  }
+
+  @override
+  List<MusicCatalogDiscoveryKind> get discoveryKinds =>
+      const <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      ];
+
+  @override
+  Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
+    MusicCatalogDiscoveryKind kind, {
+    int limit = 6,
+  }) {
+    if (kind != MusicCatalogDiscoveryKind.recentlyAdded) {
+      return Future<List<MusicCatalogCollection>>.error(
+        UnsupportedError('Jellyfin discovery kind is not supported.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 50);
+    return _guardRequest(() async {
+      return parseJellyfinLatestCollectionsResponse(
+        await _requestLoader(
+          _requestUri(
+            '/Items/Latest',
+            <String, String>{
+              'userId': userId,
+              'includeItemTypes': 'MusicAlbum',
+              'fields': 'Genres,RecursiveItemCount,ChildCount',
+              'enableImages': 'true',
+              'enableImageTypes': 'Primary',
+              'imageTypeLimit': '1',
+              'limit': boundedLimit.toString(),
+              'groupItems': 'false',
+            },
+          ),
+        ),
       );
     });
   }
@@ -518,6 +558,29 @@ List<MusicCatalogCollection> parseJellyfinCollectionsResponse(
       .whereType<Map<dynamic, dynamic>>()
       .map((item) => item.cast<String, Object?>())
       .map((item) => _jellyfinCollection(item, kind))
+      .whereType<MusicCatalogCollection>()
+      .toList(growable: false);
+}
+
+List<MusicCatalogCollection> parseJellyfinLatestCollectionsResponse(
+  String jsonText,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! List<dynamic>) {
+    throw const FormatException(
+      'Jellyfin latest media response must be a JSON array.',
+    );
+  }
+
+  return decoded
+      .whereType<Map<dynamic, dynamic>>()
+      .map((item) => item.cast<String, Object?>())
+      .map(
+        (item) => _jellyfinCollection(
+          item,
+          MusicCatalogCollectionKind.album,
+        ),
+      )
       .whereType<MusicCatalogCollection>()
       .toList(growable: false);
 }

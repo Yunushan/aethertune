@@ -35,6 +35,7 @@ import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/lyrics_document.dart';
+import '../domain/music_catalog_discovery_provider.dart';
 import '../domain/music_catalog_provider.dart';
 import '../domain/replay_gain.dart';
 import '../domain/music_source_provider.dart';
@@ -2763,7 +2764,7 @@ class _ProviderHomeDiscovery extends StatelessWidget {
     final subtitle = offline
         ? 'Offline mode'
         : loadedSections > 0
-            ? '$loadedSections catalog section(s) loaded'
+            ? '$loadedSections server section(s) loaded'
             : '$providerCount configured server(s)';
 
     return Column(
@@ -2801,7 +2802,7 @@ class _ProviderHomeDiscovery extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.warning_amber_outlined),
             title: Text(
-              '${feed!.errors.length} catalog section(s) unavailable',
+              '${feed!.errors.length} server section(s) unavailable',
             ),
             subtitle: feed!.hasContent
                 ? const Text('Available server results are shown below.')
@@ -2828,16 +2829,26 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final discoveryKind = section.discoveryKind;
+    final sectionLabel = discoveryKind == null
+        ? _providerHomeKindLabel(section.kind)
+        : _providerHomeDiscoveryLabel(discoveryKind);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: Icon(_providerHomeKindIcon(section.kind)),
-          title: Text(
-            '${section.provider.name} ${_providerHomeKindLabel(section.kind)}',
+          leading: Icon(
+            discoveryKind == null
+                ? _providerHomeKindIcon(section.kind)
+                : _providerHomeDiscoveryIcon(discoveryKind),
           ),
-          subtitle: const Text('Configured self-hosted catalog'),
+          title: Text('${section.provider.name} $sectionLabel'),
+          subtitle: Text(
+            discoveryKind == null
+                ? 'Configured self-hosted catalog'
+                : _providerHomeDiscoverySubtitle(discoveryKind),
+          ),
           trailing: Text('${section.collections.length}'),
         ),
         SizedBox(
@@ -2961,6 +2972,37 @@ IconData _providerHomeKindIcon(MusicCatalogCollectionKind kind) {
     MusicCatalogCollectionKind.artist => Icons.people_outline,
     MusicCatalogCollectionKind.album => Icons.album_outlined,
     MusicCatalogCollectionKind.playlist => Icons.queue_music_outlined,
+  };
+}
+
+String _providerHomeDiscoveryLabel(MusicCatalogDiscoveryKind kind) {
+  return switch (kind) {
+    MusicCatalogDiscoveryKind.recentlyAdded => 'recently added',
+    MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequently played',
+    MusicCatalogDiscoveryKind.recentlyPlayed => 'recently played',
+    MusicCatalogDiscoveryKind.random => 'random albums',
+  };
+}
+
+String _providerHomeDiscoverySubtitle(MusicCatalogDiscoveryKind kind) {
+  return switch (kind) {
+    MusicCatalogDiscoveryKind.recentlyAdded =>
+      'Newest albums reported by this server',
+    MusicCatalogDiscoveryKind.frequentlyPlayed =>
+      'Most-played albums reported by this server',
+    MusicCatalogDiscoveryKind.recentlyPlayed =>
+      'Recently played albums reported by this server',
+    MusicCatalogDiscoveryKind.random =>
+      'Random albums selected by this server',
+  };
+}
+
+IconData _providerHomeDiscoveryIcon(MusicCatalogDiscoveryKind kind) {
+  return switch (kind) {
+    MusicCatalogDiscoveryKind.recentlyAdded => Icons.new_releases_outlined,
+    MusicCatalogDiscoveryKind.frequentlyPlayed => Icons.trending_up,
+    MusicCatalogDiscoveryKind.recentlyPlayed => Icons.history_outlined,
+    MusicCatalogDiscoveryKind.random => Icons.shuffle,
   };
 }
 

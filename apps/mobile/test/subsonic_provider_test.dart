@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/subsonic_provider.dart';
+import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 
@@ -162,6 +163,50 @@ void main() {
             !request.queryParameters.containsKey('p'),
       ),
       isTrue,
+    );
+  });
+
+  test('loads documented Subsonic album discovery lists', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _albumListResponseJson;
+      },
+    );
+
+    for (final kind in provider.discoveryKinds) {
+      final albums = await provider.browseDiscoveryCollections(kind, limit: 7);
+      expect(albums.single.id, 'album-1');
+    }
+
+    expect(provider.discoveryKinds, <MusicCatalogDiscoveryKind>[
+      MusicCatalogDiscoveryKind.recentlyAdded,
+      MusicCatalogDiscoveryKind.frequentlyPlayed,
+      MusicCatalogDiscoveryKind.recentlyPlayed,
+      MusicCatalogDiscoveryKind.random,
+    ]);
+    expect(
+      requests.map((request) => request.queryParameters['type']),
+      <String>['newest', 'frequent', 'recent', 'random'],
+    );
+    expect(
+      requests.every(
+        (request) =>
+            request.path == '/navidrome/rest/getAlbumList2.view' &&
+            request.queryParameters['size'] == '7' &&
+            request.queryParameters['offset'] == '0' &&
+            request.queryParameters['t'] == _secretToken,
+      ),
+      isTrue,
+    );
+    expect(
+      provider.capabilities,
+      isNot(contains(MusicSourceCapability.recommendations)),
     );
   });
 
