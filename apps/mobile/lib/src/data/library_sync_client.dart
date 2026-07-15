@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import '../domain/library_sync_account.dart';
+import '../domain/library_sync_profile.dart';
 import 'provider_error.dart';
 
 const maxLibrarySyncResponseBytes = 9 * 1024 * 1024;
@@ -71,7 +72,12 @@ abstract interface class LibrarySyncGateway {
   Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision});
 }
 
-class LibrarySyncClient implements LibrarySyncGateway {
+abstract interface class LibrarySyncProfileGateway {
+  Future<LibrarySyncProfile?> fetchProfile();
+}
+
+class LibrarySyncClient
+    implements LibrarySyncGateway, LibrarySyncProfileGateway {
   LibrarySyncClient({
     required this.account,
     required this.token,
@@ -81,6 +87,21 @@ class LibrarySyncClient implements LibrarySyncGateway {
   final LibrarySyncAccount account;
   final String token;
   final LibrarySyncHttpExecutor _httpExecutor;
+
+  @override
+  Future<LibrarySyncProfile?> fetchProfile() async {
+    final response = await _execute(
+      'GET',
+      endpoint: account.profileEndpointUri,
+    );
+    if (response.statusCode == 404) {
+      return null;
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return LibrarySyncProfile.fromServerJson(_jsonObject(response.body));
+  }
 
   @override
   Future<LibrarySyncRemoteSnapshot> fetch() async {
@@ -182,12 +203,13 @@ class LibrarySyncClient implements LibrarySyncGateway {
 
   Future<LibrarySyncHttpResponse> _execute(
     String method, {
+    Uri? endpoint,
     String? body,
   }) async {
     try {
       return await _httpExecutor(
         method,
-        account.libraryEndpointUri,
+        endpoint ?? account.libraryEndpointUri,
         headers: <String, String>{
           'authorization': 'Bearer $token',
           'accept': 'application/json',

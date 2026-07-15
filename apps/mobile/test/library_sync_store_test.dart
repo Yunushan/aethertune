@@ -8,6 +8,7 @@ import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/library_sync_credential_vault.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
+import 'package:aethertune/src/domain/library_sync_profile.dart';
 import 'package:aethertune/src/domain/track.dart';
 
 void main() {
@@ -26,6 +27,7 @@ void main() {
         checksum: 'checksum',
         snapshot: _emptySnapshot(),
       ),
+      profile: _managedProfile(),
     );
     final store = LibrarySyncStore(
       credentialVault: vault,
@@ -43,11 +45,15 @@ void main() {
     expect(store.isConfigured, isTrue);
     expect(store.lastKnownRevision, 0);
     expect(store.remoteRevision, 3);
+    expect(store.profile?.effectiveDisplayName, 'Primary listener');
+    expect(store.profile?.device?.name, 'Windows desktop');
     expect(vault.token, 'private-token');
     final prefs = await SharedPreferences.getInstance();
     final metadata = prefs.getString('aethertune.library_sync.metadata.v1')!;
     expect(metadata, contains('sync.example.test'));
     expect(metadata, contains('Test device'));
+    expect(metadata, contains('Primary listener'));
+    expect(metadata, contains('Windows desktop'));
     expect(metadata, isNot(contains('private-token')));
 
     final restored = LibrarySyncStore(
@@ -57,6 +63,45 @@ void main() {
     await restored.load();
     expect(restored.isConfigured, isTrue);
     expect(restored.remoteRevision, 3);
+    expect(restored.profile?.id, 'primary');
+    expect(restored.profile?.device?.name, 'Windows desktop');
+  });
+
+  test('refreshes and persists non-secret account identity', () async {
+    final vault = _MemorySyncVault();
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      profile: _managedProfile(),
+    );
+    final store = LibrarySyncStore(
+      credentialVault: vault,
+      clientFactory: (account, token) => gateway,
+    );
+    final library = LibraryStore();
+    await library.load();
+    await store.load();
+    await store.testAndSave(library, _account(), 'private-token');
+
+    gateway.profile = LibrarySyncProfile(
+      id: 'primary',
+      displayName: 'Updated listener',
+      managed: true,
+      device: _managedProfile().device,
+    );
+    await store.refreshProfile(library);
+
+    expect(gateway.profileFetchCalls, 2);
+    expect(store.profile?.effectiveDisplayName, 'Updated listener');
+    final restored = LibrarySyncStore(
+      credentialVault: vault,
+      clientFactory: (account, token) => gateway,
+    );
+    await restored.load();
+    expect(restored.profile?.effectiveDisplayName, 'Updated listener');
+    final metadata = (await SharedPreferences.getInstance()).getString(
+      'aethertune.library_sync.metadata.v1',
+    )!;
+    expect(metadata, isNot(contains('private-token')));
   });
 
   test('failed connection and vault writes do not replace working settings',
@@ -64,6 +109,7 @@ void main() {
     final vault = _MemorySyncVault();
     final firstGateway = _FakeSyncGateway(
       remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      profile: _managedProfile(),
     );
     var activeGateway = firstGateway;
     final store = LibrarySyncStore(
@@ -95,8 +141,17 @@ void main() {
     );
     expect(vault.token, 'old-token');
     expect(store.account?.deviceId, 'Test device');
+    expect(store.profile?.effectiveDisplayName, 'Primary listener');
 
-    activeGateway = firstGateway;
+    activeGateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      profile: LibrarySyncProfile(
+        id: 'replacement',
+        displayName: 'Replacement profile',
+        managed: true,
+        device: _managedProfile().device,
+      ),
+    );
     vault.failNextWriteFor = 'write-failure-token';
     await expectLater(
       store.testAndSave(
@@ -108,6 +163,7 @@ void main() {
     );
     expect(vault.token, 'old-token');
     expect(store.account?.deviceId, 'Test device');
+    expect(store.profile?.effectiveDisplayName, 'Primary listener');
   });
 
   test('push detects conflicts and explicit overwrite advances revision',
@@ -394,6 +450,7 @@ void main() {
 
     await sync.remove();
     expect(sync.isConfigured, isFalse);
+    expect(sync.profile, isNull);
     expect(vault.token, isNull);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('aethertune.library_sync.metadata.v1'), isNull);
@@ -419,6 +476,19 @@ Map<String, Object?> _emptySnapshot() {
   };
 }
 
+LibrarySyncProfile _managedProfile() {
+  return LibrarySyncProfile(
+    id: 'primary',
+    displayName: 'Primary listener',
+    managed: true,
+    device: LibrarySyncProfileDevice(
+      id: '0123456789abcdef01234567',
+      name: 'Windows desktop',
+      createdAt: DateTime.utc(2026, 7, 15, 12),
+    ),
+  );
+}
+
 class _MemorySyncVault implements LibrarySyncCredentialVault {
   String? token;
   String? failNextWriteFor;
@@ -441,16 +511,23 @@ class _MemorySyncVault implements LibrarySyncCredentialVault {
   }
 }
 
-class _FakeSyncGateway implements LibrarySyncGateway {
-  _FakeSyncGateway({required this.remote, this.fetchError});
+class _FakeSyncGateway
+    implements LibrarySyncGateway, LibrarySyncProfileGateway {
+  _FakeSyncGateway({
+    required this.remote,
+    this.profile,
+    this.fetchError,
+  });
 
   LibrarySyncRemoteSnapshot remote;
+  LibrarySyncProfile? profile;
   Object? fetchError;
   Object? pushError;
   LibrarySyncRemoteSnapshot? pushResult;
   Object? deleteError;
   LibrarySyncRemoteSnapshot? deleteResult;
   int pushCalls = 0;
+  int profileFetchCalls = 0;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
   final List<Map<String, Object?>> pushedSnapshots =
@@ -462,6 +539,12 @@ class _FakeSyncGateway implements LibrarySyncGateway {
       throw fetchError!;
     }
     return remote;
+  }
+
+  @override
+  Future<LibrarySyncProfile?> fetchProfile() async {
+    profileFetchCalls += 1;
+    return profile;
   }
 
   @override

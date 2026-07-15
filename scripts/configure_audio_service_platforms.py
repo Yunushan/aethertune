@@ -648,20 +648,28 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
     gradle = gradle_path.read_text(encoding="utf-8")
     gradle, replacements = re.subn(
         r"minSdk\s*=\s*flutter\.minSdkVersion",
-        f"minSdk = {ANDROID_MIN_SDK}",
+        f"minSdk = maxOf(flutter.minSdkVersion, {ANDROID_MIN_SDK})",
         gradle,
     )
     if replacements == 0:
         gradle, replacements = re.subn(
             r"minSdkVersion\s+flutter\.minSdkVersion",
-            f"minSdkVersion {ANDROID_MIN_SDK}",
+            f"minSdkVersion Math.max(flutter.minSdkVersion, {ANDROID_MIN_SDK})",
             gradle,
         )
-    if replacements == 0 and not re.search(
-        rf"(?:minSdk\s*=|minSdkVersion)\s*{ANDROID_MIN_SDK}\b", gradle
-    ):
+    if replacements == 0 and not _has_android_min_sdk_floor(gradle):
         raise RuntimeError(f"No Android minimum SDK declaration in {gradle_path}")
     gradle_path.write_text(gradle, encoding="utf-8")
+
+
+def _has_android_min_sdk_floor(gradle: str) -> bool:
+    minimum = ANDROID_MIN_SDK
+    patterns = (
+        rf"(?:minSdk\s*=|minSdkVersion)\s*{minimum}\b",
+        rf"minSdk\s*=\s*maxOf\(\s*flutter\.minSdkVersion\s*,\s*{minimum}\s*\)",
+        rf"minSdkVersion\s+Math\.max\(\s*flutter\.minSdkVersion\s*,\s*{minimum}\s*\)",
+    )
+    return any(re.search(pattern, gradle) for pattern in patterns)
 
 
 def configure_ios(info_plist_path: Path) -> None:
@@ -876,10 +884,8 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     if not all(action in activity_source_text for action in shortcut_actions):
         raise RuntimeError("Android launcher shortcuts are not routed by MainActivity")
     gradle = gradle_path.read_text(encoding="utf-8")
-    if not re.search(
-        rf"(?:minSdk\s*=|minSdkVersion)\s*{ANDROID_MIN_SDK}\b", gradle
-    ):
-        raise RuntimeError("Android minimum SDK is not 23")
+    if not _has_android_min_sdk_floor(gradle):
+        raise RuntimeError("Android minimum SDK floor is not 23")
 
 
 def verify_ios(info_plist_path: Path) -> None:

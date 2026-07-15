@@ -83,7 +83,7 @@ void main() {
       'false',
     );
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
-    expect(gradle, contains('minSdk = 23'));
+    expect(gradle, contains('minSdk = maxOf(flutter.minSdkVersion, 23)'));
   });
 
   test('generated iOS wrapper enables background audio', () {

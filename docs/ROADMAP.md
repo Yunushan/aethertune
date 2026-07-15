@@ -126,6 +126,7 @@
 - [x] Durable managed account and device-token registry
 - [x] Operations-authenticated token issue, rotation, and revocation
 - [x] Authenticated account/device profile endpoint
+- [x] Client account/device identity validation, persistence, and refresh UI
 - [ ] Optional public registration or external identity integration
 - [x] Versioned library sync API with durable snapshots
 - [ ] Remote provider coordination

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/library_sync_account.dart';
+import '../domain/library_sync_profile.dart';
 import 'library_store.dart';
 import 'library_sync_client.dart';
 import 'library_sync_credential_vault.dart';
@@ -32,6 +33,7 @@ class LibrarySyncStore extends ChangeNotifier {
   final DateTime Function() _clock;
 
   LibrarySyncAccount? _account;
+  LibrarySyncProfile? _profile;
   String? _token;
   int _lastKnownRevision = 0;
   int _remoteRevision = 0;
@@ -47,6 +49,7 @@ class LibrarySyncStore extends ChangeNotifier {
   bool _busy = false;
 
   LibrarySyncAccount? get account => _account;
+  LibrarySyncProfile? get profile => _profile;
   int get lastKnownRevision => _lastKnownRevision;
   int get remoteRevision => _remoteRevision;
   DateTime? get lastSyncAt => _lastSyncAt;
@@ -80,6 +83,7 @@ class LibrarySyncStore extends ChangeNotifier {
         _account = LibrarySyncAccount.fromJson(
           Map<String, Object?>.from(rawAccount),
         );
+        _profile = _optionalProfile(metadata['profile']);
         _lastKnownRevision = _nonNegativeInt(metadata['lastKnownRevision']);
         _remoteRevision = _nonNegativeInt(metadata['remoteRevision']);
         _lastSyncAt = _optionalDate(metadata['lastSyncAt']);
@@ -117,8 +121,13 @@ class LibrarySyncStore extends ChangeNotifier {
     return _runBusy(() async {
       _requireOnline(library);
       LibrarySyncRemoteSnapshot remote;
+      LibrarySyncProfile? profile;
       try {
-        remote = await _clientFactory(account, normalizedToken).fetch();
+        final client = _clientFactory(account, normalizedToken);
+        remote = await client.fetch();
+        if (client is LibrarySyncProfileGateway) {
+          profile = await (client as LibrarySyncProfileGateway).fetchProfile();
+        }
       } on Object catch (error) {
         throw ProviderRequestException(
           safeProviderErrorMessage(
@@ -130,6 +139,7 @@ class LibrarySyncStore extends ChangeNotifier {
       }
 
       final oldAccount = _account;
+      final oldProfile = _profile;
       final oldToken = _token;
       final oldKnownRevision = _lastKnownRevision;
       final oldRemoteRevision = _remoteRevision;
@@ -139,6 +149,7 @@ class LibrarySyncStore extends ChangeNotifier {
         await _credentialVault.write(normalizedToken);
         final sameServer = oldAccount?.baseUri == account.baseUri;
         _account = account;
+        _profile = profile;
         _token = normalizedToken;
         _lastKnownRevision = sameServer ? oldKnownRevision : 0;
         _applyRemoteMetadata(remote);
@@ -146,6 +157,7 @@ class LibrarySyncStore extends ChangeNotifier {
         await _saveMetadata();
       } on Object catch (error) {
         _account = oldAccount;
+        _profile = oldProfile;
         _token = oldToken;
         _lastKnownRevision = oldKnownRevision;
         _remoteRevision = oldRemoteRevision;
@@ -221,6 +233,27 @@ class LibrarySyncStore extends ChangeNotifier {
       rethrow;
     }
     notifyListeners();
+  }
+
+  Future<LibrarySyncProfile?> refreshProfile(LibraryStore library) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      if (client is! LibrarySyncProfileGateway) {
+        return _profile;
+      }
+      final previous = _profile;
+      final refreshed = await (client as LibrarySyncProfileGateway)
+          .fetchProfile();
+      _profile = refreshed;
+      try {
+        await _saveMetadata();
+      } on Object {
+        _profile = previous;
+        rethrow;
+      }
+      return refreshed;
+    });
   }
 
   Future<bool> uploadAutomaticallyIfDue(LibraryStore library) async {
@@ -352,6 +385,7 @@ class LibrarySyncStore extends ChangeNotifier {
         rethrow;
       }
       _account = null;
+      _profile = null;
       _token = null;
       _lastKnownRevision = 0;
       _remoteRevision = 0;
@@ -414,6 +448,7 @@ class LibrarySyncStore extends ChangeNotifier {
       _metadataKey,
       jsonEncode(<String, Object?>{
         'account': account.toJson(),
+        'profile': _profile?.toJson(),
         'lastKnownRevision': _lastKnownRevision,
         'remoteRevision': _remoteRevision,
         'lastSyncAt': _lastSyncAt?.toIso8601String(),
@@ -445,4 +480,15 @@ String? _optionalString(Object? value) {
 DateTime? _optionalDate(Object? value) {
   final raw = _optionalString(value);
   return raw == null ? null : DateTime.tryParse(raw)?.toUtc();
+}
+
+LibrarySyncProfile? _optionalProfile(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  try {
+    return LibrarySyncProfile.fromJson(Map<String, Object?>.from(value));
+  } on FormatException {
+    return null;
+  }
 }

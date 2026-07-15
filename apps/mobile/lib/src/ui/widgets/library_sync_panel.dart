@@ -5,6 +5,7 @@ import '../../data/library_store.dart';
 import '../../data/library_sync_client.dart';
 import '../../data/library_sync_store.dart';
 import '../../domain/library_sync_account.dart';
+import '../../domain/library_sync_profile.dart';
 
 enum _LibrarySyncConflictChoice { server, merge, local }
 
@@ -44,6 +45,34 @@ class LibrarySyncPanel extends StatelessWidget {
         ),
         if (sync.busy)
           const LinearProgressIndicator(key: Key('library-sync-progress')),
+        if (sync.isConfigured)
+          ListTile(
+            key: const Key('library-sync-profile'),
+            dense: true,
+            leading: Icon(
+              sync.profile == null
+                  ? Icons.person_outline
+                  : sync.profile!.managed
+                  ? Icons.manage_accounts_outlined
+                  : Icons.key_outlined,
+            ),
+            title: Text(
+              sync.profile?.effectiveDisplayName ?? 'Server account',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              _profileStatusText(sync.profile),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              key: const Key('library-sync-refresh-profile'),
+              tooltip: 'Refresh account identity',
+              onPressed: actionsEnabled ? () => _refreshProfile(context) : null,
+              icon: const Icon(Icons.refresh_outlined),
+            ),
+          ),
         if (sync.isConfigured)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -133,6 +162,37 @@ class LibrarySyncPanel extends StatelessWidget {
     final device = sync.remoteUpdatedByDevice;
     final remote = device == null ? revision : '$revision from $device';
     return '${account.baseUri.host} · $remote';
+  }
+
+  static String _profileStatusText(LibrarySyncProfile? profile) {
+    if (profile == null) {
+      return 'Account identity unavailable';
+    }
+    final device = profile.device;
+    if (profile.managed && device != null) {
+      return 'Account ${profile.id} · Device ${device.name}';
+    }
+    return 'Static account ${profile.id}';
+  }
+
+  static Future<void> _refreshProfile(BuildContext context) async {
+    try {
+      final profile = await context.read<LibrarySyncStore>().refreshProfile(
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(
+          context,
+          profile == null
+              ? 'Server account identity is unavailable.'
+              : 'Account identity refreshed.',
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, error);
+      }
+    }
   }
 
   static Future<void> _configure(

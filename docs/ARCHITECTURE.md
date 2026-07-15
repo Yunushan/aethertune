@@ -211,6 +211,15 @@ account under `AETHERTUNE_DATA_DIR`, enforces an optimistic base revision, and
 rejects local paths and device cache jobs. Separate tokens issued for the same
 account resolve to that same snapshot owner.
 
+During client **Test and save**, the Flutter sync gateway first verifies the
+snapshot endpoint and then requests the authenticated profile capability. A
+`404` keeps older servers compatible; a supported response must pass bounded
+account/device validation before the non-secret profile is persisted beside
+sync metadata. The bearer token remains only in the platform credential vault.
+Options presents the account/device identity and can refresh it independently;
+failed vault or metadata writes restore the previous account, profile, and
+token state.
+
 Operators set a distinct `AETHERTUNE_OPS_TOKEN`, in raw or `sha256:` form, to
 protect aggregate metrics and all managed credential mutations with
 constant-time bearer verification. Managed administration fails closed when

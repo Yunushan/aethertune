@@ -10,6 +10,7 @@ import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/library_sync_credential_vault.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
+import 'package:aethertune/src/domain/library_sync_profile.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/ui/widgets/library_sync_panel.dart';
 
@@ -26,6 +27,7 @@ void main() {
     final vault = _MemorySyncVault();
     final gateway = _FakeSyncGateway(
       remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      profile: _managedProfile(),
     );
     final sync = LibrarySyncStore(
       credentialVault: vault,
@@ -60,10 +62,26 @@ void main() {
     expect(vault.token, 'private-token');
     expect(gateway.fetchCalls, 1);
     expect(find.textContaining('sync.example.test'), findsOneWidget);
+    expect(find.text('Primary listener'), findsOneWidget);
+    expect(
+      find.text('Account primary · Device Windows desktop'),
+      findsOneWidget,
+    );
+    expect(find.text('0123456789abcdef01234567'), findsNothing);
     expect(find.byKey(const Key('library-sync-upload')), findsOneWidget);
     await tester.tap(find.byKey(const Key('library-sync-automatic-upload')));
     await tester.pumpAndSettle();
     expect(sync.automaticUploadEnabled, isTrue);
+    gateway.profile = LibrarySyncProfile(
+      id: 'primary',
+      displayName: 'Updated listener',
+      managed: true,
+      device: _managedProfile().device,
+    );
+    await tester.tap(find.byKey(const Key('library-sync-refresh-profile')));
+    await tester.pumpAndSettle();
+    expect(gateway.profileFetchCalls, 2);
+    expect(find.text('Updated listener'), findsOneWidget);
     expect(find.text('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -300,9 +318,13 @@ void main() {
     final download = tester.widget<IconButton>(
       find.byKey(const Key('library-sync-download')),
     );
+    final refreshProfile = tester.widget<IconButton>(
+      find.byKey(const Key('library-sync-refresh-profile')),
+    );
     expect(configure.onPressed, isNull);
     expect(upload.onPressed, isNull);
     expect(download.onPressed, isNull);
+    expect(refreshProfile.onPressed, isNull);
     expect(find.text('Library sync paused by offline mode'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -340,6 +362,19 @@ LibrarySyncAccount _account() {
   );
 }
 
+LibrarySyncProfile _managedProfile() {
+  return LibrarySyncProfile(
+    id: 'primary',
+    displayName: 'Primary listener',
+    managed: true,
+    device: LibrarySyncProfileDevice(
+      id: '0123456789abcdef01234567',
+      name: 'Windows desktop',
+      createdAt: DateTime.utc(2026, 7, 15, 12),
+    ),
+  );
+}
+
 class _MemorySyncVault implements LibrarySyncCredentialVault {
   String? token;
 
@@ -357,18 +392,22 @@ class _MemorySyncVault implements LibrarySyncCredentialVault {
   }
 }
 
-class _FakeSyncGateway implements LibrarySyncGateway {
+class _FakeSyncGateway
+    implements LibrarySyncGateway, LibrarySyncProfileGateway {
   _FakeSyncGateway({
     required this.remote,
+    this.profile,
     List<Object> pushResults = const <Object>[],
     List<Object> deleteResults = const <Object>[],
   })  : pushResults = List<Object>.from(pushResults),
         deleteResults = List<Object>.from(deleteResults);
 
   LibrarySyncRemoteSnapshot remote;
+  LibrarySyncProfile? profile;
   final List<Object> pushResults;
   final List<Object> deleteResults;
   int fetchCalls = 0;
+  int profileFetchCalls = 0;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
 
@@ -376,6 +415,12 @@ class _FakeSyncGateway implements LibrarySyncGateway {
   Future<LibrarySyncRemoteSnapshot> fetch() async {
     fetchCalls += 1;
     return remote;
+  }
+
+  @override
+  Future<LibrarySyncProfile?> fetchProfile() async {
+    profileFetchCalls += 1;
+    return profile;
   }
 
   @override

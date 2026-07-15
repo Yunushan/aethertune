@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/provider_error.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
+import 'package:aethertune/src/domain/library_sync_profile.dart';
 
 void main() {
   test('validates server URLs and builds a path-safe sync endpoint', () {
@@ -21,6 +22,12 @@ void main() {
       account.libraryEndpointUri,
       Uri.parse(
         'https://sync.example.test/aethertune/api/v1/sync/library',
+      ),
+    );
+    expect(
+      account.profileEndpointUri,
+      Uri.parse(
+        'https://sync.example.test/aethertune/api/v1/auth/profile',
       ),
     );
     expect(
@@ -178,6 +185,117 @@ void main() {
     expect(requestBody?['baseRevision'], 3);
     expect(requestBody?['deviceId'], 'Test device');
     expect(requestBody?['snapshot'], snapshot);
+  });
+
+  test('fetches validated managed identity without exposing its token',
+      () async {
+    const token = 'managed-private-token';
+    Uri? requestedUri;
+    Map<String, String>? requestedHeaders;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: token,
+      httpExecutor: (method, uri, {required headers, body}) async {
+        requestedUri = uri;
+        requestedHeaders = headers;
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'account': <String, Object?>{
+              'id': 'primary',
+              'displayName': 'Primary listener',
+              'managed': true,
+            },
+            'device': <String, Object?>{
+              'id': '0123456789abcdef01234567',
+              'deviceName': 'Windows desktop',
+              'createdAt': '2026-07-15T12:00:00.000Z',
+            },
+          }),
+        );
+      },
+    );
+
+    final profile = await client.fetchProfile();
+
+    expect(requestedUri, _account().profileEndpointUri);
+    expect(requestedHeaders?['authorization'], 'Bearer $token');
+    expect(requestedUri.toString(), isNot(contains(token)));
+    expect(profile?.id, 'primary');
+    expect(profile?.effectiveDisplayName, 'Primary listener');
+    expect(profile?.managed, isTrue);
+    expect(profile?.device?.name, 'Windows desktop');
+    expect(profile?.device?.createdAt, DateTime.utc(2026, 7, 15, 12));
+  });
+
+  test('tolerates old servers and rejects malformed managed identity',
+      () async {
+    final oldServer = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        return const LibrarySyncHttpResponse(
+          statusCode: 404,
+          body: '{"error":"not_found"}',
+        );
+      },
+    );
+    expect(await oldServer.fetchProfile(), isNull);
+
+    final staticServer = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        return const LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: '{'
+              '"account":{'
+              '"id":"static-account",'
+              '"displayName":null,'
+              '"managed":false'
+              '},'
+              '"device":null'
+              '}',
+        );
+      },
+    );
+    final staticProfile = await staticServer.fetchProfile();
+    expect(staticProfile?.id, 'static-account');
+    expect(staticProfile?.effectiveDisplayName, 'static-account');
+    expect(staticProfile?.managed, isFalse);
+    expect(staticProfile?.device, isNull);
+
+    final malformed = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        return const LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: '{'
+              '"account":{"id":"primary","managed":true},'
+              '"device":null'
+              '}',
+        );
+      },
+    );
+    await expectLater(
+      malformed.fetchProfile(),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => LibrarySyncProfile.fromServerJson(<String, Object?>{
+        'account': <String, Object?>{
+          'id': 'primary',
+          'managed': true,
+        },
+        'device': <String, Object?>{
+          'id': '0123456789abcdef01234567',
+          'deviceName': 'Desktop',
+          'createdAt': 42,
+        },
+      }),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('deletes a remote snapshot with the current revision', () async {

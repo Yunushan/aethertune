@@ -11,18 +11,18 @@ class LibrarySyncAccount {
 
   bool get usesSecureTransport => baseUri.scheme == 'https';
 
-  Uri get libraryEndpointUri {
+  Uri get libraryEndpointUri =>
+      _endpointUri(<String>['api', 'v1', 'sync', 'library']);
+
+  Uri get profileEndpointUri =>
+      _endpointUri(<String>['api', 'v1', 'auth', 'profile']);
+
+  Uri _endpointUri(List<String> endpointSegments) {
     final baseSegments = baseUri.pathSegments
         .where((segment) => segment.trim().isNotEmpty)
         .toList(growable: true);
     return baseUri.replace(
-      pathSegments: <String>[
-        ...baseSegments,
-        'api',
-        'v1',
-        'sync',
-        'library',
-      ],
+      pathSegments: <String>[...baseSegments, ...endpointSegments],
       query: null,
       fragment: null,
     );

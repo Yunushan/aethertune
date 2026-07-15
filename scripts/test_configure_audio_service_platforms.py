@@ -44,6 +44,7 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
 
             platform_config.configure_android(manifest_path, gradle_path)
             platform_config.verify_android(manifest_path, gradle_path)
+            platform_config.configure_android(manifest_path, gradle_path)
 
             root = ET.parse(manifest_path).getroot()
             application = root.find("application")
@@ -77,6 +78,10 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             self.assertIn(
                 "updatePlaybackWidgets",
                 activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "minSdk = maxOf(flutter.minSdkVersion, 23)",
+                gradle_path.read_text(encoding="utf-8"),
             )
             self.assertIn(
                 'call.argument<Number>("positionMillis")',
