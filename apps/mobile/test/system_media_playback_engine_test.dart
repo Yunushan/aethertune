@@ -98,6 +98,30 @@ void main() {
     expect(engine.playbackState.value.speed, 1.5);
   });
 
+  test('forwards pitch only when the wrapped backend supports it', () async {
+    final delegate = _FakePitchPlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+
+    expect(engine.supportsPitch, isTrue);
+    await engine.setPitch(1.25);
+    expect(engine.pitch, 1.25);
+    expect(delegate.pitchValue, 1.25);
+
+    final unsupported = SystemMediaPlaybackEngine(_FakePlaybackAudioEngine());
+    addTearDown(unsupported.dispose);
+    expect(unsupported.supportsPitch, isFalse);
+    expect(() => unsupported.setPitch(1.25), throwsUnsupportedError);
+  });
+
+  test('enables pitch control only on supported production backends', () {
+    expect(supportsPitchControl(TargetPlatform.android), isTrue);
+    expect(supportsPitchControl(TargetPlatform.linux), isTrue);
+    expect(supportsPitchControl(TargetPlatform.windows), isTrue);
+    expect(supportsPitchControl(TargetPlatform.iOS), isFalse);
+    expect(supportsPitchControl(TargetPlatform.macOS), isFalse);
+  });
+
   test('publishes the current title and play state to Android widgets',
       () async {
     final delegate = _FakePlaybackAudioEngine();
@@ -389,6 +413,22 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     await _positionController.close();
     await _processingController.close();
     await _indexController.close();
+  }
+}
+
+class _FakePitchPlaybackAudioEngine extends _FakePlaybackAudioEngine
+    implements PitchPlaybackAudioEngine {
+  double pitchValue = 1;
+
+  @override
+  bool get supportsPitch => true;
+
+  @override
+  double get pitch => pitchValue;
+
+  @override
+  Future<void> setPitch(double pitch) async {
+    pitchValue = pitch;
   }
 }
 

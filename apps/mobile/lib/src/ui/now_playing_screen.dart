@@ -79,6 +79,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ? null
                 : library.playbackSpeedForTrack(current.id),
           ),
+          if (player.supportsPitch) _PlaybackPitchMenu(player: player),
         ],
       ),
       body: current == null
@@ -556,6 +557,30 @@ class _PlaybackSpeedMenu extends StatelessWidget {
             value: speed,
             checked: speed == player.defaultPlaybackSpeed,
             child: Text(_formatPlaybackSpeed(speed)),
+          ),
+      ],
+    );
+  }
+}
+
+class _PlaybackPitchMenu extends StatelessWidget {
+  const _PlaybackPitchMenu({required this.player});
+
+  final PlayerController player;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<double>(
+      key: const Key('now-playing-pitch'),
+      tooltip: 'Pitch: ${_formatPlaybackSpeed(player.defaultPlaybackPitch)}',
+      icon: const Icon(Icons.music_note_outlined),
+      onSelected: player.setPlaybackPitch,
+      itemBuilder: (context) => <PopupMenuEntry<double>>[
+        for (final pitch in PlayerController.supportedPlaybackPitches)
+          CheckedPopupMenuItem<double>(
+            value: pitch,
+            checked: pitch == player.defaultPlaybackPitch,
+            child: Text(_formatPlaybackSpeed(pitch)),
           ),
       ],
     );

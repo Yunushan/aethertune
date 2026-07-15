@@ -20,6 +20,14 @@ class PlayerController extends ChangeNotifier {
   static const minVolume = 0.0;
   static const maxVolume = 1.0;
   static const supportedPlaybackSpeeds = supportedPlaybackSpeedValues;
+  static const supportedPlaybackPitches = <double>[
+    0.5,
+    0.75,
+    1,
+    1.25,
+    1.5,
+    2,
+  ];
   static const supportedSkipIntervals = <Duration>[
     Duration(seconds: 5),
     Duration(seconds: 10),
@@ -103,6 +111,7 @@ class PlayerController extends ChangeNotifier {
   bool _loudnessEnhancerEnabled = false;
   double _loudnessEnhancerTargetGainDb = 0;
   double _defaultPlaybackSpeed = 1;
+  double _defaultPlaybackPitch = 1;
   Duration _skipBackwardInterval = const Duration(seconds: 10);
   Duration _skipForwardInterval = const Duration(seconds: 30);
 
@@ -114,6 +123,12 @@ class PlayerController extends ChangeNotifier {
   LoopMode get loopMode => _audio.loopMode;
   double get playbackSpeed => _audio.speed;
   double get defaultPlaybackSpeed => _defaultPlaybackSpeed;
+  bool get supportsPitch =>
+      _audio is PitchPlaybackAudioEngine && _audio.supportsPitch;
+  double get playbackPitch => _audio is PitchPlaybackAudioEngine
+      ? _audio.pitch
+      : _defaultPlaybackPitch;
+  double get defaultPlaybackPitch => _defaultPlaybackPitch;
   Duration get skipBackwardInterval => _skipBackwardInterval;
   Duration get skipForwardInterval => _skipForwardInterval;
   double get volume => _volume;
@@ -223,6 +238,14 @@ class PlayerController extends ChangeNotifier {
           settings['playbackSpeed'],
         );
         await _audio.setSpeed(_defaultPlaybackSpeed);
+        _defaultPlaybackPitch = _playbackPitchFromJson(
+          settings['playbackPitch'],
+        );
+        if (supportsPitch) {
+          await (_audio as PitchPlaybackAudioEngine).setPitch(
+            _defaultPlaybackPitch,
+          );
+        }
         _skipBackwardInterval = _skipIntervalFromJson(
           settings['skipBackwardSeconds'],
           fallback: _skipBackwardInterval,
@@ -654,6 +677,18 @@ class PlayerController extends ChangeNotifier {
     await (_audio as CrossfadePlaybackAudioEngine).setCrossfadeDuration(
       duration,
     );
+    await _savePlaybackSettings();
+    notifyListeners();
+  }
+
+  Future<void> setPlaybackPitch(double pitch) async {
+    _requireSupportedPlaybackPitch(pitch);
+    final audio = _audio;
+    if (audio is! PitchPlaybackAudioEngine || !audio.supportsPitch) {
+      throw UnsupportedError('Pitch control is unavailable for this backend.');
+    }
+    _defaultPlaybackPitch = pitch;
+    await audio.setPitch(pitch);
     await _savePlaybackSettings();
     notifyListeners();
   }
@@ -1093,6 +1128,7 @@ class PlayerController extends ChangeNotifier {
           'shuffleEnabled': _audio.shuffleModeEnabled,
           'loopMode': _loopModeToJson(_audio.loopMode),
           'playbackSpeed': _defaultPlaybackSpeed,
+          'playbackPitch': _defaultPlaybackPitch,
           'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
           'skipForwardSeconds': _skipForwardInterval.inSeconds,
           'volume': _volume,
@@ -1139,6 +1175,16 @@ class PlayerController extends ChangeNotifier {
       final speed = value.toDouble();
       if (supportedPlaybackSpeeds.contains(speed)) {
         return speed;
+      }
+    }
+    return 1;
+  }
+
+  double _playbackPitchFromJson(Object? value) {
+    if (value is num) {
+      final pitch = value.toDouble();
+      if (supportedPlaybackPitches.contains(pitch)) {
+        return pitch;
       }
     }
     return 1;
@@ -1218,6 +1264,16 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return Duration.zero;
+  }
+
+  void _requireSupportedPlaybackPitch(double pitch) {
+    if (!supportedPlaybackPitches.contains(pitch)) {
+      throw ArgumentError.value(
+        pitch,
+        'pitch',
+        'Playback pitch must be one of the supported values.',
+      );
+    }
   }
 
   AudioEffectsPlaybackAudioEngine? get _audioEffectsEngine {

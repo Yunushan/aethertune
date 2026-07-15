@@ -20,7 +20,9 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('changes desktop density from Options', (tester) async {
+  testWidgets('changes desktop density and playback pitch from Options', (
+    tester,
+  ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1200, 800);
@@ -37,7 +39,8 @@ void main() {
     addTearDown(sync.dispose);
     final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
     addTearDown(folderWatch.dispose);
-    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    final engine = _TestPlaybackAudioEngine();
+    final player = PlayerController(audioEngine: engine);
     addTearDown(player.dispose);
 
     await tester.pumpWidget(
@@ -79,11 +82,28 @@ void main() {
 
     expect(library.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(find.text('Compact'), findsOneWidget);
+
+    final pitchTile = find.byKey(const Key('playback-pitch-setting')).first;
+    expect(pitchTile, findsOneWidget);
+    final pitchMenu = find.descendant(
+      of: pitchTile,
+      matching: find.byType(DropdownButton<double>),
+    );
+    await tester.tap(pitchMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('1.25x').last);
+    await tester.pumpAndSettle();
+
+    expect(player.defaultPlaybackPitch, 1.25);
+    expect(engine.pitchValue, 1.25);
     debugDefaultTargetPlatformOverride = null;
   });
 }
 
-class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
+class _TestPlaybackAudioEngine
+    implements PlaybackAudioEngine, PitchPlaybackAudioEngine {
+  double pitchValue = 1;
+
   @override
   Stream<Object?> get stateChanges => const Stream<Object?>.empty();
 
@@ -117,6 +137,12 @@ class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   double get speed => 1;
+
+  @override
+  bool get supportsPitch => true;
+
+  @override
+  double get pitch => pitchValue;
 
   @override
   double get volume => 1;
@@ -160,6 +186,11 @@ class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   Future<void> setSpeed(double speed) async {}
+
+  @override
+  Future<void> setPitch(double pitch) async {
+    pitchValue = pitch;
+  }
 
   @override
   Future<void> setVolume(double volume) async {}

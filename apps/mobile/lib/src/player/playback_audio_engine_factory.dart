@@ -15,10 +15,17 @@ bool supportsAndroidAudioEffects(TargetPlatform platform) {
   return platform == TargetPlatform.android;
 }
 
+bool supportsPitchControl(TargetPlatform platform) {
+  return platform == TargetPlatform.android ||
+      platform == TargetPlatform.linux ||
+      platform == TargetPlatform.windows;
+}
+
 Future<PlaybackAudioEngine> createPlaybackAudioEngine() async {
   final engine = JustAudioPlaybackEngine(
     enableAndroidAudioEffects:
         !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
+    enablePitch: !kIsWeb && supportsPitchControl(defaultTargetPlatform),
   );
   if (kIsWeb || !supportsSystemMediaSession(defaultTargetPlatform)) {
     return engine;

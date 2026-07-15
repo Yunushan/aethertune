@@ -11,7 +11,10 @@ import 'playback_audio_engine.dart';
 /// Adds operating-system media controls around the app's playback engine.
 class SystemMediaPlaybackEngine extends BaseAudioHandler
     with SeekHandler
-    implements CrossfadePlaybackAudioEngine, AudioEffectsPlaybackAudioEngine {
+    implements
+        CrossfadePlaybackAudioEngine,
+        AudioEffectsPlaybackAudioEngine,
+        PitchPlaybackAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
     PlaybackWidgetBridge? playbackWidgetBridge,
@@ -87,6 +90,13 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   double get speed => _engine.speed;
+
+  @override
+  bool get supportsPitch =>
+      _engine is PitchPlaybackAudioEngine && _engine.supportsPitch;
+
+  @override
+  double get pitch => _engine is PitchPlaybackAudioEngine ? _engine.pitch : 1;
 
   @override
   double get volume => _engine.volume;
@@ -245,6 +255,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       throw UnsupportedError('Crossfade is unavailable for this audio backend.');
     }
     return engine.setCrossfadeDuration(duration);
+  }
+
+  @override
+  Future<void> setPitch(double pitch) {
+    final engine = _engine;
+    if (engine is! PitchPlaybackAudioEngine || !engine.supportsPitch) {
+      throw UnsupportedError('Pitch control is unavailable for this backend.');
+    }
+    return engine.setPitch(pitch);
   }
 
   @override

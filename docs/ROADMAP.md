@@ -101,6 +101,7 @@
 - [x] Android foreground media playback service configuration
 - [x] Android device-adaptive equalizer presets and persisted custom bands
 - [x] Android native loudness enhancement mirrored through crossfade
+- [x] Independent pitch control on Android/Linux/Windows
 - [ ] Physical-device audio-effect and acoustic transition fixtures
 - [ ] iOS and desktop DSP backends plus Android virtualizer
 - [ ] Android Auto

@@ -54,6 +54,14 @@ abstract interface class CrossfadePlaybackAudioEngine
   Future<void> setCrossfadeDuration(Duration duration);
 }
 
+abstract interface class PitchPlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  bool get supportsPitch;
+  double get pitch;
+
+  Future<void> setPitch(double pitch);
+}
+
 abstract interface class AudioEffectsPlaybackAudioEngine
     implements PlaybackAudioEngine {
   bool get supportsEqualizer;
@@ -67,15 +75,20 @@ abstract interface class AudioEffectsPlaybackAudioEngine
 }
 
 class JustAudioPlaybackEngine
-    implements CrossfadePlaybackAudioEngine, AudioEffectsPlaybackAudioEngine {
+    implements
+        CrossfadePlaybackAudioEngine,
+        AudioEffectsPlaybackAudioEngine,
+        PitchPlaybackAudioEngine {
   factory JustAudioPlaybackEngine({
     AudioPlayer? player,
     bool enableAndroidAudioEffects = false,
+    bool enablePitch = false,
   }) {
     if (player != null || !enableAndroidAudioEffects) {
       return JustAudioPlaybackEngine._(
         player: player ?? AudioPlayer(),
         crossfadePlayer: AudioPlayer(),
+        enablePitch: enablePitch,
       );
     }
 
@@ -104,6 +117,7 @@ class JustAudioPlaybackEngine
       crossfadeEqualizer: crossfadeEqualizer,
       loudnessEnhancer: loudnessEnhancer,
       crossfadeLoudnessEnhancer: crossfadeLoudnessEnhancer,
+      enablePitch: enablePitch,
     );
   }
 
@@ -114,12 +128,14 @@ class JustAudioPlaybackEngine
     AndroidEqualizer? crossfadeEqualizer,
     AndroidLoudnessEnhancer? loudnessEnhancer,
     AndroidLoudnessEnhancer? crossfadeLoudnessEnhancer,
+    required bool enablePitch,
   })  : _player = player,
         _crossfadePlayer = crossfadePlayer,
         _equalizer = equalizer,
         _crossfadeEqualizer = crossfadeEqualizer,
         _loudnessEnhancer = loudnessEnhancer,
-        _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer {
+        _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer,
+        _pitchEnabled = enablePitch {
     _durationSubscription = _player.durationStream.listen(
       (_) => _scheduleCrossfade(),
     );
@@ -137,6 +153,7 @@ class JustAudioPlaybackEngine
   final AndroidEqualizer? _crossfadeEqualizer;
   final AndroidLoudnessEnhancer? _loudnessEnhancer;
   final AndroidLoudnessEnhancer? _crossfadeLoudnessEnhancer;
+  final bool _pitchEnabled;
   final List<Track> _queue = <Track>[];
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<int?>? _indexSubscription;
@@ -188,6 +205,12 @@ class JustAudioPlaybackEngine
 
   @override
   double get speed => _player.speed;
+
+  @override
+  bool get supportsPitch => _pitchEnabled;
+
+  @override
+  double get pitch => _player.pitch;
 
   @override
   double get volume => _player.volume;
@@ -326,6 +349,15 @@ class JustAudioPlaybackEngine
     }
     await _player.setVolume(volume);
     await _crossfadePlayer.setVolume(volume);
+  }
+
+  @override
+  Future<void> setPitch(double pitch) async {
+    if (!_pitchEnabled) {
+      throw UnsupportedError('Pitch control is unavailable for this backend.');
+    }
+    await _player.setPitch(pitch);
+    await _crossfadePlayer.setPitch(pitch);
   }
 
   @override

@@ -93,6 +93,39 @@ void main() {
     );
   });
 
+  test('persists supported playback pitch and hides it from unsupported engines',
+      () async {
+    final firstEngine = _FakePlaybackAudioEngine()
+      ..supportsPitchValue = true;
+    final firstController = PlayerController(audioEngine: firstEngine);
+    await firstController.setPlaybackPitch(1.25);
+    expect(firstEngine.pitchValue, 1.25);
+    expect(firstController.defaultPlaybackPitch, 1.25);
+    firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine()
+      ..supportsPitchValue = true;
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+    expect(restoredController.defaultPlaybackPitch, 1.25);
+    expect(restoredEngine.pitchValue, 1.25);
+    await expectLater(
+      restoredController.setPlaybackPitch(1.1),
+      throwsArgumentError,
+    );
+
+    final unsupportedController = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+    );
+    addTearDown(unsupportedController.dispose);
+    expect(unsupportedController.supportsPitch, isFalse);
+    await expectLater(
+      unsupportedController.setPlaybackPitch(1.25),
+      throwsUnsupportedError,
+    );
+  });
+
   test('persists and restores Android audio effect settings', () async {
     final firstEngine = _FakeAudioEffectsEngine();
     final firstController = PlayerController(audioEngine: firstEngine);
@@ -654,7 +687,8 @@ Track _track(
   );
 }
 
-class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
+class _FakePlaybackAudioEngine
+    implements CrossfadePlaybackAudioEngine, PitchPlaybackAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
   final _durationController =
       StreamController<Duration?>.broadcast(sync: true);
@@ -672,6 +706,8 @@ class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
   LoopMode loopModeValue = LoopMode.off;
   double volumeValue = 1;
   double speedValue = 1;
+  double pitchValue = 1;
+  bool supportsPitchValue = false;
   Duration crossfadeDurationValue = Duration.zero;
   CrossfadeTrackVolumeResolver? crossfadeTrackVolumeResolver;
   int currentIndex = 0;
@@ -713,6 +749,12 @@ class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
 
   @override
   double get speed => speedValue;
+
+  @override
+  bool get supportsPitch => supportsPitchValue;
+
+  @override
+  double get pitch => pitchValue;
 
   @override
   double get volume => volumeValue;
@@ -813,6 +855,14 @@ class _FakePlaybackAudioEngine implements CrossfadePlaybackAudioEngine {
   @override
   Future<void> setSpeed(double speed) async {
     speedValue = speed;
+  }
+
+  @override
+  Future<void> setPitch(double pitch) async {
+    if (!supportsPitchValue) {
+      throw UnsupportedError('Pitch control is unavailable for this backend.');
+    }
+    pitchValue = pitch;
   }
 
   @override

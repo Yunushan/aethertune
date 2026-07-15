@@ -13348,6 +13348,33 @@ class _SettingsTab extends StatelessWidget {
               },
             ),
           ),
+        if (player.supportsPitch)
+          ListTile(
+            key: const Key('playback-pitch-setting'),
+            title: const Text('Playback pitch'),
+            subtitle: const Text(
+              'Shifts pitch independently from playback speed on this device.',
+            ),
+            trailing: DropdownButton<double>(
+              value: player.defaultPlaybackPitch,
+              items: <DropdownMenuItem<double>>[
+                for (final pitch in PlayerController.supportedPlaybackPitches)
+                  DropdownMenuItem<double>(
+                    value: pitch,
+                    child: Text(
+                      pitch == pitch.roundToDouble()
+                          ? '${pitch.toStringAsFixed(0)}x'
+                          : '${pitch}x',
+                    ),
+                  ),
+              ],
+              onChanged: (pitch) {
+                if (pitch != null) {
+                  unawaited(player.setPlaybackPitch(pitch));
+                }
+              },
+            ),
+          ),
         ListTile(
           title: const Text('Repeat mode'),
           subtitle: Text(player.loopMode.name),

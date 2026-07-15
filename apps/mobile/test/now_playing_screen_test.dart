@@ -28,7 +28,7 @@ void main() {
     tester.view.physicalSize = const Size(1200, 800);
     addTearDown(tester.view.reset);
 
-    final engine = _FakePlaybackAudioEngine();
+    final engine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
     final player = PlayerController(audioEngine: engine);
     final library = LibraryStore();
     final first = _track('first', title: 'First Song', durationSeconds: 240)
@@ -69,6 +69,7 @@ void main() {
     expect(find.byKey(const Key('now-playing-volume')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-skip-backward')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-skip-forward')), findsOneWidget);
+    expect(find.byKey(const Key('now-playing-pitch')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-chapters')), findsOneWidget);
     expect(
       find.byKey(const Key('now-playing-chapter-marker-60000')),
@@ -122,6 +123,15 @@ void main() {
     await tester.ensureVisible(speedItem);
     await tester.tap(speedItem);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('now-playing-pitch')));
+    await tester.pumpAndSettle();
+    final pitchItem = find.widgetWithText(
+      CheckedPopupMenuItem<double>,
+      '1.25x',
+    );
+    await tester.ensureVisible(pitchItem);
+    await tester.tap(pitchItem);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-track-speed')));
     await tester.pumpAndSettle();
     final trackSpeedItem = find.byKey(
@@ -138,6 +148,7 @@ void main() {
     expect(engine.shuffleValue, isTrue);
     expect(engine.loopModeValue, LoopMode.all);
     expect(engine.speedValue, 2);
+    expect(engine.pitchValue, 1.25);
     expect(library.playbackSpeedForTrack(first.id), 2);
     expect(engine.volumeValue, 0.4);
     expect(library.tracks.first.isFavorite, isTrue);
@@ -319,7 +330,8 @@ Track _track(
   );
 }
 
-class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
+class _FakePlaybackAudioEngine
+    implements PlaybackAudioEngine, PitchPlaybackAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
   final _durationController = StreamController<Duration?>.broadcast(sync: true);
   final _positionController = StreamController<Duration>.broadcast(sync: true);
@@ -336,6 +348,8 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   int currentIndex = 0;
   int seekToNextCalls = 0;
   double speedValue = 1;
+  double pitchValue = 1;
+  bool supportsPitchValue = false;
   double volumeValue = 1;
 
   @override
@@ -371,6 +385,12 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   double get speed => speedValue;
+
+  @override
+  bool get supportsPitch => supportsPitchValue;
+
+  @override
+  double get pitch => pitchValue;
 
   @override
   double get volume => volumeValue;
@@ -455,6 +475,14 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> setSpeed(double speed) async {
     speedValue = speed;
+  }
+
+  @override
+  Future<void> setPitch(double pitch) async {
+    if (!supportsPitchValue) {
+      throw UnsupportedError('Pitch control is unavailable for this backend.');
+    }
+    pitchValue = pitch;
   }
 
   @override
