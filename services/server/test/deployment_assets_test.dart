@@ -19,8 +19,9 @@ void main() {
     expect(systemd, contains('ProtectSystem=strict'));
     expect(systemd, contains('ReadWritePaths=/var/lib/aethertune'));
     expect(caddy, contains('reverse_proxy 127.0.0.1:8080'));
-    expect(environment, contains("AETHERTUNE_SYNC_USERS='"));
+    expect(environment, contains("AETHERTUNE_SYNC_USERS='{}'"));
     expect(environment, contains('AETHERTUNE_OPS_TOKEN='));
+    expect(dockerEnvironment, contains('AETHERTUNE_SYNC_USERS={}'));
     expect(dockerEnvironment, contains('AETHERTUNE_OPS_TOKEN='));
     expect(compose, contains(r'${AETHERTUNE_OPS_TOKEN:?'));
   });

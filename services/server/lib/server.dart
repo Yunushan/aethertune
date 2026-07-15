@@ -7,11 +7,16 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 
+import 'src/authentication.dart';
+
+export 'src/authentication.dart';
+
 const _jsonHeaders = <String, String>{
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
 };
 const maxSyncSnapshotBytes = 8 * 1024 * 1024;
+const maxManagedAuthRequestBytes = 16 * 1024;
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 
@@ -68,6 +73,7 @@ const _tracks = <CatalogTrack>[
 Handler createServerHandler({
   DateTime Function()? clock,
   SyncAuthenticator? syncAuthenticator,
+  ManagedSyncAccountRegistry? managedSyncAccounts,
   OperationsAuthenticator? operationsAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
   ServerRequestLogger? requestLogger,
@@ -124,8 +130,9 @@ Handler createServerHandler({
           <String, Object?>{
             'name': 'AetherTune',
             'service': 'aethertune-server',
-            'version': '0.2.0',
+            'version': '0.3.0',
             'librarySync': authenticator.isConfigured,
+            'managedAuthentication': managedSyncAccounts != null,
             'supportedClients': <String>[
               'android',
               'ios',
@@ -147,6 +154,24 @@ Handler createServerHandler({
                 .map((track) => track.toJson())
                 .toList(growable: false),
           },
+        );
+      case 'api/v1/auth/profile':
+        return _handleAuthProfile(
+          request,
+          authenticator: authenticator,
+          managedAccounts: managedSyncAccounts,
+        );
+      case 'api/v1/admin/sync-accounts':
+        return _handleManagedSyncAccounts(
+          request,
+          operations: operations,
+          managedAccounts: managedSyncAccounts,
+        );
+      case 'api/v1/admin/sync-tokens':
+        return _handleManagedSyncTokens(
+          request,
+          operations: operations,
+          managedAccounts: managedSyncAccounts,
         );
       case 'api/v1/sync/library':
         return _handleLibrarySync(
@@ -225,9 +250,198 @@ String _logRoute(String path) {
     'api/v1/info' => '/api/v1/info',
     'api/v1/metrics' => '/api/v1/metrics',
     'api/v1/tracks' => '/api/v1/tracks',
+    'api/v1/auth/profile' => '/api/v1/auth/profile',
+    'api/v1/admin/sync-accounts' => '/api/v1/admin/sync-accounts',
+    'api/v1/admin/sync-tokens' => '/api/v1/admin/sync-tokens',
     'api/v1/sync/library' => '/api/v1/sync/library',
     _ => '/not-found',
   };
+}
+
+Future<Response> _handleAuthProfile(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  if (request.method != 'GET') {
+    return _methodNotAllowed(request);
+  }
+  if (!authenticator.isConfigured) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'sync_not_configured'},
+    );
+  }
+
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  final accountId = token == null ? null : authenticator.authenticate(token);
+  if (accountId == null) {
+    return _unauthorizedResponse();
+  }
+  final principal =
+      token == null ? null : managedAccounts?.authenticatePrincipal(token);
+  final managedProfile =
+      principal == null ? null : managedAccounts?.account(principal.accountId);
+  return _jsonResponse(
+    200,
+    <String, Object?>{
+      'account': <String, Object?>{
+        'id': accountId,
+        'displayName': managedProfile?.displayName,
+        'managed': managedProfile != null,
+      },
+      'device': principal?.token.toJson(),
+    },
+  );
+}
+
+Future<Response> _handleManagedSyncAccounts(
+  Request request, {
+  required OperationsAuthenticator operations,
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  final rejection = _managedAuthAdminRejection(request, operations);
+  if (rejection != null) {
+    return rejection;
+  }
+  if (managedAccounts == null) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'managed_auth_not_configured'},
+    );
+  }
+  if (request.method != 'GET') {
+    return _methodNotAllowed(request);
+  }
+  return _jsonResponse(
+    200,
+    <String, Object?>{
+      'accounts': managedAccounts.accounts
+          .map((account) => account.toJson())
+          .toList(growable: false),
+    },
+  );
+}
+
+Future<Response> _handleManagedSyncTokens(
+  Request request, {
+  required OperationsAuthenticator operations,
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  final rejection = _managedAuthAdminRejection(request, operations);
+  if (rejection != null) {
+    return rejection;
+  }
+  if (managedAccounts == null) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'managed_auth_not_configured'},
+    );
+  }
+  if (request.method != 'POST' && request.method != 'DELETE') {
+    return _methodNotAllowed(request);
+  }
+
+  try {
+    final body = await _readBoundedJson(
+      request,
+      maxBytes: maxManagedAuthRequestBytes,
+    );
+    final accountId = _requiredString(body, 'accountId');
+    if (request.method == 'DELETE') {
+      final tokenId = _requiredString(body, 'tokenId');
+      final revoked = await managedAccounts.revokeToken(
+        accountId: accountId,
+        tokenId: tokenId,
+      );
+      if (!revoked) {
+        return _jsonResponse(
+          404,
+          <String, Object?>{'error': 'managed_token_not_found'},
+        );
+      }
+      return _jsonResponse(
+        200,
+        <String, Object?>{
+          'revoked': true,
+          'accountId': accountId,
+          'tokenId': tokenId,
+        },
+      );
+    }
+
+    final displayName = _optionalString(body, 'displayName');
+    final deviceName = _requiredString(body, 'deviceName');
+    final replaceTokenId = _optionalString(body, 'replaceTokenId');
+    final issued = await managedAccounts.issueToken(
+      accountId: accountId,
+      displayName: displayName,
+      deviceName: deviceName,
+      replaceTokenId: replaceTokenId,
+    );
+    return _jsonResponse(
+      201,
+      <String, Object?>{
+        'tokenType': 'Bearer',
+        'token': issued.token,
+        'account': issued.account.toJson(),
+        'device': issued.device.toJson(),
+        'replacedTokenId': issued.replacedTokenId,
+      },
+    );
+  } on _PayloadTooLarge catch (error) {
+    return _jsonResponse(
+      413,
+      <String, Object?>{
+        'error': 'payload_too_large',
+        'maxBytes': error.maxBytes,
+      },
+    );
+  } on FormatException catch (error) {
+    return _jsonResponse(
+      400,
+      <String, Object?>{
+        'error': 'invalid_auth_request',
+        'message': error.message,
+      },
+    );
+  }
+}
+
+Response? _managedAuthAdminRejection(
+  Request request,
+  OperationsAuthenticator operations,
+) {
+  if (!operations.isConfigured) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'operations_auth_not_configured'},
+    );
+  }
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  if (token == null || !operations.authenticate(token)) {
+    return _unauthorizedResponse();
+  }
+  return null;
+}
+
+String _requiredString(Map<String, Object?> body, String fieldName) {
+  final value = body[fieldName];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('$fieldName is required.');
+  }
+  return value.trim();
+}
+
+String? _optionalString(Map<String, Object?> body, String fieldName) {
+  final value = body[fieldName];
+  if (value == null) {
+    return null;
+  }
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('$fieldName must be a non-empty string.');
+  }
+  return value.trim();
 }
 
 Future<Response> _handleLibrarySync(
@@ -299,12 +513,12 @@ Future<Response> _handleLibrarySync(
           );
         }
         return _jsonResponse(200, result.snapshot!.toMetadataJson());
-      } on _PayloadTooLarge {
+      } on _PayloadTooLarge catch (error) {
         return _jsonResponse(
           413,
           <String, Object?>{
             'error': 'payload_too_large',
-            'maxBytes': maxSyncSnapshotBytes,
+            'maxBytes': error.maxBytes,
           },
         );
       } on FormatException catch (error) {
@@ -339,12 +553,12 @@ Future<Response> _handleLibrarySync(
           );
         }
         return _jsonResponse(200, result.snapshot!.toMetadataJson());
-      } on _PayloadTooLarge {
+      } on _PayloadTooLarge catch (error) {
         return _jsonResponse(
           413,
           <String, Object?>{
             'error': 'payload_too_large',
-            'maxBytes': maxSyncSnapshotBytes,
+            'maxBytes': error.maxBytes,
           },
         );
       } on FormatException catch (error) {
@@ -379,13 +593,16 @@ Future<Response> _handleLibrarySync(
   return (baseRevision: baseRevision, deviceId: deviceId);
 }
 
-Future<Map<String, Object?>> _readBoundedJson(Request request) async {
+Future<Map<String, Object?>> _readBoundedJson(
+  Request request, {
+  int maxBytes = maxSyncSnapshotBytes,
+}) async {
   final builder = BytesBuilder(copy: false);
   var byteCount = 0;
   await for (final chunk in request.read()) {
     byteCount += chunk.length;
-    if (byteCount > maxSyncSnapshotBytes) {
-      throw const _PayloadTooLarge();
+    if (byteCount > maxBytes) {
+      throw _PayloadTooLarge(maxBytes);
     }
     builder.add(chunk);
   }
@@ -469,137 +686,6 @@ Response _jsonResponse(
     body: jsonEncode(body),
     headers: <String, String>{..._jsonHeaders, ...headers},
   );
-}
-
-abstract interface class SyncAuthenticator {
-  bool get isConfigured;
-  String? authenticate(String token);
-}
-
-abstract interface class OperationsAuthenticator {
-  bool get isConfigured;
-  bool authenticate(String token);
-}
-
-class DisabledOperationsAuthenticator implements OperationsAuthenticator {
-  const DisabledOperationsAuthenticator();
-
-  @override
-  bool get isConfigured => false;
-
-  @override
-  bool authenticate(String token) => false;
-}
-
-class StaticOperationsAuthenticator implements OperationsAuthenticator {
-  StaticOperationsAuthenticator(String configuredToken)
-      : _tokenHash = _configuredTokenHash(
-          configuredToken,
-          configurationName: 'AETHERTUNE_OPS_TOKEN',
-        );
-
-  final List<int> _tokenHash;
-
-  @override
-  bool get isConfigured => true;
-
-  @override
-  bool authenticate(String token) {
-    return _constantTimeEquals(
-      sha256.convert(utf8.encode(token)).bytes,
-      _tokenHash,
-    );
-  }
-}
-
-class DisabledSyncAuthenticator implements SyncAuthenticator {
-  const DisabledSyncAuthenticator();
-
-  @override
-  bool get isConfigured => false;
-
-  @override
-  String? authenticate(String token) => null;
-}
-
-class StaticSyncAuthenticator implements SyncAuthenticator {
-  StaticSyncAuthenticator(Map<String, String> users)
-      : _userTokenHashes = <String, List<int>>{
-          for (final entry in users.entries)
-            if (entry.key.trim().isNotEmpty && entry.value.isNotEmpty)
-              entry.key.trim(): _configuredTokenHash(entry.value),
-        };
-
-  factory StaticSyncAuthenticator.fromJson(String? rawUsers) {
-    if (rawUsers == null || rawUsers.trim().isEmpty) {
-      return StaticSyncAuthenticator(const <String, String>{});
-    }
-    final decoded = jsonDecode(rawUsers);
-    if (decoded is! Map) {
-      throw const FormatException(
-        'AETHERTUNE_SYNC_USERS must be a JSON object.',
-      );
-    }
-    return StaticSyncAuthenticator(
-      decoded.map(
-        (key, value) => MapEntry(key.toString(), value.toString()),
-      ),
-    );
-  }
-
-  final Map<String, List<int>> _userTokenHashes;
-
-  @override
-  bool get isConfigured => _userTokenHashes.isNotEmpty;
-
-  @override
-  String? authenticate(String token) {
-    final candidate = sha256.convert(utf8.encode(token)).bytes;
-    for (final entry in _userTokenHashes.entries) {
-      if (_constantTimeEquals(candidate, entry.value)) {
-        return entry.key;
-      }
-    }
-    return null;
-  }
-}
-
-List<int> _configuredTokenHash(
-  String configuredToken, {
-  String configurationName = 'AETHERTUNE_SYNC_USERS',
-}) {
-  if (configuredToken.isEmpty || RegExp(r'\s').hasMatch(configuredToken)) {
-    throw FormatException(
-      '$configurationName tokens must be non-empty and contain no whitespace.',
-    );
-  }
-
-  const prefix = 'sha256:';
-  if (!configuredToken.startsWith(prefix)) {
-    return sha256.convert(utf8.encode(configuredToken)).bytes;
-  }
-
-  final hex = configuredToken.substring(prefix.length);
-  if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hex)) {
-    throw FormatException(
-      '$configurationName SHA-256 token digests must contain 64 hex characters.',
-    );
-  }
-  return <int>[
-    for (var index = 0; index < hex.length; index += 2)
-      int.parse(hex.substring(index, index + 2), radix: 16),
-  ];
-}
-
-bool _constantTimeEquals(List<int> left, List<int> right) {
-  var difference = left.length ^ right.length;
-  final length = left.length > right.length ? left.length : right.length;
-  for (var index = 0; index < length; index += 1) {
-    final leftByte = index < left.length ? left[index] : 0;
-    final rightByte = index < right.length ? right[index] : 0;
-    difference |= leftByte ^ rightByte;
-  }
-  return difference == 0;
 }
 
 class LibrarySyncSnapshot {
@@ -953,5 +1039,7 @@ class CatalogTrack {
 }
 
 class _PayloadTooLarge implements Exception {
-  const _PayloadTooLarge();
+  const _PayloadTooLarge(this.maxBytes);
+
+  final int maxBytes;
 }

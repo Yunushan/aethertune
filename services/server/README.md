@@ -16,22 +16,28 @@ snapshots and a `/health` health check.
 ```bash
 cd services/server
 cp .env.example .env
-# Edit .env and replace the example bearer token with a long random value.
+# Edit .env and replace the example operations token with a long random value.
 docker compose up --build -d
 docker compose ps
 curl http://127.0.0.1:8080/health
 ```
 
-`AETHERTUNE_SYNC_USERS` must remain valid JSON, for example
-`{"phone":"token-one","desktop":"token-two"}`. The account ID is the
-server-side sync user; each client enters its corresponding bearer token in
-the app. For deployments with a managed secret store, a value can instead be
-`sha256:<64-hex-digest>`; the server hashes the client bearer token and compares
-it to that digest without keeping the raw value in memory. Invalid digest
-values stop startup with a configuration error. Compose refuses to start when
-the variable is absent, and `.env` is ignored by the image build context.
-`AETHERTUNE_OPS_TOKEN` configures a separate bearer token for operational
-metrics and accepts the same raw or `sha256:` form. Docker Compose requires it.
+`AETHERTUNE_SYNC_USERS` must remain valid JSON. Leave it as `{}` to use the
+managed account registry described below. Static compatibility mode accepts a
+single token, a token list, or named device tokens per account:
+
+```text
+{"primary":{"phone":"token-one","desktop":"token-two"}}
+```
+
+Any configured token can instead be `sha256:<64-hex-digest>`; the server
+hashes the presented bearer token and compares it to that digest without
+keeping the raw value in memory. Tokens must be unique across all account and
+device entries; invalid or ambiguous values stop startup. Compose refuses
+to start when the variable is absent, and `.env` is ignored by the image build
+context. `AETHERTUNE_OPS_TOKEN` configures a separate bearer token for metrics
+and managed account administration, accepts the same raw or `sha256:` form,
+and is required by Docker Compose.
 
 Compose binds to `127.0.0.1` by default. Use the supplied
 [`deploy/Caddyfile`](deploy/Caddyfile) for HTTPS and see
@@ -42,8 +48,9 @@ the host firewall and a TLS proxy protect the service.
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
 public internet, and do not commit populated `.env` files. The named
-`aethertune-server-data` volume contains the latest per-user snapshots; back
-it up before image or host maintenance. Check the running image with
+`aethertune-server-data` volume contains the latest per-account snapshots and
+managed authentication registry; back it up before image or host maintenance.
+Check the running image with
 `docker compose ps` and update it with `docker compose up --build -d` after
 reviewing release notes.
 
@@ -54,17 +61,59 @@ Available endpoints:
 - `GET /api/v1/metrics`
 - `GET /api/v1/tracks`
 - `GET /api/v1/tracks?q=radio`
+- `GET /api/v1/auth/profile`
+- `GET /api/v1/admin/sync-accounts`
+- `POST /api/v1/admin/sync-tokens`
+- `DELETE /api/v1/admin/sync-tokens`
 - `GET /api/v1/sync/library`
 - `PUT /api/v1/sync/library`
 - `DELETE /api/v1/sync/library`
 
-The snapshot endpoints are disabled unless `AETHERTUNE_SYNC_USERS` contains a
-JSON object mapping user IDs to bearer tokens. Set `AETHERTUNE_DATA_DIR` to
-choose the durable snapshot directory. Requests require `Authorization: Bearer
+The snapshot endpoints are disabled until either a static or managed device
+token exists. Set `AETHERTUNE_DATA_DIR` to choose the durable snapshot and
+authentication-registry directory. Requests require `Authorization: Bearer
 <token>` and use optimistic `baseRevision` conflicts instead of automatic
 merging. A successful `DELETE` records a revisioned tombstone rather than
 erasing history, so stale devices cannot repopulate a cleared snapshot. The
 service rejects local file paths and device cache jobs from portable snapshots.
+
+## Managed accounts and device tokens
+
+The operations API can create an account and issue a different token to each
+device. It requires `AETHERTUNE_OPS_TOKEN` and fails closed when that token is
+not configured. For example, issue the first phone token after startup:
+
+```bash
+curl --fail-with-body -X POST \
+  -H "Authorization: Bearer $AETHERTUNE_OPS_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"accountId":"primary","displayName":"Primary","deviceName":"Phone"}' \
+  https://sync.example.com/api/v1/admin/sync-tokens
+```
+
+The response contains a 256-bit bearer token exactly once. Enter it in the
+phone's AetherTune sync settings, then issue another token with the same
+`accountId` and `deviceName` set to `Desktop`. Both devices authenticate as the
+same snapshot owner without sharing a credential. The registry stores only
+SHA-256 token digests under `AETHERTUNE_DATA_DIR/authentication`.
+
+List account and non-secret device metadata with
+`GET /api/v1/admin/sync-accounts`. Rotate a device token by repeating the
+`POST` with `replaceTokenId` set to its listed token ID. The replacement is
+committed atomically, and the old token stops authenticating immediately.
+Revoke without replacement using:
+
+```bash
+curl --fail-with-body -X DELETE \
+  -H "Authorization: Bearer $AETHERTUNE_OPS_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"accountId":"primary","tokenId":"listed-token-id"}' \
+  https://sync.example.com/api/v1/admin/sync-tokens
+```
+
+An authenticated device can call `GET /api/v1/auth/profile` to verify its
+account and device identity. Public registration, password login, OAuth, and
+automatic client-side token rotation are intentionally not exposed yet.
 
 `GET /api/v1/metrics` reports only process-lifetime aggregate state: start
 time, uptime, total request count, and whether library sync is configured. It

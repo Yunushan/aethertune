@@ -187,22 +187,39 @@ release builders require the Visual C++ ATL component used by the plugin.
 - `GET /api/v1/info`
 - `GET /api/v1/metrics` (aggregate process state only)
 - `GET /api/v1/tracks`
+- `GET /api/v1/auth/profile`
+- `GET /api/v1/admin/sync-accounts`
+- `POST /api/v1/admin/sync-tokens`
+- `DELETE /api/v1/admin/sync-tokens`
 - `GET /api/v1/sync/library`
 - `PUT /api/v1/sync/library`
+- `DELETE /api/v1/sync/library`
 
-The sync routes are disabled until the operator supplies an
-`AETHERTUNE_SYNC_USERS` JSON map of user IDs to bearer tokens. The server keeps
-only the latest checksum-verified portable snapshot per user under
-`AETHERTUNE_DATA_DIR`, enforces an optimistic base revision, and rejects local
-paths and device cache jobs. Registration, token lifecycle, automatic sync,
-and merge policies remain client/server roadmap work.
+The executable combines optional static credentials from
+`AETHERTUNE_SYNC_USERS` with a durable managed account registry under
+`AETHERTUNE_DATA_DIR/authentication`. Static configuration accepts one token,
+a token list, or named device tokens per account. The operations-authenticated
+managed API issues 256-bit random bearer tokens once, persists only SHA-256
+digests, supports several independently revocable devices on one account, and
+atomically rotates a selected token. The profile endpoint returns only the
+authenticated account and current non-secret device metadata. Public
+registration, password/OAuth login, and automatic client token renewal remain
+roadmap work.
 
-Operators can set a distinct `AETHERTUNE_OPS_TOKEN`, in raw or `sha256:` form,
-to protect aggregate metrics with constant-time bearer verification. Docker
-and native deployment templates supply this token separately from sync users.
-Structured request logs never include the authorization header or token.
+The server keeps only the latest checksum-verified portable snapshot per
+account under `AETHERTUNE_DATA_DIR`, enforces an optimistic base revision, and
+rejects local paths and device cache jobs. Separate tokens issued for the same
+account resolve to that same snapshot owner.
 
-The server is intentionally small, but it is real code with tests and CI coverage. Future server work should add account registration and token lifecycle, automatic merge/background sync, remote library metadata, and provider coordination without weakening the client-first privacy model.
+Operators set a distinct `AETHERTUNE_OPS_TOKEN`, in raw or `sha256:` form, to
+protect aggregate metrics and all managed credential mutations with
+constant-time bearer verification. Managed administration fails closed when
+operations authentication is absent. Docker and native deployment templates
+supply this token separately from sync users. Structured request logs normalize
+the new routes and never include account IDs, request bodies, authorization
+headers, or tokens.
+
+The server is intentionally small, but it is real code with tests and CI coverage. Future server work should add opt-in public registration or external identity integration, automatic merge/background sync, remote library metadata, and provider coordination without weakening the client-first privacy model.
 
 ## Future modules
 

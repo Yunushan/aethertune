@@ -13,6 +13,14 @@ Future<void> main() async {
   final syncAuthenticator = StaticSyncAuthenticator.fromJson(
     Platform.environment['AETHERTUNE_SYNC_USERS'],
   );
+  final managedSyncAccounts = await ManagedSyncAccountRegistry.open(
+    Directory(
+      '${dataDirectory.path}${Platform.pathSeparator}authentication',
+    ),
+  );
+  final combinedSyncAuthenticator = CompositeSyncAuthenticator(
+    <SyncAuthenticator>[syncAuthenticator, managedSyncAccounts],
+  );
   final operationsToken = Platform.environment['AETHERTUNE_OPS_TOKEN'];
   final operationsAuthenticator =
       operationsToken == null || operationsToken.isEmpty
@@ -20,7 +28,8 @@ Future<void> main() async {
           : StaticOperationsAuthenticator(operationsToken);
   final server = await shelf_io.serve(
     createServerHandler(
-      syncAuthenticator: syncAuthenticator,
+      syncAuthenticator: combinedSyncAuthenticator,
+      managedSyncAccounts: managedSyncAccounts,
       operationsAuthenticator: operationsAuthenticator,
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
       requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),

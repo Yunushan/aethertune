@@ -108,7 +108,7 @@
 - [x] iOS background music audio session and wrapper mode
 - [x] macOS Control Center media session
 - [ ] Physical Android/iOS interruption, route, battery, and background lifecycle fixtures
-- [ ] Windows/Linux global media key support
+- [x] Windows/Linux global media key support
 - [x] Desktop navigation rail at wide widths
 - [x] Wide desktop queue split pane with persisted resizing, queue selection, removal, and reordering
 - [ ] Tray/menu bar and installer polish
@@ -122,6 +122,11 @@
 - [x] Privacy-preserving structured request logs
 - [x] Separate raw or hash-only operations-token protection
 - [x] Static bearer-token auth model
+- [x] Static multi-device tokens for one sync account
+- [x] Durable managed account and device-token registry
+- [x] Operations-authenticated token issue, rotation, and revocation
+- [x] Authenticated account/device profile endpoint
+- [ ] Optional public registration or external identity integration
 - [x] Versioned library sync API with durable snapshots
 - [ ] Remote provider coordination
 
