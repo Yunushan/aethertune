@@ -81,6 +81,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                   onTogglePlayPause: player.togglePlayPause,
                   onPrevious: player.previous,
                   onNext: player.next,
+                  minimizeToTray: library.desktopMinimizeToTray,
                   child: DesktopGlobalHotkeys(
                     onTogglePlayPause: player.togglePlayPause,
                     onPrevious: player.previous,

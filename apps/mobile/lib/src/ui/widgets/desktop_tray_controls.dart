@@ -17,6 +17,16 @@ bool supportsDesktopTray(TargetPlatform platform) {
 
 enum DesktopTrayCommand { showWindow, togglePlayPause, previous, next, quit }
 
+enum DesktopWindowCloseAction { hide, quit }
+
+DesktopWindowCloseAction desktopWindowCloseAction({
+  required bool minimizeToTray,
+}) {
+  return minimizeToTray
+      ? DesktopWindowCloseAction.hide
+      : DesktopWindowCloseAction.quit;
+}
+
 class DesktopTrayCommandController {
   DesktopTrayCommandController({
     required this.onShowWindow,
@@ -65,6 +75,7 @@ class DesktopTrayControls extends StatefulWidget {
     required this.onTogglePlayPause,
     required this.onPrevious,
     required this.onNext,
+    required this.minimizeToTray,
     required this.child,
     super.key,
   });
@@ -72,6 +83,7 @@ class DesktopTrayControls extends StatefulWidget {
   final Future<void> Function() onTogglePlayPause;
   final Future<void> Function() onPrevious;
   final Future<void> Function() onNext;
+  final bool minimizeToTray;
   final Widget child;
 
   @override
@@ -79,7 +91,7 @@ class DesktopTrayControls extends StatefulWidget {
 }
 
 class _DesktopTrayControlsState extends State<DesktopTrayControls>
-    with TrayListener {
+    with TrayListener, WindowListener {
   DesktopTrayCommandController? _commands;
   bool _initialized = false;
 
@@ -97,7 +109,19 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
       onQuit: _quit,
     );
     trayManager.addListener(this);
+    windowManager.addListener(this);
     unawaited(_initializeTray());
+    unawaited(_configureWindowCloseBehavior());
+  }
+
+  @override
+  void didUpdateWidget(covariant DesktopTrayControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.minimizeToTray != widget.minimizeToTray &&
+        !kIsWeb &&
+        supportsDesktopTray(defaultTargetPlatform)) {
+      unawaited(_configureWindowCloseBehavior());
+    }
   }
 
   Future<void> _initializeTray() async {
@@ -132,7 +156,27 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
     await windowManager.focus();
   }
 
-  Future<void> _quit() => windowManager.close();
+  Future<void> _quit() => windowManager.destroy();
+
+  Future<void> _configureWindowCloseBehavior() async {
+    try {
+      await windowManager.setPreventClose(widget.minimizeToTray);
+    } on Object {
+      // The app remains usable when a host cannot intercept close events.
+    }
+  }
+
+  @override
+  Future<void> onWindowClose() async {
+    switch (
+      desktopWindowCloseAction(minimizeToTray: widget.minimizeToTray)
+    ) {
+      case DesktopWindowCloseAction.hide:
+        await windowManager.hide();
+      case DesktopWindowCloseAction.quit:
+        await windowManager.destroy();
+    }
+  }
 
   @override
   void onTrayIconMouseDown() {
@@ -149,6 +193,7 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
   @override
   void dispose() {
     trayManager.removeListener(this);
+    windowManager.removeListener(this);
     if (_initialized) {
       unawaited(trayManager.destroy());
     }

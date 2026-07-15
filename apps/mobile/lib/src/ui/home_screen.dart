@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:aethertune/l10n/app_localizations.dart';
@@ -66,6 +67,7 @@ import 'widgets/listening_heatmap.dart';
 import 'widgets/listening_stats_bar_chart.dart';
 import 'widgets/library_sync_panel.dart';
 import 'widgets/desktop_queue_pane.dart';
+import 'widgets/desktop_tray_controls.dart';
 import 'widgets/lyrics_share_card.dart';
 import 'widgets/lyrics_search_sheet.dart';
 import 'widgets/player_bar.dart';
@@ -11564,6 +11566,17 @@ class _SettingsTab extends StatelessWidget {
           value: player.shuffleEnabled,
           onChanged: player.setShuffleEnabled,
         ),
+        if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
+          SwitchListTile(
+            secondary: const Icon(Icons.minimize_outlined),
+            title: const Text('Minimize to tray on close'),
+            subtitle: const Text(
+              'Keep playback running in the system tray until you choose Quit.',
+            ),
+            value: library.desktopMinimizeToTray,
+            onChanged: (enabled) =>
+                unawaited(library.setDesktopMinimizeToTray(enabled)),
+          ),
         ListTile(
           title: const Text('Repeat mode'),
           subtitle: Text(player.loopMode.name),

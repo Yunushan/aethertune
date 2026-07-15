@@ -50,6 +50,17 @@ void main() {
     expect(supportsDesktopTray(TargetPlatform.iOS), isFalse);
   });
 
+  test('uses the selected policy for desktop window close events', () {
+    expect(
+      desktopWindowCloseAction(minimizeToTray: true),
+      DesktopWindowCloseAction.hide,
+    );
+    expect(
+      desktopWindowCloseAction(minimizeToTray: false),
+      DesktopWindowCloseAction.quit,
+    );
+  });
+
   test('embeds the generated PNG payload in a valid single-image ICO', () {
     final png = Uint8List.fromList(<int>[137, 80, 78, 71]);
     final ico = icoFileFromPng(png, width: 64, height: 32);

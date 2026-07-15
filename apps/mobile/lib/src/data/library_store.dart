@@ -910,6 +910,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.track_playback_speed_overrides.v1';
   static const _desktopQueuePaneWidthKey =
       'aethertune.desktop_queue_pane_width.v1';
+  static const _desktopMinimizeToTrayKey =
+      'aethertune.desktop_minimize_to_tray.v1';
   static const _onboardingCompletedKey =
       'aethertune.onboarding_completed.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
@@ -957,6 +959,7 @@ class LibraryStore extends ChangeNotifier {
   AppAccentColor _accentColor = AppAccentColor.system;
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
+  bool _desktopMinimizeToTray = false;
   bool _onboardingCompleted = false;
   int _offlineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
   final Map<String, int> _offlineCacheProviderLimitMegabytes = <String, int>{};
@@ -1009,6 +1012,7 @@ class LibraryStore extends ChangeNotifier {
   AppAccentColor get accentColor => _accentColor;
   AppLanguagePreference get languagePreference => _languagePreference;
   double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
+  bool get desktopMinimizeToTray => _desktopMinimizeToTray;
   bool get onboardingCompleted => _onboardingCompleted;
   int get offlineCacheLimitMegabytes => _offlineCacheLimitMegabytes;
   int get offlineCacheLimitBytes => _offlineCacheLimitMegabytes * 1024 * 1024;
@@ -1206,6 +1210,8 @@ class LibraryStore extends ChangeNotifier {
       prefs.getDouble(_desktopQueuePaneWidthKey) ??
           defaultDesktopQueuePaneWidth,
     );
+    _desktopMinimizeToTray =
+        prefs.getBool(_desktopMinimizeToTrayKey) ?? false;
     _onboardingCompleted = prefs.getBool(_onboardingCompletedKey) ?? false;
     _offlineCacheLimitMegabytes = _sanitizeOfflineCacheLimitMegabytes(
       prefs.getInt(_offlineCacheLimitMegabytesKey) ??
@@ -1575,6 +1581,16 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _desktopQueuePaneWidth = sanitized;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setDesktopMinimizeToTray(bool enabled) async {
+    if (_desktopMinimizeToTray == enabled) {
+      return;
+    }
+
+    _desktopMinimizeToTray = enabled;
     await _save();
     notifyListeners();
   }
@@ -7557,6 +7573,7 @@ class LibraryStore extends ChangeNotifier {
       jsonEncode(_trackPlaybackSpeedOverrides),
     );
     await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
+    await prefs.setBool(_desktopMinimizeToTrayKey, _desktopMinimizeToTray);
     await prefs.setBool(_onboardingCompletedKey, _onboardingCompleted);
     await prefs.setInt(
       _offlineCacheLimitMegabytesKey,

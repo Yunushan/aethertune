@@ -3085,6 +3085,7 @@ void main() {
       firstStore.desktopQueuePaneWidth,
       LibraryStore.defaultDesktopQueuePaneWidth,
     );
+    expect(firstStore.desktopMinimizeToTray, isFalse);
     expect(
       firstStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
@@ -3097,6 +3098,7 @@ void main() {
     await firstStore.setAccentColor(AppAccentColor.rose);
     await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
     await firstStore.setDesktopQueuePaneWidth(410);
+    await firstStore.setDesktopMinimizeToTray(true);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
       ' Internet-Archive ',
@@ -3109,6 +3111,7 @@ void main() {
     expect(firstStore.accentColor, AppAccentColor.rose);
     expect(firstStore.languagePreference, AppLanguagePreference.arabic);
     expect(firstStore.desktopQueuePaneWidth, 410);
+    expect(firstStore.desktopMinimizeToTray, isTrue);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
     expect(
@@ -3129,6 +3132,7 @@ void main() {
     expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.desktopQueuePaneWidth, 410);
+    expect(secondStore.desktopMinimizeToTray, isTrue);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -3163,6 +3167,7 @@ void main() {
     expect(secondStore.themePreference, AppThemePreference.system);
     expect(secondStore.accentColor, AppAccentColor.system);
     expect(secondStore.languagePreference, AppLanguagePreference.system);
+    expect(secondStore.desktopMinimizeToTray, isTrue);
     expect(
       secondStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
