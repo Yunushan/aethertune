@@ -40,8 +40,8 @@ Platform layer
 
 Server layer
   Dart Shelf handler, health/info/catalog/aggregate-metrics endpoints,
-  authenticated versioned library snapshot endpoint with checksum and
-  optimistic revision conflict handling
+  privacy-preserving structured request logs, authenticated versioned library
+  snapshot endpoint with checksum and optimistic revision conflict handling
 ```
 
 ## Domain model

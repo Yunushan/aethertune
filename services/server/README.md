@@ -71,6 +71,12 @@ payloads. The count includes the metrics request itself and resets when the
 server restarts. Keep the endpoint behind the same private network or proxy
 access policy as the rest of the service.
 
+The server executable writes one JSON log line for each handled request with
+only a timestamp, HTTP method, normalized known route (or `/not-found`), status
+code, and duration. Query strings, request bodies, headers, addresses, user
+IDs, and tokens are never included. A log-sink failure cannot affect the
+request response.
+
 Run checks from this directory:
 
 ```bash

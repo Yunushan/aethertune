@@ -112,6 +112,7 @@
 - [x] Server info endpoint
 - [x] Server catalog endpoint
 - [x] Aggregate no-tracking server metrics endpoint
+- [x] Privacy-preserving structured request logs
 - [x] Static bearer-token auth model
 - [x] Versioned library sync API with durable snapshots
 - [ ] Remote provider coordination

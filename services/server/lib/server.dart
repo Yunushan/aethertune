@@ -13,6 +13,34 @@ const _jsonHeaders = <String, String>{
 };
 const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 
+typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
+
+class ServerRequestLogEntry {
+  const ServerRequestLogEntry({
+    required this.timestamp,
+    required this.method,
+    required this.route,
+    required this.statusCode,
+    required this.durationMilliseconds,
+  });
+
+  final DateTime timestamp;
+  final String method;
+  final String route;
+  final int statusCode;
+  final int durationMilliseconds;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'timestamp': timestamp.toUtc().toIso8601String(),
+      'method': method,
+      'route': route,
+      'statusCode': statusCode,
+      'durationMilliseconds': durationMilliseconds,
+    };
+  }
+}
+
 const _tracks = <CatalogTrack>[
   CatalogTrack(
     id: 'local-files',
@@ -41,6 +69,7 @@ Handler createServerHandler({
   DateTime Function()? clock,
   SyncAuthenticator? syncAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
+  ServerRequestLogger? requestLogger,
 }) {
   final now = clock ?? DateTime.now;
   final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
@@ -48,8 +77,7 @@ Handler createServerHandler({
   final startedAt = now().toUtc();
   var requestsTotal = 0;
 
-  return (Request request) async {
-    requestsTotal += 1;
+  Future<Response> route(Request request) async {
     switch (request.url.path) {
       case 'health':
         if (request.method != 'GET') {
@@ -127,6 +155,69 @@ Handler createServerHandler({
           },
         );
     }
+  }
+
+  return (Request request) async {
+    requestsTotal += 1;
+    final requestStartedAt = now().toUtc();
+    try {
+      final response = await route(request);
+      _writeRequestLog(
+        requestLogger,
+        request: request,
+        response: response,
+        requestStartedAt: requestStartedAt,
+        finishedAt: now().toUtc(),
+      );
+      return response;
+    } on Object {
+      _writeRequestLog(
+        requestLogger,
+        request: request,
+        response: Response.internalServerError(),
+        requestStartedAt: requestStartedAt,
+        finishedAt: now().toUtc(),
+      );
+      rethrow;
+    }
+  };
+}
+
+void _writeRequestLog(
+  ServerRequestLogger? requestLogger, {
+  required Request request,
+  required Response response,
+  required DateTime requestStartedAt,
+  required DateTime finishedAt,
+}) {
+  if (requestLogger == null) {
+    return;
+  }
+
+  final elapsed = finishedAt.difference(requestStartedAt);
+  try {
+    requestLogger(
+      ServerRequestLogEntry(
+        timestamp: finishedAt,
+        method: request.method,
+        route: _logRoute(request.url.path),
+        statusCode: response.statusCode,
+        durationMilliseconds: elapsed.isNegative ? 0 : elapsed.inMilliseconds,
+      ),
+    );
+  } on Object {
+    // Logging is optional observability and must not interrupt client requests.
+  }
+}
+
+String _logRoute(String path) {
+  return switch (path) {
+    'health' => '/health',
+    'api/v1/info' => '/api/v1/info',
+    'api/v1/metrics' => '/api/v1/metrics',
+    'api/v1/tracks' => '/api/v1/tracks',
+    'api/v1/sync/library' => '/api/v1/sync/library',
+    _ => '/not-found',
   };
 }
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:aethertune_server/server.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
     createServerHandler(
       syncAuthenticator: syncAuthenticator,
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
+      requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
     ),
     InternetAddress.anyIPv4,
     port,

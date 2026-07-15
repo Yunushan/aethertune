@@ -57,6 +57,51 @@ void main() {
       expect(jsonEncode(body), isNot(contains('test-token')));
     });
 
+    test('writes safe structured request logs without disrupting requests',
+        () async {
+      final entries = <ServerRequestLogEntry>[];
+      final handler = createServerHandler(
+        clock: () => DateTime.utc(2026, 1, 2, 3, 4, 5),
+        requestLogger: entries.add,
+      );
+
+      final tracks = await handler(
+        _request(
+          'GET',
+          '/api/v1/tracks?q=private-search&token=query-secret',
+          token: 'header-secret',
+        ),
+      );
+      final missing = await handler(
+        _request('POST', '/private-path/embedded-secret'),
+      );
+
+      expect(tracks.statusCode, 200);
+      expect(missing.statusCode, 404);
+      expect(entries, hasLength(2));
+      expect(entries[0].toJson(), <String, Object?>{
+        'timestamp': '2026-01-02T03:04:05.000Z',
+        'method': 'GET',
+        'route': '/api/v1/tracks',
+        'statusCode': 200,
+        'durationMilliseconds': 0,
+      });
+      expect(entries[1].route, '/not-found');
+      final logs = jsonEncode(entries.map((entry) => entry.toJson()).toList());
+      expect(logs, isNot(contains('private-search')));
+      expect(logs, isNot(contains('query-secret')));
+      expect(logs, isNot(contains('header-secret')));
+      expect(logs, isNot(contains('embedded-secret')));
+
+      final failureTolerant = createServerHandler(
+        requestLogger: (_) => throw StateError('logger failure'),
+      );
+      expect(
+        (await failureTolerant(_request('GET', '/health'))).statusCode,
+        200,
+      );
+    });
+
     test('info endpoint lists clients and sync availability', () async {
       final unavailable = await createServerHandler()(
         _request('GET', '/api/v1/info'),
