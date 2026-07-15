@@ -66,11 +66,27 @@ class LibrarySyncPanel extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: IconButton(
-              key: const Key('library-sync-refresh-profile'),
-              tooltip: 'Refresh account identity',
-              onPressed: actionsEnabled ? () => _refreshProfile(context) : null,
-              icon: const Icon(Icons.refresh_outlined),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (sync.profile?.editable == true)
+                  IconButton(
+                    key: const Key('library-sync-edit-profile'),
+                    tooltip: 'Edit account identity',
+                    onPressed: actionsEnabled
+                        ? () => _editProfile(context, sync.profile!)
+                        : null,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                IconButton(
+                  key: const Key('library-sync-refresh-profile'),
+                  tooltip: 'Refresh account identity',
+                  onPressed: actionsEnabled
+                      ? () => _refreshProfile(context)
+                      : null,
+                  icon: const Icon(Icons.refresh_outlined),
+                ),
+              ],
             ),
           ),
         if (sync.isConfigured)
@@ -192,6 +208,19 @@ class LibrarySyncPanel extends StatelessWidget {
       if (context.mounted) {
         _showError(context, error);
       }
+    }
+  }
+
+  static Future<void> _editProfile(
+    BuildContext context,
+    LibrarySyncProfile profile,
+  ) async {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => _LibrarySyncProfileDialog(profile: profile),
+    );
+    if (context.mounted && updated == true) {
+      _showSuccess(context, 'Account identity updated.');
     }
   }
 
@@ -463,6 +492,136 @@ class LibrarySyncPanel extends StatelessWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(error.toString())));
+  }
+}
+
+class _LibrarySyncProfileDialog extends StatefulWidget {
+  const _LibrarySyncProfileDialog({required this.profile});
+
+  final LibrarySyncProfile profile;
+
+  @override
+  State<_LibrarySyncProfileDialog> createState() =>
+      _LibrarySyncProfileDialogState();
+}
+
+class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
+  late final TextEditingController _displayNameController;
+  late final TextEditingController _deviceNameController;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayNameController = TextEditingController(
+      text: widget.profile.effectiveDisplayName,
+    );
+    _deviceNameController = TextEditingController(
+      text: widget.profile.device?.name ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    _deviceNameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit account identity'),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                key: const Key('library-sync-profile-display-name'),
+                controller: _displayNameController,
+                enabled: !_saving,
+                autofocus: true,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  labelText: 'Account display name',
+                ),
+                textInputAction: TextInputAction.next,
+                onChanged: (_) => setState(() => _error = null),
+              ),
+              TextField(
+                key: const Key('library-sync-profile-device-name'),
+                controller: _deviceNameController,
+                enabled: !_saving,
+                maxLength: 80,
+                decoration: const InputDecoration(labelText: 'Device name'),
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => setState(() => _error = null),
+                onSubmitted: (_) => _save(),
+              ),
+              if (_error != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _error!,
+                    key: const Key('library-sync-profile-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (_saving) ...<Widget>[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(
+                  key: Key('library-sync-profile-progress'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          key: const Key('library-sync-save-profile'),
+          onPressed: _saving ? null : _save,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Save'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    if (_saving) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await context.read<LibrarySyncStore>().updateProfile(
+        context.read<LibraryStore>(),
+        displayName: _displayNameController.text,
+        deviceName: _deviceNameController.text,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = error.toString();
+        });
+      }
+    }
   }
 }
 

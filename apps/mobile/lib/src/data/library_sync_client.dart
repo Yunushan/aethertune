@@ -76,8 +76,18 @@ abstract interface class LibrarySyncProfileGateway {
   Future<LibrarySyncProfile?> fetchProfile();
 }
 
+abstract interface class LibrarySyncProfileEditorGateway {
+  Future<LibrarySyncProfile> updateProfile({
+    required String displayName,
+    required String deviceName,
+  });
+}
+
 class LibrarySyncClient
-    implements LibrarySyncGateway, LibrarySyncProfileGateway {
+    implements
+        LibrarySyncGateway,
+        LibrarySyncProfileGateway,
+        LibrarySyncProfileEditorGateway {
   LibrarySyncClient({
     required this.account,
     required this.token,
@@ -97,6 +107,25 @@ class LibrarySyncClient
     if (response.statusCode == 404) {
       return null;
     }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return LibrarySyncProfile.fromServerJson(_jsonObject(response.body));
+  }
+
+  @override
+  Future<LibrarySyncProfile> updateProfile({
+    required String displayName,
+    required String deviceName,
+  }) async {
+    final response = await _execute(
+      'PATCH',
+      endpoint: account.profileEndpointUri,
+      body: jsonEncode(<String, Object?>{
+        'displayName': normalizeLibrarySyncProfileDisplayName(displayName),
+        'deviceName': normalizeLibrarySyncProfileDeviceName(deviceName),
+      }),
+    );
     if (response.statusCode != 200) {
       throw _requestFailure(response);
     }

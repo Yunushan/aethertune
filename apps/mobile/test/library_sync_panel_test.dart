@@ -77,11 +77,29 @@ void main() {
       displayName: 'Updated listener',
       managed: true,
       device: _managedProfile().device,
+      editable: true,
     );
     await tester.tap(find.byKey(const Key('library-sync-refresh-profile')));
     await tester.pumpAndSettle();
     expect(gateway.profileFetchCalls, 2);
     expect(find.text('Updated listener'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('library-sync-edit-profile')));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit account identity'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('library-sync-profile-display-name')),
+      'Shared listeners',
+    );
+    await tester.enterText(
+      find.byKey(const Key('library-sync-profile-device-name')),
+      'Pocket player',
+    );
+    await tester.tap(find.byKey(const Key('library-sync-save-profile')));
+    await tester.pumpAndSettle();
+    expect(gateway.profileUpdateCalls, 1);
+    expect(find.text('Shared listeners'), findsOneWidget);
+    expect(find.text('Account primary · Device Pocket player'), findsOneWidget);
+    expect(sync.account?.deviceId, 'Pocket player');
     expect(find.text('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -238,6 +256,38 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('hides profile editing for a legacy managed server', (
+    tester,
+  ) async {
+    _setPhoneSize(tester);
+    final library = LibraryStore();
+    final legacyProfile = LibrarySyncProfile(
+      id: 'primary',
+      displayName: 'Legacy listener',
+      managed: true,
+      device: _managedProfile().device,
+    );
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+        profile: legacyProfile,
+      ),
+    );
+    await library.load();
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'private-token');
+    await tester.pumpWidget(_harness(library: library, sync: sync));
+
+    expect(find.text('Legacy listener'), findsOneWidget);
+    expect(find.byKey(const Key('library-sync-edit-profile')), findsNothing);
+    expect(
+      find.byKey(const Key('library-sync-refresh-profile')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('deletes the remote snapshot only after confirmation', (
     tester,
   ) async {
@@ -301,6 +351,7 @@ void main() {
       credentialVault: _MemorySyncVault(),
       clientFactory: (account, token) => _FakeSyncGateway(
         remote: const LibrarySyncRemoteSnapshot(revision: 0),
+        profile: _managedProfile(),
       ),
     );
     await library.load();
@@ -321,10 +372,14 @@ void main() {
     final refreshProfile = tester.widget<IconButton>(
       find.byKey(const Key('library-sync-refresh-profile')),
     );
+    final editProfile = tester.widget<IconButton>(
+      find.byKey(const Key('library-sync-edit-profile')),
+    );
     expect(configure.onPressed, isNull);
     expect(upload.onPressed, isNull);
     expect(download.onPressed, isNull);
     expect(refreshProfile.onPressed, isNull);
+    expect(editProfile.onPressed, isNull);
     expect(find.text('Library sync paused by offline mode'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -372,6 +427,7 @@ LibrarySyncProfile _managedProfile() {
       name: 'Windows desktop',
       createdAt: DateTime.utc(2026, 7, 15, 12),
     ),
+    editable: true,
   );
 }
 
@@ -393,7 +449,10 @@ class _MemorySyncVault implements LibrarySyncCredentialVault {
 }
 
 class _FakeSyncGateway
-    implements LibrarySyncGateway, LibrarySyncProfileGateway {
+    implements
+        LibrarySyncGateway,
+        LibrarySyncProfileGateway,
+        LibrarySyncProfileEditorGateway {
   _FakeSyncGateway({
     required this.remote,
     this.profile,
@@ -408,6 +467,7 @@ class _FakeSyncGateway
   final List<Object> deleteResults;
   int fetchCalls = 0;
   int profileFetchCalls = 0;
+  int profileUpdateCalls = 0;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
 
@@ -421,6 +481,30 @@ class _FakeSyncGateway
   Future<LibrarySyncProfile?> fetchProfile() async {
     profileFetchCalls += 1;
     return profile;
+  }
+
+  @override
+  Future<LibrarySyncProfile> updateProfile({
+    required String displayName,
+    required String deviceName,
+  }) async {
+    profileUpdateCalls += 1;
+    final current = profile;
+    if (current == null || current.device == null) {
+      throw StateError('No managed profile.');
+    }
+    profile = LibrarySyncProfile(
+      id: current.id,
+      displayName: displayName,
+      managed: true,
+      device: LibrarySyncProfileDevice(
+        id: current.device!.id,
+        name: deviceName,
+        createdAt: current.device!.createdAt,
+      ),
+      editable: current.editable,
+    );
+    return profile!;
   }
 
   @override

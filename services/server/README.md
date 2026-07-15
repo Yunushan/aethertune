@@ -62,6 +62,7 @@ Available endpoints:
 - `GET /api/v1/tracks`
 - `GET /api/v1/tracks?q=radio`
 - `GET /api/v1/auth/profile`
+- `PATCH /api/v1/auth/profile`
 - `GET /api/v1/admin/sync-accounts`
 - `POST /api/v1/admin/sync-tokens`
 - `DELETE /api/v1/admin/sync-tokens`
@@ -112,8 +113,23 @@ curl --fail-with-body -X DELETE \
 ```
 
 An authenticated device can call `GET /api/v1/auth/profile` to verify its
-account and device identity. Public registration, password login, OAuth, and
-automatic client-side token rotation are intentionally not exposed yet.
+account and device identity. Managed profile responses advertise
+`"editable":true`; older servers and static credentials do not. A managed
+device can atomically rename the shared account display name and its own device
+label without changing its token, token ID, or creation time:
+
+```bash
+curl --fail-with-body -X PATCH \
+  -H "Authorization: Bearer $AETHERTUNE_DEVICE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"displayName":"Family library","deviceName":"Living room"}' \
+  https://sync.example.com/api/v1/auth/profile
+```
+
+At least one field is required, labels are limited to 80 printable characters,
+and a device label must remain unique within the account. Static credentials
+return `409 profile_not_managed`. Public registration, password login, OAuth,
+and automatic client-side token rotation are intentionally not exposed yet.
 
 `GET /api/v1/metrics` reports only process-lifetime aggregate state: start
 time, uptime, total request count, and whether library sync is configured. It

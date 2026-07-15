@@ -263,7 +263,7 @@ Future<Response> _handleAuthProfile(
   required SyncAuthenticator authenticator,
   required ManagedSyncAccountRegistry? managedAccounts,
 }) async {
-  if (request.method != 'GET') {
+  if (request.method != 'GET' && request.method != 'PATCH') {
     return _methodNotAllowed(request);
   }
   if (!authenticator.isConfigured) {
@@ -278,21 +278,92 @@ Future<Response> _handleAuthProfile(
   if (accountId == null) {
     return _unauthorizedResponse();
   }
-  final principal =
+  final candidatePrincipal =
       token == null ? null : managedAccounts?.authenticatePrincipal(token);
+  final principal = candidatePrincipal?.accountId == accountId
+      ? candidatePrincipal
+      : null;
   final managedProfile =
       principal == null ? null : managedAccounts?.account(principal.accountId);
-  return _jsonResponse(
-    200,
-    <String, Object?>{
-      'account': <String, Object?>{
-        'id': accountId,
-        'displayName': managedProfile?.displayName,
-        'managed': managedProfile != null,
+  if (request.method == 'GET') {
+    return _jsonResponse(
+      200,
+      _authProfileJson(
+        accountId: accountId,
+        account: managedProfile,
+        device: principal?.token,
+      ),
+    );
+  }
+  if (managedAccounts == null || principal == null || managedProfile == null) {
+    return _jsonResponse(
+      409,
+      <String, Object?>{'error': 'profile_not_managed'},
+    );
+  }
+
+  try {
+    final body = await _readBoundedJson(
+      request,
+      maxBytes: maxManagedAuthRequestBytes,
+    );
+    final hasDisplayName = body.containsKey('displayName');
+    final hasDeviceName = body.containsKey('deviceName');
+    if (!hasDisplayName && !hasDeviceName) {
+      throw const FormatException(
+        'At least one profile field must be provided.',
+      );
+    }
+    final updated = await managedAccounts.updateProfile(
+      accountId: principal.accountId,
+      tokenId: principal.token.id,
+      displayName: hasDisplayName ? _requiredString(body, 'displayName') : null,
+      deviceName: hasDeviceName ? _requiredString(body, 'deviceName') : null,
+    );
+    if (updated == null) {
+      return _unauthorizedResponse();
+    }
+    return _jsonResponse(
+      200,
+      _authProfileJson(
+        accountId: updated.account.id,
+        account: updated.account,
+        device: updated.device,
+      ),
+    );
+  } on _PayloadTooLarge catch (error) {
+    return _jsonResponse(
+      413,
+      <String, Object?>{
+        'error': 'payload_too_large',
+        'maxBytes': error.maxBytes,
       },
-      'device': principal?.token.toJson(),
+    );
+  } on FormatException catch (error) {
+    return _jsonResponse(
+      400,
+      <String, Object?>{
+        'error': 'invalid_auth_request',
+        'message': error.message,
+      },
+    );
+  }
+}
+
+Map<String, Object?> _authProfileJson({
+  required String accountId,
+  required ManagedSyncAccountProfile? account,
+  required ManagedSyncTokenMetadata? device,
+}) {
+  return <String, Object?>{
+    'account': <String, Object?>{
+      'id': accountId,
+      'displayName': account?.displayName,
+      'managed': account != null,
+      'editable': account != null && device != null,
     },
-  );
+    'device': device?.toJson(),
+  };
 }
 
 Future<Response> _handleManagedSyncAccounts(

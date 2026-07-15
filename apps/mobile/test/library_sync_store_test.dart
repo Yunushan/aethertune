@@ -7,6 +7,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/library_sync_credential_vault.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
+import 'package:aethertune/src/data/provider_error.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
 import 'package:aethertune/src/domain/library_sync_profile.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -87,6 +88,7 @@ void main() {
       displayName: 'Updated listener',
       managed: true,
       device: _managedProfile().device,
+      editable: true,
     );
     await store.refreshProfile(library);
 
@@ -102,6 +104,68 @@ void main() {
       'aethertune.library_sync.metadata.v1',
     )!;
     expect(metadata, isNot(contains('private-token')));
+  });
+
+  test('updates managed identity and local upload attribution', () async {
+    final vault = _MemorySyncVault();
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      profile: _managedProfile(),
+    );
+    final store = LibrarySyncStore(
+      credentialVault: vault,
+      clientFactory: (account, token) => gateway,
+    );
+    final library = LibraryStore();
+    await library.load();
+    await store.load();
+    await store.testAndSave(library, _account(), 'private-token');
+
+    final updated = await store.updateProfile(
+      library,
+      displayName: '  Shared listeners  ',
+      deviceName: '  Pocket player  ',
+    );
+
+    expect(gateway.profileUpdateCalls, 1);
+    expect(gateway.lastDisplayName, 'Shared listeners');
+    expect(gateway.lastDeviceName, 'Pocket player');
+    expect(updated.id, 'primary');
+    expect(updated.device?.id, _managedProfile().device?.id);
+    expect(store.profile?.effectiveDisplayName, 'Shared listeners');
+    expect(store.profile?.device?.name, 'Pocket player');
+    expect(store.account?.deviceId, 'Pocket player');
+
+    final restored = LibrarySyncStore(
+      credentialVault: vault,
+      clientFactory: (account, token) => gateway,
+    );
+    await restored.load();
+    expect(restored.profile?.effectiveDisplayName, 'Shared listeners');
+    expect(restored.profile?.device?.name, 'Pocket player');
+    expect(restored.account?.deviceId, 'Pocket player');
+    final metadata = (await SharedPreferences.getInstance()).getString(
+      'aethertune.library_sync.metadata.v1',
+    )!;
+    expect(metadata, isNot(contains('private-token')));
+
+    gateway.profileUpdateResult = LibrarySyncProfile(
+      id: 'different-account',
+      displayName: 'Invalid identity',
+      managed: true,
+      device: _managedProfile().device,
+      editable: true,
+    );
+    await expectLater(
+      store.updateProfile(
+        library,
+        displayName: 'Invalid identity',
+        deviceName: 'Pocket player',
+      ),
+      throwsA(isA<ProviderRequestException>()),
+    );
+    expect(store.profile?.effectiveDisplayName, 'Shared listeners');
+    expect(store.account?.deviceId, 'Pocket player');
   });
 
   test('failed connection and vault writes do not replace working settings',
@@ -486,6 +550,7 @@ LibrarySyncProfile _managedProfile() {
       name: 'Windows desktop',
       createdAt: DateTime.utc(2026, 7, 15, 12),
     ),
+    editable: true,
   );
 }
 
@@ -512,7 +577,10 @@ class _MemorySyncVault implements LibrarySyncCredentialVault {
 }
 
 class _FakeSyncGateway
-    implements LibrarySyncGateway, LibrarySyncProfileGateway {
+    implements
+        LibrarySyncGateway,
+        LibrarySyncProfileGateway,
+        LibrarySyncProfileEditorGateway {
   _FakeSyncGateway({
     required this.remote,
     this.profile,
@@ -526,8 +594,13 @@ class _FakeSyncGateway
   LibrarySyncRemoteSnapshot? pushResult;
   Object? deleteError;
   LibrarySyncRemoteSnapshot? deleteResult;
+  Object? profileUpdateError;
+  LibrarySyncProfile? profileUpdateResult;
   int pushCalls = 0;
   int profileFetchCalls = 0;
+  int profileUpdateCalls = 0;
+  String? lastDisplayName;
+  String? lastDeviceName;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
   final List<Map<String, Object?>> pushedSnapshots =
@@ -545,6 +618,37 @@ class _FakeSyncGateway
   Future<LibrarySyncProfile?> fetchProfile() async {
     profileFetchCalls += 1;
     return profile;
+  }
+
+  @override
+  Future<LibrarySyncProfile> updateProfile({
+    required String displayName,
+    required String deviceName,
+  }) async {
+    profileUpdateCalls += 1;
+    lastDisplayName = displayName;
+    lastDeviceName = deviceName;
+    if (profileUpdateError != null) {
+      throw profileUpdateError!;
+    }
+    final current = profile;
+    if (current == null || current.device == null) {
+      throw StateError('No managed profile.');
+    }
+    final result = profileUpdateResult ??
+        LibrarySyncProfile(
+          id: current.id,
+          displayName: displayName,
+          managed: true,
+          device: LibrarySyncProfileDevice(
+            id: current.device!.id,
+            name: deviceName,
+            createdAt: current.device!.createdAt,
+          ),
+          editable: current.editable,
+        );
+    profile = result;
+    return result;
   }
 
   @override

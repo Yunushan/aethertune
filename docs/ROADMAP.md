@@ -127,6 +127,7 @@
 - [x] Operations-authenticated token issue, rotation, and revocation
 - [x] Authenticated account/device profile endpoint
 - [x] Client account/device identity validation, persistence, and refresh UI
+- [x] Authenticated managed profile editing with client capability fallback
 - [ ] Optional public registration or external identity integration
 - [x] Versioned library sync API with durable snapshots
 - [ ] Remote provider coordination

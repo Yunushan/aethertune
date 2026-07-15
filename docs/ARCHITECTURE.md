@@ -188,6 +188,7 @@ release builders require the Visual C++ ATL component used by the plugin.
 - `GET /api/v1/metrics` (aggregate process state only)
 - `GET /api/v1/tracks`
 - `GET /api/v1/auth/profile`
+- `PATCH /api/v1/auth/profile`
 - `GET /api/v1/admin/sync-accounts`
 - `POST /api/v1/admin/sync-tokens`
 - `DELETE /api/v1/admin/sync-tokens`
@@ -202,7 +203,11 @@ a token list, or named device tokens per account. The operations-authenticated
 managed API issues 256-bit random bearer tokens once, persists only SHA-256
 digests, supports several independently revocable devices on one account, and
 atomically rotates a selected token. The profile endpoint returns only the
-authenticated account and current non-secret device metadata. Public
+authenticated account and current non-secret device metadata. Managed
+responses explicitly advertise profile editing; authenticated `PATCH` updates
+the shared display name and only that token's device label through the same
+copy-persist-publish transaction, preserving identifiers, creation times, and
+token hashes while rejecting duplicate active device names. Public
 registration, password/OAuth login, and automatic client token renewal remain
 roadmap work.
 
@@ -216,8 +221,12 @@ snapshot endpoint and then requests the authenticated profile capability. A
 `404` keeps older servers compatible; a supported response must pass bounded
 account/device validation before the non-secret profile is persisted beside
 sync metadata. The bearer token remains only in the platform credential vault.
-Options presents the account/device identity and can refresh it independently;
-failed vault or metadata writes restore the previous account, profile, and
+Options presents the account/device identity and can refresh it independently.
+When the server advertises editing, the shared Flutter UI can rename the
+account and current device; the validated response must retain the same account
+and token IDs before it replaces persisted profile metadata and local upload
+attribution. Missing capability fields default to false for older servers.
+Failed vault or metadata writes restore the previous account, profile, and
 token state.
 
 Operators set a distinct `AETHERTUNE_OPS_TOKEN`, in raw or `sha256:` form, to

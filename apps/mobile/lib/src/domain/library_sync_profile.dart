@@ -4,6 +4,7 @@ class LibrarySyncProfile {
     required this.managed,
     this.displayName,
     this.device,
+    this.editable = false,
   });
 
   factory LibrarySyncProfile.fromServerJson(Map<String, Object?> json) {
@@ -29,6 +30,12 @@ class LibrarySyncProfile {
         'Library sync profile management state is invalid.',
       );
     }
+    final editable = json['editable'] ?? false;
+    if (editable is! bool) {
+      throw const FormatException(
+        'Library sync profile edit capability is invalid.',
+      );
+    }
     final displayName = _optionalProfileText(
       json['displayName'],
       fieldName: 'display name',
@@ -49,11 +56,17 @@ class LibrarySyncProfile {
         'Managed library sync profile device is missing.',
       );
     }
+    if (editable && (!managed || device == null)) {
+      throw const FormatException(
+        'Editable library sync profile identity is invalid.',
+      );
+    }
     return LibrarySyncProfile(
       id: id,
       displayName: displayName,
       managed: managed,
       device: device,
+      editable: editable,
     );
   }
 
@@ -61,6 +74,7 @@ class LibrarySyncProfile {
   final String? displayName;
   final bool managed;
   final LibrarySyncProfileDevice? device;
+  final bool editable;
 
   String get effectiveDisplayName => displayName ?? id;
 
@@ -69,6 +83,7 @@ class LibrarySyncProfile {
     'displayName': displayName,
     'managed': managed,
     'device': device?.toJson(),
+    'editable': editable,
   };
 }
 
@@ -113,6 +128,14 @@ class LibrarySyncProfileDevice {
     'deviceName': name,
     'createdAt': createdAt.toUtc().toIso8601String(),
   };
+}
+
+String normalizeLibrarySyncProfileDisplayName(String value) {
+  return _requiredProfileText(value, fieldName: 'display name', maxLength: 80);
+}
+
+String normalizeLibrarySyncProfileDeviceName(String value) {
+  return _requiredProfileText(value, fieldName: 'device name', maxLength: 80);
 }
 
 String _requiredProfileText(

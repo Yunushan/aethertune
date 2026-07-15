@@ -256,6 +256,63 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
+  Future<LibrarySyncProfile> updateProfile(
+    LibraryStore library, {
+    required String displayName,
+    required String deviceName,
+  }) {
+    final normalizedDisplayName = normalizeLibrarySyncProfileDisplayName(
+      displayName,
+    );
+    final normalizedDeviceName = normalizeLibrarySyncProfileDeviceName(
+      deviceName,
+    );
+    return _runBusy(() async {
+      _requireOnline(library);
+      final previousProfile = _profile;
+      final previousAccount = _account;
+      final previousDevice = previousProfile?.device;
+      if (previousProfile == null ||
+          !previousProfile.managed ||
+          !previousProfile.editable ||
+          previousDevice == null ||
+          previousAccount == null) {
+        throw StateError('This sync account does not support profile editing.');
+      }
+      final client = _requireClient();
+      if (client is! LibrarySyncProfileEditorGateway) {
+        throw StateError('This sync server does not support profile editing.');
+      }
+      final updated = await (client as LibrarySyncProfileEditorGateway)
+          .updateProfile(
+            displayName: normalizedDisplayName,
+            deviceName: normalizedDeviceName,
+          );
+      if (!updated.managed ||
+          updated.id != previousProfile.id ||
+          updated.device?.id != previousDevice.id) {
+        throw const ProviderRequestException(
+          'Library sync returned a different account or device identity.',
+        );
+      }
+
+      _profile = updated;
+      _account = LibrarySyncAccount(
+        baseUri: previousAccount.baseUri,
+        deviceId: updated.device!.name,
+        allowInsecureHttp: previousAccount.allowInsecureHttp,
+      );
+      try {
+        await _saveMetadata();
+      } on Object {
+        _profile = previousProfile;
+        _account = previousAccount;
+        rethrow;
+      }
+      return updated;
+    });
+  }
+
   Future<bool> uploadAutomaticallyIfDue(LibraryStore library) async {
     if (!_loaded ||
         !_automaticUploadEnabled ||

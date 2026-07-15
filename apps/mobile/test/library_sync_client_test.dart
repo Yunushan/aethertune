@@ -205,6 +205,7 @@ void main() {
               'id': 'primary',
               'displayName': 'Primary listener',
               'managed': true,
+              'editable': true,
             },
             'device': <String, Object?>{
               'id': '0123456789abcdef01234567',
@@ -224,8 +225,68 @@ void main() {
     expect(profile?.id, 'primary');
     expect(profile?.effectiveDisplayName, 'Primary listener');
     expect(profile?.managed, isTrue);
+    expect(profile?.editable, isTrue);
     expect(profile?.device?.name, 'Windows desktop');
     expect(profile?.device?.createdAt, DateTime.utc(2026, 7, 15, 12));
+  });
+
+  test('updates managed profile over authenticated PATCH', () async {
+    const token = 'managed-private-token';
+    String? requestedMethod;
+    Uri? requestedUri;
+    Map<String, String>? requestedHeaders;
+    Map<String, Object?>? requestedBody;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: token,
+      httpExecutor: (method, uri, {required headers, body}) async {
+        requestedMethod = method;
+        requestedUri = uri;
+        requestedHeaders = headers;
+        requestedBody = jsonDecode(body!) as Map<String, Object?>;
+        return const LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: '{'
+              '"account":{'
+              '"id":"primary",'
+              '"displayName":"Shared listeners",'
+              '"managed":true,'
+              '"editable":true'
+              '},'
+              '"device":{'
+              '"id":"0123456789abcdef01234567",'
+              '"deviceName":"Pocket player",'
+              '"createdAt":"2026-07-15T12:00:00.000Z"'
+              '}'
+              '}',
+        );
+      },
+    );
+
+    final updated = await client.updateProfile(
+      displayName: '  Shared listeners  ',
+      deviceName: '  Pocket player  ',
+    );
+
+    expect(requestedMethod, 'PATCH');
+    expect(requestedUri, _account().profileEndpointUri);
+    expect(requestedHeaders?['authorization'], 'Bearer $token');
+    expect(requestedHeaders?['content-type'], 'application/json');
+    expect(requestedBody, <String, Object?>{
+      'displayName': 'Shared listeners',
+      'deviceName': 'Pocket player',
+    });
+    expect(jsonEncode(requestedBody), isNot(contains(token)));
+    expect(updated.effectiveDisplayName, 'Shared listeners');
+    expect(updated.editable, isTrue);
+    expect(updated.device?.name, 'Pocket player');
+    await expectLater(
+      client.updateProfile(
+        displayName: ' ',
+        deviceName: 'Pocket player',
+      ),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('tolerates old servers and rejects malformed managed identity',
@@ -263,7 +324,35 @@ void main() {
     expect(staticProfile?.id, 'static-account');
     expect(staticProfile?.effectiveDisplayName, 'static-account');
     expect(staticProfile?.managed, isFalse);
+    expect(staticProfile?.editable, isFalse);
     expect(staticProfile?.device, isNull);
+
+    final legacyManagedProfile = LibrarySyncProfile.fromServerJson(
+      <String, Object?>{
+        'account': <String, Object?>{
+          'id': 'legacy-managed',
+          'displayName': 'Legacy listener',
+          'managed': true,
+        },
+        'device': <String, Object?>{
+          'id': '0123456789abcdef01234567',
+          'deviceName': 'Legacy device',
+          'createdAt': '2026-07-15T12:00:00.000Z',
+        },
+      },
+    );
+    expect(legacyManagedProfile.editable, isFalse);
+    expect(
+      () => LibrarySyncProfile.fromServerJson(<String, Object?>{
+        'account': <String, Object?>{
+          'id': 'static-account',
+          'managed': false,
+          'editable': true,
+        },
+        'device': null,
+      }),
+      throwsA(isA<FormatException>()),
+    );
 
     final malformed = LibrarySyncClient(
       account: _account(),

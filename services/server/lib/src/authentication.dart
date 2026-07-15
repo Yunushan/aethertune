@@ -182,6 +182,16 @@ class IssuedManagedSyncToken {
   final String? replacedTokenId;
 }
 
+class ManagedSyncProfileUpdate {
+  const ManagedSyncProfileUpdate({
+    required this.account,
+    required this.device,
+  });
+
+  final ManagedSyncAccountProfile account;
+  final ManagedSyncTokenMetadata device;
+}
+
 typedef ManagedSyncTokenGenerator = String Function();
 
 class ManagedSyncAccountRegistry implements SyncAuthenticator {
@@ -372,6 +382,94 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
       _accounts = candidate;
       _revision = nextRevision;
       return true;
+    });
+  }
+
+  Future<ManagedSyncProfileUpdate?> updateProfile({
+    required String accountId,
+    required String tokenId,
+    String? displayName,
+    String? deviceName,
+  }) {
+    final normalizedAccountId = _validatedAccountId(accountId);
+    final normalizedTokenId = tokenId.trim();
+    if (!RegExp(r'^[0-9a-f]{24}$').hasMatch(normalizedTokenId)) {
+      throw const FormatException('tokenId is invalid.');
+    }
+    if (displayName == null && deviceName == null) {
+      throw const FormatException(
+        'At least one profile field must be provided.',
+      );
+    }
+    final normalizedDisplayName = displayName == null
+        ? null
+        : _validatedLabel(
+            displayName,
+            fieldName: 'displayName',
+            maxLength: 80,
+          );
+    final normalizedDeviceName = deviceName == null
+        ? null
+        : _validatedLabel(
+            deviceName,
+            fieldName: 'deviceName',
+            maxLength: 80,
+          );
+
+    return _serialized(() async {
+      final candidate = _copyAccounts();
+      final account = candidate[normalizedAccountId];
+      if (account == null) {
+        return null;
+      }
+      final tokenIndex = account.tokens.indexWhere(
+        (token) => token.id == normalizedTokenId,
+      );
+      if (tokenIndex < 0) {
+        return null;
+      }
+      final currentToken = account.tokens[tokenIndex];
+      if (normalizedDeviceName != null &&
+          account.tokens.any(
+            (token) =>
+                token.id != normalizedTokenId &&
+                token.deviceName == normalizedDeviceName,
+          )) {
+        throw const FormatException(
+          'deviceName already has an active token for this account.',
+        );
+      }
+
+      final accountChanged = normalizedDisplayName != null &&
+          normalizedDisplayName != account.displayName;
+      final deviceChanged = normalizedDeviceName != null &&
+          normalizedDeviceName != currentToken.deviceName;
+      if (accountChanged) {
+        account.displayName = normalizedDisplayName;
+      }
+      if (deviceChanged) {
+        account.tokens[tokenIndex] = _ManagedTokenRecord(
+          id: currentToken.id,
+          deviceName: normalizedDeviceName,
+          createdAt: currentToken.createdAt,
+          tokenHash: currentToken.tokenHash,
+        );
+      }
+      if (accountChanged || deviceChanged) {
+        final nextRevision = await _persist(candidate);
+        _accounts = candidate;
+        _revision = nextRevision;
+      }
+      final updatedAccount = accountChanged || deviceChanged
+          ? _accounts[normalizedAccountId]!
+          : account;
+      final updatedToken = updatedAccount.tokens.firstWhere(
+        (token) => token.id == normalizedTokenId,
+      );
+      return ManagedSyncProfileUpdate(
+        account: _profileForRecord(updatedAccount),
+        device: updatedToken.metadata,
+      );
     });
   }
 

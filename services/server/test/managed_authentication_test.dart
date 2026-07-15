@@ -52,6 +52,105 @@ void main() {
     expect(registry.authenticate(issued.token), 'primary');
   });
 
+  test('managed profile updates persist without changing token identity',
+      () async {
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-managed-profile-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final registry = await ManagedSyncAccountRegistry.open(
+      root,
+      clock: () => DateTime.utc(2026, 7, 15, 9),
+      tokenGenerator: Queue<String>.from(<String>[
+        'at_profile_phone_secret',
+        'at_profile_desktop_secret',
+      ]).removeFirst,
+    );
+    final phone = await registry.issueToken(
+      accountId: 'primary',
+      displayName: 'Original account',
+      deviceName: 'Phone',
+    );
+    await registry.issueToken(
+      accountId: 'primary',
+      deviceName: 'Desktop',
+    );
+
+    final updated = await registry.updateProfile(
+      accountId: 'primary',
+      tokenId: phone.device.id,
+      displayName: 'Updated account',
+      deviceName: 'Pocket player',
+    );
+
+    expect(updated?.account.displayName, 'Updated account');
+    expect(updated?.device.id, phone.device.id);
+    expect(updated?.device.deviceName, 'Pocket player');
+    expect(updated?.device.createdAt, phone.device.createdAt);
+    expect(registry.authenticate(phone.token), 'primary');
+    await expectLater(
+      registry.updateProfile(
+        accountId: 'primary',
+        tokenId: phone.device.id,
+        deviceName: 'Desktop',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      registry.account('primary')!.tokens.first.deviceName,
+      'Pocket player',
+    );
+
+    await registry.updateProfile(
+      accountId: 'primary',
+      tokenId: phone.device.id,
+      displayName: 'Updated account',
+      deviceName: 'Pocket player',
+    );
+    expect((await _registryFiles(root)).single.path, endsWith('registry-3.json'));
+
+    final restarted = await ManagedSyncAccountRegistry.open(root);
+    expect(restarted.authenticate(phone.token), 'primary');
+    expect(restarted.account('primary')?.displayName, 'Updated account');
+    expect(
+      restarted.account('primary')!.tokens.first.deviceName,
+      'Pocket player',
+    );
+  });
+
+  test('failed managed profile persistence leaves active state unchanged',
+      () async {
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-managed-profile-rollback-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final registry = await ManagedSyncAccountRegistry.open(
+      root,
+      tokenGenerator: () => 'at_profile_rollback_secret',
+    );
+    final issued = await registry.issueToken(
+      accountId: 'primary',
+      displayName: 'Original account',
+      deviceName: 'Phone',
+    );
+    await Directory('${root.path}${Platform.pathSeparator}registry-2.json')
+        .create();
+
+    await expectLater(
+      registry.updateProfile(
+        accountId: 'primary',
+        tokenId: issued.device.id,
+        displayName: 'Uncommitted account',
+        deviceName: 'Uncommitted device',
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(registry.account('primary')?.displayName, 'Original account');
+    expect(registry.account('primary')?.tokens.single.deviceName, 'Phone');
+    expect(registry.authenticate(issued.token), 'primary');
+  });
+
   test('managed registry persists one-time device tokens and lifecycle changes',
       () async {
     final root = await Directory.systemTemp.createTemp(
@@ -255,11 +354,98 @@ void main() {
         'id': 'primary',
         'displayName': 'Primary listener',
         'managed': true,
+        'editable': true,
       },
     );
     expect(
       (profileBody['device'] as Map<String, dynamic>)['deviceName'],
       'Desktop',
+    );
+
+    final profileUpdate = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: <String, Object?>{
+          'displayName': 'Shared listeners',
+          'deviceName': 'Workstation',
+        },
+      ),
+    );
+    final profileUpdateText = await profileUpdate.readAsString();
+    final profileUpdateBody =
+        jsonDecode(profileUpdateText) as Map<String, dynamic>;
+    expect(profileUpdate.statusCode, 200);
+    expect(
+      (profileUpdateBody['account'] as Map)['displayName'],
+      'Shared listeners',
+    );
+    expect(
+      (profileUpdateBody['device'] as Map)['deviceName'],
+      'Workstation',
+    );
+    expect(profileUpdateText, isNot(contains(desktopToken)));
+    expect(profileUpdateText, isNot(contains('sha256')));
+
+    final phoneProfile = await handler(
+      _request('GET', '/api/v1/auth/profile', token: phoneToken),
+    );
+    final phoneProfileBody = await _json(phoneProfile);
+    expect(
+      (phoneProfileBody['account'] as Map)['displayName'],
+      'Shared listeners',
+    );
+    expect(
+      (phoneProfileBody['device'] as Map)['deviceName'],
+      'Phone',
+    );
+
+    final duplicateDeviceUpdate = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: <String, Object?>{'deviceName': 'Phone'},
+      ),
+    );
+    expect(duplicateDeviceUpdate.statusCode, 400);
+    expect(
+      (await _json(duplicateDeviceUpdate))['error'],
+      'invalid_auth_request',
+    );
+
+    final emptyProfileUpdate = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{},
+      ),
+    );
+    expect(emptyProfileUpdate.statusCode, 400);
+    expect(
+      (await _json(emptyProfileUpdate))['error'],
+      'invalid_auth_request',
+    );
+
+    final oversizedProfileUpdate = await handler(
+      Request(
+        'PATCH',
+        Uri.parse('http://localhost/api/v1/auth/profile'),
+        headers: <String, String>{
+          'authorization': 'Bearer $desktopToken',
+          'content-type': 'application/json',
+        },
+        body: Stream<List<int>>.value(
+          List<int>.filled(maxManagedAuthRequestBytes + 1, 0),
+        ),
+      ),
+    );
+    expect(oversizedProfileUpdate.statusCode, 413);
+    expect(
+      (await _json(oversizedProfileUpdate))['error'],
+      'payload_too_large',
     );
 
     final accountList = await handler(
@@ -273,6 +459,12 @@ void main() {
     final accountListBody = jsonDecode(accountListText) as Map<String, dynamic>;
     final listedAccount =
         (accountListBody['accounts'] as List<dynamic>).single as Map;
+    expect(listedAccount['displayName'], 'Shared listeners');
+    expect(
+      (listedAccount['tokens'] as List<dynamic>)
+          .map((token) => (token as Map)['deviceName']),
+      <String>['Phone', 'Workstation'],
+    );
     expect((listedAccount['tokens'] as List<dynamic>), hasLength(2));
     expect(accountListText, isNot(contains(phoneToken)));
     expect(accountListText, isNot(contains(desktopToken)));
@@ -370,6 +562,72 @@ void main() {
       'operations_auth_not_configured',
     );
     expect(accounts.isConfigured, isFalse);
+  });
+
+  test('static sync credentials cannot mutate managed profile metadata',
+      () async {
+    final authenticator = StaticSyncAuthenticator.fromJson(
+      '{"static-account":"static-token"}',
+    );
+    final response = await createServerHandler(
+      syncAuthenticator: authenticator,
+    )(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: 'static-token',
+        body: <String, Object?>{'displayName': 'Not persisted'},
+      ),
+    );
+
+    expect(response.statusCode, 409);
+    expect((await _json(response))['error'], 'profile_not_managed');
+  });
+
+  test('static identity wins without managed rights for an overlapping token',
+      () async {
+    final accounts = ManagedSyncAccountRegistry.memory(
+      tokenGenerator: () => 'overlapping-token',
+    );
+    await accounts.issueToken(
+      accountId: 'managed-account',
+      displayName: 'Managed account',
+      deviceName: 'Managed device',
+    );
+    final staticAccounts = StaticSyncAuthenticator.fromJson(
+      '{"static-account":"overlapping-token"}',
+    );
+    final authenticator = CompositeSyncAuthenticator(
+      <SyncAuthenticator>[staticAccounts, accounts],
+    );
+    final handler = createServerHandler(
+      syncAuthenticator: authenticator,
+      managedSyncAccounts: accounts,
+    );
+
+    final profile = await handler(
+      _request(
+        'GET',
+        '/api/v1/auth/profile',
+        token: 'overlapping-token',
+      ),
+    );
+    final profileBody = await _json(profile);
+    expect((profileBody['account'] as Map)['id'], 'static-account');
+    expect((profileBody['account'] as Map)['managed'], isFalse);
+    expect((profileBody['account'] as Map)['editable'], isFalse);
+    expect(profileBody['device'], isNull);
+
+    final update = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: 'overlapping-token',
+        body: <String, Object?>{'displayName': 'Escalated account'},
+      ),
+    );
+    expect(update.statusCode, 409);
+    expect(accounts.account('managed-account')?.displayName, 'Managed account');
   });
 }
 
