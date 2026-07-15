@@ -39,8 +39,9 @@ Platform layer
   audio_service system media session on Android/iOS/macOS
 
 Server layer
-  Dart Shelf handler, health/info/catalog endpoints, authenticated versioned
-  library snapshot endpoint with checksum and optimistic revision conflict handling
+  Dart Shelf handler, health/info/catalog/aggregate-metrics endpoints,
+  authenticated versioned library snapshot endpoint with checksum and
+  optimistic revision conflict handling
 ```
 
 ## Domain model
@@ -141,6 +142,7 @@ release builders require the Visual C++ ATL component used by the plugin.
 
 - `GET /health`
 - `GET /api/v1/info`
+- `GET /api/v1/metrics` (aggregate process state only)
 - `GET /api/v1/tracks`
 - `GET /api/v1/sync/library`
 - `PUT /api/v1/sync/library`

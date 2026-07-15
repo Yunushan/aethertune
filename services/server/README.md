@@ -49,6 +49,7 @@ Available endpoints:
 
 - `GET /health`
 - `GET /api/v1/info`
+- `GET /api/v1/metrics`
 - `GET /api/v1/tracks`
 - `GET /api/v1/tracks?q=radio`
 - `GET /api/v1/sync/library`
@@ -62,6 +63,13 @@ choose the durable snapshot directory. Requests require `Authorization: Bearer
 merging. A successful `DELETE` records a revisioned tombstone rather than
 erasing history, so stale devices cannot repopulate a cleared snapshot. The
 service rejects local file paths and device cache jobs from portable snapshots.
+
+`GET /api/v1/metrics` reports only process-lifetime aggregate state: start
+time, uptime, total request count, and whether library sync is configured. It
+does not record or expose users, bearer tokens, request paths, addresses, or
+payloads. The count includes the metrics request itself and resets when the
+server restarts. Keep the endpoint behind the same private network or proxy
+access policy as the rest of the service.
 
 Run checks from this directory:
 

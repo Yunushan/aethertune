@@ -45,8 +45,11 @@ Handler createServerHandler({
   final now = clock ?? DateTime.now;
   final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
+  final startedAt = now().toUtc();
+  var requestsTotal = 0;
 
   return (Request request) async {
+    requestsTotal += 1;
     switch (request.url.path) {
       case 'health':
         if (request.method != 'GET') {
@@ -58,6 +61,21 @@ Handler createServerHandler({
             'status': 'ok',
             'service': 'aethertune-server',
             'timestamp': now().toUtc().toIso8601String(),
+          },
+        );
+      case 'api/v1/metrics':
+        if (request.method != 'GET') {
+          return _methodNotAllowed(request);
+        }
+        final uptime = now().toUtc().difference(startedAt);
+        return _jsonResponse(
+          200,
+          <String, Object?>{
+            'service': 'aethertune-server',
+            'startedAt': startedAt.toIso8601String(),
+            'uptimeSeconds': uptime.isNegative ? 0 : uptime.inSeconds,
+            'requestsTotal': requestsTotal,
+            'librarySync': authenticator.isConfigured,
           },
         );
       case 'api/v1/info':

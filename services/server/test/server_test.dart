@@ -22,6 +22,41 @@ void main() {
       expect(body['timestamp'], '2026-01-02T03:04:05.000Z');
     });
 
+    test('metrics reports aggregate process state without request details',
+        () async {
+      var current = DateTime.utc(2026, 1, 2, 3, 4, 5);
+      final handler = createServerHandler(
+        clock: () => current,
+        syncAuthenticator: StaticSyncAuthenticator(
+          const <String, String>{'yunus': 'test-token'},
+        ),
+      );
+
+      await handler(_request('GET', '/health'));
+      current = current.add(const Duration(seconds: 65));
+      final response = await handler(_request('GET', '/api/v1/metrics'));
+      final body = await _json(response);
+
+      expect(response.statusCode, 200);
+      expect(body['service'], 'aethertune-server');
+      expect(body['startedAt'], '2026-01-02T03:04:05.000Z');
+      expect(body['uptimeSeconds'], 65);
+      expect(body['requestsTotal'], 2);
+      expect(body['librarySync'], isTrue);
+      expect(
+        body.keys,
+        containsAll(<String>[
+          'service',
+          'startedAt',
+          'uptimeSeconds',
+          'requestsTotal',
+          'librarySync',
+        ]),
+      );
+      expect(jsonEncode(body), isNot(contains('yunus')));
+      expect(jsonEncode(body), isNot(contains('test-token')));
+    });
+
     test('info endpoint lists clients and sync availability', () async {
       final unavailable = await createServerHandler()(
         _request('GET', '/api/v1/info'),
