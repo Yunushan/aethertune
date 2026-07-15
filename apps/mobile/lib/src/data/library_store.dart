@@ -940,6 +940,10 @@ class LibraryStore extends ChangeNotifier {
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _pauseListeningHistoryKey =
       'aethertune.pause_listening_history.v1';
+  static const _recommendationFavoriteSignalsKey =
+      'aethertune.recommendation_favorite_signals.v1';
+  static const _recommendationHistorySignalsKey =
+      'aethertune.recommendation_history_signals.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
   static const _automaticOfflineQueueKey =
       'aethertune.automatic_offline_queue.v1';
@@ -993,6 +997,8 @@ class LibraryStore extends ChangeNotifier {
   final List<String> _watchedLocalFolderPaths = <String>[];
   final DateTime Function() _clock;
   bool _pauseListeningHistory = false;
+  bool _recommendationFavoriteSignalsEnabled = true;
+  bool _recommendationHistorySignalsEnabled = true;
   bool _offlineModeEnabled = false;
   bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
@@ -1046,6 +1052,10 @@ class LibraryStore extends ChangeNotifier {
   List<Track> get favorites =>
       _tracks.where((track) => track.isFavorite).toList(growable: false);
   bool get pauseListeningHistory => _pauseListeningHistory;
+  bool get recommendationFavoriteSignalsEnabled =>
+      _recommendationFavoriteSignalsEnabled;
+  bool get recommendationHistorySignalsEnabled =>
+      _recommendationHistorySignalsEnabled;
   bool get offlineModeEnabled => _offlineModeEnabled;
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
   AppThemePreference get themePreference => _themePreference;
@@ -1227,6 +1237,10 @@ class LibraryStore extends ChangeNotifier {
     }
     _pauseListeningHistory =
         prefs.getBool(_pauseListeningHistoryKey) ?? false;
+    _recommendationFavoriteSignalsEnabled =
+        prefs.getBool(_recommendationFavoriteSignalsKey) ?? true;
+    _recommendationHistorySignalsEnabled =
+        prefs.getBool(_recommendationHistorySignalsKey) ?? true;
     _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
     _automaticOfflineQueueEnabled =
         prefs.getBool(_automaticOfflineQueueKey) ?? false;
@@ -1621,6 +1635,26 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _desktopQueuePaneWidth = sanitized;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setRecommendationFavoriteSignalsEnabled(bool enabled) async {
+    if (_recommendationFavoriteSignalsEnabled == enabled) {
+      return;
+    }
+
+    _recommendationFavoriteSignalsEnabled = enabled;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setRecommendationHistorySignalsEnabled(bool enabled) async {
+    if (_recommendationHistorySignalsEnabled == enabled) {
+      return;
+    }
+
+    _recommendationHistorySignalsEnabled = enabled;
     await _save();
     notifyListeners();
   }
@@ -2752,31 +2786,35 @@ class LibraryStore extends ChangeNotifier {
       addWeight(genreWeights, _knownMetadataKey(track.genre), genre);
     }
 
-    for (final track in favorites) {
-      addPreference(track, artist: 28, album: 16, genre: 22);
-      _addKnownMetadataKey(favoriteArtists, track.artist);
-      _addKnownMetadataKey(favoriteAlbums, track.album);
-      _addKnownMetadataKey(favoriteGenres, track.genre);
+    if (_recommendationFavoriteSignalsEnabled) {
+      for (final track in favorites) {
+        addPreference(track, artist: 28, album: 16, genre: 22);
+        _addKnownMetadataKey(favoriteArtists, track.artist);
+        _addKnownMetadataKey(favoriteAlbums, track.album);
+        _addKnownMetadataKey(favoriteGenres, track.genre);
+      }
     }
 
     final recentHistoryTrackIds = <String>{};
-    for (final entry in _history.take(50)) {
-      final track = byId[entry.trackId];
-      if (track == null) {
-        continue;
-      }
+    if (_recommendationHistorySignalsEnabled) {
+      for (final entry in _history.take(50)) {
+        final track = byId[entry.trackId];
+        if (track == null) {
+          continue;
+        }
 
-      recentHistoryTrackIds.add(track.id);
-      _addKnownMetadataKey(recentlyPlayedArtists, track.artist);
-      _addKnownMetadataKey(recentlyPlayedAlbums, track.album);
-      _addKnownMetadataKey(recentlyPlayedGenres, track.genre);
-      final firstRecentPlay = recentHistoryTrackIds.length <= 12;
-      addPreference(
-        track,
-        artist: firstRecentPlay ? 18 : 8,
-        album: firstRecentPlay ? 10 : 4,
-        genre: firstRecentPlay ? 16 : 7,
-      );
+        recentHistoryTrackIds.add(track.id);
+        _addKnownMetadataKey(recentlyPlayedArtists, track.artist);
+        _addKnownMetadataKey(recentlyPlayedAlbums, track.album);
+        _addKnownMetadataKey(recentlyPlayedGenres, track.genre);
+        final firstRecentPlay = recentHistoryTrackIds.length <= 12;
+        addPreference(
+          track,
+          artist: firstRecentPlay ? 18 : 8,
+          album: firstRecentPlay ? 10 : 4,
+          genre: firstRecentPlay ? 16 : 7,
+        );
+      }
     }
 
     if (artistWeights.isEmpty && albumWeights.isEmpty && genreWeights.isEmpty) {
@@ -2816,17 +2854,24 @@ class LibraryStore extends ChangeNotifier {
       score += albumWeights[albumKey] ?? 0;
       score += genreWeights[genreKey] ?? 0;
 
-      if (track.isFavorite) {
+      if (_recommendationFavoriteSignalsEnabled && track.isFavorite) {
         score += 8;
         reasons.add(LibraryRecommendationReason.favoriteTrack);
       }
 
-      final playCount = playCountForTrack(track.id);
-      if (playCount == 0) {
-        score += 12;
-        reasons.add(LibraryRecommendationReason.unplayed);
-      } else {
-        score -= playCount * 2;
+      final playCount = _recommendationHistorySignalsEnabled
+          ? playCountForTrack(track.id)
+          : 0;
+      final candidateLastPlayedAt = _recommendationHistorySignalsEnabled
+          ? lastPlayedAt(track.id)
+          : null;
+      if (_recommendationHistorySignalsEnabled) {
+        if (playCount == 0) {
+          score += 12;
+          reasons.add(LibraryRecommendationReason.unplayed);
+        } else {
+          score -= playCount * 2;
+        }
       }
 
       if (score <= 0) {
@@ -2839,7 +2884,7 @@ class LibraryStore extends ChangeNotifier {
           reasons: List<LibraryRecommendationReason>.unmodifiable(reasons),
           score: score,
           playCount: playCount,
-          lastPlayedAt: lastPlayedAt(track.id),
+          lastPlayedAt: candidateLastPlayedAt,
         ),
       );
     }
@@ -3413,6 +3458,10 @@ class LibraryStore extends ChangeNotifier {
       'version': _backupVersion,
       'exportedAt': _clock().toIso8601String(),
       'pauseListeningHistory': _pauseListeningHistory,
+      'recommendationFavoriteSignalsEnabled':
+          _recommendationFavoriteSignalsEnabled,
+      'recommendationHistorySignalsEnabled':
+          _recommendationHistorySignalsEnabled,
       'offlineModeEnabled': _offlineModeEnabled,
       'themePreference': _themePreference.name,
       'accentColor': _accentColor.name,
@@ -4044,6 +4093,8 @@ class LibraryStore extends ChangeNotifier {
     final restoredLyrics = <TrackLyrics>[];
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredPauseListeningHistory = false;
+    var restoredRecommendationFavoriteSignalsEnabled = true;
+    var restoredRecommendationHistorySignalsEnabled = true;
     var restoredOfflineModeEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
     var restoredAccentColor = AppAccentColor.system;
@@ -4057,6 +4108,18 @@ class LibraryStore extends ChangeNotifier {
         backup,
         'pauseListeningHistory',
         isRequired: false,
+      );
+      restoredRecommendationFavoriteSignalsEnabled = _jsonBool(
+        backup,
+        'recommendationFavoriteSignalsEnabled',
+        isRequired: false,
+        defaultValue: true,
+      );
+      restoredRecommendationHistorySignalsEnabled = _jsonBool(
+        backup,
+        'recommendationHistorySignalsEnabled',
+        isRequired: false,
+        defaultValue: true,
       );
       restoredOfflineModeEnabled = _jsonBool(
         backup,
@@ -4228,6 +4291,10 @@ class LibraryStore extends ChangeNotifier {
       ..clear()
       ..addAll(_dedupeOfflineCacheQueue(restoredOfflineCacheQueue));
     _pauseListeningHistory = restoredPauseListeningHistory;
+    _recommendationFavoriteSignalsEnabled =
+        restoredRecommendationFavoriteSignalsEnabled;
+    _recommendationHistorySignalsEnabled =
+        restoredRecommendationHistorySignalsEnabled;
     _offlineModeEnabled = restoredOfflineModeEnabled;
     _themePreference = restoredThemePreference;
     _accentColor = restoredAccentColor;
@@ -7263,10 +7330,11 @@ class LibraryStore extends ChangeNotifier {
     Map<String, Object?> backup,
     String key, {
     bool isRequired = true,
+    bool defaultValue = false,
   }) {
     final rawValue = backup[key];
     if (rawValue == null && !isRequired) {
-      return false;
+      return defaultValue;
     }
 
     if (rawValue is! bool) {
@@ -7705,6 +7773,14 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_pauseListeningHistoryKey, _pauseListeningHistory);
+    await prefs.setBool(
+      _recommendationFavoriteSignalsKey,
+      _recommendationFavoriteSignalsEnabled,
+    );
+    await prefs.setBool(
+      _recommendationHistorySignalsKey,
+      _recommendationHistorySignalsEnabled,
+    );
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
     await prefs.setBool(
       _automaticOfflineQueueKey,

@@ -102,6 +102,75 @@ void main() {
     );
     expect(find.text('Saved 2 tracks as Focus mix.'), findsOneWidget);
   });
+
+  testWidgets('changes recommendation taste signals from Options', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 5),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final favoritesTile = find.widgetWithText(
+      SwitchListTile,
+      'Use favorites in For you',
+    );
+    await tester.scrollUntilVisible(favoritesTile, 300);
+    expect(tester.widget<SwitchListTile>(favoritesTile).value, isTrue);
+
+    await tester.tap(favoritesTile);
+    await tester.pumpAndSettle();
+    expect(library.recommendationFavoriteSignalsEnabled, isFalse);
+    expect(tester.widget<SwitchListTile>(favoritesTile).value, isFalse);
+
+    final historyTile = find.widgetWithText(
+      SwitchListTile,
+      'Use listening history in For you',
+    );
+    await tester.scrollUntilVisible(historyTile, 200);
+    expect(tester.widget<SwitchListTile>(historyTile).value, isTrue);
+
+    await tester.tap(historyTile);
+    await tester.pumpAndSettle();
+    expect(library.recommendationHistorySignalsEnabled, isFalse);
+    expect(tester.widget<SwitchListTile>(historyTile).value, isFalse);
+  });
 }
 
 class _TestPlaybackAudioEngine implements PlaybackAudioEngine {

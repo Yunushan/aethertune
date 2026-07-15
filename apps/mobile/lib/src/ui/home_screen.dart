@@ -12129,6 +12129,28 @@ class _SettingsTab extends StatelessWidget {
           ),
         ),
         SwitchListTile(
+          secondary: const Icon(Icons.favorite_outline),
+          title: const Text('Use favorites in For you'),
+          subtitle: const Text(
+            'Let favorite tracks, artists, albums, and genres shape recommendations.',
+          ),
+          value: library.recommendationFavoriteSignalsEnabled,
+          onChanged: (value) {
+            unawaited(library.setRecommendationFavoriteSignalsEnabled(value));
+          },
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.history),
+          title: const Text('Use listening history in For you'),
+          subtitle: const Text(
+            'Let recent plays, play counts, and unplayed status shape recommendations.',
+          ),
+          value: library.recommendationHistorySignalsEnabled,
+          onChanged: (value) {
+            unawaited(library.setRecommendationHistorySignalsEnabled(value));
+          },
+        ),
+        SwitchListTile(
           secondary: const Icon(Icons.pause_circle_outline),
           title: const Text('Pause listening history'),
           subtitle: const Text(

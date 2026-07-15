@@ -2338,6 +2338,71 @@ void main() {
       ]),
     );
     expect(matches.first.score, greaterThan(matches.last.score));
+
+    await store.setRecommendationFavoriteSignalsEnabled(false);
+    final historyOnly = store.personalizedRecommendationMatches(limit: 3);
+    final historyOnlyReasons = historyOnly.expand((match) => match.reasons);
+    expect(
+      historyOnlyReasons,
+      contains(LibraryRecommendationReason.recentlyPlayedArtist),
+    );
+    expect(
+      historyOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.favoriteArtist)),
+    );
+    expect(
+      historyOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.favoriteAlbum)),
+    );
+    expect(
+      historyOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.favoriteGenre)),
+    );
+    expect(
+      historyOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.favoriteTrack)),
+    );
+
+    await store.setRecommendationFavoriteSignalsEnabled(true);
+    await store.setRecommendationHistorySignalsEnabled(false);
+    final favoritesOnly = store.personalizedRecommendationMatches(limit: 3);
+    final favoriteOnlyReasons = favoritesOnly.expand(
+      (match) => match.reasons,
+    );
+    expect(
+      favoriteOnlyReasons,
+      contains(LibraryRecommendationReason.favoriteArtist),
+    );
+    expect(
+      favoriteOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.recentlyPlayedArtist)),
+    );
+    expect(
+      favoriteOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.recentlyPlayedAlbum)),
+    );
+    expect(
+      favoriteOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.recentlyPlayedGenre)),
+    );
+    expect(
+      favoriteOnlyReasons,
+      isNot(contains(LibraryRecommendationReason.unplayed)),
+    );
+
+    await store.setRecommendationFavoriteSignalsEnabled(false);
+    final fallbackWithoutTasteSignals = store
+        .personalizedRecommendationMatches(limit: 3);
+    expect(
+      fallbackWithoutTasteSignals.map((match) => match.reasons),
+      everyElement(const <LibraryRecommendationReason>[
+        LibraryRecommendationReason.recentlyAdded,
+      ]),
+    );
+    expect(
+      fallbackWithoutTasteSignals.map((match) => match.score),
+      everyElement(0),
+    );
     expect(store.personalizedRecommendations(limit: 0), isEmpty);
     expect(store.personalizedRecommendationMatches(limit: 0), isEmpty);
   });
@@ -3128,6 +3193,8 @@ void main() {
 
     expect(firstStore.offlineModeEnabled, isFalse);
     expect(firstStore.pauseListeningHistory, isFalse);
+    expect(firstStore.recommendationFavoriteSignalsEnabled, isTrue);
+    expect(firstStore.recommendationHistorySignalsEnabled, isTrue);
     expect(firstStore.themePreference, AppThemePreference.system);
     expect(firstStore.accentColor, AppAccentColor.system);
     expect(firstStore.languagePreference, AppLanguagePreference.system);
@@ -3144,6 +3211,8 @@ void main() {
 
     await firstStore.setOfflineModeEnabled(true);
     await firstStore.setPauseListeningHistory(true);
+    await firstStore.setRecommendationFavoriteSignalsEnabled(false);
+    await firstStore.setRecommendationHistorySignalsEnabled(false);
     await firstStore.setThemePreference(AppThemePreference.amoled);
     await firstStore.setAccentColor(AppAccentColor.rose);
     await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
@@ -3157,6 +3226,8 @@ void main() {
 
     expect(firstStore.offlineModeEnabled, isTrue);
     expect(firstStore.pauseListeningHistory, isTrue);
+    expect(firstStore.recommendationFavoriteSignalsEnabled, isFalse);
+    expect(firstStore.recommendationHistorySignalsEnabled, isFalse);
     expect(firstStore.themePreference, AppThemePreference.amoled);
     expect(firstStore.accentColor, AppAccentColor.rose);
     expect(firstStore.languagePreference, AppLanguagePreference.arabic);
@@ -3178,6 +3249,8 @@ void main() {
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.pauseListeningHistory, isTrue);
+    expect(secondStore.recommendationFavoriteSignalsEnabled, isFalse);
+    expect(secondStore.recommendationHistorySignalsEnabled, isFalse);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
@@ -3193,6 +3266,8 @@ void main() {
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
     expect(backup['pauseListeningHistory'], isTrue);
+    expect(backup['recommendationFavoriteSignalsEnabled'], isFalse);
+    expect(backup['recommendationHistorySignalsEnabled'], isFalse);
     expect(backup['themePreference'], AppThemePreference.amoled.name);
     expect(backup['accentColor'], AppAccentColor.rose.name);
     expect(backup['languagePreference'], AppLanguagePreference.arabic.name);
@@ -3205,6 +3280,8 @@ void main() {
     final legacyBackup = Map<String, dynamic>.from(backup)
       ..remove('offlineModeEnabled')
       ..remove('pauseListeningHistory')
+      ..remove('recommendationFavoriteSignalsEnabled')
+      ..remove('recommendationHistorySignalsEnabled')
       ..remove('themePreference')
       ..remove('accentColor')
       ..remove('languagePreference')
@@ -3214,6 +3291,8 @@ void main() {
 
     expect(secondStore.offlineModeEnabled, isFalse);
     expect(secondStore.pauseListeningHistory, isFalse);
+    expect(secondStore.recommendationFavoriteSignalsEnabled, isTrue);
+    expect(secondStore.recommendationHistorySignalsEnabled, isTrue);
     expect(secondStore.themePreference, AppThemePreference.system);
     expect(secondStore.accentColor, AppAccentColor.system);
     expect(secondStore.languagePreference, AppLanguagePreference.system);
@@ -3228,6 +3307,8 @@ void main() {
 
     expect(secondStore.offlineModeEnabled, isTrue);
     expect(secondStore.pauseListeningHistory, isTrue);
+    expect(secondStore.recommendationFavoriteSignalsEnabled, isFalse);
+    expect(secondStore.recommendationHistorySignalsEnabled, isFalse);
     expect(secondStore.themePreference, AppThemePreference.amoled);
     expect(secondStore.accentColor, AppAccentColor.rose);
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
