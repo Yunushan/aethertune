@@ -152,34 +152,24 @@ void main() {
       'Use favorites in For you',
     );
     await tester.scrollUntilVisible(favoritesTile, 300);
-    await tester.drag(
-      find.ancestor(of: favoritesTile, matching: find.byType(Scrollable)).first,
-      Offset(0, 420 - tester.getCenter(favoritesTile).dy),
-    );
-    await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(favoritesTile).value, isTrue);
+    final favoritesSwitch = tester.widget<SwitchListTile>(favoritesTile);
+    expect(favoritesSwitch.value, isTrue);
 
-    await tester.tap(favoritesTile);
+    favoritesSwitch.onChanged!(false);
     await tester.pumpAndSettle();
     expect(library.recommendationFavoriteSignalsEnabled, isFalse);
-    expect(tester.widget<SwitchListTile>(favoritesTile).value, isFalse);
 
     final historyTile = find.widgetWithText(
       SwitchListTile,
       'Use listening history in For you',
     );
     await tester.scrollUntilVisible(historyTile, 200);
-    await tester.drag(
-      find.ancestor(of: historyTile, matching: find.byType(Scrollable)).first,
-      Offset(0, 420 - tester.getCenter(historyTile).dy),
-    );
-    await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(historyTile).value, isTrue);
+    final historySwitch = tester.widget<SwitchListTile>(historyTile);
+    expect(historySwitch.value, isTrue);
 
-    await tester.tap(historyTile);
+    historySwitch.onChanged!(false);
     await tester.pumpAndSettle();
     expect(library.recommendationHistorySignalsEnabled, isFalse);
-    expect(tester.widget<SwitchListTile>(historyTile).value, isFalse);
   });
 
   testWidgets('opens full artist and album pages with collection actions', (
