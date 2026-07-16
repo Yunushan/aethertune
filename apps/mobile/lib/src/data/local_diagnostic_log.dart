@@ -174,9 +174,9 @@ String _sanitize(String value, int maximumLength) {
     RegExp(r'file://\S+', caseSensitive: false),
     'file://[redacted]',
   );
-  sanitized = sanitized.replaceAll(
+  sanitized = sanitized.replaceAllMapped(
     RegExp(r'(https?://)[^\s/@]+@', caseSensitive: false),
-    r'$1[redacted]@',
+    (match) => '${match.group(1)}[redacted]@',
   );
   return _truncate(sanitized, maximumLength);
 }
