@@ -1,0 +1,85 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
+
+import '../../data/library_store.dart';
+import '../../data/podcast_subscription_refresh_worker.dart';
+
+typedef PodcastRefreshRunner =
+    Future<PodcastRefreshReport> Function(LibraryStore library);
+
+class PodcastRssRefreshWorker extends StatefulWidget {
+  const PodcastRssRefreshWorker({
+    super.key,
+    required this.child,
+    this.runRefresh,
+  });
+
+  final Widget child;
+  final PodcastRefreshRunner? runRefresh;
+
+  @override
+  State<PodcastRssRefreshWorker> createState() =>
+      _PodcastRssRefreshWorkerState();
+}
+
+class _PodcastRssRefreshWorkerState extends State<PodcastRssRefreshWorker>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+  bool _refreshing = false;
+  late final PodcastRefreshRunner _runRefresh;
+
+  @override
+  void initState() {
+    super.initState();
+    _runRefresh =
+        widget.runRefresh ?? PodcastSubscriptionRefreshWorker().refreshDue;
+    WidgetsBinding.instance.addObserver(this);
+    _timer = Timer.periodic(const Duration(minutes: 15), (_) => _runIfDue());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runIfDue());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _runIfDue();
+    }
+  }
+
+  void _runIfDue() {
+    if (!mounted || _refreshing) {
+      return;
+    }
+    final library = context.read<LibraryStore>();
+    if (!library.loaded || library.offlineModeEnabled) {
+      return;
+    }
+    unawaited(_run(library));
+  }
+
+  Future<void> _run(LibraryStore library) async {
+    _refreshing = true;
+    try {
+      await _runRefresh(library);
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    if (library.loaded && !library.offlineModeEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _runIfDue());
+    }
+    return widget.child;
+  }
+}

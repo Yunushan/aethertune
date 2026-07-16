@@ -21,6 +21,7 @@ import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
 import 'widgets/desktop_global_hotkeys.dart';
 import 'widgets/offline_cache_foreground_worker.dart';
+import 'widgets/podcast_rss_refresh_worker.dart';
 import 'widgets/desktop_tray_controls.dart';
 import 'widgets/aethertune_deep_link_listener.dart';
 
@@ -89,8 +90,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
           },
         ),
       ],
-      child: OfflineCacheForegroundWorker(
-        child: LibrarySyncAutomaticUpload(
+      child: PodcastRssRefreshWorker(
+        child: OfflineCacheForegroundWorker(
+          child: LibrarySyncAutomaticUpload(
           child: DynamicColorBuilder(
             builder: (lightDynamic, darkDynamic) =>
                 Consumer2<LibraryStore, PlayerController>(
@@ -185,6 +187,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                   ),
                 );
               },
+            ),
             ),
           ),
         ),

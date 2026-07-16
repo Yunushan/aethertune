@@ -30,6 +30,7 @@ import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
+import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
@@ -12673,60 +12674,30 @@ class _SourcesTabState extends State<_SourcesTab> {
       _podcastError = null;
     });
 
-    var refreshed = 0;
-    var failed = 0;
-    for (final subscription in subscriptions) {
-      final feedUri = Uri.tryParse(subscription.feedUrl);
-      if (feedUri == null) {
-        failed += 1;
-        await library.markPodcastSubscriptionFetchFailed(
-          subscription.id,
-          'Saved feed URL is invalid.',
-        );
-        continue;
-      }
-      try {
-        final provider = PodcastRssProvider(feedUri: feedUri);
-        final feed = await provider.fetchFeed();
-        final tracks = feed.episodes
-            .map(
-              (episode) => episode.toTrack(sourceId: provider.id, feed: feed),
-            )
-            .toList(growable: false);
-        final saved = await library.savePodcastSubscription(
-          PodcastSubscription(
-            id: stablePodcastSubscriptionId(feed.feedUri.toString()),
-            feedUrl: feed.feedUri.toString(),
-            title: feed.title,
-            description: feed.description,
-            author: feed.author,
-            artworkUri: feed.artworkUri,
-            episodes: tracks,
-          ),
-        );
-        await library.markPodcastSubscriptionFetched(saved.id);
-        refreshed += 1;
-      } catch (error) {
-        failed += 1;
-        await library.markPodcastSubscriptionFetchFailed(subscription.id, error);
-      }
-    }
+    final report = await PodcastSubscriptionRefreshWorker()
+        .refreshSubscriptions(library, subscriptions: subscriptions);
 
     if (!context.mounted) {
       return;
     }
+    final selectedSubscription = _selectedPodcastSubscriptionId == null
+        ? null
+        : library.podcastSubscriptionById(_selectedPodcastSubscriptionId!);
     setState(() {
       _podcastLoading = false;
-      _podcastError = failed == 0
+      if (selectedSubscription != null) {
+        _podcastEpisodeTracks = selectedSubscription.episodes;
+      }
+      _podcastError = report.failedCount == 0
           ? null
-          : '$failed podcast feed(s) could not be refreshed.';
+          : '${report.failedCount} podcast feed(s) could not be refreshed.';
     });
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          failed == 0
-              ? 'Refreshed $refreshed podcast feed(s).'
-              : 'Refreshed $refreshed feed(s); $failed failed.',
+          report.failedCount == 0
+              ? 'Refreshed ${report.refreshedCount} podcast feed(s).'
+              : 'Refreshed ${report.refreshedCount} feed(s); ${report.failedCount} failed.',
         ),
       ),
     );
