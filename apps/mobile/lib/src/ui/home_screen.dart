@@ -2443,6 +2443,7 @@ class _HomeTabState extends State<_HomeTab> {
       ProviderHomeFeedCoordinator();
 
   LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
+  FollowingFeedSource _followingFeedSource = FollowingFeedSource.all;
   ProviderHomeFeed? _providerHomeFeed;
   String? _providerHomeSignature;
   bool _providerHomeLoading = false;
@@ -2477,6 +2478,9 @@ class _HomeTabState extends State<_HomeTab> {
     }
 
     final sections = library.homeFeedSections();
+    final followingTracks = library.followingFeedTracks(
+      source: _followingFeedSource,
+    );
     final charts = library.localCharts(range: _chartRange);
     final recommendationMatches = library.personalizedRecommendationMatches(
       limit: 6,
@@ -2525,6 +2529,12 @@ class _HomeTabState extends State<_HomeTab> {
             onImport: widget.onImport,
             onImportFolder: widget.onImportFolder,
           ),
+        ..._followingFeedWidgets(
+          context: context,
+          player: player,
+          library: library,
+          tracks: followingTracks,
+        ),
         ..._homeTrackPreviewWidgets(
           context: context,
           player: player,
@@ -2675,6 +2685,89 @@ class _HomeTabState extends State<_HomeTab> {
               : null,
           onRemove: () => library.removeTrack(track.id),
         ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  List<Widget> _followingFeedWidgets({
+    required BuildContext context,
+    required PlayerController player,
+    required LibraryStore library,
+    required List<Track> tracks,
+  }) {
+    final hasFollowingContent = library
+        .followingFeedTracks(limit: 1)
+        .isNotEmpty;
+    if (!hasFollowingContent) {
+      return <Widget>[];
+    }
+
+    return <Widget>[
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.dynamic_feed_outlined),
+        title: const Text('Following'),
+        subtitle: const Text('Newest updates from artists and podcasts'),
+        trailing: Text('${tracks.length}'),
+      ),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: <Widget>[
+          for (final source in FollowingFeedSource.values)
+            ChoiceChip(
+              label: Text(_followingFeedSourceLabel(source)),
+              selected: _followingFeedSource == source,
+              onSelected: (_) {
+                setState(() => _followingFeedSource = source);
+              },
+            ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      if (tracks.isEmpty)
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.filter_alt_off_outlined),
+          title: Text('No updates for this filter'),
+        )
+      else
+        for (final track in tracks)
+          TrackTile(
+            track: track,
+            detailText: _followingFeedTrackDetail(track),
+            onPlay: () => _playTrackWithResume(
+              context,
+              player,
+              library,
+              track,
+              queue: tracks,
+            ),
+            onStartRadio: () => unawaited(
+              _startTrackRadio(context, player, library, track),
+            ),
+            onSimilarTracks: () => unawaited(
+              _showSimilarTracks(
+                context,
+                track,
+                onAddToPlaylist: widget.onAddToPlaylist,
+                onLyrics: widget.onLyrics,
+              ),
+            ),
+            onShare: () => unawaited(
+              _copyTrackShareText(context, library, track),
+            ),
+            onFavorite: () => library.toggleFavorite(track.id),
+            onAddToPlaylist: () => widget.onAddToPlaylist(track),
+            onLyrics: () => widget.onLyrics(track),
+            onEditMetadata: () => unawaited(
+              _showTrackMetadataEditor(context, track),
+            ),
+            onEditArtwork: track.sourceId == 'local'
+                ? () => unawaited(_editTrackArtwork(context, track))
+                : null,
+            onRemove: () => library.removeTrack(track.id),
+          ),
       const SizedBox(height: 12),
     ];
   }
@@ -3332,6 +3425,20 @@ String _homeSectionSubtitle(LibraryHomeSectionType type) {
     case LibraryHomeSectionType.recentlyAdded:
       return 'Newest imports';
   }
+}
+
+String _followingFeedSourceLabel(FollowingFeedSource source) {
+  return switch (source) {
+    FollowingFeedSource.all => 'All',
+    FollowingFeedSource.artists => 'Artists',
+    FollowingFeedSource.podcasts => 'Podcasts',
+  };
+}
+
+String _followingFeedTrackDetail(Track track) {
+  return track.sourceId.startsWith('podcast-')
+      ? 'Podcast subscription'
+      : 'Followed artist';
 }
 
 String _libraryChartRangeLabel(LibraryChartRange range) {

@@ -145,6 +145,61 @@ void main() {
     expect(restored.isArtistFollowed('mira'), isFalse);
   });
 
+  test('merges, de-duplicates, ranks, and filters following updates', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'artist-update',
+        artist: 'Mira',
+        addedAt: DateTime.utc(2026, 1, 2),
+      ),
+      _track(
+        'other-artist',
+        artist: 'Ari',
+        addedAt: DateTime.utc(2026, 1, 7),
+      ),
+    ]);
+    await store.setArtistFollowed('Mira', true);
+    await store.savePodcastSubscription(
+      PodcastSubscription(
+        id: 'podcast',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether Radio',
+        episodes: <Track>[
+          _track(
+            'podcast-new',
+            sourceId: 'podcast-rss',
+            addedAt: DateTime.utc(2026, 1, 5),
+          ),
+          _track(
+            'artist-update',
+            sourceId: 'podcast-rss',
+            addedAt: DateTime.utc(2026, 1, 4),
+          ),
+        ],
+      ),
+    );
+
+    expect(
+      store.followingFeedTracks().map((track) => track.id),
+      <String>['podcast-new', 'artist-update'],
+    );
+    expect(
+      store
+          .followingFeedTracks(source: FollowingFeedSource.artists)
+          .map((track) => track.id),
+      <String>['artist-update'],
+    );
+    expect(
+      store
+          .followingFeedTracks(source: FollowingFeedSource.podcasts)
+          .map((track) => track.id),
+      <String>['podcast-new', 'artist-update'],
+    );
+    expect(store.followingFeedTracks(limit: 0), isEmpty);
+  });
+
   test('filters custom smart playlists by exact source artist album and genre', () async {
     final store = LibraryStore();
     await store.load();

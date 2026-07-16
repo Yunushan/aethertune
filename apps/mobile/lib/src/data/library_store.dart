@@ -64,6 +64,9 @@ enum LibraryHomeSectionType {
   recentlyAdded,
 }
 
+/// The source subset to include in the combined following feed.
+enum FollowingFeedSource { all, artists, podcasts }
+
 enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
 enum LibraryRecapPeriod { month, year }
@@ -2760,6 +2763,33 @@ class LibraryStore extends ChangeNotifier {
     );
 
     return sections;
+  }
+
+  /// Returns newest items from the user's local artist follows and RSS feeds.
+  ///
+  /// A track can appear in both sources after a feed episode is saved into the
+  /// library. Sorting before de-duplication keeps the most recently added
+  /// representation without showing the same item twice.
+  List<Track> followingFeedTracks({
+    FollowingFeedSource source = FollowingFeedSource.all,
+    int limit = 8,
+  }) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+
+    final tracks = switch (source) {
+      FollowingFeedSource.all => <Track>[
+        ..._followedArtistTracks(limit: _tracks.length),
+        ..._subscribedPodcastEpisodeTracks(),
+      ],
+      FollowingFeedSource.artists => _followedArtistTracks(
+        limit: _tracks.length,
+      ),
+      FollowingFeedSource.podcasts => _subscribedPodcastEpisodeTracks(),
+    };
+    tracks.sort(_compareByDateThenTitle);
+    return _uniqueTracks(tracks).take(limit).toList(growable: false);
   }
 
   List<Track> _subscribedPodcastEpisodeTracks() {
