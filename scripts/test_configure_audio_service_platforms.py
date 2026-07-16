@@ -177,7 +177,11 @@ MyApplication* my_application_new() {
             windows_source = root / "main.cpp"
             windows_cmake = root / "CMakeLists.txt"
             windows_source.write_text(
-                """#include \"flutter_windows.h\"
+                """#include <flutter/dart_project.h>
+#include <flutter/flutter_view_controller.h>
+#include <windows.h>
+#include "flutter_window.h"
+#include "utils.h"
 int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE prev,
     wchar_t *command_line, int show_command) {
   return 0;

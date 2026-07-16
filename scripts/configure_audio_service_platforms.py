@@ -802,9 +802,9 @@ def configure_linux_deep_links(source_path: Path) -> None:
 def configure_windows_deep_links(source_path: Path, cmake_path: Path) -> None:
     source = source_path.read_text(encoding="utf-8")
     if "app_links/app_links_plugin_c_api.h" not in source:
-        marker = '#include "flutter_windows.h"\n'
+        marker = "#include <windows.h>\n"
         if marker not in source:
-            raise RuntimeError("Windows Flutter include is missing")
+            raise RuntimeError("Windows platform include is missing")
         source = source.replace(
             marker,
             marker + '#include "app_links/app_links_plugin_c_api.h"\n#include <string>\n',
