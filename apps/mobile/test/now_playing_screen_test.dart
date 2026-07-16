@@ -64,6 +64,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('First Song'), findsOneWidget);
+    expect(
+      find.byKey(const Key('now-playing-artwork-palette')),
+      findsOneWidget,
+    );
     expect(find.text('Track 1 of 2'), findsOneWidget);
     expect(find.byKey(const Key('now-playing-seek')), findsOneWidget);
     expect(find.byKey(const Key('now-playing-volume')), findsOneWidget);

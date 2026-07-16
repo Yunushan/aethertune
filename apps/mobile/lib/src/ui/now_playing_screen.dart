@@ -11,6 +11,7 @@ import '../domain/track.dart';
 import '../domain/track_chapter.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
+import 'widgets/artwork_palette_backdrop.dart';
 import 'widgets/track_artwork.dart';
 import 'widgets/track_share_card.dart';
 
@@ -84,70 +85,73 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       ),
       body: current == null
           ? const Center(child: Text('No track is currently selected.'))
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final savedTrack = _findTrack(library.tracks, current.id);
-                final currentQueueIndex = player.queue.indexWhere(
-                  (track) => track.id == current.id,
-                );
-                final content = _NowPlayingContent(
-                  track: current,
-                  isFavorite: savedTrack?.isFavorite ?? false,
-                  canFavorite: savedTrack != null,
-                  player: player,
-                  chapters: savedTrack?.chapters ?? current.chapters,
-                  onToggleFavorite: savedTrack == null
-                      ? null
-                      : () => library.toggleFavorite(current.id),
-                  onOpenQueue: widget.onOpenQueue,
-                  onOpenLyrics: widget.onOpenLyrics,
-                  onHorizontalDragStart: () => _horizontalDragDistance = 0,
-                  onHorizontalDragUpdate: (delta) {
-                    _horizontalDragDistance += delta;
-                  },
-                  onHorizontalDragEnd: () => _finishArtworkSwipe(player),
-                  onArtworkPrevious: currentQueueIndex > 0
-                      ? () => _runPlaybackAction(player.previous)
-                      : null,
-                  onArtworkNext: currentQueueIndex >= 0 &&
-                          currentQueueIndex < player.queue.length - 1
-                      ? () => _runPlaybackAction(player.next)
-                      : null,
-                );
+          : ArtworkPaletteBackdrop(
+              artworkUri: current.artworkUri,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final savedTrack = _findTrack(library.tracks, current.id);
+                  final currentQueueIndex = player.queue.indexWhere(
+                    (track) => track.id == current.id,
+                  );
+                  final content = _NowPlayingContent(
+                    track: current,
+                    isFavorite: savedTrack?.isFavorite ?? false,
+                    canFavorite: savedTrack != null,
+                    player: player,
+                    chapters: savedTrack?.chapters ?? current.chapters,
+                    onToggleFavorite: savedTrack == null
+                        ? null
+                        : () => library.toggleFavorite(current.id),
+                    onOpenQueue: widget.onOpenQueue,
+                    onOpenLyrics: widget.onOpenLyrics,
+                    onHorizontalDragStart: () => _horizontalDragDistance = 0,
+                    onHorizontalDragUpdate: (delta) {
+                      _horizontalDragDistance += delta;
+                    },
+                    onHorizontalDragEnd: () => _finishArtworkSwipe(player),
+                    onArtworkPrevious: currentQueueIndex > 0
+                        ? () => _runPlaybackAction(player.previous)
+                        : null,
+                    onArtworkNext: currentQueueIndex >= 0 &&
+                            currentQueueIndex < player.queue.length - 1
+                        ? () => _runPlaybackAction(player.next)
+                        : null,
+                  );
 
-                if (constraints.maxWidth >= 900) {
-                  return Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1120),
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: <Widget>[
-                            Expanded(child: content.artwork),
-                            const SizedBox(width: 56),
-                            Expanded(child: content.controls),
-                          ],
+                  if (constraints.maxWidth >= 900) {
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1120),
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: <Widget>[
+                              Expanded(child: content.artwork),
+                              const SizedBox(width: 56),
+                              Expanded(child: content.controls),
+                            ],
+                          ),
                         ),
+                      ),
+                    );
+                  }
+
+                  return SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                      child: Column(
+                        children: <Widget>[
+                          content.artwork,
+                          const SizedBox(height: 28),
+                          content.controls,
+                        ],
                       ),
                     ),
                   );
-                }
-
-                return SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-                    child: Column(
-                      children: <Widget>[
-                        content.artwork,
-                        const SizedBox(height: 28),
-                        content.controls,
-                      ],
-                    ),
-                  ),
-                );
-              },
+                },
+              ),
             ),
     );
   }

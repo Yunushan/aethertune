@@ -123,7 +123,7 @@ class _TrackArtworkContentState extends State<_TrackArtworkContent> {
 
   @override
   Widget build(BuildContext context) {
-    final imageProvider = _imageProvider(widget.artworkUri);
+    final imageProvider = trackArtworkImageProvider(widget.artworkUri);
     if (imageProvider != null) {
       return _artworkImage(imageProvider);
     }
@@ -172,7 +172,7 @@ class _TrackArtworkContentState extends State<_TrackArtworkContent> {
   }
 }
 
-ImageProvider? _imageProvider(Uri? uri) {
+ImageProvider? trackArtworkImageProvider(Uri? uri) {
   if (uri == null) {
     return null;
   }
