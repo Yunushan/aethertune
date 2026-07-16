@@ -10,6 +10,43 @@ permissions:
   contents: read
 
 jobs:
+  provenance:
+    name: Release dependency provenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter and Dart
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+
+      - name: Resolve client dependencies
+        run: cd apps/mobile && flutter pub get
+
+      - name: Resolve server dependencies
+        run: cd services/server && dart pub get
+
+      - name: Generate release SBOMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/provenance
+          (cd apps/mobile && flutter pub deps --json > ../../release/provenance/aethertune-mobile-dependencies.json)
+          (cd services/server && dart pub deps --json > ../../release/provenance/aethertune-server-dependencies.json)
+          python3 scripts/ci/generate_dart_sbom.py --deps-json release/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output release/provenance/aethertune-mobile.cdx.json
+          python3 scripts/ci/generate_dart_sbom.py --deps-json release/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output release/provenance/aethertune-server.cdx.json
+          python3 scripts/ci/generate_dart_sbom.py --deps-json release/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output release/provenance/aethertune-mobile.cdx.json --check
+          python3 scripts/ci/generate_dart_sbom.py --deps-json release/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output release/provenance/aethertune-server.cdx.json --check
+
+      - name: Upload release dependency provenance
+        uses: actions/upload-artifact@v7
+        with:
+          name: aethertune-dependency-provenance
+          if-no-files-found: error
+          path: release/provenance/
+
   android:
     name: Android release artifacts
     runs-on: ubuntu-latest

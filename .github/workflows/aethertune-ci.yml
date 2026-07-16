@@ -8,6 +8,49 @@ on:
   workflow_dispatch:
 
 jobs:
+  provenance:
+    name: Dependency provenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter and Dart
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+
+      - name: Test SBOM generator
+        run: python3 scripts/ci/test_generate_dart_sbom.py
+
+      - name: Resolve client dependencies
+        run: cd apps/mobile && flutter pub get
+
+      - name: Resolve server dependencies
+        run: cd services/server && dart pub get
+
+      - name: Capture resolved dependency graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/provenance
+          (cd apps/mobile && flutter pub deps --json > ../../build/provenance/aethertune-mobile-dependencies.json)
+          (cd services/server && dart pub deps --json > ../../build/provenance/aethertune-server-dependencies.json)
+
+      - name: Generate reproducible SBOMs
+        run: |
+          python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output build/provenance/aethertune-mobile.cdx.json
+          python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output build/provenance/aethertune-server.cdx.json
+          python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output build/provenance/aethertune-mobile.cdx.json --check
+          python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output build/provenance/aethertune-server.cdx.json --check
+
+      - name: Upload dependency provenance
+        uses: actions/upload-artifact@v7
+        with:
+          name: aethertune-dependency-provenance
+          if-no-files-found: error
+          path: build/provenance/
+
   flutter:
     name: Flutter analyze and test
     runs-on: ubuntu-latest
