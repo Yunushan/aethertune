@@ -2579,8 +2579,8 @@ class _HomeTabState extends State<_HomeTab> {
           player: player,
           library: library,
           icon: Icons.auto_awesome,
-          title: 'For you',
-          subtitle: 'Local recommendations',
+          title: 'Quick picks',
+          subtitle: 'Personalized local recommendations',
           tracks: recommendations,
           detailTextForTrack: (track) => _recommendationReasonText(
             recommendationReasons[track.id] ??

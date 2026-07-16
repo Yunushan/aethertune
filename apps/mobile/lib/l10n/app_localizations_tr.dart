@@ -1,0 +1,92 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for Turkish (`tr`).
+class AppLocalizationsTr extends AppLocalizations {
+  AppLocalizationsTr([String locale = 'tr']) : super(locale);
+
+  @override
+  String get appTitle => 'AetherTune';
+
+  @override
+  String get home => 'Ana Sayfa';
+
+  @override
+  String get library => 'Kitaplık';
+
+  @override
+  String get playlists => 'Listeler';
+
+  @override
+  String get history => 'Geçmiş';
+
+  @override
+  String get sources => 'Kaynaklar';
+
+  @override
+  String get options => 'Seçenekler';
+
+  @override
+  String get language => 'Dil';
+
+  @override
+  String get languageSystem => 'Sistem varsayılanı';
+
+  @override
+  String get languageEnglish => 'İngilizce';
+
+  @override
+  String get languageTurkish => 'Türkçe';
+
+  @override
+  String get languageArabic => 'Arapça';
+
+  @override
+  String get loading => 'AetherTune yükleniyor';
+
+  @override
+  String get setupSaveError => 'Kurulum kaydedilemedi. Lütfen yeniden deneyin.';
+
+  @override
+  String get welcomeTitle => 'AetherTune\'a hoş geldiniz';
+
+  @override
+  String get welcomeDescription =>
+      'Kontrol ettiğiniz müzikle başlayın veya yasal bir kaynak seçin. Tüm seçimleri daha sonra Seçenekler\'den değiştirebilirsiniz.';
+
+  @override
+  String get localLibraryTitle => 'Yerel kitaplık kurun';
+
+  @override
+  String get localLibraryDescription =>
+      'Ses dosyalarını veya bir klasörü içe aktarın; uygulama açıkken izlenen klasörleri eşzamanlı tutun.';
+
+  @override
+  String get openLibrary => 'Kitaplığı aç';
+
+  @override
+  String get legalSourcesTitle => 'Yasal kaynakları keşfedin';
+
+  @override
+  String get legalSourcesDescription =>
+      'Podcast RSS beslemeleri ekleyin, Radio Browser ve Internet Archive\'da gezinin veya desteklenen kendi medya sunucunuza bağlanın.';
+
+  @override
+  String get openSources => 'Kaynakları aç';
+
+  @override
+  String get privacyFirstTitle => 'Önce gizlilik';
+
+  @override
+  String get privacyFirstDescription =>
+      'AetherTune telemetri içermez. Ağ sağlayıcıları, kullanım öncesinde bağlantı kuracakları alan adlarını açıklar.';
+
+  @override
+  String get startAtHome => 'Ana Sayfada başla';
+
+  @override
+  String get skipSetup => 'Kurulumu atla';
+}
