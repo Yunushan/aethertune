@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../data/library_store.dart';
 import '../../data/library_sync_client.dart';
 import '../../data/library_sync_store.dart';
+import '../../data/listen_together_store.dart';
 import '../../domain/library_sync_account.dart';
 import '../../domain/library_sync_profile.dart';
 import '../../player/player_controller.dart';
@@ -16,6 +17,7 @@ class LibrarySyncPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<LibrarySyncStore>();
+    final listenTogether = context.watch<ListenTogetherStore?>();
     final library = context.watch<LibraryStore>();
     final player = context.watch<PlayerController?>();
     final account = sync.account;
@@ -88,6 +90,70 @@ class LibrarySyncPanel extends StatelessWidget {
                       : null,
                   icon: const Icon(Icons.refresh_outlined),
                 ),
+              ],
+            ),
+          ),
+        if (sync.isConfigured && listenTogether != null)
+          ListTile(
+            key: const Key('listen-together-session'),
+            leading: Icon(
+              listenTogether.hosting
+                  ? Icons.sensors_outlined
+                  : listenTogether.joined
+                  ? Icons.group_outlined
+                  : Icons.group_add_outlined,
+            ),
+            title: Text(
+              listenTogether.hosting
+                  ? 'Hosting listen together'
+                  : listenTogether.joined
+                  ? 'Joined listen together'
+                  : 'Listen together',
+            ),
+            subtitle: Text(
+              listenTogether.hosting || listenTogether.joined
+                  ? '${listenTogether.session?.trackIds.length ?? 0} shared library tracks'
+                  : 'Share the current library-backed queue',
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (!listenTogether.hosting && !listenTogether.joined)
+                  IconButton(
+                    key: const Key('listen-together-host'),
+                    tooltip: 'Host listen together',
+                    onPressed: actionsEnabled && player != null
+                        ? () => _hostListenTogether(context)
+                        : null,
+                    icon: const Icon(Icons.sensors_outlined),
+                  ),
+                if (!listenTogether.hosting && !listenTogether.joined)
+                  IconButton(
+                    key: const Key('listen-together-join'),
+                    tooltip: 'Join listen together',
+                    onPressed: actionsEnabled && player != null
+                        ? () => _joinListenTogether(context)
+                        : null,
+                    icon: const Icon(Icons.login_outlined),
+                  ),
+                if (listenTogether.hosting)
+                  IconButton(
+                    key: const Key('listen-together-end'),
+                    tooltip: 'End listen together',
+                    onPressed: actionsEnabled
+                        ? () => _endListenTogether(context)
+                        : null,
+                    icon: const Icon(Icons.stop_circle_outlined),
+                  ),
+                if (listenTogether.joined && !listenTogether.hosting)
+                  IconButton(
+                    key: const Key('listen-together-leave'),
+                    tooltip: 'Leave listen together',
+                    onPressed: listenTogether.busy
+                        ? null
+                        : () => context.read<ListenTogetherStore>().leave(),
+                    icon: const Icon(Icons.logout_outlined),
+                  ),
               ],
             ),
           ),
@@ -222,6 +288,51 @@ class LibrarySyncPanel extends StatelessWidget {
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, error);
+      }
+    }
+  }
+
+  static Future<void> _hostListenTogether(BuildContext context) async {
+    try {
+      await context.read<ListenTogetherStore>().host(
+        context.read<LibraryStore>(),
+        context.read<PlayerController>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Listen-together session started.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not start listen together: $error');
+      }
+    }
+  }
+
+  static Future<void> _joinListenTogether(BuildContext context) async {
+    try {
+      final restored = await context.read<ListenTogetherStore>().join(
+        context.read<LibraryStore>(),
+        context.read<PlayerController>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Joined shared playback with $restored tracks.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not join listen together: $error');
+      }
+    }
+  }
+
+  static Future<void> _endListenTogether(BuildContext context) async {
+    try {
+      await context.read<ListenTogetherStore>().endHostedSession();
+      if (context.mounted) {
+        _showSuccess(context, 'Listen-together session ended.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not end listen together: $error');
       }
     }
   }

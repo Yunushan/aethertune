@@ -553,6 +553,16 @@ class LibrarySyncStore extends ChangeNotifier {
     return _clientFactory(account, token);
   }
 
+  /// Creates the authenticated client used for account-scoped social sessions.
+  /// The secure sync token stays owned by this store.
+  ListenTogetherGateway createListenTogetherGateway() {
+    final client = _requireClient();
+    if (client is! ListenTogetherGateway) {
+      throw StateError('This library sync server does not support listen together.');
+    }
+    return client as ListenTogetherGateway;
+  }
+
   void _requireOnline(LibraryStore library) {
     if (library.offlineModeEnabled) {
       throw StateError('Turn off offline mode before syncing the library.');

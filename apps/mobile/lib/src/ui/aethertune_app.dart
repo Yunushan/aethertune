@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../data/library_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/library_sync_store.dart';
+import '../data/listen_together_store.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/custom_catalog_store.dart';
 import '../data/self_hosted_provider_store.dart';
@@ -19,6 +20,7 @@ import 'home_screen.dart';
 import 'onboarding_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
+import 'widgets/listen_together_foreground_sync.dart';
 import 'widgets/desktop_global_hotkeys.dart';
 import 'widgets/offline_cache_foreground_worker.dart';
 import 'widgets/podcast_rss_refresh_worker.dart';
@@ -64,6 +66,16 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ChangeNotifierProvider<LibrarySyncStore>(
           create: (_) => LibrarySyncStore()..load(),
         ),
+        ChangeNotifierProxyProvider<LibrarySyncStore, ListenTogetherStore>(
+          create: (_) => ListenTogetherStore(),
+          update: (_, sync, listenTogether) {
+            final store = listenTogether ?? ListenTogetherStore();
+            store.updateGatewayFactory(
+              sync.isConfigured ? sync.createListenTogetherGateway : null,
+            );
+            return store;
+          },
+        ),
         ChangeNotifierProxyProvider<LibraryStore, LocalFolderWatchStore>(
           create: (_) => LocalFolderWatchStore(),
           update: (_, library, watcher) {
@@ -93,6 +105,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
       child: PodcastRssRefreshWorker(
         child: OfflineCacheForegroundWorker(
           child: LibrarySyncAutomaticUpload(
+          child: ListenTogetherForegroundSync(
           child: DynamicColorBuilder(
             builder: (lightDynamic, darkDynamic) =>
                 Consumer2<LibraryStore, PlayerController>(
@@ -189,6 +202,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
               },
             ),
             ),
+          ),
           ),
         ),
       ),
