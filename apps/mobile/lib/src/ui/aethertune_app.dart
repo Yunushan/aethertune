@@ -20,11 +20,13 @@ import 'widgets/library_sync_automatic_upload.dart';
 import 'widgets/desktop_global_hotkeys.dart';
 import 'widgets/offline_cache_foreground_worker.dart';
 import 'widgets/desktop_tray_controls.dart';
+import 'widgets/aethertune_deep_link_listener.dart';
 
 class AetherTuneApp extends StatefulWidget {
-  const AetherTuneApp({super.key, this.audioEngine});
+  const AetherTuneApp({super.key, this.audioEngine, this.incomingUriStream});
 
   final PlaybackAudioEngine? audioEngine;
+  final Stream<Uri>? incomingUriStream;
 
   @override
   State<AetherTuneApp> createState() => _AetherTuneAppState();
@@ -32,6 +34,7 @@ class AetherTuneApp extends StatefulWidget {
 
 class _AetherTuneAppState extends State<AetherTuneApp> {
   int _onboardingDestination = 0;
+  int _homeGeneration = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +91,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                     onPrevious: player.previous,
                     onNext: player.next,
                     child: MaterialApp(
+                    scaffoldMessengerKey: _scaffoldMessengerKey,
                     locale: localeForLanguagePreference(
                       library.languagePreference,
                     ),
@@ -115,6 +119,12 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                         defaultTargetPlatform,
                       ),
                     ),
+                    builder: (context, child) => AetherTuneDeepLinkListener(
+                      library: library,
+                      incomingUriStream: widget.incomingUriStream,
+                      onImported: (_) => _openPlaylistsFromDeepLink(),
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                     home: !library.loaded
                         ? const _AppLoadingScreen()
                         : CallbackShortcuts(
@@ -137,6 +147,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                               autofocus: true,
                               child: library.onboardingCompleted
                                   ? HomeScreen(
+                                      key: ValueKey<String>(
+                                        'home-$_homeGeneration',
+                                      ),
                                       initialTab: _onboardingDestination,
                                       onRestartOnboarding: () => unawaited(
                                         library.setOnboardingCompleted(false),
@@ -163,6 +176,19 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
       ),
     );
+  }
+
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
+  void _openPlaylistsFromDeepLink() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _onboardingDestination = 2;
+      _homeGeneration += 1;
+    });
   }
 }
 

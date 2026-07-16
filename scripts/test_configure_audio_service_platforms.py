@@ -61,6 +61,20 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity.get(f"{platform_config.ANDROID}name"),
                 platform_config.ACTIVITY_NAME,
             )
+            self.assertEqual(
+                activity.get(f"{platform_config.ANDROID}exported"),
+                "true",
+            )
+            self.assertTrue(
+                any(
+                    any(
+                        data.get(f"{platform_config.ANDROID}scheme")
+                        == platform_config.DEEP_LINK_SCHEME
+                        for data in intent_filter.findall("data")
+                    )
+                    for intent_filter in activity.findall("intent-filter")
+                )
+            )
             widget_source = (
                 app_dir
                 / "android/app/src/main/kotlin/dev/aethertune/aethertune"
@@ -113,6 +127,80 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 for shortcut in shortcut_root.findall("shortcut")
             }
             self.assertEqual(shortcut_ids, {"previous", "play_pause", "next"})
+
+    def test_configures_ios_and_macos_url_schemes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            info_path = Path(temporary_directory) / "Info.plist"
+            with info_path.open("wb") as stream:
+                platform_config.plistlib.dump({}, stream)
+
+            platform_config.configure_ios(info_path)
+            platform_config.verify_ios(info_path)
+            platform_config.configure_ios(info_path)
+
+            with info_path.open("rb") as stream:
+                ios = platform_config.plistlib.load(stream)
+            self.assertFalse(ios["FlutterDeepLinkingEnabled"])
+            self.assertEqual(
+                ios["CFBundleURLTypes"][0]["CFBundleURLSchemes"],
+                [platform_config.DEEP_LINK_SCHEME],
+            )
+
+            platform_config.configure_macos(info_path)
+            platform_config.verify_macos(info_path)
+
+    def test_configures_linux_and_windows_deep_link_forwarding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            linux_source = root / "my_application.cc"
+            linux_source.write_text(
+                """static void my_application_activate(GApplication* application) {
+  MyApplication* self = MY_APPLICATION(application);
+}
+static gboolean my_application_local_command_line(
+    GApplication* application, gchar*** arguments, int* exit_status) {
+  g_application_activate(application);
+  *exit_status = 0;
+  return TRUE;
+}
+MyApplication* my_application_new() {
+  return MY_APPLICATION(g_object_new(my_application_get_type(),
+      \"flags\", G_APPLICATION_NON_UNIQUE,
+      nullptr));
+}
+""",
+                encoding="utf-8",
+            )
+            platform_config.configure_linux_deep_links(linux_source)
+            platform_config.verify_linux_deep_links(linux_source)
+
+            windows_source = root / "main.cpp"
+            windows_cmake = root / "CMakeLists.txt"
+            windows_source.write_text(
+                """#include \"flutter_windows.h\"
+int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE prev,
+    wchar_t *command_line, int show_command) {
+  return 0;
+}
+""",
+                encoding="utf-8",
+            )
+            windows_cmake.write_text(
+                "target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)\n",
+                encoding="utf-8",
+            )
+            platform_config.configure_windows_deep_links(
+                windows_source,
+                windows_cmake,
+            )
+            platform_config.verify_windows_deep_links(
+                windows_source,
+                windows_cmake,
+            )
+            self.assertIn(
+                'L"\\"" + std::wstring(executable_path)',
+                windows_source.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

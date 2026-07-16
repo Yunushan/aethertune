@@ -27,6 +27,8 @@ WIDGET_PROVIDER_NAME = "dev.aethertune.aethertune.AetherTunePlaybackWidget"
 IOS_DEPLOYMENT_TARGET = "14.0"
 ANDROID_MIN_SDK = 23
 KEYCHAIN_ACCESS_GROUPS = "keychain-access-groups"
+DEEP_LINK_SCHEME = "aethertune"
+DEEP_LINK_URL_NAME = "dev.aethertune.aethertune"
 
 _WIDGET_INFO_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <appwidget-provider xmlns:android=\"http://schemas.android.com/apk/res/android\"
@@ -515,6 +517,73 @@ def _ensure_metadata(parent: ET.Element, name: str, resource: str) -> None:
     )
 
 
+def _ensure_metadata_value(parent: ET.Element, name: str, value: str) -> None:
+    for metadata in parent.findall("meta-data"):
+        if metadata.get(f"{ANDROID}name") == name:
+            metadata.attrib.pop(f"{ANDROID}resource", None)
+            metadata.set(f"{ANDROID}value", value)
+            return
+    ET.SubElement(
+        parent,
+        "meta-data",
+        {
+            f"{ANDROID}name": name,
+            f"{ANDROID}value": value,
+        },
+    )
+
+
+def _ensure_deep_link_intent_filter(activity: ET.Element) -> None:
+    intent_filter = next(
+        (
+            candidate
+            for candidate in activity.findall("intent-filter")
+            if any(
+                action.get(f"{ANDROID}name") == "android.intent.action.VIEW"
+                for action in candidate.findall("action")
+            )
+            and any(
+                data.get(f"{ANDROID}scheme") == DEEP_LINK_SCHEME
+                for data in candidate.findall("data")
+            )
+        ),
+        None,
+    )
+    if intent_filter is None:
+        intent_filter = ET.SubElement(activity, "intent-filter")
+    for category in (
+        "android.intent.category.DEFAULT",
+        "android.intent.category.BROWSABLE",
+    ):
+        if not any(
+            item.get(f"{ANDROID}name") == category
+            for item in intent_filter.findall("category")
+        ):
+            ET.SubElement(
+                intent_filter,
+                "category",
+                {f"{ANDROID}name": category},
+            )
+    if not any(
+        action.get(f"{ANDROID}name") == "android.intent.action.VIEW"
+        for action in intent_filter.findall("action")
+    ):
+        ET.SubElement(
+            intent_filter,
+            "action",
+            {f"{ANDROID}name": "android.intent.action.VIEW"},
+        )
+    if not any(
+        data.get(f"{ANDROID}scheme") == DEEP_LINK_SCHEME
+        for data in intent_filter.findall("data")
+    ):
+        ET.SubElement(
+            intent_filter,
+            "data",
+            {f"{ANDROID}scheme": DEEP_LINK_SCHEME},
+        )
+
+
 def _widget_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path]:
     app_dir = manifest_path.parents[2]
     resources = app_dir / "src/main/res"
@@ -590,6 +659,9 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
     if activity is None:
         raise RuntimeError(f"No <activity> in {manifest_path}")
     activity.set(f"{ANDROID}name", ACTIVITY_NAME)
+    activity.set(f"{ANDROID}exported", "true")
+    _ensure_metadata_value(activity, "flutter_deeplinking_enabled", "false")
+    _ensure_deep_link_intent_filter(activity)
     _ensure_metadata(
         activity,
         "android.app.shortcuts",
@@ -679,8 +751,175 @@ def configure_ios(info_plist_path: Path) -> None:
     if "audio" not in modes:
         modes.append("audio")
     info["UIBackgroundModes"] = modes
+    info["FlutterDeepLinkingEnabled"] = False
+    _configure_apple_url_scheme(info)
     with info_plist_path.open("wb") as stream:
         plistlib.dump(info, stream, sort_keys=False)
+
+
+def configure_macos(info_plist_path: Path) -> None:
+    with info_plist_path.open("rb") as stream:
+        info = plistlib.load(stream)
+    _configure_apple_url_scheme(info)
+    with info_plist_path.open("wb") as stream:
+        plistlib.dump(info, stream, sort_keys=False)
+
+
+def configure_linux_deep_links(source_path: Path) -> None:
+    source = source_path.read_text(encoding="utf-8")
+    if "gtk_application_get_windows" not in source:
+        marker = "  MyApplication* self = MY_APPLICATION(application);\n"
+        replacement = marker + """
+  GList* windows = gtk_application_get_windows(GTK_APPLICATION(application));
+  if (windows) {
+    gtk_window_present(GTK_WINDOW(windows->data));
+    return;
+  }
+"""
+        if marker not in source:
+            raise RuntimeError("Linux application activation hook is missing")
+        source = source.replace(marker, replacement, 1)
+    if "G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_HANDLES_OPEN" not in source:
+        source, replacements = re.subn(
+            r'("flags",\s*)G_APPLICATION_NON_UNIQUE,',
+            r"\1G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_HANDLES_OPEN,",
+            source,
+        )
+        if replacements == 0:
+            raise RuntimeError("Linux application flags are not configurable")
+    if "return FALSE;" not in source:
+        source, replacements = re.subn(
+            r"(\*exit_status = 0;\s*)return TRUE;",
+            r"\1return FALSE;",
+            source,
+            count=1,
+        )
+        if replacements == 0:
+            raise RuntimeError("Linux command-line handler is not configurable")
+    source_path.write_text(source, encoding="utf-8")
+
+
+def configure_windows_deep_links(source_path: Path, cmake_path: Path) -> None:
+    source = source_path.read_text(encoding="utf-8")
+    if "app_links/app_links_plugin_c_api.h" not in source:
+        marker = '#include "flutter_windows.h"\n'
+        if marker not in source:
+            raise RuntimeError("Windows Flutter include is missing")
+        source = source.replace(
+            marker,
+            marker + '#include "app_links/app_links_plugin_c_api.h"\n#include <string>\n',
+            1,
+        )
+    if "RegisterAetherTuneUrlScheme" not in source:
+        marker = "int APIENTRY wWinMain("
+        if marker not in source:
+            raise RuntimeError("Windows entrypoint is missing")
+        registration = r'''void RegisterAetherTuneUrlScheme() {
+  wchar_t executable_path[MAX_PATH];
+  const DWORD length = GetModuleFileNameW(nullptr, executable_path, MAX_PATH);
+  if (length == 0 || length == MAX_PATH) {
+    return;
+  }
+
+  HKEY protocol_key = nullptr;
+  if (RegCreateKeyExW(
+          HKEY_CURRENT_USER,
+          L"Software\\Classes\\aethertune",
+          0,
+          nullptr,
+          0,
+          KEY_SET_VALUE | KEY_CREATE_SUB_KEY,
+          nullptr,
+          &protocol_key,
+          nullptr) != ERROR_SUCCESS) {
+    return;
+  }
+  const wchar_t description[] = L"URL:AetherTune Protocol";
+  RegSetValueExW(
+      protocol_key,
+      nullptr,
+      0,
+      REG_SZ,
+      reinterpret_cast<const BYTE*>(description),
+      sizeof(description));
+  const wchar_t protocol[] = L"";
+  RegSetValueExW(
+      protocol_key,
+      L"URL Protocol",
+      0,
+      REG_SZ,
+      reinterpret_cast<const BYTE*>(protocol),
+      sizeof(protocol));
+
+  HKEY command_key = nullptr;
+  if (RegCreateKeyExW(
+          protocol_key,
+          L"shell\\open\\command",
+          0,
+          nullptr,
+          0,
+          KEY_SET_VALUE,
+          nullptr,
+          &command_key,
+          nullptr) == ERROR_SUCCESS) {
+    const std::wstring command =
+        L"\"" + std::wstring(executable_path) + L"\" \"%1\"";
+    RegSetValueExW(
+        command_key,
+        nullptr,
+        0,
+        REG_SZ,
+        reinterpret_cast<const BYTE*>(command.c_str()),
+        static_cast<DWORD>((command.length() + 1) * sizeof(wchar_t)));
+    RegCloseKey(command_key);
+  }
+  RegCloseKey(protocol_key);
+}
+
+'''
+        source = source.replace(marker, registration + marker, 1)
+    if "SendAppLinkToInstance()" not in source:
+        pattern = re.compile(r"(int APIENTRY wWinMain\([\s\S]*?\) \{\n)")
+        source, replacements = pattern.subn(
+            r"\1  RegisterAetherTuneUrlScheme();\n"
+            "  if (SendAppLinkToInstance()) {\n"
+            "    return EXIT_SUCCESS;\n"
+            "  }\n",
+            source,
+            count=1,
+        )
+        if replacements == 0:
+            raise RuntimeError("Windows entrypoint is not configurable")
+    source_path.write_text(source, encoding="utf-8")
+
+    cmake = cmake_path.read_text(encoding="utf-8")
+    if "advapi32" not in cmake:
+        pattern = re.compile(
+            r"(target_link_libraries\(\$\{BINARY_NAME\} PRIVATE [^\n]+)\)"
+        )
+        cmake, replacements = pattern.subn(r"\1 advapi32)", cmake, count=1)
+        if replacements == 0:
+            raise RuntimeError("Windows runner libraries are not configurable")
+    cmake_path.write_text(cmake, encoding="utf-8")
+
+
+def _configure_apple_url_scheme(info: dict[str, object]) -> None:
+    types = list(info.get("CFBundleURLTypes", []))
+    target = next(
+        (
+            item
+            for item in types
+            if isinstance(item, dict)
+            and DEEP_LINK_SCHEME in item.get("CFBundleURLSchemes", [])
+        ),
+        None,
+    )
+    if target is None:
+        target = {}
+        types.append(target)
+    target["CFBundleURLName"] = DEEP_LINK_URL_NAME
+    target["CFBundleURLSchemes"] = [DEEP_LINK_SCHEME]
+    info["CFBundleURLTypes"] = types
 
 
 def configure_ios_deployment_target(
@@ -774,6 +1013,43 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     activity = application.find("activity")
     if activity is None or activity.get(f"{ANDROID}name") != ACTIVITY_NAME:
         raise RuntimeError("Android activity is not connected to audio_service")
+    if activity.get(f"{ANDROID}exported") != "true":
+        raise RuntimeError("Android activity is not exported for deep links")
+    deep_link_metadata = next(
+        (
+            metadata
+            for metadata in activity.findall("meta-data")
+            if metadata.get(f"{ANDROID}name") == "flutter_deeplinking_enabled"
+        ),
+        None,
+    )
+    if (
+        deep_link_metadata is None
+        or deep_link_metadata.get(f"{ANDROID}value") != "false"
+    ):
+        raise RuntimeError("Android app_links ownership is not configured")
+    has_deep_link_filter = any(
+        any(
+            action.get(f"{ANDROID}name") == "android.intent.action.VIEW"
+            for action in intent_filter.findall("action")
+        )
+        and any(
+            data.get(f"{ANDROID}scheme") == DEEP_LINK_SCHEME
+            for data in intent_filter.findall("data")
+        )
+        and {
+            category.get(f"{ANDROID}name")
+            for category in intent_filter.findall("category")
+        }.issuperset(
+            {
+                "android.intent.category.DEFAULT",
+                "android.intent.category.BROWSABLE",
+            }
+        )
+        for intent_filter in activity.findall("intent-filter")
+    )
+    if not has_deep_link_filter:
+        raise RuntimeError("Android AetherTune deep-link intent filter is missing")
     shortcut_metadata = next(
         (
             metadata
@@ -893,6 +1169,53 @@ def verify_ios(info_plist_path: Path) -> None:
         info = plistlib.load(stream)
     if "audio" not in info.get("UIBackgroundModes", []):
         raise RuntimeError("iOS audio background mode is missing")
+    if info.get("FlutterDeepLinkingEnabled") is not False:
+        raise RuntimeError("iOS app_links ownership is not configured")
+    _verify_apple_url_scheme(info, "iOS")
+
+
+def verify_macos(info_plist_path: Path) -> None:
+    with info_plist_path.open("rb") as stream:
+        info = plistlib.load(stream)
+    _verify_apple_url_scheme(info, "macOS")
+
+
+def verify_linux_deep_links(source_path: Path) -> None:
+    source = source_path.read_text(encoding="utf-8")
+    required = (
+        "gtk_application_get_windows",
+        "gtk_window_present",
+        "return FALSE;",
+        "G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_HANDLES_OPEN",
+    )
+    if not all(snippet in source for snippet in required):
+        raise RuntimeError("Linux deep-link lifecycle is not configured")
+
+
+def verify_windows_deep_links(source_path: Path, cmake_path: Path) -> None:
+    source = source_path.read_text(encoding="utf-8")
+    required = (
+        "app_links/app_links_plugin_c_api.h",
+        "RegisterAetherTuneUrlScheme",
+        "Software\\\\Classes\\\\aethertune",
+        "SendAppLinkToInstance()",
+    )
+    if not all(snippet in source for snippet in required):
+        raise RuntimeError("Windows deep-link routing is not configured")
+    if "advapi32" not in cmake_path.read_text(encoding="utf-8"):
+        raise RuntimeError("Windows deep-link registry library is not linked")
+
+
+def _verify_apple_url_scheme(info: dict[str, object], platform: str) -> None:
+    for item in info.get("CFBundleURLTypes", []):
+        if not isinstance(item, dict):
+            continue
+        if (
+            item.get("CFBundleURLName") == DEEP_LINK_URL_NAME
+            and item.get("CFBundleURLSchemes") == [DEEP_LINK_SCHEME]
+        ):
+            return
+    raise RuntimeError(f"{platform} AetherTune URL scheme is missing")
 
 
 def verify_ios_deployment_target(
@@ -942,22 +1265,33 @@ def main() -> int:
     ios_framework_info = app_dir / "ios/Flutter/AppFrameworkInfo.plist"
     ios_debug_entitlements = app_dir / "ios/Runner/DebugProfile.entitlements"
     ios_release_entitlements = app_dir / "ios/Runner/Release.entitlements"
+    macos_info = app_dir / "macos/Runner/Info.plist"
     macos_debug_entitlements = app_dir / "macos/Runner/DebugProfile.entitlements"
     macos_release_entitlements = app_dir / "macos/Runner/Release.entitlements"
+    linux_application = app_dir / "linux/runner/my_application.cc"
+    windows_main = app_dir / "windows/runner/main.cpp"
+    windows_cmake = app_dir / "windows/runner/CMakeLists.txt"
     for path in (
         android_manifest,
         android_gradle,
         ios_info,
         ios_project,
         ios_framework_info,
+        macos_info,
         macos_debug_entitlements,
         macos_release_entitlements,
+        linux_application,
+        windows_main,
+        windows_cmake,
     ):
         if not path.is_file():
             raise FileNotFoundError(path)
 
     configure_android(android_manifest, android_gradle)
     configure_ios(ios_info)
+    configure_macos(macos_info)
+    configure_linux_deep_links(linux_application)
+    configure_windows_deep_links(windows_main, windows_cmake)
     configure_ios_deployment_target(ios_project, ios_framework_info)
     configure_keychain_entitlements(ios_debug_entitlements)
     configure_keychain_entitlements(ios_release_entitlements)
@@ -966,6 +1300,9 @@ def main() -> int:
     configure_ios_code_sign_entitlements(ios_project)
     verify_android(android_manifest, android_gradle)
     verify_ios(ios_info)
+    verify_macos(macos_info)
+    verify_linux_deep_links(linux_application)
+    verify_windows_deep_links(windows_main, windows_cmake)
     verify_ios_deployment_target(ios_project, ios_framework_info)
     verify_keychain_entitlements(ios_debug_entitlements)
     verify_keychain_entitlements(ios_release_entitlements)
