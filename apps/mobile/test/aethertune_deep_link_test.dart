@@ -49,7 +49,7 @@ void main() {
       title: 'Shared track',
       artist: 'Artist',
       album: 'Album',
-      duration: Duration(minutes: 3),
+      duration: const Duration(minutes: 3),
       localPath: '/music/shared-track.mp3',
     );
     await source.addTracks(<Track>[track]);
