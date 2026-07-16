@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -367,6 +368,18 @@ class LibrarySyncStore extends ChangeNotifier {
           );
           _applyRemoteMetadata(remote);
           await _saveMetadata();
+          return false;
+        }
+        final remoteChecksum = remote?.checksum;
+        if (remoteChecksum != null &&
+            remoteChecksum ==
+                sha256
+                    .convert(
+                      utf8.encode(
+                        jsonEncode(_snapshotForPush(library, player: player)),
+                      ),
+                    )
+                    .toString()) {
           return false;
         }
       }

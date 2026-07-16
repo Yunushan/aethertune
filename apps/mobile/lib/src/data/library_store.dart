@@ -3906,6 +3906,7 @@ class LibraryStore extends ChangeNotifier {
     );
     backup
       ..['syncVersion'] = _syncSnapshotVersion
+      ..remove('exportedAt')
       ..remove('offlineModeEnabled')
       ..remove('offlineCacheLimitMegabytes')
       ..remove('offlineCacheProviderLimitMegabytes')

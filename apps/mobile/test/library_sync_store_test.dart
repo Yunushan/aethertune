@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -628,6 +629,29 @@ void main() {
     expect(gateway.pushCalls, 1);
   });
 
+  test('automatic uploads skip an unchanged library snapshot', () async {
+    var now = DateTime.utc(2026, 7, 11, 9);
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+    )..usesSnapshotChecksum = true;
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+      clock: () => now,
+    );
+    await library.load();
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    await sync.setAutomaticUploadEnabled(true);
+
+    expect(await sync.uploadAutomaticallyIfDue(library), isTrue);
+    now = now.add(LibrarySyncStore.automaticUploadInterval);
+    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+    expect(gateway.metadataFetchCalls, 2);
+    expect(gateway.pushCalls, 1);
+  });
+
   test('offline mode blocks network sync and removal clears secure state',
       () async {
     final vault = _MemorySyncVault();
@@ -736,6 +760,7 @@ class _FakeSyncGateway
   int pushCalls = 0;
   int metadataFetchCalls = 0;
   bool metadataUnavailable = false;
+  bool usesSnapshotChecksum = false;
   int profileFetchCalls = 0;
   int profileUpdateCalls = 0;
   String? lastDisplayName;
@@ -812,7 +837,9 @@ class _FakeSyncGateway
           revision: baseRevision + 1,
           updatedAt: DateTime.utc(2026, 7, 10),
           updatedByDevice: 'Test device',
-          checksum: 'checksum',
+          checksum: usesSnapshotChecksum
+              ? sha256.convert(utf8.encode(jsonEncode(snapshot))).toString()
+              : 'checksum',
         );
     remote = result;
     return result;

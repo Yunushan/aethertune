@@ -62,6 +62,7 @@ void main() {
         as Map<String, dynamic>;
 
     expect(snapshot['syncVersion'], 1);
+    expect(snapshot.containsKey('exportedAt'), isFalse);
     expect(snapshot['offlineCacheQueue'], isEmpty);
     expect(snapshot.containsKey('offlineModeEnabled'), isFalse);
     expect(snapshot.containsKey('offlineCacheLimitMegabytes'), isFalse);
