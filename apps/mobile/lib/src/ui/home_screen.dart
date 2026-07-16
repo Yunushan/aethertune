@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -9580,18 +9581,22 @@ Future<void> _exportLocalDiagnostics(
   LocalDiagnosticLog diagnostics,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
+  final bytes = Uint8List.fromList(utf8.encode(diagnostics.exportJson()));
   final outputPath = await FilePicker.saveFile(
     dialogTitle: 'Export local diagnostics',
     fileName: 'aethertune-local-diagnostics.json',
     type: FileType.custom,
     allowedExtensions: const <String>['json'],
+    bytes: bytes,
   );
   if (!context.mounted || outputPath == null) {
     return;
   }
 
   try {
-    await File(outputPath).writeAsString(diagnostics.exportJson(), flush: true);
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      await File(outputPath).writeAsBytes(bytes, flush: true);
+    }
     if (context.mounted) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Saved local diagnostics.')),

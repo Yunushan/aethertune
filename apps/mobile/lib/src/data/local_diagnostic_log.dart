@@ -156,18 +156,26 @@ class LocalDiagnosticEntry {
 String _sanitize(String value, int maximumLength) {
   var sanitized = value.trim();
   sanitized = sanitized.replaceAllMapped(
-    RegExp(r'(?im)\bauthorization\s*[:=].*$'),
+    RegExp(
+      r'\bauthorization\s*[:=].*$',
+      caseSensitive: false,
+      multiLine: true,
+    ),
     (_) => 'authorization=[redacted]',
   );
   sanitized = sanitized.replaceAllMapped(
     RegExp(
-      r'(?i)\b(authorization|token|password|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+',
+      r'\b(authorization|token|password|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+',
+      caseSensitive: false,
     ),
     (match) => '${match.group(1)}=[redacted]',
   );
-  sanitized = sanitized.replaceAll(RegExp(r'(?i)file://\S+'), 'file://[redacted]');
   sanitized = sanitized.replaceAll(
-    RegExp(r'(?i)(https?://)[^\s/@]+@'),
+    RegExp(r'file://\S+', caseSensitive: false),
+    'file://[redacted]',
+  );
+  sanitized = sanitized.replaceAll(
+    RegExp(r'(https?://)[^\s/@]+@', caseSensitive: false),
     r'$1[redacted]@',
   );
   return _truncate(sanitized, maximumLength);
