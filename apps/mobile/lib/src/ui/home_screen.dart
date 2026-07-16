@@ -102,9 +102,9 @@ const _aetherTuneNavigationDestinationCount = 6;
 
 Future<void> _showMobileAudioRoutePicker(BuildContext context) async {
   try {
-    await AudioRouter().showAudioRoutePicker(
+    await const AudioRouter().showAudioRoutePicker(
       context,
-      androidOptions: AndroidAudioOptions.media(),
+      androidOptions: const AndroidAudioOptions.media(),
       dialogTitle: 'Audio output',
     );
   } on Object {
