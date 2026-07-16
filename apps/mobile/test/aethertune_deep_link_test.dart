@@ -44,7 +44,7 @@ void main() {
     final target = LibraryStore();
     await source.load();
     await target.load();
-    final track = const Track(
+    final track = Track(
       id: 'shared-track',
       title: 'Shared track',
       artist: 'Artist',
@@ -59,7 +59,7 @@ void main() {
     final link = source.playlistImportLink(playlist.id)!;
     final incoming = StreamController<Uri>();
     addTearDown(incoming.close);
-    var importedKind;
+    AetherTuneDeepLinkKind? importedKind;
 
     await tester.pumpWidget(
       MaterialApp(
