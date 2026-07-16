@@ -56,6 +56,7 @@ The `aethertune-release-artifacts` GitHub Actions workflow builds downloadable
 desktop archives on tags or manual dispatch:
 
 - `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`
+- `aethertune-linux-x64`: `aethertune-linux-x64.deb` for 64-bit Debian/Ubuntu systems
 - `aethertune-macos`: `aethertune-macos.zip`
 - `aethertune-windows-x64`: `aethertune-windows-x64.zip`
 
