@@ -74,16 +74,21 @@ class PlayerController extends ChangeNotifier {
     _currentIndexSub = _audio.currentIndexStream.listen(
       _handleCurrentIndexChanged,
     );
+    _savedQueues.add(_emptySavedQueue());
   }
 
   static const _queueSnapshotKey = 'aethertune.player_queue.v1';
+  static const _savedQueuesSnapshotKey = 'aethertune.player_queues.v2';
   static const _playbackSettingsKey = 'aethertune.playback_settings.v1';
+  static const _defaultQueueId = 'default';
+  static const _defaultQueueName = 'Queue 1';
 
   final PlaybackAudioEngine _audio;
   TrackPlaybackResolver? _trackResolver;
   final DateTime Function() _clock;
   final List<Track> _queue = <Track>[];
   final List<Track> _loadedPlaybackQueue = <Track>[];
+  final List<SavedTrackQueue> _savedQueues = <SavedTrackQueue>[];
 
   StreamSubscription<Object?>? _playerStateSub;
   StreamSubscription<Duration?>? _durationSub;
@@ -100,6 +105,8 @@ class PlayerController extends ChangeNotifier {
   Duration _sleepTimerFadeDuration = defaultSleepTimerFadeDuration;
   bool _queueSnapshotLoaded = false;
   DateTime? _queueUpdatedAt;
+  String _activeQueueId = _defaultQueueId;
+  int _nextSavedQueueSerial = 0;
   bool _playbackSettingsLoaded = false;
   bool _offlineModeEnabled = false;
   bool _isLoadingQueue = false;
@@ -127,6 +134,10 @@ class PlayerController extends ChangeNotifier {
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
+  List<SavedTrackQueue> get savedQueues =>
+      List<SavedTrackQueue>.unmodifiable(_savedQueues);
+  String get activeQueueId => _activeQueueId;
+  String get activeQueueName => _activeSavedQueue.name;
   int get playbackStartSerial => _playbackStartSerial;
   bool get isPlaying => _audio.playing;
   bool get shuffleEnabled => _audio.shuffleModeEnabled;
@@ -280,28 +291,134 @@ class PlayerController extends ChangeNotifier {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final rawSnapshot = prefs.getString(_queueSnapshotKey);
-    if (rawSnapshot != null && rawSnapshot.isNotEmpty) {
+    final rawCollection = prefs.getString(_savedQueuesSnapshotKey);
+    if (rawCollection != null && rawCollection.isNotEmpty) {
       try {
-        final decoded = jsonDecode(rawSnapshot) as Map;
-        final snapshot = TrackQueueSnapshot.fromJson(
+        final decoded = jsonDecode(rawCollection) as Map;
+        final collection = SavedTrackQueueCollection.fromJson(
           Map<String, Object?>.from(decoded),
         );
-
-        _queue
+        _savedQueues
           ..clear()
-          ..addAll(snapshot.tracks);
-        _current = snapshot.currentTrack;
-        _queueUpdatedAt = snapshot.updatedAt;
-        _loadedTrackId = null;
-        _loadedPlaybackQueue.clear();
+          ..addAll(collection.queues);
+        _activeQueueId = collection.activeQueueId;
+        _restoreActiveSavedQueue();
       } catch (_) {
-        await prefs.remove(_queueSnapshotKey);
+        await prefs.remove(_savedQueuesSnapshotKey);
+        _resetSavedQueues();
+      }
+    } else {
+      final rawSnapshot = prefs.getString(_queueSnapshotKey);
+      if (rawSnapshot != null && rawSnapshot.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(rawSnapshot) as Map;
+          final snapshot = TrackQueueSnapshot.fromJson(
+            Map<String, Object?>.from(decoded),
+          );
+          _savedQueues
+            ..clear()
+            ..add(
+              SavedTrackQueue(
+                id: _defaultQueueId,
+                name: _defaultQueueName,
+                snapshot: snapshot,
+              ),
+            );
+          _activeQueueId = _defaultQueueId;
+          _restoreActiveSavedQueue();
+        } catch (_) {
+          await prefs.remove(_queueSnapshotKey);
+          _resetSavedQueues();
+        }
       }
     }
 
     _queueSnapshotLoaded = true;
     notifyListeners();
+  }
+
+  Future<SavedTrackQueue?> createSavedQueue(String name) async {
+    final normalizedName = _normalizeSavedQueueName(name);
+    if (normalizedName == null ||
+        _savedQueues.length >= SavedTrackQueueCollection.maxQueues) {
+      return null;
+    }
+    if (_savedQueues.any(
+      (queue) => queue.name.toLowerCase() == normalizedName.toLowerCase(),
+    )) {
+      return null;
+    }
+
+    _captureActiveSavedQueue();
+    final created = SavedTrackQueue(
+      id: '${_clock().toUtc().microsecondsSinceEpoch}-${_nextSavedQueueSerial += 1}',
+      name: normalizedName,
+      snapshot: const TrackQueueSnapshot(tracks: <Track>[]),
+    );
+    _savedQueues.add(created);
+    await _saveQueueSnapshot();
+    notifyListeners();
+    return created;
+  }
+
+  Future<bool> renameSavedQueue(String queueId, String name) async {
+    final normalizedName = _normalizeSavedQueueName(name);
+    if (normalizedName == null ||
+        _savedQueues.any(
+          (queue) =>
+              queue.id != queueId &&
+              queue.name.toLowerCase() == normalizedName.toLowerCase(),
+        )) {
+      return false;
+    }
+    final index = _savedQueues.indexWhere((queue) => queue.id == queueId);
+    if (index == -1 || _savedQueues[index].name == normalizedName) {
+      return false;
+    }
+    _captureActiveSavedQueue();
+    _savedQueues[index] = _savedQueues[index].copyWith(name: normalizedName);
+    await _saveQueueSnapshot();
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> switchSavedQueue(String queueId) async {
+    if (queueId == _activeQueueId ||
+        !_savedQueues.any((queue) => queue.id == queueId)) {
+      return false;
+    }
+    _captureActiveSavedQueue();
+    await _audio.stop();
+    _activeQueueId = queueId;
+    _restoreActiveSavedQueue();
+    _duration = Duration.zero;
+    await _saveQueueSnapshot();
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> deleteSavedQueue(String queueId) async {
+    if (_savedQueues.length <= 1) {
+      return false;
+    }
+    final index = _savedQueues.indexWhere((queue) => queue.id == queueId);
+    if (index == -1) {
+      return false;
+    }
+    _captureActiveSavedQueue();
+    if (queueId == _activeQueueId) {
+      final replacement = _savedQueues[index == 0 ? 1 : index - 1];
+      await _audio.stop();
+      _activeQueueId = replacement.id;
+      _savedQueues.removeAt(index);
+      _restoreActiveSavedQueue();
+      _duration = Duration.zero;
+    } else {
+      _savedQueues.removeAt(index);
+    }
+    await _saveQueueSnapshot();
+    notifyListeners();
+    return true;
   }
 
   Future<void> loadPersistedPlaybackSettings() async {
@@ -493,6 +610,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> removeTracksFromSource(String sourceId) async {
+    _removeTracksFromInactiveSavedQueues(sourceId);
     final removesCurrent = _current?.sourceId == sourceId;
     _queue.removeWhere((track) => track.sourceId == sourceId);
     if (removesCurrent) {
@@ -1357,6 +1475,15 @@ class PlayerController extends ChangeNotifier {
     if (touch || _queueUpdatedAt == null) {
       _queueUpdatedAt = _clock().toUtc();
     }
+    _captureActiveSavedQueue();
+    final collection = SavedTrackQueueCollection(
+      activeQueueId: _activeQueueId,
+      queues: _savedQueues,
+    );
+    await prefs.setString(
+      _savedQueuesSnapshotKey,
+      jsonEncode(collection.toJson()),
+    );
     if (_queue.isEmpty) {
       await prefs.remove(_queueSnapshotKey);
       return;
@@ -1368,6 +1495,103 @@ class PlayerController extends ChangeNotifier {
       updatedAt: _queueUpdatedAt,
     );
     await prefs.setString(_queueSnapshotKey, jsonEncode(snapshot.toJson()));
+  }
+
+  SavedTrackQueue get _activeSavedQueue {
+    return _savedQueues.firstWhere(
+      (queue) => queue.id == _activeQueueId,
+      orElse: _emptySavedQueue,
+    );
+  }
+
+  SavedTrackQueue _emptySavedQueue() {
+    return const SavedTrackQueue(
+      id: _defaultQueueId,
+      name: _defaultQueueName,
+      snapshot: TrackQueueSnapshot(tracks: <Track>[]),
+    );
+  }
+
+  void _resetSavedQueues() {
+    _savedQueues
+      ..clear()
+      ..add(_emptySavedQueue());
+    _activeQueueId = _defaultQueueId;
+    _restoreActiveSavedQueue();
+  }
+
+  void _captureActiveSavedQueue() {
+    final index = _savedQueues.indexWhere(
+      (queue) => queue.id == _activeQueueId,
+    );
+    if (index == -1) {
+      _savedQueues.add(
+        SavedTrackQueue(
+          id: _defaultQueueId,
+          name: _defaultQueueName,
+          snapshot: _activeQueueSnapshot(),
+        ),
+      );
+      _activeQueueId = _defaultQueueId;
+      return;
+    }
+    _savedQueues[index] = _savedQueues[index].copyWith(
+      snapshot: _activeQueueSnapshot(),
+    );
+  }
+
+  void _removeTracksFromInactiveSavedQueues(String sourceId) {
+    for (var index = 0; index < _savedQueues.length; index += 1) {
+      final savedQueue = _savedQueues[index];
+      if (savedQueue.id == _activeQueueId) {
+        continue;
+      }
+      final remaining = savedQueue.snapshot.tracks
+          .where((track) => track.sourceId != sourceId)
+          .toList(growable: false);
+      if (remaining.length == savedQueue.snapshot.tracks.length) {
+        continue;
+      }
+      final currentTrackId = savedQueue.snapshot.currentTrackId;
+      _savedQueues[index] = savedQueue.copyWith(
+        snapshot: TrackQueueSnapshot(
+          tracks: remaining,
+          currentTrackId: remaining.any((track) => track.id == currentTrackId)
+              ? currentTrackId
+              : remaining.isEmpty
+              ? null
+              : remaining.first.id,
+          updatedAt: _clock().toUtc(),
+        ),
+      );
+    }
+  }
+
+  TrackQueueSnapshot _activeQueueSnapshot() {
+    return TrackQueueSnapshot(
+      tracks: List<Track>.from(_queue),
+      currentTrackId: _current?.id,
+      updatedAt: _queueUpdatedAt,
+    );
+  }
+
+  void _restoreActiveSavedQueue() {
+    final snapshot = _activeSavedQueue.snapshot;
+    _queue
+      ..clear()
+      ..addAll(snapshot.tracks);
+    _current = snapshot.currentTrack;
+    _queueUpdatedAt = snapshot.updatedAt;
+    _loadedTrackId = null;
+    _loadedPlaybackQueue.clear();
+  }
+
+  String? _normalizeSavedQueueName(String value) {
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty || normalized.length > 80) {
+      return null;
+    }
+    return normalized;
   }
 
   Future<void> _savePlaybackSettings() async {

@@ -43,6 +43,119 @@ class TrackQueueSnapshot {
   }
 }
 
+/// A durable local queue slot. Only the active slot is loaded into the audio
+/// engine; the remaining slots are inert snapshots until the user switches.
+class SavedTrackQueue {
+  const SavedTrackQueue({
+    required this.id,
+    required this.name,
+    required this.snapshot,
+  });
+
+  final String id;
+  final String name;
+  final TrackQueueSnapshot snapshot;
+
+  SavedTrackQueue copyWith({
+    String? name,
+    TrackQueueSnapshot? snapshot,
+  }) {
+    return SavedTrackQueue(
+      id: id,
+      name: name ?? this.name,
+      snapshot: snapshot ?? this.snapshot,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'id': id,
+      'name': name,
+      'snapshot': snapshot.toJson(),
+    };
+  }
+
+  factory SavedTrackQueue.fromJson(Map<String, Object?> json) {
+    final id = (json['id'] as String? ?? '').trim();
+    final name = (json['name'] as String? ?? '').trim();
+    final rawSnapshot = json['snapshot'];
+    if (id.isEmpty || id.length > 128 || name.isEmpty || name.length > 80) {
+      throw const FormatException('Saved queue metadata is invalid.');
+    }
+    if (rawSnapshot is! Map) {
+      throw const FormatException('Saved queue snapshot is missing.');
+    }
+    return SavedTrackQueue(
+      id: id,
+      name: name,
+      snapshot: TrackQueueSnapshot.fromJson(
+        Map<String, Object?>.from(rawSnapshot),
+      ),
+    );
+  }
+}
+
+/// Versioned local persistence for a bounded set of independently resumable
+/// queues. This stays device-local and is deliberately excluded from sync.
+class SavedTrackQueueCollection {
+  const SavedTrackQueueCollection({
+    required this.activeQueueId,
+    required this.queues,
+  });
+
+  static const version = 1;
+  static const maxQueues = 12;
+
+  final String activeQueueId;
+  final List<SavedTrackQueue> queues;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'version': version,
+      'activeQueueId': activeQueueId,
+      'queues': queues.map((queue) => queue.toJson()).toList(growable: false),
+    };
+  }
+
+  factory SavedTrackQueueCollection.fromJson(Map<String, Object?> json) {
+    if (json['version'] != version) {
+      throw FormatException(
+        'Unsupported saved queue collection version: ${json['version']}.',
+      );
+    }
+    final activeQueueId = (json['activeQueueId'] as String? ?? '').trim();
+    final rawQueues = json['queues'];
+    if (activeQueueId.isEmpty || rawQueues is! List) {
+      throw const FormatException('Saved queue collection is malformed.');
+    }
+
+    final queues = <SavedTrackQueue>[];
+    final ids = <String>{};
+    for (final rawQueue in rawQueues) {
+      if (rawQueue is! Map) {
+        continue;
+      }
+      final queue = SavedTrackQueue.fromJson(
+        Map<String, Object?>.from(rawQueue),
+      );
+      if (!ids.add(queue.id)) {
+        throw const FormatException('Saved queue IDs must be unique.');
+      }
+      queues.add(queue);
+      if (queues.length == maxQueues) {
+        break;
+      }
+    }
+    if (queues.isEmpty || !ids.contains(activeQueueId)) {
+      throw const FormatException('Saved queue collection has no active queue.');
+    }
+    return SavedTrackQueueCollection(
+      activeQueueId: activeQueueId,
+      queues: List<SavedTrackQueue>.unmodifiable(queues),
+    );
+  }
+}
+
 /// A privacy-safe queue representation for an opt-in library sync snapshot.
 ///
 /// It deliberately contains only library track IDs: local paths, stream URLs,

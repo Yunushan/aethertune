@@ -521,6 +521,47 @@ void main() {
     expect(restoredEngine.playing, isTrue);
   });
 
+  test('persists independently switchable named queues', () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    final firstQueue = <Track>[_track('1'), _track('2')];
+    final focusQueue = <Track>[_track('3'), _track('4')];
+    await controller.playTrack(firstQueue[1], queue: firstQueue);
+
+    final focus = await controller.createSavedQueue('Focus');
+    expect(focus, isNotNull);
+    expect(await controller.switchSavedQueue(focus!.id), isTrue);
+    expect(controller.queue, isEmpty);
+    expect(controller.current, isNull);
+    await controller.playTrack(focusQueue.first, queue: focusQueue);
+
+    expect(await controller.switchSavedQueue('default'), isTrue);
+    expect(controller.activeQueueName, 'Queue 1');
+    expect(controller.queue.map((track) => track.id), <String>['1', '2']);
+    expect(controller.current?.id, '2');
+    expect(
+      controller.savedQueues.map((queue) => queue.name),
+      <String>['Queue 1', 'Focus'],
+    );
+
+    controller.dispose();
+    await _flushAsyncWork();
+
+    final restoredEngine = _FakePlaybackAudioEngine();
+    final restored = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restored.dispose);
+    await restored.loadPersistedQueue();
+
+    expect(restored.activeQueueId, 'default');
+    expect(restored.queue.map((track) => track.id), <String>['1', '2']);
+    final restoredFocus = restored.savedQueues.singleWhere(
+      (queue) => queue.name == 'Focus',
+    );
+    expect(await restored.switchSavedQueue(restoredFocus.id), isTrue);
+    expect(restored.queue.map((track) => track.id), <String>['3', '4']);
+    expect(restored.current?.id, '3');
+  });
+
   test(
     'resolves credentialed queues after restart without persisting secrets',
     () async {
@@ -618,6 +659,30 @@ void main() {
     final snapshot = prefs.getString('aethertune.player_queue.v1')!;
     expect(snapshot, isNot(contains('music.example.test')));
     expect(snapshot, contains('local'));
+  });
+
+  test('removes deleted provider tracks from inactive saved queues', () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final localTrack = _track('local');
+    final privateTrack = Track(
+      id: 'private',
+      title: 'Private',
+      streamUrl: 'https://music.example.test/private',
+      sourceId: 'self-hosted',
+    );
+    await controller.playTrack(localTrack, queue: <Track>[localTrack]);
+    final privateQueue = await controller.createSavedQueue('Private');
+    await controller.switchSavedQueue(privateQueue!.id);
+    await controller.playTrack(privateTrack, queue: <Track>[privateTrack]);
+    await controller.switchSavedQueue('default');
+
+    await controller.removeTracksFromSource('self-hosted');
+    await controller.switchSavedQueue(privateQueue.id);
+
+    expect(controller.queue, isEmpty);
+    expect(controller.current, isNull);
   });
 
   test(

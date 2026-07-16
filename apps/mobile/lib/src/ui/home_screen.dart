@@ -2397,17 +2397,71 @@ class _QueueSheet extends StatelessWidget {
     final player = context.watch<PlayerController>();
     final queue = player.queue;
     final current = player.current;
+    final savedQueues = player.savedQueues;
 
     return SafeArea(
       child: ListView(
         shrinkWrap: true,
         children: <Widget>[
           ListTile(
+            leading: const Icon(Icons.library_music_outlined),
+            title: const Text('Queues'),
+            subtitle: Text('${savedQueues.length} saved · ${player.activeQueueName} active'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  tooltip: 'Create queue',
+                  onPressed: () => unawaited(_createQueue(context, player)),
+                  icon: const Icon(Icons.playlist_add_outlined),
+                ),
+                PopupMenuButton<_SavedQueueAction>(
+                  tooltip: 'Manage active queue',
+                  onSelected: (action) =>
+                      unawaited(_manageQueue(context, player, action)),
+                  itemBuilder: (_) => <PopupMenuEntry<_SavedQueueAction>>[
+                    const PopupMenuItem(
+                      value: _SavedQueueAction.rename,
+                      child: ListTile(
+                        leading: Icon(Icons.drive_file_rename_outline),
+                        title: Text('Rename queue'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _SavedQueueAction.delete,
+                      enabled: savedQueues.length > 1,
+                      child: const ListTile(
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('Delete queue'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          for (final savedQueue in savedQueues)
+            ListTile(
+              selected: savedQueue.id == player.activeQueueId,
+              leading: Icon(
+                savedQueue.id == player.activeQueueId
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+              ),
+              title: Text(savedQueue.name),
+              subtitle: Text('${savedQueue.snapshot.tracks.length} track(s)'),
+              onTap: savedQueue.id == player.activeQueueId
+                  ? null
+                  : () => unawaited(
+                        player.switchSavedQueue(savedQueue.id),
+                      ),
+            ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.queue_music),
-            title: const Text('Queue'),
+            title: Text(player.activeQueueName),
             subtitle: Text('${queue.length} track(s)'),
           ),
-          const Divider(height: 1),
           if (queue.isEmpty)
             const ListTile(
               leading: Icon(Icons.queue_music_outlined),
@@ -2425,6 +2479,111 @@ class _QueueSheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _createQueue(
+    BuildContext context,
+    PlayerController player,
+  ) async {
+    final name = await _promptForQueueName(context, title: 'Create queue');
+    if (!context.mounted || name == null) {
+      return;
+    }
+    final created = await player.createSavedQueue(name);
+    if (!context.mounted) {
+      return;
+    }
+    if (created == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Use a unique queue name (up to 80 characters).')),
+      );
+      return;
+    }
+    await player.switchSavedQueue(created.id);
+  }
+
+  Future<void> _manageQueue(
+    BuildContext context,
+    PlayerController player,
+    _SavedQueueAction action,
+  ) async {
+    switch (action) {
+      case _SavedQueueAction.rename:
+        final name = await _promptForQueueName(
+          context,
+          title: 'Rename queue',
+          initialValue: player.activeQueueName,
+        );
+        if (!context.mounted || name == null) {
+          return;
+        }
+        final renamed = await player.renameSavedQueue(
+          player.activeQueueId,
+          name,
+        );
+        if (context.mounted && !renamed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Use a unique queue name (up to 80 characters).')),
+          );
+        }
+        return;
+      case _SavedQueueAction.delete:
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete queue?'),
+            content: Text('Delete ${player.activeQueueName} and its saved tracks?'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true && context.mounted) {
+          await player.deleteSavedQueue(player.activeQueueId);
+        }
+    }
+  }
+
+  Future<String?> _promptForQueueName(
+    BuildContext context, {
+    required String title,
+    String initialValue = '',
+  }) async {
+    final controller = TextEditingController(text: initialValue);
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            maxLength: 80,
+            decoration: const InputDecoration(labelText: 'Queue name'),
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }
 
@@ -2501,6 +2660,8 @@ class _QueueTrackTile extends StatelessWidget {
 }
 
 enum _QueueTrackAction { moveUp, moveDown, remove }
+
+enum _SavedQueueAction { rename, delete }
 
 class _HomeTab extends StatefulWidget {
   const _HomeTab({

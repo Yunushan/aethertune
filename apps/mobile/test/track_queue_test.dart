@@ -26,6 +26,36 @@ void main() {
     expect(snapshot.currentTrack?.id, '1');
   });
 
+  test('serializes bounded named queue collections with an active slot', () {
+    final collection = SavedTrackQueueCollection(
+      activeQueueId: 'focus',
+      queues: <SavedTrackQueue>[
+        SavedTrackQueue(
+          id: 'default',
+          name: 'Queue 1',
+          snapshot: TrackQueueSnapshot(tracks: <Track>[_track('1')]),
+        ),
+        SavedTrackQueue(
+          id: 'focus',
+          name: 'Focus',
+          snapshot: TrackQueueSnapshot(
+            currentTrackId: '3',
+            tracks: <Track>[_track('2'), _track('3')],
+          ),
+        ),
+      ],
+    );
+
+    final restored = SavedTrackQueueCollection.fromJson(collection.toJson());
+
+    expect(restored.activeQueueId, 'focus');
+    expect(restored.queues.map((queue) => queue.name), <String>[
+      'Queue 1',
+      'Focus',
+    ]);
+    expect(restored.queues.last.snapshot.currentTrack?.id, '3');
+  });
+
   test('bounds and validates privacy-safe queue sync references', () {
     final snapshot = TrackQueueReferenceSnapshot.fromJson(<String, Object?>{
       'version': TrackQueueReferenceSnapshot.syncVersion,
