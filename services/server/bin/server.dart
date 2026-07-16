@@ -35,11 +35,16 @@ Future<void> main() async {
       managedSyncAccounts: managedSyncAccounts,
       operationsAuthenticator: operationsAuthenticator,
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
-      listenTogetherStore: FileLibrarySyncSnapshotStore(
-        Directory(
-          '${dataDirectory.path}${Platform.pathSeparator}listen-together',
+        listenTogetherStore: FileLibrarySyncSnapshotStore(
+          Directory(
+            '${dataDirectory.path}${Platform.pathSeparator}listen-together',
+          ),
         ),
-      ),
+        listenTogetherInviteStore: FileListenTogetherInviteStore(
+          Directory(
+            '${dataDirectory.path}${Platform.pathSeparator}listen-together-invites',
+          ),
+        ),
       requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
     ),
     listenAddress,

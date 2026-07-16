@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -18,6 +19,7 @@ const _jsonHeaders = <String, String>{
 const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 const maxManagedAuthRequestBytes = 16 * 1024;
 const maxListenTogetherSessionBytes = 32 * 1024;
+final _listenTogetherInviteRandom = Random.secure();
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 
@@ -97,6 +99,7 @@ Handler createServerHandler({
   OperationsAuthenticator? operationsAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
   LibrarySyncSnapshotStore? listenTogetherStore,
+  ListenTogetherInviteStore? listenTogetherInviteStore,
   ServerRequestLogger? requestLogger,
 }) {
   final now = clock ?? DateTime.now;
@@ -105,10 +108,19 @@ Handler createServerHandler({
       operationsAuthenticator ?? const DisabledOperationsAuthenticator();
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
   final sessions = listenTogetherStore ?? MemoryLibrarySyncSnapshotStore();
+  final invites = listenTogetherInviteStore ?? MemoryListenTogetherInviteStore();
   final startedAt = now().toUtc();
   var requestsTotal = 0;
 
   Future<Response> route(Request request) async {
+    if (request.url.path.startsWith('api/v1/listen-together/invites/')) {
+      return _handleListenTogetherInviteJoin(
+        request,
+        authenticator: authenticator,
+        sessions: sessions,
+        invites: invites,
+      );
+    }
     switch (request.url.path) {
       case 'health':
         if (request.method != 'GET') {
@@ -217,6 +229,13 @@ Handler createServerHandler({
           sessions: sessions,
           now: now,
         );
+      case 'api/v1/listen-together/session/invite':
+        return _handleListenTogetherInviteIssue(
+          request,
+          authenticator: authenticator,
+          sessions: sessions,
+          invites: invites,
+        );
       default:
         return _jsonResponse(
           404,
@@ -282,6 +301,9 @@ void _writeRequestLog(
 }
 
 String _logRoute(String path) {
+  if (path.startsWith('api/v1/listen-together/invites/')) {
+    return '/api/v1/listen-together/invites/:code';
+  }
   return switch (path) {
     'health' => '/health',
     'api/v1/info' => '/api/v1/info',
@@ -827,6 +849,63 @@ Future<Response> _handleListenTogetherSession(
   }
 }
 
+Future<Response> _handleListenTogetherInviteIssue(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required LibrarySyncSnapshotStore sessions,
+  required ListenTogetherInviteStore invites,
+}) async {
+  if (request.method != 'POST') {
+    return _methodNotAllowed(request);
+  }
+  final userId = _authenticatedListenTogetherUser(request, authenticator);
+  if (userId == null) {
+    return authenticator.isConfigured
+        ? _unauthorizedResponse()
+        : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
+  }
+  final session = await sessions.read(userId);
+  if (session?.snapshot == null) {
+    return _jsonResponse(409, <String, Object?>{'error': 'no_active_session'});
+  }
+  final code = await invites.issue(userId);
+  return _jsonResponse(201, <String, Object?>{'inviteCode': code});
+}
+
+Future<Response> _handleListenTogetherInviteJoin(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required LibrarySyncSnapshotStore sessions,
+  required ListenTogetherInviteStore invites,
+}) async {
+  if (request.method != 'GET') {
+    return _methodNotAllowed(request);
+  }
+  if (_authenticatedListenTogetherUser(request, authenticator) == null) {
+    return authenticator.isConfigured
+        ? _unauthorizedResponse()
+        : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
+  }
+  final code = request.url.pathSegments.last;
+  final ownerId = await invites.lookup(code);
+  final session = ownerId == null ? null : await sessions.read(ownerId);
+  if (session?.snapshot == null) {
+    return _jsonResponse(404, <String, Object?>{'error': 'invite_not_found'});
+  }
+  return _jsonResponse(200, _listenTogetherSessionResponse(session));
+}
+
+String? _authenticatedListenTogetherUser(
+  Request request,
+  SyncAuthenticator authenticator,
+) {
+  if (!authenticator.isConfigured) {
+    return null;
+  }
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  return token == null ? null : authenticator.authenticate(token);
+}
+
 Response _listenTogetherConflict(LibrarySyncSnapshot? current) {
   return _jsonResponse(
     409,
@@ -1118,6 +1197,90 @@ class LibrarySyncWriteResult {
 
   final bool isConflict;
   final LibrarySyncSnapshot? snapshot;
+}
+
+abstract interface class ListenTogetherInviteStore {
+  Future<String> issue(String ownerId);
+
+  Future<String?> lookup(String inviteCode);
+}
+
+class MemoryListenTogetherInviteStore implements ListenTogetherInviteStore {
+  final Map<String, String> _ownersByCode = <String, String>{};
+
+  @override
+  Future<String> issue(String ownerId) async {
+    final code = _newListenTogetherInviteCode();
+    _ownersByCode[code] = ownerId;
+    return code;
+  }
+
+  @override
+  Future<String?> lookup(String inviteCode) async {
+    return _isListenTogetherInviteCode(inviteCode)
+        ? _ownersByCode[inviteCode]
+        : null;
+  }
+}
+
+class FileListenTogetherInviteStore implements ListenTogetherInviteStore {
+  FileListenTogetherInviteStore(this.rootDirectory);
+
+  final Directory rootDirectory;
+
+  @override
+  Future<String> issue(String ownerId) async {
+    await rootDirectory.create(recursive: true);
+    for (var attempt = 0; attempt < 4; attempt += 1) {
+      final code = _newListenTogetherInviteCode();
+      final file = _fileFor(code);
+      if (await file.exists()) {
+        continue;
+      }
+      await file.writeAsString(
+        jsonEncode(<String, Object?>{'ownerId': ownerId}),
+        flush: true,
+      );
+      return code;
+    }
+    throw StateError('Could not allocate a listen-together invite.');
+  }
+
+  @override
+  Future<String?> lookup(String inviteCode) async {
+    if (!_isListenTogetherInviteCode(inviteCode)) {
+      return null;
+    }
+    final file = _fileFor(inviteCode);
+    if (!await file.exists()) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map) {
+        return null;
+      }
+      final ownerId = decoded['ownerId'];
+      return ownerId is String && ownerId.isNotEmpty ? ownerId : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  File _fileFor(String code) {
+    final digest = sha256.convert(utf8.encode(code)).toString();
+    return File(p.join(rootDirectory.path, '$digest.json'));
+  }
+}
+
+String _newListenTogetherInviteCode() {
+  return base64Url.encode(
+    List<int>.generate(18, (_) => _listenTogetherInviteRandom.nextInt(256)),
+  );
+}
+
+bool _isListenTogetherInviteCode(String value) {
+  return RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
 }
 
 abstract interface class LibrarySyncSnapshotStore {

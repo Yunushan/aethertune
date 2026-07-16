@@ -596,6 +596,63 @@ void main() {
       expect(rejected.statusCode, 400);
       expect((await _json(rejected))['error'], 'invalid_listen_together_session');
     });
+
+    test('lets a separately authenticated guest read a host invite', () async {
+      const hostToken = 'host-secret';
+      const guestToken = 'guest-secret';
+      final handler = createServerHandler(
+        syncAuthenticator: StaticSyncAuthenticator(
+          const <String, String>{
+            'host-account': hostToken,
+            'guest-account': guestToken,
+          },
+        ),
+        listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
+        listenTogetherInviteStore: MemoryListenTogetherInviteStore(),
+      );
+      final created = await handler(
+        _request(
+          'PUT',
+          '/api/v1/listen-together/session',
+          token: hostToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'host-phone',
+            'session': <String, Object?>{
+              'version': 1,
+              'trackIds': <String>['track-1'],
+              'currentTrackId': 'track-1',
+              'positionMilliseconds': 5000,
+              'playing': true,
+            },
+          },
+        ),
+      );
+      expect(created.statusCode, 200);
+
+      final issued = await handler(
+        _request(
+          'POST',
+          '/api/v1/listen-together/session/invite',
+          token: hostToken,
+        ),
+      );
+      final inviteCode = (await _json(issued))['inviteCode'] as String;
+      expect(issued.statusCode, 201);
+      expect(inviteCode, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
+
+      final joined = await handler(
+        _request(
+          'GET',
+          '/api/v1/listen-together/invites/$inviteCode',
+          token: guestToken,
+        ),
+      );
+      final joinedBody = await _json(joined);
+      expect(joined.statusCode, 200);
+      expect((joinedBody['session'] as Map<String, dynamic>)['currentTrackId'], 'track-1');
+      expect(joinedBody.containsKey('host-account'), isFalse);
+    });
   });
 
   test('file sync store survives restart and retains only the latest revision',
