@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'track_lyrics.dart';
 
-const supportedLyricsDocumentExtensions = <String>['txt', 'lrc', 'ttml'];
+const supportedLyricsDocumentExtensions = <String>['txt', 'lrc', 'srt', 'ttml'];
 
 class LyricsDocumentExport {
   const LyricsDocumentExport({
@@ -71,6 +71,9 @@ String lyricsDocumentExtensionForText(String plainText) {
   if (isTtmlLyricsDocument(plainText)) {
     return 'ttml';
   }
+  if (isSrtLyricsDocument(plainText)) {
+    return 'srt';
+  }
   return parseSyncedLyricLines(plainText).isEmpty ? 'txt' : 'lrc';
 }
 
@@ -85,6 +88,10 @@ String decodeLyricsDocumentBytes(
         (!isTtmlLyricsDocument(normalized) ||
             parseSyncedLyricLines(normalized).isEmpty)) {
       throw const FormatException('TTML lyrics must contain valid lyric lines.');
+    }
+    if (_lyricsDocumentHasExtension(fileName, 'srt') &&
+        !isSrtLyricsDocument(normalized)) {
+      throw const FormatException('SRT lyrics must contain valid cue blocks.');
     }
     return normalized;
   } on FormatException {

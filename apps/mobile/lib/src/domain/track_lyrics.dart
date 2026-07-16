@@ -50,6 +50,7 @@ class TrackLyrics {
 
   bool get isEmpty => plainText.trim().isEmpty;
   bool get isTtmlDocument => isTtmlLyricsDocument(plainText);
+  bool get isSrtDocument => isSrtLyricsDocument(plainText);
   List<SyncedLyricLine> get syncedLines => parseSyncedLyricLines(plainText);
   bool get hasSyncedLines => syncedLines.isNotEmpty;
   bool get hasProviderAttribution =>
@@ -115,6 +116,10 @@ Uri? _parseLyricsSourceUri(String? value) {
 List<SyncedLyricLine> parseSyncedLyricLines(String input) {
   if (isTtmlLyricsDocument(input)) {
     return _parseTtmlSyncedLyricLines(input);
+  }
+  final srtLines = _parseSrtSyncedLyricLines(input);
+  if (srtLines.isNotEmpty) {
+    return srtLines;
   }
 
   final indexedLines = <_IndexedSyncedLyricLine>[];
@@ -186,11 +191,13 @@ int syncedLyricLineIndexAt(
 ) {
   var activeIndex = -1;
   for (var index = 0; index < lines.length; index += 1) {
-    if (lines[index].timestamp > position) {
+    final line = lines[index];
+    if (line.timestamp > position) {
       break;
     }
-
-    activeIndex = index;
+    if (line.endTimestamp == null || position < line.endTimestamp!) {
+      activeIndex = index;
+    }
   }
 
   return activeIndex;
@@ -222,6 +229,80 @@ bool isTtmlLyricsDocument(String input) {
   }
   return RegExp(r'^<(?:[\w.-]+:)?tt(?:\s|>)', caseSensitive: false)
       .hasMatch(root);
+}
+
+bool isSrtLyricsDocument(String input) =>
+    _parseSrtSyncedLyricLines(input).isNotEmpty;
+
+List<SyncedLyricLine> _parseSrtSyncedLyricLines(String input) {
+  final indexedLines = <_IndexedSyncedLyricLine>[];
+  var order = 0;
+  for (final rawBlock in input.split(RegExp(r'\n\s*\n'))) {
+    final blockLines = rawBlock
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .toList(growable: false);
+    if (blockLines.isEmpty) {
+      continue;
+    }
+    var timingLineIndex = 0;
+    if (RegExp(r'^\d+$').hasMatch(blockLines.first)) {
+      timingLineIndex = 1;
+    }
+    if (timingLineIndex >= blockLines.length) {
+      continue;
+    }
+    final timing = _parseSrtTiming(blockLines[timingLineIndex]);
+    if (timing == null || timing.end < timing.start) {
+      continue;
+    }
+    final text = blockLines
+        .skip(timingLineIndex + 1)
+        .where((line) => line.isNotEmpty)
+        .join('\n');
+    if (text.isEmpty) {
+      continue;
+    }
+    indexedLines.add(
+      _IndexedSyncedLyricLine(
+        line: SyncedLyricLine(
+          timestamp: timing.start,
+          endTimestamp: timing.end,
+          text: text,
+        ),
+        order: order,
+      ),
+    );
+    order += 1;
+  }
+  indexedLines.sort((a, b) {
+    final byTimestamp = a.line.timestamp.compareTo(b.line.timestamp);
+    return byTimestamp == 0 ? a.order.compareTo(b.order) : byTimestamp;
+  });
+  return indexedLines.map((entry) => entry.line).toList(growable: false);
+}
+
+_SrtTiming? _parseSrtTiming(String value) {
+  final match = RegExp(
+    r'^(\d+):([0-5]\d):([0-5]\d)[,.](\d{1,3})\s+-->\s+(\d+):([0-5]\d):([0-5]\d)[,.](\d{1,3})$',
+  ).firstMatch(value.trim());
+  if (match == null) {
+    return null;
+  }
+  Duration timestamp(int offset) => Duration(
+        hours: int.parse(match.group(offset)!),
+        minutes: int.parse(match.group(offset + 1)!),
+        seconds: int.parse(match.group(offset + 2)!),
+        milliseconds: _lrcFractionToMilliseconds(match.group(offset + 3)),
+      );
+  return _SrtTiming(start: timestamp(1), end: timestamp(5));
+}
+
+class _SrtTiming {
+  const _SrtTiming({required this.start, required this.end});
+
+  final Duration start;
+  final Duration end;
 }
 
 List<SyncedLyricLine> _parseTtmlSyncedLyricLines(String input) {

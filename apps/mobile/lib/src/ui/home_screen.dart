@@ -2077,7 +2077,9 @@ class _EmptyNowPlayingLyrics extends StatelessWidget {
           const ListTile(
             leading: Icon(Icons.subtitles_outlined),
             title: Text('No lyrics yet'),
-            subtitle: Text('Add plain lyrics or import LRC or TTML timed lyrics.'),
+            subtitle: Text(
+              'Add plain lyrics or import LRC, SRT, or TTML timed lyrics.',
+            ),
           ),
         ],
       ),

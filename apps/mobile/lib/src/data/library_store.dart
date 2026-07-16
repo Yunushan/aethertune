@@ -4120,6 +4120,8 @@ class LibraryStore extends ChangeNotifier {
       ..writeln(
         'Format: ${lyrics.isTtmlDocument
             ? 'Synced TTML karaoke'
+            : lyrics.isSrtDocument
+            ? 'Synced SRT'
             : lyrics.hasSyncedLines
             ? 'Synced LRC'
             : 'Plain text'}',

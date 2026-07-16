@@ -95,6 +95,38 @@ Plain lyric line
     expect(lines[1].timestamp, const Duration(milliseconds: 4500));
   });
 
+  test('parses SRT cue timing and clears the highlight after a cue ends', () {
+    const document = '''
+1
+00:00:01,250 --> 00:00:03,500
+First lyric
+
+00:00:04.000 --> 00:00:06.125
+Second
+line
+''';
+    expect(isSrtLyricsDocument(document), isTrue);
+    final lines = parseSyncedLyricLines(document);
+
+    expect(lines, hasLength(2));
+    expect(lines[0].timestamp, const Duration(milliseconds: 1250));
+    expect(lines[0].endTimestamp, const Duration(milliseconds: 3500));
+    expect(lines[0].text, 'First lyric');
+    expect(lines[1].timestamp, const Duration(seconds: 4));
+    expect(lines[1].endTimestamp, const Duration(milliseconds: 6125));
+    expect(lines[1].text, 'Second\nline');
+    expect(syncedLyricLineIndexAt(lines, const Duration(seconds: 2)), 0);
+    expect(
+      syncedLyricLineIndexAt(lines, const Duration(milliseconds: 3750)),
+      -1,
+    );
+    expect(syncedLyricLineIndexAt(lines, const Duration(seconds: 5)), 1);
+    expect(
+      isSrtLyricsDocument('00:00:03,000 --> 00:00:01,000\nBackwards'),
+      isFalse,
+    );
+  });
+
   test('plain lyrics are not treated as synced lyrics', () {
     final lyrics = TrackLyrics(
       trackId: 'track-1',

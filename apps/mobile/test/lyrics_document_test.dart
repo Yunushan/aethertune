@@ -8,6 +8,7 @@ void main() {
   test('recognizes supported lyrics document file names', () {
     expect(isSupportedLyricsDocumentName('lyrics.txt'), isTrue);
     expect(isSupportedLyricsDocumentName('song.LRC'), isTrue);
+    expect(isSupportedLyricsDocumentName('subtitles.srt'), isTrue);
     expect(isSupportedLyricsDocumentName('karaoke.ttml'), isTrue);
     expect(isSupportedLyricsDocumentName('notes.md'), isFalse);
     expect(isSupportedLyricsDocumentName('lyrics'), isFalse);
@@ -32,6 +33,16 @@ void main() {
     );
   });
 
+  test('rejects malformed SRT documents', () {
+    expect(
+      () => decodeLyricsDocumentBytes(
+        utf8.encode('1\n00:00:03,000 --> 00:00:01,000\nBackwards'),
+        fileName: 'broken.srt',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('rejects non-utf8 lyrics documents', () {
     expect(
       () => decodeLyricsDocumentBytes(<int>[0xff, 0xfe], fileName: 'bad.lrc'),
@@ -39,7 +50,7 @@ void main() {
     );
   });
 
-  test('builds txt, lrc, and ttml lyrics export documents', () {
+  test('builds txt, lrc, srt, and ttml lyrics export documents', () {
     final plainExport = buildLyricsDocumentExport(
       title: 'Plain / Song',
       artist: '',
@@ -55,6 +66,11 @@ void main() {
       artist: 'Mira',
       plainText: '<tt><body><div><p begin="1s">Line</p></div></body></tt>',
     )!;
+    final srtExport = buildLyricsDocumentExport(
+      title: 'Subtitled',
+      artist: 'Mira',
+      plainText: '1\n00:00:01,000 --> 00:00:02,000\nFirst line',
+    )!;
 
     expect(plainExport.fileName, 'Plain Song.txt');
     expect(plainExport.extension, 'txt');
@@ -68,6 +84,8 @@ void main() {
 
     expect(ttmlExport.fileName, 'Mira - Karaoke.ttml');
     expect(ttmlExport.extension, 'ttml');
+    expect(srtExport.fileName, 'Mira - Subtitled.srt');
+    expect(srtExport.extension, 'srt');
   });
 
   test('does not build empty lyrics export documents', () {
