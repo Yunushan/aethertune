@@ -57,9 +57,17 @@ class _ListenTogetherForegroundSyncState
       return;
     }
     if (session.hosting) {
-      unawaited(session.publishHostPlayback(library, player));
+      unawaited(_ignoreErrors(session.publishHostPlayback(library, player)));
     } else {
-      unawaited(session.refreshJoined(library, player));
+      unawaited(_ignoreErrors(session.refreshJoined(library, player)));
+    }
+  }
+
+  Future<void> _ignoreErrors(Future<void> operation) async {
+    try {
+      await operation;
+    } on Object {
+      // The store retains a safe error state for the settings panel.
     }
   }
 
