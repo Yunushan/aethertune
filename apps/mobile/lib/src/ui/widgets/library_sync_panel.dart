@@ -136,6 +136,24 @@ class LibrarySyncPanel extends StatelessWidget {
                         : null,
                     icon: const Icon(Icons.login_outlined),
                   ),
+                if (!listenTogether.hosting && !listenTogether.joined)
+                  IconButton(
+                    key: const Key('listen-together-join-invite'),
+                    tooltip: 'Join with invite code',
+                    onPressed: actionsEnabled && player != null
+                        ? () => _joinListenTogetherInvite(context)
+                        : null,
+                    icon: const Icon(Icons.vpn_key_outlined),
+                  ),
+                if (listenTogether.hosting)
+                  IconButton(
+                    key: const Key('listen-together-share-invite'),
+                    tooltip: 'Create invite code',
+                    onPressed: actionsEnabled
+                        ? () => _shareListenTogetherInvite(context)
+                        : null,
+                    icon: const Icon(Icons.share_outlined),
+                  ),
                 if (listenTogether.hosting)
                   IconButton(
                     key: const Key('listen-together-end'),
@@ -333,6 +351,76 @@ class LibrarySyncPanel extends StatelessWidget {
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, 'Could not end listen together: $error');
+      }
+    }
+  }
+
+  static Future<void> _shareListenTogetherInvite(BuildContext context) async {
+    try {
+      final code = await context.read<ListenTogetherStore>().createInvite();
+      if (!context.mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Listen-together invite code'),
+          content: SelectableText(code),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not create invite code: $error');
+      }
+    }
+  }
+
+  static Future<void> _joinListenTogetherInvite(BuildContext context) async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Join listen together'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.none,
+          decoration: const InputDecoration(labelText: 'Invite code'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (code == null || code.trim().isEmpty || !context.mounted) {
+      return;
+    }
+    try {
+      final restored = await context.read<ListenTogetherStore>().joinInvite(
+        code,
+        context.read<LibraryStore>(),
+        context.read<PlayerController>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Joined shared playback with $restored tracks.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not join invite: $error');
       }
     }
   }

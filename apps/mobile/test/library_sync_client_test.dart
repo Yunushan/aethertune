@@ -142,10 +142,10 @@ void main() {
   });
 
   test('publishes and fetches portable listen-together sessions', () async {
-    final session = ListenTogetherSession(
-      trackIds: const <String>['track-1', 'track-2'],
+    const session = ListenTogetherSession(
+      trackIds: <String>['track-1', 'track-2'],
       currentTrackId: 'track-1',
-      position: const Duration(seconds: 12),
+      position: Duration(seconds: 12),
       playing: true,
     );
     var requests = 0;
@@ -215,8 +215,8 @@ void main() {
     await expectLater(
       client.publishListenTogetherSession(
         baseRevision: 0,
-        session: ListenTogetherSession(
-          trackIds: const <String>['track-1'],
+        session: const ListenTogetherSession(
+          trackIds: <String>['track-1'],
           currentTrackId: 'track-1',
           position: Duration.zero,
           playing: false,
@@ -228,6 +228,43 @@ void main() {
             .having((error) => error.updatedByDevice, 'device', 'Host desktop'),
       ),
     );
+  });
+
+  test('issues and reads cross-account listen-together invites', () async {
+    const inviteCode = 'AAAAAAAAAAAAAAAAAAAAAAAA';
+    const session = ListenTogetherSession(
+      trackIds: <String>['track-1'],
+      currentTrackId: 'track-1',
+      position: Duration(seconds: 5),
+      playing: true,
+    );
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        if (method == 'POST') {
+          expect(uri, _account().listenTogetherInviteIssueEndpointUri);
+          return LibrarySyncHttpResponse(
+            statusCode: 201,
+            body: jsonEncode(<String, Object?>{'inviteCode': inviteCode}),
+          );
+        }
+        expect(method, 'GET');
+        expect(uri, _account().listenTogetherInviteEndpointUri(inviteCode));
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 2,
+            'session': session.toJson(),
+          }),
+        );
+      },
+    );
+
+    expect(await client.issueListenTogetherInvite(), inviteCode);
+    final remote = await client.fetchListenTogetherInvite(inviteCode);
+    expect(remote.revision, 2);
+    expect(remote.session?.currentTrackId, 'track-1');
   });
 
   test('rejects a corrupted snapshot and redacts transport failures', () async {

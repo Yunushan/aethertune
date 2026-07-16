@@ -122,6 +122,15 @@ class _MemoryListenTogetherGateway implements ListenTogetherGateway {
     return _remote();
   }
 
+  @override
+  Future<String> issueListenTogetherInvite() async =>
+      'AAAAAAAAAAAAAAAAAAAAAAAA';
+
+  @override
+  Future<ListenTogetherRemoteSession> fetchListenTogetherInvite(
+    String inviteCode,
+  ) async => _remote();
+
   ListenTogetherRemoteSession _remote() => ListenTogetherRemoteSession(
     revision: revision,
     updatedAt: DateTime.utc(2026, 7, 16),

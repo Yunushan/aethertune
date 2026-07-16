@@ -118,6 +118,12 @@ abstract interface class ListenTogetherGateway {
   Future<ListenTogetherRemoteSession> leaveListenTogetherSession({
     required int baseRevision,
   });
+
+  Future<String> issueListenTogetherInvite();
+
+  Future<ListenTogetherRemoteSession> fetchListenTogetherInvite(
+    String inviteCode,
+  );
 }
 
 abstract interface class LibrarySyncProfileGateway {
@@ -273,6 +279,40 @@ class LibrarySyncClient
       throw _requestFailure(response);
     }
     return _parseListenTogetherMetadata(response.body);
+  }
+
+  @override
+  Future<String> issueListenTogetherInvite() async {
+    final response = await _execute(
+      'POST',
+      endpoint: account.listenTogetherInviteIssueEndpointUri,
+    );
+    if (response.statusCode != 201) {
+      throw _requestFailure(response);
+    }
+    final code = _jsonObject(response.body)['inviteCode'];
+    if (code is! String || !_isListenTogetherInviteCode(code)) {
+      throw const FormatException('Listen-together invite code is invalid.');
+    }
+    return code;
+  }
+
+  @override
+  Future<ListenTogetherRemoteSession> fetchListenTogetherInvite(
+    String inviteCode,
+  ) async {
+    final normalized = inviteCode.trim();
+    if (!_isListenTogetherInviteCode(normalized)) {
+      throw const FormatException('Enter a valid listen-together invite code.');
+    }
+    final response = await _execute(
+      'GET',
+      endpoint: account.listenTogetherInviteEndpointUri(normalized),
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseListenTogetherSession(response.body);
   }
 
   @override
@@ -498,6 +538,10 @@ ListenTogetherConflictException _parseListenTogetherConflict(String rawBody) {
     updatedByDevice: _optionalString(body['updatedByDevice']),
     checksum: _optionalString(body['checksum']),
   );
+}
+
+bool _isListenTogetherInviteCode(String value) {
+  return RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
 }
 
 Map<String, Object?> _jsonObject(String rawBody) {

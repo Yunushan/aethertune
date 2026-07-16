@@ -79,6 +79,8 @@ Available endpoints:
 - `GET /api/v1/listen-together/session`
 - `PUT /api/v1/listen-together/session`
 - `DELETE /api/v1/listen-together/session`
+- `POST /api/v1/listen-together/session/invite`
+- `GET /api/v1/listen-together/invites/{inviteCode}`
 
 The snapshot endpoints are disabled until either a static or managed device
 token exists. Set `AETHERTUNE_DATA_DIR` to choose the durable snapshot and
@@ -96,6 +98,11 @@ The listen-together session endpoints are scoped to the same authenticated
 account. They store a versioned, revision-protected queue of portable library
 track IDs, current item, play state, and position only; they never store media
 URLs, local paths, or provider credentials.
+
+An active host can issue an opaque 144-bit invite code. A separately
+authenticated guest can use that code to read the portable host session, but
+cannot change it. The server stores only a SHA-256-derived invite filename and
+does not return the host account identity to guests.
 
 ## Managed accounts and device tokens
 

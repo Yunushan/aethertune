@@ -82,6 +82,35 @@ class ListenTogetherStore extends ChangeNotifier {
     });
   }
 
+  Future<String> createInvite() {
+    return _runBusy(() async {
+      if (!_hosting) {
+        throw StateError('Host a listen-together session before sharing it.');
+      }
+      return _requireGateway().issueListenTogetherInvite();
+    });
+  }
+
+  Future<int> joinInvite(
+    String inviteCode,
+    LibraryStore library,
+    PlayerController player,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final remote = await _requireGateway().fetchListenTogetherInvite(inviteCode);
+      final shared = remote.session;
+      if (shared == null) {
+        throw StateError('That listen-together invite has ended.');
+      }
+      final restored = await _applySession(shared, library, player);
+      _applyMetadata(remote, session: shared);
+      _hosting = false;
+      _joined = true;
+      return restored;
+    });
+  }
+
   /// Applies a newer host update for a device that already joined.
   Future<int> refreshJoined(LibraryStore library, PlayerController player) {
     return _runBusy(() async {
