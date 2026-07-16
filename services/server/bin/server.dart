@@ -6,6 +6,9 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 
 Future<void> main() async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
+  final listenAddress = serverListenAddress(
+    Platform.environment['AETHERTUNE_LISTEN_ADDRESS'],
+  );
   final dataDirectory = Directory(
     Platform.environment['AETHERTUNE_DATA_DIR'] ??
         '${Directory.current.path}${Platform.pathSeparator}data',
@@ -34,7 +37,7 @@ Future<void> main() async {
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
       requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
     ),
-    InternetAddress.anyIPv4,
+    listenAddress,
     port,
   );
 

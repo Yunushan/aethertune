@@ -9,6 +9,17 @@ import 'package:test/test.dart';
 
 void main() {
   group('AetherTune server', () {
+    test('uses a loopback listener unless an explicit IP is configured', () {
+      expect(serverListenAddress(null).address, '127.0.0.1');
+      expect(serverListenAddress('  ').address, '127.0.0.1');
+      expect(serverListenAddress('0.0.0.0').address, '0.0.0.0');
+      expect(serverListenAddress('::1').address, '::1');
+      expect(
+        () => serverListenAddress('sync.example.com'),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('health endpoint reports ok', () async {
       final handler = createServerHandler(
         clock: () => DateTime.utc(2026, 1, 2, 3, 4, 5),

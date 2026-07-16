@@ -8,7 +8,8 @@ portable library snapshots. Back up its state before host or image changes.
 
 1. Copy `services/server/.env.example` to `services/server/.env`, leave
    `AETHERTUNE_SYNC_USERS={}` for managed accounts, and set a long random
-   `AETHERTUNE_OPS_TOKEN`. Keep `AETHERTUNE_BIND_ADDRESS=127.0.0.1`.
+   `AETHERTUNE_OPS_TOKEN`. Keep `AETHERTUNE_BIND_ADDRESS=127.0.0.1`; Docker
+   uses `AETHERTUNE_LISTEN_ADDRESS=0.0.0.0` only inside its network namespace.
 2. Start the service with `docker compose up --build -d` from
    `services/server`.
 3. Issue a separate managed token for each phone or desktop through
@@ -53,8 +54,9 @@ sudo systemctl enable --now aethertune
 sudo systemctl status aethertune
 ```
 
-The native service listens on `PORT` (default `8080`) and writes snapshots to
-the systemd-managed `/var/lib/aethertune` state directory. Place the supplied
+The native service listens on `PORT` (default `8080`) and
+`AETHERTUNE_LISTEN_ADDRESS` (default `127.0.0.1`), then writes snapshots to the
+systemd-managed `/var/lib/aethertune` state directory. Place the supplied
 `Caddyfile` in front of the service exactly as in the Docker setup.
 
 ## Tokens, Backups, and Updates

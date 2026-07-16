@@ -20,6 +20,25 @@ const maxManagedAuthRequestBytes = 16 * 1024;
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 
+/// Resolves the network interface used by the server executable.
+///
+/// Native deployments stay private by default. Containers must explicitly set
+/// `0.0.0.0` because their loopback interface is isolated from the published
+/// host port.
+InternetAddress serverListenAddress(String? configuredAddress) {
+  final normalized = configuredAddress?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return InternetAddress.loopbackIPv4;
+  }
+  final address = InternetAddress.tryParse(normalized);
+  if (address == null) {
+    throw FormatException(
+      'AETHERTUNE_LISTEN_ADDRESS must be an IPv4 or IPv6 address.',
+    );
+  }
+  return address;
+}
+
 class ServerRequestLogEntry {
   const ServerRequestLogEntry({
     required this.timestamp,

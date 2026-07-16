@@ -45,6 +45,12 @@ Compose binds to `127.0.0.1` by default. Use the supplied
 backup, update, and client-setup steps. Do not set a public bind address unless
 the host firewall and a TLS proxy protect the service.
 
+The native executable binds to `127.0.0.1` by default. Set
+`AETHERTUNE_LISTEN_ADDRESS` only to an explicit IPv4 or IPv6 address when the
+deployment needs another interface. Docker sets its own listener to `0.0.0.0`
+inside the container; its published host port remains controlled separately by
+`AETHERTUNE_BIND_ADDRESS`.
+
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
 public internet, and do not commit populated `.env` files. The named

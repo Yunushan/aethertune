@@ -23,6 +23,9 @@ void main() {
     expect(environment, contains('AETHERTUNE_OPS_TOKEN='));
     expect(dockerEnvironment, contains('AETHERTUNE_SYNC_USERS={}'));
     expect(dockerEnvironment, contains('AETHERTUNE_OPS_TOKEN='));
+    expect(dockerEnvironment, contains('AETHERTUNE_LISTEN_ADDRESS=0.0.0.0'));
+    expect(environment, contains('AETHERTUNE_LISTEN_ADDRESS=127.0.0.1'));
     expect(compose, contains(r'${AETHERTUNE_OPS_TOKEN:?'));
+    expect(compose, contains(r'${AETHERTUNE_LISTEN_ADDRESS:-0.0.0.0}'));
   });
 }
