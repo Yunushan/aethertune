@@ -695,6 +695,33 @@ void main() {
     });
   });
 
+  test('file listen-together invites survive restart without storing raw codes',
+      () async {
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-server-invite-test-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final firstStore = FileListenTogetherInviteStore(root);
+    final code = await firstStore.issue('host-account', 7);
+    final restartedStore = FileListenTogetherInviteStore(root);
+
+    final restored = await restartedStore.lookup(code);
+    expect(restored?.ownerId, 'host-account');
+    expect(restored?.sessionRevision, 7);
+    expect(await restartedStore.lookup('not-an-invite'), isNull);
+    final files = await root
+        .list(recursive: true)
+        .where((entity) => entity is File)
+        .cast<File>()
+        .toList();
+    expect(files, hasLength(1));
+    expect(files.single.path, isNot(contains(code)));
+  });
+
   test('file sync store survives restart and retains only the latest revision',
       () async {
     final root = await Directory.systemTemp.createTemp(
