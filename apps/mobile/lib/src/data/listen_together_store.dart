@@ -22,6 +22,7 @@ class ListenTogetherStore extends ChangeNotifier {
   ListenTogetherSession? _session;
   DateTime? _updatedAt;
   String? _updatedByDevice;
+  String? _inviteCode;
   bool _hosting = false;
   bool _joined = false;
   bool _busy = false;
@@ -31,6 +32,7 @@ class ListenTogetherStore extends ChangeNotifier {
   ListenTogetherSession? get session => _session;
   DateTime? get updatedAt => _updatedAt;
   String? get updatedByDevice => _updatedByDevice;
+  String? get inviteCode => _inviteCode;
   bool get hosting => _hosting;
   bool get joined => _joined;
   bool get busy => _busy;
@@ -61,6 +63,7 @@ class ListenTogetherStore extends ChangeNotifier {
         session: local,
       );
       _applyMetadata(published, session: local);
+      _inviteCode = null;
       _hosting = true;
       _joined = true;
     });
@@ -76,6 +79,7 @@ class ListenTogetherStore extends ChangeNotifier {
       }
       final restored = await _applySession(shared, library, player);
       _applyMetadata(remote, session: shared);
+      _inviteCode = null;
       _hosting = false;
       _joined = true;
       return restored;
@@ -105,6 +109,7 @@ class ListenTogetherStore extends ChangeNotifier {
       }
       final restored = await _applySession(shared, library, player);
       _applyMetadata(remote, session: shared);
+      _inviteCode = inviteCode.trim();
       _hosting = false;
       _joined = true;
       return restored;
@@ -118,7 +123,10 @@ class ListenTogetherStore extends ChangeNotifier {
         return 0;
       }
       _requireOnline(library);
-      final remote = await _requireGateway().fetchListenTogetherSession();
+      final gateway = _requireGateway();
+      final remote = _inviteCode == null
+          ? await gateway.fetchListenTogetherSession()
+          : await gateway.fetchListenTogetherInvite(_inviteCode!);
       final shared = remote.session;
       if (shared == null) {
         _reset();
@@ -268,6 +276,7 @@ class ListenTogetherStore extends ChangeNotifier {
     _session = null;
     _updatedAt = null;
     _updatedByDevice = null;
+    _inviteCode = null;
     _hosting = false;
     _joined = false;
   }

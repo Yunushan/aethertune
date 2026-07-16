@@ -80,6 +80,31 @@ void main() {
     expect(engine.positionValue, const Duration(seconds: 7));
     expect(player.isPlaying, isFalse);
   });
+
+  test('refreshes an invite guest through the host invite endpoint', () async {
+    final library = LibraryStore();
+    await library.load();
+    final track = _track('shared');
+    await library.addTracks(<Track>[track]);
+    final gateway = _MemoryListenTogetherGateway()
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['shared'],
+        currentTrackId: 'shared',
+        position: Duration.zero,
+        playing: true,
+      )
+      ..revision = 1;
+    final player = PlayerController(audioEngine: _TestAudioEngine());
+    addTearDown(player.dispose);
+    final store = ListenTogetherStore(gatewayFactory: () => gateway);
+
+    await store.joinInvite('AAAAAAAAAAAAAAAAAAAAAAAA', library, player);
+    gateway.revision = 2;
+    await store.refreshJoined(library, player);
+
+    expect(store.inviteCode, 'AAAAAAAAAAAAAAAAAAAAAAAA');
+    expect(gateway.inviteFetchCalls, 2);
+  });
 }
 
 Track _track(String id) => Track(
@@ -90,6 +115,7 @@ Track _track(String id) => Track(
 
 class _MemoryListenTogetherGateway implements ListenTogetherGateway {
   int revision = 0;
+  int inviteFetchCalls = 0;
   ListenTogetherSession? session;
 
   @override
@@ -129,7 +155,10 @@ class _MemoryListenTogetherGateway implements ListenTogetherGateway {
   @override
   Future<ListenTogetherRemoteSession> fetchListenTogetherInvite(
     String inviteCode,
-  ) async => _remote();
+  ) async {
+    inviteFetchCalls += 1;
+    return _remote();
+  }
 
   ListenTogetherRemoteSession _remote() => ListenTogetherRemoteSession(
     revision: revision,
