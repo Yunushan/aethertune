@@ -14128,7 +14128,9 @@ class _SettingsTab extends StatelessWidget {
                     },
             ),
           ),
-        if (player.supportsEqualizer || player.supportsLoudnessEnhancer)
+        if (player.supportsEqualizer ||
+            player.supportsLoudnessEnhancer ||
+            player.supportsVirtualizer)
           AudioEffectsSettingsTile(player: player),
         SwitchListTile(
           secondary: const Icon(Icons.graphic_eq_outlined),

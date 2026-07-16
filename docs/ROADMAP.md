@@ -103,7 +103,8 @@
 - [x] Android native loudness enhancement mirrored through crossfade
 - [x] Independent pitch control on Android/Linux/Windows
 - [ ] Physical-device audio-effect and acoustic transition fixtures
-- [ ] iOS and desktop DSP backends plus Android virtualizer
+- [ ] iOS and desktop DSP backends
+- [x] Android virtualizer mirrored through crossfade
 - [ ] Android Auto
 - [x] iOS Control Center and lock-screen controls
 - [x] iOS background music audio session and wrapper mode

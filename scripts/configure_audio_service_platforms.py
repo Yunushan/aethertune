@@ -424,6 +424,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
+import android.media.audiofx.Virtualizer
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -439,6 +440,7 @@ import kotlin.math.sqrt
 
 class MainActivity : AudioServiceActivity() {
     private val audioVisualizer = AetherTuneAudioVisualizer()
+    private val audioVirtualizer = AetherTuneAudioVirtualizer()
     private var pendingVisualizerResult: MethodChannel.Result? = null
     private var pendingVisualizerSessionId: Int? = null
 
@@ -473,6 +475,39 @@ class MainActivity : AudioServiceActivity() {
                 }
                 "stop" -> {
                     audioVisualizer.stop()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/audio_virtualizer",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "attach" -> {
+                    val sessionId = call.argument<Number>("audioSessionId")?.toInt()
+                    val slot = call.argument<String>("slot")
+                    result.success(
+                        sessionId != null &&
+                            sessionId > 0 &&
+                            slot != null &&
+                            audioVirtualizer.attach(slot, sessionId),
+                    )
+                }
+                "setEnabled" -> {
+                    result.success(
+                        audioVirtualizer.setEnabled(call.argument<Boolean>("enabled") ?: false),
+                    )
+                }
+                "setStrength" -> {
+                    val strength = call.argument<Number>("strength")?.toInt()
+                    result.success(
+                        strength != null && audioVirtualizer.setStrength(strength),
+                    )
+                }
+                "release" -> {
+                    audioVirtualizer.release()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -536,6 +571,7 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onDestroy() {
         audioVisualizer.stop()
+        audioVirtualizer.release()
         super.onDestroy()
     }
 
@@ -666,6 +702,90 @@ private class AetherTuneAudioVisualizer : EventChannel.StreamHandler {
             (ln(average + 1.0) / 5.0).coerceIn(0.0, 1.0)
         }
         mainHandler.post { eventSink?.success(normalized) }
+    }
+}
+
+private class AetherTuneAudioVirtualizer {
+    private var primary: Virtualizer? = null
+    private var crossfade: Virtualizer? = null
+    private var enabled = false
+    private var strength: Short = 500
+
+    fun attach(slot: String, audioSessionId: Int): Boolean {
+        val effect = try {
+            Virtualizer(0, audioSessionId)
+        } catch (_: Exception) {
+            return false
+        }
+        if (!apply(effect)) {
+            effect.release()
+            return false
+        }
+        when (slot) {
+            "primary" -> {
+                releasePrimary()
+                primary = effect
+            }
+            "crossfade" -> {
+                releaseCrossfade()
+                crossfade = effect
+            }
+            else -> {
+                effect.release()
+                return false
+            }
+        }
+        return true
+    }
+
+    fun setEnabled(enabled: Boolean): Boolean {
+        this.enabled = enabled
+        return applyToActiveEffects()
+    }
+
+    fun setStrength(strength: Int): Boolean {
+        this.strength = strength.coerceIn(0, 1000).toShort()
+        return applyToActiveEffects()
+    }
+
+    fun release() {
+        releasePrimary()
+        releaseCrossfade()
+    }
+
+    private fun applyToActiveEffects(): Boolean {
+        var success = true
+        primary?.let { success = apply(it) && success }
+        crossfade?.let { success = apply(it) && success }
+        return success
+    }
+
+    private fun apply(effect: Virtualizer): Boolean {
+        return try {
+            if (effect.strengthSupported) {
+                effect.setStrength(strength)
+            }
+            effect.enabled = enabled
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun releasePrimary() {
+        primary?.let { effect ->
+            effect.enabled = false
+            effect.release()
+        }
+        primary = null
+    }
+
+    private fun releaseCrossfade() {
+        crossfade?.let { effect ->
+            effect.enabled = false
+            effect.release()
+        }
+        crossfade = null
     }
 }
 """
@@ -1380,6 +1500,9 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "dev.aethertune/audio_visualizer",
         "AetherTuneAudioVisualizer",
         "Visualizer.getMaxCaptureRate",
+        "dev.aethertune/audio_virtualizer",
+        "AetherTuneAudioVirtualizer",
+        "Virtualizer(0, audioSessionId)",
     )
     if not all(snippet in activity_source_text for snippet in required_activity_snippets):
         raise RuntimeError("Android playback widget state bridge is missing")

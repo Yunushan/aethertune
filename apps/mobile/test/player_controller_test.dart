@@ -136,6 +136,8 @@ void main() {
     );
     await firstController.setLoudnessEnhancerEnabled(true);
     await firstController.setLoudnessEnhancerTargetGain(5.5);
+    await firstController.setVirtualizerEnabled(true);
+    await firstController.setVirtualizerStrength(650);
 
     expect(firstEngine.equalizerEnabledValue, isTrue);
     expect(
@@ -144,6 +146,8 @@ void main() {
     );
     expect(firstEngine.loudnessEnhancerEnabledValue, isTrue);
     expect(firstEngine.loudnessEnhancerTargetGainValue, 5.5);
+    expect(firstEngine.virtualizerEnabledValue, isTrue);
+    expect(firstEngine.virtualizerStrengthValue, 650);
     firstController.dispose();
 
     final restoredEngine = _FakeAudioEffectsEngine();
@@ -158,8 +162,12 @@ void main() {
     );
     expect(restoredController.loudnessEnhancerEnabled, isTrue);
     expect(restoredController.loudnessEnhancerTargetGainDb, 5.5);
+    expect(restoredController.virtualizerEnabled, isTrue);
+    expect(restoredController.virtualizerStrength, 650);
     expect(restoredEngine.equalizerEnabledValue, isTrue);
     expect(restoredEngine.loudnessEnhancerEnhancerSetCalls, 1);
+    expect(restoredEngine.virtualizerEnabledValue, isTrue);
+    expect(restoredEngine.virtualizerStrengthValue, 650);
   });
 
   test('syncs only library-backed queue references without starting playback',
@@ -287,6 +295,10 @@ void main() {
     addTearDown(supported.dispose);
     await expectLater(
       supported.setLoudnessEnhancerTargetGain(12.5),
+      throwsArgumentError,
+    );
+    await expectLater(
+      supported.setVirtualizerStrength(1001),
       throwsArgumentError,
     );
   });
@@ -968,7 +980,7 @@ class _NoCrossfadeAudioEngine extends _FakePlaybackAudioEngine {
 }
 
 class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
-    implements AudioEffectsPlaybackAudioEngine {
+    implements AudioEffectsPlaybackAudioEngine, VirtualizerPlaybackAudioEngine {
   bool equalizerEnabledValue = false;
   PlaybackEqualizerProfile equalizerProfileValue =
       const PlaybackEqualizerProfile(
@@ -977,6 +989,8 @@ class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
   bool loudnessEnhancerEnabledValue = false;
   double loudnessEnhancerTargetGainValue = 0;
   int loudnessEnhancerEnhancerSetCalls = 0;
+  bool virtualizerEnabledValue = false;
+  int virtualizerStrengthValue = 500;
   List<PlaybackEqualizerBand> bands = const <PlaybackEqualizerBand>[
     PlaybackEqualizerBand(
       index: 0,
@@ -1006,6 +1020,9 @@ class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
 
   @override
   bool get supportsLoudnessEnhancer => true;
+
+  @override
+  bool get supportsVirtualizer => true;
 
   @override
   Future<void> setEqualizerEnabled(bool enabled) async {
@@ -1040,6 +1057,16 @@ class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
     loudnessEnhancerTargetGainValue = gainDb;
+  }
+
+  @override
+  Future<void> setVirtualizerEnabled(bool enabled) async {
+    virtualizerEnabledValue = enabled;
+  }
+
+  @override
+  Future<void> setVirtualizerStrength(int strength) async {
+    virtualizerStrengthValue = strength;
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
 import 'android_audio_visualizer_bridge.dart';
+import 'android_audio_virtualizer_bridge.dart';
 import 'playback_audio_effects.dart';
 
 typedef CrossfadeTrackVolumeResolver = double Function(Track track);
@@ -75,6 +76,14 @@ abstract interface class AudioEffectsPlaybackAudioEngine
   Future<void> setLoudnessEnhancerTargetGain(double gainDb);
 }
 
+abstract interface class VirtualizerPlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  bool get supportsVirtualizer;
+
+  Future<void> setVirtualizerEnabled(bool enabled);
+  Future<void> setVirtualizerStrength(int strength);
+}
+
 abstract interface class SkipSilencePlaybackAudioEngine
     implements PlaybackAudioEngine {
   bool get supportsSkipSilence;
@@ -95,6 +104,7 @@ class JustAudioPlaybackEngine
     implements
         CrossfadePlaybackAudioEngine,
         AudioEffectsPlaybackAudioEngine,
+        VirtualizerPlaybackAudioEngine,
         AudioVisualizationPlaybackAudioEngine,
         SkipSilencePlaybackAudioEngine,
         PitchPlaybackAudioEngine {
@@ -102,6 +112,7 @@ class JustAudioPlaybackEngine
     AudioPlayer? player,
     bool enableAndroidAudioEffects = false,
     bool enableAndroidVisualizer = false,
+    bool enableAndroidVirtualizer = false,
     bool enableSkipSilence = false,
     bool enablePitch = false,
   }) {
@@ -111,6 +122,9 @@ class JustAudioPlaybackEngine
         crossfadePlayer: AudioPlayer(),
         visualizer:
             enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
+        virtualizer: enableAndroidVirtualizer
+            ? AndroidAudioVirtualizerBridge()
+            : null,
         supportsSkipSilence: enableSkipSilence,
         enablePitch: enablePitch,
       );
@@ -143,6 +157,9 @@ class JustAudioPlaybackEngine
       crossfadeLoudnessEnhancer: crossfadeLoudnessEnhancer,
       visualizer:
           enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
+      virtualizer: enableAndroidVirtualizer
+          ? AndroidAudioVirtualizerBridge()
+          : null,
       supportsSkipSilence: enableSkipSilence,
       enablePitch: enablePitch,
     );
@@ -156,6 +173,7 @@ class JustAudioPlaybackEngine
     AndroidLoudnessEnhancer? loudnessEnhancer,
     AndroidLoudnessEnhancer? crossfadeLoudnessEnhancer,
     AndroidAudioVisualizerBridge? visualizer,
+    AndroidAudioVirtualizerBridge? virtualizer,
     required bool supportsSkipSilence,
     required bool enablePitch,
   })  : _player = player,
@@ -165,6 +183,7 @@ class JustAudioPlaybackEngine
         _loudnessEnhancer = loudnessEnhancer,
         _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer,
         _visualizer = visualizer,
+        _virtualizer = virtualizer,
         _supportsSkipSilence = supportsSkipSilence,
         _pitchEnabled = enablePitch {
     _durationSubscription = _player.durationStream.listen(
@@ -177,8 +196,26 @@ class JustAudioPlaybackEngine
       _scheduleCrossfade();
     });
     _visualizerSessionSubscription = _player.androidAudioSessionIdStream.listen(
-      (sessionId) => _visualizerSessionId = sessionId,
+      (sessionId) {
+        _visualizerSessionId = sessionId;
+        if (sessionId != null && sessionId > 0) {
+          _attachVirtualizer(
+            sessionId,
+            slot: AndroidAudioVirtualizerSlot.primary,
+          );
+        }
+      },
     );
+    _crossfadeVirtualizerSessionSubscription = _crossfadePlayer
+        .androidAudioSessionIdStream
+        .listen((sessionId) {
+          if (sessionId != null && sessionId > 0) {
+            _attachVirtualizer(
+              sessionId,
+              slot: AndroidAudioVirtualizerSlot.crossfade,
+            );
+          }
+        });
   }
 
   final AudioPlayer _player;
@@ -188,6 +225,7 @@ class JustAudioPlaybackEngine
   final AndroidLoudnessEnhancer? _loudnessEnhancer;
   final AndroidLoudnessEnhancer? _crossfadeLoudnessEnhancer;
   final AndroidAudioVisualizerBridge? _visualizer;
+  final AndroidAudioVirtualizerBridge? _virtualizer;
   final bool _supportsSkipSilence;
   final bool _pitchEnabled;
   final List<Track> _queue = <Track>[];
@@ -195,6 +233,7 @@ class JustAudioPlaybackEngine
   StreamSubscription<int?>? _indexSubscription;
   StreamSubscription<PlayerState>? _stateSubscription;
   StreamSubscription<int?>? _visualizerSessionSubscription;
+  StreamSubscription<int?>? _crossfadeVirtualizerSessionSubscription;
   Timer? _crossfadeStartTimer;
   Timer? _crossfadeStepTimer;
   Duration _crossfadeDuration = Duration.zero;
@@ -267,6 +306,9 @@ class JustAudioPlaybackEngine
 
   @override
   bool get supportsLoudnessEnhancer => _loudnessEnhancer != null;
+
+  @override
+  bool get supportsVirtualizer => _virtualizer != null;
 
   @override
   bool get supportsSkipSilence => _supportsSkipSilence;
@@ -479,6 +521,28 @@ class JustAudioPlaybackEngine
   }
 
   @override
+  Future<void> setVirtualizerEnabled(bool enabled) async {
+    final virtualizer = _virtualizer;
+    if (virtualizer == null) {
+      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+    }
+    if (!await virtualizer.setEnabled(enabled)) {
+      throw StateError('Android virtualizer could not be enabled on this device.');
+    }
+  }
+
+  @override
+  Future<void> setVirtualizerStrength(int strength) async {
+    final virtualizer = _virtualizer;
+    if (virtualizer == null) {
+      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+    }
+    if (!await virtualizer.setStrength(strength)) {
+      throw StateError('Android virtualizer strength is unavailable on this device.');
+    }
+  }
+
+  @override
   Future<void> setSkipSilenceEnabled(bool enabled) async {
     if (!supportsSkipSilence) {
       throw UnsupportedError(
@@ -527,7 +591,9 @@ class JustAudioPlaybackEngine
   Future<void> dispose() async {
     _cancelCrossfade();
     await _visualizerSessionSubscription?.cancel();
+    await _crossfadeVirtualizerSessionSubscription?.cancel();
     await _visualizer?.stop();
+    await _virtualizer?.release();
     await _durationSubscription?.cancel();
     await _indexSubscription?.cancel();
     await _stateSubscription?.cancel();
@@ -660,6 +726,19 @@ class JustAudioPlaybackEngine
     _crossfadeStepTimer?.cancel();
     _crossfadeStepTimer = null;
     _crossfadeActive = false;
+  }
+
+  void _attachVirtualizer(
+    int audioSessionId, {
+    required AndroidAudioVirtualizerSlot slot,
+  }) {
+    final virtualizer = _virtualizer;
+    if (virtualizer == null) {
+      return;
+    }
+    unawaited(
+      virtualizer.attach(audioSessionId, slot: slot).then<void>((_) {}),
+    );
   }
 
   Future<void> _scheduleEqualizerProfileApply() {

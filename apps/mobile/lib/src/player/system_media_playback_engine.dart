@@ -14,6 +14,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     implements
         CrossfadePlaybackAudioEngine,
         AudioEffectsPlaybackAudioEngine,
+        VirtualizerPlaybackAudioEngine,
         AudioVisualizationPlaybackAudioEngine,
         SkipSilencePlaybackAudioEngine,
         PitchPlaybackAudioEngine {
@@ -127,6 +128,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   bool get supportsLoudnessEnhancer =>
       _engine is AudioEffectsPlaybackAudioEngine &&
       _engine.supportsLoudnessEnhancer;
+
+  @override
+  bool get supportsVirtualizer =>
+      _engine is VirtualizerPlaybackAudioEngine && _engine.supportsVirtualizer;
 
   @override
   bool get supportsSkipSilence =>
@@ -336,6 +341,26 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       );
     }
     return engine.setLoudnessEnhancerTargetGain(gainDb);
+  }
+
+  @override
+  Future<void> setVirtualizerEnabled(bool enabled) {
+    final engine = _engine;
+    if (engine is! VirtualizerPlaybackAudioEngine ||
+        !engine.supportsVirtualizer) {
+      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+    }
+    return engine.setVirtualizerEnabled(enabled);
+  }
+
+  @override
+  Future<void> setVirtualizerStrength(int strength) {
+    final engine = _engine;
+    if (engine is! VirtualizerPlaybackAudioEngine ||
+        !engine.supportsVirtualizer) {
+      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+    }
+    return engine.setVirtualizerStrength(strength);
   }
 
   @override

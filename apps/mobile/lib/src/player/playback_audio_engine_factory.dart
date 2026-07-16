@@ -31,6 +31,8 @@ Future<PlaybackAudioEngine> createPlaybackAudioEngine() async {
         !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
     enableAndroidVisualizer:
         !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
+    enableAndroidVirtualizer:
+        !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
     enableSkipSilence: !kIsWeb && supportsSkipSilence(defaultTargetPlatform),
     enablePitch: !kIsWeb && supportsPitchControl(defaultTargetPlatform),
   );

@@ -15,7 +15,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('configures native equalizer and volume boost controls', (
+  testWidgets('configures native equalizer, volume boost, and spatial controls', (
     tester,
   ) async {
     final engine = _WidgetAudioEffectsEngine();
@@ -40,6 +40,7 @@ void main() {
 
     expect(find.text('Equalizer'), findsOneWidget);
     expect(find.text('Volume boost'), findsOneWidget);
+    expect(find.text('Spatial audio'), findsOneWidget);
     expect(find.text('60 Hz'), findsOneWidget);
 
     await tester.tap(
@@ -65,19 +66,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(engine.loudnessEnhancerEnabledValue, isTrue);
 
+    await tester.tap(
+      find.byKey(const ValueKey<String>('virtualizer-enabled-switch')),
+    );
+    await tester.pumpAndSettle();
+    expect(engine.virtualizerEnabledValue, isTrue);
+
+    final spatialSlider = tester.widget<Slider>(
+      find.byKey(const ValueKey<String>('virtualizer-strength-slider')),
+    );
+    spatialSlider.onChangeEnd!(650);
+    await tester.pumpAndSettle();
+    expect(engine.virtualizerStrengthValue, 650);
+
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Bass boost'), findsOneWidget);
     expect(find.textContaining('Volume boost'), findsOneWidget);
+    expect(find.textContaining('Spatial audio'), findsOneWidget);
   });
 }
 
-class _WidgetAudioEffectsEngine implements AudioEffectsPlaybackAudioEngine {
+class _WidgetAudioEffectsEngine
+    implements AudioEffectsPlaybackAudioEngine, VirtualizerPlaybackAudioEngine {
   bool equalizerEnabledValue = false;
   PlaybackEqualizerProfile equalizerProfileValue =
       const PlaybackEqualizerProfile(preset: PlaybackEqualizerPreset.flat);
   bool loudnessEnhancerEnabledValue = false;
   double loudnessEnhancerTargetGainValue = 0;
+  bool virtualizerEnabledValue = false;
+  int virtualizerStrengthValue = 500;
   List<PlaybackEqualizerBand> bands = const <PlaybackEqualizerBand>[
     PlaybackEqualizerBand(
       index: 0,
@@ -143,6 +161,9 @@ class _WidgetAudioEffectsEngine implements AudioEffectsPlaybackAudioEngine {
 
   @override
   bool get supportsLoudnessEnhancer => true;
+
+  @override
+  bool get supportsVirtualizer => true;
 
   @override
   Future<void> setQueue(
@@ -213,6 +234,16 @@ class _WidgetAudioEffectsEngine implements AudioEffectsPlaybackAudioEngine {
   @override
   Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
     loudnessEnhancerTargetGainValue = gainDb;
+  }
+
+  @override
+  Future<void> setVirtualizerEnabled(bool enabled) async {
+    virtualizerEnabledValue = enabled;
+  }
+
+  @override
+  Future<void> setVirtualizerStrength(int strength) async {
+    virtualizerStrengthValue = strength;
   }
 
   @override

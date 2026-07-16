@@ -232,15 +232,20 @@ void main() {
 
     expect(engine.supportsEqualizer, isTrue);
     expect(engine.supportsLoudnessEnhancer, isTrue);
+    expect(engine.supportsVirtualizer, isTrue);
     await engine.setEqualizerEnabled(true);
     await engine.setEqualizerProfile(profile);
     await engine.setLoudnessEnhancerTargetGain(4.5);
     await engine.setLoudnessEnhancerEnabled(true);
+    await engine.setVirtualizerStrength(650);
+    await engine.setVirtualizerEnabled(true);
 
     expect(delegate.equalizerEnabledValue, isTrue);
     expect(delegate.equalizerProfileValue, same(profile));
     expect(delegate.loudnessEnhancerTargetGainValue, 4.5);
     expect(delegate.loudnessEnhancerEnabledValue, isTrue);
+    expect(delegate.virtualizerStrengthValue, 650);
+    expect(delegate.virtualizerEnabledValue, isTrue);
     expect(await engine.loadEqualizerBands(), delegate.bands);
   });
 
@@ -462,7 +467,7 @@ class _FakePitchPlaybackAudioEngine extends _FakePlaybackAudioEngine
 }
 
 class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
-    implements AudioEffectsPlaybackAudioEngine {
+    implements AudioEffectsPlaybackAudioEngine, VirtualizerPlaybackAudioEngine {
   bool equalizerEnabledValue = false;
   PlaybackEqualizerProfile equalizerProfileValue =
       const PlaybackEqualizerProfile(
@@ -470,6 +475,8 @@ class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
       );
   bool loudnessEnhancerEnabledValue = false;
   double loudnessEnhancerTargetGainValue = 0;
+  bool virtualizerEnabledValue = false;
+  int virtualizerStrengthValue = 500;
   final List<PlaybackEqualizerBand> bands = const <PlaybackEqualizerBand>[
     PlaybackEqualizerBand(
       index: 0,
@@ -485,6 +492,9 @@ class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
 
   @override
   bool get supportsLoudnessEnhancer => true;
+
+  @override
+  bool get supportsVirtualizer => true;
 
   @override
   Future<void> setEqualizerEnabled(bool enabled) async {
@@ -507,6 +517,16 @@ class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
     loudnessEnhancerTargetGainValue = gainDb;
+  }
+
+  @override
+  Future<void> setVirtualizerEnabled(bool enabled) async {
+    virtualizerEnabledValue = enabled;
+  }
+
+  @override
+  Future<void> setVirtualizerStrength(int strength) async {
+    virtualizerStrengthValue = strength;
   }
 }
 

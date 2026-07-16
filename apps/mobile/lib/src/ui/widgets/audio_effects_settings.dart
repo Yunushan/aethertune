@@ -179,6 +179,56 @@ class _AudioEffectsDialog extends StatelessWidget {
                             ),
                     ),
                   ],
+                  if ((player.supportsEqualizer ||
+                          player.supportsLoudnessEnhancer) &&
+                      player.supportsVirtualizer)
+                    const Divider(height: 32),
+                  if (player.supportsVirtualizer) ...<Widget>[
+                    SwitchListTile(
+                      key: const ValueKey<String>('virtualizer-enabled-switch'),
+                      contentPadding: EdgeInsets.zero,
+                      secondary: const Icon(Icons.surround_sound_outlined),
+                      title: const Text('Spatial audio'),
+                      subtitle: Text(
+                        '${(player.virtualizerStrength / 10).round()}% effect strength',
+                      ),
+                      value: player.virtualizerEnabled,
+                      onChanged: (enabled) => unawaited(
+                        _showAudioEffectError(
+                          context,
+                          player.setVirtualizerEnabled(enabled),
+                        ),
+                      ),
+                    ),
+                    Slider(
+                      key: const ValueKey<String>('virtualizer-strength-slider'),
+                      min: PlayerController.minVirtualizerStrength.toDouble(),
+                      max: PlayerController.maxVirtualizerStrength.toDouble(),
+                      divisions: 20,
+                      value: player.virtualizerStrength.toDouble(),
+                      label: '${(player.virtualizerStrength / 10).round()}%',
+                      semanticFormatterCallback: (value) =>
+                          'Spatial audio ${(value / 10).round()} percent',
+                      onChanged: !player.virtualizerEnabled
+                          ? null
+                          : (strength) => unawaited(
+                              _showAudioEffectError(
+                                context,
+                                player.previewVirtualizerStrength(
+                                  strength.round(),
+                                ),
+                              ),
+                            ),
+                      onChangeEnd: !player.virtualizerEnabled
+                          ? null
+                          : (strength) => unawaited(
+                              _showAudioEffectError(
+                                context,
+                                player.setVirtualizerStrength(strength.round()),
+                              ),
+                            ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -276,6 +326,9 @@ String _audioEffectsSummary(PlayerController player) {
     active.add(
       'Volume boost ${_formatGainDb(player.loudnessEnhancerTargetGainDb)}',
     );
+  }
+  if (player.supportsVirtualizer && player.virtualizerEnabled) {
+    active.add('Spatial audio ${(player.virtualizerStrength / 10).round()}%');
   }
   return active.isEmpty ? 'Off' : active.join(', ');
 }

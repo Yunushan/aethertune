@@ -46,6 +46,8 @@ class PlayerController extends ChangeNotifier {
   ];
   static const minLoudnessEnhancerGainDb = 0.0;
   static const maxLoudnessEnhancerGainDb = 12.0;
+  static const minVirtualizerStrength = 0;
+  static const maxVirtualizerStrength = 1000;
 
   PlayerController({
     PlaybackAudioEngine? audioEngine,
@@ -114,6 +116,8 @@ class PlayerController extends ChangeNotifier {
   bool _equalizerBandsLoading = false;
   bool _loudnessEnhancerEnabled = false;
   double _loudnessEnhancerTargetGainDb = 0;
+  bool _virtualizerEnabled = false;
+  int _virtualizerStrength = 500;
   bool _skipSilenceEnabled = false;
   double _defaultPlaybackSpeed = 1;
   double _defaultPlaybackPitch = 1;
@@ -144,6 +148,8 @@ class PlayerController extends ChangeNotifier {
   bool get supportsLoudnessEnhancer =>
       _audio is AudioEffectsPlaybackAudioEngine &&
       _audio.supportsLoudnessEnhancer;
+  bool get supportsVirtualizer =>
+      _audio is VirtualizerPlaybackAudioEngine && _audio.supportsVirtualizer;
   bool get supportsSkipSilence =>
       _audio is SkipSilencePlaybackAudioEngine && _audio.supportsSkipSilence;
   bool get skipSilenceEnabled => _skipSilenceEnabled;
@@ -162,6 +168,8 @@ class PlayerController extends ChangeNotifier {
   bool get equalizerBandsLoading => _equalizerBandsLoading;
   bool get loudnessEnhancerEnabled => _loudnessEnhancerEnabled;
   double get loudnessEnhancerTargetGainDb => _loudnessEnhancerTargetGainDb;
+  bool get virtualizerEnabled => _virtualizerEnabled;
+  int get virtualizerStrength => _virtualizerStrength;
   bool get supportsCrossfade =>
       _audio is CrossfadePlaybackAudioEngine &&
       _audio.supportsCrossfade;
@@ -351,6 +359,10 @@ class PlayerController extends ChangeNotifier {
         _loudnessEnhancerTargetGainDb = _loudnessEnhancerGainFromJson(
           settings['loudnessEnhancerTargetGainDb'],
         );
+        _virtualizerEnabled = settings['virtualizerEnabled'] as bool? ?? false;
+        _virtualizerStrength = _virtualizerStrengthFromJson(
+          settings['virtualizerStrength'],
+        );
         final crossfadeDuration = _crossfadeDurationFromJson(
           settings['crossfadeMilliseconds'],
         );
@@ -379,6 +391,11 @@ class PlayerController extends ChangeNotifier {
           await audioEffectsEngine.setLoudnessEnhancerEnabled(
             _loudnessEnhancerEnabled,
           );
+        }
+        final virtualizerEngine = _virtualizerEngine;
+        if (virtualizerEngine != null && virtualizerEngine.supportsVirtualizer) {
+          await virtualizerEngine.setVirtualizerStrength(_virtualizerStrength);
+          await virtualizerEngine.setVirtualizerEnabled(_virtualizerEnabled);
         }
         await _applyOutputVolume();
       } catch (_) {
@@ -927,6 +944,44 @@ class PlayerController extends ChangeNotifier {
     await _savePlaybackSettings();
   }
 
+  Future<void> setVirtualizerEnabled(bool enabled) async {
+    final engine = _requireVirtualizerEngine();
+    if (_virtualizerEnabled == enabled) {
+      return;
+    }
+    final previous = _virtualizerEnabled;
+    _virtualizerEnabled = enabled;
+    notifyListeners();
+    try {
+      await engine.setVirtualizerEnabled(enabled);
+      await _savePlaybackSettings();
+    } on Object {
+      _virtualizerEnabled = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> previewVirtualizerStrength(int strength) async {
+    final engine = _requireVirtualizerEngine();
+    _validateVirtualizerStrength(strength);
+    final previous = _virtualizerStrength;
+    _virtualizerStrength = strength;
+    notifyListeners();
+    try {
+      await engine.setVirtualizerStrength(strength);
+    } on Object {
+      _virtualizerStrength = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setVirtualizerStrength(int strength) async {
+    await previewVirtualizerStrength(strength);
+    await _savePlaybackSettings();
+  }
+
   static String formatVolume(double volume) {
     final percent = (volume.clamp(minVolume, maxVolume) * 100).round();
     return '$percent%';
@@ -1253,6 +1308,8 @@ class PlayerController extends ChangeNotifier {
               .toList(growable: false),
           'loudnessEnhancerEnabled': _loudnessEnhancerEnabled,
           'loudnessEnhancerTargetGainDb': _loudnessEnhancerTargetGainDb,
+          'virtualizerEnabled': _virtualizerEnabled,
+          'virtualizerStrength': _virtualizerStrength,
         },
       ),
     );
@@ -1392,6 +1449,11 @@ class PlayerController extends ChangeNotifier {
     return engine is AudioEffectsPlaybackAudioEngine ? engine : null;
   }
 
+  VirtualizerPlaybackAudioEngine? get _virtualizerEngine {
+    final engine = _audio;
+    return engine is VirtualizerPlaybackAudioEngine ? engine : null;
+  }
+
   PlaybackEqualizerProfile get _currentEqualizerProfile =>
       PlaybackEqualizerProfile(
         preset: _equalizerPreset,
@@ -1412,6 +1474,14 @@ class PlayerController extends ChangeNotifier {
       throw UnsupportedError(
         'Loudness enhancer is unavailable for this audio backend.',
       );
+    }
+    return engine;
+  }
+
+  VirtualizerPlaybackAudioEngine _requireVirtualizerEngine() {
+    final engine = _virtualizerEngine;
+    if (engine == null || !engine.supportsVirtualizer) {
+      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
     }
     return engine;
   }
@@ -1516,6 +1586,28 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return minLoudnessEnhancerGainDb;
+  }
+
+  int _virtualizerStrengthFromJson(Object? value) {
+    if (value is num) {
+      final strength = value.toInt();
+      if (strength >= minVirtualizerStrength &&
+          strength <= maxVirtualizerStrength) {
+        return strength;
+      }
+    }
+    return 500;
+  }
+
+  void _validateVirtualizerStrength(int strength) {
+    if (strength < minVirtualizerStrength ||
+        strength > maxVirtualizerStrength) {
+      throw ArgumentError.value(
+        strength,
+        'strength',
+        'Virtualizer strength must be between 0 and 1000.',
+      );
+    }
   }
 
   void _validateLoudnessEnhancerGain(double gainDb) {
