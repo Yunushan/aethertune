@@ -259,6 +259,17 @@ void main() {
     expect(await engine.visualizerBands.first, <double>[0.2, 0.8]);
   });
 
+  test('forwards skip silence through the system media wrapper', () async {
+    final delegate = _FakeSkipSilencePlaybackEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+
+    expect(engine.supportsSkipSilence, isTrue);
+    await engine.setSkipSilenceEnabled(true);
+
+    expect(delegate.skipSilenceEnabledValue, isTrue);
+  });
+
   test('enables native media sessions only on supported platforms', () {
     expect(supportsSystemMediaSession(TargetPlatform.android), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.iOS), isTrue);
@@ -268,6 +279,9 @@ void main() {
     expect(supportsAndroidAudioEffects(TargetPlatform.android), isTrue);
     expect(supportsAndroidAudioEffects(TargetPlatform.iOS), isFalse);
     expect(supportsAndroidAudioEffects(TargetPlatform.windows), isFalse);
+    expect(supportsSkipSilence(TargetPlatform.android), isTrue);
+    expect(supportsSkipSilence(TargetPlatform.iOS), isFalse);
+    expect(supportsSkipSilence(TargetPlatform.windows), isFalse);
   });
 }
 
@@ -517,6 +531,19 @@ class _FakeVisualizationPlaybackEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> stopVisualizer() async {
     stopCalls += 1;
+  }
+}
+
+class _FakeSkipSilencePlaybackEngine extends _FakePlaybackAudioEngine
+    implements SkipSilencePlaybackAudioEngine {
+  bool skipSilenceEnabledValue = false;
+
+  @override
+  bool get supportsSkipSilence => true;
+
+  @override
+  Future<void> setSkipSilenceEnabled(bool enabled) async {
+    skipSilenceEnabledValue = enabled;
   }
 }
 

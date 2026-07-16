@@ -21,12 +21,17 @@ bool supportsPitchControl(TargetPlatform platform) {
       platform == TargetPlatform.windows;
 }
 
+bool supportsSkipSilence(TargetPlatform platform) {
+  return platform == TargetPlatform.android;
+}
+
 Future<PlaybackAudioEngine> createPlaybackAudioEngine() async {
   final engine = JustAudioPlaybackEngine(
     enableAndroidAudioEffects:
         !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
     enableAndroidVisualizer:
         !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
+    enableSkipSilence: !kIsWeb && supportsSkipSilence(defaultTargetPlatform),
     enablePitch: !kIsWeb && supportsPitchControl(defaultTargetPlatform),
   );
   if (kIsWeb || !supportsSystemMediaSession(defaultTargetPlatform)) {

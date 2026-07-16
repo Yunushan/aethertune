@@ -75,6 +75,13 @@ abstract interface class AudioEffectsPlaybackAudioEngine
   Future<void> setLoudnessEnhancerTargetGain(double gainDb);
 }
 
+abstract interface class SkipSilencePlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  bool get supportsSkipSilence;
+
+  Future<void> setSkipSilenceEnabled(bool enabled);
+}
+
 abstract interface class AudioVisualizationPlaybackAudioEngine
     implements PlaybackAudioEngine {
   bool get supportsVisualizer;
@@ -89,11 +96,13 @@ class JustAudioPlaybackEngine
         CrossfadePlaybackAudioEngine,
         AudioEffectsPlaybackAudioEngine,
         AudioVisualizationPlaybackAudioEngine,
+        SkipSilencePlaybackAudioEngine,
         PitchPlaybackAudioEngine {
   factory JustAudioPlaybackEngine({
     AudioPlayer? player,
     bool enableAndroidAudioEffects = false,
     bool enableAndroidVisualizer = false,
+    bool enableSkipSilence = false,
     bool enablePitch = false,
   }) {
     if (player != null || !enableAndroidAudioEffects) {
@@ -102,6 +111,7 @@ class JustAudioPlaybackEngine
         crossfadePlayer: AudioPlayer(),
         visualizer:
             enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
+        supportsSkipSilence: enableSkipSilence,
         enablePitch: enablePitch,
       );
     }
@@ -133,6 +143,7 @@ class JustAudioPlaybackEngine
       crossfadeLoudnessEnhancer: crossfadeLoudnessEnhancer,
       visualizer:
           enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
+      supportsSkipSilence: enableSkipSilence,
       enablePitch: enablePitch,
     );
   }
@@ -145,6 +156,7 @@ class JustAudioPlaybackEngine
     AndroidLoudnessEnhancer? loudnessEnhancer,
     AndroidLoudnessEnhancer? crossfadeLoudnessEnhancer,
     AndroidAudioVisualizerBridge? visualizer,
+    required bool supportsSkipSilence,
     required bool enablePitch,
   })  : _player = player,
         _crossfadePlayer = crossfadePlayer,
@@ -153,6 +165,7 @@ class JustAudioPlaybackEngine
         _loudnessEnhancer = loudnessEnhancer,
         _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer,
         _visualizer = visualizer,
+        _supportsSkipSilence = supportsSkipSilence,
         _pitchEnabled = enablePitch {
     _durationSubscription = _player.durationStream.listen(
       (_) => _scheduleCrossfade(),
@@ -175,6 +188,7 @@ class JustAudioPlaybackEngine
   final AndroidLoudnessEnhancer? _loudnessEnhancer;
   final AndroidLoudnessEnhancer? _crossfadeLoudnessEnhancer;
   final AndroidAudioVisualizerBridge? _visualizer;
+  final bool _supportsSkipSilence;
   final bool _pitchEnabled;
   final List<Track> _queue = <Track>[];
   StreamSubscription<Duration?>? _durationSubscription;
@@ -253,6 +267,9 @@ class JustAudioPlaybackEngine
 
   @override
   bool get supportsLoudnessEnhancer => _loudnessEnhancer != null;
+
+  @override
+  bool get supportsSkipSilence => _supportsSkipSilence;
 
   @override
   bool get supportsVisualizer => _visualizer != null;
@@ -459,6 +476,17 @@ class JustAudioPlaybackEngine
     }
     await enhancer.setTargetGain(gainDb);
     await crossfadeEnhancer.setTargetGain(gainDb);
+  }
+
+  @override
+  Future<void> setSkipSilenceEnabled(bool enabled) async {
+    if (!supportsSkipSilence) {
+      throw UnsupportedError(
+        'Skip silence is unavailable for this audio backend.',
+      );
+    }
+    await _player.setSkipSilenceEnabled(enabled);
+    await _crossfadePlayer.setSkipSilenceEnabled(enabled);
   }
 
   @override

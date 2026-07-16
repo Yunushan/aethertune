@@ -15,6 +15,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         CrossfadePlaybackAudioEngine,
         AudioEffectsPlaybackAudioEngine,
         AudioVisualizationPlaybackAudioEngine,
+        SkipSilencePlaybackAudioEngine,
         PitchPlaybackAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
@@ -126,6 +127,11 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   bool get supportsLoudnessEnhancer =>
       _engine is AudioEffectsPlaybackAudioEngine &&
       _engine.supportsLoudnessEnhancer;
+
+  @override
+  bool get supportsSkipSilence =>
+      _engine is SkipSilencePlaybackAudioEngine &&
+      _engine.supportsSkipSilence;
 
   @override
   bool get supportsVisualizer =>
@@ -330,6 +336,18 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       );
     }
     return engine.setLoudnessEnhancerTargetGain(gainDb);
+  }
+
+  @override
+  Future<void> setSkipSilenceEnabled(bool enabled) {
+    final engine = _engine;
+    if (engine is! SkipSilencePlaybackAudioEngine ||
+        !engine.supportsSkipSilence) {
+      throw UnsupportedError(
+        'Skip silence is unavailable for this audio backend.',
+      );
+    }
+    return engine.setSkipSilenceEnabled(enabled);
   }
 
   @override

@@ -162,6 +162,25 @@ void main() {
     expect(restoredEngine.loudnessEnhancerEnhancerSetCalls, 1);
   });
 
+  test('persists skip silence only through a supported playback engine',
+      () async {
+    final firstEngine = _FakeSkipSilenceEngine();
+    final firstController = PlayerController(audioEngine: firstEngine);
+
+    expect(firstController.supportsSkipSilence, isTrue);
+    await firstController.setSkipSilenceEnabled(true);
+    expect(firstEngine.skipSilenceEnabledValue, isTrue);
+    firstController.dispose();
+
+    final restoredEngine = _FakeSkipSilenceEngine();
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.skipSilenceEnabled, isTrue);
+    expect(restoredEngine.skipSilenceEnabledValue, isTrue);
+  });
+
   test('loads device bands and persists a custom equalizer curve', () async {
     final firstEngine = _FakeAudioEffectsEngine();
     final firstController = PlayerController(audioEngine: firstEngine);
@@ -213,6 +232,10 @@ void main() {
     expect(unsupported.supportsEqualizer, isFalse);
     await expectLater(
       unsupported.setEqualizerEnabled(true),
+      throwsA(isA<UnsupportedError>()),
+    );
+    await expectLater(
+      unsupported.setSkipSilenceEnabled(true),
       throwsA(isA<UnsupportedError>()),
     );
 
@@ -973,5 +996,18 @@ class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
     loudnessEnhancerTargetGainValue = gainDb;
+  }
+}
+
+class _FakeSkipSilenceEngine extends _FakePlaybackAudioEngine
+    implements SkipSilencePlaybackAudioEngine {
+  bool skipSilenceEnabledValue = false;
+
+  @override
+  bool get supportsSkipSilence => true;
+
+  @override
+  Future<void> setSkipSilenceEnabled(bool enabled) async {
+    skipSilenceEnabledValue = enabled;
   }
 }

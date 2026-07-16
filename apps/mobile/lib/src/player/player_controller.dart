@@ -110,6 +110,7 @@ class PlayerController extends ChangeNotifier {
   bool _equalizerBandsLoading = false;
   bool _loudnessEnhancerEnabled = false;
   double _loudnessEnhancerTargetGainDb = 0;
+  bool _skipSilenceEnabled = false;
   double _defaultPlaybackSpeed = 1;
   double _defaultPlaybackPitch = 1;
   Duration _skipBackwardInterval = const Duration(seconds: 10);
@@ -139,6 +140,9 @@ class PlayerController extends ChangeNotifier {
   bool get supportsLoudnessEnhancer =>
       _audio is AudioEffectsPlaybackAudioEngine &&
       _audio.supportsLoudnessEnhancer;
+  bool get supportsSkipSilence =>
+      _audio is SkipSilencePlaybackAudioEngine && _audio.supportsSkipSilence;
+  bool get skipSilenceEnabled => _skipSilenceEnabled;
   bool get supportsVisualizer =>
       _audio is AudioVisualizationPlaybackAudioEngine &&
       _audio.supportsVisualizer;
@@ -261,6 +265,7 @@ class PlayerController extends ChangeNotifier {
           settings['skipForwardSeconds'],
           fallback: _skipForwardInterval,
         );
+        _skipSilenceEnabled = settings['skipSilenceEnabled'] as bool? ?? false;
         _volume = _volumeFromJson(settings['volume']);
         _loudnessNormalizationEnabled =
             settings['loudnessNormalizationEnabled'] as bool? ?? false;
@@ -287,6 +292,11 @@ class PlayerController extends ChangeNotifier {
         if (supportsCrossfade) {
           await (_audio as CrossfadePlaybackAudioEngine)
               .setCrossfadeDuration(crossfadeDuration);
+        }
+        if (supportsSkipSilence) {
+          await (_audio as SkipSilencePlaybackAudioEngine).setSkipSilenceEnabled(
+            _skipSilenceEnabled,
+          );
         }
         final audioEffectsEngine = _audioEffectsEngine;
         if (audioEffectsEngine != null &&
@@ -642,6 +652,30 @@ class PlayerController extends ChangeNotifier {
     _skipForwardInterval = interval;
     await _savePlaybackSettings();
     notifyListeners();
+  }
+
+  Future<void> setSkipSilenceEnabled(bool enabled) async {
+    final engine = _audio;
+    if (engine is! SkipSilencePlaybackAudioEngine ||
+        !engine.supportsSkipSilence) {
+      throw UnsupportedError(
+        'Skip silence is unavailable for this audio backend.',
+      );
+    }
+    if (_skipSilenceEnabled == enabled) {
+      return;
+    }
+    final previous = _skipSilenceEnabled;
+    _skipSilenceEnabled = enabled;
+    notifyListeners();
+    try {
+      await engine.setSkipSilenceEnabled(enabled);
+      await _savePlaybackSettings();
+    } on Object {
+      _skipSilenceEnabled = previous;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> previewVolume(double volume) async {
@@ -1138,6 +1172,7 @@ class PlayerController extends ChangeNotifier {
           'playbackPitch': _defaultPlaybackPitch,
           'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
           'skipForwardSeconds': _skipForwardInterval.inSeconds,
+          'skipSilenceEnabled': _skipSilenceEnabled,
           'volume': _volume,
           'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
           'replayGainMode': _replayGainMode.name,

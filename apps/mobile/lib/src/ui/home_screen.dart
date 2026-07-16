@@ -13644,6 +13644,18 @@ class _SettingsTab extends StatelessWidget {
             },
           ),
         ),
+        if (player.supportsSkipSilence)
+          SwitchListTile(
+            key: const Key('skip-silence-setting'),
+            secondary: const Icon(Icons.graphic_eq_outlined),
+            title: const Text('Skip silence'),
+            subtitle: const Text(
+              'Shortens quiet passages during playback on this device.',
+            ),
+            value: player.skipSilenceEnabled,
+            onChanged: (enabled) =>
+                unawaited(player.setSkipSilenceEnabled(enabled)),
+          ),
         ListTile(
           leading: Icon(
             player.volume == 0
