@@ -151,9 +151,10 @@ void main() {
       SwitchListTile,
       'Use favorites in For you',
     );
-    await Scrollable.ensureVisible(
-      tester.element(favoritesTile),
-      alignment: 0.5,
+    await tester.scrollUntilVisible(favoritesTile, 300);
+    await tester.drag(
+      find.ancestor(of: favoritesTile, matching: find.byType(Scrollable)).first,
+      Offset(0, 420 - tester.getCenter(favoritesTile).dy),
     );
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(favoritesTile).value, isTrue);
@@ -167,9 +168,10 @@ void main() {
       SwitchListTile,
       'Use listening history in For you',
     );
-    await Scrollable.ensureVisible(
-      tester.element(historyTile),
-      alignment: 0.5,
+    await tester.scrollUntilVisible(historyTile, 200);
+    await tester.drag(
+      find.ancestor(of: historyTile, matching: find.byType(Scrollable)).first,
+      Offset(0, 420 - tester.getCenter(historyTile).dy),
     );
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(historyTile).value, isTrue);
