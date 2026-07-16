@@ -20,6 +20,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("sha256sum -- * > SHA256SUMS.txt", workflow)
         self.assertIn("scripts/ci/package_linux_deb.sh", workflow)
         self.assertIn("aethertune-linux-x64.deb", workflow)
+        self.assertIn("scripts/ci/package_windows_zip.ps1", workflow)
+        self.assertIn("aethertune-windows-x64.zip", workflow)
         self.assertIn("name: aethertune-release-bundle", workflow)
         self.assertIn("startsWith(github.ref, 'refs/tags/v')", workflow)
         self.assertIn("contents: write", workflow)

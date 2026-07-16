@@ -140,8 +140,7 @@ jobs:
         if: matrix.target == 'windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Compress-Archive -Path apps/mobile/build/windows/x64/runner/Release/* -DestinationPath release/aethertune-windows-x64.zip -Force
+          ./scripts/ci/package_windows_zip.ps1 -BundlePath apps/mobile/build/windows/x64/runner/Release -OutputPath release/aethertune-windows-x64.zip
 
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v7

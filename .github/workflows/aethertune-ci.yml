@@ -120,6 +120,11 @@ jobs:
       - name: Build desktop app
         run: cd apps/mobile && flutter build ${{ matrix.target }} --debug
 
+      - name: Test Windows ZIP packaging
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: ./scripts/ci/test_package_windows_zip.ps1
+
       - name: Build iOS app without signing
         if: matrix.target == 'macos'
         run: cd apps/mobile && flutter build ios --debug --no-codesign
