@@ -14523,6 +14523,17 @@ class _SettingsTab extends StatelessWidget {
             onChanged: (enabled) =>
                 unawaited(player.setSkipSilenceEnabled(enabled)),
           ),
+        SwitchListTile(
+          key: const Key('skip-failed-tracks-setting'),
+          secondary: const Icon(Icons.skip_next_outlined),
+          title: const Text('Skip failed tracks'),
+          subtitle: const Text(
+            'Advances through the queue when the current track cannot play.',
+          ),
+          value: player.skipFailedTracksEnabled,
+          onChanged: (enabled) =>
+              unawaited(player.setSkipFailedTracksEnabled(enabled)),
+        ),
         ListTile(
           leading: Icon(
             player.volume == 0

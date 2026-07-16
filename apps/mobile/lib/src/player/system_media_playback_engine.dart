@@ -17,7 +17,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         VirtualizerPlaybackAudioEngine,
         AudioVisualizationPlaybackAudioEngine,
         SkipSilencePlaybackAudioEngine,
-        PitchPlaybackAudioEngine {
+        PitchPlaybackAudioEngine,
+        PlaybackErrorAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
     PlaybackWidgetBridge? playbackWidgetBridge,
@@ -76,6 +77,14 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   Stream<int?> get currentIndexStream => _engine.currentIndexStream;
+
+  @override
+  Stream<Object> get errorStream {
+    final engine = _engine;
+    return engine is PlaybackErrorAudioEngine
+        ? (engine as PlaybackErrorAudioEngine).errorStream
+        : const Stream<Object>.empty();
+  }
 
   @override
   bool get playing => _engine.playing;

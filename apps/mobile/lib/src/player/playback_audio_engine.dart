@@ -45,6 +45,10 @@ abstract interface class PlaybackAudioEngine {
   Future<void> dispose();
 }
 
+abstract interface class PlaybackErrorAudioEngine {
+  Stream<Object> get errorStream;
+}
+
 abstract interface class CrossfadePlaybackAudioEngine
     implements PlaybackAudioEngine {
   bool get supportsCrossfade;
@@ -107,7 +111,8 @@ class JustAudioPlaybackEngine
         VirtualizerPlaybackAudioEngine,
         AudioVisualizationPlaybackAudioEngine,
         SkipSilencePlaybackAudioEngine,
-        PitchPlaybackAudioEngine {
+        PitchPlaybackAudioEngine,
+        PlaybackErrorAudioEngine {
   factory JustAudioPlaybackEngine({
     AudioPlayer? player,
     bool enableAndroidAudioEffects = false,
@@ -195,6 +200,14 @@ class JustAudioPlaybackEngine
     _stateSubscription = _player.playerStateStream.listen((_) {
       _scheduleCrossfade();
     });
+    _errorSubscription = _player.playbackEventStream.listen(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        if (!_errorController.isClosed) {
+          _errorController.add(error);
+        }
+      },
+    );
     _visualizerSessionSubscription = _player.androidAudioSessionIdStream.listen(
       (sessionId) {
         _visualizerSessionId = sessionId;
@@ -229,9 +242,12 @@ class JustAudioPlaybackEngine
   final bool _supportsSkipSilence;
   final bool _pitchEnabled;
   final List<Track> _queue = <Track>[];
+  final StreamController<Object> _errorController =
+      StreamController<Object>.broadcast();
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<int?>? _indexSubscription;
   StreamSubscription<PlayerState>? _stateSubscription;
+  StreamSubscription<PlaybackEvent>? _errorSubscription;
   StreamSubscription<int?>? _visualizerSessionSubscription;
   StreamSubscription<int?>? _crossfadeVirtualizerSessionSubscription;
   Timer? _crossfadeStartTimer;
@@ -264,6 +280,9 @@ class JustAudioPlaybackEngine
 
   @override
   Stream<int?> get currentIndexStream => _player.currentIndexStream;
+
+  @override
+  Stream<Object> get errorStream => _errorController.stream;
 
   @override
   bool get playing => _player.playing;
@@ -597,6 +616,8 @@ class JustAudioPlaybackEngine
     await _durationSubscription?.cancel();
     await _indexSubscription?.cancel();
     await _stateSubscription?.cancel();
+    await _errorSubscription?.cancel();
+    await _errorController.close();
     await _crossfadePlayer.dispose();
     await _player.dispose();
   }

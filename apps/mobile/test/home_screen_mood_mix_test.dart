@@ -152,6 +152,11 @@ void main() {
       'Use favorites in For you',
     );
     await tester.scrollUntilVisible(favoritesTile, 300);
+    await Scrollable.ensureVisible(
+      tester.element(favoritesTile),
+      alignment: 0.5,
+    );
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(favoritesTile).value, isTrue);
 
     await tester.tap(favoritesTile);
@@ -164,6 +169,11 @@ void main() {
       'Use listening history in For you',
     );
     await tester.scrollUntilVisible(historyTile, 200);
+    await Scrollable.ensureVisible(
+      tester.element(historyTile),
+      alignment: 0.5,
+    );
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(historyTile).value, isTrue);
 
     await tester.tap(historyTile);

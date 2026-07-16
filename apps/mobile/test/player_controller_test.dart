@@ -261,6 +261,22 @@ void main() {
     expect(restoredEngine.skipSilenceEnabledValue, isTrue);
   });
 
+  test('persists the failed-track recovery preference', () async {
+    final firstController = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+    );
+    await firstController.setSkipFailedTracksEnabled(false);
+    firstController.dispose();
+
+    final restoredController = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+    );
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+
+    expect(restoredController.skipFailedTracksEnabled, isFalse);
+  });
+
   test('loads device bands and persists a custom equalizer curve', () async {
     final firstEngine = _FakeAudioEffectsEngine();
     final firstController = PlayerController(audioEngine: firstEngine);
@@ -446,6 +462,45 @@ void main() {
     expect(controller.current?.id, '1');
     expect(engine.seekToPreviousCalls, 1);
     expect(engine.setQueueCalls, 1);
+  });
+
+  test('skips failed tracks and stops after all looped queue items fail',
+      () async {
+    final engine = _FakePlaybackAudioEngine()..loopModeValue = LoopMode.all;
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final tracks = <Track>[_track('1'), _track('2'), _track('3')];
+    await controller.playTrack(tracks.first, queue: tracks);
+
+    engine.emitError(StateError('first failed'));
+    await _flushAsyncWork();
+    expect(controller.current?.id, '2');
+
+    engine.emitError(StateError('second failed'));
+    await _flushAsyncWork();
+    expect(controller.current?.id, '3');
+
+    engine.emitError(StateError('third failed'));
+    await _flushAsyncWork();
+    expect(engine.stopCalls, 1);
+    expect(engine.currentIndex, 2);
+  });
+
+  test('leaves playback unchanged when failed-track recovery is disabled',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final tracks = <Track>[_track('1'), _track('2')];
+    await controller.playTrack(tracks.first, queue: tracks);
+    await controller.setSkipFailedTracksEnabled(false);
+
+    engine.emitError(StateError('failed'));
+    await _flushAsyncWork();
+
+    expect(controller.current?.id, '1');
+    expect(engine.stopCalls, 0);
+    expect(engine.currentIndex, 0);
   });
 
   test('filters network queue entries while offline', () async {
@@ -860,7 +915,10 @@ Track _track(
 }
 
 class _FakePlaybackAudioEngine
-    implements CrossfadePlaybackAudioEngine, PitchPlaybackAudioEngine {
+    implements
+        CrossfadePlaybackAudioEngine,
+        PitchPlaybackAudioEngine,
+        PlaybackErrorAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
   final _durationController =
       StreamController<Duration?>.broadcast(sync: true);
@@ -868,6 +926,7 @@ class _FakePlaybackAudioEngine
   final _processingController =
       StreamController<ProcessingState>.broadcast(sync: true);
   final _indexController = StreamController<int?>.broadcast(sync: true);
+  final _errorController = StreamController<Object>.broadcast(sync: true);
 
   List<Track> queue = <Track>[];
   int initialIndex = 0;
@@ -903,6 +962,9 @@ class _FakePlaybackAudioEngine
 
   @override
   Stream<int?> get currentIndexStream => _indexController.stream;
+
+  @override
+  Stream<Object> get errorStream => _errorController.stream;
 
   @override
   bool get playing => playingValue;
@@ -968,6 +1030,8 @@ class _FakePlaybackAudioEngine
   void emitCompleted() {
     _processingController.add(ProcessingState.completed);
   }
+
+  void emitError(Object error) => _errorController.add(error);
 
   @override
   Future<void> play() async {
@@ -1064,6 +1128,7 @@ class _FakePlaybackAudioEngine
     await _positionController.close();
     await _processingController.close();
     await _indexController.close();
+    await _errorController.close();
   }
 }
 

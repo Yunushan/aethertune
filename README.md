@@ -52,6 +52,8 @@
 
 The app is intentionally **provider-based**: the player, library, queue, cache, favorites, playlists, search, and UI are open-source core features, while source adapters can be added for legal sources such as local files, self-hosted servers, Internet Archive, Radio Browser, Jellyfin, Navidrome/Subsonic, podcasts, or other official APIs.
 
+Playback failures are handled locally: AetherTune skips to the next playable queue item by default, stops after every playable item in a looped queue has failed, and lets the listener disable that recovery in Options.
+
 > Important: this repository does **not** include DRM bypass, paid-service cloning, credential stealing, private API scraping, or any code intended to violate a platform's terms. You can build legal source adapters through the provider interface.
 
 ## Platform Preview

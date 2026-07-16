@@ -74,6 +74,13 @@ class PlayerController extends ChangeNotifier {
     _currentIndexSub = _audio.currentIndexStream.listen(
       _handleCurrentIndexChanged,
     );
+    final errorEngine = _audio;
+    if (errorEngine is PlaybackErrorAudioEngine) {
+      final playbackErrorEngine = errorEngine as PlaybackErrorAudioEngine;
+      _errorSub = playbackErrorEngine.errorStream.listen((_) {
+        unawaited(_handlePlaybackError());
+      });
+    }
     _savedQueues.add(_emptySavedQueue());
   }
 
@@ -94,6 +101,7 @@ class PlayerController extends ChangeNotifier {
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<ProcessingState>? _completedSub;
   StreamSubscription<int?>? _currentIndexSub;
+  StreamSubscription<Object>? _errorSub;
   Timer? _sleepTimer;
   Timer? _sleepFadeStartTimer;
   Timer? _sleepFadeStepTimer;
@@ -126,6 +134,9 @@ class PlayerController extends ChangeNotifier {
   bool _virtualizerEnabled = false;
   int _virtualizerStrength = 500;
   bool _skipSilenceEnabled = false;
+  bool _skipFailedTracksEnabled = true;
+  final Set<String> _failedTrackIds = <String>{};
+  bool _handlingPlaybackError = false;
   double _defaultPlaybackSpeed = 1;
   double _defaultPlaybackPitch = 1;
   final Map<String, double> _trackPlaybackPitchOverrides = <String, double>{};
@@ -167,6 +178,7 @@ class PlayerController extends ChangeNotifier {
   bool get supportsSkipSilence =>
       _audio is SkipSilencePlaybackAudioEngine && _audio.supportsSkipSilence;
   bool get skipSilenceEnabled => _skipSilenceEnabled;
+  bool get skipFailedTracksEnabled => _skipFailedTracksEnabled;
   bool get supportsVisualizer =>
       _audio is AudioVisualizationPlaybackAudioEngine &&
       _audio.supportsVisualizer;
@@ -466,6 +478,8 @@ class PlayerController extends ChangeNotifier {
           fallback: _skipForwardInterval,
         );
         _skipSilenceEnabled = settings['skipSilenceEnabled'] as bool? ?? false;
+        _skipFailedTracksEnabled =
+            settings['skipFailedTracksEnabled'] as bool? ?? true;
         _volume = _volumeFromJson(settings['volume']);
         _loudnessNormalizationEnabled =
             settings['loudnessNormalizationEnabled'] as bool? ?? false;
@@ -539,6 +553,7 @@ class PlayerController extends ChangeNotifier {
     List<Track>? queue,
     Duration? initialPosition,
   }) async {
+    _failedTrackIds.clear();
     if (_offlineModeEnabled) {
       requireOfflineModePlaybackAllowed(
         track,
@@ -888,6 +903,18 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
+  Future<void> setSkipFailedTracksEnabled(bool enabled) async {
+    if (_skipFailedTracksEnabled == enabled) {
+      return;
+    }
+    _skipFailedTracksEnabled = enabled;
+    if (!enabled) {
+      _failedTrackIds.clear();
+    }
+    await _savePlaybackSettings();
+    notifyListeners();
+  }
+
   Future<void> previewVolume(double volume) async {
     _validateVolume(volume);
     _volume = volume;
@@ -1228,6 +1255,34 @@ class PlayerController extends ChangeNotifier {
     }
 
     await next();
+  }
+
+  Future<void> _handlePlaybackError() async {
+    if (_handlingPlaybackError) {
+      return;
+    }
+    final failedTrack = _current;
+    if (!_skipFailedTracksEnabled || failedTrack == null) {
+      notifyListeners();
+      return;
+    }
+
+    _handlingPlaybackError = true;
+    try {
+      _failedTrackIds.add(failedTrack.id);
+      final nextIndex = _nextRecoverableLoadedTrackIndex();
+      if (nextIndex == null) {
+        await stop();
+        return;
+      }
+      await _audio.seek(Duration.zero, index: nextIndex);
+      unawaited(_audio.play());
+    } on Object catch (error) {
+      debugPrint('Could not recover from playback failure: $error');
+      await stop();
+    } finally {
+      _handlingPlaybackError = false;
+    }
   }
 
   Future<void> _applyPitchForCurrentTrack() async {
@@ -1608,6 +1663,7 @@ class PlayerController extends ChangeNotifier {
           'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
           'skipForwardSeconds': _skipForwardInterval.inSeconds,
           'skipSilenceEnabled': _skipSilenceEnabled,
+          'skipFailedTracksEnabled': _skipFailedTracksEnabled,
           'volume': _volume,
           'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
           'replayGainMode': _replayGainMode.name,
@@ -2014,6 +2070,32 @@ class PlayerController extends ChangeNotifier {
     return null;
   }
 
+  int? _nextRecoverableLoadedTrackIndex() {
+    if (_loadedPlaybackQueue.isEmpty) {
+      return null;
+    }
+    final currentIndex = _loadedPlaybackQueue.indexWhere(
+      (track) => track.id == _current?.id,
+    );
+    if (currentIndex == -1) {
+      return null;
+    }
+
+    for (var offset = 1; offset < _loadedPlaybackQueue.length; offset += 1) {
+      final candidateIndex = currentIndex + offset;
+      if (candidateIndex >= _loadedPlaybackQueue.length &&
+          _audio.loopMode != LoopMode.all) {
+        return null;
+      }
+      final normalizedIndex = candidateIndex % _loadedPlaybackQueue.length;
+      final candidate = _loadedPlaybackQueue[normalizedIndex];
+      if (!_failedTrackIds.contains(candidate.id)) {
+        return normalizedIndex;
+      }
+    }
+    return null;
+  }
+
   Track? _previousPlayableTrack(int startIndex) {
     for (var index = startIndex; index >= 0; index -= 1) {
       final track = _queue[index];
@@ -2036,6 +2118,7 @@ class PlayerController extends ChangeNotifier {
     _durationSub?.cancel();
     _completedSub?.cancel();
     _currentIndexSub?.cancel();
+    _errorSub?.cancel();
     unawaited(_audio.dispose());
     super.dispose();
   }
