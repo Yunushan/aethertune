@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 
 import '../domain/library_sync_account.dart';
 import '../domain/library_sync_profile.dart';
+import '../domain/listen_together_session.dart';
 import 'provider_error.dart';
 
 const maxLibrarySyncResponseBytes = 9 * 1024 * 1024;
@@ -61,6 +62,36 @@ class LibrarySyncConflictException implements Exception {
   }
 }
 
+class ListenTogetherRemoteSession {
+  const ListenTogetherRemoteSession({
+    required this.revision,
+    this.updatedAt,
+    this.updatedByDevice,
+    this.checksum,
+    this.session,
+  });
+
+  final int revision;
+  final DateTime? updatedAt;
+  final String? updatedByDevice;
+  final String? checksum;
+  final ListenTogetherSession? session;
+}
+
+class ListenTogetherConflictException implements Exception {
+  const ListenTogetherConflictException({
+    required this.currentRevision,
+    this.updatedAt,
+    this.updatedByDevice,
+    this.checksum,
+  });
+
+  final int currentRevision;
+  final DateTime? updatedAt;
+  final String? updatedByDevice;
+  final String? checksum;
+}
+
 abstract interface class LibrarySyncGateway {
   Future<LibrarySyncRemoteSnapshot> fetch();
 
@@ -74,6 +105,19 @@ abstract interface class LibrarySyncGateway {
 
 abstract interface class LibrarySyncMetadataGateway {
   Future<LibrarySyncRemoteSnapshot?> fetchMetadata();
+}
+
+abstract interface class ListenTogetherGateway {
+  Future<ListenTogetherRemoteSession> fetchListenTogetherSession();
+
+  Future<ListenTogetherRemoteSession> publishListenTogetherSession({
+    required int baseRevision,
+    required ListenTogetherSession session,
+  });
+
+  Future<ListenTogetherRemoteSession> leaveListenTogetherSession({
+    required int baseRevision,
+  });
 }
 
 abstract interface class LibrarySyncProfileGateway {
@@ -91,6 +135,7 @@ class LibrarySyncClient
     implements
         LibrarySyncGateway,
         LibrarySyncMetadataGateway,
+        ListenTogetherGateway,
         LibrarySyncProfileGateway,
         LibrarySyncProfileEditorGateway {
   LibrarySyncClient({
@@ -172,6 +217,62 @@ class LibrarySyncClient
       throw _requestFailure(response);
     }
     return _parseRemoteMetadata(response.body);
+  }
+
+  @override
+  Future<ListenTogetherRemoteSession> fetchListenTogetherSession() async {
+    final response = await _execute(
+      'GET',
+      endpoint: account.listenTogetherEndpointUri,
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseListenTogetherSession(response.body);
+  }
+
+  @override
+  Future<ListenTogetherRemoteSession> publishListenTogetherSession({
+    required int baseRevision,
+    required ListenTogetherSession session,
+  }) async {
+    final response = await _execute(
+      'PUT',
+      endpoint: account.listenTogetherEndpointUri,
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+        'session': session.toJson(),
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseListenTogetherConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseListenTogetherMetadata(response.body);
+  }
+
+  @override
+  Future<ListenTogetherRemoteSession> leaveListenTogetherSession({
+    required int baseRevision,
+  }) async {
+    final response = await _execute(
+      'DELETE',
+      endpoint: account.listenTogetherEndpointUri,
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseListenTogetherConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseListenTogetherMetadata(response.body);
   }
 
   @override
@@ -343,6 +444,56 @@ LibrarySyncRemoteSnapshot _parseRemoteMetadata(String rawBody) {
   }
   return LibrarySyncRemoteSnapshot(
     revision: revision,
+    updatedAt: _optionalDate(body['updatedAt']),
+    updatedByDevice: _optionalString(body['updatedByDevice']),
+    checksum: _optionalString(body['checksum']),
+  );
+}
+
+ListenTogetherRemoteSession _parseListenTogetherSession(String rawBody) {
+  final body = _jsonObject(rawBody);
+  final metadata = _parseListenTogetherMetadataBody(body);
+  final rawSession = body['session'];
+  if (rawSession == null) {
+    return metadata;
+  }
+  if (rawSession is! Map) {
+    throw const FormatException('Listen-together session is invalid.');
+  }
+  return ListenTogetherRemoteSession(
+    revision: metadata.revision,
+    updatedAt: metadata.updatedAt,
+    updatedByDevice: metadata.updatedByDevice,
+    checksum: metadata.checksum,
+    session: ListenTogetherSession.fromJson(
+      Map<String, Object?>.from(rawSession),
+    ),
+  );
+}
+
+ListenTogetherRemoteSession _parseListenTogetherMetadata(String rawBody) {
+  return _parseListenTogetherMetadataBody(_jsonObject(rawBody));
+}
+
+ListenTogetherRemoteSession _parseListenTogetherMetadataBody(
+  Map<String, Object?> body,
+) {
+  final revision = body['revision'];
+  if (revision is! int || revision < 0) {
+    throw const FormatException('Listen-together revision is invalid.');
+  }
+  return ListenTogetherRemoteSession(
+    revision: revision,
+    updatedAt: _optionalDate(body['updatedAt']),
+    updatedByDevice: _optionalString(body['updatedByDevice']),
+    checksum: _optionalString(body['checksum']),
+  );
+}
+
+ListenTogetherConflictException _parseListenTogetherConflict(String rawBody) {
+  final body = _jsonObject(rawBody);
+  return ListenTogetherConflictException(
+    currentRevision: body['currentRevision'] as int? ?? 0,
     updatedAt: _optionalDate(body['updatedAt']),
     updatedByDevice: _optionalString(body['updatedByDevice']),
     checksum: _optionalString(body['checksum']),

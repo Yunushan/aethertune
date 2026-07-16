@@ -497,6 +497,107 @@ void main() {
     });
   });
 
+  group('authenticated listen-together sessions', () {
+    const token = 'listen-together-secret';
+
+    test('shares a portable revision-protected playback session', () async {
+      final handler = createServerHandler(
+        clock: () => DateTime.utc(2026, 7, 12, 10),
+        syncAuthenticator: StaticSyncAuthenticator(
+          const <String, String>{'friends': token},
+        ),
+        listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
+      );
+      final empty = await handler(
+        _request('GET', '/api/v1/listen-together/session', token: token),
+      );
+      final emptyBody = await _json(empty);
+      expect(empty.statusCode, 200);
+      expect(emptyBody['revision'], 0);
+      expect(emptyBody['session'], isNull);
+
+      final created = await handler(
+        _request(
+          'PUT',
+          '/api/v1/listen-together/session',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'host-phone',
+            'session': <String, Object?>{
+              'version': 1,
+              'trackIds': <String>['track-1', 'track-2'],
+              'currentTrackId': 'track-1',
+              'positionMilliseconds': 12345,
+              'playing': true,
+            },
+          },
+        ),
+      );
+      final createdBody = await _json(created);
+      expect(created.statusCode, 200);
+      expect(createdBody['revision'], 1);
+      expect(createdBody['checksum'], hasLength(64));
+
+      final joined = await handler(
+        _request('GET', '/api/v1/listen-together/session', token: token),
+      );
+      final joinedBody = await _json(joined);
+      expect(joinedBody['revision'], 1);
+      expect((joinedBody['session'] as Map<String, dynamic>)['playing'], isTrue);
+
+      final stale = await handler(
+        _request(
+          'PUT',
+          '/api/v1/listen-together/session',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'guest-desktop',
+            'session': <String, Object?>{
+              'version': 1,
+              'trackIds': <String>['track-1'],
+              'currentTrackId': 'track-1',
+              'positionMilliseconds': 0,
+              'playing': false,
+            },
+          },
+        ),
+      );
+      expect(stale.statusCode, 409);
+      expect((await _json(stale))['error'], 'listen_together_conflict');
+    });
+
+    test('rejects non-portable listen-together payloads', () async {
+      final handler = createServerHandler(
+        syncAuthenticator: StaticSyncAuthenticator(
+          const <String, String>{'friends': token},
+        ),
+      );
+      final rejected = await handler(
+        _request(
+          'PUT',
+          '/api/v1/listen-together/session',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'host-phone',
+            'session': <String, Object?>{
+              'version': 1,
+              'trackIds': <String>['track-1'],
+              'currentTrackId': 'track-1',
+              'positionMilliseconds': 0,
+              'playing': false,
+              'streamUrl': 'https://private.example.test/token',
+            },
+          },
+        ),
+      );
+      expect(rejected.statusCode, 400);
+      expect((await _json(rejected))['error'], 'invalid_listen_together_session');
+    });
+  });
+
   test('file sync store survives restart and retains only the latest revision',
       () async {
     final root = await Directory.systemTemp.createTemp(

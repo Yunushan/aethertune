@@ -7,6 +7,7 @@ import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/provider_error.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
 import 'package:aethertune/src/domain/library_sync_profile.dart';
+import 'package:aethertune/src/domain/listen_together_session.dart';
 
 void main() {
   test('validates server URLs and builds a path-safe sync endpoint', () {
@@ -138,6 +139,95 @@ void main() {
     );
 
     expect(await client.fetchMetadata(), isNull);
+  });
+
+  test('publishes and fetches portable listen-together sessions', () async {
+    final session = ListenTogetherSession(
+      trackIds: const <String>['track-1', 'track-2'],
+      currentTrackId: 'track-1',
+      position: const Duration(seconds: 12),
+      playing: true,
+    );
+    var requests = 0;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(uri, _account().listenTogetherEndpointUri);
+        requests += 1;
+        if (method == 'PUT') {
+          final request = jsonDecode(body!) as Map<String, dynamic>;
+          expect(request['baseRevision'], 0);
+          expect(request['deviceId'], 'Test device');
+          expect(request['session'], session.toJson());
+          return LibrarySyncHttpResponse(
+            statusCode: 200,
+            body: jsonEncode(<String, Object?>{
+              'revision': 1,
+              'updatedAt': '2026-07-12T10:00:00.000Z',
+              'updatedByDevice': 'Test device',
+              'checksum': 'a' * 64,
+            }),
+          );
+        }
+        expect(method, 'GET');
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 1,
+            'updatedAt': '2026-07-12T10:00:00.000Z',
+            'updatedByDevice': 'Test device',
+            'checksum': 'a' * 64,
+            'session': session.toJson(),
+          }),
+        );
+      },
+    );
+
+    final published = await client.publishListenTogetherSession(
+      baseRevision: 0,
+      session: session,
+    );
+    final joined = await client.fetchListenTogetherSession();
+
+    expect(published.revision, 1);
+    expect(joined.session?.trackIds, session.trackIds);
+    expect(joined.session?.position, session.position);
+    expect(requests, 2);
+  });
+
+  test('raises typed listen-together conflicts', () async {
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        return LibrarySyncHttpResponse(
+          statusCode: 409,
+          body: jsonEncode(<String, Object?>{
+            'error': 'listen_together_conflict',
+            'currentRevision': 4,
+            'updatedByDevice': 'Host desktop',
+          }),
+        );
+      },
+    );
+
+    await expectLater(
+      client.publishListenTogetherSession(
+        baseRevision: 0,
+        session: ListenTogetherSession(
+          trackIds: const <String>['track-1'],
+          currentTrackId: 'track-1',
+          position: Duration.zero,
+          playing: false,
+        ),
+      ),
+      throwsA(
+        isA<ListenTogetherConflictException>()
+            .having((error) => error.currentRevision, 'revision', 4)
+            .having((error) => error.updatedByDevice, 'device', 'Host desktop'),
+      ),
+    );
   });
 
   test('rejects a corrupted snapshot and redacts transport failures', () async {

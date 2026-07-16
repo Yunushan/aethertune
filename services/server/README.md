@@ -76,6 +76,9 @@ Available endpoints:
 - `GET /api/v1/sync/library/metadata`
 - `PUT /api/v1/sync/library`
 - `DELETE /api/v1/sync/library`
+- `GET /api/v1/listen-together/session`
+- `PUT /api/v1/listen-together/session`
+- `DELETE /api/v1/listen-together/session`
 
 The snapshot endpoints are disabled until either a static or managed device
 token exists. Set `AETHERTUNE_DATA_DIR` to choose the durable snapshot and
@@ -88,6 +91,11 @@ service rejects local file paths and device cache jobs from portable snapshots.
 revision, timestamp, device label, and checksum. Current clients use it before
 automatic uploads to avoid sending a stale full snapshot, then fall back to the
 existing full-upload protocol when connecting to older servers without it.
+
+The listen-together session endpoints are scoped to the same authenticated
+account. They store a versioned, revision-protected queue of portable library
+track IDs, current item, play state, and position only; they never store media
+URLs, local paths, or provider credentials.
 
 ## Managed accounts and device tokens
 

@@ -17,6 +17,7 @@ const _jsonHeaders = <String, String>{
 };
 const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 const maxManagedAuthRequestBytes = 16 * 1024;
+const maxListenTogetherSessionBytes = 32 * 1024;
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 
@@ -95,6 +96,7 @@ Handler createServerHandler({
   ManagedSyncAccountRegistry? managedSyncAccounts,
   OperationsAuthenticator? operationsAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
+  LibrarySyncSnapshotStore? listenTogetherStore,
   ServerRequestLogger? requestLogger,
 }) {
   final now = clock ?? DateTime.now;
@@ -102,6 +104,7 @@ Handler createServerHandler({
   final operations =
       operationsAuthenticator ?? const DisabledOperationsAuthenticator();
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
+  final sessions = listenTogetherStore ?? MemoryLibrarySyncSnapshotStore();
   final startedAt = now().toUtc();
   var requestsTotal = 0;
 
@@ -138,6 +141,7 @@ Handler createServerHandler({
             'uptimeSeconds': uptime.isNegative ? 0 : uptime.inSeconds,
             'requestsTotal': requestsTotal,
             'librarySync': authenticator.isConfigured,
+            'listenTogether': authenticator.isConfigured,
           },
         );
       case 'api/v1/info':
@@ -151,6 +155,7 @@ Handler createServerHandler({
             'service': 'aethertune-server',
             'version': '0.3.0',
             'librarySync': authenticator.isConfigured,
+            'listenTogether': authenticator.isConfigured,
             'managedAuthentication': managedSyncAccounts != null,
             'supportedClients': <String>[
               'android',
@@ -204,6 +209,13 @@ Handler createServerHandler({
           request,
           authenticator: authenticator,
           snapshots: snapshots,
+        );
+      case 'api/v1/listen-together/session':
+        return _handleListenTogetherSession(
+          request,
+          authenticator: authenticator,
+          sessions: sessions,
+          now: now,
         );
       default:
         return _jsonResponse(
@@ -280,6 +292,7 @@ String _logRoute(String path) {
     'api/v1/admin/sync-tokens' => '/api/v1/admin/sync-tokens',
     'api/v1/sync/library' => '/api/v1/sync/library',
     'api/v1/sync/library/metadata' => '/api/v1/sync/library/metadata',
+    'api/v1/listen-together/session' => '/api/v1/listen-together/session',
     _ => '/not-found',
   };
 }
@@ -704,6 +717,193 @@ Future<Response> _handleLibrarySyncMetadata(
           'checksum': null,
         },
   );
+}
+
+Future<Response> _handleListenTogetherSession(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required LibrarySyncSnapshotStore sessions,
+  required DateTime Function() now,
+}) async {
+  if (!authenticator.isConfigured) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'sync_not_configured'},
+    );
+  }
+
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  final userId = token == null ? null : authenticator.authenticate(token);
+  if (userId == null) {
+    return _unauthorizedResponse();
+  }
+
+  switch (request.method) {
+    case 'GET':
+      final session = await sessions.read(userId);
+      return _jsonResponse(200, _listenTogetherSessionResponse(session));
+    case 'PUT':
+      try {
+        final body = await _readBoundedJson(
+          request,
+          maxBytes: maxListenTogetherSessionBytes,
+        );
+        final mutation = _syncMutationFields(body);
+        final rawSession = body['session'];
+        if (rawSession is! Map) {
+          throw const FormatException('session must be an object.');
+        }
+        final session = Map<String, Object?>.from(rawSession);
+        _validateListenTogetherSession(session);
+        final checksum = sha256
+            .convert(utf8.encode(jsonEncode(session)))
+            .toString();
+        final result = await sessions.write(
+          userId: userId,
+          baseRevision: mutation.baseRevision,
+          deviceId: mutation.deviceId,
+          snapshot: session,
+          checksum: checksum,
+          updatedAt: now().toUtc(),
+        );
+        if (result.isConflict) {
+          return _listenTogetherConflict(result.snapshot);
+        }
+        return _jsonResponse(200, result.snapshot!.toMetadataJson());
+      } on _PayloadTooLarge catch (error) {
+        return _jsonResponse(
+          413,
+          <String, Object?>{
+            'error': 'payload_too_large',
+            'maxBytes': error.maxBytes,
+          },
+        );
+      } on FormatException catch (error) {
+        return _jsonResponse(
+          400,
+          <String, Object?>{
+            'error': 'invalid_listen_together_session',
+            'message': error.message,
+          },
+        );
+      }
+    case 'DELETE':
+      try {
+        final mutation = _syncMutationFields(
+          await _readBoundedJson(
+            request,
+            maxBytes: maxListenTogetherSessionBytes,
+          ),
+        );
+        final result = await sessions.delete(
+          userId: userId,
+          baseRevision: mutation.baseRevision,
+          deviceId: mutation.deviceId,
+          updatedAt: now().toUtc(),
+        );
+        if (result.isConflict) {
+          return _listenTogetherConflict(result.snapshot);
+        }
+        return _jsonResponse(200, result.snapshot!.toMetadataJson());
+      } on _PayloadTooLarge catch (error) {
+        return _jsonResponse(
+          413,
+          <String, Object?>{
+            'error': 'payload_too_large',
+            'maxBytes': error.maxBytes,
+          },
+        );
+      } on FormatException catch (error) {
+        return _jsonResponse(
+          400,
+          <String, Object?>{
+            'error': 'invalid_listen_together_session',
+            'message': error.message,
+          },
+        );
+      }
+    default:
+      return _methodNotAllowed(request);
+  }
+}
+
+Response _listenTogetherConflict(LibrarySyncSnapshot? current) {
+  return _jsonResponse(
+    409,
+    <String, Object?>{
+      'error': 'listen_together_conflict',
+      'currentRevision': current?.revision ?? 0,
+      'updatedAt': current?.updatedAt.toIso8601String(),
+      'updatedByDevice': current?.updatedByDevice,
+      'checksum': current?.checksum,
+    },
+  );
+}
+
+Map<String, Object?> _listenTogetherSessionResponse(
+  LibrarySyncSnapshot? session,
+) {
+  return <String, Object?>{
+    ...(session?.toMetadataJson() ??
+        <String, Object?>{
+          'revision': 0,
+          'updatedAt': null,
+          'updatedByDevice': null,
+          'checksum': null,
+        }),
+    'session': session?.snapshot,
+  };
+}
+
+void _validateListenTogetherSession(Map<String, Object?> session) {
+  const allowedFields = <String>{
+    'version',
+    'trackIds',
+    'currentTrackId',
+    'positionMilliseconds',
+    'playing',
+  };
+  if (session.keys.any((key) => !allowedFields.contains(key))) {
+    throw const FormatException(
+      'Listen-together sessions contain unsupported fields.',
+    );
+  }
+  if (session['version'] != 1) {
+    throw const FormatException('Unsupported listen-together session version.');
+  }
+  final trackIds = session['trackIds'];
+  if (trackIds is! List || trackIds.length > 500) {
+    throw const FormatException('session trackIds must contain at most 500 IDs.');
+  }
+  final normalizedIds = <String>[];
+  for (final value in trackIds) {
+    if (value is! String ||
+        value != value.trim() ||
+        value.isEmpty ||
+        value.length > 256) {
+      throw const FormatException('session trackIds must be bounded strings.');
+    }
+    normalizedIds.add(value);
+  }
+  if (normalizedIds.toSet().length != normalizedIds.length) {
+    throw const FormatException('session trackIds must not repeat.');
+  }
+  final currentTrackId = session['currentTrackId'];
+  if (currentTrackId != null &&
+      (currentTrackId is! String ||
+          currentTrackId != currentTrackId.trim() ||
+          !normalizedIds.contains(currentTrackId))) {
+    throw const FormatException('session currentTrackId must belong to trackIds.');
+  }
+  final positionMilliseconds = session['positionMilliseconds'];
+  if (positionMilliseconds is! int ||
+      positionMilliseconds < 0 ||
+      positionMilliseconds > 7 * 24 * 60 * 60 * 1000) {
+    throw const FormatException('session positionMilliseconds is invalid.');
+  }
+  if (session['playing'] is! bool) {
+    throw const FormatException('session playing must be a boolean.');
+  }
 }
 
 ({int baseRevision, String deviceId}) _syncMutationFields(
