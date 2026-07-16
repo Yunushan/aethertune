@@ -652,6 +652,46 @@ void main() {
       expect(joined.statusCode, 200);
       expect((joinedBody['session'] as Map<String, dynamic>)['currentTrackId'], 'track-1');
       expect(joinedBody.containsKey('host-account'), isFalse);
+
+      final ended = await handler(
+        _request(
+          'DELETE',
+          '/api/v1/listen-together/session',
+          token: hostToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 1,
+            'deviceId': 'host-phone',
+          },
+        ),
+      );
+      expect(ended.statusCode, 200);
+      final restarted = await handler(
+        _request(
+          'PUT',
+          '/api/v1/listen-together/session',
+          token: hostToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 2,
+            'deviceId': 'host-phone',
+            'session': <String, Object?>{
+              'version': 1,
+              'trackIds': <String>['track-1'],
+              'currentTrackId': 'track-1',
+              'positionMilliseconds': 0,
+              'playing': false,
+            },
+          },
+        ),
+      );
+      expect(restarted.statusCode, 200);
+      final expired = await handler(
+        _request(
+          'GET',
+          '/api/v1/listen-together/invites/$inviteCode',
+          token: guestToken,
+        ),
+      );
+      expect(expired.statusCode, 404);
     });
   });
 

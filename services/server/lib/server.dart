@@ -865,10 +865,10 @@ Future<Response> _handleListenTogetherInviteIssue(
         : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
   }
   final session = await sessions.read(userId);
-  if (session?.snapshot == null) {
+  if (session == null || session.snapshot == null) {
     return _jsonResponse(409, <String, Object?>{'error': 'no_active_session'});
   }
-  final code = await invites.issue(userId);
+  final code = await invites.issue(userId, session.revision);
   return _jsonResponse(201, <String, Object?>{'inviteCode': code});
 }
 
@@ -887,9 +887,9 @@ Future<Response> _handleListenTogetherInviteJoin(
         : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
   }
   final code = request.url.pathSegments.last;
-  final ownerId = await invites.lookup(code);
-  final session = ownerId == null ? null : await sessions.read(ownerId);
-  if (session?.snapshot == null) {
+  final invite = await invites.lookup(code);
+  final session = invite == null ? null : await sessions.read(invite.ownerId);
+  if (session?.snapshot == null || session!.revision != invite!.sessionRevision) {
     return _jsonResponse(404, <String, Object?>{'error': 'invite_not_found'});
   }
   return _jsonResponse(200, _listenTogetherSessionResponse(session));
@@ -1200,25 +1200,39 @@ class LibrarySyncWriteResult {
 }
 
 abstract interface class ListenTogetherInviteStore {
-  Future<String> issue(String ownerId);
+  Future<String> issue(String ownerId, int sessionRevision);
 
-  Future<String?> lookup(String inviteCode);
+  Future<ListenTogetherInvite?> lookup(String inviteCode);
+}
+
+class ListenTogetherInvite {
+  const ListenTogetherInvite({
+    required this.ownerId,
+    required this.sessionRevision,
+  });
+
+  final String ownerId;
+  final int sessionRevision;
 }
 
 class MemoryListenTogetherInviteStore implements ListenTogetherInviteStore {
-  final Map<String, String> _ownersByCode = <String, String>{};
+  final Map<String, ListenTogetherInvite> _invitesByCode =
+      <String, ListenTogetherInvite>{};
 
   @override
-  Future<String> issue(String ownerId) async {
+  Future<String> issue(String ownerId, int sessionRevision) async {
     final code = _newListenTogetherInviteCode();
-    _ownersByCode[code] = ownerId;
+    _invitesByCode[code] = ListenTogetherInvite(
+      ownerId: ownerId,
+      sessionRevision: sessionRevision,
+    );
     return code;
   }
 
   @override
-  Future<String?> lookup(String inviteCode) async {
+  Future<ListenTogetherInvite?> lookup(String inviteCode) async {
     return _isListenTogetherInviteCode(inviteCode)
-        ? _ownersByCode[inviteCode]
+        ? _invitesByCode[inviteCode]
         : null;
   }
 }
@@ -1229,7 +1243,7 @@ class FileListenTogetherInviteStore implements ListenTogetherInviteStore {
   final Directory rootDirectory;
 
   @override
-  Future<String> issue(String ownerId) async {
+  Future<String> issue(String ownerId, int sessionRevision) async {
     await rootDirectory.create(recursive: true);
     for (var attempt = 0; attempt < 4; attempt += 1) {
       final code = _newListenTogetherInviteCode();
@@ -1238,7 +1252,10 @@ class FileListenTogetherInviteStore implements ListenTogetherInviteStore {
         continue;
       }
       await file.writeAsString(
-        jsonEncode(<String, Object?>{'ownerId': ownerId}),
+        jsonEncode(<String, Object?>{
+          'ownerId': ownerId,
+          'sessionRevision': sessionRevision,
+        }),
         flush: true,
       );
       return code;
@@ -1247,7 +1264,7 @@ class FileListenTogetherInviteStore implements ListenTogetherInviteStore {
   }
 
   @override
-  Future<String?> lookup(String inviteCode) async {
+  Future<ListenTogetherInvite?> lookup(String inviteCode) async {
     if (!_isListenTogetherInviteCode(inviteCode)) {
       return null;
     }
@@ -1261,7 +1278,15 @@ class FileListenTogetherInviteStore implements ListenTogetherInviteStore {
         return null;
       }
       final ownerId = decoded['ownerId'];
-      return ownerId is String && ownerId.isNotEmpty ? ownerId : null;
+      final sessionRevision = decoded['sessionRevision'];
+      if (ownerId is! String || ownerId.isEmpty ||
+          sessionRevision is! int || sessionRevision <= 0) {
+        return null;
+      }
+      return ListenTogetherInvite(
+        ownerId: ownerId,
+        sessionRevision: sessionRevision,
+      );
     } on Object {
       return null;
     }
