@@ -26,6 +26,28 @@ void main() {
     expect(snapshot.currentTrack?.id, '1');
   });
 
+  test('bounds and validates privacy-safe queue sync references', () {
+    final snapshot = TrackQueueReferenceSnapshot.fromJson(<String, Object?>{
+      'version': TrackQueueReferenceSnapshot.syncVersion,
+      'trackIds': <Object?>[' first ', 4, '', 'second'],
+      'currentTrackId': ' second ',
+      'updatedAt': '2026-07-16T12:00:00Z',
+    });
+
+    expect(snapshot.trackIds, <String>['first', 'second']);
+    expect(snapshot.currentTrackId, 'second');
+    expect(snapshot.updatedAt, DateTime.utc(2026, 7, 16, 12));
+    expect(snapshot.toJson()['trackIds'], <String>['first', 'second']);
+    expect(
+      () => TrackQueueReferenceSnapshot.fromJson(<String, Object?>{
+        'version': 2,
+        'trackIds': <Object?>[],
+        'updatedAt': '2026-07-16T12:00:00Z',
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('moves queue items without mutating the original queue', () {
     final queue = <Track>[
       _track('1'),

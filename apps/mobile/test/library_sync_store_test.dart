@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
@@ -11,6 +12,9 @@ import 'package:aethertune/src/data/provider_error.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
 import 'package:aethertune/src/domain/library_sync_profile.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/domain/track_queue.dart';
+import 'package:aethertune/src/player/playback_audio_engine.dart';
+import 'package:aethertune/src/player/player_controller.dart';
 
 void main() {
   setUp(() {
@@ -328,6 +332,93 @@ void main() {
     expect(localStore.tracks.single.localPath, '/phone/music.mp3');
     expect(sync.lastKnownRevision, 2);
     expect(sync.conflict, isNull);
+  });
+
+  test('opt-in queue sync shares only IDs and restores the remote queue',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final localFirst = Track(
+      id: 'local-first',
+      title: 'Local first',
+      localPath: '/phone/local-first.mp3',
+    );
+    final localSecond = Track(
+      id: 'local-second',
+      title: 'Local second',
+      localPath: '/phone/local-second.mp3',
+    );
+    await library.addTracks(<Track>[localFirst, localSecond]);
+    final engine = _QueueSyncPlaybackAudioEngine();
+    final player = PlayerController(
+      audioEngine: engine,
+      clock: () => DateTime.utc(2026, 7, 16, 10),
+    );
+    addTearDown(player.dispose);
+    await player.playTrack(
+      localSecond,
+      queue: <Track>[
+        localFirst,
+        Track(
+          id: 'search-only',
+          title: 'Search-only result',
+          streamUrl: 'https://private.example.test/stream?token=secret',
+        ),
+        localSecond,
+      ],
+    );
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+    );
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    await sync.setQueueSyncEnabled(true);
+
+    await sync.push(library, player: player);
+
+    final pushedQueue = Map<String, Object?>.from(
+      gateway.pushedSnapshots.single['queueSync']! as Map,
+    );
+    expect(pushedQueue['trackIds'], <String>['local-first', 'local-second']);
+    expect(pushedQueue['currentTrackId'], 'local-second');
+    final pushedJson = jsonEncode(gateway.pushedSnapshots.single);
+    expect(pushedJson, isNot(contains('/phone/local-first.mp3')));
+    expect(pushedJson, isNot(contains('private.example.test')));
+
+    final remoteLibrary = LibraryStore();
+    await remoteLibrary.load();
+    await remoteLibrary.addTracks(<Track>[
+      Track(id: 'remote-first', title: 'Remote first'),
+      Track(id: 'remote-second', title: 'Remote second'),
+    ]);
+    final remoteSnapshot = Map<String, Object?>.from(
+      jsonDecode(remoteLibrary.exportSyncSnapshotJson()) as Map,
+    )..['queueSync'] = TrackQueueReferenceSnapshot(
+        trackIds: const <String>['remote-second', 'remote-first'],
+        currentTrackId: 'remote-first',
+        updatedAt: DateTime.utc(2026, 7, 16, 11),
+      ).toJson();
+    gateway.remote = LibrarySyncRemoteSnapshot(
+      revision: 2,
+      updatedAt: DateTime.utc(2026, 7, 16, 11),
+      updatedByDevice: 'Desktop',
+      checksum: 'remote-checksum',
+      snapshot: remoteSnapshot,
+    );
+
+    await sync.pull(library, player: player);
+
+    expect(player.queue.map((track) => track.id), <String>[
+      'remote-second',
+      'remote-first',
+    ]);
+    expect(player.current?.id, 'remote-first');
+    expect(engine.playingValue, isFalse);
+    expect(engine.stopCalls, 1);
   });
 
   test('deletes only the remote snapshot and disables automatic upload',
@@ -686,4 +777,102 @@ class _FakeSyncGateway
           updatedByDevice: 'Test device',
         );
   }
+}
+
+class _QueueSyncPlaybackAudioEngine implements PlaybackAudioEngine {
+  List<Track> queue = <Track>[];
+  bool playingValue = false;
+  int stopCalls = 0;
+
+  @override
+  Stream<Object?> get stateChanges => const Stream<Object?>.empty();
+
+  @override
+  Stream<Duration?> get durationStream => const Stream<Duration?>.empty();
+
+  @override
+  Stream<Duration> get positionStream => const Stream<Duration>.empty();
+
+  @override
+  Stream<ProcessingState> get processingStateStream =>
+      const Stream<ProcessingState>.empty();
+
+  @override
+  Stream<int?> get currentIndexStream => const Stream<int?>.empty();
+
+  @override
+  bool get playing => playingValue;
+
+  @override
+  bool get shuffleModeEnabled => false;
+
+  @override
+  LoopMode get loopMode => LoopMode.off;
+
+  @override
+  Duration get position => Duration.zero;
+
+  @override
+  Duration get bufferedPosition => Duration.zero;
+
+  @override
+  double get speed => 1;
+
+  @override
+  double get volume => 1;
+
+  @override
+  bool get hasNext => false;
+
+  @override
+  bool get hasPrevious => false;
+
+  @override
+  Future<void> setQueue(
+    List<Track> tracks, {
+    required int initialIndex,
+    Duration initialPosition = Duration.zero,
+  }) async {
+    queue = List<Track>.from(tracks);
+  }
+
+  @override
+  Future<void> play() async {
+    playingValue = true;
+  }
+
+  @override
+  Future<void> pause() async {
+    playingValue = false;
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls += 1;
+    playingValue = false;
+  }
+
+  @override
+  Future<void> seek(Duration position, {int? index}) async {}
+
+  @override
+  Future<void> seekToNext() async {}
+
+  @override
+  Future<void> seekToPrevious() async {}
+
+  @override
+  Future<void> setShuffleModeEnabled(bool enabled) async {}
+
+  @override
+  Future<void> setLoopMode(LoopMode mode) async {}
+
+  @override
+  Future<void> setSpeed(double speed) async {}
+
+  @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
+  Future<void> dispose() async {}
 }

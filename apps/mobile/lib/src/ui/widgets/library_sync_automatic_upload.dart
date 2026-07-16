@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
 import '../../data/library_sync_store.dart';
+import '../../player/player_controller.dart';
 
 class LibrarySyncAutomaticUpload extends StatefulWidget {
   const LibrarySyncAutomaticUpload({super.key, required this.child});
@@ -48,10 +49,11 @@ class _LibrarySyncAutomaticUploadState extends State<LibrarySyncAutomaticUpload>
     }
     final library = context.read<LibraryStore>();
     final sync = context.read<LibrarySyncStore>();
+    final player = context.read<PlayerController?>();
     if (!library.loaded || !sync.loaded) {
       return;
     }
-    unawaited(sync.uploadAutomaticallyIfDue(library));
+    unawaited(sync.uploadAutomaticallyIfDue(library, player: player));
   }
 
   @override

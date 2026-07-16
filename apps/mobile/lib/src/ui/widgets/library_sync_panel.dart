@@ -6,6 +6,7 @@ import '../../data/library_sync_client.dart';
 import '../../data/library_sync_store.dart';
 import '../../domain/library_sync_account.dart';
 import '../../domain/library_sync_profile.dart';
+import '../../player/player_controller.dart';
 
 enum _LibrarySyncConflictChoice { server, merge, local }
 
@@ -16,6 +17,7 @@ class LibrarySyncPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final sync = context.watch<LibrarySyncStore>();
     final library = context.watch<LibraryStore>();
+    final player = context.watch<PlayerController?>();
     final account = sync.account;
     final actionsEnabled =
         sync.loaded && !sync.busy && !library.offlineModeEnabled;
@@ -140,6 +142,19 @@ class LibrarySyncPanel extends StatelessWidget {
                 ? (enabled) => _setAutomaticUpload(context, enabled)
                 : null,
           ),
+        if (sync.isConfigured)
+          SwitchListTile.adaptive(
+            key: const Key('library-sync-queue'),
+            secondary: const Icon(Icons.queue_music_outlined),
+            title: const Text('Sync active queue'),
+            subtitle: const Text(
+              'Sync library-backed queue order and current item. Media URLs, local files, and playback position stay on this device.',
+            ),
+            value: sync.queueSyncEnabled,
+            onChanged: actionsEnabled && player != null
+                ? (enabled) => _setQueueSync(context, enabled)
+                : null,
+          ),
         if (library.offlineModeEnabled)
           const ListTile(
             dense: true,
@@ -243,8 +258,9 @@ class LibrarySyncPanel extends StatelessWidget {
   static Future<void> _upload(BuildContext context) async {
     final sync = context.read<LibrarySyncStore>();
     final library = context.read<LibraryStore>();
+    final player = context.read<PlayerController?>();
     try {
-      final result = await sync.push(library);
+      final result = await sync.push(library, player: player);
       if (context.mounted) {
         _showSuccess(context, 'Uploaded library revision ${result.revision}.');
       }
@@ -258,7 +274,7 @@ class LibrarySyncPanel extends StatelessWidget {
       }
       try {
         if (choice == _LibrarySyncConflictChoice.server) {
-          final result = await sync.pull(library);
+          final result = await sync.pull(library, player: player);
           if (context.mounted) {
             _showSuccess(
               context,
@@ -266,7 +282,7 @@ class LibrarySyncPanel extends StatelessWidget {
             );
           }
         } else if (choice == _LibrarySyncConflictChoice.merge) {
-          final result = await sync.mergeAndPush(library);
+          final result = await sync.mergeAndPush(library, player: player);
           if (context.mounted) {
             _showSuccess(
               context,
@@ -277,6 +293,7 @@ class LibrarySyncPanel extends StatelessWidget {
           final result = await sync.push(
             library,
             baseRevision: conflict.currentRevision,
+            player: player,
           );
           if (context.mounted) {
             _showSuccess(
@@ -325,6 +342,7 @@ class LibrarySyncPanel extends StatelessWidget {
     try {
       final result = await context.read<LibrarySyncStore>().pull(
         context.read<LibraryStore>(),
+        player: context.read<PlayerController?>(),
       );
       if (context.mounted) {
         _showSuccess(context, 'Downloaded server revision ${result.revision}.');
@@ -342,6 +360,19 @@ class LibrarySyncPanel extends StatelessWidget {
   ) async {
     try {
       await context.read<LibrarySyncStore>().setAutomaticUploadEnabled(enabled);
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, error);
+      }
+    }
+  }
+
+  static Future<void> _setQueueSync(
+    BuildContext context,
+    bool enabled,
+  ) async {
+    try {
+      await context.read<LibrarySyncStore>().setQueueSyncEnabled(enabled);
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, error);

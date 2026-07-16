@@ -50,8 +50,10 @@ class PlayerController extends ChangeNotifier {
   PlayerController({
     PlaybackAudioEngine? audioEngine,
     TrackPlaybackResolver? trackResolver,
+    DateTime Function()? clock,
   })  : _audio = audioEngine ?? JustAudioPlaybackEngine(),
-        _trackResolver = trackResolver {
+        _trackResolver = trackResolver,
+        _clock = clock ?? DateTime.now {
     final crossfadeEngine = _audio;
     if (crossfadeEngine is CrossfadePlaybackAudioEngine &&
         crossfadeEngine.supportsCrossfade) {
@@ -77,6 +79,7 @@ class PlayerController extends ChangeNotifier {
 
   final PlaybackAudioEngine _audio;
   TrackPlaybackResolver? _trackResolver;
+  final DateTime Function() _clock;
   final List<Track> _queue = <Track>[];
   final List<Track> _loadedPlaybackQueue = <Track>[];
 
@@ -94,6 +97,7 @@ class PlayerController extends ChangeNotifier {
   bool _sleepTimerFadesOut = false;
   Duration _sleepTimerFadeDuration = defaultSleepTimerFadeDuration;
   bool _queueSnapshotLoaded = false;
+  DateTime? _queueUpdatedAt;
   bool _playbackSettingsLoaded = false;
   bool _offlineModeEnabled = false;
   bool _isLoadingQueue = false;
@@ -178,6 +182,66 @@ class PlayerController extends ChangeNotifier {
     _trackResolver = resolver;
   }
 
+  /// Exports only queue references that can be resolved from a synced library.
+  ///
+  /// Search-only and credential-backed items are intentionally omitted rather
+  /// than sending their media URLs to the sync server.
+  TrackQueueReferenceSnapshot exportQueueSyncSnapshot(
+    Iterable<Track> libraryTracks,
+  ) {
+    final libraryTrackIds = libraryTracks.map((track) => track.id).toSet();
+    final trackIds = _queue
+        .map((track) => track.id)
+        .where(libraryTrackIds.contains)
+        .take(TrackQueueReferenceSnapshot.maxTrackIds)
+        .toList(growable: false);
+    final currentTrackId = _current?.id;
+    return TrackQueueReferenceSnapshot(
+      trackIds: trackIds,
+      currentTrackId:
+          currentTrackId != null && trackIds.contains(currentTrackId)
+          ? currentTrackId
+          : null,
+      updatedAt: _queueUpdatedAt?.toUtc() ?? _clock().toUtc(),
+    );
+  }
+
+  /// Rehydrates an opt-in synced queue from the local synced library.
+  ///
+  /// Receiving a queue never begins playback. A device keeps its own playable
+  /// local paths and resolves provider items only when the user presses play.
+  Future<int> restoreQueueSyncSnapshot(
+    TrackQueueReferenceSnapshot snapshot,
+    Iterable<Track> libraryTracks,
+  ) async {
+    final tracksById = <String, Track>{
+      for (final track in libraryTracks) track.id: track,
+    };
+    final restoredQueue = snapshot.trackIds
+        .map((id) => tracksById[id])
+        .whereType<Track>()
+        .toList(growable: false);
+    final restoredCurrent = snapshot.currentTrackId == null
+        ? null
+        : tracksById[snapshot.currentTrackId];
+
+    if (_loadedPlaybackQueue.isNotEmpty || _current != null) {
+      await _audio.stop();
+    }
+    _queue
+      ..clear()
+      ..addAll(restoredQueue);
+    _current = restoredCurrent ??
+        (restoredQueue.isEmpty ? null : restoredQueue.first);
+    _queueUpdatedAt = snapshot.updatedAt.toUtc();
+    _loadedTrackId = null;
+    _loadedPlaybackQueue.clear();
+    _duration = Duration.zero;
+    await _saveQueueSnapshot();
+    notifyListeners();
+    return restoredQueue.length;
+  }
+
   void setOfflineModeEnabled(bool enabled) {
     if (_offlineModeEnabled == enabled) {
       return;
@@ -217,6 +281,7 @@ class PlayerController extends ChangeNotifier {
           ..clear()
           ..addAll(snapshot.tracks);
         _current = snapshot.currentTrack;
+        _queueUpdatedAt = snapshot.updatedAt;
         _loadedTrackId = null;
         _loadedPlaybackQueue.clear();
       } catch (_) {
@@ -345,7 +410,7 @@ class PlayerController extends ChangeNotifier {
 
     _current = preparedTrack;
     notifyListeners();
-    await _saveQueueSnapshot();
+    await _saveQueueSnapshot(touch: true);
 
     await _loadQueue(
       preparedTrack,
@@ -411,7 +476,7 @@ class PlayerController extends ChangeNotifier {
     } else if (_current != null) {
       await _reloadQueuePreservingPlayback();
     }
-    await _saveQueueSnapshot();
+    await _saveQueueSnapshot(touch: true);
     notifyListeners();
   }
 
@@ -582,7 +647,7 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(reordered);
-    unawaited(_saveQueueSnapshot());
+    unawaited(_saveQueueSnapshot(touch: true));
     unawaited(_reloadQueuePreservingPlayback());
     notifyListeners();
   }
@@ -600,7 +665,7 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(remaining);
-    unawaited(_saveQueueSnapshot());
+    unawaited(_saveQueueSnapshot(touch: true));
     unawaited(_reloadQueuePreservingPlayback());
     notifyListeners();
   }
@@ -939,7 +1004,7 @@ class PlayerController extends ChangeNotifier {
     _current = track;
     _playbackStartSerial += 1;
     unawaited(_applyOutputVolume());
-    unawaited(_saveQueueSnapshot());
+    unawaited(_saveQueueSnapshot(touch: true));
     notifyListeners();
   }
 
@@ -1146,8 +1211,11 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveQueueSnapshot() async {
+  Future<void> _saveQueueSnapshot({bool touch = false}) async {
     final prefs = await SharedPreferences.getInstance();
+    if (touch || _queueUpdatedAt == null) {
+      _queueUpdatedAt = _clock().toUtc();
+    }
     if (_queue.isEmpty) {
       await prefs.remove(_queueSnapshotKey);
       return;
@@ -1156,6 +1224,7 @@ class PlayerController extends ChangeNotifier {
     final snapshot = TrackQueueSnapshot(
       tracks: _queue,
       currentTrackId: _current?.id,
+      updatedAt: _queueUpdatedAt,
     );
     await prefs.setString(_queueSnapshotKey, jsonEncode(snapshot.toJson()));
   }

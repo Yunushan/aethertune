@@ -69,6 +69,11 @@ void main() {
     );
     expect(find.text('0123456789abcdef01234567'), findsNothing);
     expect(find.byKey(const Key('library-sync-upload')), findsOneWidget);
+    expect(find.byKey(const Key('library-sync-queue')), findsOneWidget);
+    final queueSync = tester.widget<SwitchListTile>(
+      find.byKey(const Key('library-sync-queue')),
+    );
+    expect(queueSync.onChanged, isNull);
     await tester.tap(find.byKey(const Key('library-sync-automatic-upload')));
     await tester.pumpAndSettle();
     expect(sync.automaticUploadEnabled, isTrue);

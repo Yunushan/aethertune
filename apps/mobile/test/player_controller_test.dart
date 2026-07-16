@@ -162,6 +162,50 @@ void main() {
     expect(restoredEngine.loudnessEnhancerEnhancerSetCalls, 1);
   });
 
+  test('syncs only library-backed queue references without starting playback',
+      () async {
+    final updatedAt = DateTime.utc(2026, 7, 16, 12);
+    final source = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+      clock: () => updatedAt,
+    );
+    addTearDown(source.dispose);
+    final libraryOne = _track('library-one');
+    final sourceOnly = _track('source-only');
+    final libraryTwo = _track('library-two');
+    await source.playTrack(
+      libraryTwo,
+      queue: <Track>[libraryOne, sourceOnly, libraryTwo],
+    );
+
+    final snapshot = source.exportQueueSyncSnapshot(<Track>[
+      libraryOne,
+      libraryTwo,
+    ]);
+    expect(snapshot.trackIds, <String>['library-one', 'library-two']);
+    expect(snapshot.currentTrackId, 'library-two');
+    expect(snapshot.updatedAt, updatedAt);
+
+    final destinationEngine = _FakePlaybackAudioEngine();
+    final destination = PlayerController(audioEngine: destinationEngine);
+    addTearDown(destination.dispose);
+    await destination.playTrack(_track('previous'));
+    final restored = await destination.restoreQueueSyncSnapshot(snapshot, <Track>[
+      _track('library-one', localPath: '/device-a/one.mp3'),
+      _track('library-two', localPath: '/device-a/two.mp3'),
+    ]);
+
+    expect(restored, 2);
+    expect(destination.queue.map((track) => track.id), <String>[
+      'library-one',
+      'library-two',
+    ]);
+    expect(destination.current?.id, 'library-two');
+    expect(destinationEngine.stopCalls, 1);
+    expect(destinationEngine.playingValue, isFalse);
+    expect(destinationEngine.setQueueCalls, 1);
+  });
+
   test('persists skip silence only through a supported playback engine',
       () async {
     final firstEngine = _FakeSkipSilenceEngine();

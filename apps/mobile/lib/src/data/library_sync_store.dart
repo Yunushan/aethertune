@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/library_sync_account.dart';
 import '../domain/library_sync_profile.dart';
+import '../domain/track_queue.dart';
+import '../player/player_controller.dart';
 import 'library_store.dart';
 import 'library_sync_client.dart';
 import 'library_sync_credential_vault.dart';
@@ -41,6 +43,7 @@ class LibrarySyncStore extends ChangeNotifier {
   DateTime? _remoteUpdatedAt;
   String? _remoteUpdatedByDevice;
   bool _automaticUploadEnabled = false;
+  bool _queueSyncEnabled = false;
   DateTime? _lastAutomaticUploadAttemptAt;
   DateTime? _lastAutomaticUploadAt;
   LibrarySyncConflictException? _conflict;
@@ -56,6 +59,7 @@ class LibrarySyncStore extends ChangeNotifier {
   DateTime? get remoteUpdatedAt => _remoteUpdatedAt;
   String? get remoteUpdatedByDevice => _remoteUpdatedByDevice;
   bool get automaticUploadEnabled => _automaticUploadEnabled;
+  bool get queueSyncEnabled => _queueSyncEnabled;
   DateTime? get lastAutomaticUploadAt => _lastAutomaticUploadAt;
   LibrarySyncConflictException? get conflict => _conflict;
   String? get lastError => _lastError;
@@ -92,6 +96,7 @@ class LibrarySyncStore extends ChangeNotifier {
           metadata['remoteUpdatedByDevice'],
         );
         _automaticUploadEnabled = metadata['automaticUploadEnabled'] == true;
+        _queueSyncEnabled = metadata['queueSyncEnabled'] == true;
         _lastAutomaticUploadAttemptAt = _optionalDate(
           metadata['lastAutomaticUploadAttemptAt'],
         );
@@ -189,18 +194,16 @@ class LibrarySyncStore extends ChangeNotifier {
   Future<LibrarySyncRemoteSnapshot> push(
     LibraryStore library, {
     int? baseRevision,
+    PlayerController? player,
   }) {
     return _runBusy(() async {
       _requireOnline(library);
       final client = _requireClient();
-      final decoded = jsonDecode(library.exportSyncSnapshotJson());
-      if (decoded is! Map) {
-        throw const FormatException('Portable library snapshot is invalid.');
-      }
+      final snapshot = _snapshotForPush(library, player: player);
       try {
         final result = await client.push(
           baseRevision: baseRevision ?? _lastKnownRevision,
-          snapshot: Map<String, Object?>.from(decoded),
+          snapshot: snapshot,
         );
         _lastKnownRevision = result.revision;
         _applyRemoteMetadata(result);
@@ -230,6 +233,22 @@ class LibrarySyncStore extends ChangeNotifier {
       await _saveMetadata();
     } on Object {
       _automaticUploadEnabled = previous;
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  Future<void> setQueueSyncEnabled(bool enabled) async {
+    if (_queueSyncEnabled == enabled) {
+      return;
+    }
+
+    final previous = _queueSyncEnabled;
+    _queueSyncEnabled = enabled;
+    try {
+      await _saveMetadata();
+    } on Object {
+      _queueSyncEnabled = previous;
       rethrow;
     }
     notifyListeners();
@@ -313,7 +332,10 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
-  Future<bool> uploadAutomaticallyIfDue(LibraryStore library) async {
+  Future<bool> uploadAutomaticallyIfDue(
+    LibraryStore library, {
+    PlayerController? player,
+  }) async {
     if (!_loaded ||
         !_automaticUploadEnabled ||
         !isConfigured ||
@@ -332,7 +354,7 @@ class LibrarySyncStore extends ChangeNotifier {
     _lastAutomaticUploadAttemptAt = now;
     try {
       await _saveMetadata();
-      await push(library);
+      await push(library, player: player);
       _lastAutomaticUploadAt = now;
       await _saveMetadata();
       notifyListeners();
@@ -342,7 +364,10 @@ class LibrarySyncStore extends ChangeNotifier {
     }
   }
 
-  Future<LibrarySyncRemoteSnapshot> pull(LibraryStore library) {
+  Future<LibrarySyncRemoteSnapshot> pull(
+    LibraryStore library, {
+    PlayerController? player,
+  }) {
     return _runBusy(() async {
       _requireOnline(library);
       final remote = await _requireClient().fetch();
@@ -351,7 +376,19 @@ class LibrarySyncStore extends ChangeNotifier {
           'The sync server does not have a library snapshot yet.',
         );
       }
+      final queueSnapshot = _queueSyncEnabled
+          ? _queueSnapshotFrom(remote.snapshot)
+          : null;
+      final queuePlayer = queueSnapshot == null
+          ? null
+          : _requireQueuePlayer(player);
       await library.restoreSyncSnapshotJson(jsonEncode(remote.snapshot));
+      if (queuePlayer != null && queueSnapshot != null) {
+        await queuePlayer.restoreQueueSyncSnapshot(
+          queueSnapshot,
+          library.tracks,
+        );
+      }
       _lastKnownRevision = remote.revision;
       _applyRemoteMetadata(remote);
       _lastSyncAt = _clock().toUtc();
@@ -361,7 +398,10 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
-  Future<LibrarySyncRemoteSnapshot> mergeAndPush(LibraryStore library) {
+  Future<LibrarySyncRemoteSnapshot> mergeAndPush(
+    LibraryStore library, {
+    PlayerController? player,
+  }) {
     return _runBusy(() async {
       _requireOnline(library);
       final client = _requireClient();
@@ -372,20 +412,36 @@ class LibrarySyncStore extends ChangeNotifier {
         );
       }
       final localBeforeMerge = library.exportSyncSnapshotJson();
+      final localQueueSnapshot = _queueSyncEnabled
+          ? _requireQueuePlayer(player).exportQueueSyncSnapshot(library.tracks)
+          : null;
+      final remoteQueueSnapshot = _queueSyncEnabled
+          ? _queueSnapshotFrom(remote.snapshot)
+          : null;
+      final mergedQueueSnapshot = _newestQueueSnapshot(
+        localQueueSnapshot,
+        remoteQueueSnapshot,
+      );
       var remoteAcceptedMerge = false;
       try {
         await library.mergeSyncSnapshotJson(jsonEncode(remote.snapshot));
-        final decoded = jsonDecode(library.exportSyncSnapshotJson());
-        if (decoded is! Map) {
-          throw const FormatException(
-            'Merged portable library snapshot is invalid.',
-          );
-        }
         final result = await client.push(
           baseRevision: remote.revision,
-          snapshot: Map<String, Object?>.from(decoded),
+          snapshot: _snapshotForPush(
+            library,
+            player: player,
+            queueSnapshot: mergedQueueSnapshot,
+          ),
         );
         remoteAcceptedMerge = true;
+        if (_queueSyncEnabled &&
+            remoteQueueSnapshot != null &&
+            identical(mergedQueueSnapshot, remoteQueueSnapshot)) {
+          await _requireQueuePlayer(player).restoreQueueSyncSnapshot(
+            remoteQueueSnapshot,
+            library.tracks,
+          );
+        }
         _lastKnownRevision = result.revision;
         _applyRemoteMetadata(result);
         _lastSyncAt = _clock().toUtc();
@@ -450,6 +506,7 @@ class LibrarySyncStore extends ChangeNotifier {
       _remoteUpdatedAt = null;
       _remoteUpdatedByDevice = null;
       _automaticUploadEnabled = false;
+      _queueSyncEnabled = false;
       _lastAutomaticUploadAttemptAt = null;
       _lastAutomaticUploadAt = null;
       _conflict = null;
@@ -469,6 +526,61 @@ class LibrarySyncStore extends ChangeNotifier {
     if (library.offlineModeEnabled) {
       throw StateError('Turn off offline mode before syncing the library.');
     }
+  }
+
+  Map<String, Object?> _snapshotForPush(
+    LibraryStore library, {
+    required PlayerController? player,
+    TrackQueueReferenceSnapshot? queueSnapshot,
+  }) {
+    final decoded = jsonDecode(library.exportSyncSnapshotJson());
+    if (decoded is! Map) {
+      throw const FormatException('Portable library snapshot is invalid.');
+    }
+    final snapshot = Map<String, Object?>.from(decoded);
+    if (!_queueSyncEnabled) {
+      snapshot.remove('queueSync');
+      return snapshot;
+    }
+
+    final queue = queueSnapshot ??
+        _requireQueuePlayer(player).exportQueueSyncSnapshot(library.tracks);
+    snapshot['queueSync'] = queue.toJson();
+    return snapshot;
+  }
+
+  PlayerController _requireQueuePlayer(PlayerController? player) {
+    if (player == null) {
+      throw StateError(
+        'Queue sync requires an active player controller on this device.',
+      );
+    }
+    return player;
+  }
+
+  TrackQueueReferenceSnapshot? _queueSnapshotFrom(
+    Map<String, Object?> snapshot,
+  ) {
+    final raw = snapshot['queueSync'];
+    if (raw == null) {
+      return null;
+    }
+    if (raw is! Map) {
+      throw const FormatException('Queue sync snapshot must be an object.');
+    }
+    return TrackQueueReferenceSnapshot.fromJson(
+      Map<String, Object?>.from(raw),
+    );
+  }
+
+  TrackQueueReferenceSnapshot? _newestQueueSnapshot(
+    TrackQueueReferenceSnapshot? local,
+    TrackQueueReferenceSnapshot? remote,
+  ) {
+    if (local == null || remote == null) {
+      return local ?? remote;
+    }
+    return remote.updatedAt.isAfter(local.updatedAt) ? remote : local;
   }
 
   void _applyRemoteMetadata(LibrarySyncRemoteSnapshot remote) {
@@ -512,6 +624,7 @@ class LibrarySyncStore extends ChangeNotifier {
         'remoteUpdatedAt': _remoteUpdatedAt?.toIso8601String(),
         'remoteUpdatedByDevice': _remoteUpdatedByDevice,
         'automaticUploadEnabled': _automaticUploadEnabled,
+        'queueSyncEnabled': _queueSyncEnabled,
         'lastAutomaticUploadAttemptAt': _lastAutomaticUploadAttemptAt
             ?.toIso8601String(),
         'lastAutomaticUploadAt': _lastAutomaticUploadAt?.toIso8601String(),
