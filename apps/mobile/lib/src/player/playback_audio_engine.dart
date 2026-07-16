@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
+import 'android_audio_visualizer_bridge.dart';
 import 'playback_audio_effects.dart';
 
 typedef CrossfadeTrackVolumeResolver = double Function(Track track);
@@ -74,20 +75,33 @@ abstract interface class AudioEffectsPlaybackAudioEngine
   Future<void> setLoudnessEnhancerTargetGain(double gainDb);
 }
 
+abstract interface class AudioVisualizationPlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  bool get supportsVisualizer;
+  Stream<List<double>> get visualizerBands;
+
+  Future<bool> startVisualizer();
+  Future<void> stopVisualizer();
+}
+
 class JustAudioPlaybackEngine
     implements
         CrossfadePlaybackAudioEngine,
         AudioEffectsPlaybackAudioEngine,
+        AudioVisualizationPlaybackAudioEngine,
         PitchPlaybackAudioEngine {
   factory JustAudioPlaybackEngine({
     AudioPlayer? player,
     bool enableAndroidAudioEffects = false,
+    bool enableAndroidVisualizer = false,
     bool enablePitch = false,
   }) {
     if (player != null || !enableAndroidAudioEffects) {
       return JustAudioPlaybackEngine._(
         player: player ?? AudioPlayer(),
         crossfadePlayer: AudioPlayer(),
+        visualizer:
+            enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
         enablePitch: enablePitch,
       );
     }
@@ -117,6 +131,8 @@ class JustAudioPlaybackEngine
       crossfadeEqualizer: crossfadeEqualizer,
       loudnessEnhancer: loudnessEnhancer,
       crossfadeLoudnessEnhancer: crossfadeLoudnessEnhancer,
+      visualizer:
+          enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
       enablePitch: enablePitch,
     );
   }
@@ -128,6 +144,7 @@ class JustAudioPlaybackEngine
     AndroidEqualizer? crossfadeEqualizer,
     AndroidLoudnessEnhancer? loudnessEnhancer,
     AndroidLoudnessEnhancer? crossfadeLoudnessEnhancer,
+    AndroidAudioVisualizerBridge? visualizer,
     required bool enablePitch,
   })  : _player = player,
         _crossfadePlayer = crossfadePlayer,
@@ -135,6 +152,7 @@ class JustAudioPlaybackEngine
         _crossfadeEqualizer = crossfadeEqualizer,
         _loudnessEnhancer = loudnessEnhancer,
         _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer,
+        _visualizer = visualizer,
         _pitchEnabled = enablePitch {
     _durationSubscription = _player.durationStream.listen(
       (_) => _scheduleCrossfade(),
@@ -145,6 +163,9 @@ class JustAudioPlaybackEngine
     _stateSubscription = _player.playerStateStream.listen((_) {
       _scheduleCrossfade();
     });
+    _visualizerSessionSubscription = _player.androidAudioSessionIdStream.listen(
+      (sessionId) => _visualizerSessionId = sessionId,
+    );
   }
 
   final AudioPlayer _player;
@@ -153,11 +174,13 @@ class JustAudioPlaybackEngine
   final AndroidEqualizer? _crossfadeEqualizer;
   final AndroidLoudnessEnhancer? _loudnessEnhancer;
   final AndroidLoudnessEnhancer? _crossfadeLoudnessEnhancer;
+  final AndroidAudioVisualizerBridge? _visualizer;
   final bool _pitchEnabled;
   final List<Track> _queue = <Track>[];
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<int?>? _indexSubscription;
   StreamSubscription<PlayerState>? _stateSubscription;
+  StreamSubscription<int?>? _visualizerSessionSubscription;
   Timer? _crossfadeStartTimer;
   Timer? _crossfadeStepTimer;
   Duration _crossfadeDuration = Duration.zero;
@@ -166,6 +189,7 @@ class JustAudioPlaybackEngine
   bool _crossfadeActive = false;
   bool _mainSourceLoaded = false;
   bool _crossfadeSourceLoaded = false;
+  int? _visualizerSessionId;
   PlaybackEqualizerProfile _equalizerProfile =
       const PlaybackEqualizerProfile(preset: PlaybackEqualizerPreset.flat);
   Future<void> _equalizerApplyTail = Future<void>.value();
@@ -229,6 +253,13 @@ class JustAudioPlaybackEngine
 
   @override
   bool get supportsLoudnessEnhancer => _loudnessEnhancer != null;
+
+  @override
+  bool get supportsVisualizer => _visualizer != null;
+
+  @override
+  Stream<List<double>> get visualizerBands =>
+      _visualizer?.bands ?? const Stream<List<double>>.empty();
 
   @override
   Duration get crossfadeDuration => _crossfadeDuration;
@@ -431,6 +462,21 @@ class JustAudioPlaybackEngine
   }
 
   @override
+  Future<bool> startVisualizer() async {
+    final visualizer = _visualizer;
+    final sessionId = _visualizerSessionId;
+    if (visualizer == null || sessionId == null) {
+      return false;
+    }
+    return visualizer.start(sessionId);
+  }
+
+  @override
+  Future<void> stopVisualizer() async {
+    await _visualizer?.stop();
+  }
+
+  @override
   void setCrossfadeTrackVolumeResolver(
     CrossfadeTrackVolumeResolver? resolver,
   ) {
@@ -452,6 +498,8 @@ class JustAudioPlaybackEngine
   @override
   Future<void> dispose() async {
     _cancelCrossfade();
+    await _visualizerSessionSubscription?.cancel();
+    await _visualizer?.stop();
     await _durationSubscription?.cancel();
     await _indexSubscription?.cancel();
     await _stateSubscription?.cancel();

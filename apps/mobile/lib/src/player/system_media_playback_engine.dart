@@ -14,6 +14,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     implements
         CrossfadePlaybackAudioEngine,
         AudioEffectsPlaybackAudioEngine,
+        AudioVisualizationPlaybackAudioEngine,
         PitchPlaybackAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
@@ -125,6 +126,17 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   bool get supportsLoudnessEnhancer =>
       _engine is AudioEffectsPlaybackAudioEngine &&
       _engine.supportsLoudnessEnhancer;
+
+  @override
+  bool get supportsVisualizer =>
+      _engine is AudioVisualizationPlaybackAudioEngine &&
+      _engine.supportsVisualizer;
+
+  @override
+  Stream<List<double>> get visualizerBands =>
+      _engine is AudioVisualizationPlaybackAudioEngine
+      ? _engine.visualizerBands
+      : const Stream<List<double>>.empty();
 
   @override
   Future<void> setQueue(
@@ -318,6 +330,26 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       );
     }
     return engine.setLoudnessEnhancerTargetGain(gainDb);
+  }
+
+  @override
+  Future<bool> startVisualizer() {
+    final engine = _engine;
+    if (engine is! AudioVisualizationPlaybackAudioEngine ||
+        !engine.supportsVisualizer) {
+      return Future<bool>.value(false);
+    }
+    return engine.startVisualizer();
+  }
+
+  @override
+  Future<void> stopVisualizer() {
+    final engine = _engine;
+    if (engine is! AudioVisualizationPlaybackAudioEngine ||
+        !engine.supportsVisualizer) {
+      return Future<void>.value();
+    }
+    return engine.stopVisualizer();
   }
 
   @override

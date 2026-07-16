@@ -19,6 +19,7 @@ ANDROID_PERMISSIONS = (
     "android.permission.WAKE_LOCK",
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+    "android.permission.RECORD_AUDIO",
 )
 ACTIVITY_NAME = "dev.aethertune.aethertune.MainActivity"
 SERVICE_NAME = "com.ryanheise.audioservice.AudioService"
@@ -419,14 +420,27 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
 
 _MAIN_ACTIVITY_KOTLIN = """package dev.aethertune.aethertune
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.audiofx.Visualizer
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import com.ryanheise.audioservice.AudioServiceActivity
+import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlin.math.ln
+import kotlin.math.sqrt
 
 class MainActivity : AudioServiceActivity() {
+    private val audioVisualizer = AetherTuneAudioVisualizer()
+    private var pendingVisualizerResult: MethodChannel.Result? = null
+    private var pendingVisualizerSessionId: Int? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dispatchLauncherShortcut(intent)
@@ -439,6 +453,30 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/audio_visualizer/bands",
+        ).setStreamHandler(audioVisualizer)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/audio_visualizer",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    val sessionId = call.argument<Number>("audioSessionId")?.toInt()
+                    if (sessionId == null || sessionId <= 0) {
+                        result.success(false)
+                    } else {
+                        startVisualizer(sessionId, result)
+                    }
+                }
+                "stop" -> {
+                    audioVisualizer.stop()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/playback_widget",
@@ -460,6 +498,55 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != visualizerPermissionRequestCode) {
+            return
+        }
+        val result = pendingVisualizerResult
+        val sessionId = pendingVisualizerSessionId
+        pendingVisualizerResult = null
+        pendingVisualizerSessionId = null
+        if (result == null) {
+            return
+        }
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        result.success(granted && sessionId != null && audioVisualizer.start(sessionId))
+    }
+
+    override fun onDestroy() {
+        audioVisualizer.stop()
+        super.onDestroy()
+    }
+
+    private fun startVisualizer(sessionId: Int, result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            if (pendingVisualizerResult != null) {
+                result.error("permission-request-active", "A visualizer permission request is active.", null)
+                return
+            }
+            pendingVisualizerResult = result
+            pendingVisualizerSessionId = sessionId
+            requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                visualizerPermissionRequestCode,
+            )
+            return
+        }
+        result.success(audioVisualizer.start(sessionId))
+    }
+
+    private companion object {
+        const val visualizerPermissionRequestCode = 7318
+    }
+
     private fun dispatchLauncherShortcut(intent: Intent) {
         when (intent.action) {
             "dev.aethertune.aethertune.shortcut.PREVIOUS" ->
@@ -478,6 +565,91 @@ class MainActivity : AudioServiceActivity() {
                     KeyEvent.KEYCODE_MEDIA_NEXT,
                 )
         }
+    }
+}
+
+private class AetherTuneAudioVisualizer : EventChannel.StreamHandler {
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var eventSink: EventChannel.EventSink? = null
+    private var visualizer: Visualizer? = null
+
+    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        eventSink = events
+    }
+
+    override fun onCancel(arguments: Any?) {
+        eventSink = null
+    }
+
+    fun start(audioSessionId: Int): Boolean {
+        stop()
+        return try {
+            val effect = Visualizer(audioSessionId)
+            val captureRange = Visualizer.getCaptureSizeRange()
+            val captureSize = captureRange.last().coerceAtMost(1024)
+            effect.captureSize = captureSize
+            val status = effect.setDataCaptureListener(
+                object : Visualizer.OnDataCaptureListener {
+                    override fun onWaveFormDataCapture(
+                        visualizer: Visualizer,
+                        waveform: ByteArray,
+                        samplingRate: Int,
+                    ) = Unit
+
+                    override fun onFftDataCapture(
+                        visualizer: Visualizer,
+                        fft: ByteArray,
+                        samplingRate: Int,
+                    ) {
+                        publishBands(fft)
+                    }
+                },
+                Visualizer.getMaxCaptureRate() / 2,
+                false,
+                true,
+            )
+            if (status != Visualizer.SUCCESS) {
+                effect.release()
+                false
+            } else {
+                effect.enabled = true
+                visualizer = effect
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun stop() {
+        visualizer?.let { effect ->
+            effect.enabled = false
+            effect.release()
+        }
+        visualizer = null
+    }
+
+    private fun publishBands(fft: ByteArray) {
+        if (fft.size < 4) {
+            return
+        }
+        val bands = DoubleArray(16)
+        val counts = IntArray(16)
+        val pairCount = fft.size / 2
+        for (index in 1 until pairCount) {
+            val real = fft[index * 2].toInt().toDouble()
+            val imaginary = fft[index * 2 + 1].toInt().toDouble()
+            val magnitude = sqrt(real * real + imaginary * imaginary)
+            val band = ((index - 1) * bands.size / (pairCount - 1))
+                .coerceIn(0, bands.lastIndex)
+            bands[band] += magnitude
+            counts[band] += 1
+        }
+        val normalized = bands.indices.map { index ->
+            val average = if (counts[index] == 0) 0.0 else bands[index] / counts[index]
+            (ln(average + 1.0) / 5.0).coerceIn(0.0, 1.0)
+        }
+        mainHandler.post { eventSink?.success(normalized) }
     }
 }
 """
@@ -1118,6 +1290,9 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "MethodChannel",
         "dev.aethertune/playback_widget",
         "updatePlaybackWidgets",
+        "dev.aethertune/audio_visualizer",
+        "AetherTuneAudioVisualizer",
+        "Visualizer.getMaxCaptureRate",
     )
     if not all(snippet in activity_source_text for snippet in required_activity_snippets):
         raise RuntimeError("Android playback widget state bridge is missing")

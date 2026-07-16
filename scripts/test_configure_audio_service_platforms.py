@@ -105,6 +105,18 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 'call.argument<String>("artworkPath")',
                 activity_source.read_text(encoding="utf-8"),
             )
+            self.assertIn(
+                'dev.aethertune/audio_visualizer',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'Visualizer.getMaxCaptureRate()',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'android.permission.RECORD_AUDIO',
+                manifest_path.read_text(encoding="utf-8"),
+            )
             widget_layout = (
                 widget_source.parents[4]
                 / "res/layout/aethertune_playback_widget.xml"

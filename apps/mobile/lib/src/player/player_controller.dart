@@ -139,6 +139,13 @@ class PlayerController extends ChangeNotifier {
   bool get supportsLoudnessEnhancer =>
       _audio is AudioEffectsPlaybackAudioEngine &&
       _audio.supportsLoudnessEnhancer;
+  bool get supportsVisualizer =>
+      _audio is AudioVisualizationPlaybackAudioEngine &&
+      _audio.supportsVisualizer;
+  Stream<List<double>> get visualizerBands =>
+      _audio is AudioVisualizationPlaybackAudioEngine
+      ? _audio.visualizerBands
+      : const Stream<List<double>>.empty();
   bool get equalizerEnabled => _equalizerEnabled;
   PlaybackEqualizerPreset get equalizerPreset => _equalizerPreset;
   List<PlaybackEqualizerBand> get equalizerBands =>
@@ -1303,6 +1310,24 @@ class PlayerController extends ChangeNotifier {
       );
     }
     return engine;
+  }
+
+  Future<bool> startVisualizer() {
+    final engine = _audio;
+    if (engine is! AudioVisualizationPlaybackAudioEngine ||
+        !engine.supportsVisualizer) {
+      return Future<bool>.value(false);
+    }
+    return engine.startVisualizer();
+  }
+
+  Future<void> stopVisualizer() {
+    final engine = _audio;
+    if (engine is! AudioVisualizationPlaybackAudioEngine ||
+        !engine.supportsVisualizer) {
+      return Future<void>.value();
+    }
+    return engine.stopVisualizer();
   }
 
   Future<void> _refreshEqualizerBands({required bool notify}) async {

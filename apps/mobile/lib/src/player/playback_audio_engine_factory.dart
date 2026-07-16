@@ -25,6 +25,8 @@ Future<PlaybackAudioEngine> createPlaybackAudioEngine() async {
   final engine = JustAudioPlaybackEngine(
     enableAndroidAudioEffects:
         !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
+    enableAndroidVisualizer:
+        !kIsWeb && supportsAndroidAudioEffects(defaultTargetPlatform),
     enablePitch: !kIsWeb && supportsPitchControl(defaultTargetPlatform),
   );
   if (kIsWeb || !supportsSystemMediaSession(defaultTargetPlatform)) {

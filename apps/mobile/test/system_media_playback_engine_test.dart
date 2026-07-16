@@ -244,6 +244,21 @@ void main() {
     expect(await engine.loadEqualizerBands(), delegate.bands);
   });
 
+  test('forwards an opt-in visualizer through the system media wrapper',
+      () async {
+    final delegate = _FakeVisualizationPlaybackEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+
+    expect(engine.supportsVisualizer, isTrue);
+    expect(await engine.startVisualizer(), isTrue);
+    await engine.stopVisualizer();
+
+    expect(delegate.startCalls, 1);
+    expect(delegate.stopCalls, 1);
+    expect(await engine.visualizerBands.first, <double>[0.2, 0.8]);
+  });
+
   test('enables native media sessions only on supported platforms', () {
     expect(supportsSystemMediaSession(TargetPlatform.android), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.iOS), isTrue);
@@ -478,6 +493,30 @@ class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> setLoudnessEnhancerTargetGain(double gainDb) async {
     loudnessEnhancerTargetGainValue = gainDb;
+  }
+}
+
+class _FakeVisualizationPlaybackEngine extends _FakePlaybackAudioEngine
+    implements AudioVisualizationPlaybackAudioEngine {
+  int startCalls = 0;
+  int stopCalls = 0;
+
+  @override
+  bool get supportsVisualizer => true;
+
+  @override
+  Stream<List<double>> get visualizerBands =>
+      Stream<List<double>>.value(<double>[0.2, 0.8]);
+
+  @override
+  Future<bool> startVisualizer() async {
+    startCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<void> stopVisualizer() async {
+    stopCalls += 1;
   }
 }
 

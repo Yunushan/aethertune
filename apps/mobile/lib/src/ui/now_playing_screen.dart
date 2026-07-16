@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -441,6 +442,10 @@ class _NowPlayingControls extends StatelessWidget {
             const SizedBox(height: 4),
             _ChapterMarkers(player: player, chapters: chapters),
           ],
+          if (player.supportsVisualizer) ...<Widget>[
+            const SizedBox(height: 12),
+            _PlaybackVisualizer(player: player),
+          ],
           const SizedBox(height: 4),
           _PlaybackVolumeControl(player: player),
           const SizedBox(height: 8),
@@ -530,6 +535,159 @@ class _NowPlayingControls extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PlaybackVisualizer extends StatefulWidget {
+  const _PlaybackVisualizer({required this.player});
+
+  final PlayerController player;
+
+  @override
+  State<_PlaybackVisualizer> createState() => _PlaybackVisualizerState();
+}
+
+class _PlaybackVisualizerState extends State<_PlaybackVisualizer> {
+  bool _enabled = false;
+  bool _starting = false;
+
+  @override
+  void dispose() {
+    unawaited(widget.player.stopVisualizer());
+    super.dispose();
+  }
+
+  Future<void> _start() async {
+    setState(() => _starting = true);
+    try {
+      final enabled = await widget.player.startVisualizer();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _enabled = enabled);
+      if (!enabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Visualizer is unavailable until audio is ready.'),
+          ),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not enable the visualizer.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _starting = false);
+      }
+    }
+  }
+
+  Future<void> _stop() async {
+    await widget.player.stopVisualizer();
+    if (mounted) {
+      setState(() => _enabled = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_enabled) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const Key('now-playing-enable-visualizer'),
+          onPressed: _starting ? null : _start,
+          icon: _starting
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.graphic_eq),
+          label: const Text('Enable visualizer'),
+        ),
+      );
+    }
+
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Live playback visualizer',
+      child: SizedBox(
+        height: 72,
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: StreamBuilder<List<double>>(
+                stream: widget.player.visualizerBands,
+                initialData: const <double>[],
+                builder: (context, snapshot) => CustomPaint(
+                  painter: _VisualizerBarsPainter(
+                    bands: snapshot.data ?? const <double>[],
+                    color: colors.primary,
+                    mutedColor: colors.primaryContainer,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Disable visualizer',
+              onPressed: _stop,
+              icon: const Icon(Icons.graphic_eq_outlined),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VisualizerBarsPainter extends CustomPainter {
+  const _VisualizerBarsPainter({
+    required this.bands,
+    required this.color,
+    required this.mutedColor,
+  });
+
+  final List<double> bands;
+  final Color color;
+  final Color mutedColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const bandCount = 16;
+    const gap = 3.0;
+    final barWidth = (size.width - (bandCount - 1) * gap) / bandCount;
+    final mutedPaint = Paint()..color = mutedColor;
+    final activePaint = Paint()..color = color;
+    for (var index = 0; index < bandCount; index += 1) {
+      final x = index * (barWidth + gap);
+      final level = index < bands.length
+          ? bands[index].clamp(0.0, 1.0).toDouble()
+          : 0.0;
+      final activeHeight = 6 + (size.height - 6) * level;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, 0, barWidth, size.height),
+          const Radius.circular(2),
+        ),
+        mutedPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, size.height - activeHeight, barWidth, activeHeight),
+          const Radius.circular(2),
+        ),
+        activePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_VisualizerBarsPainter oldDelegate) =>
+      oldDelegate.bands != bands ||
+      oldDelegate.color != color ||
+      oldDelegate.mutedColor != mutedColor;
 }
 
 class _PlaybackSpeedMenu extends StatelessWidget {
