@@ -13458,7 +13458,10 @@ class _SettingsTab extends StatelessWidget {
     final localizations = AppLocalizations.of(context)!;
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
-    final diagnostics = context.watch<LocalDiagnosticLog>();
+    // HomeScreen is also used directly by focused widget tests and embedders.
+    // The app shell supplies this shared log, while those narrow surfaces can
+    // remain independent of diagnostics capture.
+    final diagnostics = context.watch<LocalDiagnosticLog?>();
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
@@ -13774,35 +13777,40 @@ class _SettingsTab extends StatelessWidget {
             ),
         ],
         const Divider(),
-        ListTile(
-          key: const Key('local-diagnostic-log'),
-          leading: const Icon(Icons.bug_report_outlined),
-          title: const Text('Local diagnostics'),
-          subtitle: Text(
-            diagnostics.entries.isEmpty
-                ? 'No reports. Nothing is sent from this device.'
-                : '${diagnostics.entries.length} local report(s). Nothing is sent automatically.',
+        if (diagnostics != null)
+          ListTile(
+            key: const Key('local-diagnostic-log'),
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text('Local diagnostics'),
+            subtitle: Text(
+              diagnostics.entries.isEmpty
+                  ? 'No reports. Nothing is sent from this device.'
+                  : '${diagnostics.entries.length} local report(s). Nothing is sent automatically.',
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  tooltip: 'Export local diagnostics',
+                  onPressed: diagnostics.entries.isEmpty
+                      ? null
+                      : () => unawaited(
+                          _exportLocalDiagnostics(context, diagnostics),
+                        ),
+                  icon: const Icon(Icons.save_alt_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Clear local diagnostics',
+                  onPressed: diagnostics.entries.isEmpty
+                      ? null
+                      : () => unawaited(
+                          _clearLocalDiagnostics(context, diagnostics),
+                        ),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              IconButton(
-                tooltip: 'Export local diagnostics',
-                onPressed: diagnostics.entries.isEmpty
-                    ? null
-                    : () => unawaited(_exportLocalDiagnostics(context, diagnostics)),
-                icon: const Icon(Icons.save_alt_outlined),
-              ),
-              IconButton(
-                tooltip: 'Clear local diagnostics',
-                onPressed: diagnostics.entries.isEmpty
-                    ? null
-                    : () => unawaited(_clearLocalDiagnostics(context, diagnostics)),
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
-          ),
-        ),
         ListTile(
           leading: const Icon(Icons.language_outlined),
           title: Text(localizations.language),
