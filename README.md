@@ -154,7 +154,7 @@ This scaffold includes real app code, not only a README:
 | Provider architecture | `MusicSourceProvider`, optional `MusicSourceSearchPagingProvider`, `MusicCatalogProvider`, optional `MusicCatalogPagingProvider`, `MusicCatalogDiscoveryProvider`, optional `MusicCatalogDiscoveryPagingProvider`, and `MusicCatalogRadioProvider`, `MusicPlaylistMutationProvider`, and `LyricsProvider` interfaces with privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered checksum-verified private media cache storage, resilient paginated unified music-provider search, LRCLIB plain/synced lyrics search, demo provider, Podcast RSS feeds, Radio Browser, Internet Archive, and configurable Jellyfin/Navidrome/Subsonic accounts with secure credentials, test-before-replace credential rotation, salted Subsonic tokens, paginated catalog/discovery browsing, provider-backed radio, credential-safe artwork, and remote playlist editing |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
 | GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
-| Proof gates | CI analyzes/tests Flutter, runs provider and system-media contract tests, compiles an Android APK and unsigned iOS app, builds all desktop targets, analyzes/tests/compiles the server, and defines tag/manual release artifacts |
+| Proof gates | CI analyzes/tests Flutter, runs provider and system-media contract tests, compiles an Android APK and unsigned iOS app, builds all desktop targets, analyzes/tests/compiles the server, assembles checksummed tag/manual release bundles, and publishes version-tag GitHub Release assets |
 
 ## Feature Goal
 

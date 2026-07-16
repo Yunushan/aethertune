@@ -23,6 +23,9 @@ jobs:
       - name: Test SBOM generator
         run: python3 scripts/ci/test_generate_dart_sbom.py
 
+      - name: Test release workflow contract
+        run: python3 scripts/ci/test_release_workflow.py
+
       - name: Resolve client dependencies
         run: cd apps/mobile && flutter pub get
 

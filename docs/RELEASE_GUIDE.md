@@ -52,7 +52,8 @@ flutter build macos --release
 flutter build windows --release
 ```
 
-The `aethertune-release-artifacts` GitHub Actions workflow can also build downloadable desktop archives on tags or manual dispatch:
+The `aethertune-release-artifacts` GitHub Actions workflow builds downloadable
+desktop archives on tags or manual dispatch:
 
 - `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`
 - `aethertune-macos`: `aethertune-macos.zip`
@@ -78,7 +79,9 @@ The release workflow uploads native server executables as:
 
 ## GitHub release workflow
 
-Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts` workflow manually. It uploads:
+Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts`
+workflow manually. Both runs assemble the following files into the
+`aethertune-release-bundle` artifact with a `SHA256SUMS.txt` manifest:
 
 - Android: `app-release.apk` and `app-release.aab`
 - Linux desktop archive
@@ -86,6 +89,12 @@ Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts` workflow
 - Windows desktop archive
 - Linux/macOS/Windows server executables
 - `aethertune-dependency-provenance`: resolved client/server dependency inventories and deterministic CycloneDX 1.5 SBOMs
+
+A pushed `v*` tag also creates or updates a GitHub Release and attaches the
+same bundle files individually. Manual dispatch intentionally remains
+artifact-only, so it can validate a candidate without publishing it. Verify a
+download with `sha256sum -c SHA256SUMS.txt` on Linux/macOS, or
+`Get-FileHash` on Windows.
 
 The SBOM artifact is generated from the exact `dart pub deps --json` graph
 resolved by that workflow. It intentionally omits a timestamp, embeds the
@@ -113,7 +122,8 @@ AetherTune is MIT licensed and has no telemetry. To prepare for F-Droid:
 - [ ] `flutter test` passes.
 - [ ] Desktop debug builds pass in GitHub Actions.
 - [ ] Release artifact workflow completes.
-- [ ] Download and retain the `aethertune-dependency-provenance` artifact.
+- [ ] Download the `aethertune-release-bundle` artifact or verify the tagged GitHub Release.
+- [ ] Verify downloaded files against `SHA256SUMS.txt`.
 - [ ] `dart analyze` passes in `services/server`.
 - [ ] `dart test` passes in `services/server`.
 - [ ] `dart compile exe` passes in `services/server`.
