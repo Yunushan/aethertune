@@ -66,15 +66,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(engine.loudnessEnhancerEnabledValue, isTrue);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('virtualizer-enabled-switch')),
+    final virtualizerSwitch = find.byKey(
+      const ValueKey<String>('virtualizer-enabled-switch'),
     );
+    await tester.ensureVisible(virtualizerSwitch);
+    await tester.pumpAndSettle();
+    await tester.tap(virtualizerSwitch);
     await tester.pumpAndSettle();
     expect(engine.virtualizerEnabledValue, isTrue);
 
-    final spatialSlider = tester.widget<Slider>(
-      find.byKey(const ValueKey<String>('virtualizer-strength-slider')),
+    final spatialSliderFinder = find.byKey(
+      const ValueKey<String>('virtualizer-strength-slider'),
     );
+    await tester.ensureVisible(spatialSliderFinder);
+    final spatialSlider = tester.widget<Slider>(spatialSliderFinder);
     spatialSlider.onChangeEnd!(650);
     await tester.pumpAndSettle();
     expect(engine.virtualizerStrengthValue, 650);
