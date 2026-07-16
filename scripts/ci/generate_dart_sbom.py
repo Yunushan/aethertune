@@ -39,8 +39,7 @@ def _dependency_components(graph: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(packages, list):
         raise ValueError("dependency graph must contain a packages array")
 
-    root = graph.get("root")
-    root_name = root.get("name") if isinstance(root, dict) else None
+    root_name = _root_name(graph)
     components: list[dict[str, Any]] = []
     names: set[str] = set()
 
@@ -76,13 +75,31 @@ def _dependency_components(graph: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(components, key=lambda component: component["name"].lower())
 
 
+def _root_name(graph: dict[str, Any]) -> str:
+    root = graph.get("root")
+    if isinstance(root, str):
+        return _require_string(root, "root package name")
+    if isinstance(root, dict):
+        # Accept the object form too, which keeps this helper useful for
+        # callers that build a graph in memory rather than invoking Pub.
+        return _require_string(root.get("name"), "root package name")
+    raise ValueError("dependency graph must contain a root package name")
+
+
+def _root_version(graph: dict[str, Any], root_name: str) -> str:
+    packages = graph.get("packages")
+    assert isinstance(packages, list)
+    for package in packages:
+        if isinstance(package, dict) and package.get("name") == root_name:
+            return _require_string(package.get("version"), "root version")
+    raise ValueError(f"dependency graph does not include root package {root_name!r}")
+
+
 def generate_bom(graph: dict[str, Any], component_name: str) -> dict[str, Any]:
     """Return a stable CycloneDX 1.5 document for one resolved Dart graph."""
     component_name = _require_string(component_name, "component name")
-    root = graph.get("root")
-    if not isinstance(root, dict):
-        raise ValueError("dependency graph must contain a root object")
-    root_version = _require_string(root.get("version"), "root version")
+    root_name = _root_name(graph)
+    root_version = _root_version(graph, root_name)
     components = _dependency_components(graph)
     graph_sha256 = hashlib.sha256(
         json.dumps(graph, sort_keys=True, separators=(",", ":")).encode("utf-8")

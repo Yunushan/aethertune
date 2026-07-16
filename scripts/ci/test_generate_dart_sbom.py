@@ -18,8 +18,14 @@ SCRIPT = ROOT / "scripts" / "ci" / "generate_dart_sbom.py"
 class GenerateDartSbomTest(unittest.TestCase):
     def _graph(self) -> dict[str, object]:
         return {
-            "root": {"name": "mobile", "version": "1.2.3"},
+            "root": "mobile",
             "packages": [
+                {
+                    "name": "mobile",
+                    "version": "1.2.3",
+                    "source": "root",
+                    "kind": "root",
+                },
                 {
                     "name": "zeta",
                     "version": "2.0.0",
