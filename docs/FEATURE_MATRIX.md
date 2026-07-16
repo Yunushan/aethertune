@@ -91,7 +91,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Playback speed | Done | NewPipe, PipePipe, LibreTube, podcast and music players | The shared audio engine supports 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x, 2.5x, and 3x playback. Options sets a persisted default and Now Playing can apply or clear a device-local speed override for the current track without changing that default; automatic track changes restore the applicable override or default. Supported system media sessions receive the effective speed. Pitch-preserving DSP remains future work. |
 | Playback volume | Done | Music players | Now Playing and Options expose a 0-100% output-volume slider. It previews while dragging, persists on release, restores before playback, and disables only while an active sleep fade owns output volume. |
 | Sleep timer with fade/custom rules | Done | InnerTune, Namida, YouTube Music | Presets, custom 1-1440 minute duration, end-of-current-track action, opt-in 10-second/30-second/1-minute/2-minute fade-out, volume restore on cancel/stop, and unit-tested fade timing/volume rules are implemented. Needed next: media-session-aware sleep timer notifications. |
-| Output device picker | Roadmap | YouTube Music, desktop players | Platform route picker and Bluetooth/cast support. |
+| Output device picker | Scaffolded | YouTube Music, desktop players | Android/iOS Options opens the platform media route picker for speaker, wired, Bluetooth, and other available outputs, with an unavailable state. Desktop enumeration/selection and Cast remain. |
 
 ### Library And Local Files
 
