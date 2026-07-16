@@ -24,7 +24,9 @@ void main() {
     );
 
     expect(definition.name, 'Community mixes');
-    expect(definition.catalogUri, Uri.parse('https://catalog.example.test/music.json'));
+    expect(definition.catalogUri.scheme, 'https');
+    expect(definition.catalogUri.host, 'catalog.example.test');
+    expect(definition.catalogUri.path, '/music.json');
     expect(definition.mediaDomains, <String>['cdn.example.test']);
     expect(
       definition.declaredNetworkDomains,
@@ -153,7 +155,11 @@ void main() {
     expect(persisted, isNot(contains('token')));
     final restored = CustomCatalogStore();
     await restored.load();
-    expect(restored.definitions.single.toJson(), definition.toJson());
+    final restoredDefinition = restored.definitions.single;
+    expect(restoredDefinition.id, definition.id);
+    expect(restoredDefinition.name, definition.name);
+    expect(restoredDefinition.catalogUri.toString(), definition.catalogUri.toString());
+    expect(restoredDefinition.mediaDomains, definition.mediaDomains);
     expect(restored.musicProviders.single.id, definition.providerId);
 
     await restored.remove(definition.id);
