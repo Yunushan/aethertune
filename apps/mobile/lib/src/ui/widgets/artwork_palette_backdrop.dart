@@ -55,13 +55,18 @@ class _ArtworkPaletteBackdropState extends State<ArtworkPaletteBackdrop> {
   @override
   Widget build(BuildContext context) {
     final fallback = Theme.of(context).colorScheme.surface;
-    return AnimatedContainer(
-      key: const Key('now-playing-artwork-palette'),
+    final surface = artworkPaletteSurfaceColor(
+      fallback: fallback,
+      palette: _palette,
+    );
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: surface),
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOut,
-      color: artworkPaletteSurfaceColor(
-        fallback: fallback,
-        palette: _palette,
+      builder: (context, color, child) => Material(
+        key: const Key('now-playing-artwork-palette'),
+        color: color ?? surface,
+        child: child,
       ),
       child: widget.child,
     );
