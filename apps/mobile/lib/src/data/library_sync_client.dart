@@ -72,6 +72,10 @@ abstract interface class LibrarySyncGateway {
   Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision});
 }
 
+abstract interface class LibrarySyncMetadataGateway {
+  Future<LibrarySyncRemoteSnapshot> fetchMetadata();
+}
+
 abstract interface class LibrarySyncProfileGateway {
   Future<LibrarySyncProfile?> fetchProfile();
 }
@@ -86,6 +90,7 @@ abstract interface class LibrarySyncProfileEditorGateway {
 class LibrarySyncClient
     implements
         LibrarySyncGateway,
+        LibrarySyncMetadataGateway,
         LibrarySyncProfileGateway,
         LibrarySyncProfileEditorGateway {
   LibrarySyncClient({
@@ -152,6 +157,18 @@ class LibrarySyncClient
       }
     }
     return result;
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> fetchMetadata() async {
+    final response = await _execute(
+      'GET',
+      endpoint: account.libraryMetadataEndpointUri,
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseRemoteMetadata(response.body);
   }
 
   @override
@@ -312,6 +329,20 @@ LibrarySyncRemoteSnapshot _parseRemoteSnapshot(String rawBody) {
     updatedByDevice: _optionalString(body['updatedByDevice']),
     checksum: _optionalString(body['checksum']),
     snapshot: Map<String, Object?>.from(rawSnapshot),
+  );
+}
+
+LibrarySyncRemoteSnapshot _parseRemoteMetadata(String rawBody) {
+  final body = _jsonObject(rawBody);
+  final revision = body['revision'];
+  if (revision is! int || revision < 0) {
+    throw const FormatException('Library sync revision is invalid.');
+  }
+  return LibrarySyncRemoteSnapshot(
+    revision: revision,
+    updatedAt: _optionalDate(body['updatedAt']),
+    updatedByDevice: _optionalString(body['updatedByDevice']),
+    checksum: _optionalString(body['checksum']),
   );
 }
 

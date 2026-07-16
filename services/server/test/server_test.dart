@@ -291,6 +291,15 @@ void main() {
       expect(uploadBody['updatedByDevice'], 'android-phone');
       expect(uploadBody['checksum'], hasLength(64));
 
+      final metadata = await handler(
+        _request('GET', '/api/v1/sync/library/metadata', token: token),
+      );
+      final metadataBody = await _json(metadata);
+      expect(metadata.statusCode, 200);
+      expect(metadataBody['revision'], 1);
+      expect(metadataBody['checksum'], uploadBody['checksum']);
+      expect(metadataBody, isNot(contains('snapshot')));
+
       final downloaded = await handler(
         _request('GET', '/api/v1/sync/library', token: token),
       );

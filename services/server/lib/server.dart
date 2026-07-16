@@ -199,6 +199,12 @@ Handler createServerHandler({
           snapshots: snapshots,
           now: now,
         );
+      case 'api/v1/sync/library/metadata':
+        return _handleLibrarySyncMetadata(
+          request,
+          authenticator: authenticator,
+          snapshots: snapshots,
+        );
       default:
         return _jsonResponse(
           404,
@@ -273,6 +279,7 @@ String _logRoute(String path) {
     'api/v1/admin/sync-accounts' => '/api/v1/admin/sync-accounts',
     'api/v1/admin/sync-tokens' => '/api/v1/admin/sync-tokens',
     'api/v1/sync/library' => '/api/v1/sync/library',
+    'api/v1/sync/library/metadata' => '/api/v1/sync/library/metadata',
     _ => '/not-found',
   };
 }
@@ -663,6 +670,40 @@ Future<Response> _handleLibrarySync(
     default:
       return _methodNotAllowed(request);
   }
+}
+
+Future<Response> _handleLibrarySyncMetadata(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required LibrarySyncSnapshotStore snapshots,
+}) async {
+  if (request.method != 'GET') {
+    return _methodNotAllowed(request);
+  }
+  if (!authenticator.isConfigured) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'sync_not_configured'},
+    );
+  }
+
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  final userId = token == null ? null : authenticator.authenticate(token);
+  if (userId == null) {
+    return _unauthorizedResponse();
+  }
+
+  final snapshot = await snapshots.read(userId);
+  return _jsonResponse(
+    200,
+    snapshot?.toMetadataJson() ??
+        <String, Object?>{
+          'revision': 0,
+          'updatedAt': null,
+          'updatedByDevice': null,
+          'checksum': null,
+        },
+  );
 }
 
 ({int baseRevision, String deviceId}) _syncMutationFields(

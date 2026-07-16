@@ -14,6 +14,9 @@ class LibrarySyncAccount {
   Uri get libraryEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'sync', 'library']);
 
+  Uri get libraryMetadataEndpointUri =>
+      _endpointUri(<String>['api', 'v1', 'sync', 'library', 'metadata']);
+
   Uri get profileEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'auth', 'profile']);
 

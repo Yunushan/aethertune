@@ -354,6 +354,22 @@ class LibrarySyncStore extends ChangeNotifier {
     _lastAutomaticUploadAttemptAt = now;
     try {
       await _saveMetadata();
+      final client = _requireClient();
+      if (client is LibrarySyncMetadataGateway) {
+        final metadataClient = client as LibrarySyncMetadataGateway;
+        final remote = await metadataClient.fetchMetadata();
+        if (remote.revision != _lastKnownRevision) {
+          _conflict = LibrarySyncConflictException(
+            currentRevision: remote.revision,
+            updatedAt: remote.updatedAt,
+            updatedByDevice: remote.updatedByDevice,
+            checksum: remote.checksum,
+          );
+          _applyRemoteMetadata(remote);
+          await _saveMetadata();
+          return false;
+        }
+      }
       await push(library, player: player);
       _lastAutomaticUploadAt = now;
       await _saveMetadata();

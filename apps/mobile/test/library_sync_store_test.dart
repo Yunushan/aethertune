@@ -583,6 +583,32 @@ void main() {
     expect(restored.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
   });
 
+  test('automatic uploads avoid sending a stale library snapshot', () async {
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+    );
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await library.load();
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    await sync.setAutomaticUploadEnabled(true);
+    gateway.remote = const LibrarySyncRemoteSnapshot(
+      revision: 3,
+      updatedByDevice: 'Desktop',
+      checksum: 'checksum',
+    );
+
+    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+    expect(gateway.metadataFetchCalls, 1);
+    expect(gateway.pushCalls, 0);
+    expect(sync.conflict?.currentRevision, 3);
+    expect(sync.remoteUpdatedByDevice, 'Desktop');
+  });
+
   test('offline mode blocks network sync and removal clears secure state',
       () async {
     final vault = _MemorySyncVault();
@@ -670,6 +696,7 @@ class _MemorySyncVault implements LibrarySyncCredentialVault {
 class _FakeSyncGateway
     implements
         LibrarySyncGateway,
+        LibrarySyncMetadataGateway,
         LibrarySyncProfileGateway,
         LibrarySyncProfileEditorGateway {
   _FakeSyncGateway({
@@ -688,6 +715,7 @@ class _FakeSyncGateway
   Object? profileUpdateError;
   LibrarySyncProfile? profileUpdateResult;
   int pushCalls = 0;
+  int metadataFetchCalls = 0;
   int profileFetchCalls = 0;
   int profileUpdateCalls = 0;
   String? lastDisplayName;
@@ -702,6 +730,12 @@ class _FakeSyncGateway
     if (fetchError != null) {
       throw fetchError!;
     }
+    return remote;
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> fetchMetadata() async {
+    metadataFetchCalls += 1;
     return remote;
   }
 
@@ -753,13 +787,15 @@ class _FakeSyncGateway
     if (pushError != null) {
       throw pushError!;
     }
-    return pushResult ??
+    final result = pushResult ??
         LibrarySyncRemoteSnapshot(
           revision: baseRevision + 1,
           updatedAt: DateTime.utc(2026, 7, 10),
           updatedByDevice: 'Test device',
           checksum: 'checksum',
         );
+    remote = result;
+    return result;
   }
 
   @override

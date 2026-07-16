@@ -98,6 +98,34 @@ void main() {
     expect(result.updatedByDevice, 'Android phone');
   });
 
+  test('fetches sync metadata without requesting a snapshot document', () async {
+    Uri? uri;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, capturedUri, {required headers, body}) async {
+        expect(method, 'GET');
+        uri = capturedUri;
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 4,
+            'updatedAt': '2026-07-10T12:30:00.000Z',
+            'updatedByDevice': 'Android phone',
+            'checksum': 'a' * 64,
+          }),
+        );
+      },
+    );
+
+    final result = await client.fetchMetadata();
+
+    expect(uri, _account().libraryMetadataEndpointUri);
+    expect(result.revision, 4);
+    expect(result.snapshot, isNull);
+    expect(result.checksum, 'a' * 64);
+  });
+
   test('rejects a corrupted snapshot and redacts transport failures', () async {
     const token = 'never-display-this-token';
     final corrupted = LibrarySyncClient(

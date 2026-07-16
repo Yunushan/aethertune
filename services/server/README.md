@@ -73,6 +73,7 @@ Available endpoints:
 - `POST /api/v1/admin/sync-tokens`
 - `DELETE /api/v1/admin/sync-tokens`
 - `GET /api/v1/sync/library`
+- `GET /api/v1/sync/library/metadata`
 - `PUT /api/v1/sync/library`
 - `DELETE /api/v1/sync/library`
 
@@ -83,6 +84,9 @@ authentication-registry directory. Requests require `Authorization: Bearer
 merging. A successful `DELETE` records a revisioned tombstone rather than
 erasing history, so stale devices cannot repopulate a cleared snapshot. The
 service rejects local file paths and device cache jobs from portable snapshots.
+`GET /api/v1/sync/library/metadata` returns only the authenticated account's
+revision, timestamp, device label, and checksum. Current clients use it before
+automatic uploads to avoid sending a stale full snapshot.
 
 ## Managed accounts and device tokens
 
