@@ -93,6 +93,10 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 "updatePlaybackWidgets",
                 activity_source.read_text(encoding="utf-8"),
             )
+            activity_text = activity_source.read_text(encoding="utf-8")
+            self.assertIn("dev.aethertune/pinned_shortcuts", activity_text)
+            self.assertIn("ShortcutManager", activity_text)
+            self.assertIn("requestPinShortcut", activity_text)
             self.assertIn(
                 "minSdk = maxOf(flutter.minSdkVersion, 23)",
                 gradle_path.read_text(encoding="utf-8"),

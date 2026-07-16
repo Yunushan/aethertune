@@ -33,6 +33,9 @@ void main() {
     ).readAsStringSync();
     expect(activity, contains('class MainActivity : AudioServiceActivity()'));
     expect(activity, contains('dev.aethertune/playback_widget'));
+    expect(activity, contains('dev.aethertune/pinned_shortcuts'));
+    expect(activity, contains('ShortcutManager'));
+    expect(activity, contains('requestPinShortcut'));
     for (final action in <String>[
       'dev.aethertune.aethertune.shortcut.PREVIOUS',
       'dev.aethertune.aethertune.shortcut.PLAY_PAUSE',

@@ -58,6 +58,7 @@ import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
 import '../domain/track_lyrics.dart';
 import '../player/offline_playback_policy.dart';
+import '../player/android_pinned_shortcut_bridge.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
@@ -109,6 +110,28 @@ Future<void> _showMobileAudioRoutePicker(BuildContext context) async {
       ),
     );
   }
+}
+
+final AndroidPinnedShortcutBridge _androidPinnedShortcutBridge =
+    AndroidPinnedShortcutBridge();
+
+Future<void> _requestAndroidPinnedShortcut(
+  BuildContext context,
+  AndroidPinnedShortcut shortcut,
+) async {
+  final requested = await _androidPinnedShortcutBridge.requestPin(shortcut);
+  if (!context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        requested
+            ? 'Confirm the launcher prompt to pin ${shortcut.label}.'
+            : 'Pinned shortcuts are unavailable in this launcher.',
+      ),
+    ),
+  );
 }
 
 final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
@@ -14369,6 +14392,27 @@ class _SettingsTab extends StatelessWidget {
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => unawaited(_showMobileAudioRoutePicker(context)),
+          ),
+        if (!kIsWeb && Platform.isAndroid)
+          ListTile(
+            key: const Key('android-pinned-shortcut'),
+            leading: const Icon(Icons.push_pin_outlined),
+            title: const Text('Pin playback shortcut'),
+            trailing: PopupMenuButton<AndroidPinnedShortcut>(
+              key: const Key('android-pinned-shortcut-menu'),
+              tooltip: 'Choose a playback shortcut to pin',
+              icon: const Icon(Icons.add),
+              onSelected: (shortcut) => unawaited(
+                _requestAndroidPinnedShortcut(context, shortcut),
+              ),
+              itemBuilder: (context) => <PopupMenuEntry<AndroidPinnedShortcut>>[
+                for (final shortcut in AndroidPinnedShortcut.values)
+                  PopupMenuItem<AndroidPinnedShortcut>(
+                    value: shortcut,
+                    child: Text(shortcut.label),
+                  ),
+              ],
+            ),
           ),
         ListTile(
           leading: const Icon(Icons.lyrics_outlined),

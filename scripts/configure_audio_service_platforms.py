@@ -422,6 +422,9 @@ _MAIN_ACTIVITY_KOTLIN = """package dev.aethertune.aethertune
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
+import android.graphics.drawable.Icon
 import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
 import android.media.audiofx.Virtualizer
@@ -534,6 +537,16 @@ class MainActivity : AudioServiceActivity() {
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/pinned_shortcuts",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "requestPin") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            result.success(requestPinnedShortcut(call.argument<String>("shortcut")))
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/audio_routes",
         ).setMethodCallHandler { call, result ->
             if (call.method != "showAudioRoutePicker") {
@@ -547,6 +560,47 @@ class MainActivity : AudioServiceActivity() {
                 result.success(false)
             }
         }
+    }
+
+    private fun requestPinnedShortcut(shortcut: String?): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return false
+        }
+        val shortcutManager = getSystemService(ShortcutManager::class.java)
+            ?: return false
+        if (!shortcutManager.isRequestPinShortcutSupported) {
+            return false
+        }
+        val definition = when (shortcut) {
+            "previous" -> Triple(
+                "pinned_previous",
+                getString(R.string.aethertune_shortcut_previous),
+                R.drawable.aethertune_shortcut_previous,
+            )
+            "playPause" -> Triple(
+                "pinned_play_pause",
+                getString(R.string.aethertune_shortcut_play_pause),
+                R.drawable.aethertune_shortcut_play_pause,
+            )
+            "next" -> Triple(
+                "pinned_next",
+                getString(R.string.aethertune_shortcut_next),
+                R.drawable.aethertune_shortcut_next,
+            )
+            else -> return false
+        }
+        val action = when (shortcut) {
+            "previous" -> "dev.aethertune.aethertune.shortcut.PREVIOUS"
+            "playPause" -> "dev.aethertune.aethertune.shortcut.PLAY_PAUSE"
+            "next" -> "dev.aethertune.aethertune.shortcut.NEXT"
+            else -> return false
+        }
+        val shortcutInfo = ShortcutInfo.Builder(this, definition.first)
+            .setShortLabel(definition.second)
+            .setIcon(Icon.createWithResource(this, definition.third))
+            .setIntent(Intent(this, MainActivity::class.java).setAction(action))
+            .build()
+        return shortcutManager.requestPinShortcut(shortcutInfo, null)
     }
 
     override fun onRequestPermissionsResult(
@@ -1494,6 +1548,9 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "AudioServiceActivity",
         "MethodChannel",
         "dev.aethertune/playback_widget",
+        "dev.aethertune/pinned_shortcuts",
+        "ShortcutManager",
+        "requestPinShortcut",
         "dev.aethertune/audio_routes",
         "Settings.ACTION_SOUND_SETTINGS",
         "updatePlaybackWidgets",
