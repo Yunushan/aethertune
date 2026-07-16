@@ -3403,6 +3403,7 @@ void main() {
     final backupJson = secondStore.exportBackupJson();
     final backup = jsonDecode(backupJson) as Map<String, dynamic>;
     expect(backup['offlineModeEnabled'], isTrue);
+    expect(backup['screenshotProtectionEnabled'], isTrue);
     expect(backup['pauseListeningHistory'], isTrue);
     expect(backup['recommendationFavoriteSignalsEnabled'], isFalse);
     expect(backup['recommendationHistorySignalsEnabled'], isFalse);

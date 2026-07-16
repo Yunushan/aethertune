@@ -3874,6 +3874,7 @@ class LibraryStore extends ChangeNotifier {
       'recommendationHistorySignalsEnabled':
           _recommendationHistorySignalsEnabled,
       'offlineModeEnabled': _offlineModeEnabled,
+      'screenshotProtectionEnabled': _screenshotProtectionEnabled,
       'themePreference': _themePreference.name,
       'accentColor': _accentColor.name,
       'listeningRecapVisualTheme': _listeningRecapVisualTheme.name,
@@ -4509,6 +4510,7 @@ class LibraryStore extends ChangeNotifier {
     var restoredRecommendationFavoriteSignalsEnabled = true;
     var restoredRecommendationHistorySignalsEnabled = true;
     var restoredOfflineModeEnabled = false;
+    var restoredScreenshotProtectionEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
     var restoredAccentColor = AppAccentColor.system;
     var restoredListeningRecapVisualTheme =
@@ -4539,6 +4541,11 @@ class LibraryStore extends ChangeNotifier {
       restoredOfflineModeEnabled = _jsonBool(
         backup,
         'offlineModeEnabled',
+        isRequired: false,
+      );
+      restoredScreenshotProtectionEnabled = _jsonBool(
+        backup,
+        'screenshotProtectionEnabled',
         isRequired: false,
       );
       restoredThemePreference = _appThemePreferenceFromName(
@@ -4714,6 +4721,7 @@ class LibraryStore extends ChangeNotifier {
     _recommendationHistorySignalsEnabled =
         restoredRecommendationHistorySignalsEnabled;
     _offlineModeEnabled = restoredOfflineModeEnabled;
+    _screenshotProtectionEnabled = restoredScreenshotProtectionEnabled;
     _themePreference = restoredThemePreference;
     _accentColor = restoredAccentColor;
     _listeningRecapVisualTheme = restoredListeningRecapVisualTheme;
