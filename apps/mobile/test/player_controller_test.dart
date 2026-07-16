@@ -126,6 +126,34 @@ void main() {
     );
   });
 
+  test('persists per-track pitch overrides without changing the default',
+      () async {
+    final firstEngine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
+    final firstController = PlayerController(audioEngine: firstEngine);
+    await firstController.setPlaybackPitch(1.25);
+    await firstController.setTrackPlaybackPitch('track-1', 0.75);
+    expect(firstController.defaultPlaybackPitch, 1.25);
+    expect(firstController.playbackPitchForTrack('track-1'), 0.75);
+    firstController.dispose();
+
+    final restoredEngine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
+    final restoredController = PlayerController(audioEngine: restoredEngine);
+    addTearDown(restoredController.dispose);
+    await restoredController.loadPersistedPlaybackSettings();
+    expect(restoredController.defaultPlaybackPitch, 1.25);
+    expect(restoredController.playbackPitchForTrack('track-1'), 0.75);
+
+    await restoredController.playTrack(_track('track-1'));
+    expect(restoredEngine.pitchValue, 0.75);
+    await restoredController.clearTrackPlaybackPitch('track-1');
+    expect(restoredController.playbackPitchForTrack('track-1'), isNull);
+    expect(restoredEngine.pitchValue, 1.25);
+    await expectLater(
+      restoredController.setTrackPlaybackPitch('', 1.25),
+      throwsArgumentError,
+    );
+  });
+
   test('persists and restores Android audio effect settings', () async {
     final firstEngine = _FakeAudioEffectsEngine();
     final firstController = PlayerController(audioEngine: firstEngine);

@@ -121,6 +121,7 @@ class PlayerController extends ChangeNotifier {
   bool _skipSilenceEnabled = false;
   double _defaultPlaybackSpeed = 1;
   double _defaultPlaybackPitch = 1;
+  final Map<String, double> _trackPlaybackPitchOverrides = <String, double>{};
   Duration _skipBackwardInterval = const Duration(seconds: 10);
   Duration _skipForwardInterval = const Duration(seconds: 30);
 
@@ -138,6 +139,8 @@ class PlayerController extends ChangeNotifier {
       ? _audio.pitch
       : _defaultPlaybackPitch;
   double get defaultPlaybackPitch => _defaultPlaybackPitch;
+  Map<String, double> get trackPlaybackPitchOverrides =>
+      Map<String, double>.unmodifiable(_trackPlaybackPitchOverrides);
   Duration get skipBackwardInterval => _skipBackwardInterval;
   Duration get skipForwardInterval => _skipForwardInterval;
   double get volume => _volume;
@@ -325,6 +328,13 @@ class PlayerController extends ChangeNotifier {
         _defaultPlaybackPitch = _playbackPitchFromJson(
           settings['playbackPitch'],
         );
+        _trackPlaybackPitchOverrides
+          ..clear()
+          ..addAll(
+            _trackPlaybackPitchOverridesFromJson(
+              settings['trackPlaybackPitchOverrides'],
+            ),
+          );
         if (supportsPitch) {
           await (_audio as PitchPlaybackAudioEngine).setPitch(
             _defaultPlaybackPitch,
@@ -806,13 +816,73 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setPlaybackPitch(double pitch) async {
     _requireSupportedPlaybackPitch(pitch);
-    final audio = _audio;
-    if (audio is! PitchPlaybackAudioEngine || !audio.supportsPitch) {
-      throw UnsupportedError('Pitch control is unavailable for this backend.');
-    }
+    final audio = _requirePitchEngine();
     _defaultPlaybackPitch = pitch;
     await audio.setPitch(pitch);
     await _savePlaybackSettings();
+    notifyListeners();
+  }
+
+  double? playbackPitchForTrack(String trackId) {
+    return _trackPlaybackPitchOverrides[trackId.trim()];
+  }
+
+  Future<void> setTrackPlaybackPitch(String trackId, double pitch) async {
+    final normalizedTrackId = trackId.trim();
+    if (normalizedTrackId.isEmpty) {
+      throw ArgumentError.value(trackId, 'trackId', 'Track ID cannot be empty.');
+    }
+    _requireSupportedPlaybackPitch(pitch);
+    final audio = _requirePitchEngine();
+    final previous = _trackPlaybackPitchOverrides[normalizedTrackId];
+    if (previous == pitch) {
+      return;
+    }
+    _trackPlaybackPitchOverrides[normalizedTrackId] = pitch;
+    try {
+      if (_current?.id == normalizedTrackId) {
+        await audio.setPitch(pitch);
+      }
+      await _savePlaybackSettings();
+      notifyListeners();
+    } on Object {
+      if (previous == null) {
+        _trackPlaybackPitchOverrides.remove(normalizedTrackId);
+      } else {
+        _trackPlaybackPitchOverrides[normalizedTrackId] = previous;
+      }
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> clearTrackPlaybackPitch(String trackId) async {
+    final normalizedTrackId = trackId.trim();
+    final previous = _trackPlaybackPitchOverrides.remove(normalizedTrackId);
+    if (previous == null) {
+      return;
+    }
+    final audio = _requirePitchEngine();
+    try {
+      if (_current?.id == normalizedTrackId) {
+        await audio.setPitch(_defaultPlaybackPitch);
+      }
+      await _savePlaybackSettings();
+      notifyListeners();
+    } on Object {
+      _trackPlaybackPitchOverrides[normalizedTrackId] = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> setTemporaryPlaybackPitch(double pitch) async {
+    _requireSupportedPlaybackPitch(pitch);
+    final audio = _requirePitchEngine();
+    if (audio.pitch == pitch) {
+      return;
+    }
+    await audio.setPitch(pitch);
     notifyListeners();
   }
 
@@ -1042,6 +1112,20 @@ class PlayerController extends ChangeNotifier {
     await next();
   }
 
+  Future<void> _applyPitchForCurrentTrack() async {
+    final track = _current;
+    if (track == null || !supportsPitch) {
+      return;
+    }
+    final pitch =
+        playbackPitchForTrack(track.id) ?? _defaultPlaybackPitch;
+    final audio = _audio as PitchPlaybackAudioEngine;
+    if (audio.pitch == pitch) {
+      return;
+    }
+    await audio.setPitch(pitch);
+  }
+
   void _handleCurrentIndexChanged(int? index) {
     if (_isLoadingQueue ||
         index == null ||
@@ -1058,6 +1142,7 @@ class PlayerController extends ChangeNotifier {
 
     _current = track;
     _playbackStartSerial += 1;
+    unawaited(_applyPitchForCurrentTrack());
     unawaited(_applyOutputVolume());
     unawaited(_saveQueueSnapshot(touch: true));
     notifyListeners();
@@ -1155,6 +1240,7 @@ class PlayerController extends ChangeNotifier {
         initialPosition: initialPosition,
       );
       await _refreshEqualizerBands(notify: false);
+      await _applyPitchForCurrentTrack();
       _loadedTrackId = track.id;
     } on Object {
       _loadedPlaybackQueue.clear();
@@ -1294,6 +1380,7 @@ class PlayerController extends ChangeNotifier {
           'loopMode': _loopModeToJson(_audio.loopMode),
           'playbackSpeed': _defaultPlaybackSpeed,
           'playbackPitch': _defaultPlaybackPitch,
+          'trackPlaybackPitchOverrides': _trackPlaybackPitchOverrides,
           'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
           'skipForwardSeconds': _skipForwardInterval.inSeconds,
           'skipSilenceEnabled': _skipSilenceEnabled,
@@ -1356,6 +1443,24 @@ class PlayerController extends ChangeNotifier {
       }
     }
     return 1;
+  }
+
+  Map<String, double> _trackPlaybackPitchOverridesFromJson(Object? value) {
+    if (value is! Map) {
+      return <String, double>{};
+    }
+    final overrides = <String, double>{};
+    for (final entry in value.entries) {
+      final trackId = entry.key is String ? (entry.key as String).trim() : '';
+      final pitch = entry.value is num ? (entry.value as num).toDouble() : null;
+      if (trackId.isEmpty ||
+          pitch == null ||
+          !supportedPlaybackPitches.contains(pitch)) {
+        continue;
+      }
+      overrides[trackId] = pitch;
+    }
+    return overrides;
   }
 
   void _requireSupportedPlaybackSpeed(double speed) {
@@ -1442,6 +1547,14 @@ class PlayerController extends ChangeNotifier {
         'Playback pitch must be one of the supported values.',
       );
     }
+  }
+
+  PitchPlaybackAudioEngine _requirePitchEngine() {
+    final audio = _audio;
+    if (audio is! PitchPlaybackAudioEngine || !audio.supportsPitch) {
+      throw UnsupportedError('Pitch control is unavailable for this backend.');
+    }
+    return audio;
   }
 
   AudioEffectsPlaybackAudioEngine? get _audioEffectsEngine {

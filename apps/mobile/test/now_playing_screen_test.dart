@@ -136,6 +136,14 @@ void main() {
     await tester.ensureVisible(pitchItem);
     await tester.tap(pitchItem);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('now-playing-track-pitch')));
+    await tester.pumpAndSettle();
+    final trackPitchItem = find.byKey(
+      const Key('now-playing-track-pitch-0.75'),
+    );
+    await tester.ensureVisible(trackPitchItem);
+    await tester.tap(trackPitchItem);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-track-speed')));
     await tester.pumpAndSettle();
     final trackSpeedItem = find.byKey(
@@ -152,7 +160,9 @@ void main() {
     expect(engine.shuffleValue, isTrue);
     expect(engine.loopModeValue, LoopMode.all);
     expect(engine.speedValue, 2);
-    expect(engine.pitchValue, 1.25);
+    expect(engine.pitchValue, 0.75);
+    expect(player.defaultPlaybackPitch, 1.25);
+    expect(player.playbackPitchForTrack(first.id), 0.75);
     expect(library.playbackSpeedForTrack(first.id), 2);
     expect(engine.volumeValue, 0.4);
     expect(library.tracks.first.isFavorite, isTrue);

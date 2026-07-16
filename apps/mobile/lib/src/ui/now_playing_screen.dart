@@ -74,13 +74,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               library: library,
               track: current,
             ),
+          if (current != null && player.supportsPitch)
+            _TrackPlaybackPitchMenu(player: player, track: current),
           _PlaybackSpeedMenu(
             player: player,
             trackPlaybackSpeedOverride: current == null
                 ? null
                 : library.playbackSpeedForTrack(current.id),
           ),
-          if (player.supportsPitch) _PlaybackPitchMenu(player: player),
+          if (player.supportsPitch)
+            _PlaybackPitchMenu(
+              player: player,
+              trackPlaybackPitchOverride: current == null
+                  ? null
+                  : player.playbackPitchForTrack(current.id),
+            ),
         ],
       ),
       body: current == null
@@ -725,9 +733,13 @@ class _PlaybackSpeedMenu extends StatelessWidget {
 }
 
 class _PlaybackPitchMenu extends StatelessWidget {
-  const _PlaybackPitchMenu({required this.player});
+  const _PlaybackPitchMenu({
+    required this.player,
+    required this.trackPlaybackPitchOverride,
+  });
 
   final PlayerController player;
+  final double? trackPlaybackPitchOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -735,7 +747,13 @@ class _PlaybackPitchMenu extends StatelessWidget {
       key: const Key('now-playing-pitch'),
       tooltip: 'Pitch: ${_formatPlaybackSpeed(player.defaultPlaybackPitch)}',
       icon: const Icon(Icons.music_note_outlined),
-      onSelected: player.setPlaybackPitch,
+      onSelected: (pitch) async {
+        await player.setPlaybackPitch(pitch);
+        final override = trackPlaybackPitchOverride;
+        if (override != null) {
+          await player.setTemporaryPlaybackPitch(override);
+        }
+      },
       itemBuilder: (context) => <PopupMenuEntry<double>>[
         for (final pitch in PlayerController.supportedPlaybackPitches)
           CheckedPopupMenuItem<double>(
@@ -803,6 +821,59 @@ class _TrackPlaybackSpeedSelection {
   const _TrackPlaybackSpeedSelection([this.speed]);
 
   final double? speed;
+}
+
+class _TrackPlaybackPitchMenu extends StatelessWidget {
+  const _TrackPlaybackPitchMenu({required this.player, required this.track});
+
+  final PlayerController player;
+  final Track track;
+
+  @override
+  Widget build(BuildContext context) {
+    final override = player.playbackPitchForTrack(track.id);
+    final activePitch = override ?? player.defaultPlaybackPitch;
+    return PopupMenuButton<_TrackPlaybackPitchSelection>(
+      key: const Key('now-playing-track-pitch'),
+      tooltip: override == null
+          ? 'Track pitch: Default (${_formatPlaybackSpeed(activePitch)})'
+          : 'Track pitch: ${_formatPlaybackSpeed(activePitch)}',
+      icon: const Icon(Icons.music_note_outlined),
+      onSelected: (selection) async {
+        final pitch = selection.pitch;
+        if (pitch == null) {
+          await player.clearTrackPlaybackPitch(track.id);
+          return;
+        }
+        await player.setTrackPlaybackPitch(track.id, pitch);
+      },
+      itemBuilder: (context) =>
+          <PopupMenuEntry<_TrackPlaybackPitchSelection>>[
+            CheckedPopupMenuItem<_TrackPlaybackPitchSelection>(
+              key: const Key('now-playing-track-pitch-default'),
+              value: const _TrackPlaybackPitchSelection(),
+              checked: override == null,
+              child: Text(
+                'Use default (${_formatPlaybackSpeed(player.defaultPlaybackPitch)})',
+              ),
+            ),
+            const PopupMenuDivider(),
+            for (final pitch in PlayerController.supportedPlaybackPitches)
+              CheckedPopupMenuItem<_TrackPlaybackPitchSelection>(
+                key: Key('now-playing-track-pitch-$pitch'),
+                value: _TrackPlaybackPitchSelection(pitch),
+                checked: override == pitch,
+                child: Text(_formatPlaybackSpeed(pitch)),
+              ),
+          ],
+    );
+  }
+}
+
+class _TrackPlaybackPitchSelection {
+  const _TrackPlaybackPitchSelection([this.pitch]);
+
+  final double? pitch;
 }
 
 class _PlaybackVolumeControl extends StatelessWidget {
