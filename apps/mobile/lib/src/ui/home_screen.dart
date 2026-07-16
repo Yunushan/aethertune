@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:audio_router/audio_router.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -99,24 +98,6 @@ class _AetherTuneNavigationDestination {
 }
 
 const _aetherTuneNavigationDestinationCount = 6;
-
-Future<void> _showMobileAudioRoutePicker(BuildContext context) async {
-  try {
-    await const AudioRouter().showAudioRoutePicker(
-      context,
-      androidOptions: const AndroidAudioOptions.media(),
-      dialogTitle: 'Audio output',
-    );
-  } on Object {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Audio output selection is unavailable on this device.'),
-        ),
-      );
-    }
-  }
-}
 
 final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
   _AetherTuneNavigationDestination(
@@ -13958,19 +13939,6 @@ class _SettingsTab extends StatelessWidget {
                 }
               },
             ),
-          ),
-        if (!kIsWeb &&
-            (defaultTargetPlatform == TargetPlatform.android ||
-                defaultTargetPlatform == TargetPlatform.iOS))
-          ListTile(
-            key: const Key('audio-output-picker'),
-            leading: const Icon(Icons.speaker_group_outlined),
-            title: const Text('Audio output'),
-            subtitle: const Text(
-              'Choose speaker, wired, Bluetooth, or another available system route.',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => unawaited(_showMobileAudioRoutePicker(context)),
           ),
         if (player.supportsPitch)
           ListTile(
