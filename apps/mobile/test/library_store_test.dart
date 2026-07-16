@@ -3304,6 +3304,7 @@ void main() {
     await firstStore.load();
 
     expect(firstStore.offlineModeEnabled, isFalse);
+    expect(firstStore.screenshotProtectionEnabled, isFalse);
     expect(firstStore.pauseListeningHistory, isFalse);
     expect(firstStore.recommendationFavoriteSignalsEnabled, isTrue);
     expect(firstStore.recommendationHistorySignalsEnabled, isTrue);
@@ -3330,6 +3331,7 @@ void main() {
     expect(firstStore.offlineCacheProviderLimitMegabytes, isEmpty);
 
     await firstStore.setOfflineModeEnabled(true);
+    await firstStore.setScreenshotProtectionEnabled(true);
     await firstStore.setPauseListeningHistory(true);
     await firstStore.setRecommendationFavoriteSignalsEnabled(false);
     await firstStore.setRecommendationHistorySignalsEnabled(false);
@@ -3349,6 +3351,7 @@ void main() {
     );
 
     expect(firstStore.offlineModeEnabled, isTrue);
+    expect(firstStore.screenshotProtectionEnabled, isTrue);
     expect(firstStore.pauseListeningHistory, isTrue);
     expect(firstStore.recommendationFavoriteSignalsEnabled, isFalse);
     expect(firstStore.recommendationHistorySignalsEnabled, isFalse);
@@ -3377,6 +3380,7 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.offlineModeEnabled, isTrue);
+    expect(secondStore.screenshotProtectionEnabled, isTrue);
     expect(secondStore.pauseListeningHistory, isTrue);
     expect(secondStore.recommendationFavoriteSignalsEnabled, isFalse);
     expect(secondStore.recommendationHistorySignalsEnabled, isFalse);
