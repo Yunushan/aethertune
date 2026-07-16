@@ -14655,6 +14655,17 @@ class _SettingsTab extends StatelessWidget {
           title: Text('Privacy'),
           subtitle: Text('No ads, no telemetry, no forced account in the core app.'),
         ),
+        SwitchListTile.adaptive(
+          secondary: const Icon(Icons.screenshot_monitor_outlined),
+          title: const Text('Block screenshots'),
+          subtitle: const Text('Prevent screenshots and screen recording on Android.'),
+          value: library.screenshotProtectionEnabled,
+          onChanged: library.loaded
+              ? (enabled) => unawaited(
+                  library.setScreenshotProtectionEnabled(enabled),
+                )
+              : null,
+        ),
         const ListTile(
           leading: Icon(Icons.balance_outlined),
           title: Text('Legal source policy'),

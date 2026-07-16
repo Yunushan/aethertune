@@ -272,6 +272,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Pause listening history | Done | History and Options expose a persisted toggle that stops new playback-history and resume-progress writes; backup/restore preserves the preference. |
 | Delete listening history entries | Done | The History tab lists individual play events for the selected range and can remove one event without clearing all history. |
 | Secure token storage | Scaffolded | Implemented for static Jellyfin and Navidrome/Subsonic credentials through platform-secure storage with HTTPS default, explicit insecure-HTTP consent, redacted errors, no authenticated URL persistence, confirmed atomic rotation with rollback, and random-salt Subsonic request tokens that avoid transmitting the reversible encoded password. OAuth refresh tokens and physical-device storage tests remain. |
+| Screenshot protection | Scaffolded | InnerTune | Options persists an Android-only screenshot-protection preference. On Android, the app applies `FLAG_SECURE` through a narrow platform channel to block screenshots and screen recording; unsupported platforms retain normal behavior. Dart setting persistence is covered; Android host/device verification remains. |
 | Content policy/moderation | Roadmap | Required before public profiles, comments, or social surfaces. |
 
 ### Testing, Release, And Maintenance

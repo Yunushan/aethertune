@@ -1063,6 +1063,8 @@ class LibraryStore extends ChangeNotifier {
   static const _recommendationHistorySignalsKey =
       'aethertune.recommendation_history_signals.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
+  static const _screenshotProtectionKey =
+      'aethertune.screenshot_protection.v1';
   static const _automaticOfflineQueueKey =
       'aethertune.automatic_offline_queue.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
@@ -1122,6 +1124,7 @@ class LibraryStore extends ChangeNotifier {
   bool _recommendationFavoriteSignalsEnabled = true;
   bool _recommendationHistorySignalsEnabled = true;
   bool _offlineModeEnabled = false;
+  bool _screenshotProtectionEnabled = false;
   bool _automaticOfflineQueueEnabled = false;
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.system;
@@ -1183,6 +1186,7 @@ class LibraryStore extends ChangeNotifier {
   bool get recommendationHistorySignalsEnabled =>
       _recommendationHistorySignalsEnabled;
   bool get offlineModeEnabled => _offlineModeEnabled;
+  bool get screenshotProtectionEnabled => _screenshotProtectionEnabled;
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
@@ -1372,6 +1376,8 @@ class LibraryStore extends ChangeNotifier {
     _recommendationHistorySignalsEnabled =
         prefs.getBool(_recommendationHistorySignalsKey) ?? true;
     _offlineModeEnabled = prefs.getBool(_offlineModeKey) ?? false;
+    _screenshotProtectionEnabled =
+        prefs.getBool(_screenshotProtectionKey) ?? false;
     _automaticOfflineQueueEnabled =
         prefs.getBool(_automaticOfflineQueueKey) ?? false;
     _themePreference = _appThemePreferenceFromName(
@@ -6504,6 +6510,15 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setScreenshotProtectionEnabled(bool enabled) async {
+    if (_screenshotProtectionEnabled == enabled) {
+      return;
+    }
+    _screenshotProtectionEnabled = enabled;
+    await _save();
+    notifyListeners();
+  }
+
   Map<String, Object?> _portablePlaylistJson(Playlist playlist) {
     final json = playlist.toJson();
     json['artworkUri'] = _portableSyncUri(
@@ -8274,6 +8289,10 @@ class LibraryStore extends ChangeNotifier {
       _recommendationHistorySignalsEnabled,
     );
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
+    await prefs.setBool(
+      _screenshotProtectionKey,
+      _screenshotProtectionEnabled,
+    );
     await prefs.setBool(
       _automaticOfflineQueueKey,
       _automaticOfflineQueueEnabled,

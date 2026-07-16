@@ -26,6 +26,7 @@ import 'widgets/offline_cache_foreground_worker.dart';
 import 'widgets/podcast_rss_refresh_worker.dart';
 import 'widgets/desktop_tray_controls.dart';
 import 'widgets/aethertune_deep_link_listener.dart';
+import 'widgets/android_screenshot_protection.dart';
 
 class AetherTuneApp extends StatefulWidget {
   const AetherTuneApp({
@@ -103,6 +104,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
       ],
       child: PodcastRssRefreshWorker(
+        child: AndroidScreenshotProtection(
         child: OfflineCacheForegroundWorker(
           child: LibrarySyncAutomaticUpload(
           child: ListenTogetherForegroundSync(
@@ -204,6 +206,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             ),
           ),
           ),
+        ),
         ),
       ),
     );
