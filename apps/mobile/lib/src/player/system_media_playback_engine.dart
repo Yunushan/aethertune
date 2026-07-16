@@ -46,6 +46,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   static const _widgetProgressUpdateInterval = Duration(seconds: 1);
+  static const _androidAutoQueueId = 'aethertune:android-auto:queue';
 
   final PlaybackAudioEngine _engine;
   final PlaybackWidgetBridge _playbackWidgetBridge;
@@ -344,6 +345,55 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   @override
+  Future<List<MediaItem>> getChildren(
+    String parentMediaId, [
+    Map<String, dynamic>? options,
+  ]) async {
+    switch (parentMediaId) {
+      case AudioService.browsableRootId:
+        return <MediaItem>[_androidAutoQueueFolder()];
+      case AudioService.recentRootId:
+        final currentItem = _currentQueueMediaItem();
+        return currentItem == null
+            ? const <MediaItem>[]
+            : <MediaItem>[currentItem];
+      case _androidAutoQueueId:
+        return _queueMediaItems();
+      default:
+        return const <MediaItem>[];
+    }
+  }
+
+  @override
+  Future<MediaItem?> getMediaItem(String mediaId) async {
+    if (mediaId == _androidAutoQueueId) {
+      return _androidAutoQueueFolder();
+    }
+    for (var index = 0; index < _tracks.length; index += 1) {
+      if (_tracks[index].id == mediaId) {
+        final runtimeDuration = index == _currentIndex
+            ? _runtimeDuration
+            : null;
+        return _mediaItemForTrack(_tracks[index], runtimeDuration);
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> playFromMediaId(
+    String mediaId, [
+    Map<String, dynamic>? extras,
+  ]) async {
+    final index = _tracks.indexWhere((track) => track.id == mediaId);
+    if (index < 0) {
+      return;
+    }
+    await _engine.seek(Duration.zero, index: index);
+    await _engine.play();
+  }
+
+  @override
   Future<void> setVirtualizerEnabled(bool enabled) {
     final engine = _engine;
     if (engine is! VirtualizerPlaybackAudioEngine ||
@@ -406,11 +456,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   void _publishQueueAndCurrentItem() {
-    final items = <MediaItem>[];
-    for (var index = 0; index < _tracks.length; index += 1) {
-      final runtimeDuration = index == _currentIndex ? _runtimeDuration : null;
-      items.add(_mediaItemForTrack(_tracks[index], runtimeDuration));
-    }
+    final items = _queueMediaItems();
     queue.add(List<MediaItem>.unmodifiable(items));
 
     final index = _currentIndex;
@@ -419,6 +465,30 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       return;
     }
     mediaItem.add(items[index]);
+  }
+
+  List<MediaItem> _queueMediaItems() {
+    return List<MediaItem>.generate(_tracks.length, (index) {
+      final runtimeDuration = index == _currentIndex ? _runtimeDuration : null;
+      return _mediaItemForTrack(_tracks[index], runtimeDuration);
+    }, growable: false);
+  }
+
+  MediaItem? _currentQueueMediaItem() {
+    final index = _currentIndex;
+    if (index == null || index < 0 || index >= _tracks.length) {
+      return null;
+    }
+    return _mediaItemForTrack(_tracks[index], _runtimeDuration);
+  }
+
+  MediaItem _androidAutoQueueFolder() {
+    return const MediaItem(
+      id: _androidAutoQueueId,
+      title: 'Current queue',
+      displaySubtitle: 'AetherTune',
+      playable: false,
+    );
   }
 
   void _publishState() {

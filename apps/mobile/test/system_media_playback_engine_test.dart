@@ -249,6 +249,35 @@ void main() {
     expect(await engine.loadEqualizerBands(), delegate.bands);
   });
 
+  test('browses and plays the current queue through Android Auto', () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+    await engine.setQueue(
+      <Track>[_track('one'), _track('two')],
+      initialIndex: 1,
+    );
+
+    final rootItems = await engine.getChildren(AudioService.browsableRootId);
+    expect(rootItems, hasLength(1));
+    expect(rootItems.single.title, 'Current queue');
+    expect(rootItems.single.playable, isFalse);
+
+    final queueItems = await engine.getChildren(rootItems.single.id);
+    expect(queueItems.map((item) => item.id), <String>['one', 'two']);
+    expect(queueItems.every((item) => item.playable == true), isTrue);
+    expect(
+      (await engine.getChildren(AudioService.recentRootId)).single.id,
+      'two',
+    );
+    expect((await engine.getMediaItem('one'))?.title, 'Track one');
+    expect(await engine.getMediaItem('missing'), isNull);
+
+    await engine.playFromMediaId('one');
+    expect(delegate.currentIndex, 0);
+    expect(delegate.playingValue, isTrue);
+  });
+
   test('forwards an opt-in visualizer through the system media wrapper',
       () async {
     final delegate = _FakeVisualizationPlaybackEngine();
