@@ -13,6 +13,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../data/demo_source_provider.dart';
+import '../data/custom_catalog_provider.dart';
+import '../data/custom_catalog_store.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jellyfin_provider.dart';
@@ -35,6 +37,7 @@ import '../data/subsonic_provider.dart';
 import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../domain/backup_file_document.dart';
+import '../domain/custom_catalog_definition.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/music_catalog_discovery_provider.dart';
 import '../domain/music_catalog_provider.dart';
@@ -10527,6 +10530,8 @@ class _EmptyLibrary extends StatelessWidget {
 
 enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
+enum _CustomCatalogAction { edit, remove }
+
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
     this.archiveProvider,
@@ -10627,6 +10632,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final selfHosted = context.watch<SelfHostedProviderStore>();
+    final customCatalogs = context.watch<CustomCatalogStore?>();
     final podcastSubscriptions = library.podcastSubscriptions;
     final offlineModeEnabled = library.offlineModeEnabled;
     final selfHostedActionsEnabled = selfHosted.loaded &&
@@ -10848,6 +10854,91 @@ class _SourcesTabState extends State<_SourcesTab> {
                   ),
                   const PopupMenuItem<_SelfHostedAccountAction>(
                     value: _SelfHostedAccountAction.remove,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Remove'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        const SizedBox(height: 16),
+        Text(
+          'Custom JSON catalogs',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            OutlinedButton.icon(
+              key: const Key('add-custom-catalog'),
+              onPressed: customCatalogs?.loaded == true && !offlineModeEnabled
+                  ? () => unawaited(_editCustomCatalog(context))
+                  : null,
+              icon: const Icon(Icons.add_link_outlined),
+              label: const Text('Add JSON catalog'),
+            ),
+          ],
+        ),
+        if (customCatalogs == null || !customCatalogs.loaded) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ]
+        else if (customCatalogs.loadError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.extension_off_outlined),
+            title: const Text('Custom catalogs unavailable'),
+            subtitle: Text(customCatalogs.loadError!),
+          ),
+        ]
+        else if (customCatalogs.definitions.isEmpty)
+          const ListTile(
+            leading: Icon(Icons.data_object_outlined),
+            title: Text('No custom JSON catalogs configured'),
+            subtitle: Text(
+              'Add a declared HTTPS catalog with its media hosts to search legal direct streams.',
+            ),
+          )
+        else
+          for (final definition in customCatalogs.definitions)
+            _ProviderCard(
+              title: definition.name,
+              status: 'Enabled',
+              description: definition.description.isEmpty
+                  ? 'JSON catalog at ${definition.catalogUri.host}'
+                  : definition.description,
+              icon: Icons.data_object_outlined,
+              capabilities: CustomCatalogProvider(definition).capabilities,
+              disclosure: CustomCatalogProvider(definition).disclosure,
+              actions: PopupMenuButton<_CustomCatalogAction>(
+                tooltip: 'Manage ${definition.name}',
+                onSelected: (action) {
+                  switch (action) {
+                    case _CustomCatalogAction.edit:
+                      unawaited(
+                        _editCustomCatalog(context, definition: definition),
+                      );
+                      break;
+                    case _CustomCatalogAction.remove:
+                      unawaited(_removeCustomCatalog(context, definition));
+                      break;
+                  }
+                },
+                itemBuilder: (_) => <PopupMenuEntry<_CustomCatalogAction>>[
+                  const PopupMenuItem<_CustomCatalogAction>(
+                    value: _CustomCatalogAction.edit,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit catalog'),
+                    ),
+                  ),
+                  const PopupMenuItem<_CustomCatalogAction>(
+                    value: _CustomCatalogAction.remove,
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.delete_outline),
@@ -11514,6 +11605,218 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  Future<void> _editCustomCatalog(
+    BuildContext context, {
+    CustomCatalogDefinition? definition,
+  }) async {
+    final nameController = TextEditingController(text: definition?.name ?? '');
+    final catalogUrlController = TextEditingController(
+      text: definition?.catalogUri.toString() ?? '',
+    );
+    final domainsController = TextEditingController(
+      text: definition?.mediaDomains.join(', ') ?? '',
+    );
+    final descriptionController = TextEditingController(
+      text: definition?.description ?? '',
+    );
+    var allowInsecureHttp = definition?.allowInsecureHttp ?? false;
+    String? validationError;
+    try {
+      final saved = await showDialog<CustomCatalogDefinition>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: Text(
+              definition == null ? 'Add JSON catalog' : 'Edit JSON catalog',
+            ),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextField(
+                      key: const Key('custom-catalog-name'),
+                      controller: nameController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: 'Catalog name'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const Key('custom-catalog-url'),
+                      controller: catalogUrlController,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'JSON catalog URL',
+                        hintText: 'https://catalog.example/music.json',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const Key('custom-catalog-domains'),
+                      controller: domainsController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Additional media domains',
+                        hintText: 'cdn.example, audio.example',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'The catalog host is always declared. Audio and artwork URLs must use this host or one listed above.',
+                    ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: allowInsecureHttp,
+                      onChanged: (value) => setDialogState(
+                        () => allowInsecureHttp = value ?? false,
+                      ),
+                      title: const Text('Allow insecure HTTP'),
+                      subtitle: const Text(
+                        'Only enable this for a trusted local network catalog.',
+                      ),
+                    ),
+                    TextField(
+                      key: const Key('custom-catalog-description'),
+                      controller: descriptionController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Description (optional)',
+                      ),
+                    ),
+                    if (validationError != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  try {
+                    final savedDefinition = CustomCatalogDefinition.create(
+                      id: definition?.id,
+                      name: nameController.text,
+                      catalogUrl: catalogUrlController.text,
+                      mediaDomains: domainsController.text.split(
+                        RegExp(r'[,\s]+'),
+                      ),
+                      allowInsecureHttp: allowInsecureHttp,
+                      description: descriptionController.text,
+                    );
+                    Navigator.of(dialogContext).pop(savedDefinition);
+                  } on FormatException catch (error) {
+                    setDialogState(() => validationError = error.message);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!context.mounted || saved == null) {
+        return;
+      }
+      final store = context.read<CustomCatalogStore?>();
+      if (store == null) {
+        return;
+      }
+      await store.save(saved);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${definition == null ? 'Added' : 'Updated'} ${saved.name}.',
+          ),
+        ),
+      );
+    } on StateError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error')),
+        );
+      }
+    } finally {
+      nameController.dispose();
+      catalogUrlController.dispose();
+      domainsController.dispose();
+      descriptionController.dispose();
+    }
+  }
+
+  Future<void> _removeCustomCatalog(
+    BuildContext context,
+    CustomCatalogDefinition definition,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove ${definition.name}?'),
+        content: const Text(
+          'This removes the catalog configuration from this device. Saved library entries remain unchanged.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    final store = context.read<CustomCatalogStore?>();
+    if (store == null) {
+      return;
+    }
+    await context.read<PlayerController>().removeTracksFromSource(
+      definition.providerId,
+    );
+    await store.remove(definition.id);
+    if (!context.mounted) {
+      return;
+    }
+    _providerSearchRequestSerial += 1;
+    setState(() {
+      _providerSearchLoading = false;
+      _providerSearchLoadingMore = false;
+      _providerSearchResults.removeWhere(
+        (result) => result.providerId == definition.providerId,
+      );
+      _providerSearchErrors.removeWhere(
+        (error) => error.providerId == definition.providerId,
+      );
+      _providerSearchLoadMoreErrors.removeWhere(
+        (error) => error.providerId == definition.providerId,
+      );
+      _providerSearchContinuations.remove(definition.providerId);
+      _providerSearchFailedContinuations.remove(definition.providerId);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed ${definition.name}.')),
+    );
+  }
+
   Future<void> _editSelfHostedAccount(
     BuildContext context,
     SelfHostedProviderKind kind, {
@@ -11670,6 +11973,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _radioProvider,
       _archiveProvider,
       ...context.read<SelfHostedProviderStore>().musicProviders,
+      ...?context.read<CustomCatalogStore?>()?.musicProviders,
     ];
   }
 

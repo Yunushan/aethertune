@@ -11,6 +11,7 @@ import '../data/library_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/library_sync_store.dart';
 import '../data/local_folder_watch_store.dart';
+import '../data/custom_catalog_store.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
@@ -55,6 +56,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
         ChangeNotifierProvider<SelfHostedProviderStore>(
           create: (_) => SelfHostedProviderStore()..load(),
+        ),
+        ChangeNotifierProvider<CustomCatalogStore>(
+          create: (_) => CustomCatalogStore()..load(),
         ),
         ChangeNotifierProvider<LibrarySyncStore>(
           create: (_) => LibrarySyncStore()..load(),

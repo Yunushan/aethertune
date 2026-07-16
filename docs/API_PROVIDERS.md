@@ -137,3 +137,36 @@ class MyProvider implements MusicSourceProvider {
 - Credential sharing or token theft.
 - Ad-blocking modules designed specifically to violate a service's terms.
 - Providers that hide network behavior from the user.
+# Declarative Custom Catalogs
+
+Sources can register a user-owned JSON catalog without downloading or executing
+provider code. A catalog declares its own JSON endpoint and any additional
+hosts that may serve media or artwork. HTTPS is required by default; HTTP
+requires the user's explicit local-network consent. Credentials and redirect
+chains are not supported.
+
+The catalog document is bounded to 2 MiB and 500 tracks:
+
+```json
+{
+  "version": 1,
+  "tracks": [
+    {
+      "id": "night-drive",
+      "title": "Night Drive",
+      "artist": "Open Artist",
+      "album": "City Lights",
+      "genre": "Electronic",
+      "durationMs": 185000,
+      "streamUrl": "https://declared-media.example/audio/night-drive.mp3",
+      "artworkUrl": "https://declared-media.example/art/night-drive.jpg"
+    }
+  ]
+}
+```
+
+Track IDs must be unique and every `streamUrl` or `artworkUrl` must be an
+HTTP(S) URL on the catalog host or one of the additional user-declared hosts.
+Invalid documents are rejected as a whole. The adapter performs metadata
+search locally against the fetched catalog and returns its declared direct
+stream URL only after rechecking the provider and host boundary.

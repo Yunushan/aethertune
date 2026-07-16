@@ -176,7 +176,8 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | YouTube / YouTube Music | Blocked / official-only | YouTube Music, InnerTune, NewPipe family | Official API, embeds, or user-provided legal URLs only; no private API scraping. |
 | SoundCloud or similar services | Blocked / official-only | Multi-source clients | Official API or documented public feeds only. |
 | Bandcamp / artist stores | Blocked / official-only | Open music discovery | Official/public pages only where terms allow. |
-| User-added custom provider plugins | Roadmap | Echo Music, Bloomee Tunes, Grayjay | Plugin SDK, packaging, signing, sandbox, and provider contract test suite. |
+| User-added JSON catalog providers | Scaffolded | Echo Music, Bloomee Tunes, Grayjay | Sources lets users add/edit/remove up to 20 declarative JSON catalogs. Each catalog explicitly declares its metadata and media hosts, defaults to HTTPS, requires explicit HTTP consent, rejects credential-bearing URLs and off-list stream/artwork URLs, and is bounded to 500 tracks/2 MiB. These data-only providers participate in unified search and direct playback without executing downloaded code or storing provider credentials. Contract/store tests cover persistence, parsing, and host boundaries. |
+| User-added executable provider plugins | Roadmap | Echo Music, Bloomee Tunes, Grayjay | A cross-platform SDK with packaging, signing, sandboxing, review, and a provider contract suite remains required before downloaded executable plugins can be supported safely. |
 
 ### Video And Media Browsing
 
