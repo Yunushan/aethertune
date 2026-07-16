@@ -24,6 +24,7 @@ import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
+import '../data/lyrics_translation_settings_store.dart';
 import '../data/m4a_metadata_writer.dart';
 import '../data/mp3_id3v1_tag_writer.dart';
 import '../data/ogg_vorbis_comment_writer.dart';
@@ -41,6 +42,7 @@ import '../data/youtube_data_settings_store.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/custom_catalog_definition.dart';
 import '../domain/lyrics_document.dart';
+import '../domain/lyrics_translator.dart';
 import '../domain/music_catalog_discovery_provider.dart';
 import '../domain/music_catalog_provider.dart';
 import '../domain/replay_gain.dart';
@@ -112,6 +114,189 @@ Future<void> _showMobileAudioRoutePicker(BuildContext context) async {
       ),
     );
   }
+}
+
+Future<void> _configureLyricsTranslation(BuildContext context) async {
+  final store = context.read<LyricsTranslationSettingsStore?>();
+  if (store == null) {
+    return;
+  }
+  final endpointController = TextEditingController(
+    text: store.endpoint?.toString() ?? '',
+  );
+  final targetLanguageController = TextEditingController(
+    text: store.targetLanguage,
+  );
+  final apiKeyController = TextEditingController();
+  String? validationError;
+  try {
+    final draft = await showDialog<_LyricsTranslationConfiguration>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Configure lyrics translation'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Text(
+                    'AetherTune sends lyric text only to the LibreTranslate-compatible service you choose. Translation is shown separately and never replaces the original timed lyrics.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('lyrics-translation-endpoint'),
+                    controller: endpointController,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Service URL',
+                      hintText: 'https://translate.example',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('lyrics-translation-target-language'),
+                    controller: targetLanguageController,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Target language',
+                      hintText: 'en, tr, de, ...',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('lyrics-translation-api-key'),
+                    controller: apiKeyController,
+                    obscureText: true,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'API key (optional)',
+                      helperText: 'Leave empty to use no API key.',
+                    ),
+                  ),
+                  if (validationError != null) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Text(
+                      validationError!,
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final endpoint = endpointController.text.trim();
+                final targetLanguage = targetLanguageController.text.trim();
+                if (endpoint.isEmpty || targetLanguage.isEmpty) {
+                  setDialogState(
+                    () => validationError =
+                        'Enter a service URL and target language.',
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop(
+                  _LyricsTranslationConfiguration(
+                    endpoint: endpoint,
+                    targetLanguage: targetLanguage,
+                    apiKey: apiKeyController.text,
+                  ),
+                );
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || draft == null) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!context.mounted) {
+      return;
+    }
+    await store.save(
+      endpoint: draft.endpoint,
+      targetLanguage: draft.targetLanguage,
+      apiKey: draft.apiKey,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lyrics translation configured.')),
+      );
+    }
+  } on FormatException catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  } finally {
+    endpointController.dispose();
+    targetLanguageController.dispose();
+    apiKeyController.dispose();
+  }
+}
+
+Future<void> _removeLyricsTranslation(BuildContext context) async {
+  final store = context.read<LyricsTranslationSettingsStore?>();
+  if (store == null || !store.isConfigured) {
+    return;
+  }
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Remove lyrics translation service?'),
+      content: const Text(
+        'This removes the endpoint, target language, and any API key from this device. Saved lyrics remain unchanged.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Remove'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted || confirmed != true) {
+    return;
+  }
+  await store.remove();
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Lyrics translation service removed.')),
+    );
+  }
+}
+
+class _LyricsTranslationConfiguration {
+  const _LyricsTranslationConfiguration({
+    required this.endpoint,
+    required this.targetLanguage,
+    required this.apiKey,
+  });
+
+  final String endpoint;
+  final String targetLanguage;
+  final String apiKey;
 }
 
 final AndroidPinnedShortcutBridge _androidPinnedShortcutBridge =
@@ -1032,6 +1217,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showNowPlayingLyrics(BuildContext context) async {
     final player = context.read<PlayerController>();
     final library = context.read<LibraryStore>();
+    final translationSettings =
+        context.read<LyricsTranslationSettingsStore?>();
     final track = player.current;
     if (track == null) {
       return;
@@ -1046,6 +1233,9 @@ class _HomeScreenState extends State<HomeScreen> {
           track: track,
           lyrics: library.lyricsForTrack(track.id),
           player: player,
+          translator: translationSettings?.translator,
+          translationTargetLanguage:
+              translationSettings?.targetLanguage ?? 'en',
           onEdit: () {
             Navigator.of(sheetContext).pop();
             unawaited(_showLyricsEditor(context, track));
@@ -2010,6 +2200,8 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
     required this.track,
     required this.lyrics,
     required this.player,
+    required this.translator,
+    required this.translationTargetLanguage,
     required this.onEdit,
     required this.onShare,
     required this.onShareRange,
@@ -2018,6 +2210,8 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
   final Track track;
   final TrackLyrics? lyrics;
   final PlayerController player;
+  final LyricsTranslator? translator;
+  final String translationTargetLanguage;
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onShareRange;
@@ -2038,6 +2232,10 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
         onEdit: onEdit,
         onShare: onShare,
         onShareRange: onShareRange,
+        onTranslate: _translationAction(
+          context,
+          currentLyrics.plainText,
+        ),
       );
     }
 
@@ -2049,6 +2247,25 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
       onEdit: onEdit,
       onShare: onShare,
       onShareRange: onShareRange,
+      onTranslate: _translationAction(
+        context,
+        syncedLines.map((line) => line.text).join('\n'),
+      ),
+    );
+  }
+
+  VoidCallback? _translationAction(BuildContext context, String lyricsText) {
+    final currentTranslator = translator;
+    if (currentTranslator == null || lyricsText.trim().isEmpty) {
+      return null;
+    }
+    return () => unawaited(
+      _showLyricsTranslation(
+        context,
+        translator: currentTranslator,
+        lyrics: lyricsText,
+        targetLanguage: translationTargetLanguage,
+      ),
     );
   }
 }
@@ -2095,6 +2312,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
     required this.onEdit,
     required this.onShare,
     required this.onShareRange,
+    this.onTranslate,
   });
 
   final Track track;
@@ -2103,6 +2321,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onShareRange;
+  final VoidCallback? onTranslate;
 
   @override
   Widget build(BuildContext context) {
@@ -2122,6 +2341,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
                 onEdit: onEdit,
                 onShare: onShare,
                 onShareRange: onShareRange,
+                onTranslate: onTranslate,
               ),
               const Divider(height: 1),
               Padding(
@@ -2145,6 +2365,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
     required this.onEdit,
     required this.onShare,
     required this.onShareRange,
+    this.onTranslate,
   });
 
   final Track track;
@@ -2154,6 +2375,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onShareRange;
+  final VoidCallback? onTranslate;
 
   @override
   State<_SyncedNowPlayingLyrics> createState() =>
@@ -2200,6 +2422,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                       onEdit: widget.onEdit,
                       onShare: widget.onShare,
                       onShareRange: widget.onShareRange,
+                      onTranslate: widget.onTranslate,
                     );
                   }
 
@@ -2250,6 +2473,7 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
     required this.onEdit,
     this.onShare,
     this.onShareRange,
+    this.onTranslate,
   });
 
   final Track track;
@@ -2257,6 +2481,7 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback? onShare;
   final VoidCallback? onShareRange;
+  final VoidCallback? onTranslate;
 
   @override
   Widget build(BuildContext context) {
@@ -2279,6 +2504,12 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
               onPressed: onShareRange,
               icon: const Icon(Icons.format_line_spacing),
             ),
+          if (onTranslate != null)
+            IconButton(
+              tooltip: 'Translate lyrics',
+              onPressed: onTranslate,
+              icon: const Icon(Icons.translate_outlined),
+            ),
           IconButton(
             tooltip: 'Edit lyrics',
             onPressed: onEdit,
@@ -2293,6 +2524,109 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
 String _lyricsSubtitle(String base, String? sourceLabel) {
   final source = sourceLabel?.trim() ?? '';
   return source.isEmpty ? base : '$base - $source';
+}
+
+Future<void> _showLyricsTranslation(
+  BuildContext context, {
+  required LyricsTranslator translator,
+  required String lyrics,
+  required String targetLanguage,
+}) async {
+  final navigator = Navigator.of(context);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 16),
+          Expanded(child: Text('Translating lyrics...')),
+        ],
+      ),
+    ),
+  );
+
+  try {
+    final translated = await translator.translate(
+      lyrics,
+      targetLanguage: targetLanguage,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    navigator.pop();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _TranslatedLyricsSheet(
+        lyrics: translated,
+        targetLanguage: targetLanguage,
+      ),
+    );
+  } on Object catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    navigator.pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not translate lyrics: $error')),
+    );
+  }
+}
+
+class _TranslatedLyricsSheet extends StatelessWidget {
+  const _TranslatedLyricsSheet({
+    required this.lyrics,
+    required this.targetLanguage,
+  });
+
+  final String lyrics;
+  final String targetLanguage;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.translate_outlined),
+              title: const Text('Translated lyrics'),
+              subtitle: Text('Target language: $targetLanguage'),
+              trailing: IconButton(
+                tooltip: 'Copy translated lyrics',
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: lyrics));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Translated lyrics copied.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.content_copy_outlined),
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SelectableText(lyrics),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SyncedNowPlayingLyricLine extends StatelessWidget {
@@ -14330,6 +14664,8 @@ class _SettingsTab extends StatelessWidget {
     // remain independent of diagnostics capture.
     final diagnostics = context.watch<LocalDiagnosticLog?>();
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
+    final lyricsTranslation =
+        context.watch<LyricsTranslationSettingsStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
     final offlineCacheLimitBytes = library.offlineCacheLimitBytes;
@@ -14534,6 +14870,26 @@ class _SettingsTab extends StatelessWidget {
           onChanged: (enabled) =>
               unawaited(player.setSkipFailedTracksEnabled(enabled)),
         ),
+        if (lyricsTranslation != null)
+          ListTile(
+            key: const Key('lyrics-translation-settings'),
+            leading: const Icon(Icons.translate_outlined),
+            title: const Text('Lyrics translation'),
+            subtitle: Text(
+              lyricsTranslation.isConfigured
+                  ? 'Self-hosted service: ${lyricsTranslation.endpoint!.host} to ${lyricsTranslation.targetLanguage}.'
+                  : 'Configure a self-hosted LibreTranslate-compatible service.',
+            ),
+            onTap: () => unawaited(_configureLyricsTranslation(context)),
+            trailing: lyricsTranslation.isConfigured
+                ? IconButton(
+                    tooltip: 'Remove lyrics translation service',
+                    onPressed: () =>
+                        unawaited(_removeLyricsTranslation(context)),
+                    icon: const Icon(Icons.delete_outline),
+                  )
+                : const Icon(Icons.chevron_right),
+          ),
         ListTile(
           leading: Icon(
             player.volume == 0

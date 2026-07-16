@@ -8,8 +8,11 @@ import 'package:aethertune/l10n/app_localizations.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
+import 'package:aethertune/src/data/lyrics_translation_settings_store.dart';
+import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/domain/lyrics_translator.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/home_screen.dart';
@@ -180,6 +183,157 @@ void main() {
     await tester.pumpAndSettle();
     expect(library.recommendationHistorySignalsEnabled, isFalse);
     expect(tester.widget<SwitchListTile>(historyTile).value, isFalse);
+  });
+
+  testWidgets('configures lyrics translation from Options', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    final translations = LyricsTranslationSettingsStore(
+      credentialVault: _MemoryCredentialVault(),
+    );
+    await translations.load();
+    addTearDown(translations.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+          ChangeNotifierProvider<LyricsTranslationSettingsStore>.value(
+            value: translations,
+          ),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 5),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final settingsTile = find.byKey(const Key('lyrics-translation-settings'));
+    await tester.scrollUntilVisible(settingsTile, 300);
+    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(settingsTile);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('lyrics-translation-endpoint')),
+      'https://translate.example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('lyrics-translation-target-language')),
+      'tr',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(translations.endpoint, Uri.parse('https://translate.example.test'));
+    expect(translations.targetLanguage, 'tr');
+    await tester.scrollUntilVisible(settingsTile, 300);
+    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('translate.example.test to tr'), findsOneWidget);
+  });
+
+  testWidgets('translates now playing lyrics without modifying source text',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    final track = Track(
+      id: 'translated-lyrics-track',
+      title: 'Signal',
+      artist: 'Mira',
+      localPath: '/music/signal.mp3',
+    );
+    await library.addTracks(<Track>[track]);
+    await library.setLyrics(track.id, 'Original lyric line');
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    final translator = _FakeLyricsTranslator();
+    final translations = LyricsTranslationSettingsStore(
+      credentialVault: _MemoryCredentialVault(),
+      translatorFactory: (_, __) => translator,
+    );
+    await translations.load();
+    await translations.save(
+      endpoint: 'https://translate.example.test',
+      targetLanguage: 'tr',
+    );
+    addTearDown(translations.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+          ChangeNotifierProvider<LyricsTranslationSettingsStore>.value(
+            value: translations,
+          ),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 0),
+        ),
+      ),
+    );
+    await player.playTrack(track);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Lyrics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Translate lyrics'));
+    await tester.pumpAndSettle();
+
+    expect(translator.calls, 1);
+    expect(translator.targetLanguage, 'tr');
+    expect(find.text('Translated lyric line'), findsOneWidget);
+    expect(library.lyricsForTrack(track.id)?.plainText, 'Original lyric line');
   });
 
   testWidgets('opens full artist and album pages with collection actions', (
@@ -476,6 +630,40 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+}
+
+final class _MemoryCredentialVault implements ProviderCredentialVault {
+  final Map<String, String> _values = <String, String>{};
+
+  @override
+  Future<void> delete(String accountId) async {
+    _values.remove(accountId);
+  }
+
+  @override
+  Future<String?> read(String accountId) async => _values[accountId];
+
+  @override
+  Future<void> write(String accountId, String secret) async {
+    _values[accountId] = secret;
+  }
+}
+
+final class _FakeLyricsTranslator implements LyricsTranslator {
+  int calls = 0;
+  String? targetLanguage;
+
+  @override
+  Future<String> translate(
+    String text, {
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+  }) async {
+    calls += 1;
+    this.targetLanguage = targetLanguage;
+    expect(text, 'Original lyric line');
+    return 'Translated lyric line';
+  }
 }
 
 class _TestPlaybackAudioEngine implements PlaybackAudioEngine {

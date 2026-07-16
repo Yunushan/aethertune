@@ -12,6 +12,7 @@ import '../data/local_diagnostic_log.dart';
 import '../data/library_sync_store.dart';
 import '../data/listen_together_store.dart';
 import '../data/local_folder_watch_store.dart';
+import '../data/lyrics_translation_settings_store.dart';
 import '../data/custom_catalog_store.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/youtube_data_settings_store.dart';
@@ -67,6 +68,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
         ChangeNotifierProvider<YouTubeDataSettingsStore>(
           create: (_) => YouTubeDataSettingsStore()..load(),
+        ),
+        ChangeNotifierProvider<LyricsTranslationSettingsStore>(
+          create: (_) => LyricsTranslationSettingsStore()..load(),
         ),
         ChangeNotifierProvider<LibrarySyncStore>(
           create: (_) => LibrarySyncStore()..load(),
