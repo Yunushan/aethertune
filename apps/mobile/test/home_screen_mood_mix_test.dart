@@ -152,6 +152,11 @@ void main() {
       'Use favorites in For you',
     );
     await tester.scrollUntilVisible(favoritesTile, 300);
+    await tester.drag(
+      find.ancestor(of: favoritesTile, matching: find.byType(Scrollable)).first,
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(favoritesTile).value, isTrue);
 
     await tester.tap(favoritesTile);
