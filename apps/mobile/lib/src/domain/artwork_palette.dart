@@ -64,7 +64,7 @@ Color artworkPaletteSurfaceColor({
   if (dominant == null) {
     return fallback;
   }
-  return Color.alphaBlend(dominant.withOpacity(0.16), fallback);
+  return Color.alphaBlend(dominant.withValues(alpha: 0.16), fallback);
 }
 
 class _ArtworkColorBucket {
