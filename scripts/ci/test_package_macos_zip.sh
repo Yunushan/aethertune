@@ -10,11 +10,11 @@ archive="$workspace/aethertune-macos.zip"
 package_script="$root/scripts/ci/package_macos_zip.sh"
 
 mkdir -p "$bundle/Contents/MacOS" \
-  "$bundle/Contents/Frameworks/App.framework/flutter_assets"
+  "$bundle/Contents/Frameworks/App.framework/Versions/A/Resources/flutter_assets"
 printf 'fixture executable\n' > "$bundle/Contents/MacOS/aethertune"
 chmod +x "$bundle/Contents/MacOS/aethertune"
 printf 'fixture asset manifest\n' \
-  > "$bundle/Contents/Frameworks/App.framework/flutter_assets/AssetManifest.bin"
+  > "$bundle/Contents/Frameworks/App.framework/Versions/A/Resources/flutter_assets/AssetManifest.bin"
 
 bash "$package_script" "$bundle" "$archive"
 

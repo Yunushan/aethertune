@@ -10,7 +10,7 @@ if [[ ! -d "$app_bundle" || "${app_bundle##*.}" != "app" ]]; then
 fi
 
 executable_path="$app_bundle/Contents/MacOS/aethertune"
-flutter_assets_path="$app_bundle/Contents/Frameworks/App.framework/flutter_assets/AssetManifest.bin"
+flutter_assets_path="$app_bundle/Contents/Frameworks/App.framework/Versions/A/Resources/flutter_assets/AssetManifest.bin"
 
 if [[ ! -x "$executable_path" ]]; then
   echo "Expected a macOS Flutter app executable at $executable_path." >&2
@@ -33,7 +33,7 @@ if ! grep -Fxq "$bundle_name/Contents/MacOS/aethertune" <<<"$entries"; then
   exit 1
 fi
 
-if ! grep -Fxq "$bundle_name/Contents/Frameworks/App.framework/flutter_assets/AssetManifest.bin" <<<"$entries"; then
+if ! grep -Fxq "$bundle_name/Contents/Frameworks/App.framework/Versions/A/Resources/flutter_assets/AssetManifest.bin" <<<"$entries"; then
   echo "The macOS ZIP is missing the Flutter asset manifest." >&2
   exit 1
 fi
