@@ -371,18 +371,19 @@ class LibrarySyncStore extends ChangeNotifier {
     return _runBusy(() async {
       _requireOnline(library);
       final remote = await _requireClient().fetch();
-      if (!remote.hasSnapshot) {
+      final remoteSnapshot = remote.snapshot;
+      if (remoteSnapshot == null) {
         throw StateError(
           'The sync server does not have a library snapshot yet.',
         );
       }
       final queueSnapshot = _queueSyncEnabled
-          ? _queueSnapshotFrom(remote.snapshot)
+          ? _queueSnapshotFrom(remoteSnapshot)
           : null;
       final queuePlayer = queueSnapshot == null
           ? null
           : _requireQueuePlayer(player);
-      await library.restoreSyncSnapshotJson(jsonEncode(remote.snapshot));
+      await library.restoreSyncSnapshotJson(jsonEncode(remoteSnapshot));
       if (queuePlayer != null && queueSnapshot != null) {
         await queuePlayer.restoreQueueSyncSnapshot(
           queueSnapshot,
@@ -406,7 +407,8 @@ class LibrarySyncStore extends ChangeNotifier {
       _requireOnline(library);
       final client = _requireClient();
       final remote = await client.fetch();
-      if (!remote.hasSnapshot) {
+      final remoteSnapshot = remote.snapshot;
+      if (remoteSnapshot == null) {
         throw StateError(
           'The sync server does not have a library snapshot yet.',
         );
@@ -416,7 +418,7 @@ class LibrarySyncStore extends ChangeNotifier {
           ? _requireQueuePlayer(player).exportQueueSyncSnapshot(library.tracks)
           : null;
       final remoteQueueSnapshot = _queueSyncEnabled
-          ? _queueSnapshotFrom(remote.snapshot)
+          ? _queueSnapshotFrom(remoteSnapshot)
           : null;
       final mergedQueueSnapshot = _newestQueueSnapshot(
         localQueueSnapshot,
@@ -424,7 +426,7 @@ class LibrarySyncStore extends ChangeNotifier {
       );
       var remoteAcceptedMerge = false;
       try {
-        await library.mergeSyncSnapshotJson(jsonEncode(remote.snapshot));
+        await library.mergeSyncSnapshotJson(jsonEncode(remoteSnapshot));
         final result = await client.push(
           baseRevision: remote.revision,
           snapshot: _snapshotForPush(
