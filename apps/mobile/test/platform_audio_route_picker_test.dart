@@ -32,7 +32,8 @@ void main() {
       await showPlatformAudioRoutePicker(platform: TargetPlatform.android),
       isTrue,
     );
-    expect(calls, <MethodCall>[const MethodCall('showAudioRoutePicker')]);
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'showAudioRoutePicker');
   });
 
   test('does not send a platform message from desktop platforms', () async {
