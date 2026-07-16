@@ -10,12 +10,12 @@ const _maximumCustomCatalogDomains = 12;
 /// credentials, or make requests outside its declared hosts.
 final class CustomCatalogDefinition {
   CustomCatalogDefinition({
-    required this.id,
-    required this.name,
-    required this.catalogUri,
+    required String id,
+    required String name,
+    required Uri catalogUri,
     required Iterable<String> mediaDomains,
     required this.allowInsecureHttp,
-    this.description = '',
+    String description = '',
   })  : id = _normalizeId(id),
         name = _normalizeName(name),
         catalogUri = _normalizeCatalogUri(
