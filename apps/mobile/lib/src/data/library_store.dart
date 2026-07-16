@@ -4117,7 +4117,13 @@ class LibraryStore extends ChangeNotifier {
       ..writeln('Track: ${_shareTextValue(track.title, 'Untitled')}')
       ..writeln('Artist: ${_shareTextValue(track.artist, 'Unknown Artist')}')
       ..writeln('Album: ${_shareTextValue(track.album, 'Unknown Album')}')
-      ..writeln('Format: ${lyrics.hasSyncedLines ? 'Synced LRC' : 'Plain text'}');
+      ..writeln(
+        'Format: ${lyrics.isTtmlDocument
+            ? 'Synced TTML karaoke'
+            : lyrics.hasSyncedLines
+            ? 'Synced LRC'
+            : 'Plain text'}',
+      );
     if (lyrics.hasProviderAttribution) {
       final recordSuffix = lyrics.sourceExternalId.trim().isEmpty
           ? ''

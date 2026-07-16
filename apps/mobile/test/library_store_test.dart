@@ -1771,6 +1771,7 @@ void main() {
     await store.addTracks(<Track>[
       _track('1', title: 'Plain Song', artist: 'Mira', album: 'Dawn'),
       _track('2', title: 'Synced Song', artist: 'Ari', album: 'Night'),
+      _track('3', title: 'Karaoke Song', artist: 'Ari', album: 'Night'),
     ]);
     await store.setLyrics(
       '1',
@@ -1779,6 +1780,10 @@ void main() {
     await store.setLyrics(
       '2',
       '[00:01.00]First synced\n[00:04.20]Second synced\nuntimed note',
+    );
+    await store.setLyrics(
+      '3',
+      '<tt><body><div><p begin="1s"><span begin="0s">Word</span><span begin="0.5s">timed</span></p></div></body></tt>',
     );
 
     final plainShare = store.shareLyricsText('1', maxLines: 3)!;
@@ -1831,6 +1836,12 @@ void main() {
     )!;
     expect(draftShare, contains('Draft synced'));
     expect(draftShare, contains('Format: Synced LRC'));
+
+    final ttmlShare = store.shareLyricsText('3')!;
+    expect(ttmlShare, contains('Format: Synced TTML karaoke'));
+    expect(ttmlShare, contains('Word timed'));
+    expect(ttmlShare, isNot(contains('<span')));
+    expect(store.lyricsShareLines('3'), <String>['Word timed']);
 
     expect(store.shareLyricsText('missing'), isNull);
     expect(store.shareLyricsText('1', plainText: '   '), isNull);

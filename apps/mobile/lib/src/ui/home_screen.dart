@@ -944,7 +944,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!isSupportedLyricsDocumentName(file.name)) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Choose a .txt or .lrc lyrics file.')),
+        const SnackBar(content: Text('Choose a .txt, .lrc, or .ttml lyrics file.')),
       );
       return null;
     }
@@ -2076,7 +2076,7 @@ class _EmptyNowPlayingLyrics extends StatelessWidget {
           const ListTile(
             leading: Icon(Icons.subtitles_outlined),
             title: Text('No lyrics yet'),
-            subtitle: Text('Add plain lyrics or paste LRC timestamped lyrics.'),
+            subtitle: Text('Add plain lyrics or import LRC or TTML timed lyrics.'),
           ),
         ],
       ),
@@ -2205,6 +2205,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                   return _SyncedNowPlayingLyricLine(
                     line: line,
                     isActive: lineIndex == activeIndex,
+                    position: position,
                   );
                 },
               );
@@ -2295,10 +2296,12 @@ class _SyncedNowPlayingLyricLine extends StatelessWidget {
   const _SyncedNowPlayingLyricLine({
     required this.line,
     required this.isActive,
+    required this.position,
   });
 
   final SyncedLyricLine line;
   final bool isActive;
+  final Duration position;
 
   @override
   Widget build(BuildContext context) {
@@ -2335,13 +2338,52 @@ class _SyncedNowPlayingLyricLine extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                line.text,
-                style: textStyle,
-              ),
+              child: line.hasWordTiming
+                  ? _KaraokeLyricText(
+                      words: line.words,
+                      activeWordIndex: syncedLyricWordIndexAt(
+                        line.words,
+                        position,
+                      ),
+                      activeStyle: textStyle?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      inactiveStyle: textStyle,
+                    )
+                  : Text(line.text, style: textStyle),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _KaraokeLyricText extends StatelessWidget {
+  const _KaraokeLyricText({
+    required this.words,
+    required this.activeWordIndex,
+    required this.activeStyle,
+    required this.inactiveStyle,
+  });
+
+  final List<SyncedLyricWord> words;
+  final int activeWordIndex;
+  final TextStyle? activeStyle;
+  final TextStyle? inactiveStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        children: List<InlineSpan>.generate(words.length, (index) {
+          final prefix = index == 0 ? '' : ' ';
+          return TextSpan(
+            text: '$prefix${words[index].text}',
+            style: index == activeWordIndex ? activeStyle : inactiveStyle,
+          );
+        }),
       ),
     );
   }

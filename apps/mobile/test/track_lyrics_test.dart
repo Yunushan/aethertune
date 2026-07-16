@@ -61,6 +61,40 @@ Plain lyric line
     expect(syncedLyricLineIndexAt(<SyncedLyricLine>[], Duration.zero), -1);
   });
 
+  test('parses TTML timed lines and word-level karaoke spans', () {
+    const document = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml"><body><div>
+  <p begin="00:00:01.000" end="00:00:03.000">
+    <span begin="0.2s">Hello</span><span begin="0.6s" end="1.0s">world</span>
+  </p>
+  <p begin="00:00:04.500">Final line</p>
+</div></body></tt>
+''';
+    expect(isTtmlLyricsDocument(document), isTrue);
+    final lines = parseSyncedLyricLines(document);
+
+    expect(lines, hasLength(2));
+    expect(lines[0].text, 'Hello world');
+    expect(lines[0].timestamp, const Duration(seconds: 1));
+    expect(lines[0].endTimestamp, const Duration(seconds: 3));
+    expect(lines[0].words.map((word) => word.text), <String>['Hello', 'world']);
+    expect(
+      lines[0].words.map((word) => word.timestamp),
+      <Duration>[
+        const Duration(milliseconds: 1200),
+        const Duration(milliseconds: 1600),
+      ],
+    );
+    expect(lines[0].words[0].endTimestamp, const Duration(milliseconds: 1600));
+    expect(lines[0].words[1].endTimestamp, const Duration(seconds: 2));
+    expect(syncedLyricWordIndexAt(lines[0].words, const Duration(milliseconds: 1300)), 0);
+    expect(syncedLyricWordIndexAt(lines[0].words, const Duration(milliseconds: 1700)), 1);
+    expect(syncedLyricWordIndexAt(lines[0].words, const Duration(seconds: 3)), -1);
+    expect(lines[1].text, 'Final line');
+    expect(lines[1].timestamp, const Duration(milliseconds: 4500));
+  });
+
   test('plain lyrics are not treated as synced lyrics', () {
     final lyrics = TrackLyrics(
       trackId: 'track-1',

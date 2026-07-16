@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'track_lyrics.dart';
 
-const supportedLyricsDocumentExtensions = <String>['txt', 'lrc'];
+const supportedLyricsDocumentExtensions = <String>['txt', 'lrc', 'ttml'];
 
 class LyricsDocumentExport {
   const LyricsDocumentExport({
@@ -68,6 +68,9 @@ String lyricsDocumentFileName({
 }
 
 String lyricsDocumentExtensionForText(String plainText) {
+  if (isTtmlLyricsDocument(plainText)) {
+    return 'ttml';
+  }
   return parseSyncedLyricLines(plainText).isEmpty ? 'txt' : 'lrc';
 }
 
@@ -77,12 +80,25 @@ String decodeLyricsDocumentBytes(
 }) {
   try {
     final decoded = utf8.decode(bytes, allowMalformed: false);
-    return _normalizeLyricsDocumentText(decoded);
+    final normalized = _normalizeLyricsDocumentText(decoded);
+    if (_lyricsDocumentHasExtension(fileName, 'ttml') &&
+        (!isTtmlLyricsDocument(normalized) ||
+            parseSyncedLyricLines(normalized).isEmpty)) {
+      throw const FormatException('TTML lyrics must contain valid lyric lines.');
+    }
+    return normalized;
   } on FormatException {
     final name = fileName?.trim();
     final suffix = name == null || name.isEmpty ? '' : ' for $name';
     throw FormatException('Lyrics document$suffix must be valid UTF-8 text.');
   }
+}
+
+bool _lyricsDocumentHasExtension(String? fileName, String extension) {
+  if (fileName == null) {
+    return false;
+  }
+  return fileName.trim().toLowerCase().endsWith('.$extension');
 }
 
 String _normalizeLyricsDocumentText(String value) {

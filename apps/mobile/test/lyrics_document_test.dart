@@ -8,6 +8,7 @@ void main() {
   test('recognizes supported lyrics document file names', () {
     expect(isSupportedLyricsDocumentName('lyrics.txt'), isTrue);
     expect(isSupportedLyricsDocumentName('song.LRC'), isTrue);
+    expect(isSupportedLyricsDocumentName('karaoke.ttml'), isTrue);
     expect(isSupportedLyricsDocumentName('notes.md'), isFalse);
     expect(isSupportedLyricsDocumentName('lyrics'), isFalse);
   });
@@ -21,6 +22,16 @@ void main() {
     );
   });
 
+  test('rejects malformed TTML documents', () {
+    expect(
+      () => decodeLyricsDocumentBytes(
+        utf8.encode('<tt><body><div><p begin="1s">Broken'),
+        fileName: 'broken.ttml',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('rejects non-utf8 lyrics documents', () {
     expect(
       () => decodeLyricsDocumentBytes(<int>[0xff, 0xfe], fileName: 'bad.lrc'),
@@ -28,7 +39,7 @@ void main() {
     );
   });
 
-  test('builds txt and lrc lyrics export documents', () {
+  test('builds txt, lrc, and ttml lyrics export documents', () {
     final plainExport = buildLyricsDocumentExport(
       title: 'Plain / Song',
       artist: '',
@@ -38,6 +49,11 @@ void main() {
       title: 'Dawn:Signal',
       artist: 'Mira*Vale',
       plainText: '[00:01.00]First synced\r\n[00:04.20]Second synced',
+    )!;
+    final ttmlExport = buildLyricsDocumentExport(
+      title: 'Karaoke',
+      artist: 'Mira',
+      plainText: '<tt><body><div><p begin="1s">Line</p></div></body></tt>',
     )!;
 
     expect(plainExport.fileName, 'Plain Song.txt');
@@ -49,6 +65,9 @@ void main() {
     expect(syncedExport.extension, 'lrc');
     expect(syncedExport.text, contains('[00:01.00]First synced'));
     expect(utf8.decode(syncedExport.bytes), syncedExport.text);
+
+    expect(ttmlExport.fileName, 'Mira - Karaoke.ttml');
+    expect(ttmlExport.extension, 'ttml');
   });
 
   test('does not build empty lyrics export documents', () {

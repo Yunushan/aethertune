@@ -1,11 +1,31 @@
+import 'package:xml/xml.dart';
+
+class SyncedLyricWord {
+  const SyncedLyricWord({
+    required this.timestamp,
+    required this.text,
+    this.endTimestamp,
+  });
+
+  final Duration timestamp;
+  final Duration? endTimestamp;
+  final String text;
+}
+
 class SyncedLyricLine {
   const SyncedLyricLine({
     required this.timestamp,
     required this.text,
+    this.endTimestamp,
+    this.words = const <SyncedLyricWord>[],
   });
 
   final Duration timestamp;
+  final Duration? endTimestamp;
   final String text;
+  final List<SyncedLyricWord> words;
+
+  bool get hasWordTiming => words.isNotEmpty;
 }
 
 /// User-managed plain-text or LRC lyrics attached to one library track.
@@ -29,6 +49,7 @@ class TrackLyrics {
   final DateTime updatedAt;
 
   bool get isEmpty => plainText.trim().isEmpty;
+  bool get isTtmlDocument => isTtmlLyricsDocument(plainText);
   List<SyncedLyricLine> get syncedLines => parseSyncedLyricLines(plainText);
   bool get hasSyncedLines => syncedLines.isNotEmpty;
   bool get hasProviderAttribution =>
@@ -92,6 +113,10 @@ Uri? _parseLyricsSourceUri(String? value) {
 }
 
 List<SyncedLyricLine> parseSyncedLyricLines(String input) {
+  if (isTtmlLyricsDocument(input)) {
+    return _parseTtmlSyncedLyricLines(input);
+  }
+
   final indexedLines = <_IndexedSyncedLyricLine>[];
   var order = 0;
 
@@ -169,6 +194,273 @@ int syncedLyricLineIndexAt(
   }
 
   return activeIndex;
+}
+
+int syncedLyricWordIndexAt(
+  List<SyncedLyricWord> words,
+  Duration position,
+) {
+  for (var index = 0; index < words.length; index += 1) {
+    final word = words[index];
+    final end = word.endTimestamp;
+    if (position >= word.timestamp && (end == null || position < end)) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+bool isTtmlLyricsDocument(String input) {
+  var root = input.trimLeft();
+  if (root.startsWith('<?xml')) {
+    final declarationEnd = root.indexOf('?>');
+    if (declarationEnd == -1) {
+      return false;
+    }
+    root = root.substring(declarationEnd + 2).trimLeft();
+  }
+  return RegExp(r'^<(?:[\w.-]+:)?tt(?:\s|>)', caseSensitive: false)
+      .hasMatch(root);
+}
+
+List<SyncedLyricLine> _parseTtmlSyncedLyricLines(String input) {
+  final document = _tryParseTtml(input);
+  if (document == null) {
+    return const <SyncedLyricLine>[];
+  }
+
+  final indexedLines = <_IndexedSyncedLyricLine>[];
+  var order = 0;
+  for (final paragraph in document.descendants.whereType<XmlElement>()) {
+    if (paragraph.name.local.toLowerCase() != 'p') {
+      continue;
+    }
+
+    final timestamp = _resolveTtmlTimestamp(
+          _ttmlAttribute(paragraph, 'begin'),
+          Duration.zero,
+        ) ??
+        Duration.zero;
+    final endTimestamp = _resolveTtmlEndTimestamp(
+      paragraph,
+      start: timestamp,
+      parentStart: Duration.zero,
+    );
+    final text = _ttmlText(paragraph);
+    if (text.isEmpty) {
+      continue;
+    }
+
+    final words = _ttmlWordsForParagraph(
+      paragraph,
+      lineTimestamp: timestamp,
+      lineEndTimestamp: endTimestamp,
+    );
+    indexedLines.add(
+      _IndexedSyncedLyricLine(
+        line: SyncedLyricLine(
+          timestamp: timestamp,
+          endTimestamp: endTimestamp,
+          text: text,
+          words: words,
+        ),
+        order: order,
+      ),
+    );
+    order += 1;
+  }
+
+  indexedLines.sort((a, b) {
+    final byTimestamp = a.line.timestamp.compareTo(b.line.timestamp);
+    return byTimestamp == 0 ? a.order.compareTo(b.order) : byTimestamp;
+  });
+  return indexedLines.map((entry) => entry.line).toList(growable: false);
+}
+
+XmlDocument? _tryParseTtml(String input) {
+  try {
+    return XmlDocument.parse(input.trimLeft());
+  } on XmlParserException {
+    return null;
+  }
+}
+
+String? _ttmlAttribute(XmlElement element, String localName) {
+  for (final attribute in element.attributes) {
+    if (attribute.name.local.toLowerCase() == localName.toLowerCase()) {
+      return attribute.value;
+    }
+  }
+  return null;
+}
+
+Duration? _resolveTtmlEndTimestamp(
+  XmlElement element, {
+  required Duration start,
+  required Duration parentStart,
+}) {
+  final explicitEnd = _resolveTtmlTimestamp(
+    _ttmlAttribute(element, 'end'),
+    parentStart,
+  );
+  if (explicitEnd != null) {
+    return explicitEnd;
+  }
+  final duration = _parseTtmlOffset(_ttmlAttribute(element, 'dur'));
+  return duration == null ? null : start + duration;
+}
+
+Duration? _resolveTtmlTimestamp(String? value, Duration parentStart) {
+  if (value == null) {
+    return null;
+  }
+  final offset = _parseTtmlOffset(value);
+  if (offset != null) {
+    return parentStart + offset;
+  }
+  return _parseTtmlClock(value);
+}
+
+Duration? _parseTtmlOffset(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final match = RegExp(
+    r'^([0-9]+(?:\.[0-9]+)?)(h|m|s|ms)$',
+    caseSensitive: false,
+  ).firstMatch(value.trim());
+  if (match == null) {
+    return null;
+  }
+  final amount = double.tryParse(match.group(1) ?? '');
+  if (amount == null || amount.isNegative) {
+    return null;
+  }
+  final unit = (match.group(2) ?? '').toLowerCase();
+  final milliseconds = switch (unit) {
+    'h' => amount * Duration.millisecondsPerHour,
+    'm' => amount * Duration.millisecondsPerMinute,
+    's' => amount * Duration.millisecondsPerSecond,
+    'ms' => amount,
+    _ => 0.0,
+  };
+  return Duration(milliseconds: milliseconds.round());
+}
+
+Duration? _parseTtmlClock(String value) {
+  final match = RegExp(
+    r'^(?:(\d+):)?([0-5]?\d):([0-5]?\d)(?:\.(\d{1,3}))?$',
+  ).firstMatch(value.trim());
+  if (match == null) {
+    return null;
+  }
+  final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+  final minutes = int.tryParse(match.group(2) ?? '');
+  final seconds = int.tryParse(match.group(3) ?? '');
+  if (minutes == null || seconds == null) {
+    return null;
+  }
+  return Duration(
+    hours: hours,
+    minutes: minutes,
+    seconds: seconds,
+    milliseconds: _lrcFractionToMilliseconds(match.group(4)),
+  );
+}
+
+String _ttmlText(XmlElement element) {
+  final buffer = StringBuffer();
+  void visit(XmlNode node) {
+    if (node is XmlText) {
+      buffer.write(node.value);
+      return;
+    }
+    if (node is XmlElement && node.name.local.toLowerCase() == 'br') {
+      buffer.write(' ');
+      return;
+    }
+    if (node is XmlElement &&
+        node.name.local.toLowerCase() == 'span' &&
+        buffer.isNotEmpty &&
+        !RegExp(r'\s$').hasMatch(buffer.toString())) {
+      buffer.write(' ');
+    }
+    for (final child in node.children) {
+      visit(child);
+    }
+  }
+
+  visit(element);
+  return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+List<SyncedLyricWord> _ttmlWordsForParagraph(
+  XmlElement paragraph, {
+  required Duration lineTimestamp,
+  required Duration? lineEndTimestamp,
+}) {
+  final candidates = <_TtmlWordCandidate>[];
+
+  void visit(XmlElement element, Duration parentStart, Duration? parentEnd) {
+    for (final child in element.children.whereType<XmlElement>()) {
+      final start = _resolveTtmlTimestamp(
+            _ttmlAttribute(child, 'begin'),
+            parentStart,
+          ) ??
+          parentStart;
+      final explicitEnd = _resolveTtmlEndTimestamp(
+        child,
+        start: start,
+        parentStart: parentStart,
+      );
+      final end = explicitEnd ?? parentEnd;
+      final hasTimedDescendant = child.descendants
+          .whereType<XmlElement>()
+          .any((nested) => _ttmlAttribute(nested, 'begin') != null);
+      final text = _ttmlText(child);
+      if (child.name.local.toLowerCase() == 'span' &&
+          _ttmlAttribute(child, 'begin') != null &&
+          !hasTimedDescendant &&
+          text.isNotEmpty) {
+        candidates.add(
+          _TtmlWordCandidate(
+            timestamp: start,
+            endTimestamp: explicitEnd,
+            text: text,
+          ),
+        );
+      } else {
+        visit(child, start, end);
+      }
+    }
+  }
+
+  visit(paragraph, lineTimestamp, lineEndTimestamp);
+  candidates.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  return List<SyncedLyricWord>.generate(candidates.length, (index) {
+    final candidate = candidates[index];
+    final nextTimestamp = index + 1 < candidates.length
+        ? candidates[index + 1].timestamp
+        : lineEndTimestamp;
+    return SyncedLyricWord(
+      timestamp: candidate.timestamp,
+      endTimestamp: candidate.endTimestamp ?? nextTimestamp,
+      text: candidate.text,
+    );
+  }, growable: false);
+}
+
+class _TtmlWordCandidate {
+  const _TtmlWordCandidate({
+    required this.timestamp,
+    required this.endTimestamp,
+    required this.text,
+  });
+
+  final Duration timestamp;
+  final Duration? endTimestamp;
+  final String text;
 }
 
 final _lrcTagPattern = RegExp(r'\[([^\]]+)\]');
