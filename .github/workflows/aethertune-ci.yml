@@ -125,6 +125,15 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/test_package_windows_zip.ps1
 
+      - name: Test macOS ZIP packaging
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/ci/test_package_macos_zip.sh
+          app_bundle="$(find apps/mobile/build/macos/Build/Products/Debug -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          bash ./scripts/ci/package_macos_zip.sh "$app_bundle" build/aethertune-macos-debug.zip
+
       - name: Build iOS app without signing
         if: matrix.target == 'macos'
         run: cd apps/mobile && flutter build ios --debug --no-codesign

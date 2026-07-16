@@ -57,10 +57,13 @@ desktop archives on tags or manual dispatch:
 
 - `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`
 - `aethertune-linux-x64`: `aethertune-linux-x64.deb` for 64-bit Debian/Ubuntu systems
-- `aethertune-macos`: `aethertune-macos.zip`
+- `aethertune-macos`: `aethertune-macos.zip`, containing the validated `.app` bundle
 - `aethertune-windows-x64`: `aethertune-windows-x64.zip`
 
-Release packaging still needs platform-specific signing, notarization, and installer work before store-quality distribution.
+The macOS ZIP packager validates the app executable and Flutter asset manifest,
+then reopens the archive to verify both paths before upload. Release packaging
+still needs platform-specific signing, notarization, universal binaries, and
+installer work before store-quality distribution.
 
 ## Server release
 
