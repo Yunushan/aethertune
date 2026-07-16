@@ -62,6 +62,7 @@ import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
 import 'internet_archive_item_screen.dart';
+import 'platform_audio_route_picker.dart';
 import 'platform_text_share.dart';
 import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
@@ -98,6 +99,17 @@ class _AetherTuneNavigationDestination {
 }
 
 const _aetherTuneNavigationDestinationCount = 6;
+
+Future<void> _showMobileAudioRoutePicker(BuildContext context) async {
+  final opened = await showPlatformAudioRoutePicker();
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Audio output selection is unavailable on this device.'),
+      ),
+    );
+  }
+}
 
 final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
   _AetherTuneNavigationDestination(
@@ -14345,6 +14357,17 @@ class _SettingsTab extends StatelessWidget {
             unawaited(library.setPauseListeningHistory(value));
           },
         ),
+        if (!kIsWeb && supportsPlatformAudioRoutePicker(defaultTargetPlatform))
+          ListTile(
+            key: const Key('audio-output-picker'),
+            leading: const Icon(Icons.speaker_group_outlined),
+            title: const Text('Audio output'),
+            subtitle: const Text(
+              'Choose an available system playback route.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => unawaited(_showMobileAudioRoutePicker(context)),
+          ),
         ListTile(
           leading: const Icon(Icons.lyrics_outlined),
           title: const Text('Cached lyrics searches'),

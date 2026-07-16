@@ -110,6 +110,14 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'dev.aethertune/audio_routes',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'Settings.ACTION_SOUND_SETTINGS',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 'Visualizer.getMaxCaptureRate()',
                 activity_source.read_text(encoding="utf-8"),
             )
@@ -143,12 +151,13 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
     def test_configures_ios_and_macos_url_schemes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             info_path = Path(temporary_directory) / "Info.plist"
+            app_delegate_path = Path(temporary_directory) / "Runner/AppDelegate.swift"
             with info_path.open("wb") as stream:
                 platform_config.plistlib.dump({}, stream)
 
-            platform_config.configure_ios(info_path)
-            platform_config.verify_ios(info_path)
-            platform_config.configure_ios(info_path)
+            platform_config.configure_ios(info_path, app_delegate_path)
+            platform_config.verify_ios(info_path, app_delegate_path)
+            platform_config.configure_ios(info_path, app_delegate_path)
 
             with info_path.open("rb") as stream:
                 ios = platform_config.plistlib.load(stream)
@@ -157,6 +166,9 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 ios["CFBundleURLTypes"][0]["CFBundleURLSchemes"],
                 [platform_config.DEEP_LINK_SCHEME],
             )
+            app_delegate = app_delegate_path.read_text(encoding="utf-8")
+            self.assertIn("AVRoutePickerView", app_delegate)
+            self.assertIn("dev.aethertune/audio_routes", app_delegate)
 
             platform_config.configure_macos(info_path)
             platform_config.verify_macos(info_path)

@@ -426,6 +426,7 @@ import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
@@ -495,6 +496,21 @@ class MainActivity : AudioServiceActivity() {
                 call.argument<String>("artworkPath"),
             )
             result.success(null)
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/audio_routes",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "showAudioRoutePicker") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            try {
+                startActivity(Intent(Settings.ACTION_SOUND_SETTINGS))
+                result.success(true)
+            } catch (_: Exception) {
+                result.success(false)
+            }
         }
     }
 
@@ -650,6 +666,73 @@ private class AetherTuneAudioVisualizer : EventChannel.StreamHandler {
             (ln(average + 1.0) / 5.0).coerceIn(0.0, 1.0)
         }
         mainHandler.post { eventSink?.success(normalized) }
+    }
+}
+"""
+
+_APP_DELEGATE_SWIFT = """import AVKit
+import Flutter
+import UIKit
+
+@main
+@objc class AppDelegate: FlutterAppDelegate {
+    private var audioRoutePickerController: UIViewController?
+
+    override func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) -> Bool {
+        GeneratedPluginRegistrant.register(with: self)
+        if let flutterController = window?.rootViewController as? FlutterViewController {
+            let channel = FlutterMethodChannel(
+                name: "dev.aethertune/audio_routes",
+                binaryMessenger: flutterController.binaryMessenger
+            )
+            channel.setMethodCallHandler { [weak self, weak flutterController] call, result in
+                guard call.method == "showAudioRoutePicker" else {
+                    result(FlutterMethodNotImplemented)
+                    return
+                }
+                guard let appDelegate = self, let controller = flutterController else {
+                    result(false)
+                    return
+                }
+                result(appDelegate.showAudioRoutePicker(from: controller))
+            }
+        }
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    private func showAudioRoutePicker(from controller: UIViewController) -> Bool {
+        let pickerController = UIViewController()
+        pickerController.title = "Audio output"
+        pickerController.view.backgroundColor = .systemBackground
+
+        let picker = AVRoutePickerView()
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        pickerController.view.addSubview(picker)
+        NSLayoutConstraint.activate([
+            picker.centerXAnchor.constraint(equalTo: pickerController.view.centerXAnchor),
+            picker.centerYAnchor.constraint(equalTo: pickerController.view.centerYAnchor),
+            picker.widthAnchor.constraint(equalToConstant: 88),
+            picker.heightAnchor.constraint(equalToConstant: 56),
+        ])
+        pickerController.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(dismissAudioRoutePicker)
+        )
+
+        let navigationController = UINavigationController(rootViewController: pickerController)
+        navigationController.modalPresentationStyle = .formSheet
+        audioRoutePickerController = navigationController
+        controller.present(navigationController, animated: true)
+        return true
+    }
+
+    @objc private func dismissAudioRoutePicker() {
+        audioRoutePickerController?.dismiss(animated: true)
+        audioRoutePickerController = nil
     }
 }
 """
@@ -916,7 +999,7 @@ def _has_android_min_sdk_floor(gradle: str) -> bool:
     return any(re.search(pattern, gradle) for pattern in patterns)
 
 
-def configure_ios(info_plist_path: Path) -> None:
+def configure_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
     with info_plist_path.open("rb") as stream:
         info = plistlib.load(stream)
     modes = list(info.get("UIBackgroundModes", []))
@@ -927,6 +1010,8 @@ def configure_ios(info_plist_path: Path) -> None:
     _configure_apple_url_scheme(info)
     with info_plist_path.open("wb") as stream:
         plistlib.dump(info, stream, sort_keys=False)
+    app_delegate_path.parent.mkdir(parents=True, exist_ok=True)
+    app_delegate_path.write_text(_APP_DELEGATE_SWIFT, encoding="utf-8")
 
 
 def configure_macos(info_plist_path: Path) -> None:
@@ -1289,6 +1374,8 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "AudioServiceActivity",
         "MethodChannel",
         "dev.aethertune/playback_widget",
+        "dev.aethertune/audio_routes",
+        "Settings.ACTION_SOUND_SETTINGS",
         "updatePlaybackWidgets",
         "dev.aethertune/audio_visualizer",
         "AetherTuneAudioVisualizer",
@@ -1339,7 +1426,7 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         raise RuntimeError("Android minimum SDK floor is not 23")
 
 
-def verify_ios(info_plist_path: Path) -> None:
+def verify_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
     with info_plist_path.open("rb") as stream:
         info = plistlib.load(stream)
     if "audio" not in info.get("UIBackgroundModes", []):
@@ -1347,6 +1434,14 @@ def verify_ios(info_plist_path: Path) -> None:
     if info.get("FlutterDeepLinkingEnabled") is not False:
         raise RuntimeError("iOS app_links ownership is not configured")
     _verify_apple_url_scheme(info, "iOS")
+    app_delegate_source = app_delegate_path.read_text(encoding="utf-8")
+    required_route_picker_snippets = (
+        "AVRoutePickerView",
+        "dev.aethertune/audio_routes",
+        "showAudioRoutePicker",
+    )
+    if not all(snippet in app_delegate_source for snippet in required_route_picker_snippets):
+        raise RuntimeError("iOS audio route picker is not configured")
 
 
 def verify_macos(info_plist_path: Path) -> None:
@@ -1436,6 +1531,7 @@ def main() -> int:
     android_manifest = app_dir / "android/app/src/main/AndroidManifest.xml"
     android_gradle = app_dir / "android/app/build.gradle.kts"
     ios_info = app_dir / "ios/Runner/Info.plist"
+    ios_app_delegate = app_dir / "ios/Runner/AppDelegate.swift"
     ios_project = app_dir / "ios/Runner.xcodeproj/project.pbxproj"
     ios_framework_info = app_dir / "ios/Flutter/AppFrameworkInfo.plist"
     ios_debug_entitlements = app_dir / "ios/Runner/DebugProfile.entitlements"
@@ -1450,6 +1546,7 @@ def main() -> int:
         android_manifest,
         android_gradle,
         ios_info,
+        ios_app_delegate,
         ios_project,
         ios_framework_info,
         macos_info,
@@ -1463,7 +1560,7 @@ def main() -> int:
             raise FileNotFoundError(path)
 
     configure_android(android_manifest, android_gradle)
-    configure_ios(ios_info)
+    configure_ios(ios_info, ios_app_delegate)
     configure_macos(macos_info)
     configure_linux_deep_links(linux_application)
     configure_windows_deep_links(windows_main, windows_cmake)
@@ -1474,7 +1571,7 @@ def main() -> int:
     configure_keychain_entitlements(macos_release_entitlements)
     configure_ios_code_sign_entitlements(ios_project)
     verify_android(android_manifest, android_gradle)
-    verify_ios(ios_info)
+    verify_ios(ios_info, ios_app_delegate)
     verify_macos(macos_info)
     verify_linux_deep_links(linux_application)
     verify_windows_deep_links(windows_main, windows_cmake)
