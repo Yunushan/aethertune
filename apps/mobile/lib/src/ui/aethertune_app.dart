@@ -8,6 +8,7 @@ import 'package:aethertune/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
+import '../data/local_diagnostic_log.dart';
 import '../data/library_sync_store.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/self_hosted_provider_store.dart';
@@ -23,9 +24,15 @@ import 'widgets/desktop_tray_controls.dart';
 import 'widgets/aethertune_deep_link_listener.dart';
 
 class AetherTuneApp extends StatefulWidget {
-  const AetherTuneApp({super.key, this.audioEngine, this.incomingUriStream});
+  const AetherTuneApp({
+    super.key,
+    this.audioEngine,
+    this.diagnostics,
+    this.incomingUriStream,
+  });
 
   final PlaybackAudioEngine? audioEngine;
+  final LocalDiagnosticLog? diagnostics;
   final Stream<Uri>? incomingUriStream;
 
   @override
@@ -42,6 +49,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
       providers: [
         ChangeNotifierProvider<LibraryStore>(
           create: (_) => LibraryStore()..load(),
+        ),
+        ChangeNotifierProvider<LocalDiagnosticLog>(
+          create: (_) => widget.diagnostics ?? LocalDiagnosticLog()..load(),
         ),
         ChangeNotifierProvider<SelfHostedProviderStore>(
           create: (_) => SelfHostedProviderStore()..load(),

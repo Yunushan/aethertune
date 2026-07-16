@@ -17,6 +17,7 @@ import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
+import '../data/local_diagnostic_log.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
@@ -9574,6 +9575,71 @@ Future<void> _saveBrowseGroupRadioPlaylist(
   );
 }
 
+Future<void> _exportLocalDiagnostics(
+  BuildContext context,
+  LocalDiagnosticLog diagnostics,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final outputPath = await FilePicker.saveFile(
+    dialogTitle: 'Export local diagnostics',
+    fileName: 'aethertune-local-diagnostics.json',
+    type: FileType.custom,
+    allowedExtensions: const <String>['json'],
+  );
+  if (!context.mounted || outputPath == null) {
+    return;
+  }
+
+  try {
+    await File(outputPath).writeAsString(diagnostics.exportJson(), flush: true);
+    if (context.mounted) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Saved local diagnostics.')),
+      );
+    }
+  } on Object catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save local diagnostics: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _clearLocalDiagnostics(
+  BuildContext context,
+  LocalDiagnosticLog diagnostics,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Clear local diagnostics?'),
+      content: const Text(
+        'This permanently removes the reports saved on this device.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Clear'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  await diagnostics.clear();
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cleared local diagnostics.')),
+    );
+  }
+}
+
 Future<void> _copyTrackShareText(
   BuildContext context,
   LibraryStore library,
@@ -13388,6 +13454,7 @@ class _SettingsTab extends StatelessWidget {
     final localizations = AppLocalizations.of(context)!;
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
+    final diagnostics = context.watch<LocalDiagnosticLog>();
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
@@ -13702,6 +13769,36 @@ class _SettingsTab extends StatelessWidget {
               ),
             ),
         ],
+        const Divider(),
+        ListTile(
+          key: const Key('local-diagnostic-log'),
+          leading: const Icon(Icons.bug_report_outlined),
+          title: const Text('Local diagnostics'),
+          subtitle: Text(
+            diagnostics.entries.isEmpty
+                ? 'No reports. Nothing is sent from this device.'
+                : '${diagnostics.entries.length} local report(s). Nothing is sent automatically.',
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Export local diagnostics',
+                onPressed: diagnostics.entries.isEmpty
+                    ? null
+                    : () => unawaited(_exportLocalDiagnostics(context, diagnostics)),
+                icon: const Icon(Icons.save_alt_outlined),
+              ),
+              IconButton(
+                tooltip: 'Clear local diagnostics',
+                onPressed: diagnostics.entries.isEmpty
+                    ? null
+                    : () => unawaited(_clearLocalDiagnostics(context, diagnostics)),
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        ),
         ListTile(
           leading: const Icon(Icons.language_outlined),
           title: Text(localizations.language),
