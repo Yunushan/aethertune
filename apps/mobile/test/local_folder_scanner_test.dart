@@ -118,6 +118,28 @@ void main() {
     );
   });
 
+  test('associates SRT sidecars and skips malformed higher-priority files',
+      () async {
+    final audioPath = p.join(root.path, 'Timed Artist - Timed Title.ogg');
+    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+    await File(p.setExtension(audioPath, '.ttml')).writeAsString(
+      '<tt><body><div><p begin="1s">Broken',
+    );
+    await File(p.setExtension(audioPath, '.SRT')).writeAsString('''
+1
+00:00:01,000 --> 00:00:02,000
+Timed sidecar
+''');
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.ignoredFileCount, 0);
+    expect(
+      result.sidecarLyricsByTrackId[Track.stableLocalId(audioPath)],
+      '1\n00:00:01,000 --> 00:00:02,000\nTimed sidecar',
+    );
+  });
+
   test('falls back to matching TXT sidecar lyrics', () async {
     final audioPath = p.join(root.path, 'Plain Artist - Plain Title.wav');
     await File(audioPath).writeAsBytes(<int>[1, 2, 3]);

@@ -2046,4 +2046,9 @@ const _maxOggPacketBytes = 512 * 1024;
 const _maxVorbisComments = 2048;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
-const _sidecarLyricsExtensionsByPreference = <String>['.lrc', '.txt'];
+const _sidecarLyricsExtensionsByPreference = <String>[
+  '.ttml',
+  '.srt',
+  '.lrc',
+  '.txt',
+];
