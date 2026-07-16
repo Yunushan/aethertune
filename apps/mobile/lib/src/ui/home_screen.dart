@@ -37,6 +37,7 @@ import '../data/self_hosted_provider_store.dart';
 import '../data/subsonic_provider.dart';
 import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
+import '../data/youtube_data_settings_store.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/custom_catalog_definition.dart';
 import '../domain/lyrics_document.dart';
@@ -10771,6 +10772,8 @@ enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
 enum _CustomCatalogAction { edit, remove }
 
+enum _YouTubeDataAction { configure, remove }
+
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
     this.archiveProvider,
@@ -10872,6 +10875,12 @@ class _SourcesTabState extends State<_SourcesTab> {
     final library = context.watch<LibraryStore>();
     final selfHosted = context.watch<SelfHostedProviderStore>();
     final customCatalogs = context.watch<CustomCatalogStore?>();
+    final youtubeData = context.watch<YouTubeDataSettingsStore?>();
+    final youtubeProviders = youtubeData?.musicProviders ??
+        const <MusicSourceProvider>[];
+    final youtubeProvider = youtubeProviders.isEmpty
+        ? null
+        : youtubeProviders.first;
     final podcastSubscriptions = library.podcastSubscriptions;
     final offlineModeEnabled = library.offlineModeEnabled;
     final selfHostedActionsEnabled = selfHosted.loaded &&
@@ -10952,6 +10961,80 @@ class _SourcesTabState extends State<_SourcesTab> {
           capabilities: _archiveProvider.capabilities,
           disclosure: _archiveProvider.disclosure,
         ),
+        const SizedBox(height: 16),
+        Text(
+          'Official APIs',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        _ProviderCard(
+          title: 'YouTube Data API',
+          status: youtubeData?.isConfigured == true ? 'Enabled' : 'Optional',
+          description: youtubeData?.isConfigured == true
+              ? 'Searches official video metadata only. Playback and offline media are unavailable.'
+              : 'Configure a user-owned Google Cloud API key for official video metadata search only.',
+          icon: Icons.ondemand_video_outlined,
+          capabilities: youtubeProvider?.capabilities ??
+              const <MusicSourceCapability>{
+                MusicSourceCapability.metadataSearch,
+                MusicSourceCapability.artwork,
+              },
+          disclosure: youtubeProvider?.disclosure ??
+              const ProviderPrivacyDisclosure(
+                networkDomains: <String>[
+                  'www.googleapis.com',
+                  'i.ytimg.com',
+                ],
+              ),
+          actions: PopupMenuButton<_YouTubeDataAction>(
+            tooltip: 'Manage YouTube Data API',
+            onSelected: (action) {
+              switch (action) {
+                case _YouTubeDataAction.configure:
+                  unawaited(_configureYouTubeData(context));
+                  break;
+                case _YouTubeDataAction.remove:
+                  unawaited(_removeYouTubeData(context));
+                  break;
+              }
+            },
+            itemBuilder: (_) => <PopupMenuEntry<_YouTubeDataAction>>[
+              PopupMenuItem<_YouTubeDataAction>(
+                value: _YouTubeDataAction.configure,
+                enabled: youtubeData?.loaded == true && !offlineModeEnabled,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.key_outlined),
+                  title: Text(
+                    youtubeData?.isConfigured == true
+                        ? 'Replace API key'
+                        : 'Configure API key',
+                  ),
+                ),
+              ),
+              PopupMenuItem<_YouTubeDataAction>(
+                value: _YouTubeDataAction.remove,
+                enabled: youtubeData?.isConfigured == true,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('Remove API key'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (youtubeData?.loaded != true) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ] else if (youtubeData?.loadError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('YouTube Data API unavailable'),
+            subtitle: Text(youtubeData!.loadError!),
+          ),
+        ],
         const SizedBox(height: 16),
         Text(
           'Self-hosted servers',
@@ -11844,6 +11927,167 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  Future<void> _configureYouTubeData(BuildContext context) async {
+    final keyController = TextEditingController();
+    String? validationError;
+    try {
+      final apiKey = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Configure YouTube Data API'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'This source searches official video metadata only. It does not play, download, or cache YouTube audiovisual content and does not sign in to a YouTube account.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const Key('youtube-data-api-key'),
+                      controller: keyController,
+                      obscureText: true,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) {
+                        final value = keyController.text.trim();
+                        if (value.isEmpty) {
+                          setDialogState(
+                            () => validationError =
+                                'Enter a Google Cloud API key.',
+                          );
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(value);
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Google Cloud API key',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Use an app-restricted key from your own Google Cloud project. YouTube Terms of Service: https://www.youtube.com/t/terms',
+                    ),
+                    if (validationError != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final value = keyController.text.trim();
+                  if (value.isEmpty) {
+                    setDialogState(
+                      () => validationError = 'Enter a Google Cloud API key.',
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(value);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!context.mounted || apiKey == null) {
+        return;
+      }
+      final store = context.read<YouTubeDataSettingsStore?>();
+      if (store == null) {
+        return;
+      }
+      await store.saveApiKey(apiKey);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('YouTube Data API metadata search enabled.')),
+      );
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      keyController.dispose();
+    }
+  }
+
+  Future<void> _removeYouTubeData(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove YouTube Data API key?'),
+        content: const Text(
+          'This disables YouTube Data API metadata search on this device. Saved metadata entries remain unchanged.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    final store = context.read<YouTubeDataSettingsStore?>();
+    if (store == null) {
+      return;
+    }
+    await context
+        .read<PlayerController>()
+        .removeTracksFromSource('youtube-data-metadata');
+    await store.removeApiKey();
+    if (!context.mounted) {
+      return;
+    }
+    _providerSearchRequestSerial += 1;
+    setState(() {
+      _providerSearchLoading = false;
+      _providerSearchLoadingMore = false;
+      _providerSearchResults.removeWhere(
+        (result) => result.providerId == 'youtube-data-metadata',
+      );
+      _providerSearchErrors.removeWhere(
+        (error) => error.providerId == 'youtube-data-metadata',
+      );
+      _providerSearchLoadMoreErrors.removeWhere(
+        (error) => error.providerId == 'youtube-data-metadata',
+      );
+      _providerSearchContinuations.remove('youtube-data-metadata');
+      _providerSearchFailedContinuations.remove('youtube-data-metadata');
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('YouTube Data API key removed.')),
+    );
+  }
+
   Future<void> _editCustomCatalog(
     BuildContext context, {
     CustomCatalogDefinition? definition,
@@ -12211,6 +12455,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _provider,
       _radioProvider,
       _archiveProvider,
+      ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
       ...context.read<SelfHostedProviderStore>().musicProviders,
       ...?context.read<CustomCatalogStore?>()?.musicProviders,
     ];

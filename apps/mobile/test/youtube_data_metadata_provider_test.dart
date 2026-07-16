@@ -1,0 +1,105 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
+import 'package:aethertune/src/domain/music_source_provider.dart';
+
+void main() {
+  test('searches official video metadata without exposing a playable URI',
+      () async {
+    Uri? capturedUri;
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async {
+        capturedUri = uri;
+        return _searchJson;
+      },
+    );
+
+    expect(
+      provider.capabilities,
+      const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.artwork,
+      },
+    );
+    expect(provider.disclosure.cachesMedia, isFalse);
+    expect(provider.disclosure.supportsDownloads, isFalse);
+
+    final page = await provider.searchPage('  Aether song  ', limit: 75);
+
+    expect(capturedUri!.host, 'www.googleapis.com');
+    expect(capturedUri!.path, '/youtube/v3/search');
+    expect(capturedUri!.queryParameters, <String, String>{
+      'part': 'snippet',
+      'type': 'video',
+      'q': 'Aether song',
+      'maxResults': '50',
+      'key': 'project-key',
+    });
+    expect(page.totalCount, 87);
+    expect(page.nextCursor, 'next-page');
+    expect(page.tracks, hasLength(1));
+    final track = page.tracks.single;
+    expect(track.title, 'Aether Session');
+    expect(track.artist, 'Aether Channel');
+    expect(track.album, 'YouTube');
+    expect(track.externalId, 'video-1');
+    expect(track.artworkUri, Uri.parse('https://i.ytimg.com/high.jpg'));
+    expect(track.isPlayable, isFalse);
+    expect(await provider.resolveStream(track), isNull);
+  });
+
+  test('passes page tokens, skips malformed entries, and avoids empty queries',
+      () async {
+    final requests = <Uri>[];
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async {
+        requests.add(uri);
+        return '''
+          {
+            "items": [
+              {"id": {"videoId": "valid"}, "snippet": {"title": "Valid", "thumbnails": {"default": {"url": "http://not-secure.example/image.jpg"}}}},
+              {"id": {"channelId": "not-a-video"}, "snippet": {"title": "Skip"}}
+            ]
+          }
+        ''';
+      },
+    );
+
+    expect((await provider.searchPage('')).tracks, isEmpty);
+    expect(requests, isEmpty);
+
+    final page = await provider.searchPage('test', cursor: 'token', limit: 1);
+    expect(requests.single.queryParameters['pageToken'], 'token');
+    expect(page.tracks.single.title, 'Valid');
+    expect(page.tracks.single.artworkUri, isNull);
+  });
+
+  test('rejects unusable configuration and malformed API responses', () async {
+    expect(() => YouTubeDataMetadataProvider(apiKey: ' '), throwsArgumentError);
+    expect(
+      () => parseYouTubeDataSearchPage('[]'),
+      throwsA(isA<FormatException>()),
+    );
+  });
+}
+
+const _searchJson = '''
+{
+  "nextPageToken": "next-page",
+  "pageInfo": {"totalResults": 87},
+  "items": [
+    {
+      "id": {"videoId": "video-1"},
+      "snippet": {
+        "title": "Aether Session",
+        "channelTitle": "Aether Channel",
+        "thumbnails": {
+          "high": {"url": "https://i.ytimg.com/high.jpg"}
+        }
+      }
+    }
+  ]
+}
+''';

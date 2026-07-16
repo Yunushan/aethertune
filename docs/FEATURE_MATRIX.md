@@ -61,6 +61,7 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 | Shuffle | Done | `just_audio` shuffle flag is persisted across app launches. | Queue-aware shuffle polish. |
 | Repeat one/all/off | Done | `just_audio` loop mode is persisted across app launches. | UI tests and platform media-session integration. |
 | Provider plugin contract | Done | `MusicSourceProvider` requires capability flags, privacy/network disclosure, and cache/download policy inputs. | Stable provider SDK, packaging, sandbox rules. |
+| YouTube Data API metadata source | Done | Sources can securely store a user-owned Google Cloud API key and query the documented `search.list` endpoint for video metadata and HTTPS thumbnail artwork. The adapter declares only metadata search/artwork, returns no media URI, and does not expose playback, downloads, offline caching, or account access. Provider/store tests, full Flutter suite, and Android debug build verify the implemented contract. | OAuth playlist/channel features only where official terms and a future client configuration permit them. |
 | Demo provider | Done | Metadata-only provider template. | Real providers listed below. |
 | Podcast RSS subscriptions | Scaffolded | Sources tab adds/removes persisted RSS feed subscriptions, imports/exports OPML, retains up to 100 playable episodes per feed for offline browsing and Home, loads or refreshes one feed or all saved feeds sequentially with per-feed status/failure recording, tracks refresh status/staleness, and refreshes due feeds every 12 hours while the app is foregrounded, launched, or resumed. The foreground worker isolates per-feed failures, accepts only HTTP(S) feed URLs, and makes no network request in offline mode. Episodes play/save, queue cache/download requests after provider policy approval, materialize direct enclosure URLs into checksum-verified private cache storage with HTTP Range retry resume, apply usage/app-provider quota eviction controls, resume saved episode progress, include backups and sync merge, and declare cache/download policy for legal enclosures. Provider/cache/store/worker behavior has tests. | OS-background refresh and download jobs. |
 | Radio Browser station search | Scaffolded | Sources tab searches Radio Browser, discovers a public API mirror before default searches with fallback to the bundled mirror, filters by country/language/tag/codec/bitrate, paginates results with retained-results retry and duplicate protection, opens station details with directory status/tags/codec/homepage/stream metadata, validates selected station stream reachability/content type, plays public streams, sends station click accounting on playback, saves stations to the library, denies cache/download policy for live streams, and provider parsing/filter/mirror/pagination/validation/click/detail behavior has tests. | Deeper codec probing and retry/backoff policy. |
@@ -317,7 +318,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 | SoundPod | Lightweight streaming/player UX. | Roadmap |
 | NouTube | Music/video source browsing. | Roadmap / official-only |
 | Grayjay | Multi-source subscriptions, creator following, unified feeds. | Roadmap |
-| OuterTune | YouTube Music-style client features. | Roadmap / official-only |
+| OuterTune | YouTube Music-style client features; official metadata search is implemented, while unofficial playback/download behavior remains excluded. | Scaffolded / official-only |
 | ViTune | YouTube Music-style playback, cache, lyrics. | Roadmap / official-only |
 | RiMusic | YouTube Music-style playback, cache, lyrics, Android polish. | Scaffolded / official-only |
 | Harmony Music | Lightweight music client UX and provider ideas. | Roadmap |
@@ -333,7 +334,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 3. Extend the implemented mobile/system sessions and desktop global media keys with physical-host lifecycle fixtures, native Windows SMTC/Linux MPRIS publication, and Android Auto/CarPlay browsing where allowed.
 4. Build provider SDK v1 with capability declarations, network disclosure, auth handling, and contract tests.
 5. Complete legal providers: OS-background Podcast RSS jobs, richer Radio Browser UX, automated self-hosted sync merge, and pagination/browse surfaces for additional legal providers.
-6. Add official-only adapters where terms allow: Spotify metadata, YouTube/YouTube Music, SoundCloud, Bandcamp, or others.
+6. Add official-only adapters where terms allow: Spotify metadata, YouTube OAuth playlist/channel features, SoundCloud, Bandcamp, or others.
 7. Expand the current checksum-verified direct-URL offline cache with HTTP Range retry resume, queue pause/resume, and user-chosen folder export into a full cache/download manager with background jobs, in-progress cancellation, provider checksum manifests where available, and deeper system Downloads integration where legally allowed.
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.
 9. Add discovery: home feed, charts, recommendations, moods, artist/track radio, similar artists.
