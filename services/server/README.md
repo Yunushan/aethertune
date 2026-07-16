@@ -86,7 +86,8 @@ erasing history, so stale devices cannot repopulate a cleared snapshot. The
 service rejects local file paths and device cache jobs from portable snapshots.
 `GET /api/v1/sync/library/metadata` returns only the authenticated account's
 revision, timestamp, device label, and checksum. Current clients use it before
-automatic uploads to avoid sending a stale full snapshot.
+automatic uploads to avoid sending a stale full snapshot, then fall back to the
+existing full-upload protocol when connecting to older servers without it.
 
 ## Managed accounts and device tokens
 

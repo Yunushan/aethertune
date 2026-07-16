@@ -609,6 +609,25 @@ void main() {
     expect(sync.remoteUpdatedByDevice, 'Desktop');
   });
 
+  test('automatic uploads fall back for older sync servers', () async {
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+    )..metadataUnavailable = true;
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await library.load();
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    await sync.setAutomaticUploadEnabled(true);
+
+    expect(await sync.uploadAutomaticallyIfDue(library), isTrue);
+    expect(gateway.metadataFetchCalls, 1);
+    expect(gateway.pushCalls, 1);
+  });
+
   test('offline mode blocks network sync and removal clears secure state',
       () async {
     final vault = _MemorySyncVault();
@@ -716,6 +735,7 @@ class _FakeSyncGateway
   LibrarySyncProfile? profileUpdateResult;
   int pushCalls = 0;
   int metadataFetchCalls = 0;
+  bool metadataUnavailable = false;
   int profileFetchCalls = 0;
   int profileUpdateCalls = 0;
   String? lastDisplayName;
@@ -734,9 +754,9 @@ class _FakeSyncGateway
   }
 
   @override
-  Future<LibrarySyncRemoteSnapshot> fetchMetadata() async {
+  Future<LibrarySyncRemoteSnapshot?> fetchMetadata() async {
     metadataFetchCalls += 1;
-    return remote;
+    return metadataUnavailable ? null : remote;
   }
 
   @override

@@ -118,12 +118,26 @@ void main() {
       },
     );
 
-    final result = await client.fetchMetadata();
+    final result = (await client.fetchMetadata())!;
 
     expect(uri, _account().libraryMetadataEndpointUri);
     expect(result.revision, 4);
     expect(result.snapshot, isNull);
     expect(result.checksum, 'a' * 64);
+  });
+
+  test('falls back when an older server lacks sync metadata', () async {
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'GET');
+        expect(uri, _account().libraryMetadataEndpointUri);
+        return const LibrarySyncHttpResponse(statusCode: 404, body: '');
+      },
+    );
+
+    expect(await client.fetchMetadata(), isNull);
   });
 
   test('rejects a corrupted snapshot and redacts transport failures', () async {

@@ -358,7 +358,7 @@ class LibrarySyncStore extends ChangeNotifier {
       if (client is LibrarySyncMetadataGateway) {
         final metadataClient = client as LibrarySyncMetadataGateway;
         final remote = await metadataClient.fetchMetadata();
-        if (remote.revision != _lastKnownRevision) {
+        if (remote != null && remote.revision != _lastKnownRevision) {
           _conflict = LibrarySyncConflictException(
             currentRevision: remote.revision,
             updatedAt: remote.updatedAt,

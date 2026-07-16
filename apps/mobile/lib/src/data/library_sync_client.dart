@@ -73,7 +73,7 @@ abstract interface class LibrarySyncGateway {
 }
 
 abstract interface class LibrarySyncMetadataGateway {
-  Future<LibrarySyncRemoteSnapshot> fetchMetadata();
+  Future<LibrarySyncRemoteSnapshot?> fetchMetadata();
 }
 
 abstract interface class LibrarySyncProfileGateway {
@@ -160,11 +160,14 @@ class LibrarySyncClient
   }
 
   @override
-  Future<LibrarySyncRemoteSnapshot> fetchMetadata() async {
+  Future<LibrarySyncRemoteSnapshot?> fetchMetadata() async {
     final response = await _execute(
       'GET',
       endpoint: account.libraryMetadataEndpointUri,
     );
+    if (response.statusCode == 404) {
+      return null;
+    }
     if (response.statusCode != 200) {
       throw _requestFailure(response);
     }
