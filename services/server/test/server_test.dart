@@ -722,6 +722,187 @@ void main() {
     expect(files.single.path, isNot(contains(code)));
   });
 
+  group('shared playlists', () {
+    const ownerToken = 'shared-owner-token';
+    const viewerToken = 'shared-viewer-token';
+    const editorToken = 'shared-editor-token';
+
+    Handler handler() => createServerHandler(
+      syncAuthenticator: StaticSyncAuthenticator(
+        const <String, String>{
+          'owner-account': ownerToken,
+          'viewer-account': viewerToken,
+          'editor-account': editorToken,
+        },
+      ),
+      sharedPlaylistStore: MemorySharedPlaylistStore(),
+      sharedPlaylistInviteStore: MemorySharedPlaylistInviteStore(),
+    );
+
+    test('enforces authenticated viewer/editor invitations and revisions',
+        () async {
+      final server = handler();
+      final created = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Road trip',
+              'trackIds': <String>['track-1', 'track-2'],
+            },
+          },
+        ),
+      );
+      expect(created.statusCode, 201);
+      final createdBody = await _json(created);
+      final playlistId = createdBody['id'] as String;
+      expect(playlistId, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
+      expect(createdBody['role'], 'owner');
+
+      final viewerInvite = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{'role': 'viewer'},
+        ),
+      );
+      expect(viewerInvite.statusCode, 201);
+      final viewerCode = (await _json(viewerInvite))['inviteCode'] as String;
+
+      final viewerJoin = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$viewerCode',
+          token: viewerToken,
+        ),
+      );
+      expect(viewerJoin.statusCode, 200);
+      expect((await _json(viewerJoin))['role'], 'viewer');
+
+      final viewerWrite = await server(
+        _request(
+          'PUT',
+          '/api/v1/shared-playlists/$playlistId',
+          token: viewerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 2,
+            'deviceId': 'viewer-desktop',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Changed',
+              'trackIds': <String>['track-1'],
+            },
+          },
+        ),
+      );
+      expect(viewerWrite.statusCode, 403);
+
+      final editorInvite = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{'role': 'editor'},
+        ),
+      );
+      final editorCode = (await _json(editorInvite))['inviteCode'] as String;
+      final editorJoin = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$editorCode',
+          token: editorToken,
+        ),
+      );
+      expect(editorJoin.statusCode, 200);
+      expect((await _json(editorJoin))['role'], 'editor');
+
+      final editorWrite = await server(
+        _request(
+          'PUT',
+          '/api/v1/shared-playlists/$playlistId',
+          token: editorToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 3,
+            'deviceId': 'editor-desktop',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Road trip updated',
+              'trackIds': <String>['track-2', 'track-1', 'track-2'],
+            },
+          },
+        ),
+      );
+      expect(editorWrite.statusCode, 200);
+      expect((await _json(editorWrite))['revision'], 4);
+
+      final staleOwnerWrite = await server(
+        _request(
+          'PUT',
+          '/api/v1/shared-playlists/$playlistId',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 3,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Stale',
+              'trackIds': <String>['track-1'],
+            },
+          },
+        ),
+      );
+      expect(staleOwnerWrite.statusCode, 409);
+      expect((await _json(staleOwnerWrite))['error'], 'shared_playlist_conflict');
+
+      final ownerRead = await server(
+        _request(
+          'GET',
+          '/api/v1/shared-playlists/$playlistId',
+          token: ownerToken,
+        ),
+      );
+      final ownerBody = await _json(ownerRead);
+      expect(ownerRead.statusCode, 200);
+      expect((ownerBody['playlist'] as Map)['name'], 'Road trip updated');
+      expect((ownerBody['collaborators'] as Map)['viewer-account'], 'viewer');
+      expect((ownerBody['collaborators'] as Map)['editor-account'], 'editor');
+    });
+
+    test('rejects stream URLs and unauthenticated invitation joins', () async {
+      final server = handler();
+      final rejected = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Unsafe',
+              'trackIds': <String>['track-1'],
+              'streamUrl': 'https://private.example.test/audio',
+            },
+          },
+        ),
+      );
+      expect(rejected.statusCode, 400);
+      expect((await _json(rejected))['error'], 'invalid_shared_playlist');
+
+      final unauthenticated = await server(
+        _request('POST', '/api/v1/shared-playlist-invites/not-a-real-code'),
+      );
+      expect(unauthenticated.statusCode, 401);
+    });
+  });
+
   test('file sync store survives restart and retains only the latest revision',
       () async {
     final root = await Directory.systemTemp.createTemp(

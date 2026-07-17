@@ -9,8 +9,10 @@ import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 
 import 'src/authentication.dart';
+import 'src/shared_playlists.dart';
 
 export 'src/authentication.dart';
+export 'src/shared_playlists.dart';
 
 const _jsonHeaders = <String, String>{
   'content-type': 'application/json; charset=utf-8',
@@ -19,6 +21,7 @@ const _jsonHeaders = <String, String>{
 const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 const maxManagedAuthRequestBytes = 16 * 1024;
 const maxListenTogetherSessionBytes = 32 * 1024;
+const maxSharedPlaylistBytes = 64 * 1024;
 final _listenTogetherInviteRandom = Random.secure();
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
@@ -100,6 +103,8 @@ Handler createServerHandler({
   LibrarySyncSnapshotStore? syncStore,
   LibrarySyncSnapshotStore? listenTogetherStore,
   ListenTogetherInviteStore? listenTogetherInviteStore,
+  SharedPlaylistStore? sharedPlaylistStore,
+  SharedPlaylistInviteStore? sharedPlaylistInviteStore,
   ServerRequestLogger? requestLogger,
 }) {
   final now = clock ?? DateTime.now;
@@ -109,10 +114,31 @@ Handler createServerHandler({
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
   final sessions = listenTogetherStore ?? MemoryLibrarySyncSnapshotStore();
   final invites = listenTogetherInviteStore ?? MemoryListenTogetherInviteStore();
+  final sharedPlaylists = sharedPlaylistStore ?? MemorySharedPlaylistStore();
+  final sharedPlaylistInvites =
+      sharedPlaylistInviteStore ?? MemorySharedPlaylistInviteStore();
   final startedAt = now().toUtc();
   var requestsTotal = 0;
 
   Future<Response> route(Request request) async {
+    if (request.url.path.startsWith('api/v1/shared-playlist-invites/')) {
+      return _handleSharedPlaylistInviteJoin(
+        request,
+        authenticator: authenticator,
+        playlists: sharedPlaylists,
+        invites: sharedPlaylistInvites,
+        now: now,
+      );
+    }
+    if (request.url.path.startsWith('api/v1/shared-playlists/')) {
+      return _handleSharedPlaylistItem(
+        request,
+        authenticator: authenticator,
+        playlists: sharedPlaylists,
+        invites: sharedPlaylistInvites,
+        now: now,
+      );
+    }
     if (request.url.path.startsWith('api/v1/listen-together/invites/')) {
       return _handleListenTogetherInviteJoin(
         request,
@@ -154,6 +180,7 @@ Handler createServerHandler({
             'requestsTotal': requestsTotal,
             'librarySync': authenticator.isConfigured,
             'listenTogether': authenticator.isConfigured,
+            'sharedPlaylists': authenticator.isConfigured,
           },
         );
       case 'api/v1/info':
@@ -168,6 +195,7 @@ Handler createServerHandler({
             'version': '0.3.0',
             'librarySync': authenticator.isConfigured,
             'listenTogether': authenticator.isConfigured,
+            'sharedPlaylists': authenticator.isConfigured,
             'managedAuthentication': managedSyncAccounts != null,
             'supportedClients': <String>[
               'android',
@@ -235,6 +263,13 @@ Handler createServerHandler({
           authenticator: authenticator,
           sessions: sessions,
           invites: invites,
+        );
+      case 'api/v1/shared-playlists':
+        return _handleSharedPlaylistCollection(
+          request,
+          authenticator: authenticator,
+          playlists: sharedPlaylists,
+          now: now,
         );
       default:
         return _jsonResponse(
@@ -304,6 +339,12 @@ String _logRoute(String path) {
   if (path.startsWith('api/v1/listen-together/invites/')) {
     return '/api/v1/listen-together/invites/:code';
   }
+  if (path.startsWith('api/v1/shared-playlist-invites/')) {
+    return '/api/v1/shared-playlist-invites/:code';
+  }
+  if (path.startsWith('api/v1/shared-playlists/')) {
+    return '/api/v1/shared-playlists/:id';
+  }
   return switch (path) {
     'health' => '/health',
     'api/v1/info' => '/api/v1/info',
@@ -315,6 +356,7 @@ String _logRoute(String path) {
     'api/v1/sync/library' => '/api/v1/sync/library',
     'api/v1/sync/library/metadata' => '/api/v1/sync/library/metadata',
     'api/v1/listen-together/session' => '/api/v1/listen-together/session',
+    'api/v1/shared-playlists' => '/api/v1/shared-playlists',
     _ => '/not-found',
   };
 }
@@ -739,6 +781,308 @@ Future<Response> _handleLibrarySyncMetadata(
           'checksum': null,
         },
   );
+}
+
+Future<Response> _handleSharedPlaylistCollection(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required SharedPlaylistStore playlists,
+  required DateTime Function() now,
+}) async {
+  if (request.method != 'POST') {
+    return _methodNotAllowed(request);
+  }
+  final ownerId = _authenticatedSharedPlaylistUser(request, authenticator);
+  if (ownerId == null) {
+    return authenticator.isConfigured
+        ? _unauthorizedResponse()
+        : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
+  }
+  try {
+    final body = await _readBoundedJson(
+      request,
+      maxBytes: maxSharedPlaylistBytes,
+    );
+    final mutation = _syncMutationFields(body);
+    final rawDocument = body['playlist'];
+    if (rawDocument is! Map) {
+      throw const FormatException('playlist must be an object.');
+    }
+    final document = Map<String, Object?>.from(rawDocument);
+    validateSharedPlaylistDocument(document);
+    for (var attempt = 0; attempt < 4; attempt += 1) {
+      final playlistId = newSharedPlaylistId();
+      final result = await playlists.write(
+        playlistId: playlistId,
+        ownerId: ownerId,
+        baseRevision: 0,
+        deviceId: mutation.deviceId,
+        document: document,
+        collaborators: const <String, SharedPlaylistRole>{},
+        updatedAt: now().toUtc(),
+      );
+      if (!result.isConflict) {
+        return _jsonResponse(
+          201,
+          _sharedPlaylistResponse(result.record!, ownerId),
+        );
+      }
+    }
+    throw StateError('Could not allocate a shared playlist.');
+  } on _PayloadTooLarge catch (error) {
+    return _jsonResponse(
+      413,
+      <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
+    );
+  } on FormatException catch (error) {
+    return _jsonResponse(
+      400,
+      <String, Object?>{
+        'error': 'invalid_shared_playlist',
+        'message': error.message,
+      },
+    );
+  }
+}
+
+Future<Response> _handleSharedPlaylistItem(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required SharedPlaylistStore playlists,
+  required SharedPlaylistInviteStore invites,
+  required DateTime Function() now,
+}) async {
+  final accountId = _authenticatedSharedPlaylistUser(request, authenticator);
+  if (accountId == null) {
+    return authenticator.isConfigured
+        ? _unauthorizedResponse()
+        : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
+  }
+  final segments = request.url.pathSegments;
+  if (segments.length < 4 || segments[0] != 'api' || segments[1] != 'v1') {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  final playlistId = segments[3];
+  final isInviteEndpoint =
+      segments.length == 5 && segments[4] == 'invites';
+  if (segments.length != 4 && !isInviteEndpoint) {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  final record = await playlists.read(playlistId);
+  if (record == null || record.roleFor(accountId) == null) {
+    return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_not_found'});
+  }
+  if (isInviteEndpoint) {
+    if (request.method != 'POST') {
+      return _methodNotAllowed(request);
+    }
+    if (!record.isOwner(accountId)) {
+      return _sharedPlaylistForbidden();
+    }
+    try {
+      final body = await _readBoundedJson(request, maxBytes: maxSharedPlaylistBytes);
+      final role = sharedPlaylistRoleFromWire(body['role']);
+      if (role == null) {
+        throw const FormatException('Invite role must be viewer or editor.');
+      }
+      final code = await invites.issue(playlistId: playlistId, role: role);
+      return _jsonResponse(
+        201,
+        <String, Object?>{
+          'inviteCode': code,
+          'role': sharedPlaylistRoleToWire(role),
+        },
+      );
+    } on _PayloadTooLarge catch (error) {
+      return _jsonResponse(
+        413,
+        <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
+      );
+    } on FormatException catch (error) {
+      return _jsonResponse(
+        400,
+        <String, Object?>{
+          'error': 'invalid_shared_playlist_invite',
+          'message': error.message,
+        },
+      );
+    }
+  }
+  switch (request.method) {
+    case 'GET':
+      return _jsonResponse(200, _sharedPlaylistResponse(record, accountId));
+    case 'PUT':
+      if (record.roleFor(accountId) != SharedPlaylistRole.editor) {
+        return _sharedPlaylistForbidden();
+      }
+      try {
+        final body = await _readBoundedJson(
+          request,
+          maxBytes: maxSharedPlaylistBytes,
+        );
+        final mutation = _syncMutationFields(body);
+        final rawDocument = body['playlist'];
+        if (rawDocument is! Map) {
+          throw const FormatException('playlist must be an object.');
+        }
+        final document = Map<String, Object?>.from(rawDocument);
+        validateSharedPlaylistDocument(document);
+        final result = await playlists.write(
+          playlistId: record.id,
+          ownerId: record.ownerId,
+          baseRevision: mutation.baseRevision,
+          deviceId: mutation.deviceId,
+          document: document,
+          collaborators: record.collaborators,
+          updatedAt: now().toUtc(),
+        );
+        if (result.isConflict) {
+          return _sharedPlaylistConflict(result.record);
+        }
+        return _jsonResponse(200, _sharedPlaylistResponse(result.record!, accountId));
+      } on _PayloadTooLarge catch (error) {
+        return _jsonResponse(
+          413,
+          <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
+        );
+      } on FormatException catch (error) {
+        return _jsonResponse(
+          400,
+          <String, Object?>{
+            'error': 'invalid_shared_playlist',
+            'message': error.message,
+          },
+        );
+      }
+    case 'DELETE':
+      if (!record.isOwner(accountId)) {
+        return _sharedPlaylistForbidden();
+      }
+      try {
+        final mutation = _syncMutationFields(
+          await _readBoundedJson(request, maxBytes: maxSharedPlaylistBytes),
+        );
+        final result = await playlists.delete(
+          playlistId: record.id,
+          baseRevision: mutation.baseRevision,
+        );
+        if (result.isConflict) {
+          return _sharedPlaylistConflict(result.record);
+        }
+        return _jsonResponse(200, <String, Object?>{'deleted': true});
+      } on _PayloadTooLarge catch (error) {
+        return _jsonResponse(
+          413,
+          <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
+        );
+      } on FormatException catch (error) {
+        return _jsonResponse(
+          400,
+          <String, Object?>{
+            'error': 'invalid_shared_playlist',
+            'message': error.message,
+          },
+        );
+      }
+    default:
+      return _methodNotAllowed(request);
+  }
+}
+
+Future<Response> _handleSharedPlaylistInviteJoin(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required SharedPlaylistStore playlists,
+  required SharedPlaylistInviteStore invites,
+  required DateTime Function() now,
+}) async {
+  if (request.method != 'POST') {
+    return _methodNotAllowed(request);
+  }
+  final accountId = _authenticatedSharedPlaylistUser(request, authenticator);
+  if (accountId == null) {
+    return authenticator.isConfigured
+        ? _unauthorizedResponse()
+        : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
+  }
+  final code = request.url.pathSegments.last;
+  final invite = await invites.lookup(code);
+  final record = invite == null ? null : await playlists.read(invite.playlistId);
+  if (record == null || invite == null) {
+    return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_invite_not_found'});
+  }
+  final existingRole = record.roleFor(accountId);
+  if (existingRole != null) {
+    return _jsonResponse(200, _sharedPlaylistResponse(record, accountId));
+  }
+  final collaborators = <String, SharedPlaylistRole>{
+    ...record.collaborators,
+    accountId: invite.role,
+  };
+  final result = await playlists.write(
+    playlistId: record.id,
+    ownerId: record.ownerId,
+    baseRevision: record.revision,
+    deviceId: 'invite-join',
+    document: record.document,
+    collaborators: collaborators,
+    updatedAt: now().toUtc(),
+  );
+  if (result.isConflict) {
+    return _sharedPlaylistConflict(result.record);
+  }
+  return _jsonResponse(200, _sharedPlaylistResponse(result.record!, accountId));
+}
+
+String? _authenticatedSharedPlaylistUser(
+  Request request,
+  SyncAuthenticator authenticator,
+) {
+  if (!authenticator.isConfigured) {
+    return null;
+  }
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  return token == null ? null : authenticator.authenticate(token);
+}
+
+Response _sharedPlaylistForbidden() =>
+    _jsonResponse(403, <String, Object?>{'error': 'shared_playlist_forbidden'});
+
+Response _sharedPlaylistConflict(SharedPlaylistRecord? record) {
+  return _jsonResponse(
+    409,
+    <String, Object?>{
+      'error': 'shared_playlist_conflict',
+      'currentRevision': record?.revision ?? 0,
+      'updatedAt': record?.updatedAt.toIso8601String(),
+      'updatedByDevice': record?.updatedByDevice,
+      'checksum': record?.checksum,
+    },
+  );
+}
+
+Map<String, Object?> _sharedPlaylistResponse(
+  SharedPlaylistRecord record,
+  String accountId,
+) {
+  final isOwner = record.isOwner(accountId);
+  final role = isOwner ? 'owner' : sharedPlaylistRoleToWire(record.roleFor(accountId)!);
+  return <String, Object?>{
+    'id': record.id,
+    'revision': record.revision,
+    'updatedAt': record.updatedAt.toIso8601String(),
+    'updatedByDevice': record.updatedByDevice,
+    'checksum': record.checksum,
+    'role': role,
+    'playlist': record.document,
+    if (isOwner)
+      'collaborators': record.collaborators.map(
+        (id, collaboratorRole) => MapEntry<String, String>(
+          id,
+          sharedPlaylistRoleToWire(collaboratorRole),
+        ),
+      ),
+  };
 }
 
 Future<Response> _handleListenTogetherSession(

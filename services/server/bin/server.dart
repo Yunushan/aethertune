@@ -45,6 +45,16 @@ Future<void> main() async {
             '${dataDirectory.path}${Platform.pathSeparator}listen-together-invites',
           ),
         ),
+        sharedPlaylistStore: FileSharedPlaylistStore(
+          Directory(
+            '${dataDirectory.path}${Platform.pathSeparator}shared-playlists',
+          ),
+        ),
+        sharedPlaylistInviteStore: FileSharedPlaylistInviteStore(
+          Directory(
+            '${dataDirectory.path}${Platform.pathSeparator}shared-playlist-invites',
+          ),
+        ),
       requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
     ),
     listenAddress,
