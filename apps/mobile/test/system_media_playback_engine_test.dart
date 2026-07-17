@@ -395,6 +395,12 @@ void main() {
           category: MediaLibraryBrowseCategory.genre,
           tracks: <Track>[tracks.first, tracks.last],
         ),
+        MediaLibraryBrowsePlaylist(
+          id: 'source:local',
+          title: 'local',
+          category: MediaLibraryBrowseCategory.source,
+          tracks: <Track>[tracks.last, tracks.first],
+        ),
       ],
       onPlaylistTrackSelected: (track, queue, queueIndex) async {
         selectedTrack = track;
@@ -455,6 +461,17 @@ void main() {
       <String>['Track one', 'Track two'],
     );
 
+    final sourcesFolder = libraryChildren.singleWhere(
+      (item) => item.title == 'Sources',
+    );
+    final sourceFolder = (await engine.getChildren(sourcesFolder.id)).single;
+    expect(sourceFolder.title, 'local');
+    final sourceTracks = await engine.getChildren(sourceFolder.id);
+    expect(
+      sourceTracks.map((item) => item.title),
+      <String>['Track two', 'Track one'],
+    );
+
     await engine.playFromMediaId(playlistTracks.last.id);
     expect(selectedTrack, same(tracks.last));
     expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
@@ -470,6 +487,11 @@ void main() {
     expect(selectedTrack, same(tracks.last));
     expect(selectedQueue, <Track>[tracks.first, tracks.last]);
     expect(selectedQueueIndex, 1);
+
+    await engine.playFromMediaId(sourceTracks.first.id);
+    expect(selectedTrack, same(tracks.last));
+    expect(selectedQueue, <Track>[tracks.last, tracks.first]);
+    expect(selectedQueueIndex, 0);
   });
 
   test('browses nested Android Auto folders and selects their folder queue',

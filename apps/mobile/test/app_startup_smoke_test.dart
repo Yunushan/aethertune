@@ -65,14 +65,19 @@ void main() {
     final genreCollection = audio.browsePlaylists.singleWhere(
       (playlist) => playlist.id == 'genre:unknown genre',
     );
+    final sourceCollection = audio.browsePlaylists.singleWhere(
+      (playlist) => playlist.id == 'source:local',
+    );
     expect(favoritesPlaylist.tracks.map((item) => item.id), <String>[track.id]);
     expect(customPlaylist.tracks.map((item) => item.id), <String>[track.id]);
     expect(artistCollection.category, MediaLibraryBrowseCategory.artist);
     expect(albumCollection.category, MediaLibraryBrowseCategory.album);
     expect(genreCollection.category, MediaLibraryBrowseCategory.genre);
+    expect(sourceCollection.category, MediaLibraryBrowseCategory.source);
     expect(artistCollection.tracks.map((item) => item.id), <String>[track.id]);
     expect(albumCollection.tracks.map((item) => item.id), <String>[track.id]);
     expect(genreCollection.tracks.map((item) => item.id), <String>[track.id]);
+    expect(sourceCollection.tracks.map((item) => item.id), <String>[track.id]);
     Iterable<MediaLibraryBrowseFolder> allFolders(
       Iterable<MediaLibraryBrowseFolder> folders,
     ) sync* {

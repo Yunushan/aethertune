@@ -65,6 +65,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       'aethertune:android-auto:library:albums';
   static const _androidAutoGenresId =
       'aethertune:android-auto:library:genres';
+  static const _androidAutoSourcesId =
+      'aethertune:android-auto:library:sources';
   static const _androidAutoFoldersId =
       'aethertune:android-auto:library:folders';
   static const _androidAutoPlaylistIdPrefix =
@@ -443,6 +445,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
             _androidAutoAlbumsFolder(),
           if (_hasBrowseCategory(MediaLibraryBrowseCategory.genre))
             _androidAutoGenresFolder(),
+          if (_hasBrowseCategory(MediaLibraryBrowseCategory.source))
+            _androidAutoSourcesFolder(),
           if (_libraryBrowseFolders.isNotEmpty) _androidAutoFoldersFolder(),
         ];
       case _androidAutoAllTracksId:
@@ -455,6 +459,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.album);
       case _androidAutoGenresId:
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.genre);
+      case _androidAutoSourcesId:
+        return _playlistBrowseFolders(MediaLibraryBrowseCategory.source);
       case _androidAutoFoldersId:
         return _libraryBrowseFolders.map(_folderBrowseFolder).toList(
           growable: false,
@@ -494,6 +500,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     }
     if (mediaId == _androidAutoGenresId) {
       return _androidAutoGenresFolder();
+    }
+    if (mediaId == _androidAutoSourcesId) {
+      return _androidAutoSourcesFolder();
     }
     if (mediaId == _androidAutoFoldersId) {
       return _androidAutoFoldersFolder();
@@ -756,6 +765,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     return const MediaItem(
       id: _androidAutoGenresId,
       title: 'Genres',
+      displaySubtitle: 'AetherTune library',
+      playable: false,
+    );
+  }
+
+  MediaItem _androidAutoSourcesFolder() {
+    return const MediaItem(
+      id: _androidAutoSourcesId,
+      title: 'Sources',
       displaySubtitle: 'AetherTune library',
       playable: false,
     );

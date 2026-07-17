@@ -225,6 +225,19 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                       ),
                     ),
                   ),
+              ...library
+                  .browseGroups(LibraryBrowseType.source)
+                  .map(
+                    (group) => MediaLibraryBrowsePlaylist(
+                      id: 'source:${group.key}',
+                      title: group.label,
+                      category: MediaLibraryBrowseCategory.source,
+                      tracks: library.tracksForBrowseGroup(
+                        LibraryBrowseType.source,
+                        group.key,
+                      ),
+                    ),
+                  ),
             ];
             controller.setMediaLibraryBrowseTracks(
               library.tracks,
