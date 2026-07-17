@@ -33,6 +33,21 @@ void main() {
       expect(body['timestamp'], '2026-01-02T03:04:05.000Z');
     });
 
+    test('parses a strict server request-rate limit configuration', () {
+      expect(
+        serverRequestRateLimiterFromEnvironment(
+          const <String, String>{'AETHERTUNE_RATE_LIMIT_PER_MINUTE': '7'},
+        ).maximumRequests,
+        7,
+      );
+      expect(
+        () => serverRequestRateLimiterFromEnvironment(
+          const <String, String>{'AETHERTUNE_RATE_LIMIT_PER_MINUTE': '0'},
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('rate limits without exposing bearer tokens', () async {
       var now = DateTime.utc(2026, 1, 2, 3, 4, 5);
       final handler = createServerHandler(

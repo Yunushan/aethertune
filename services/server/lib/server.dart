@@ -69,6 +69,26 @@ final class ServerRequestRateLimiter {
   }
 }
 
+ServerRequestRateLimiter serverRequestRateLimiterFromEnvironment(
+  Map<String, String> environment, {
+  DateTime Function()? clock,
+}) {
+  final raw = environment['AETHERTUNE_RATE_LIMIT_PER_MINUTE'];
+  if (raw == null || raw.trim().isEmpty) {
+    return ServerRequestRateLimiter(clock: clock);
+  }
+  final maximumRequests = int.tryParse(raw.trim());
+  if (maximumRequests == null || maximumRequests <= 0) {
+    throw const FormatException(
+      'AETHERTUNE_RATE_LIMIT_PER_MINUTE must be a positive integer.',
+    );
+  }
+  return ServerRequestRateLimiter(
+    maximumRequests: maximumRequests,
+    clock: clock,
+  );
+}
+
 final class _RateLimitWindow {
   _RateLimitWindow(this.startedAt, this.requests);
 

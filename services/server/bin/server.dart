@@ -29,11 +29,15 @@ Future<void> main() async {
       operationsToken == null || operationsToken.isEmpty
           ? const DisabledOperationsAuthenticator()
           : StaticOperationsAuthenticator(operationsToken);
+  final requestRateLimiter = serverRequestRateLimiterFromEnvironment(
+    Platform.environment,
+  );
   final server = await shelf_io.serve(
     createServerHandler(
       syncAuthenticator: combinedSyncAuthenticator,
       managedSyncAccounts: managedSyncAccounts,
       operationsAuthenticator: operationsAuthenticator,
+      requestRateLimiter: requestRateLimiter,
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
         listenTogetherStore: FileLibrarySyncSnapshotStore(
           Directory(
