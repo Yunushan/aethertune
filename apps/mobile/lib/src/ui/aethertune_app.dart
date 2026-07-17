@@ -134,18 +134,36 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             final tracksById = <String, Track>{
               for (final track in library.tracks) track.id: track,
             };
-            final playlists = library.playlists
-                .map(
-                  (playlist) => MediaLibraryBrowsePlaylist(
-                    id: playlist.id,
-                    title: playlist.name,
-                    artworkUri: playlist.artworkUri,
-                    tracks: playlist.trackIds
-                        .map((trackId) => tracksById[trackId])
-                        .whereType<Track>(),
+            final playlists = <MediaLibraryBrowsePlaylist>[
+              ...library.playlists.map(
+                (playlist) => MediaLibraryBrowsePlaylist(
+                  id: 'manual:${playlist.id}',
+                  title: playlist.name,
+                  artworkUri: playlist.artworkUri,
+                  tracks: playlist.trackIds
+                      .map((trackId) => tracksById[trackId])
+                      .whereType<Track>(),
+                ),
+              ),
+              ...library.smartPlaylists().map(
+                (playlist) => MediaLibraryBrowsePlaylist(
+                  id: 'smart:${playlist.type.name}',
+                  title: playlist.name,
+                  tracks: library.tracksForSmartPlaylist(
+                    playlist.type,
+                    limit: library.tracks.length,
                   ),
-                )
-                .toList(growable: false);
+                ),
+              ),
+              ...library.customSmartPlaylists.map(
+                (playlist) => MediaLibraryBrowsePlaylist(
+                  id: 'custom-smart:${playlist.id}',
+                  title: playlist.name,
+                  artworkUri: playlist.artworkUri,
+                  tracks: library.tracksForCustomSmartPlaylist(playlist.id),
+                ),
+              ),
+            ];
             controller.setMediaLibraryBrowseTracks(
               library.tracks,
               playlists: playlists,

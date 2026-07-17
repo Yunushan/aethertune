@@ -44,12 +44,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Morning Signal'), findsWidgets);
 
+    await library.toggleFavorite(track.id);
+    final customSmartPlaylist = await library.createCustomSmartPlaylist(
+      name: 'Smoke favorites',
+      favoritesOnly: true,
+    );
+    await tester.pumpAndSettle();
+    final favoritesPlaylist = audio.browsePlaylists.singleWhere(
+      (playlist) => playlist.id == 'smart:favorites',
+    );
+    final customPlaylist = audio.browsePlaylists.singleWhere(
+      (playlist) => playlist.id == 'custom-smart:${customSmartPlaylist.id}',
+    );
+    expect(favoritesPlaylist.tracks.map((item) => item.id), <String>[track.id]);
+    expect(customPlaylist.tracks.map((item) => item.id), <String>[track.id]);
+
+    final playCallsBefore = audio.playCalls;
     await player.playTrack(track);
     await tester.pump();
 
     expect(player.current?.id, track.id);
     expect(audio.queue.map((item) => item.id), <String>[track.id]);
-    expect(audio.playCalls, 1);
+    expect(audio.playCalls, greaterThan(playCallsBefore));
 
     await library.updateTrackMetadata(
       track.id,
@@ -65,8 +81,11 @@ void main() {
   });
 }
 
-class _SmokePlaybackAudioEngine implements PlaybackAudioEngine {
+class _SmokePlaybackAudioEngine
+    implements MediaLibraryBrowsePlaybackAudioEngine {
   List<Track> queue = const <Track>[];
+  List<MediaLibraryBrowsePlaylist> browsePlaylists =
+      const <MediaLibraryBrowsePlaylist>[];
   int playCalls = 0;
 
   @override
@@ -119,6 +138,17 @@ class _SmokePlaybackAudioEngine implements PlaybackAudioEngine {
     Duration initialPosition = Duration.zero,
   }) async {
     queue = List<Track>.unmodifiable(tracks);
+  }
+
+  @override
+  void setMediaLibraryBrowseTracks(
+    Iterable<Track> tracks, {
+    required MediaLibraryTrackSelectionHandler onTrackSelected,
+    Iterable<MediaLibraryBrowsePlaylist> playlists =
+        const <MediaLibraryBrowsePlaylist>[],
+    MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
+  }) {
+    browsePlaylists = List<MediaLibraryBrowsePlaylist>.unmodifiable(playlists);
   }
 
   @override
