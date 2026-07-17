@@ -33,6 +33,28 @@ void main() {
       expect(body['timestamp'], '2026-01-02T03:04:05.000Z');
     });
 
+    test('rate limits without exposing bearer tokens', () async {
+      var now = DateTime.utc(2026, 1, 2, 3, 4, 5);
+      final handler = createServerHandler(
+        clock: () => now,
+        requestRateLimiter: ServerRequestRateLimiter(
+          maximumRequests: 2,
+          window: const Duration(minutes: 1),
+          clock: () => now,
+        ),
+      );
+
+      expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
+      expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
+      final limited = await handler(_request('GET', '/health', token: 'private'));
+
+      expect(limited.statusCode, 429);
+      expect(limited.headers['retry-after'], '60');
+      expect((await _json(limited))['error'], 'rate_limited');
+      now = now.add(const Duration(minutes: 1));
+      expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
+    });
+
     test('metrics reports aggregate process state without request details',
         () async {
       var current = DateTime.utc(2026, 1, 2, 3, 4, 5);

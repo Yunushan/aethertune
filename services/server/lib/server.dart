@@ -26,6 +26,48 @@ final _listenTogetherInviteRandom = Random.secure();
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 
+final class ServerRequestRateLimiter {
+  ServerRequestRateLimiter({
+    this.maximumRequests = 120,
+    this.window = const Duration(minutes: 1),
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now {
+    if (maximumRequests <= 0 || window <= Duration.zero) {
+      throw ArgumentError('Rate limit bounds must be positive.');
+    }
+  }
+
+  final int maximumRequests;
+  final Duration window;
+  final DateTime Function() _clock;
+  final Map<String, _RateLimitWindow> _windows = <String, _RateLimitWindow>{};
+
+  Duration? check(Request request) {
+    final now = _clock().toUtc();
+    final token = _bearerToken(request.headers['authorization'] ?? '');
+    final key = token == null
+        ? 'anonymous'
+        : sha256.convert(utf8.encode(token)).toString();
+    final current = _windows[key];
+    if (current == null || !now.isBefore(current.startedAt.add(window))) {
+      _windows[key] = _RateLimitWindow(now, 1);
+      return null;
+    }
+    if (current.requests >= maximumRequests) {
+      return current.startedAt.add(window).difference(now);
+    }
+    current.requests += 1;
+    return null;
+  }
+}
+
+final class _RateLimitWindow {
+  _RateLimitWindow(this.startedAt, this.requests);
+
+  final DateTime startedAt;
+  int requests;
+}
+
 /// Resolves the network interface used by the server executable.
 ///
 /// Native deployments stay private by default. Containers must explicitly set
@@ -106,6 +148,7 @@ Handler createServerHandler({
   SharedPlaylistStore? sharedPlaylistStore,
   SharedPlaylistInviteStore? sharedPlaylistInviteStore,
   ServerRequestLogger? requestLogger,
+  ServerRequestRateLimiter? requestRateLimiter,
 }) {
   final now = clock ?? DateTime.now;
   final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
@@ -119,6 +162,7 @@ Handler createServerHandler({
       sharedPlaylistInviteStore ?? MemorySharedPlaylistInviteStore();
   final startedAt = now().toUtc();
   var requestsTotal = 0;
+  final rateLimiter = requestRateLimiter ?? ServerRequestRateLimiter(clock: now);
 
   Future<Response> route(Request request) async {
     if (request.url.path.startsWith('api/v1/shared-playlist-invites/')) {
@@ -286,6 +330,24 @@ Handler createServerHandler({
     requestsTotal += 1;
     final requestStartedAt = now().toUtc();
     try {
+      final retryAfter = rateLimiter.check(request);
+      if (retryAfter != null) {
+        final response = _jsonResponse(
+          429,
+          <String, Object?>{'error': 'rate_limited'},
+          headers: <String, String>{
+            'retry-after': retryAfter.inSeconds.clamp(1, 60).toString(),
+          },
+        );
+        _writeRequestLog(
+          requestLogger,
+          request: request,
+          response: response,
+          requestStartedAt: requestStartedAt,
+          finishedAt: now().toUtc(),
+        );
+        return response;
+      }
       await _recordManagedDeviceActivity(
         request,
         authenticator: authenticator,
