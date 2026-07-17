@@ -52,6 +52,7 @@ void main() {
         provider.capabilities,
         containsAll(const <MusicSourceCapability>[
           MusicSourceCapability.metadataSearch,
+          MusicSourceCapability.searchSuggestions,
           MusicSourceCapability.radioDirectory,
           MusicSourceCapability.streamResolution,
           MusicSourceCapability.directPlayback,
@@ -88,6 +89,30 @@ void main() {
       expect(capturedClickUri!.path, '/json/url/station-1');
     },
   );
+
+  test('returns bounded station suggestions through the public search API',
+      () async {
+    Uri? capturedUri;
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (uri) async {
+        capturedUri = uri;
+        return _sampleStationsJson;
+      },
+    );
+
+    final suggestions = await provider.suggest('  aether  ', limit: 1);
+
+    expect(capturedUri!.path, '/json/stations/search');
+    expect(capturedUri!.queryParameters['name'], 'aether');
+    expect(capturedUri!.queryParameters['limit'], '1');
+    expect(suggestions, hasLength(1));
+    expect(suggestions.single.value, 'Aether Radio');
+    expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.track);
+    expect(suggestions.single.subtitle, 'US / english / jazz');
+    expect(await provider.suggest('   '), isEmpty);
+    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
+  });
 
   test('parses and selects radio browser mirrors', () {
     final mirrors = parseRadioBrowserMirrors('''

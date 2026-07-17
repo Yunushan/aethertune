@@ -53,7 +53,10 @@ final class InternetArchiveAudioSearchPage {
   }
 }
 
-class InternetArchiveProvider implements MusicSourceSearchPagingProvider {
+class InternetArchiveProvider
+    implements
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   InternetArchiveProvider({
     Uri? baseUri,
     InternetArchiveSearchLoader? searchLoader,
@@ -82,6 +85,7 @@ class InternetArchiveProvider implements MusicSourceSearchPagingProvider {
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
         MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
         MusicSourceCapability.offlineCache,
@@ -104,6 +108,54 @@ class InternetArchiveProvider implements MusicSourceSearchPagingProvider {
   @override
   Future<List<Track>> search(String query) async {
     return searchAudio(query);
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+    final results = parseInternetArchiveSearchPage(
+      await _searchLoader(
+        _searchUri(
+          normalized,
+          const InternetArchiveSearchFilters(),
+          includeFacets: false,
+          page: 1,
+          rowLimit: limit.clamp(1, 50),
+        ),
+      ),
+    );
+    final seen = <String>{};
+    final suggestions = <MusicSourceSearchSuggestion>[];
+    for (final result in results.results) {
+      final value = result.title.isEmpty ? result.identifier : result.title;
+      if (value.isEmpty || !seen.add(value.toLowerCase())) {
+        continue;
+      }
+      final details = <String>[
+        if (result.creator.isNotEmpty) result.creator,
+        if (result.collection.isNotEmpty) result.collection,
+      ];
+      suggestions.add(
+        MusicSourceSearchSuggestion(
+          value: value,
+          kind: MusicSourceSearchSuggestionKind.album,
+          subtitle: details.isEmpty ? 'Internet Archive item' : details.join(' / '),
+        ),
+      );
+      if (suggestions.length >= limit) {
+        break;
+      }
+    }
+    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
   }
 
   Future<List<Track>> searchAudio(
@@ -306,9 +358,17 @@ final class InternetArchiveSearchPage {
 }
 
 final class InternetArchiveSearchResult {
-  const InternetArchiveSearchResult({required this.identifier});
+  const InternetArchiveSearchResult({
+    required this.identifier,
+    this.title = '',
+    this.creator = '',
+    this.collection = '',
+  });
 
   final String identifier;
+  final String title;
+  final String creator;
+  final String collection;
 }
 
 final class InternetArchiveFacet {
@@ -615,7 +675,12 @@ InternetArchiveSearchResult? _searchResultFromJson(
     return null;
   }
 
-  return InternetArchiveSearchResult(identifier: identifier);
+  return InternetArchiveSearchResult(
+    identifier: identifier,
+    title: _stringValue(json['title']),
+    creator: _stringList(json['creator']).join(', '),
+    collection: _stringList(json['collection']).join(', '),
+  );
 }
 
 List<InternetArchiveFacet> _facetsFromJson(Object? value) {

@@ -83,7 +83,10 @@ final class RadioBrowserStationSearchPage {
   final bool hasMore;
 }
 
-class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
+class RadioBrowserProvider
+    implements
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   RadioBrowserProvider({
     Uri? baseUri,
     Uri? mirrorDirectoryUri,
@@ -130,6 +133,7 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
         MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.radioDirectory,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
@@ -153,6 +157,48 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
   @override
   Future<List<Track>> search(String query) async {
     return searchStations(query);
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+    final page = await searchStationPage(
+      normalized,
+      pageSize: limit.clamp(1, 50),
+    );
+    final seen = <String>{};
+    final suggestions = <MusicSourceSearchSuggestion>[];
+    for (final station in page.stations) {
+      final value = station.name.trim();
+      if (value.isEmpty || !seen.add(value.toLowerCase())) {
+        continue;
+      }
+      final details = <String>[
+        if (station.countryCode.isNotEmpty) station.countryCode,
+        if (station.language.isNotEmpty) station.language,
+        if (station.tags.isNotEmpty) station.tags.first,
+      ];
+      suggestions.add(
+        MusicSourceSearchSuggestion(
+          value: value,
+          kind: MusicSourceSearchSuggestionKind.track,
+          subtitle: details.isEmpty ? 'Radio station' : details.join(' / '),
+        ),
+      );
+      if (suggestions.length >= limit) {
+        break;
+      }
+    }
+    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
   }
 
   Future<List<Track>> searchStations(

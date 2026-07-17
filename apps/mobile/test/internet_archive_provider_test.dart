@@ -74,6 +74,7 @@ void main() {
         provider.capabilities,
         containsAll(const <MusicSourceCapability>[
           MusicSourceCapability.metadataSearch,
+          MusicSourceCapability.searchSuggestions,
           MusicSourceCapability.streamResolution,
           MusicSourceCapability.directPlayback,
           MusicSourceCapability.offlineCache,
@@ -135,6 +136,40 @@ void main() {
       );
     },
   );
+
+  test('returns bounded Archive suggestions without fetching item metadata',
+      () async {
+    Uri? capturedSearchUri;
+    var metadataRequests = 0;
+    final provider = InternetArchiveProvider(
+      baseUri: Uri.parse('https://archive.org'),
+      searchLoader: (uri) async {
+        capturedSearchUri = uri;
+        return _searchResultsJson;
+      },
+      metadataLoader: (_) async {
+        metadataRequests += 1;
+        throw StateError('Type-ahead must not load item metadata.');
+      },
+    );
+
+    final suggestions = await provider.suggest('  aether  ', limit: 1);
+
+    expect(capturedSearchUri!.path, '/advancedsearch.php');
+    expect(capturedSearchUri!.queryParameters['q'], 'mediatype:audio AND (aether)');
+    expect(capturedSearchUri!.queryParameters['rows'], '1');
+    expect(
+      capturedSearchUri!.queryParametersAll.containsKey('facet[]'),
+      isFalse,
+    );
+    expect(metadataRequests, 0);
+    expect(suggestions, hasLength(1));
+    expect(suggestions.single.value, 'Aether Public Session');
+    expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.album);
+    expect(suggestions.single.subtitle, 'Internet Archive item');
+    expect(await provider.suggest('   '), isEmpty);
+    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
+  });
 
   test('search page requests and exposes archive facet suggestions', () async {
     Uri? capturedSearchUri;
