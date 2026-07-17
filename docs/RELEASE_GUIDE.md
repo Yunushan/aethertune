@@ -113,7 +113,7 @@ settings; release review still needs to consider the impact of any update.
 
 ## F-Droid notes
 
-AetherTune is MIT licensed and has no telemetry. To prepare for F-Droid:
+AetherTune is 0BSD licensed and has no telemetry. To prepare for F-Droid:
 
 - Avoid proprietary SDKs.
 - Keep builds reproducible where possible.

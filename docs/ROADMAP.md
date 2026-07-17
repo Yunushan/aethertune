@@ -5,7 +5,7 @@
 - [x] Flutter mobile shell
 - [x] Flutter desktop build support
 - [x] Dart server foundation
-- [x] MIT license
+- [x] 0BSD license
 - [x] Local import
 - [x] Local playback
 - [x] Responsive full Now Playing screen

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Changed the project source license to 0BSD.
 - Added a Now Playing track share-card preview with native PNG save support.
 - Added persisted **Match all** and **Match any** modes to custom smart playlist rules.
 - Added a bounded selected-line picker for lyrics share text in the editor and
@@ -36,7 +37,7 @@
 
 Initial GitHub-ready scaffold.
 
-- Added MIT license.
+- Added the initial project license.
 - Added Flutter client app source.
 - Added local file import.
 - Added local/URL playback controller.

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="license 0BSD" src="https://img.shields.io/badge/license-0BSD-blue">
   <img alt="status alpha" src="https://img.shields.io/badge/status-alpha-orange">
   <img alt="framework Flutter" src="https://img.shields.io/badge/flutter-Android%20%7C%20iOS%20%7C%20Desktop-02569B">
   <img alt="free open source" src="https://img.shields.io/badge/100%25-free%20%26%20open%20source-brightgreen">
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <code>Dart 3</code> · <code>Flutter</code> · <code>Android</code> · <code>iOS</code> · <code>Linux</code> · <code>macOS</code> · <code>Windows</code> · <code>Server</code> · <code>MIT</code>
+  <code>Dart 3</code> · <code>Flutter</code> · <code>Android</code> · <code>iOS</code> · <code>Linux</code> · <code>macOS</code> · <code>Windows</code> · <code>Server</code> · <code>0BSD</code>
 </p>
 
 <p align="center">
@@ -156,7 +156,7 @@ This scaffold includes real app code, not only a README:
 | Repeat/shuffle | Persisted shuffle flag and repeat mode |
 | Provider architecture | `MusicSourceProvider`, optional paging and search-suggestion extensions, `MusicCatalogProvider`, optional `MusicCatalogPagingProvider`, `MusicCatalogDiscoveryProvider`, optional `MusicCatalogDiscoveryPagingProvider`, and `MusicCatalogRadioProvider`, `MusicPlaylistMutationProvider`, and `LyricsProvider` interfaces with privacy/network disclosure, offline cache/download policy gates, persisted offline request queue, user-triggered checksum-verified private media cache storage, resilient paginated unified music-provider search, LRCLIB plain/synced lyrics search, demo provider, Podcast RSS feeds, Radio Browser, Internet Archive, and configurable Jellyfin/Navidrome/Subsonic accounts with secure credentials, portable HTTPS-only account-configuration export/import that requires credentials to be entered on each device, test-before-replace credential rotation, salted Subsonic tokens, paginated catalog/discovery browsing, provider-backed radio, credential-safe artwork, and remote playlist editing |
 | Documentation | README, feature matrix, architecture, user guide, release guide, legal notes |
-| GitHub readiness | MIT license, CI workflow, issue templates, contribution guide, security policy |
+| GitHub readiness | 0BSD license, CI workflow, issue templates, contribution guide, security policy |
 | Proof gates | CI analyzes/tests Flutter, runs provider and system-media contract tests, compiles an Android APK and unsigned iOS app, builds all desktop targets, analyzes/tests/compiles the server, assembles checksummed tag/manual release bundles, and publishes version-tag GitHub Release assets |
 
 ## Feature Goal
@@ -197,7 +197,7 @@ aethertune/
 ├─ docs/                         # Architecture, matrix, user/release/legal docs
 ├─ scripts/                      # Bootstrap and check scripts
 ├─ .github/workflows/            # GitHub Actions CI
-├─ LICENSE                       # MIT license
+├─ LICENSE                       # 0BSD license
 └─ README.md                     # Landing page
 ```
 
@@ -215,4 +215,4 @@ Pull requests are welcome. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), then
 
 ## License
 
-AetherTune is released under the **MIT License**. See [`LICENSE`](LICENSE).
+AetherTune is released under the **BSD Zero Clause License (0BSD)**. See [`LICENSE`](LICENSE).
