@@ -15,6 +15,7 @@ import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/data/spotify_metadata_provider.dart';
 import 'package:aethertune/src/data/spotify_oauth_client.dart';
 import 'package:aethertune/src/data/spotify_settings_store.dart';
+import 'package:aethertune/src/data/youtube_channel_follow_store.dart';
 import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
 import 'package:aethertune/src/data/youtube_data_settings_store.dart';
 import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
@@ -275,6 +276,99 @@ void main() {
     expect(requestedRegions, <String>['TR']);
   });
 
+  testWidgets('loads followed YouTube channel metadata explicitly on Home', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1200);
+    addTearDown(tester.view.reset);
+
+    final fixture = await _HomeFixture.create(
+      provider: _FakeProviderHomeCatalog(),
+    );
+    addTearDown(fixture.dispose);
+    final requestedChannelIds = <String>[];
+    final youtube = YouTubeDataSettingsStore(
+      credentialVault: _MemoryCredentialVault(),
+      providerFactory: (apiKey) => YouTubeDataMetadataProvider(
+        apiKey: apiKey,
+        searchLoader: (uri) async {
+          final channelId = uri.queryParameters['channelId']!;
+          requestedChannelIds.add(channelId);
+          return switch (channelId) {
+            'channel-one' => _followedChannelPage(
+              'Earlier followed upload',
+              'one',
+              '2026-07-01T00:00:00Z',
+            ),
+            _ => _followedChannelPage(
+              'Latest followed upload',
+              'two',
+              '2026-07-02T00:00:00Z',
+            ),
+          };
+        },
+      ),
+    );
+    final follows = YouTubeChannelFollowStore();
+    await Future.wait<void>(<Future<void>>[youtube.load(), follows.load()]);
+    await youtube.saveApiKey('project-key');
+    await follows.setFollowed(
+      const YouTubeDataChannel(id: 'channel-one', title: 'One'),
+      true,
+    );
+    await follows.setFollowed(
+      const YouTubeDataChannel(id: 'channel-two', title: 'Two'),
+      true,
+    );
+    addTearDown(youtube.dispose);
+    addTearDown(follows.dispose);
+
+    await _pumpHome(
+      tester,
+      fixture,
+      youtube: youtube,
+      youtubeFollows: follows,
+    );
+
+    expect(find.text('Followed YouTube channels'), findsOneWidget);
+    expect(requestedChannelIds, isEmpty);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('home-youtube-followed-channels-refresh'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedChannelIds.toSet(), <String>{'channel-one', 'channel-two'});
+    expect(find.text('Latest followed upload'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Latest followed upload')).dy,
+      lessThan(tester.getTopLeft(find.text('Earlier followed upload')).dy),
+    );
+    final saveButton = find.byTooltip('Save metadata to library').first;
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+    expect(fixture.library.tracks.single.isPlayable, isFalse);
+
+    await fixture.library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(
+              const ValueKey<String>(
+                'home-youtube-followed-channels-refresh',
+              ),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(requestedChannelIds.toSet(), <String>{'channel-one', 'channel-two'});
+  });
+
   testWidgets('loads connected Spotify library metadata explicitly on Home', (
     tester,
   ) async {
@@ -342,6 +436,7 @@ Future<void> _pumpHome(
   WidgetTester tester,
   _HomeFixture fixture, {
   YouTubeDataSettingsStore? youtube,
+  YouTubeChannelFollowStore? youtubeFollows,
   SpotifySettingsStore? spotify,
 }) async {
   await tester.pumpWidget(
@@ -359,6 +454,10 @@ Future<void> _pumpHome(
         if (youtube != null)
           ChangeNotifierProvider<YouTubeDataSettingsStore>.value(
             value: youtube,
+          ),
+        if (youtubeFollows != null)
+          ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
+            value: youtubeFollows,
           ),
         if (spotify != null)
           ChangeNotifierProvider<SpotifySettingsStore>.value(value: spotify),
@@ -398,6 +497,19 @@ const _spotifySavedTracksPage = '''
       "name": "Home saved Spotify track",
       "artists": [{"name": "Aether"}],
       "album": {"name": "Signals"}
+    }
+  }]
+}
+''';
+
+String _followedChannelPage(String title, String id, String publishedAt) => '''
+{
+  "items": [{
+    "id": {"videoId": "$id"},
+    "snippet": {
+      "title": "$title",
+      "channelTitle": "Aether Radio",
+      "publishedAt": "$publishedAt"
     }
   }]
 }

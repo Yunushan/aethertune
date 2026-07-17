@@ -44,6 +44,8 @@ import '../data/spotify_settings_store.dart';
 import '../data/subsonic_provider.dart';
 import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
+import '../data/youtube_channel_follow_store.dart';
+import '../data/youtube_followed_channel_feed.dart';
 import '../data/youtube_data_settings_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/backup_file_document.dart';
@@ -86,6 +88,7 @@ import 'spotify_saved_albums_screen.dart';
 import 'spotify_saved_playlists_screen.dart';
 import 'youtube_music_chart_screen.dart';
 import 'youtube_channel_follow_screen.dart';
+import 'youtube_followed_channel_feed_screen.dart';
 import 'youtube_public_playlists_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
@@ -3454,6 +3457,7 @@ class _HomeTabState extends State<_HomeTab> {
     final library = context.watch<LibraryStore>();
     final providerStore = context.watch<SelfHostedProviderStore>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
+    final youtubeFollows = context.watch<YouTubeChannelFollowStore?>();
     final spotify = context.watch<SpotifySettingsStore?>();
     final player = context.read<PlayerController>();
 
@@ -3527,6 +3531,12 @@ class _HomeTabState extends State<_HomeTab> {
         ],
         if (youtubeProvider != null) ...<Widget>[
           _OfficialYouTubeMusicChartShelf(provider: youtubeProvider),
+          const SizedBox(height: 12),
+        ],
+        if (youtubeProvider != null &&
+            youtubeFollows?.loaded == true &&
+            youtubeFollows!.follows.isNotEmpty) ...<Widget>[
+          _FollowedYouTubeChannelShelf(provider: youtubeProvider),
           const SizedBox(height: 12),
         ],
         if (spotifyProvider != null) ...<Widget>[
@@ -4095,6 +4105,157 @@ final class _OfficialYouTubeMusicChartShelfState
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => YouTubeMusicChartScreen(provider: widget.provider),
+      ),
+    );
+  }
+}
+
+final class _FollowedYouTubeChannelShelf extends StatefulWidget {
+  const _FollowedYouTubeChannelShelf({required this.provider});
+
+  final YouTubeDataMetadataProvider provider;
+
+  @override
+  State<_FollowedYouTubeChannelShelf> createState() =>
+      _FollowedYouTubeChannelShelfState();
+}
+
+final class _FollowedYouTubeChannelShelfState
+    extends State<_FollowedYouTubeChannelShelf> {
+  List<YouTubeFollowedChannelFeedItem> _items =
+      const <YouTubeFollowedChannelFeedItem>[];
+  bool _loading = false;
+  int _failedChannelCount = 0;
+  int _requestSerial = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final follows = context.watch<YouTubeChannelFollowStore?>();
+    final offline = library.offlineModeEnabled;
+    final followCount = follows?.follows.length ?? 0;
+    final canRefresh =
+        follows?.loaded == true && followCount > 0 && !_loading && !offline;
+    return Column(
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.video_library_outlined),
+          title: const Text('Followed YouTube channels'),
+          subtitle: Text(
+            '$followCount local public channel(s), metadata only',
+          ),
+          trailing: IconButton(
+            key: const Key('home-youtube-followed-channels-open'),
+            tooltip: 'Open followed YouTube channels',
+            onPressed: () => _openFullFeed(context),
+            icon: const Icon(Icons.open_in_new),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton.filled(
+            key: const Key('home-youtube-followed-channels-refresh'),
+            tooltip: 'Refresh followed YouTube channels',
+            onPressed: canRefresh ? () => unawaited(_refresh()) : null,
+            icon: const Icon(Icons.refresh),
+          ),
+        ),
+        if (offline && _items.isEmpty)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_off_outlined),
+            title: Text('Offline mode'),
+          ),
+        if (_loading && _items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: LinearProgressIndicator(),
+          ),
+        if (_failedChannelCount > 0)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.error_outline),
+            title: Text('$_failedChannelCount channel(s) unavailable'),
+            subtitle: const Text('Other followed-channel metadata is shown.'),
+          ),
+        for (final item in _items)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.ondemand_video_outlined),
+            title: Text(item.track.title),
+            subtitle: Text(item.subtitle),
+            onTap: () => _openFullFeed(context),
+            trailing: IconButton(
+              tooltip: library.tracks.any(
+                (saved) => saved.id == item.track.id,
+              )
+                  ? 'Saved to library'
+                  : 'Save metadata to library',
+              onPressed: () => unawaited(_saveTrack(context, item.track)),
+              icon: Icon(
+                library.tracks.any((saved) => saved.id == item.track.id)
+                    ? Icons.bookmark
+                    : Icons.bookmark_add_outlined,
+              ),
+            ),
+          ),
+        if (_loading && _items.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final follows = context.read<YouTubeChannelFollowStore?>();
+    if (follows?.loaded != true || follows!.follows.isEmpty) {
+      return;
+    }
+    final request = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _failedChannelCount = 0;
+    });
+    final feed = await loadYouTubeFollowedChannelFeed(
+      widget.provider,
+      follows.follows,
+      limitPerChannel: 2,
+      maxChannels: 6,
+    );
+    if (!mounted || request != _requestSerial) {
+      return;
+    }
+    setState(() {
+      _items = List<YouTubeFollowedChannelFeedItem>.unmodifiable(
+        feed.items.take(6),
+      );
+      _failedChannelCount = feed.failedChannelCount;
+      _loading = false;
+    });
+  }
+
+  Future<void> _saveTrack(BuildContext context, Track track) async {
+    await context.read<LibraryStore>().addTracks(<Track>[track]);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${track.title} metadata saved to your library.')),
+    );
+  }
+
+  void _openFullFeed(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeFollowedChannelFeedScreen(
+          provider: widget.provider,
+        ),
       ),
     );
   }
