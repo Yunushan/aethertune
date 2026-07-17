@@ -17,6 +17,7 @@ import '../data/custom_catalog_provider.dart';
 import '../data/custom_catalog_store.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
+import '../data/itunes_podcast_directory.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
 import '../data/local_diagnostic_log.dart';
@@ -388,6 +389,8 @@ class HomeScreen extends StatefulWidget {
     this.initialTab = 0,
     this.onRestartOnboarding,
     this.internetArchiveProvider,
+    this.podcastDirectory,
+    this.podcastProviderFactory,
     this.providerSearchProviders,
   }) : assert(
          initialTab >= 0 &&
@@ -397,6 +400,8 @@ class HomeScreen extends StatefulWidget {
   final int initialTab;
   final VoidCallback? onRestartOnboarding;
   final InternetArchiveProvider? internetArchiveProvider;
+  final ItunesPodcastDirectory? podcastDirectory;
+  final PodcastRssProvider Function(Uri feedUri)? podcastProviderFactory;
   final List<MusicSourceProvider>? providerSearchProviders;
 
   @override
@@ -653,6 +658,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const _HistoryTab(),
               _SourcesTab(
                 archiveProvider: widget.internetArchiveProvider,
+                podcastDirectory: widget.podcastDirectory,
+                podcastProviderFactory: widget.podcastProviderFactory,
                 providerSearchProviders: widget.providerSearchProviders,
               ),
               _SettingsTab(
@@ -11121,10 +11128,14 @@ enum _YouTubeDataAction { configure, remove }
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
     this.archiveProvider,
+    this.podcastDirectory,
+    this.podcastProviderFactory,
     this.providerSearchProviders,
   });
 
   final InternetArchiveProvider? archiveProvider;
+  final ItunesPodcastDirectory? podcastDirectory;
+  final PodcastRssProvider Function(Uri feedUri)? podcastProviderFactory;
   final List<MusicSourceProvider>? providerSearchProviders;
 
   @override
@@ -11134,6 +11145,7 @@ class _SourcesTab extends StatefulWidget {
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
   late final InternetArchiveProvider _archiveProvider;
+  late final ItunesPodcastDirectory _podcastDirectory;
   final _providerSearchController = TextEditingController();
   final _archiveSearchController = TextEditingController();
   final _archiveCollectionController = TextEditingController();
@@ -11141,6 +11153,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   final _archiveCreatorController = TextEditingController();
   final _archiveYearController = TextEditingController();
   final _podcastFeedController = TextEditingController();
+  final _podcastDirectoryQueryController = TextEditingController();
   final _radioProvider = RadioBrowserProvider();
   final _radioSearchController = TextEditingController();
   final _radioCountryCodeController = TextEditingController();
@@ -11152,6 +11165,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<InternetArchiveItem> _archiveItems = <InternetArchiveItem>[];
   List<Track> _demoTracks = <Track>[];
   List<Track> _podcastEpisodeTracks = <Track>[];
+  List<PodcastDirectoryResult> _podcastDirectoryResults =
+      <PodcastDirectoryResult>[];
   List<ProviderSearchResult> _providerSearchResults = <ProviderSearchResult>[];
   List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
   List<ProviderSearchError> _providerSearchLoadMoreErrors =
@@ -11173,7 +11188,9 @@ class _SourcesTabState extends State<_SourcesTab> {
   bool _archiveLoading = false;
   String? _archiveError;
   bool _podcastLoading = false;
+  bool _podcastDirectoryLoading = false;
   String? _podcastError;
+  String? _podcastDirectoryError;
   String? _selectedPodcastSubscriptionId;
   bool _providerSearchLoading = false;
   bool _providerSearchLoadingMore = false;
@@ -11193,6 +11210,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   void initState() {
     super.initState();
     _archiveProvider = widget.archiveProvider ?? InternetArchiveProvider();
+    _podcastDirectory = widget.podcastDirectory ?? ItunesPodcastDirectory();
     _provider.search('').then((tracks) {
       if (mounted) {
         setState(() => _demoTracks = tracks);
@@ -11210,6 +11228,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     _archiveCreatorController.dispose();
     _archiveYearController.dispose();
     _podcastFeedController.dispose();
+    _podcastDirectoryQueryController.dispose();
     _radioSearchController.dispose();
     _radioCountryCodeController.dispose();
     _radioLanguageController.dispose();
@@ -11843,6 +11862,72 @@ class _SourcesTabState extends State<_SourcesTab> {
           'Podcast RSS feeds',
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('podcast-directory-query'),
+          controller: _podcastDirectoryQueryController,
+          enabled: !offlineModeEnabled && !_podcastDirectoryLoading,
+          decoration: InputDecoration(
+            labelText: 'Find podcasts',
+            helperText: 'Searches the public Apple podcast directory.',
+            prefixIcon: const Icon(Icons.manage_search_outlined),
+            suffixIcon: IconButton(
+              key: const Key('podcast-directory-search'),
+              tooltip: 'Search podcast directory',
+              onPressed: offlineModeEnabled || _podcastDirectoryLoading
+                  ? null
+                  : () => _searchPodcastDirectory(context),
+              icon: _podcastDirectoryLoading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search),
+            ),
+          ),
+          textInputAction: TextInputAction.search,
+          onSubmitted: offlineModeEnabled || _podcastDirectoryLoading
+              ? null
+              : (_) => _searchPodcastDirectory(context),
+        ),
+        if (_podcastDirectoryError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            key: const Key('podcast-directory-error'),
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Podcast directory search failed'),
+            subtitle: Text(_podcastDirectoryError!),
+          ),
+        ],
+        if (_podcastDirectoryResults.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            'Podcast directory results',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          for (final result in _podcastDirectoryResults)
+            ListTile(
+              key: ValueKey<String>(
+                'podcast-directory-result-${result.feedUri}',
+              ),
+              leading: const Icon(Icons.podcasts_outlined),
+              title: Text(result.title),
+              subtitle: Text(
+                <String>[result.author, result.genre]
+                    .where((value) => value.isNotEmpty)
+                    .join(' · '),
+              ),
+              trailing: TextButton(
+                key: ValueKey<String>(
+                  'podcast-directory-subscribe-${result.feedUri}',
+                ),
+                onPressed: _podcastLoading || offlineModeEnabled
+                    ? null
+                    : () => _subscribeToPodcastDirectoryResult(context, result),
+                child: const Text('Subscribe'),
+              ),
+            ),
+        ],
         const SizedBox(height: 8),
         Row(
           children: <Widget>[
@@ -13372,6 +13457,64 @@ class _SourcesTabState extends State<_SourcesTab> {
     await _loadAndSavePodcastFeed(context, feedUri);
   }
 
+  Future<void> _searchPodcastDirectory(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      setState(() {
+        _podcastDirectoryResults = <PodcastDirectoryResult>[];
+        _podcastDirectoryError = 'Offline mode is on.';
+      });
+      return;
+    }
+    final query = _podcastDirectoryQueryController.text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _podcastDirectoryResults = <PodcastDirectoryResult>[];
+        _podcastDirectoryError = 'Enter a podcast name or topic.';
+      });
+      return;
+    }
+    setState(() {
+      _podcastDirectoryLoading = true;
+      _podcastDirectoryError = null;
+    });
+    try {
+      final results = await _podcastDirectory.search(query);
+      if (!mounted) {
+        return;
+      }
+      if (library.offlineModeEnabled) {
+        setState(() {
+          _podcastDirectoryResults = <PodcastDirectoryResult>[];
+          _podcastDirectoryLoading = false;
+          _podcastDirectoryError = 'Offline mode is on.';
+        });
+        return;
+      }
+      setState(() {
+        _podcastDirectoryResults = results;
+        _podcastDirectoryLoading = false;
+      });
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _podcastDirectoryResults = <PodcastDirectoryResult>[];
+        _podcastDirectoryLoading = false;
+        _podcastDirectoryError = 'Try again after checking your connection.';
+      });
+    }
+  }
+
+  Future<void> _subscribeToPodcastDirectoryResult(
+    BuildContext context,
+    PodcastDirectoryResult result,
+  ) async {
+    _podcastFeedController.text = result.feedUri.toString();
+    await _loadAndSavePodcastFeed(context, result.feedUri);
+  }
+
   Future<void> _importPodcastOpml(BuildContext context) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
@@ -13517,7 +13660,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
-    final provider = PodcastRssProvider(feedUri: feedUri);
+    final provider = widget.podcastProviderFactory?.call(feedUri) ??
+        PodcastRssProvider(feedUri: feedUri);
 
     setState(() {
       _podcastLoading = true;

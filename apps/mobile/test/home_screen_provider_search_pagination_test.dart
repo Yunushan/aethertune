@@ -7,7 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aethertune/l10n/app_localizations.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
+import 'package:aethertune/src/data/itunes_podcast_directory.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
+import 'package:aethertune/src/data/podcast_rss_provider.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -261,7 +263,127 @@ void main() {
     await tester.pumpAndSettle();
     expect(provider.suggestionQueries, <String>['mi']);
   });
+
+  testWidgets('finds a podcast directory result and subscribes to its RSS',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    var directoryRequests = 0;
+    final directory = ItunesPodcastDirectory(
+      loader: (_) async {
+        directoryRequests += 1;
+        return _podcastDirectoryResponse;
+      },
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(
+            initialTab: 4,
+            podcastDirectory: directory,
+            podcastProviderFactory: (feedUri) => PodcastRssProvider(
+              feedUri: feedUri,
+              feedLoader: (_) async => _podcastFeedXml,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(Scrollable).first;
+    final query = find.byKey(const Key('podcast-directory-query'));
+    await tester.scrollUntilVisible(query, 300, scrollable: scrollable);
+    await tester.enterText(query, 'aether');
+    await tester.tap(find.byKey(const Key('podcast-directory-search')));
+    await tester.pumpAndSettle();
+
+    expect(directoryRequests, 1);
+    expect(find.text('Aether Podcast'), findsOneWidget);
+    final subscribe = find.byKey(
+      const ValueKey<String>(
+        'podcast-directory-subscribe-https://feeds.example.test/aether.xml',
+      ),
+    );
+    await tester.scrollUntilVisible(subscribe, 200, scrollable: scrollable);
+    await tester.tap(subscribe);
+    await tester.pumpAndSettle();
+
+    expect(library.podcastSubscriptions, hasLength(1));
+    expect(library.podcastSubscriptions.single.title, 'Aether Podcast');
+    expect(find.text('Aether Episode'), findsOneWidget);
+
+    await library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(query, -300, scrollable: scrollable);
+    expect(
+      tester.widget<IconButton>(
+        find.byKey(const Key('podcast-directory-search')),
+      ).onPressed,
+      isNull,
+    );
+    expect(directoryRequests, 1);
+    expect(tester.takeException(), isNull);
+  });
 }
+
+const _podcastDirectoryResponse = '''
+{
+  "results": [
+    {
+      "collectionName": "Aether Podcast",
+      "artistName": "Aether Studio",
+      "primaryGenreName": "Technology",
+      "feedUrl": "https://feeds.example.test/aether.xml"
+    }
+  ]
+}
+''';
+
+const _podcastFeedXml = '''
+<rss version="2.0">
+  <channel>
+    <title>Aether Podcast</title>
+    <description>Open audio research.</description>
+    <author>Aether Studio</author>
+    <item>
+      <guid>aether-episode-1</guid>
+      <title>Aether Episode</title>
+      <description>Episode one.</description>
+      <enclosure url="https://cdn.example.test/aether.mp3" type="audio/mpeg" />
+    </item>
+  </channel>
+</rss>
+''';
 
 final class _PagedSearchProvider implements MusicSourceSearchPagingProvider {
   final List<String> calls = <String>[];
