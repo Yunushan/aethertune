@@ -22,6 +22,30 @@ typedef SelfHostedProviderFactory = MusicCatalogProvider Function(
   String secret,
 );
 
+final class SelfHostedProviderAccountExport {
+  const SelfHostedProviderAccountExport({
+    required this.json,
+    required this.exportedAccountCount,
+    required this.skippedInsecureAccountCount,
+  });
+
+  final String json;
+  final int exportedAccountCount;
+  final int skippedInsecureAccountCount;
+}
+
+final class SelfHostedProviderAccountImportResult {
+  const SelfHostedProviderAccountImportResult({
+    required this.importedAccountCount,
+    required this.skippedExistingAccountCount,
+    required this.skippedInsecureAccountCount,
+  });
+
+  final int importedAccountCount;
+  final int skippedExistingAccountCount;
+  final int skippedInsecureAccountCount;
+}
+
 final class SelfHostedProviderStore extends ChangeNotifier {
   SelfHostedProviderStore({
     ProviderCredentialVault? credentialVault,
@@ -35,6 +59,11 @@ final class SelfHostedProviderStore extends ChangeNotifier {
         _artworkFileCache = artworkFileCache ?? ProviderArtworkFileCache();
 
   static const _accountsKey = 'aethertune.self_hosted_accounts.v1';
+  static const accountMigrationDocumentFormat =
+      'aethertune.self_hosted_accounts';
+  static const accountMigrationDocumentVersion = 1;
+  static const _maximumMigrationBytes = 64 * 1024;
+  static const _maximumMigrationAccounts = 32;
 
   final ProviderCredentialVault _credentialVault;
   final SelfHostedConnectionTester _connectionTester;
@@ -72,6 +101,101 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       }
     }
     return false;
+  }
+
+  SelfHostedProviderAccountExport exportAccountConfiguration() {
+    final exportable = _accounts
+        .where((account) => account.usesSecureTransport)
+        .toList(growable: false);
+    return SelfHostedProviderAccountExport(
+      json: jsonEncode(<String, Object?>{
+        'format': accountMigrationDocumentFormat,
+        'version': accountMigrationDocumentVersion,
+        'accounts': exportable.map((account) => account.toJson()).toList(),
+      }),
+      exportedAccountCount: exportable.length,
+      skippedInsecureAccountCount: _accounts.length - exportable.length,
+    );
+  }
+
+  Future<SelfHostedProviderAccountImportResult>
+      importAccountConfiguration(String document) async {
+    if (utf8.encode(document).length > _maximumMigrationBytes) {
+      throw const FormatException(
+        'Self-hosted account configuration is too large.',
+      );
+    }
+
+    final decoded = jsonDecode(document);
+    if (decoded is! Map) {
+      throw const FormatException('Self-hosted account configuration is invalid.');
+    }
+    final root = Map<String, Object?>.from(decoded);
+    if (root['format'] != accountMigrationDocumentFormat ||
+        root['version'] != accountMigrationDocumentVersion) {
+      throw const FormatException(
+        'This is not a supported self-hosted account configuration.',
+      );
+    }
+    final rawAccounts = root['accounts'];
+    if (rawAccounts is! List || rawAccounts.length > _maximumMigrationAccounts) {
+      throw const FormatException(
+        'Self-hosted account configuration has an invalid account list.',
+      );
+    }
+
+    final importedCandidates = <SelfHostedProviderAccount>[];
+    final documentIds = <String>{};
+    var skippedInsecureAccountCount = 0;
+    for (final rawAccount in rawAccounts) {
+      if (rawAccount is! Map) {
+        throw const FormatException(
+          'Self-hosted account configuration contains an invalid account.',
+        );
+      }
+      final account = SelfHostedProviderAccount.fromJson(
+        Map<String, Object?>.from(rawAccount),
+      );
+      if (!documentIds.add(account.id)) {
+        throw const FormatException(
+          'Self-hosted account configuration contains duplicate accounts.',
+        );
+      }
+      if (!account.usesSecureTransport) {
+        skippedInsecureAccountCount += 1;
+        continue;
+      }
+      importedCandidates.add(account);
+    }
+
+    final existingIds = _accounts.map((account) => account.id).toSet();
+    final accountsToImport = importedCandidates
+        .where((account) => !existingIds.contains(account.id))
+        .toList(growable: false);
+    final result = SelfHostedProviderAccountImportResult(
+      importedAccountCount: accountsToImport.length,
+      skippedExistingAccountCount:
+          importedCandidates.length - accountsToImport.length,
+      skippedInsecureAccountCount: skippedInsecureAccountCount,
+    );
+    if (accountsToImport.isEmpty) {
+      return result;
+    }
+
+    final oldAccounts = List<SelfHostedProviderAccount>.from(_accounts);
+    try {
+      _accounts
+        ..addAll(accountsToImport)
+        ..sort((left, right) => left.name.compareTo(right.name));
+      await _saveMetadata();
+    } on Object {
+      _accounts
+        ..clear()
+        ..addAll(oldAccounts);
+      rethrow;
+    }
+    notifyListeners();
+    return result;
   }
 
   MusicCatalogProvider? catalogProviderFor(String accountId) {

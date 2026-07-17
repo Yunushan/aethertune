@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -121,6 +122,140 @@ void main() {
     expect(secondStore.musicProviders, isEmpty);
     expect(secondStore.catalogProviderFor(account.id), isNull);
     expect(vault.values.containsKey(account.id), isFalse);
+  });
+
+  test('exports only secure account configuration without credentials', () async {
+    final vault = _MemoryCredentialVault();
+    final store = SelfHostedProviderStore(
+      credentialVault: vault,
+      connectionTester: (account, secret) async {},
+    );
+    await store.load();
+    final secureAccount = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.jellyfin,
+      name: 'Home media',
+      baseUrl: 'https://media.example.test',
+      identity: 'user-1',
+      allowInsecureHttp: false,
+    );
+    final insecureAccount = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.subsonic,
+      name: 'LAN music',
+      baseUrl: 'http://192.168.1.10:4533',
+      identity: 'yunus',
+      allowInsecureHttp: true,
+    );
+    await store.testAndSave(secureAccount, 'secure-api-key');
+    await store.testAndSave(insecureAccount, 'local-password');
+
+    final export = store.exportAccountConfiguration();
+
+    expect(export.exportedAccountCount, 1);
+    expect(export.skippedInsecureAccountCount, 1);
+    expect(export.json, contains('aethertune.self_hosted_accounts'));
+    expect(export.json, contains('media.example.test'));
+    expect(export.json, isNot(contains('secure-api-key')));
+    expect(export.json, isNot(contains('local-password')));
+    expect(export.json, isNot(contains('192.168.1.10')));
+  });
+
+  test('imports secure account configuration without credentials', () async {
+    final sourceVault = _MemoryCredentialVault();
+    final source = SelfHostedProviderStore(
+      credentialVault: sourceVault,
+      connectionTester: (account, secret) async {},
+    );
+    await source.load();
+    final account = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.subsonic,
+      name: 'Home music',
+      baseUrl: 'https://music.example.test/navidrome',
+      identity: 'yunus',
+      allowInsecureHttp: false,
+    );
+    await source.testAndSave(account, 'source-password');
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final destinationVault = _MemoryCredentialVault();
+    final destination = SelfHostedProviderStore(
+      credentialVault: destinationVault,
+      connectionTester: (account, secret) async {},
+    );
+    await destination.load();
+
+    final result = await destination.importAccountConfiguration(
+      source.exportAccountConfiguration().json,
+    );
+
+    expect(result.importedAccountCount, 1);
+    expect(result.skippedExistingAccountCount, 0);
+    expect(destination.accounts.single.id, account.id);
+    expect(destination.accounts.single.name, account.name);
+    expect(destination.hasCredential(account.id), isFalse);
+    expect(destination.musicProviders, isEmpty);
+    expect(destinationVault.values, isEmpty);
+  });
+
+  test('does not overwrite existing accounts during configuration import',
+      () async {
+    final vault = _MemoryCredentialVault();
+    final store = SelfHostedProviderStore(
+      credentialVault: vault,
+      connectionTester: (account, secret) async {},
+    );
+    await store.load();
+    final account = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.jellyfin,
+      name: 'Media server',
+      baseUrl: 'https://media.example.test',
+      identity: 'user-1',
+      allowInsecureHttp: false,
+    );
+    await store.testAndSave(account.copyWith(name: 'Local name'), 'local-key');
+    final document = jsonEncode(<String, Object?>{
+      'format': SelfHostedProviderStore.accountMigrationDocumentFormat,
+      'version': SelfHostedProviderStore.accountMigrationDocumentVersion,
+      'accounts': <Map<String, Object?>>[account.toJson()],
+    });
+
+    final result = await store.importAccountConfiguration(document);
+
+    expect(result.importedAccountCount, 0);
+    expect(result.skippedExistingAccountCount, 1);
+    expect(store.accounts.single.name, 'Local name');
+    expect(vault.values[account.id], 'local-key');
+  });
+
+  test('rejects malformed documents and skips insecure imported accounts',
+      () async {
+    final store = SelfHostedProviderStore(
+      credentialVault: _MemoryCredentialVault(),
+      connectionTester: (account, secret) async {},
+    );
+    await store.load();
+    final insecure = createSelfHostedProviderAccount(
+      kind: SelfHostedProviderKind.subsonic,
+      name: 'LAN music',
+      baseUrl: 'http://192.168.1.10:4533',
+      identity: 'yunus',
+      allowInsecureHttp: true,
+    );
+    final document = jsonEncode(<String, Object?>{
+      'format': SelfHostedProviderStore.accountMigrationDocumentFormat,
+      'version': SelfHostedProviderStore.accountMigrationDocumentVersion,
+      'accounts': <Map<String, Object?>>[insecure.toJson()],
+    });
+
+    final result = await store.importAccountConfiguration(document);
+
+    expect(result.importedAccountCount, 0);
+    expect(result.skippedInsecureAccountCount, 1);
+    expect(store.accounts, isEmpty);
+    await expectLater(
+      store.importAccountConfiguration('{"format":"unknown"}'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(store.accounts, isEmpty);
   });
 
   test('keeps the existing secure secret when an edit leaves it blank', () async {

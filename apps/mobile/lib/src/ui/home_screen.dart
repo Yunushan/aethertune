@@ -12353,6 +12353,25 @@ class _SourcesTabState extends State<_SourcesTab> {
               icon: const Icon(Icons.dns_outlined),
               label: const Text('Add Navidrome'),
             ),
+            OutlinedButton.icon(
+              onPressed: selfHostedActionsEnabled &&
+                      selfHosted.accounts.isNotEmpty
+                  ? () => unawaited(
+                        _exportSelfHostedAccountConfiguration(context),
+                      )
+                  : null,
+              icon: const Icon(Icons.ios_share_outlined),
+              label: const Text('Export servers'),
+            ),
+            OutlinedButton.icon(
+              onPressed: selfHostedActionsEnabled
+                  ? () => unawaited(
+                        _showSelfHostedAccountConfigurationImport(context),
+                      )
+                  : null,
+              icon: const Icon(Icons.file_open_outlined),
+              label: const Text('Import servers'),
+            ),
           ],
         ),
         if (!selfHosted.loaded) ...<Widget>[
@@ -13946,6 +13965,199 @@ class _SourcesTabState extends State<_SourcesTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _exportSelfHostedAccountConfiguration(
+    BuildContext context,
+  ) async {
+    final export =
+        context.read<SelfHostedProviderStore>().exportAccountConfiguration();
+    final messenger = ScaffoldMessenger.of(context);
+    const fileName = 'aethertune-self-hosted-accounts.json';
+
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(export.json));
+      final outputPath = await FilePicker.saveFile(
+        dialogTitle: 'Export self-hosted servers',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const <String>['json'],
+        bytes: bytes,
+      );
+      if (outputPath == null || outputPath.isEmpty) {
+        return;
+      }
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (!context.mounted) {
+        return;
+      }
+      final skipped = export.skippedInsecureAccountCount;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exported ${export.exportedAccountCount} server '
+            '${export.exportedAccountCount == 1 ? 'configuration' : 'configurations'}'
+            '${skipped == 0 ? '.' : '; skipped $skipped HTTP server${skipped == 1 ? '' : 's'}.'}',
+          ),
+        ),
+      );
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not export servers: $error')),
+      );
+    }
+  }
+
+  Future<void> _showSelfHostedAccountConfigurationImport(
+    BuildContext context,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: const Text('Choose server configuration'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _importSelfHostedAccountConfigurationFile(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.content_paste_outlined),
+                title: const Text('Paste server configuration'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  final document =
+                      await _promptForSelfHostedAccountConfiguration(context);
+                  if (!context.mounted || document == null) {
+                    return;
+                  }
+                  await _importSelfHostedAccountConfiguration(context, document);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _importSelfHostedAccountConfigurationFile(
+    BuildContext context,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const <String>['json'],
+      );
+      final files = result?.files;
+      if (files == null || files.isEmpty) {
+        return;
+      }
+      final document = utf8.decode(await files.first.readAsBytes());
+      if (!context.mounted) {
+        return;
+      }
+      await _importSelfHostedAccountConfiguration(context, document);
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not read server configuration: $error')),
+      );
+    }
+  }
+
+  Future<void> _importSelfHostedAccountConfiguration(
+    BuildContext context,
+    String document,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await context
+          .read<SelfHostedProviderStore>()
+          .importAccountConfiguration(document);
+      if (!context.mounted) {
+        return;
+      }
+      final parts = <String>[
+        '${result.importedAccountCount} imported',
+        if (result.skippedExistingAccountCount > 0)
+          '${result.skippedExistingAccountCount} already configured',
+        if (result.skippedInsecureAccountCount > 0)
+          '${result.skippedInsecureAccountCount} HTTP server${result.skippedInsecureAccountCount == 1 ? '' : 's'} skipped',
+      ];
+      messenger.showSnackBar(
+        SnackBar(content: Text('Server configuration: ${parts.join(', ')}.')),
+      );
+    } on FormatException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not import servers: $error')),
+      );
+    }
+  }
+
+  Future<String?> _promptForSelfHostedAccountConfiguration(
+    BuildContext context,
+  ) async {
+    final controller = TextEditingController();
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Import self-hosted servers'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: TextField(
+                autofocus: true,
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Server configuration JSON',
+                ),
+                keyboardType: TextInputType.multiline,
+                minLines: 8,
+                maxLines: 14,
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  controller.text,
+                ),
+                child: const Text('Import'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _removeSelfHostedAccount(
