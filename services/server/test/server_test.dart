@@ -55,6 +55,17 @@ void main() {
       expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
     });
 
+    test('bounds rate-limit buckets under distinct-token traffic', () async {
+      final handler = createServerHandler(
+        requestRateLimiter: ServerRequestRateLimiter(
+          maximumRequests: 10,
+          maximumBuckets: 1,
+        ),
+      );
+      expect((await handler(_request('GET', '/health', token: 'one'))).statusCode, 200);
+      expect((await handler(_request('GET', '/health', token: 'two'))).statusCode, 429);
+    });
+
     test('metrics reports aggregate process state without request details',
         () async {
       var current = DateTime.utc(2026, 1, 2, 3, 4, 5);

@@ -29,15 +29,17 @@ typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 final class ServerRequestRateLimiter {
   ServerRequestRateLimiter({
     this.maximumRequests = 120,
+    this.maximumBuckets = 4096,
     this.window = const Duration(minutes: 1),
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {
-    if (maximumRequests <= 0 || window <= Duration.zero) {
+    if (maximumRequests <= 0 || maximumBuckets <= 0 || window <= Duration.zero) {
       throw ArgumentError('Rate limit bounds must be positive.');
     }
   }
 
   final int maximumRequests;
+  final int maximumBuckets;
   final Duration window;
   final DateTime Function() _clock;
   final Map<String, _RateLimitWindow> _windows = <String, _RateLimitWindow>{};
@@ -48,7 +50,13 @@ final class ServerRequestRateLimiter {
     final key = token == null
         ? 'anonymous'
         : sha256.convert(utf8.encode(token)).toString();
+    _windows.removeWhere(
+      (_, entry) => !now.isBefore(entry.startedAt.add(window)),
+    );
     final current = _windows[key];
+    if (current == null && _windows.length >= maximumBuckets) {
+      return window;
+    }
     if (current == null || !now.isBefore(current.startedAt.add(window))) {
       _windows[key] = _RateLimitWindow(now, 1);
       return null;
