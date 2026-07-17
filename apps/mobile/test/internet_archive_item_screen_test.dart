@@ -17,6 +17,7 @@ void main() {
     addTearDown(library.dispose);
     final item = parseInternetArchiveItem(_itemMetadataJson);
 
+    String? openedCollection;
     await tester.pumpWidget(
       ChangeNotifierProvider<LibraryStore>.value(
         value: library,
@@ -26,6 +27,7 @@ void main() {
             provider: InternetArchiveProvider(
               baseUri: Uri.parse('https://archive.org'),
             ),
+            onOpenCollection: (collection) => openedCollection = collection,
           ),
         ),
       ),
@@ -40,6 +42,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Aether Public Session - aether-session'), findsOneWidget);
+
+    await tester.tap(find.text('opensource_audio'));
+    expect(openedCollection, 'opensource_audio');
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Save all'));
     await tester.pump();

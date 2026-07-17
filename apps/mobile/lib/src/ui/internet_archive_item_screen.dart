@@ -14,10 +14,12 @@ class InternetArchiveItemScreen extends StatelessWidget {
     super.key,
     required this.item,
     required this.provider,
+    this.onOpenCollection,
   });
 
   final InternetArchiveItem item;
   final InternetArchiveProvider provider;
+  final ValueChanged<String>? onOpenCollection;
 
   List<Track> get _tracks =>
       item.toTracks(sourceId: provider.id, baseUri: provider.baseUri);
@@ -53,10 +55,20 @@ class InternetArchiveItemScreen extends StatelessWidget {
               runSpacing: 8,
               children: <Widget>[
                 ...item.collections.map(
-                  (collection) => Chip(
-                    avatar: const Icon(Icons.collections_bookmark_outlined),
-                    label: Text(collection),
-                  ),
+                  (collection) => onOpenCollection == null
+                      ? Chip(
+                          avatar: const Icon(
+                            Icons.collections_bookmark_outlined,
+                          ),
+                          label: Text(collection),
+                        )
+                      : ActionChip(
+                          avatar: const Icon(
+                            Icons.collections_bookmark_outlined,
+                          ),
+                          label: Text(collection),
+                          onPressed: () => onOpenCollection!(collection),
+                        ),
                 ),
                 ...item.subjects.map(
                   (subject) => Chip(

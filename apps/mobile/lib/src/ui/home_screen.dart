@@ -71,6 +71,7 @@ import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
 import 'internet_archive_item_screen.dart';
+import 'internet_archive_collection_screen.dart';
 import 'platform_audio_route_picker.dart';
 import 'platform_image_share.dart';
 import 'platform_text_share.dart';
@@ -14861,6 +14862,26 @@ class _SourcesTabState extends State<_SourcesTab> {
       MaterialPageRoute<void>(
         builder: (_) => InternetArchiveItemScreen(
           item: item,
+          provider: _archiveProvider,
+          onOpenCollection: (collection) =>
+              _openArchiveCollection(context, collection),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openArchiveCollection(
+    BuildContext context,
+    String collection,
+  ) {
+    final normalized = collection.trim();
+    if (normalized.isEmpty) {
+      return Future<void>.value();
+    }
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => InternetArchiveCollectionScreen(
+          collection: normalized,
           provider: _archiveProvider,
         ),
       ),

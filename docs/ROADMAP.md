@@ -166,7 +166,7 @@
 - [x] Internet Archive cache/download queue
 - [x] Internet Archive direct file private cache storage
 - [x] Internet Archive facet suggestion UI and collection filter chips
-- [ ] Internet Archive dedicated collection detail pages
+- [x] Internet Archive dedicated collection detail pages
 - [x] Jellyfin provider foundation
 - [x] Jellyfin settings UI and secure credential storage
 - [x] Jellyfin artist, album, track, and playlist browse pages
