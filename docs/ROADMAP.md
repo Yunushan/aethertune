@@ -168,6 +168,7 @@
 - [x] Internet Archive facet suggestion UI and collection filter chips
 - [x] Internet Archive dedicated collection detail pages
 - [x] Spotify official saved-track metadata browse and local-library save
+- [x] YouTube Data official Music-category chart metadata browse and local-library save
 - [x] Jellyfin provider foundation
 - [x] Jellyfin settings UI and secure credential storage
 - [x] Jellyfin artist, album, track, and playlist browse pages

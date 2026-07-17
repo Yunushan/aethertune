@@ -77,10 +77,66 @@ void main() {
     expect(page.tracks.single.artworkUri, isNull);
   });
 
+  test('loads paginated official music-chart metadata without a stream',
+      () async {
+    Uri? capturedUri;
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      videosLoader: (uri) async {
+        capturedUri = uri;
+        return '''
+          {
+            "nextPageToken": "chart-next",
+            "pageInfo": {"totalResults": 2},
+            "items": [{
+              "id": "chart-video",
+              "snippet": {
+                "title": "Chart Signal",
+                "channelTitle": "Aether Channel",
+                "thumbnails": {"medium": {"url": "https://i.ytimg.com/chart.jpg"}}
+              }
+            }]
+          }
+        ''';
+      },
+    );
+
+    final page = await provider.loadPopularMusicPage(
+      regionCode: ' tr ',
+      cursor: 'chart-cursor',
+      limit: 100,
+    );
+
+    expect(capturedUri!.path, '/youtube/v3/videos');
+    expect(capturedUri!.queryParameters, <String, String>{
+      'part': 'snippet',
+      'chart': 'mostPopular',
+      'videoCategoryId': '10',
+      'regionCode': 'TR',
+      'maxResults': '50',
+      'key': 'project-key',
+      'pageToken': 'chart-cursor',
+    });
+    expect(page.nextPageToken, 'chart-next');
+    expect(page.totalResults, 2);
+    expect(page.tracks.single.title, 'Chart Signal');
+    expect(page.tracks.single.externalId, 'chart-video');
+    expect(page.tracks.single.isPlayable, isFalse);
+    expect(await provider.resolveStream(page.tracks.single), isNull);
+    await expectLater(
+      provider.loadPopularMusicPage(regionCode: 'invalid'),
+      throwsArgumentError,
+    );
+  });
+
   test('rejects unusable configuration and malformed API responses', () async {
     expect(() => YouTubeDataMetadataProvider(apiKey: ' '), throwsArgumentError);
     expect(
       () => parseYouTubeDataSearchPage('[]'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => parseYouTubeDataPopularPage('[]'),
       throwsA(isA<FormatException>()),
     );
   });

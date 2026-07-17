@@ -19,17 +19,26 @@ final class YouTubeDataMetadataProvider
     required String apiKey,
     Uri? searchUri,
     YouTubeDataSearchLoader? searchLoader,
+    Uri? videosUri,
+    YouTubeDataSearchLoader? videosLoader,
   }) : _apiKey = _requireApiKey(apiKey),
        searchUri = searchUri ?? _defaultSearchUri,
-       _searchLoader = searchLoader ?? _loadYouTubeDataJson;
+       _searchLoader = searchLoader ?? _loadYouTubeDataJson,
+       videosUri = videosUri ?? _defaultVideosUri,
+       _videosLoader = videosLoader ?? _loadYouTubeDataJson;
 
   static final Uri _defaultSearchUri = Uri.parse(
     'https://www.googleapis.com/youtube/v3/search',
+  );
+  static final Uri _defaultVideosUri = Uri.parse(
+    'https://www.googleapis.com/youtube/v3/videos',
   );
 
   final String _apiKey;
   final Uri searchUri;
   final YouTubeDataSearchLoader _searchLoader;
+  final Uri videosUri;
+  final YouTubeDataSearchLoader _videosLoader;
 
   @override
   String get id => 'youtube-data-metadata';
@@ -39,8 +48,8 @@ final class YouTubeDataMetadataProvider
 
   @override
   String get description =>
-      'Official YouTube Data API video metadata search. Playback, downloads, '
-      'offline media, and account access are not provided.';
+      'Official YouTube Data API video metadata search and music-chart browse. '
+      'Playback, downloads, offline media, and account access are not provided.';
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
@@ -52,7 +61,10 @@ final class YouTubeDataMetadataProvider
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
     networkDomains: <String>['www.googleapis.com', 'i.ytimg.com'],
-    dataSent: <String>['search query', 'configured Google Cloud API key'],
+    dataSent: <String>[
+      'search query or selected content region',
+      'configured Google Cloud API key',
+    ],
   );
 
   @override
@@ -127,6 +139,34 @@ final class YouTubeDataMetadataProvider
     );
   }
 
+  /// Loads the official YouTube Music-category popular chart as metadata only.
+  Future<YouTubeDataPopularPage> loadPopularMusicPage({
+    String regionCode = 'US',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedRegion = _normalizeRegionCode(regionCode);
+    final response = parseYouTubeDataPopularPage(
+      await _videosLoader(
+        videosUri.replace(
+          queryParameters: <String, String>{
+            'part': 'snippet',
+            'chart': 'mostPopular',
+            'videoCategoryId': '10',
+            'regionCode': normalizedRegion,
+            'maxResults': limit.clamp(1, 50).toString(),
+            'key': _apiKey,
+            if (cursor?.trim().isNotEmpty == true) 'pageToken': cursor!.trim(),
+          },
+        ),
+      ),
+    );
+    return response;
+  }
+
   @override
   Future<Uri?> resolveStream(Track track) async => null;
 
@@ -146,6 +186,18 @@ final class YouTubeDataMetadataProvider
 
 final class YouTubeDataSearchPage {
   const YouTubeDataSearchPage({
+    required this.tracks,
+    this.nextPageToken,
+    this.totalResults,
+  });
+
+  final List<Track> tracks;
+  final String? nextPageToken;
+  final int? totalResults;
+}
+
+final class YouTubeDataPopularPage {
+  const YouTubeDataPopularPage({
     required this.tracks,
     this.nextPageToken,
     this.totalResults,
@@ -179,6 +231,29 @@ YouTubeDataSearchPage parseYouTubeDataSearchPage(String jsonText) {
   );
 }
 
+YouTubeDataPopularPage parseYouTubeDataPopularPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('YouTube Data API response must be a map.');
+  }
+  final json = decoded.cast<String, Object?>();
+  final items = json['items'];
+  final tracks = items is List<dynamic>
+      ? items
+            .whereType<Map<dynamic, dynamic>>()
+            .map((item) => _trackFromVideoItem(item.cast<String, Object?>()))
+            .whereType<Track>()
+            .toList(growable: false)
+      : const <Track>[];
+  return YouTubeDataPopularPage(
+    tracks: tracks,
+    nextPageToken: _nonEmptyString(json['nextPageToken']),
+    totalResults: _nonNegativeInt(
+      (json['pageInfo'] as Map<dynamic, dynamic>?)?['totalResults'],
+    ),
+  );
+}
+
 Track? _trackFromSearchItem(Map<String, Object?> json) {
   final id = json['id'] as Map<dynamic, dynamic>?;
   final videoId = _nonEmptyString(id?['videoId']);
@@ -186,6 +261,22 @@ Track? _trackFromSearchItem(Map<String, Object?> json) {
   if (videoId == null || snippet == null) {
     return null;
   }
+  return _trackFromVideoMetadata(videoId, snippet);
+}
+
+Track? _trackFromVideoItem(Map<String, Object?> json) {
+  final videoId = _nonEmptyString(json['id']);
+  final snippet = json['snippet'] as Map<dynamic, dynamic>?;
+  if (videoId == null || snippet == null) {
+    return null;
+  }
+  return _trackFromVideoMetadata(videoId, snippet);
+}
+
+Track _trackFromVideoMetadata(
+  String videoId,
+  Map<dynamic, dynamic> snippet,
+) {
   final title = _nonEmptyString(snippet['title']) ?? 'Untitled YouTube video';
   return Track(
     id: Track.stableLocalId('youtube-data-metadata|$videoId'),
@@ -197,6 +288,18 @@ Track? _trackFromSearchItem(Map<String, Object?> json) {
     sourceId: 'youtube-data-metadata',
     externalId: videoId,
   );
+}
+
+String _normalizeRegionCode(String value) {
+  final normalized = value.trim().toUpperCase();
+  if (!RegExp(r'^[A-Z]{2}$').hasMatch(normalized)) {
+    throw ArgumentError.value(
+      value,
+      'regionCode',
+      'Must be an ISO 3166-1 alpha-2 code.',
+    );
+  }
+  return normalized;
 }
 
 Uri? _thumbnailUri(Object? value) {

@@ -44,6 +44,7 @@ import '../data/subsonic_provider.dart';
 import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../data/youtube_data_settings_store.dart';
+import '../data/youtube_data_metadata_provider.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/custom_catalog_definition.dart';
 import '../domain/lyrics_document.dart';
@@ -80,6 +81,7 @@ import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'spotify_saved_tracks_screen.dart';
+import 'youtube_music_chart_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/musicbrainz_metadata_search_sheet.dart';
@@ -11740,7 +11742,7 @@ enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
 enum _CustomCatalogAction { edit, remove }
 
-enum _YouTubeDataAction { configure, remove }
+enum _YouTubeDataAction { musicChart, configure, remove }
 
 enum _SpotifyAction { savedTracks, configure, remove }
 
@@ -11866,9 +11868,13 @@ class _SourcesTabState extends State<_SourcesTab> {
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
     final youtubeProviders = youtubeData?.musicProviders ??
         const <MusicSourceProvider>[];
-    final youtubeProvider = youtubeProviders.isEmpty
-        ? null
-        : youtubeProviders.first;
+    YouTubeDataMetadataProvider? youtubeProvider;
+    for (final candidate in youtubeProviders) {
+      if (candidate is YouTubeDataMetadataProvider) {
+        youtubeProvider = candidate;
+        break;
+      }
+    }
     final spotify = context.watch<SpotifySettingsStore?>();
     final spotifyProviders = spotify?.musicProviders ??
         const <MusicSourceProvider>[];
@@ -11969,7 +11975,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           title: 'YouTube Data API',
           status: youtubeData?.isConfigured == true ? 'Enabled' : 'Optional',
           description: youtubeData?.isConfigured == true
-              ? 'Searches official video metadata only. Playback and offline media are unavailable.'
+              ? 'Searches and browses official music video metadata. Playback and offline media are unavailable.'
               : 'Configure a user-owned Google Cloud API key for official video metadata search only.',
           icon: Icons.ondemand_video_outlined,
           capabilities: youtubeProvider?.capabilities ??
@@ -11988,6 +11994,11 @@ class _SourcesTabState extends State<_SourcesTab> {
             tooltip: 'Manage YouTube Data API',
             onSelected: (action) {
               switch (action) {
+                case _YouTubeDataAction.musicChart:
+                  if (youtubeProvider != null) {
+                    _openYouTubeMusicChart(context, youtubeProvider);
+                  }
+                  break;
                 case _YouTubeDataAction.configure:
                   unawaited(_configureYouTubeData(context));
                   break;
@@ -11997,6 +12008,15 @@ class _SourcesTabState extends State<_SourcesTab> {
               }
             },
             itemBuilder: (_) => <PopupMenuEntry<_YouTubeDataAction>>[
+              PopupMenuItem<_YouTubeDataAction>(
+                value: _YouTubeDataAction.musicChart,
+                enabled: youtubeProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.trending_up_outlined),
+                  title: Text('Music chart'),
+                ),
+              ),
               PopupMenuItem<_YouTubeDataAction>(
                 value: _YouTubeDataAction.configure,
                 enabled: youtubeData?.loaded == true && !offlineModeEnabled,
@@ -13138,7 +13158,7 @@ class _SourcesTabState extends State<_SourcesTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Text(
-                      'This source searches official video metadata only. It does not play, download, or cache YouTube audiovisual content and does not sign in to a YouTube account.',
+                      'This source searches and browses official music video metadata only. It does not play, download, or cache YouTube audiovisual content and does not sign in to a YouTube account.',
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -13225,6 +13245,17 @@ class _SourcesTabState extends State<_SourcesTab> {
     } finally {
       keyController.dispose();
     }
+  }
+
+  void _openYouTubeMusicChart(
+    BuildContext context,
+    YouTubeDataMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeMusicChartScreen(provider: provider),
+      ),
+    );
   }
 
   Future<void> _removeYouTubeData(BuildContext context) async {
