@@ -20,6 +20,7 @@ import '../data/internet_archive_provider.dart';
 import '../data/itunes_podcast_directory.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
+import '../data/listenbrainz_scrobbling_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
@@ -115,6 +116,153 @@ Future<void> _showMobileAudioRoutePicker(BuildContext context) async {
       const SnackBar(
         content: Text('Audio output selection is unavailable on this device.'),
       ),
+    );
+  }
+}
+
+Future<void> _configureListenBrainz(BuildContext context) async {
+  final store = context.read<ListenBrainzScrobblingStore?>();
+  if (store == null) {
+    return;
+  }
+  final tokenController = TextEditingController();
+  String? validationError;
+  try {
+    final token = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          return AlertDialog(
+            title: const Text('Connect ListenBrainz'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const Text(
+                      'AetherTune sends the artist, track title, optional album, duration, and playback-start time to api.listenbrainz.org only after you have listened to at least half a track or four minutes, whichever comes first. Your token stays in this device\'s credential vault and is never included in backups.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const Key('listenbrainz-token'),
+                      controller: tokenController,
+                      obscureText: true,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'ListenBrainz user token',
+                      ),
+                      onSubmitted: (value) {
+                        if (value.trim().isEmpty) {
+                          setDialogState(
+                            () => validationError =
+                                'Enter a ListenBrainz user token.',
+                          );
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(value);
+                      },
+                    ),
+                    if (validationError != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final value = tokenController.text.trim();
+                  if (value.isEmpty) {
+                    setDialogState(
+                      () => validationError = 'Enter a ListenBrainz user token.',
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(value);
+                },
+                child: const Text('Connect'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (!context.mounted || token == null) {
+      return;
+    }
+    await store.configure(token);
+    if (!context.mounted) {
+      return;
+    }
+    final account = store.userName;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          account == null
+              ? 'ListenBrainz scrobbling enabled.'
+              : 'ListenBrainz scrobbling enabled for $account.',
+        ),
+      ),
+    );
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not connect ListenBrainz. Check the user token.'),
+        ),
+      );
+    }
+  } finally {
+    tokenController.dispose();
+  }
+}
+
+Future<void> _removeListenBrainz(BuildContext context) async {
+  final store = context.read<ListenBrainzScrobblingStore?>();
+  if (store == null || !store.isConfigured) {
+    return;
+  }
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Disconnect ListenBrainz?'),
+      content: const Text(
+        'This removes the ListenBrainz user token from this device and stops future submissions. Existing ListenBrainz listens and local history stay unchanged.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Disconnect'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted || confirmed != true) {
+    return;
+  }
+  await store.remove();
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('ListenBrainz disconnected.')),
     );
   }
 }
@@ -423,8 +571,11 @@ class _HomeScreenState extends State<HomeScreen> {
   LibrarySortMode _librarySortMode = LibrarySortMode.recentlyAdded;
   PlayerController? _historyPlayer;
   LibraryStore? _historyLibrary;
+  ListenBrainzScrobblingStore? _historyListenBrainz;
   StreamSubscription<Duration>? _progressSub;
   String? _lastProgressTrackId;
+  String? _listenBrainzTrackId;
+  DateTime? _listenBrainzStartedAt;
   Duration _lastRecordedProgressPosition = Duration.zero;
   int _lastRecordedPlaybackSerial = 0;
   double? _desktopQueuePaneDragWidth;
@@ -451,6 +602,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     _historyLibrary = context.read<LibraryStore>();
+    _historyListenBrainz = context.read<ListenBrainzScrobblingStore?>();
   }
 
   @override
@@ -476,6 +628,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     _lastRecordedPlaybackSerial = player.playbackStartSerial;
+    _listenBrainzTrackId = track.id;
+    _listenBrainzStartedAt = DateTime.now();
     unawaited(library.recordPlayback(track.id));
     unawaited(_recordRadioStationClick(track));
   }
@@ -507,8 +661,28 @@ class _HomeScreenState extends State<HomeScreen> {
     final track = player?.current;
     if (player == null ||
         library == null ||
-        track == null ||
-        !_tracksPodcastProgress(track)) {
+        track == null) {
+      return;
+    }
+
+    final startedAt = _listenBrainzTrackId == track.id
+        ? _listenBrainzStartedAt
+        : null;
+    final scrobbling = _historyListenBrainz;
+    if (!library.pauseListeningHistory &&
+        !library.offlineModeEnabled &&
+        scrobbling != null &&
+        startedAt != null) {
+      unawaited(
+        scrobbling.submitIfEligible(
+          track: track,
+          startedAt: startedAt,
+          position: position,
+        ),
+      );
+    }
+
+    if (!_tracksPodcastProgress(track)) {
       return;
     }
 
@@ -14993,6 +15167,7 @@ class _SettingsTab extends StatelessWidget {
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
     final lyricsTranslation =
         context.watch<LyricsTranslationSettingsStore?>();
+    final listenBrainz = context.watch<ListenBrainzScrobblingStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
     final offlineCacheLimitBytes = library.offlineCacheLimitBytes;
@@ -15216,6 +15391,32 @@ class _SettingsTab extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline),
                   )
                 : const Icon(Icons.chevron_right),
+          ),
+        if (listenBrainz != null)
+          ListTile(
+            key: const Key('listenbrainz-settings'),
+            leading: const Icon(Icons.cloud_upload_outlined),
+            title: const Text('ListenBrainz scrobbling'),
+            subtitle: Text(
+              listenBrainz.isConfigured
+                  ? 'Completed listens are sent to ListenBrainz${listenBrainz.userName == null ? '' : ' for ${listenBrainz.userName}'}. Pausing listening history also pauses submissions.'
+                  : 'Optionally submit completed listens to your ListenBrainz account.',
+            ),
+            onTap: () => unawaited(_configureListenBrainz(context)),
+            trailing: listenBrainz.isConfigured
+                ? IconButton(
+                    tooltip: 'Disconnect ListenBrainz',
+                    onPressed: () =>
+                        unawaited(_removeListenBrainz(context)),
+                    icon: const Icon(Icons.delete_outline),
+                  )
+                : const Icon(Icons.chevron_right),
+          ),
+        if (listenBrainz?.lastError != null)
+          ListTile(
+            leading: const Icon(Icons.cloud_off_outlined),
+            title: const Text('ListenBrainz needs attention'),
+            subtitle: Text(listenBrainz!.lastError!),
           ),
         ListTile(
           leading: Icon(

@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../data/library_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/library_sync_store.dart';
+import '../data/listenbrainz_scrobbling_store.dart';
 import '../data/listen_together_store.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
@@ -74,6 +75,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
         ChangeNotifierProvider<LibrarySyncStore>(
           create: (_) => LibrarySyncStore()..load(),
+        ),
+        ChangeNotifierProvider<ListenBrainzScrobblingStore>(
+          create: (_) => ListenBrainzScrobblingStore()..load(),
         ),
         ChangeNotifierProxyProvider<LibrarySyncStore, ListenTogetherStore>(
           create: (_) => ListenTogetherStore(),
