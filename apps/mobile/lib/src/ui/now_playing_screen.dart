@@ -11,6 +11,7 @@ import '../domain/track.dart';
 import '../domain/track_chapter.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
+import 'platform_image_share.dart';
 import 'widgets/artwork_palette_backdrop.dart';
 import 'widgets/track_artwork.dart';
 import 'widgets/track_share_card.dart';
@@ -202,10 +203,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         ),
         actions: <Widget>[
           TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
-          FilledButton.icon(
+          OutlinedButton.icon(
             onPressed: () => _saveTrackShareCard(dialogContext, boundaryKey, track),
-            icon: const Icon(Icons.image_outlined),
+            icon: const Icon(Icons.save_alt_outlined),
             label: const Text('Save PNG'),
+          ),
+          FilledButton.icon(
+            onPressed: () => _shareTrackShareCard(dialogContext, boundaryKey, track),
+            icon: const Icon(Icons.ios_share),
+            label: const Text('Share'),
           ),
         ],
       ),
@@ -231,6 +237,44 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
     } on Object catch (error) {
       if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('Could not save track share card: $error')));
+    }
+  }
+
+  Future<void> _shareTrackShareCard(
+    BuildContext context,
+    GlobalKey boundaryKey,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final status = await const SharePlusImageShareService().share(
+        PlatformImageShareRequest(
+          bytes: await captureTrackShareCardPng(boundaryKey),
+          fileName: 'aethertune-track.png',
+          title: '${track.title} - AetherTune',
+          subject: 'AetherTune track share card',
+          text: '${track.title} by ${track.artist}',
+          sharePositionOrigin: platformSharePositionOrigin(context),
+        ),
+      );
+      if (!context.mounted || status == PlatformImageShareStatus.dismissed) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            status == PlatformImageShareStatus.shared
+                ? 'Shared track share card.'
+                : 'Sharing is unavailable. Save the PNG instead.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not share track share card: $error')),
+        );
+      }
     }
   }
 

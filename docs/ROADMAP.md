@@ -34,6 +34,7 @@
 - [x] Local seed-based track radio queues
 - [x] Collection-aware local artist/album radio queues
 - [x] Local share text for tracks, browse groups, and playlists
+- [x] Native PNG share sheets for track, collection, and lyrics cards
 - [x] Persist shuffle/repeat settings
 - [x] Favorites
 - [x] Manual playlists

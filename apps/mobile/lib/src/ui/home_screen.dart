@@ -72,6 +72,7 @@ import 'now_playing_screen.dart';
 import 'desktop_navigation_shortcuts.dart';
 import 'internet_archive_item_screen.dart';
 import 'platform_audio_route_picker.dart';
+import 'platform_image_share.dart';
 import 'platform_text_share.dart';
 import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
@@ -10982,15 +10983,25 @@ Future<void> _showCollectionShareCard(
           onPressed: () => Navigator.of(dialogContext).pop(),
           child: const Text('Close'),
         ),
-        FilledButton.icon(
+        OutlinedButton.icon(
           onPressed: () => _saveCollectionShareCard(
             dialogContext,
             boundaryKey,
             kind: kind,
             fileToken: fileToken,
           ),
-          icon: const Icon(Icons.image_outlined),
+          icon: const Icon(Icons.save_alt_outlined),
           label: const Text('Save PNG'),
+        ),
+        FilledButton.icon(
+          onPressed: () => _shareCollectionShareCard(
+            dialogContext,
+            boundaryKey,
+            kind: kind,
+            fileToken: fileToken,
+          ),
+          icon: const Icon(Icons.ios_share),
+          label: const Text('Share'),
         ),
       ],
     ),
@@ -11028,6 +11039,46 @@ Future<void> _saveCollectionShareCard(
     if (context.mounted) {
       messenger.showSnackBar(
         SnackBar(content: Text('Could not save $kind share card: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _shareCollectionShareCard(
+  BuildContext context,
+  GlobalKey boundaryKey, {
+  required String kind,
+  required String fileToken,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final fileName = 'aethertune-${_shareCardFileToken(kind)}-'
+      '${_shareCardFileToken(fileToken)}.png';
+  try {
+    final status = await const SharePlusImageShareService().share(
+      PlatformImageShareRequest(
+        bytes: await captureCollectionShareCardPng(boundaryKey),
+        fileName: fileName,
+        title: '${kind[0].toUpperCase()}${kind.substring(1)} - AetherTune',
+        subject: 'AetherTune $kind share card',
+        sharePositionOrigin: platformSharePositionOrigin(context),
+      ),
+    );
+    if (!context.mounted || status == PlatformImageShareStatus.dismissed) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          status == PlatformImageShareStatus.shared
+              ? 'Shared $kind share card.'
+              : 'Sharing is unavailable. Save the PNG instead.',
+        ),
+      ),
+    );
+  } on Object catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not share $kind share card: $error')),
       );
     }
   }
@@ -11260,12 +11311,19 @@ Future<void> _showLyricsShareCard(
           onPressed: () => Navigator.of(dialogContext).pop(),
           child: const Text('Close'),
         ),
-        FilledButton.icon(
+        OutlinedButton.icon(
           onPressed: () => unawaited(
             _saveLyricsShareCard(dialogContext, boundaryKey, track),
           ),
-          icon: const Icon(Icons.image_outlined),
+          icon: const Icon(Icons.save_alt_outlined),
           label: const Text('Save PNG'),
+        ),
+        FilledButton.icon(
+          onPressed: () => unawaited(
+            _shareLyricsShareCard(dialogContext, boundaryKey, track),
+          ),
+          icon: const Icon(Icons.ios_share),
+          label: const Text('Share'),
         ),
       ],
     ),
@@ -11301,6 +11359,44 @@ Future<void> _saveLyricsShareCard(
     if (context.mounted) {
       messenger.showSnackBar(
         SnackBar(content: Text('Could not save lyrics share card: $error')),
+      );
+    }
+  }
+}
+
+Future<void> _shareLyricsShareCard(
+  BuildContext context,
+  GlobalKey boundaryKey,
+  Track track,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final status = await const SharePlusImageShareService().share(
+      PlatformImageShareRequest(
+        bytes: await captureLyricsShareCardPng(boundaryKey),
+        fileName: 'aethertune-lyrics.png',
+        title: '${track.title} lyrics - AetherTune',
+        subject: 'AetherTune lyrics share card',
+        text: '${track.title} by ${track.artist}',
+        sharePositionOrigin: platformSharePositionOrigin(context),
+      ),
+    );
+    if (!context.mounted || status == PlatformImageShareStatus.dismissed) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          status == PlatformImageShareStatus.shared
+              ? 'Shared lyrics share card.'
+              : 'Sharing is unavailable. Save the PNG instead.',
+        ),
+      ),
+    );
+  } on Object catch (error) {
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not share lyrics share card: $error')),
       );
     }
   }
