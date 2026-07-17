@@ -268,6 +268,21 @@ class SharedPlaylistStore extends ChangeNotifier {
     });
   }
 
+  Future<int> invalidateUnusedInvites(
+    SharedPlaylistBinding binding,
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (!binding.isOwner) {
+        throw StateError('Only the shared playlist owner can rotate invitations.');
+      }
+      return _requireGateway().invalidateSharedPlaylistInvites(
+        playlistId: binding.remoteId,
+      );
+    });
+  }
+
   Future<SharedPlaylistBinding> revokeCollaborator(
     SharedPlaylistBinding binding,
     String collaboratorId,

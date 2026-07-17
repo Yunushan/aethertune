@@ -348,6 +348,12 @@ abstract interface class SharedPlaylistInviteStore {
   /// Invitations are capability tokens, so a successful consumption is final
   /// even if a later playlist mutation conflicts and the caller must retry.
   Future<SharedPlaylistInvite?> consume(String inviteCode);
+
+  /// Invalidates every unconsumed invitation for one playlist.
+  ///
+  /// A code already claimed by [consume] is intentionally not touched so an
+  /// in-flight join cannot be interrupted halfway through its atomic claim.
+  Future<int> invalidateForPlaylist(String playlistId);
 }
 
 class MemorySharedPlaylistInviteStore implements SharedPlaylistInviteStore {
@@ -379,6 +385,21 @@ class MemorySharedPlaylistInviteStore implements SharedPlaylistInviteStore {
       return null;
     }
     return _invites.remove(inviteCode);
+  }
+
+  @override
+  Future<int> invalidateForPlaylist(String playlistId) async {
+    var invalidated = 0;
+    final codes = _invites.entries
+        .where((entry) => entry.value.playlistId == playlistId)
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final code in codes) {
+      if (_invites.remove(code) != null) {
+        invalidated += 1;
+      }
+    }
+    return invalidated;
   }
 }
 
@@ -452,6 +473,30 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
         await claimed.delete();
       }
     }
+  }
+
+  @override
+  Future<int> invalidateForPlaylist(String playlistId) async {
+    if (!_isSharedPlaylistId(playlistId) || !await rootDirectory.exists()) {
+      return 0;
+    }
+    var invalidated = 0;
+    await for (final entity in rootDirectory.list()) {
+      if (entity is! File || !entity.path.endsWith('.json')) {
+        continue;
+      }
+      final invite = await _readInviteFile(entity);
+      if (invite?.playlistId != playlistId) {
+        continue;
+      }
+      try {
+        await entity.delete();
+        invalidated += 1;
+      } on FileSystemException {
+        // A concurrent consume/delete won the race; that code is invalid too.
+      }
+    }
+    return invalidated;
   }
 
   File _fileFor(String code) {

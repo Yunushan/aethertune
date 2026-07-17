@@ -91,6 +91,17 @@ void main() {
     expect(revoked.revision, 3);
     expect(revoked.collaborators, isEmpty);
   });
+
+  test('owners can invalidate unused private invite codes', () async {
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist('Road mix');
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final hosted = await store.host(library, playlist);
+
+    expect(await store.invalidateUnusedInvites(hosted, library), 2);
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {
@@ -148,6 +159,11 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
     role: role,
     expiresAt: DateTime.utc(2026, 7, 24),
   );
+
+  @override
+  Future<int> invalidateSharedPlaylistInvites({
+    required String playlistId,
+  }) async => 2;
 
   @override
   Future<SharedPlaylistRemote> revokeSharedPlaylistCollaborator({

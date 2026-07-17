@@ -759,6 +759,34 @@ void main() {
     expect(remote.revision, 5);
     expect(remote.collaborators, isEmpty);
   });
+
+  test('invalidates outstanding shared playlist invitation codes', () async {
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'DELETE');
+        expect(
+          uri,
+          _account().sharedPlaylistInviteIssueEndpointUri(
+            'AAAAAAAAAAAAAAAAAAAAAAAA',
+          ),
+        );
+        expect(body, isNull);
+        return const LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: '{"invalidated":2}',
+        );
+      },
+    );
+
+    expect(
+      await client.invalidateSharedPlaylistInvites(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      ),
+      2,
+    );
+  });
 }
 
 LibrarySyncAccount _account() {

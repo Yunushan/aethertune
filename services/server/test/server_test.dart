@@ -753,6 +753,43 @@ void main() {
     expect(files, isEmpty);
   });
 
+  test('file shared-playlist invite rotation keeps other playlists intact',
+      () async {
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-server-shared-rotate-test-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final store = FileSharedPlaylistInviteStore(root);
+    final expiresAt = DateTime.utc(2026, 7, 24);
+    final first = await store.issue(
+      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      role: SharedPlaylistRole.viewer,
+      expiresAt: expiresAt,
+    );
+    final second = await store.issue(
+      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      role: SharedPlaylistRole.editor,
+      expiresAt: expiresAt,
+    );
+    final other = await store.issue(
+      playlistId: 'BBBBBBBBBBBBBBBBBBBBBBBB',
+      role: SharedPlaylistRole.viewer,
+      expiresAt: expiresAt,
+    );
+
+    expect(
+      await store.invalidateForPlaylist('AAAAAAAAAAAAAAAAAAAAAAAA'),
+      2,
+    );
+    expect(await store.lookup(first), isNull);
+    expect(await store.lookup(second), isNull);
+    expect((await store.lookup(other))?.playlistId, 'BBBBBBBBBBBBBBBBBBBBBBBB');
+  });
+
   group('shared playlists', () {
     const ownerToken = 'shared-owner-token';
     const viewerToken = 'shared-viewer-token';
@@ -1000,6 +1037,90 @@ void main() {
         ),
       );
       expect(expired.statusCode, 404);
+    });
+
+    test('owners can rotate every unused invitation code', () async {
+      final server = handler();
+      final created = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Rotating invite',
+              'trackIds': <String>['track-1'],
+            },
+          },
+        ),
+      );
+      final playlistId = (await _json(created))['id'] as String;
+      final viewerInvite = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{'role': 'viewer'},
+        ),
+      );
+      final editorInvite = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{'role': 'editor'},
+        ),
+      );
+      final viewerCode = (await _json(viewerInvite))['inviteCode'] as String;
+      final editorCode = (await _json(editorInvite))['inviteCode'] as String;
+
+      final rotated = await server(
+        _request(
+          'DELETE',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+        ),
+      );
+      expect(rotated.statusCode, 200);
+      expect((await _json(rotated))['invalidated'], 2);
+
+      final rejectedViewer = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$viewerCode',
+          token: viewerToken,
+        ),
+      );
+      final rejectedEditor = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$editorCode',
+          token: editorToken,
+        ),
+      );
+      expect(rejectedViewer.statusCode, 404);
+      expect(rejectedEditor.statusCode, 404);
+
+      final replacement = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{'role': 'viewer'},
+        ),
+      );
+      final replacementCode = (await _json(replacement))['inviteCode'] as String;
+      final acceptedReplacement = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$replacementCode',
+          token: viewerToken,
+        ),
+      );
+      expect(acceptedReplacement.statusCode, 200);
     });
 
     test('rejects stream URLs and unauthenticated invitation joins', () async {

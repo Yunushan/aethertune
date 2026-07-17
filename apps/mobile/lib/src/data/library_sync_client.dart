@@ -206,6 +206,10 @@ abstract interface class SharedPlaylistGateway {
     required SharedPlaylistAccessRole role,
   });
 
+  Future<int> invalidateSharedPlaylistInvites({
+    required String playlistId,
+  });
+
   Future<SharedPlaylistRemote> revokeSharedPlaylistCollaborator({
     required String playlistId,
     required String collaboratorId,
@@ -523,6 +527,25 @@ class LibrarySyncClient
       role: returnedRole,
       expiresAt: expiresAt,
     );
+  }
+
+  @override
+  Future<int> invalidateSharedPlaylistInvites({
+    required String playlistId,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    final response = await _execute(
+      'DELETE',
+      endpoint: account.sharedPlaylistInviteIssueEndpointUri(normalized),
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final invalidated = _jsonObject(response.body)['invalidated'];
+    if (invalidated is! int || invalidated < 0) {
+      throw const FormatException('Shared playlist invite rotation is invalid.');
+    }
+    return invalidated;
   }
 
   @override

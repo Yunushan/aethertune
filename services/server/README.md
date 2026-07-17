@@ -83,7 +83,7 @@ Available endpoints:
 - `GET /api/v1/listen-together/invites/{inviteCode}`
 - `POST /api/v1/shared-playlists`
 - `GET`/`PUT`/`DELETE /api/v1/shared-playlists/{playlistId}`
-- `POST /api/v1/shared-playlists/{playlistId}/invites`
+- `POST`/`DELETE /api/v1/shared-playlists/{playlistId}/invites`
 - `DELETE /api/v1/shared-playlists/{playlistId}/collaborators/{accountId}`
 - `POST /api/v1/shared-playlist-invites/{inviteCode}`
 
@@ -116,7 +116,8 @@ are rejected. Owners create opaque 144-bit viewer/editor invite codes, revoke
 existing collaborators, and can delete the server playlist. Editors can update
 against its current revision; viewers can only fetch it. Each invitation is
 atomically consumed on a join, so it cannot be reused, and expires after seven
-days if unused. Shared playlists and invite records are stored under
+days if unused. Owners can invalidate every remaining unused code and issue
+fresh replacements. Shared playlists and invite records are stored under
 `AETHERTUNE_DATA_DIR`, using SHA-256-derived filenames for IDs/codes. Clients
 must refresh explicitly after a revision conflict; there is no automatic merge
 or revision history yet.

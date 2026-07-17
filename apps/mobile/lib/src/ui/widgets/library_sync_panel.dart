@@ -779,6 +779,46 @@ class LibrarySyncPanel extends StatelessWidget {
     }
   }
 
+  static Future<void> _rotateSharedPlaylistInvites(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Invalidate unused invite codes?'),
+        content: const Text(
+          'Anyone who has not joined yet will need a newly created invite code.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Invalidate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      final invalidated = await context
+          .read<SharedPlaylistStore>()
+          .invalidateUnusedInvites(binding, context.read<LibraryStore>());
+      if (context.mounted) {
+        _showSuccess(context, 'Invalidated $invalidated unused invite code(s).');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not invalidate invite codes: $error');
+      }
+    }
+  }
+
   static Future<void> _unlinkSharedPlaylist(
     BuildContext context,
     SharedPlaylistBinding binding,
@@ -1204,6 +1244,9 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
                 binding,
               );
               break;
+            case _SharedPlaylistAction.rotateInvites:
+              LibrarySyncPanel._rotateSharedPlaylistInvites(context, binding);
+              break;
             case _SharedPlaylistAction.unlink:
               LibrarySyncPanel._unlinkSharedPlaylist(context, binding);
               break;
@@ -1234,6 +1277,14 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.person_add_alt_1_outlined),
                 title: Text('Create invite code'),
+              ),
+            ),
+          if (binding.isOwner)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.rotateInvites,
+              child: ListTile(
+                leading: Icon(Icons.restart_alt_outlined),
+                title: Text('Invalidate unused invite codes'),
               ),
             ),
           if (binding.isOwner && binding.collaborators.isNotEmpty)
@@ -1271,6 +1322,7 @@ enum _SharedPlaylistAction {
   publish,
   invite,
   collaborators,
+  rotateInvites,
   unlink,
   delete,
 }

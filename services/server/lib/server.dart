@@ -875,11 +875,18 @@ Future<Response> _handleSharedPlaylistItem(
     return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_not_found'});
   }
   if (isInviteEndpoint) {
-    if (request.method != 'POST') {
-      return _methodNotAllowed(request);
-    }
     if (!record.isOwner(accountId)) {
       return _sharedPlaylistForbidden();
+    }
+    if (request.method == 'DELETE') {
+      final invalidated = await invites.invalidateForPlaylist(playlistId);
+      return _jsonResponse(
+        200,
+        <String, Object?>{'invalidated': invalidated},
+      );
+    }
+    if (request.method != 'POST') {
+      return _methodNotAllowed(request);
     }
     try {
       final body = await _readBoundedJson(request, maxBytes: maxSharedPlaylistBytes);
