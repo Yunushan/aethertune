@@ -50,7 +50,7 @@ The Sources tab appends pages only after **Load more provider results**, dedupli
 
 `SelfHostedProviderStore` persists non-secret account metadata separately from `ProviderCredentialVault`. The production vault uses `flutter_secure_storage`; Android uses its configured encrypted storage with backup disabled, Apple wrappers declare Keychain entitlements, Linux builds include libsecret, and Windows uses the platform plugin backend. Sources requires HTTPS unless the user explicitly accepts an insecure-HTTP warning. The account editor never receives the saved secret. The dedicated rotation flow requires confirmation, tests the replacement credential before writing, rolls the vault back if its write fails, and redacts both old and replacement values from failures. Connection and media errors also redact raw, URI-encoded, legacy hex-encoded, and salted-token query credentials.
 
-Authenticated providers return metadata-only `Track` objects from search and catalog browsing. Safe artwork IDs and cache tags may persist, but authenticated artwork URLs never do; the adapter returns validated bytes to a bounded memory cache. Immediately before playback, `ProviderArtworkFileCache` atomically copies those bytes to a format-aware, hashed path under AetherTune's private temporary directory for notification, lock-screen, and Control Center metadata. The cache removes stale partial files, caps itself at 256 files and 100 MiB, and deletes a provider directory when its account is removed. The resulting `file:` URI and credential-bearing stream URL are runtime-only: `Track.toJson` omits both from queue/library/backup serialization. On restart, metadata-only queue entries, streams, and artwork are resolved again from the vault. Successful static-credential rotation invalidates memory requests and the provider's private artwork files, strips previous ephemeral media URIs from queued tracks, stops the loaded native queue before replacement, and re-resolves it with the new provider instance while preserving position/play state when possible. Resolver failures leave only metadata and stopped playback. Removing an account also deletes its secret, artwork caches, and queued provider tracks. OAuth refresh and cross-device credential sync are intentionally not implemented yet.
+Authenticated providers return metadata-only `Track` objects from search and catalog browsing. Safe artwork IDs and cache tags may persist, but authenticated artwork URLs never do; the adapter returns validated bytes to a bounded memory cache. Immediately before playback, `ProviderArtworkFileCache` atomically copies those bytes to a format-aware, hashed path under AetherTune's private temporary directory for notification, lock-screen, and Control Center metadata. The cache removes stale partial files, caps itself at 256 files and 100 MiB, and deletes a provider directory when its account is removed. The resulting `file:` URI and credential-bearing stream URL are runtime-only: `Track.toJson` omits both from queue/library/backup serialization. On restart, metadata-only queue entries, streams, and artwork are resolved again from the vault. Successful static-credential rotation invalidates memory requests and the provider's private artwork files, strips previous ephemeral media URIs from queued tracks, stops the loaded native queue before replacement, and re-resolves it with the new provider instance while preserving position/play state when possible. Resolver failures leave only metadata and stopped playback. Removing an account also deletes its secret, artwork caches, and queued provider tracks. Spotify metadata search supports its own PKCE refresh flow below; cross-device credential sync is intentionally not implemented.
 
 `MusicPlaylistMutationProvider` is separate from read-only `MusicCatalogProvider`, and adapters must also declare the `playlistMutation` capability before write controls appear. The neutral contract supports create, rename, delete, append, and ordered track replacement. Sources exposes create/rename/delete on the Playlists tab, add-to-remote-playlist from album track menus, and move/remove actions inside a playlist. Offline mode hides the network-backed catalog entirely; mutations use the same guarded/redacted credential path as reads, refresh after success, preserve the current view on failure, and never persist credentials in playlist state. Portable cross-device library snapshots can carry local playlists and safe metadata, but never provider credentials or remote provider playlist state.
 
@@ -81,6 +81,27 @@ Authenticated providers return metadata-only `Track` objects from search and cat
 `YouTubeDataMetadataProvider` is an optional, metadata-only adapter for the documented YouTube Data API `search.list` endpoint. Sources accepts a user-owned, app-restricted Google Cloud API key and stores it only through `ProviderCredentialVault`; the key is excluded from regular preferences, queues, backups, and sync documents. Search sends the query and configured key to `www.googleapis.com`, returns neutral video title/channel metadata plus HTTPS thumbnail artwork, and supports the API's opaque `nextPageToken` continuation. The adapter declares only `metadataSearch` and `artwork`, returns no stream URI, and never declares playback, offline cache, downloads, authentication, playlists, or account access. The UI states these boundaries and displays the YouTube Terms URL during setup. It must not be treated as a YouTube Music or OuterTune playback provider.
 
 Official references: [YouTube Data API search.list](https://developers.google.com/youtube/v3/docs/search/list), [YouTube Data API reference](https://developers.google.com/youtube/v3/docs), and [YouTube Developer Policies](https://developers.google.com/youtube/terms/developer-policies).
+
+## Spotify Web API metadata source
+
+`SpotifyMetadataProvider` is an optional official Spotify Web API adapter for
+track metadata and HTTPS artwork only. A user supplies the client ID for their
+own Spotify developer app. Sources launches Spotify's Authorization Code with
+PKCE flow in the system browser, listens once on an ephemeral IPv4 loopback
+callback, validates the returned state, and exchanges the code without a
+client secret. The app's client ID, access token, refresh token, and expiry
+record are stored only through `ProviderCredentialVault`; access tokens refresh
+before a search when needed, and Disconnect deletes the whole record.
+
+The provider sends the search query and OAuth bearer token only to
+`api.spotify.com`, lists `accounts.spotify.com` and `api.spotify.com` in its
+disclosure, uses bounded `offset`/`limit` pagination, and returns neutral
+metadata-only tracks. It declares metadata search, artwork, and authentication
+only. It does not resolve a stream, play Spotify audio, cache/download media,
+expose playlists, or use undocumented endpoints. The user must configure the
+loopback redirect allowed by Spotify for their developer app before connecting.
+
+Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), and [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
 
 ## LRCLIB lyrics foundation
 

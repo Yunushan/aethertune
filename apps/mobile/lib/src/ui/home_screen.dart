@@ -38,6 +38,7 @@ import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
+import '../data/spotify_settings_store.dart';
 import '../data/subsonic_provider.dart';
 import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
@@ -11351,6 +11352,8 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { configure, remove }
 
+enum _SpotifyAction { configure, remove }
+
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
     this.archiveProvider,
@@ -11476,6 +11479,12 @@ class _SourcesTabState extends State<_SourcesTab> {
     final youtubeProvider = youtubeProviders.isEmpty
         ? null
         : youtubeProviders.first;
+    final spotify = context.watch<SpotifySettingsStore?>();
+    final spotifyProviders = spotify?.musicProviders ??
+        const <MusicSourceProvider>[];
+    final spotifyProvider = spotifyProviders.isEmpty
+        ? null
+        : spotifyProviders.first;
     final podcastSubscriptions = library.podcastSubscriptions;
     final offlineModeEnabled = library.offlineModeEnabled;
     final selfHostedActionsEnabled = selfHosted.loaded &&
@@ -11628,6 +11637,84 @@ class _SourcesTabState extends State<_SourcesTab> {
             leading: const Icon(Icons.lock_outline),
             title: const Text('YouTube Data API unavailable'),
             subtitle: Text(youtubeData!.loadError!),
+          ),
+        ],
+        const SizedBox(height: 8),
+        _ProviderCard(
+          title: 'Spotify Web API',
+          status: spotify?.isConfigured == true ? 'Enabled' : 'Optional',
+          description: spotify?.isConfigured == true
+              ? 'Searches official Spotify track metadata only. Playback and offline media are unavailable.'
+              : 'Connect your own Spotify developer app for official metadata search only.',
+          icon: Icons.library_music_outlined,
+          capabilities: spotifyProvider?.capabilities ??
+              const <MusicSourceCapability>{
+                MusicSourceCapability.metadataSearch,
+                MusicSourceCapability.artwork,
+                MusicSourceCapability.authentication,
+              },
+          disclosure: spotifyProvider?.disclosure ??
+              const ProviderPrivacyDisclosure(
+                networkDomains: <String>[
+                  'accounts.spotify.com',
+                  'api.spotify.com',
+                ],
+                requiresUserCredentials: true,
+              ),
+          actions: PopupMenuButton<_SpotifyAction>(
+            tooltip: 'Manage Spotify Web API',
+            onSelected: (action) {
+              switch (action) {
+                case _SpotifyAction.configure:
+                  unawaited(_configureSpotify(context));
+                  break;
+                case _SpotifyAction.remove:
+                  unawaited(_removeSpotify(context));
+                  break;
+              }
+            },
+            itemBuilder: (_) => <PopupMenuEntry<_SpotifyAction>>[
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.configure,
+                enabled: spotify?.loaded == true &&
+                    !offlineModeEnabled &&
+                    spotify?.connecting != true,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.login_outlined),
+                  title: Text(
+                    spotify?.isConfigured == true
+                        ? 'Reconnect Spotify'
+                        : 'Connect Spotify',
+                  ),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.remove,
+                enabled: spotify?.isConfigured == true,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('Disconnect Spotify'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (spotify?.connecting == true) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+          const SizedBox(height: 4),
+          const Text('Waiting for Spotify authorization in your browser.'),
+        ] else if (spotify?.loaded != true) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ] else if (spotify?.loadError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Spotify connection unavailable'),
+            subtitle: Text(spotify!.loadError!),
           ),
         ],
         const SizedBox(height: 16),
@@ -12787,6 +12874,171 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  Future<void> _configureSpotify(BuildContext context) async {
+    final clientIdController = TextEditingController();
+    String? validationError;
+    try {
+      final clientId = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Connect Spotify Web API'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'AetherTune uses Spotify Authorization Code with PKCE. Create your own Spotify developer app, then add http://127.0.0.1 as an allowed redirect URI without a port. AetherTune opens the authorization page and uses a temporary local callback port.',
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Spotify searches official track metadata and artwork only. It does not play, download, cache, or copy Spotify audio.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const Key('spotify-client-id'),
+                      controller: clientIdController,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Spotify developer client ID',
+                      ),
+                      onSubmitted: (value) {
+                        if (value.trim().isEmpty) {
+                          setDialogState(
+                            () => validationError =
+                                'Enter a Spotify developer client ID.',
+                          );
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(value);
+                      },
+                    ),
+                    if (validationError != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final value = clientIdController.text.trim();
+                  if (value.isEmpty) {
+                    setDialogState(
+                      () => validationError =
+                          'Enter a Spotify developer client ID.',
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(value);
+                },
+                child: const Text('Authorize'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!context.mounted || clientId == null) {
+        return;
+      }
+      final store = context.read<SpotifySettingsStore?>();
+      if (store == null) {
+        return;
+      }
+      await store.connect(clientId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Spotify metadata search enabled.')),
+        );
+      }
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } on StateError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      clientIdController.dispose();
+    }
+  }
+
+  Future<void> _removeSpotify(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Disconnect Spotify?'),
+        content: const Text(
+          'This removes the Spotify access and refresh tokens from this device. Saved metadata entries remain unchanged.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    final store = context.read<SpotifySettingsStore?>();
+    if (store == null) {
+      return;
+    }
+    await context
+        .read<PlayerController>()
+        .removeTracksFromSource('spotify-metadata');
+    await store.remove();
+    if (!context.mounted) {
+      return;
+    }
+    _providerSearchRequestSerial += 1;
+    setState(() {
+      _providerSearchLoading = false;
+      _providerSearchLoadingMore = false;
+      _providerSearchResults.removeWhere(
+        (result) => result.providerId == 'spotify-metadata',
+      );
+      _providerSearchErrors.removeWhere(
+        (error) => error.providerId == 'spotify-metadata',
+      );
+      _providerSearchLoadMoreErrors.removeWhere(
+        (error) => error.providerId == 'spotify-metadata',
+      );
+      _providerSearchContinuations.remove('spotify-metadata');
+      _providerSearchFailedContinuations.remove('spotify-metadata');
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Spotify disconnected.')),
+    );
+  }
+
   Future<void> _editCustomCatalog(
     BuildContext context, {
     CustomCatalogDefinition? definition,
@@ -13155,6 +13407,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _radioProvider,
       _archiveProvider,
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
+      ...?context.read<SpotifySettingsStore?>()?.musicProviders,
       ...context.read<SelfHostedProviderStore>().musicProviders,
       ...?context.read<CustomCatalogStore?>()?.musicProviders,
     ];
