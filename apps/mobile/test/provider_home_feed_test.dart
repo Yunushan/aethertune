@@ -232,6 +232,61 @@ void main() {
     expect(provider.browseCalls, isEmpty);
   });
 
+  test('adds bounded recently added shelves for followed artists', () async {
+    final provider = _FakeHomeCatalogProvider(
+      id: 'followed',
+      name: 'Followed Server',
+      discoveryKinds: const <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      ],
+      discoveryCollections: const <
+          MusicCatalogDiscoveryKind,
+          List<MusicCatalogCollection>>{
+        MusicCatalogDiscoveryKind.recentlyAdded:
+            <MusicCatalogCollection>[
+          MusicCatalogCollection(
+            id: 'album-mira',
+            title: 'Mira New Release',
+            kind: MusicCatalogCollectionKind.album,
+            subtitle: 'Mira',
+          ),
+          MusicCatalogCollection(
+            id: 'album-other',
+            title: 'Other Release',
+            kind: MusicCatalogCollectionKind.album,
+            subtitle: 'Another Artist',
+          ),
+          MusicCatalogCollection(
+            id: 'album-orion',
+            title: 'Orion New Release',
+            kind: MusicCatalogCollectionKind.album,
+            subtitle: '  ORION  ',
+          ),
+        ],
+      },
+    );
+
+    final feed = await const ProviderHomeFeedCoordinator().load(
+      <MusicCatalogProvider>[provider],
+      followedArtists: const <String>['mira', 'Orion', 'Unknown Artist'],
+    );
+
+    final followedShelf = feed.sections.singleWhere(
+      (section) => section.isFollowedArtistShelf,
+    );
+    expect(followedShelf.sectionId, 'followed-artists');
+    expect(followedShelf.titleOverride, 'from artists you follow');
+    expect(followedShelf.subtitleOverride, contains('Recently added'));
+    expect(followedShelf.hasMore, isFalse);
+    expect(
+      followedShelf.collections.map((collection) => collection.id),
+      <String>['album-mira', 'album-orion'],
+    );
+    expect(provider.discoveryCalls, <MusicCatalogDiscoveryKind>[
+      MusicCatalogDiscoveryKind.recentlyAdded,
+    ]);
+  });
+
   test('continues a paged discovery shelf without duplicate albums', () async {
     final provider = _FakeHomeCatalogProvider(
       id: 'paged',

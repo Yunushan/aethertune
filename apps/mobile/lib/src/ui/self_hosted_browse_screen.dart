@@ -203,6 +203,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         final canMutatePlaylists =
             widget.kind == MusicCatalogCollectionKind.playlist &&
                 playlistMutator != null;
+        final library = context.watch<LibraryStore>();
         final normalizedQuery = _query.trim().toLowerCase();
         final visible = normalizedQuery.isEmpty
             ? collections
@@ -287,6 +288,10 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                 );
               }
               final collection = visible[index - 1];
+              final isArtist =
+                  collection.kind == MusicCatalogCollectionKind.artist;
+              final isFollowed =
+                  isArtist && library.isArtistFollowed(collection.title);
               return ListTile(
                 key: ValueKey<String>(
                   'catalog-${collection.kind.name}-${collection.id}',
@@ -321,7 +326,27 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                trailing: canMutatePlaylists
+                trailing: isArtist
+                    ? IconButton(
+                        key: ValueKey<String>(
+                          'catalog-follow-artist-${collection.id}',
+                        ),
+                        tooltip: isFollowed
+                            ? 'Unfollow artist'
+                            : 'Follow artist',
+                        onPressed: () => unawaited(
+                          library.setArtistFollowed(
+                            collection.title,
+                            !isFollowed,
+                          ),
+                        ),
+                        icon: Icon(
+                          isFollowed
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                        ),
+                      )
+                    : canMutatePlaylists
                     ? PopupMenuButton<_CatalogPlaylistAction>(
                         key: ValueKey<String>(
                           'catalog-playlist-actions-${collection.id}',

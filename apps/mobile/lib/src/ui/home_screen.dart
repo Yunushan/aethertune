@@ -3366,7 +3366,10 @@ class _HomeTabState extends State<_HomeTab> {
     final signature = _providerHomeStoreSignature(providerStore);
     final request = ++_providerHomeRequest;
     setState(() => _providerHomeLoading = true);
-    final feed = await _providerHomeCoordinator.load(providers);
+    final feed = await _providerHomeCoordinator.load(
+      providers,
+      followedArtists: library.followedArtists,
+    );
     if (!mounted ||
         request != _providerHomeRequest ||
         signature != _providerHomeStoreSignature(
@@ -3464,7 +3467,7 @@ List<MusicCatalogProvider> _providerHomeCatalogs(
 
 String _providerHomeSectionKey(ProviderHomeSection section) {
   return '${section.provider.id}:${section.kind.name}:'
-      '${section.discoveryKind?.name ?? ''}';
+      '${section.discoveryKind?.name ?? ''}:${section.sectionId}';
 }
 
 String _providerHomeStoreSignature(SelfHostedProviderStore store) {
@@ -3593,24 +3596,28 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final discoveryKind = section.discoveryKind;
-    final sectionLabel = discoveryKind == null
-        ? _providerHomeKindLabel(section.kind)
-        : _providerHomeDiscoveryLabel(discoveryKind);
+    final sectionLabel = section.titleOverride ??
+        (discoveryKind == null
+            ? _providerHomeKindLabel(section.kind)
+            : _providerHomeDiscoveryLabel(discoveryKind));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(
-            discoveryKind == null
-                ? _providerHomeKindIcon(section.kind)
-                : _providerHomeDiscoveryIcon(discoveryKind),
+            section.isFollowedArtistShelf
+                ? Icons.favorite_outline
+                : discoveryKind == null
+                    ? _providerHomeKindIcon(section.kind)
+                    : _providerHomeDiscoveryIcon(discoveryKind),
           ),
           title: Text('${section.provider.name} $sectionLabel'),
           subtitle: Text(
-            discoveryKind == null
-                ? 'Configured self-hosted catalog'
-                : _providerHomeDiscoverySubtitle(discoveryKind),
+            section.subtitleOverride ??
+                (discoveryKind == null
+                    ? 'Configured self-hosted catalog'
+                    : _providerHomeDiscoverySubtitle(discoveryKind)),
           ),
           trailing: Text('${section.collections.length}'),
         ),
@@ -3636,7 +3643,8 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
             child: TextButton.icon(
               key: ValueKey<String>(
                 'provider-home-load-more-${section.provider.id}-'
-                '${discoveryKind?.name ?? section.kind.name}',
+                '${discoveryKind?.name ?? section.kind.name}'
+                '${section.sectionId.isEmpty ? '' : '-${section.sectionId}'}',
               ),
               onPressed: loadingMore ? null : onLoadMore,
               icon: loadingMore

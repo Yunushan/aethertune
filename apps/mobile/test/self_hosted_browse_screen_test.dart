@@ -53,6 +53,18 @@ void main() {
     expect(find.text('Open Artist'), findsOneWidget);
     expect(provider.artworkCalls, isNotEmpty);
 
+    final followArtist = find.byKey(
+      const Key('catalog-follow-artist-artist-1'),
+    );
+    expect(followArtist, findsOneWidget);
+    await tester.tap(followArtist);
+    await tester.pumpAndSettle();
+    expect(library.isArtistFollowed('Open Artist'), isTrue);
+    expect(
+      tester.widget<IconButton>(followArtist).tooltip,
+      'Unfollow artist',
+    );
+
     await tester.enterText(
       find.byKey(const Key('catalog-filter-artist')),
       'ambient',

@@ -9,6 +9,10 @@ final class ProviderHomeSection {
     this.discoveryKind,
     this.nextOffset = 0,
     this.hasMore = false,
+    this.sectionId = '',
+    this.titleOverride,
+    this.subtitleOverride,
+    this.isFollowedArtistShelf = false,
   });
 
   final MusicCatalogProvider provider;
@@ -17,6 +21,10 @@ final class ProviderHomeSection {
   final MusicCatalogDiscoveryKind? discoveryKind;
   final int nextOffset;
   final bool hasMore;
+  final String sectionId;
+  final String? titleOverride;
+  final String? subtitleOverride;
+  final bool isFollowedArtistShelf;
 }
 
 final class ProviderHomeFeedError {
@@ -65,6 +73,7 @@ final class ProviderHomeFeedCoordinator {
     Iterable<MusicCatalogProvider> providers, {
     int limitPerSection = 6,
     int maxProviders = 8,
+    Iterable<String> followedArtists = const <String>[],
   }) async {
     if (limitPerSection <= 0 || maxProviders <= 0) {
       return const ProviderHomeFeed();
@@ -107,8 +116,15 @@ final class ProviderHomeFeedCoordinator {
       }
     }
 
+    final followedArtistSections = _followedArtistSections(
+      sections,
+      followedArtists,
+    );
     return ProviderHomeFeed(
-      sections: List<ProviderHomeSection>.unmodifiable(sections),
+      sections: List<ProviderHomeSection>.unmodifiable(<ProviderHomeSection>[
+        ...sections,
+        ...followedArtistSections,
+      ]),
       errors: List<ProviderHomeFeedError>.unmodifiable(errors),
     );
   }
@@ -150,6 +166,10 @@ final class ProviderHomeFeedCoordinator {
           discoveryKind: discoveryKind,
           nextOffset: canContinue ? page.nextOffset : section.nextOffset,
           hasMore: canContinue,
+          sectionId: section.sectionId,
+          titleOverride: section.titleOverride,
+          subtitleOverride: section.subtitleOverride,
+          isFollowedArtistShelf: section.isFollowedArtistShelf,
         ),
       );
     } on Object {
@@ -294,6 +314,49 @@ final class ProviderHomeFeedCoordinator {
       );
     }
   }
+}
+
+List<ProviderHomeSection> _followedArtistSections(
+  Iterable<ProviderHomeSection> sections,
+  Iterable<String> followedArtists,
+) {
+  final followedKeys = followedArtists
+      .map((artist) => artist.trim().toLowerCase())
+      .where((artist) => artist.isNotEmpty && artist != 'unknown artist')
+      .toSet();
+  if (followedKeys.isEmpty) {
+    return const <ProviderHomeSection>[];
+  }
+
+  final followedSections = <ProviderHomeSection>[];
+  for (final section in sections) {
+    if (section.discoveryKind != MusicCatalogDiscoveryKind.recentlyAdded ||
+        section.kind != MusicCatalogCollectionKind.album) {
+      continue;
+    }
+    final collections = section.collections
+        .where(
+          (collection) => followedKeys.contains(
+            collection.subtitle.trim().toLowerCase(),
+          ),
+        )
+        .toList(growable: false);
+    if (collections.isEmpty) {
+      continue;
+    }
+    followedSections.add(
+      ProviderHomeSection(
+        provider: section.provider,
+        kind: MusicCatalogCollectionKind.album,
+        collections: List<MusicCatalogCollection>.unmodifiable(collections),
+        sectionId: 'followed-artists',
+        titleOverride: 'from artists you follow',
+        subtitleOverride: 'Recently added albums by artists you follow',
+        isFollowedArtistShelf: true,
+      ),
+    );
+  }
+  return List<ProviderHomeSection>.unmodifiable(followedSections);
 }
 
 List<MusicCatalogCollection> _visibleCollections(

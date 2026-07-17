@@ -121,6 +121,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'surfaces recently added server albums by artists the user follows',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.reset);
+
+      final provider = _FakeProviderHomeDiscoveryCatalog();
+      final fixture = await _HomeFixture.create(provider: provider);
+      addTearDown(fixture.dispose);
+      await fixture.library.setArtistFollowed('Remote Artist', true);
+      await _pumpHome(tester, fixture);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('provider-home-refresh')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Test Server from artists you follow'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Recently added albums by artists you follow'),
+        findsOneWidget,
+      );
+      expect(find.text('Latest Server Album'), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('keeps desktop server discovery offline without requests', (
     tester,
   ) async {
