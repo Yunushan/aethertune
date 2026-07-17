@@ -114,6 +114,13 @@ jobs:
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
 
+      - name: Verify Windows SMTC toolchain
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          rustup --version
+          cargo --version
+
       - name: Generate platform wrappers
         run: bash ./scripts/bootstrap_client.sh
 

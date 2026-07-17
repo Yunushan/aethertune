@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
 import 'android_playback_widget_bridge.dart';
+import 'desktop_media_session.dart';
 import 'playback_audio_effects.dart';
 import 'playback_audio_engine.dart';
 
@@ -23,8 +24,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   SystemMediaPlaybackEngine(
     this._engine, {
     PlaybackWidgetBridge? playbackWidgetBridge,
+    DesktopMediaSession? desktopMediaSession,
   }) : _playbackWidgetBridge =
-           playbackWidgetBridge ?? const AndroidPlaybackWidgetBridge() {
+           playbackWidgetBridge ?? const AndroidPlaybackWidgetBridge(),
+       _desktopMediaSession = desktopMediaSession {
     _stateSubscription = _engine.stateChanges.listen((_) => _publishState());
     _processingSubscription = _engine.processingStateStream.listen((state) {
       _processingState = state;
@@ -40,11 +43,13 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       _runtimeDuration = duration;
       _publishQueueAndCurrentItem();
       _publishWidgetState();
+      _publishDesktopMediaSession();
     });
     _positionSubscription = _engine.positionStream.listen(
       _publishWidgetProgress,
     );
     _publishState();
+    unawaited(_startDesktopMediaSession());
   }
 
   static const _widgetProgressUpdateInterval = Duration(seconds: 1);
@@ -57,6 +62,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   final PlaybackAudioEngine _engine;
   final PlaybackWidgetBridge _playbackWidgetBridge;
+  final DesktopMediaSession? _desktopMediaSession;
   final List<Track> _tracks = <Track>[];
   final List<Track> _libraryBrowseTracks = <Track>[];
   MediaLibraryTrackSelectionHandler? _onLibraryTrackSelected;
@@ -69,6 +75,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   Duration? _runtimeDuration;
   Duration? _lastWidgetProgressPosition;
   ProcessingState _processingState = ProcessingState.idle;
+  bool _desktopMediaSessionStarted = false;
 
   @override
   Stream<Object?> get stateChanges => _engine.stateChanges;
@@ -507,6 +514,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     await _indexSubscription?.cancel();
     await _durationSubscription?.cancel();
     await _positionSubscription?.cancel();
+    await _desktopMediaSession?.dispose();
     await _engine.dispose();
   }
 
@@ -621,6 +629,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       ),
     );
     _publishWidgetState();
+    _publishDesktopMediaSession();
   }
 
   void _publishWidgetProgress(Duration position) {
@@ -656,6 +665,84 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         duration: duration,
       ),
     );
+    _publishDesktopMediaSession();
+  }
+
+  Future<void> _startDesktopMediaSession() async {
+    final session = _desktopMediaSession;
+    if (session == null) {
+      return;
+    }
+    try {
+      await session.start(_handleDesktopMediaSessionCommand);
+      _desktopMediaSessionStarted = true;
+      _publishDesktopMediaSession();
+    } on Object {
+      // Native system-media integration must not prevent local playback.
+    }
+  }
+
+  void _publishDesktopMediaSession() {
+    final session = _desktopMediaSession;
+    if (session == null || !_desktopMediaSessionStarted) {
+      return;
+    }
+    final index = _currentIndex;
+    final track = index != null && index >= 0 && index < _tracks.length
+        ? _tracks[index]
+        : null;
+    final knownDuration = _runtimeDuration ?? track?.duration;
+    unawaited(
+      session
+          .publish(
+            DesktopMediaSessionState(
+              track: track,
+              processingState: _processingState,
+              isPlaying: _engine.playing,
+              position: _engine.position,
+              duration: knownDuration != null && knownDuration > Duration.zero
+                  ? knownDuration
+                  : null,
+              canGoPrevious:
+                  _engine.hasPrevious || _engine.loopMode == LoopMode.all,
+              canGoNext: _engine.hasNext || _engine.loopMode == LoopMode.all,
+            ),
+          )
+          .catchError((Object _) {}),
+    );
+  }
+
+  Future<void> _handleDesktopMediaSessionCommand(
+    DesktopMediaSessionCommand command,
+  ) {
+    switch (command) {
+      case DesktopMediaSessionCommand.play:
+        return play();
+      case DesktopMediaSessionCommand.pause:
+        return pause();
+      case DesktopMediaSessionCommand.previous:
+        return skipToPrevious();
+      case DesktopMediaSessionCommand.next:
+        return skipToNext();
+      case DesktopMediaSessionCommand.seekBackward:
+        return seek(_offsetPosition(const Duration(seconds: -10)));
+      case DesktopMediaSessionCommand.seekForward:
+        return seek(_offsetPosition(const Duration(seconds: 30)));
+      case DesktopMediaSessionCommand.stop:
+        return stop();
+    }
+  }
+
+  Duration _offsetPosition(Duration offset) {
+    final target = _engine.position + offset;
+    final duration = _runtimeDuration;
+    if (target < Duration.zero) {
+      return Duration.zero;
+    }
+    if (duration != null && duration > Duration.zero && target > duration) {
+      return duration;
+    }
+    return target;
   }
 }
 

@@ -4,11 +4,19 @@ import 'package:flutter/foundation.dart';
 
 import 'playback_audio_engine.dart';
 import 'system_media_playback_engine.dart';
+import 'windows_system_media_session.dart';
 
 bool supportsSystemMediaSession(TargetPlatform platform) {
   return platform == TargetPlatform.android ||
       platform == TargetPlatform.iOS ||
-      platform == TargetPlatform.macOS;
+      platform == TargetPlatform.linux ||
+      platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows;
+}
+
+bool usesAudioServiceSystemMediaSession(TargetPlatform platform) {
+  return platform != TargetPlatform.windows &&
+      supportsSystemMediaSession(platform);
 }
 
 bool supportsAndroidAudioEffects(TargetPlatform platform) {
@@ -41,6 +49,13 @@ Future<PlaybackAudioEngine> createPlaybackAudioEngine() async {
   }
 
   late SystemMediaPlaybackEngine systemEngine;
+  if (defaultTargetPlatform == TargetPlatform.windows) {
+    systemEngine = SystemMediaPlaybackEngine(
+      engine,
+      desktopMediaSession: WindowsSystemMediaSession(),
+    );
+    return systemEngine;
+  }
   await AudioService.init(
     builder: () {
       systemEngine = SystemMediaPlaybackEngine(engine);

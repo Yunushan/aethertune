@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/android_playback_widget_bridge.dart';
+import 'package:aethertune/src/player/desktop_media_session.dart';
 import 'package:aethertune/src/player/playback_audio_effects.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/playback_audio_engine_factory.dart';
@@ -249,6 +250,43 @@ void main() {
     expect(await engine.loadEqualizerBands(), delegate.bands);
   });
 
+  test('publishes and routes a desktop system media session', () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final desktopSession = _FakeDesktopMediaSession();
+    final engine = SystemMediaPlaybackEngine(
+      delegate,
+      desktopMediaSession: desktopSession,
+    );
+    addTearDown(engine.dispose);
+    await Future<void>.delayed(Duration.zero);
+    await engine.setQueue(
+      <Track>[
+        _track('one', duration: const Duration(minutes: 3)),
+        _track('two'),
+      ],
+      initialIndex: 0,
+    );
+    delegate
+      ..emitProcessingState(ProcessingState.ready)
+      ..emitPosition(const Duration(seconds: 12))
+      ..emitPlaying(true);
+    await Future<void>.delayed(Duration.zero);
+
+    final state = desktopSession.states.last;
+    expect(state.track?.id, 'one');
+    expect(state.isPlaying, isTrue);
+    expect(state.position, const Duration(seconds: 12));
+    expect(state.duration, const Duration(minutes: 3));
+    expect(state.canGoNext, isTrue);
+
+    await desktopSession.send(DesktopMediaSessionCommand.seekForward);
+    expect(delegate.positionValue, const Duration(seconds: 42));
+    await desktopSession.send(DesktopMediaSessionCommand.next);
+    expect(delegate.currentIndex, 1);
+    await desktopSession.send(DesktopMediaSessionCommand.stop);
+    expect(delegate.playingValue, isFalse);
+  });
+
   test('browses the current queue and library through Android Auto', () async {
     final delegate = _FakePlaybackAudioEngine();
     final engine = SystemMediaPlaybackEngine(delegate);
@@ -350,8 +388,10 @@ void main() {
     expect(supportsSystemMediaSession(TargetPlatform.android), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.iOS), isTrue);
     expect(supportsSystemMediaSession(TargetPlatform.macOS), isTrue);
-    expect(supportsSystemMediaSession(TargetPlatform.linux), isFalse);
-    expect(supportsSystemMediaSession(TargetPlatform.windows), isFalse);
+    expect(supportsSystemMediaSession(TargetPlatform.linux), isTrue);
+    expect(supportsSystemMediaSession(TargetPlatform.windows), isTrue);
+    expect(usesAudioServiceSystemMediaSession(TargetPlatform.linux), isTrue);
+    expect(usesAudioServiceSystemMediaSession(TargetPlatform.windows), isFalse);
     expect(supportsAndroidAudioEffects(TargetPlatform.android), isTrue);
     expect(supportsAndroidAudioEffects(TargetPlatform.iOS), isFalse);
     expect(supportsAndroidAudioEffects(TargetPlatform.windows), isFalse);
@@ -635,6 +675,33 @@ class _FakeSkipSilencePlaybackEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> setSkipSilenceEnabled(bool enabled) async {
     skipSilenceEnabledValue = enabled;
+  }
+}
+
+class _FakeDesktopMediaSession implements DesktopMediaSession {
+  final List<DesktopMediaSessionState> states = <DesktopMediaSessionState>[];
+  Future<void> Function(DesktopMediaSessionCommand command)? _onCommand;
+  bool disposed = false;
+
+  @override
+  Future<void> start(
+    Future<void> Function(DesktopMediaSessionCommand command) onCommand,
+  ) async {
+    _onCommand = onCommand;
+  }
+
+  @override
+  Future<void> publish(DesktopMediaSessionState state) async {
+    states.add(state);
+  }
+
+  Future<void> send(DesktopMediaSessionCommand command) async {
+    await _onCommand!(command);
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
   }
 }
 
