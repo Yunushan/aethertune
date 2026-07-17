@@ -1,5 +1,6 @@
+import 'package:just_audio/just_audio.dart';
+
 import '../domain/track.dart';
-import 'playback_audio_engine.dart';
 
 /// Commands a desktop operating-system media session can send to playback.
 enum DesktopMediaSessionCommand {

@@ -1,10 +1,10 @@
 import 'dart:async';
 
+import 'package:just_audio/just_audio.dart';
 import 'package:smtc_windows/smtc_windows.dart';
 
 import '../domain/track.dart';
 import 'desktop_media_session.dart';
-import 'playback_audio_engine.dart';
 
 /// Bridges AetherTune playback to Windows System Media Transport Controls.
 class WindowsSystemMediaSession implements DesktopMediaSession {
