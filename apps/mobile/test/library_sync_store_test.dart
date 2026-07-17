@@ -495,6 +495,57 @@ void main() {
     expect(sync.lastKnownRevision, 5);
   });
 
+  test('merge and push keeps saved history views from both devices', () async {
+    final remoteLibrary = LibraryStore(
+      clock: () => DateTime.utc(2026, 7, 12, 10),
+    );
+    await remoteLibrary.load();
+    await remoteLibrary.createSavedHistoryView(
+      name: 'Desktop recent albums',
+      query: 'album',
+      range: ListeningHistoryRange.thirtyDays,
+    );
+    final remoteSnapshot = Map<String, Object?>.from(
+      jsonDecode(remoteLibrary.exportSyncSnapshotJson()) as Map,
+    );
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final library = LibraryStore(
+      clock: () => DateTime.utc(2026, 7, 12, 11),
+    );
+    await library.load();
+    await library.createSavedHistoryView(
+      name: 'Phone favorites',
+      query: 'favorite',
+      range: ListeningHistoryRange.sevenDays,
+    );
+    final gateway = _FakeSyncGateway(
+      remote: LibrarySyncRemoteSnapshot(
+        revision: 4,
+        updatedAt: DateTime.utc(2026, 7, 12, 10),
+        updatedByDevice: 'Desktop',
+        checksum: 'remote-checksum',
+        snapshot: remoteSnapshot,
+      ),
+    );
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+
+    await sync.mergeAndPush(library);
+
+    expect(
+      library.savedHistoryViews.map((view) => view.name),
+      containsAll(<String>['Desktop recent albums', 'Phone favorites']),
+    );
+    final pushedViews = gateway.pushedSnapshots.single['savedHistoryViews']
+        as List<Object?>;
+    expect(pushedViews, hasLength(2));
+  });
+
   test('merge and push restores the local library when the server rejects it',
       () async {
     final remoteSnapshot = _emptySnapshot()
