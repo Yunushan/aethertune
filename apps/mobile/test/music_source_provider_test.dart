@@ -1,12 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aethertune/src/data/custom_catalog_provider.dart';
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/jellyfin_provider.dart';
 import 'package:aethertune/src/data/local_library_provider.dart';
 import 'package:aethertune/src/data/podcast_rss_provider.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
+import 'package:aethertune/src/data/spotify_metadata_provider.dart';
 import 'package:aethertune/src/data/subsonic_provider.dart';
+import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
+import 'package:aethertune/src/domain/custom_catalog_definition.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
 
@@ -59,6 +63,14 @@ void main() {
       InternetArchiveProvider(
         baseUri: Uri.parse('https://archive.example.test'),
       ),
+      CustomCatalogProvider(
+        CustomCatalogDefinition.create(
+          id: 'contract-catalog',
+          name: 'Contract catalog',
+          catalogUrl: 'https://catalog.example.test/music.json',
+          mediaDomains: const <String>['media.example.test'],
+        ),
+      ),
       JellyfinProvider(
         baseUri: Uri.parse('https://jellyfin.example.test'),
         userId: 'user-1',
@@ -71,6 +83,7 @@ void main() {
       RadioBrowserProvider(
         baseUri: Uri.parse('https://radio.example.test'),
       ),
+      SpotifyMetadataProvider(accessTokenReader: () async => 'access-token'),
       SubsonicProvider(
         baseUri: Uri.parse('https://music.example.test'),
         username: 'user',
@@ -78,6 +91,7 @@ void main() {
         requestLoader: (_) async =>
             '{"subsonic-response":{"status":"ok","searchResult3":{}}}',
       ),
+      YouTubeDataMetadataProvider(apiKey: 'google-cloud-key'),
     ];
     final ids = <String>{};
 
@@ -122,6 +136,44 @@ void main() {
       if (provider.capabilities.contains(MusicSourceCapability.downloads)) {
         expect(disclosure.supportsDownloads, isTrue);
       }
+      if (provider.capabilities.contains(
+        MusicSourceCapability.searchSuggestions,
+      )) {
+        expect(provider, isA<MusicSourceSearchSuggestionProvider>());
+      }
+    }
+  });
+
+  test('official metadata providers remain audio-free and cache-free',
+      () async {
+    final providers = <MusicSourceProvider>[
+      SpotifyMetadataProvider(accessTokenReader: () async => 'access-token'),
+      YouTubeDataMetadataProvider(apiKey: 'google-cloud-key'),
+    ];
+
+    for (final provider in providers) {
+      final track = Track(
+        id: '${provider.id}-track',
+        title: 'Metadata result',
+        sourceId: provider.id,
+      );
+      expect(
+        provider.capabilities,
+        isNot(contains(MusicSourceCapability.directPlayback)),
+      );
+      expect(
+        provider.capabilities,
+        isNot(contains(MusicSourceCapability.offlineCache)),
+      );
+      expect(
+        provider.capabilities,
+        isNot(contains(MusicSourceCapability.downloads)),
+      );
+      expect(await provider.resolveStream(track), isNull);
+
+      final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+      expect(policy.canCache(track), isFalse);
+      expect(policy.canDownload(track), isFalse);
     }
   });
 
