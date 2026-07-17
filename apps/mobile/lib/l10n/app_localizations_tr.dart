@@ -78,6 +78,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get openSources => 'Kaynakları aç';
 
   @override
+  String get selfHostedLibraryTitle => 'Müzik sunucunuzu bağlayın';
+
+  @override
+  String get selfHostedLibraryDescription =>
+      'Jellyfin veya Navidrome / Subsonic kitaplığınızı güvenli ve test edilmiş bir bağlantıyla ekleyin.';
+
+  @override
+  String get connectServer => 'Sunucuyu bağla';
+
+  @override
   String get privacyFirstTitle => 'Önce gizlilik';
 
   @override

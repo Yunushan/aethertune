@@ -232,6 +232,24 @@ abstract class AppLocalizations {
   /// **'Open Sources'**
   String get openSources;
 
+  /// No description provided for @selfHostedLibraryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect your music server'**
+  String get selfHostedLibraryTitle;
+
+  /// No description provided for @selfHostedLibraryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a Jellyfin or Navidrome / Subsonic library using a secure, tested connection.'**
+  String get selfHostedLibraryDescription;
+
+  /// No description provided for @connectServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect server'**
+  String get connectServer;
+
   /// No description provided for @privacyFirstTitle.
   ///
   /// In en, this message translates to:

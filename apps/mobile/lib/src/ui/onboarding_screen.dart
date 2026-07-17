@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:aethertune/l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
+
+import '../data/self_hosted_provider_store.dart';
+import '../domain/self_hosted_provider_account.dart';
+import 'widgets/self_hosted_account_editor.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.onFinished});
@@ -32,6 +37,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  Future<void> _connectSelfHostedLibrary() async {
+    if (_submitting) {
+      return;
+    }
+    final kind = await showModalBottomSheet<SelfHostedProviderKind>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            for (final candidate in SelfHostedProviderKind.values)
+              ListTile(
+                leading: Icon(
+                  candidate == SelfHostedProviderKind.jellyfin
+                      ? Icons.video_library_outlined
+                      : Icons.cloud_queue_outlined,
+                ),
+                title: Text(candidate.label),
+                onTap: () => Navigator.of(sheetContext).pop(candidate),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || kind == null) {
+      return;
+    }
+
+    final saved = await showSelfHostedAccountEditor(
+      context,
+      kind: kind,
+      onSave: (account, secret) =>
+          context.read<SelfHostedProviderStore>().testAndSave(account, secret),
+    );
+    if (!mounted || saved != true) {
+      return;
+    }
+    await _finish(4);
   }
 
   @override
@@ -79,6 +125,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   actionLabel: localizations.openSources,
                   enabled: !_submitting,
                   onPressed: () => _finish(4),
+                ),
+                const SizedBox(height: 12),
+                _SetupChoice(
+                  icon: Icons.dns_outlined,
+                  title: localizations.selfHostedLibraryTitle,
+                  description: localizations.selfHostedLibraryDescription,
+                  actionLabel: localizations.connectServer,
+                  enabled: !_submitting,
+                  onPressed: _connectSelfHostedLibrary,
                 ),
                 const SizedBox(height: 12),
                 _SetupChoice(

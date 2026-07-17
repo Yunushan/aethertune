@@ -78,6 +78,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get openSources => 'فتح المصادر';
 
   @override
+  String get selfHostedLibraryTitle => 'ربط خادم الموسيقى الخاص بك';
+
+  @override
+  String get selfHostedLibraryDescription =>
+      'أضف مكتبة Jellyfin أو Navidrome / Subsonic عبر اتصال آمن ومختبر.';
+
+  @override
+  String get connectServer => 'ربط الخادم';
+
+  @override
   String get privacyFirstTitle => 'الخصوصية أولاً';
 
   @override

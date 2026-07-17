@@ -176,6 +176,7 @@
 - [x] Jellyfin test-before-replace API-key rotation with rollback and queue/cache invalidation
 - [x] Navidrome/Subsonic provider foundation
 - [x] Navidrome/Subsonic settings UI and secure credential storage
+- [x] First-run guided self-hosted connection setup
 - [x] Navidrome/Subsonic artist, album, track, and playlist browse pages
 - [x] Navidrome/Subsonic salted token authentication
 - [x] Navidrome/Subsonic credential-safe in-app authenticated artwork

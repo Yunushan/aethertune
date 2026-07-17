@@ -78,6 +78,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openSources => 'Open Sources';
 
   @override
+  String get selfHostedLibraryTitle => 'Connect your music server';
+
+  @override
+  String get selfHostedLibraryDescription =>
+      'Add a Jellyfin or Navidrome / Subsonic library using a secure, tested connection.';
+
+  @override
+  String get connectServer => 'Connect server';
+
+  @override
   String get privacyFirstTitle => 'Privacy first';
 
   @override
