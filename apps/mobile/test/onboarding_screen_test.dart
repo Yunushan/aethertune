@@ -85,7 +85,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Connect server'));
+    final connectServer = find.text('Connect server');
+    await tester.scrollUntilVisible(connectServer, 300);
+    await tester.tap(connectServer);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Jellyfin'));
     await tester.pumpAndSettle();

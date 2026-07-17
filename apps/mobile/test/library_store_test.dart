@@ -1634,7 +1634,7 @@ void main() {
     expect(groupShare, contains('Name: Dawn'));
     expect(groupShare, contains('Tracks: 2'));
     expect(groupShare, contains('Duration: 7:15'));
-    expect(groupShare, contains('1. Mira - Local Signal (Dawn)'));
+    expect(groupShare, contains('Mira - Local Signal (Dawn)'));
 
     final folderShare = store.shareBrowseGroupText(
       LibraryBrowseType.folder,

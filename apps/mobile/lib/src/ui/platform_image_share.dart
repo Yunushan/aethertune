@@ -1,7 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
-
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -14,7 +11,7 @@ final class PlatformImageShareRequest {
     required String fileName,
     this.title = 'AetherTune',
     this.subject = 'AetherTune image',
-    this.text,
+    String? text,
     this.sharePositionOrigin,
   }) : bytes = _requiredBytes(bytes),
        fileName = _requiredPngFileName(fileName),

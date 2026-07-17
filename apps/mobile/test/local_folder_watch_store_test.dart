@@ -30,9 +30,10 @@ void main() {
       hash: 'old-hash',
       artworkUri: Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
       addedAt: DateTime.utc(2026, 1, 1),
-      chapters: const <TrackChapter>[
+      chapters: List<TrackChapter>.unmodifiable(<TrackChapter>[
+        // ignore: prefer_const_constructors
         TrackChapter(start: Duration(seconds: 30), title: 'Keep chapter'),
-      ],
+      ]),
     );
     await store.addTracks(<Track>[original]);
     await store.toggleFavorite(original.id);

@@ -233,7 +233,11 @@ class PlayerController extends ChangeNotifier {
   /// Browsing is intentionally delegated back to [playTrack] so a selection
   /// obeys the same offline policy, provider resolution, queue persistence,
   /// and output settings as a selection made inside the app.
-  void setMediaLibraryBrowseTracks(Iterable<Track> tracks) {
+  void setMediaLibraryBrowseTracks(
+    Iterable<Track> tracks, {
+    Iterable<MediaLibraryBrowsePlaylist> playlists =
+        const <MediaLibraryBrowsePlaylist>[],
+  }) {
     final engine = _audio;
     if (engine is! MediaLibraryBrowsePlaybackAudioEngine) {
       return;
@@ -242,6 +246,9 @@ class PlayerController extends ChangeNotifier {
     engine.setMediaLibraryBrowseTracks(
       browseTracks,
       onTrackSelected: (track) => playTrack(track, queue: browseTracks),
+      playlists: playlists,
+      onPlaylistTrackSelected: (track, queue, queueIndex) =>
+          playTrack(track, queue: queue, queueIndex: queueIndex),
     );
   }
 
@@ -599,6 +606,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> playTrack(
     Track track, {
     List<Track>? queue,
+    int? queueIndex,
     Duration? initialPosition,
   }) async {
     _failedTrackIds.clear();
@@ -609,7 +617,11 @@ class PlayerController extends ChangeNotifier {
       );
     }
 
-    final preparedTrack = await _prepareQueueForPlayback(track, queue: queue);
+    final preparedTrack = await _prepareQueueForPlayback(
+      track,
+      queue: queue,
+      queueIndex: queueIndex,
+    );
     requireOfflineModePlaybackAllowed(
       preparedTrack,
       offlineModeEnabled: _offlineModeEnabled,
@@ -625,6 +637,7 @@ class PlayerController extends ChangeNotifier {
     await _loadQueue(
       preparedTrack,
       initialPosition: initialPosition ?? Duration.zero,
+      queueIndex: queueIndex,
     );
     await _applyOutputVolume();
     unawaited(_audio.play());
@@ -1580,11 +1593,21 @@ class PlayerController extends ChangeNotifier {
   Future<void> _loadQueue(
     Track track, {
     Duration initialPosition = Duration.zero,
+    int? queueIndex,
     bool forceReload = false,
   }) async {
     final playbackQueue = _playbackQueueForCurrentMode();
-    final index = playbackQueue.indexWhere((item) => item.id == track.id);
-    if (index == -1) {
+    final firstMatchingIndex = playbackQueue.indexWhere(
+      (item) => item.id == track.id,
+    );
+    final index = queueIndex == null
+        ? firstMatchingIndex
+        : _playbackQueueIndexForSelectedQueueItem(
+            track,
+            queueIndex,
+            playbackQueue,
+          );
+    if (index < 0 || index >= playbackQueue.length) {
       throw StateError('Track is not playable in the current mode: ${track.title}');
     }
 
@@ -1619,11 +1642,23 @@ class PlayerController extends ChangeNotifier {
   Future<Track> _prepareQueueForPlayback(
     Track track, {
     List<Track>? queue,
+    int? queueIndex,
   }) async {
     final candidates = queue == null
         ? List<Track>.from(_queue)
         : List<Track>.from(queue);
-    final existingIndex = candidates.indexWhere((item) => item.id == track.id);
+    final existingIndex = queueIndex ??
+        candidates.indexWhere((item) => item.id == track.id);
+    if (queueIndex != null &&
+        (queueIndex < 0 ||
+            queueIndex >= candidates.length ||
+            candidates[queueIndex].id != track.id)) {
+      throw RangeError.value(
+        queueIndex,
+        'queueIndex',
+        'Selected playlist item is no longer available.',
+      );
+    }
     if (existingIndex == -1) {
       candidates.add(track);
     } else {
@@ -1639,14 +1674,43 @@ class PlayerController extends ChangeNotifier {
                   item.isPlayable ? Future<Track>.value(item) : resolver(item),
             ),
           );
-    final preparedTrack = prepared.firstWhere(
-      (item) => item.id == track.id,
-      orElse: () => track,
-    );
+    final preparedTrack = queueIndex == null
+        ? prepared.firstWhere(
+            (item) => item.id == track.id,
+            orElse: () => track,
+          )
+        : prepared[queueIndex];
     _queue
       ..clear()
       ..addAll(prepared);
     return preparedTrack;
+  }
+
+  int _playbackQueueIndexForSelectedQueueItem(
+    Track track,
+    int queueIndex,
+    List<Track> playbackQueue,
+  ) {
+    if (queueIndex < 0 || queueIndex >= _queue.length ||
+        _queue[queueIndex].id != track.id) {
+      return -1;
+    }
+    var occurrence = 0;
+    for (var index = 0; index <= queueIndex; index += 1) {
+      if (_queue[index].id == track.id) {
+        occurrence += 1;
+      }
+    }
+    var matchingOccurrence = 0;
+    for (var index = 0; index < playbackQueue.length; index += 1) {
+      if (playbackQueue[index].id == track.id) {
+        matchingOccurrence += 1;
+        if (matchingOccurrence == occurrence) {
+          return index;
+        }
+      }
+    }
+    return -1;
   }
 
   List<Track> _playbackQueueForCurrentMode() {

@@ -160,6 +160,9 @@ Future<_OggWritePlan> _buildWritePlan(
       artist: artist,
       album: album,
       genre: genre,
+      albumArtist: albumArtist,
+      year: year,
+      trackNumber: trackNumber,
     ),
   ]);
   final lacing = _packetLacing(updatedPacket.length);
@@ -264,6 +267,9 @@ Uint8List _updatedVorbisComments({
   required String artist,
   required String album,
   required String genre,
+  required String? albumArtist,
+  required int? year,
+  required int? trackNumber,
 }) {
   final comments = <String>[
     ...retainedComments,

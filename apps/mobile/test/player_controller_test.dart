@@ -42,6 +42,36 @@ void main() {
     expect(engine.playingValue, isTrue);
   });
 
+  test('routes system-media playlist selections through their playlist queue',
+      () async {
+    final engine = _FakeMediaLibraryBrowseEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final tracks = <Track>[
+      Track(id: 'one', title: 'One', localPath: '/music/one.mp3'),
+      Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
+    ];
+    final playlist = MediaLibraryBrowsePlaylist(
+      id: 'favorites',
+      title: 'Favorites',
+      tracks: <Track>[tracks.last, tracks.first, tracks.last],
+    );
+
+    controller.setMediaLibraryBrowseTracks(
+      tracks,
+      playlists: <MediaLibraryBrowsePlaylist>[playlist],
+    );
+    await engine.selectPlaylistTrack(playlist, playlist.tracks.last);
+
+    expect(controller.current?.id, 'two');
+    expect(
+      controller.queue.map((track) => track.id),
+      <String>['two', 'one', 'two'],
+    );
+    expect(engine.initialIndex, 2);
+    expect(engine.playingValue, isTrue);
+  });
+
   test('loops from B back to A and clears markers on a track change',
       () async {
     final engine = _FakePlaybackAudioEngine();
@@ -714,8 +744,8 @@ void main() {
     final restored = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(restored.dispose);
     await restored.loadPersistedQueue();
-    expect(restored.queue, <Track>[first]);
-    expect(restored.current, first);
+    expect(restored.queue.map((track) => track.id), <String>[first.id]);
+    expect(restored.current?.id, first.id);
   });
 
   test('clears the active queue, stops playback, and persists an empty queue',
@@ -1157,6 +1187,7 @@ Future<void> _flushAsyncWork() async {
 
 Track _track(
   String id, {
+  String? title,
   String? localPath,
   String? streamUrl,
   double? replayGainTrackDb,
@@ -1164,7 +1195,7 @@ Track _track(
 }) {
   return Track(
     id: id,
-    title: 'Track $id',
+    title: title ?? 'Track $id',
     localPath: localPath ?? '/music/$id.mp3',
     streamUrl: streamUrl,
     replayGainTrackDb: replayGainTrackDb,
@@ -1320,6 +1351,7 @@ class _FakePlaybackAudioEngine
   Future<void> seek(Duration position, {int? index}) async {
     seekPositions.add(position);
     positionValue = position;
+    await Future<void>.delayed(Duration.zero);
     _positionController.add(positionValue);
     if (index != null) {
       currentIndex = index;
@@ -1509,18 +1541,37 @@ class _FakeSkipSilenceEngine extends _FakePlaybackAudioEngine
 class _FakeMediaLibraryBrowseEngine extends _FakePlaybackAudioEngine
     implements MediaLibraryBrowsePlaybackAudioEngine {
   List<Track> browseTracks = <Track>[];
+  List<MediaLibraryBrowsePlaylist> browsePlaylists =
+      <MediaLibraryBrowsePlaylist>[];
   MediaLibraryTrackSelectionHandler? _onTrackSelected;
+  MediaLibraryPlaylistTrackSelectionHandler? _onPlaylistTrackSelected;
 
   @override
   void setMediaLibraryBrowseTracks(
     Iterable<Track> tracks, {
     required MediaLibraryTrackSelectionHandler onTrackSelected,
+    Iterable<MediaLibraryBrowsePlaylist> playlists =
+        const <MediaLibraryBrowsePlaylist>[],
+    MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
   }) {
     browseTracks = List<Track>.from(tracks);
+    browsePlaylists = List<MediaLibraryBrowsePlaylist>.from(playlists);
     _onTrackSelected = onTrackSelected;
+    _onPlaylistTrackSelected = onPlaylistTrackSelected;
   }
 
   Future<void> selectBrowseTrack(Track track) async {
     await _onTrackSelected!(track);
+  }
+
+  Future<void> selectPlaylistTrack(
+    MediaLibraryBrowsePlaylist playlist,
+    Track track,
+  ) async {
+    await _onPlaylistTrackSelected!(
+      track,
+      playlist.tracks,
+      playlist.tracks.lastIndexOf(track),
+    );
   }
 }

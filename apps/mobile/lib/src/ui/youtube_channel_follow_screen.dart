@@ -117,7 +117,7 @@ final class _YouTubeChannelFollowScreenState
             const SizedBox(height: 4),
             for (final channel in follows.follows)
               _ChannelTile(
-                channel: channel,
+                channel: _asChannel(channel),
                 followed: true,
                 onOpen: () => _openChannelVideos(context, _asChannel(channel)),
                 onFollowChanged: (followed) =>

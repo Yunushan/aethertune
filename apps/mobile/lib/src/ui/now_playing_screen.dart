@@ -246,6 +246,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     Track track,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final sharePositionOrigin = platformSharePositionOrigin(context);
     try {
       final status = await const SharePlusImageShareService().share(
         PlatformImageShareRequest(
@@ -254,7 +255,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           title: '${track.title} - AetherTune',
           subject: 'AetherTune track share card',
           text: '${track.title} by ${track.artist}',
-          sharePositionOrigin: platformSharePositionOrigin(context),
+          sharePositionOrigin: sharePositionOrigin,
         ),
       );
       if (!context.mounted || status == PlatformImageShareStatus.dismissed) {
@@ -618,7 +619,8 @@ class _NowPlayingControls extends StatelessWidget {
                           return;
                         }
                         player.clearABRepeat();
-                      },
+                      }
+                    : null,
                 icon: Icon(
                   player.isABRepeatActive ? Icons.repeat_one : Icons.repeat,
                 ),

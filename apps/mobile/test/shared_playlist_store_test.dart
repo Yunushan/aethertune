@@ -22,7 +22,10 @@ void main() {
     final hosted = await store.host(library, playlist);
     expect(hosted.isOwner, isTrue);
     expect(hosted.revision, 1);
-    expect(store.bindingForLocalPlaylist(playlist.id)?.remoteId, gateway.id);
+    expect(
+      store.bindingForLocalPlaylist(playlist.id)?.remoteId,
+      _MemorySharedPlaylistGateway.id,
+    );
 
     await library.replacePlaylistTracks(
       playlist.id,

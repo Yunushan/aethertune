@@ -10,6 +10,25 @@ import 'playback_audio_effects.dart';
 typedef CrossfadeTrackVolumeResolver = double Function(Track track);
 typedef MediaLibraryTrackSelectionHandler = Future<void> Function(Track track);
 
+/// Receives a playlist track and its complete, app-owned playback queue.
+typedef MediaLibraryPlaylistTrackSelectionHandler =
+    Future<void> Function(Track track, List<Track> queue, int queueIndex);
+
+/// A playlist that can be exposed to a system-media library browser.
+class MediaLibraryBrowsePlaylist {
+  MediaLibraryBrowsePlaylist({
+    required this.id,
+    required this.title,
+    required Iterable<Track> tracks,
+    this.artworkUri,
+  }) : tracks = List<Track>.unmodifiable(tracks);
+
+  final String id;
+  final String title;
+  final List<Track> tracks;
+  final Uri? artworkUri;
+}
+
 abstract interface class PlaybackAudioEngine {
   Stream<Object?> get stateChanges;
   Stream<Duration?> get durationStream;
@@ -60,6 +79,9 @@ abstract interface class MediaLibraryBrowsePlaybackAudioEngine
   void setMediaLibraryBrowseTracks(
     Iterable<Track> tracks, {
     required MediaLibraryTrackSelectionHandler onTrackSelected,
+    Iterable<MediaLibraryBrowsePlaylist> playlists =
+        const <MediaLibraryBrowsePlaylist>[],
+    MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
   });
 }
 

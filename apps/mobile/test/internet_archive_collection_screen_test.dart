@@ -17,7 +17,7 @@ void main() {
     final provider = InternetArchiveProvider(
       limit: 1,
       searchLoader: (uri) async {
-        expect(uri.queryParameters['q'], contains('collection:opensource_audio'));
+        expect(uri.queryParameters['q'], contains('collection:(opensource_audio)'));
         final page = int.parse(uri.queryParameters['page']!);
         requestedPages.add(page);
         return page == 1 ? _searchPage('first') : _searchPage('second');
@@ -36,14 +36,16 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
 
     expect(find.text('Collection first'), findsOneWidget);
     expect(find.text('Collection second'), findsNothing);
     expect(find.text('Load more archive items (1 remaining)'), findsOneWidget);
 
     await tester.tap(find.text('Load more archive items (1 remaining)'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
 
     expect(find.text('Collection first'), findsOneWidget);
     expect(find.text('Collection second'), findsOneWidget);
@@ -57,7 +59,7 @@ String _searchPage(String identifier) {
 {
   "response": {
     "numFound": 2,
-    "docs": [{"identifier": "$identifier"}]
+    "docs": [{"identifier": "$identifier", "title": "Collection $identifier"}]
   }
 }
 ''';

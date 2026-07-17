@@ -358,6 +358,59 @@ void main() {
     expect(delegate.playingValue, isFalse);
   });
 
+  test('browses Android Auto playlists and selects their ordered queue',
+      () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+    final tracks = <Track>[_track('one'), _track('two')];
+    Track? selectedTrack;
+    List<Track>? selectedQueue;
+    int? selectedQueueIndex;
+    engine.setMediaLibraryBrowseTracks(
+      tracks,
+      onTrackSelected: (_) async {},
+      playlists: <MediaLibraryBrowsePlaylist>[
+        MediaLibraryBrowsePlaylist(
+          id: 'favorites',
+          title: 'Favorites',
+          artworkUri: Uri.parse('https://example.test/favorites.jpg'),
+          tracks: <Track>[tracks.last, tracks.first, tracks.last],
+        ),
+      ],
+      onPlaylistTrackSelected: (track, queue, queueIndex) async {
+        selectedTrack = track;
+        selectedQueue = queue;
+        selectedQueueIndex = queueIndex;
+      },
+    );
+
+    final libraryFolder = (await engine.getChildren(
+      AudioService.browsableRootId,
+    )).singleWhere((item) => item.title == 'Library');
+    final libraryChildren = await engine.getChildren(libraryFolder.id);
+    final playlistsFolder = libraryChildren.singleWhere(
+      (item) => item.title == 'Playlists',
+    );
+    final playlistFolder = (await engine.getChildren(playlistsFolder.id)).single;
+    expect(playlistFolder.title, 'Favorites');
+    expect(playlistFolder.displaySubtitle, '3 tracks');
+    expect(playlistFolder.artUri, Uri.parse('https://example.test/favorites.jpg'));
+
+    final playlistTracks = await engine.getChildren(playlistFolder.id);
+    expect(
+      playlistTracks.map((item) => item.title),
+      <String>['Track two', 'Track one', 'Track two'],
+    );
+    expect(playlistTracks.map((item) => item.id).toSet(), hasLength(3));
+
+    await engine.playFromMediaId(playlistTracks.last.id);
+    expect(selectedTrack, same(tracks.last));
+    expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
+    expect(selectedQueueIndex, 2);
+    expect(delegate.playingValue, isFalse);
+  });
+
   test('forwards an opt-in visualizer through the system media wrapper',
       () async {
     final delegate = _FakeVisualizationPlaybackEngine();

@@ -153,7 +153,7 @@ final class _YouTubeFollowedChannelFeedScreenState
             videos: page.videos,
           );
         } on Object {
-          return _ChannelFeedResponse.failure();
+          return const _ChannelFeedResponse.failure();
         }
       }),
     );

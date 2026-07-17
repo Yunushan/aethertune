@@ -1386,7 +1386,6 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
-    final sharedPlaylists = context.watch<SharedPlaylistStore>();
     final playlist = library.playlistById(binding.localPlaylistId);
     final title = playlist?.name ?? 'Missing local playlist';
     final subtitle = '${binding.role.name} · revision ${binding.revision}';

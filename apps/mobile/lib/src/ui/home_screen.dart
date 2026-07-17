@@ -4688,7 +4688,7 @@ class _LibraryTab extends StatelessWidget {
                 child: Column(
                   children: <Widget>[
                     ListTile(
-                      leading: const Icon(Icons.add_bookmark_outlined),
+                      leading: const Icon(Icons.bookmark_add_outlined),
                       title: const Text('Save current library view'),
                       subtitle: Text(
                         _savedLibraryViewDescription(
@@ -4857,29 +4857,31 @@ Future<String?> _showSavedLibraryViewNameDialog(
   final controller = TextEditingController(text: initialName);
   final name = await showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(labelText: 'Name'),
-        onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
+    builder: (dialogContext) => _TextEditingControllerOwner(
+      controllers: <TextEditingController>[controller],
+      child: AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () =>
-              Navigator.of(dialogContext).pop(controller.text.trim()),
-          child: const Text('Save'),
-        ),
-      ],
     ),
   );
-  controller.dispose();
   if (name == null || name.isEmpty) {
     return null;
   }
@@ -11228,6 +11230,7 @@ Future<void> _shareCollectionShareCard(
   required String fileToken,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  final sharePositionOrigin = platformSharePositionOrigin(context);
   final fileName = 'aethertune-${_shareCardFileToken(kind)}-'
       '${_shareCardFileToken(fileToken)}.png';
   try {
@@ -11237,7 +11240,7 @@ Future<void> _shareCollectionShareCard(
         fileName: fileName,
         title: '${kind[0].toUpperCase()}${kind.substring(1)} - AetherTune',
         subject: 'AetherTune $kind share card',
-        sharePositionOrigin: platformSharePositionOrigin(context),
+        sharePositionOrigin: sharePositionOrigin,
       ),
     );
     if (!context.mounted || status == PlatformImageShareStatus.dismissed) {
@@ -11547,6 +11550,7 @@ Future<void> _shareLyricsShareCard(
   Track track,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
+  final sharePositionOrigin = platformSharePositionOrigin(context);
   try {
     final status = await const SharePlusImageShareService().share(
       PlatformImageShareRequest(
@@ -11555,7 +11559,7 @@ Future<void> _shareLyricsShareCard(
         title: '${track.title} lyrics - AetherTune',
         subject: 'AetherTune lyrics share card',
         text: '${track.title} by ${track.artist}',
-        sharePositionOrigin: platformSharePositionOrigin(context),
+        sharePositionOrigin: sharePositionOrigin,
       ),
     );
     if (!context.mounted || status == PlatformImageShareStatus.dismissed) {

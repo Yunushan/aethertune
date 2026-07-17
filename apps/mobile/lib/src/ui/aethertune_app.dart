@@ -20,6 +20,7 @@ import '../data/self_hosted_provider_store.dart';
 import '../data/spotify_settings_store.dart';
 import '../data/youtube_data_settings_store.dart';
 import '../data/youtube_channel_follow_store.dart';
+import '../domain/track.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
 import 'home_screen.dart';
@@ -130,7 +131,25 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                   ..loadPersistedPlaybackSettings());
             controller.setOfflineModeEnabled(library.offlineModeEnabled);
             controller.setTrackResolver(selfHosted.resolveTrack);
-            controller.setMediaLibraryBrowseTracks(library.tracks);
+            final tracksById = <String, Track>{
+              for (final track in library.tracks) track.id: track,
+            };
+            final playlists = library.playlists
+                .map(
+                  (playlist) => MediaLibraryBrowsePlaylist(
+                    id: playlist.id,
+                    title: playlist.name,
+                    artworkUri: playlist.artworkUri,
+                    tracks: playlist.trackIds
+                        .map((trackId) => tracksById[trackId])
+                        .whereType<Track>(),
+                  ),
+                )
+                .toList(growable: false);
+            controller.setMediaLibraryBrowseTracks(
+              library.tracks,
+              playlists: playlists,
+            );
             unawaited(controller.reconcileLibraryTracks(library.tracks));
             return controller;
           },

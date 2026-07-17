@@ -123,9 +123,9 @@ void main() {
     await tester.tap(find.byKey(const Key('now-playing-repeat')));
     await tester.tap(find.byKey(const Key('now-playing-ab-repeat')));
     await tester.pump();
-    expect(player.aBRepeatStart, Duration.zero);
+    expect(player.aBRepeatStart, const Duration(minutes: 1));
     expect(find.text('Set B'), findsOneWidget);
-    await engine.seek(const Duration(seconds: 12));
+    await engine.seek(const Duration(minutes: 1, seconds: 12));
     await tester.pump();
     await tester.tap(find.byKey(const Key('now-playing-ab-repeat')));
     await tester.pump();

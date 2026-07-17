@@ -178,6 +178,9 @@ Future<_FlacWritePlan> _buildWritePlan(
         artist: artist,
         album: album,
         genre: genre,
+        albumArtist: albumArtist,
+        year: year,
+        trackNumber: trackNumber,
       ),
     ),
   ];
@@ -227,6 +230,9 @@ Uint8List _updatedVorbisCommentBlock({
   required String artist,
   required String album,
   required String genre,
+  required String? albumArtist,
+  required int? year,
+  required int? trackNumber,
 }) {
   final comments = <String>[
     ...retainedComments,

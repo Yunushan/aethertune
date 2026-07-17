@@ -69,6 +69,7 @@ void main() {
           name: 'Contract catalog',
           catalogUrl: 'https://catalog.example.test/music.json',
           mediaDomains: const <String>['media.example.test'],
+          allowInsecureHttp: false,
         ),
       ),
       JellyfinProvider(
