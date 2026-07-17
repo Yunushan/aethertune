@@ -1,9 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/youtube_data_settings_store.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   test('stores the API key only in the credential vault', () async {
     final vault = _MemoryCredentialVault();
     final store = YouTubeDataSettingsStore(credentialVault: vault);
@@ -37,6 +42,25 @@ void main() {
       () => store.saveApiKey('  '),
       throwsA(isA<FormatException>()),
     );
+  });
+
+  test('persists a validated official chart region independently of the key',
+      () async {
+    final vault = _MemoryCredentialVault();
+    final store = YouTubeDataSettingsStore(credentialVault: vault);
+    await store.load();
+
+    await store.setPreferredRegion(' tr ');
+
+    expect(store.preferredRegion, 'TR');
+    final restored = YouTubeDataSettingsStore(credentialVault: vault);
+    await restored.load();
+    expect(restored.preferredRegion, 'TR');
+    await expectLater(
+      restored.setPreferredRegion('turkiye'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(restored.preferredRegion, 'TR');
   });
 }
 

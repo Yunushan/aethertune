@@ -3913,11 +3913,19 @@ final class _OfficialYouTubeMusicChartShelf extends StatefulWidget {
 
 final class _OfficialYouTubeMusicChartShelfState
     extends State<_OfficialYouTubeMusicChartShelf> {
-  final _regionController = TextEditingController(text: 'US');
+  late final TextEditingController _regionController;
   List<Track> _tracks = const <Track>[];
   bool _loading = false;
   String? _error;
   int _requestSerial = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _regionController = TextEditingController(
+      text: context.read<YouTubeDataSettingsStore?>()?.preferredRegion ?? 'US',
+    );
+  }
 
   @override
   void dispose() {
@@ -4032,6 +4040,9 @@ final class _OfficialYouTubeMusicChartShelfState
       _error = null;
     });
     try {
+      await context
+          .read<YouTubeDataSettingsStore?>()
+          ?.setPreferredRegion(_regionController.text);
       final page = await widget.provider.loadPopularMusicPage(
         regionCode: _regionController.text,
         limit: 6,

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/music_source_provider.dart';
 import 'provider_credential_vault.dart';
@@ -17,17 +18,20 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
        _providerFactory = providerFactory ?? _createProvider;
 
   static const _credentialId = 'youtube-data-metadata';
+  static const _preferredRegionKey = 'aethertune.youtube_data_region.v1';
 
   final ProviderCredentialVault _credentialVault;
   final YouTubeDataProviderFactory _providerFactory;
   String? _apiKey;
   YouTubeDataMetadataProvider? _provider;
+  String _preferredRegion = 'US';
   bool _loaded = false;
   String? _loadError;
 
   bool get loaded => _loaded;
   String? get loadError => _loadError;
   bool get isConfigured => (_apiKey ?? '').isNotEmpty;
+  String get preferredRegion => _preferredRegion;
 
   List<MusicSourceProvider> get musicProviders {
     final apiKey = _apiKey;
@@ -50,6 +54,14 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
     } on Object {
       _apiKey = null;
       _loadError = 'YouTube Data API key storage is unavailable.';
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _preferredRegion = normalizeYouTubeDataRegion(
+        prefs.getString(_preferredRegionKey) ?? 'US',
+      );
+    } on Object {
+      _preferredRegion = 'US';
     }
     _loaded = true;
     notifyListeners();
@@ -74,6 +86,26 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
     _loadError = null;
     notifyListeners();
   }
+
+  Future<void> setPreferredRegion(String value) async {
+    final normalized = normalizeYouTubeDataRegion(value);
+    if (normalized == _preferredRegion) {
+      return;
+    }
+    final previous = _preferredRegion;
+    _preferredRegion = normalized;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = await prefs.setString(_preferredRegionKey, normalized);
+      if (!saved) {
+        throw StateError('Could not save the YouTube chart region.');
+      }
+    } on Object {
+      _preferredRegion = previous;
+      rethrow;
+    }
+    notifyListeners();
+  }
 }
 
 YouTubeDataMetadataProvider _createProvider(String apiKey) {
@@ -83,4 +115,12 @@ YouTubeDataMetadataProvider _createProvider(String apiKey) {
 String? _normalize(String? value) {
   final normalized = value?.trim() ?? '';
   return normalized.isEmpty ? null : normalized;
+}
+
+String normalizeYouTubeDataRegion(String value) {
+  final normalized = value.trim().toUpperCase();
+  if (!RegExp(r'^[A-Z]{2}$').hasMatch(normalized)) {
+    throw const FormatException('Enter a two-letter ISO region code.');
+  }
+  return normalized;
 }

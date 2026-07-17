@@ -240,12 +240,18 @@ void main() {
 
     expect(find.text('Official YouTube music chart'), findsOneWidget);
     expect(requestedRegions, isEmpty);
+    final regionField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.labelText == 'Region',
+    );
+    await tester.enterText(regionField, 'tr');
     await tester.tap(
       find.byKey(const ValueKey<String>('home-youtube-music-chart-refresh')),
     );
     await tester.pumpAndSettle();
 
-    expect(requestedRegions, <String>['US']);
+    expect(requestedRegions, <String>['TR']);
+    expect(youtube.preferredRegion, 'TR');
     expect(find.text('Home chart result'), findsOneWidget);
     await tester.tap(find.byTooltip('Save metadata to library'));
     await tester.pumpAndSettle();
@@ -263,7 +269,7 @@ void main() {
           .onPressed,
       isNull,
     );
-    expect(requestedRegions, <String>['US']);
+    expect(requestedRegions, <String>['TR']);
   });
 }
 

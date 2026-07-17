@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
+import '../data/youtube_data_settings_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/track.dart';
 import 'widgets/track_artwork.dart';
@@ -22,7 +23,7 @@ final class YouTubeMusicChartScreen extends StatefulWidget {
 
 final class _YouTubeMusicChartScreenState
     extends State<YouTubeMusicChartScreen> {
-  final _regionController = TextEditingController(text: 'US');
+  late final TextEditingController _regionController;
   List<Track> _tracks = const <Track>[];
   String? _nextCursor;
   int? _total;
@@ -32,6 +33,9 @@ final class _YouTubeMusicChartScreenState
   @override
   void initState() {
     super.initState();
+    _regionController = TextEditingController(
+      text: context.read<YouTubeDataSettingsStore?>()?.preferredRegion ?? 'US',
+    );
     unawaited(_load(reset: true));
   }
 
@@ -191,6 +195,9 @@ final class _YouTubeMusicChartScreenState
       }
     });
     try {
+      await context
+          .read<YouTubeDataSettingsStore?>()
+          ?.setPreferredRegion(_regionController.text);
       final page = await widget.provider.loadPopularMusicPage(
         regionCode: _regionController.text,
         cursor: reset ? null : _nextCursor,
