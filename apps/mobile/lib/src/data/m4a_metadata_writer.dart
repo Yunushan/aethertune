@@ -11,6 +11,9 @@ class M4aMetadataWriter {
     required String artist,
     required String album,
     required String genre,
+    String? albumArtist,
+    int? year,
+    int? trackNumber,
   }) async {
     if (!path.toLowerCase().endsWith('.m4a')) {
       throw const FormatException('Only local M4A files can be updated.');
@@ -26,6 +29,9 @@ class M4aMetadataWriter {
       artist: artist,
       album: album,
       genre: genre,
+      albumArtist: albumArtist,
+      year: year,
+      trackNumber: trackNumber,
     );
     await _replaceWithTaggedCopy(file, plan);
   }
@@ -83,6 +89,9 @@ Future<_M4aWritePlan> _buildWritePlan(
   String? artist,
   String? album,
   String? genre,
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
   Uint8List? artwork,
 }) async {
   final access = await file.open(mode: FileMode.read);
@@ -115,6 +124,9 @@ Future<_M4aWritePlan> _buildWritePlan(
       artist: artist,
       album: album,
       genre: genre,
+      albumArtist: albumArtist,
+      year: year,
+      trackNumber: trackNumber,
       artwork: artwork,
     );
     final movedMediaAtoms = mediaAtoms
@@ -181,6 +193,9 @@ Uint8List _updatedMoov(
   String? artist,
   String? album,
   String? genre,
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
   Uint8List? artwork,
 }) {
   final moovChildren = _childAtoms(payload);
@@ -197,6 +212,9 @@ Uint8List _updatedMoov(
     artist: artist,
     album: album,
     genre: genre,
+    albumArtist: albumArtist,
+    year: year,
+    trackNumber: trackNumber,
     artwork: artwork,
   );
 
@@ -216,6 +234,9 @@ Uint8List _updatedUdta(
   String? artist,
   String? album,
   String? genre,
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
   Uint8List? artwork,
 }) {
   final children = _childAtoms(payload);
@@ -232,6 +253,9 @@ Uint8List _updatedUdta(
     artist: artist,
     album: album,
     genre: genre,
+    albumArtist: albumArtist,
+    year: year,
+    trackNumber: trackNumber,
     artwork: artwork,
   );
 
@@ -251,6 +275,9 @@ Uint8List _updatedMeta(
   String? artist,
   String? album,
   String? genre,
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
   Uint8List? artwork,
 }) {
   if (payload.isNotEmpty && payload.length < 4) {
@@ -271,6 +298,9 @@ Uint8List _updatedMeta(
     artist: artist,
     album: album,
     genre: genre,
+    albumArtist: albumArtist,
+    year: year,
+    trackNumber: trackNumber,
     artwork: artwork,
   );
 
@@ -290,6 +320,9 @@ Uint8List _updatedIlst(
   String? artist,
   String? album,
   String? genre,
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
   Uint8List? artwork,
 }) {
   final output = BytesBuilder(copy: false);
@@ -300,6 +333,9 @@ Uint8List _updatedIlst(
       updateArtist: artist != null,
       updateAlbum: album != null,
       updateGenre: genre != null,
+      updateAlbumArtist: albumArtist != null,
+      updateYear: year != null,
+      updateTrackNumber: trackNumber != null,
       updateArtwork: artwork != null,
     )) {
       output.add(payload.sublist(item.start, item.end));
@@ -313,6 +349,15 @@ Uint8List _updatedIlst(
   }
   if (album != null && album.trim().isNotEmpty) {
     output.add(_textItem(_albumType, album));
+  }
+  if (albumArtist != null && albumArtist.trim().isNotEmpty) {
+    output.add(_textItem(_albumArtistType, albumArtist));
+  }
+  if (year != null && year > 0) {
+    output.add(_textItem(_dateType, year.toString()));
+  }
+  if (trackNumber != null && trackNumber > 0) {
+    output.add(_trackNumberItem(trackNumber));
   }
   if (genre != null && genre.trim().isNotEmpty) {
     output.add(_textItem(_genreType, genre));
@@ -365,6 +410,22 @@ Uint8List _artworkItem(Uint8List artwork) {
     ..add(const <int>[0, 0, 0, 0])
     ..add(artwork);
   return _atom('covr', _atom('data', data.takeBytes()));
+}
+
+Uint8List _trackNumberItem(int trackNumber) {
+  if (trackNumber <= 0 || trackNumber > 0xffff) {
+    throw ArgumentError.value(
+      trackNumber,
+      'trackNumber',
+      'M4A track number must be between 1 and 65535.',
+    );
+  }
+  final data = BytesBuilder(copy: false)
+    ..add(_uint32Bytes(0))
+    ..add(const <int>[0, 0, 0, 0, 0, 0])
+    ..add(<int>[(trackNumber >> 8) & 0xff, trackNumber & 0xff])
+    ..add(const <int>[0, 0, 0, 0]);
+  return _atom('trkn', _atom('data', data.takeBytes()));
 }
 
 Uint8List _atom(String type, List<int> payload) {
@@ -621,11 +682,17 @@ bool _isEditableItem(
   required bool updateArtist,
   required bool updateAlbum,
   required bool updateGenre,
+  required bool updateAlbumArtist,
+  required bool updateYear,
+  required bool updateTrackNumber,
   required bool updateArtwork,
 }) {
   return (updateTitle && _sameBytes(type, _titleType)) ||
       (updateArtist && _sameBytes(type, _artistType)) ||
       (updateAlbum && _sameBytes(type, _albumType)) ||
+      (updateAlbumArtist && _sameBytes(type, _albumArtistType)) ||
+      (updateYear && _sameBytes(type, _dateType)) ||
+      (updateTrackNumber && _hasAsciiTypeBytes(type, 'trkn')) ||
       (updateGenre && _sameBytes(type, _genreType)) ||
       (updateArtwork && _hasAsciiTypeBytes(type, 'covr'));
 }
@@ -734,4 +801,6 @@ const _maxM4aChunkOffset = 0x7fffffffffffffff;
 const _titleType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _artistType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _albumType = <int>[0xa9, 0x61, 0x6c, 0x62];
+const _albumArtistType = <int>[0x61, 0x41, 0x52, 0x54];
+const _dateType = <int>[0xa9, 0x64, 0x61, 0x79];
 const _genreType = <int>[0xa9, 0x67, 0x65, 0x6e];

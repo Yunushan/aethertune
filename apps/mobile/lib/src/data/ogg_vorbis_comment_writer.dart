@@ -11,6 +11,9 @@ class OggVorbisCommentWriter {
     required String artist,
     required String album,
     required String genre,
+    String? albumArtist,
+    int? year,
+    int? trackNumber,
   }) async {
     if (!_isSupportedPath(path)) {
       throw const FormatException(
@@ -32,6 +35,9 @@ class OggVorbisCommentWriter {
         artist: artist,
         album: album,
         genre: genre,
+        albumArtist: albumArtist,
+        year: year,
+        trackNumber: trackNumber,
       );
     } finally {
       await access.close();
@@ -105,6 +111,9 @@ Future<_OggWritePlan> _buildWritePlan(
   required String artist,
   required String album,
   required String genre,
+  required String? albumArtist,
+  required int? year,
+  required int? trackNumber,
 }) async {
   final identificationPage = await _readOggPage(access, fileLength, 0);
   if (!identificationPage.isBeginningOfStream ||
@@ -261,6 +270,10 @@ Uint8List _updatedVorbisComments({
     if (title.trim().isNotEmpty) 'TITLE=${title.trim()}',
     if (artist.trim().isNotEmpty) 'ARTIST=${artist.trim()}',
     if (album.trim().isNotEmpty) 'ALBUM=${album.trim()}',
+    if (albumArtist?.trim().isNotEmpty == true)
+      'ALBUMARTIST=${albumArtist!.trim()}',
+    if (year != null) 'DATE=$year',
+    if (trackNumber != null) 'TRACKNUMBER=$trackNumber',
     if (genre.trim().isNotEmpty) 'GENRE=${genre.trim()}',
   ];
   final vendorBytes = utf8.encode(vendor);
@@ -428,4 +441,13 @@ int _oggChecksum(List<int> bytes) {
   return checksum.toUnsigned(32);
 }
 
-const _editableCommentKeys = <String>{'TITLE', 'ARTIST', 'ALBUM', 'GENRE'};
+const _editableCommentKeys = <String>{
+  'TITLE',
+  'ARTIST',
+  'ALBUM',
+  'ALBUMARTIST',
+  'DATE',
+  'YEAR',
+  'TRACKNUMBER',
+  'GENRE',
+};

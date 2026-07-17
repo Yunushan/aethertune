@@ -1811,12 +1811,18 @@ class _TrackMetadataDraft {
     required this.title,
     required this.artist,
     required this.album,
+    required this.albumArtist,
+    required this.year,
+    required this.trackNumber,
     required this.genre,
   });
 
   final String title;
   final String artist;
   final String album;
+  final String albumArtist;
+  final int? year;
+  final int? trackNumber;
   final String genre;
 }
 
@@ -1837,6 +1843,12 @@ Future<void> _showTrackMetadataEditor(
     title: draft.title,
     artist: draft.artist,
     album: draft.album,
+    albumArtist: draft.albumArtist,
+    clearAlbumArtist: draft.albumArtist.trim().isEmpty,
+    year: draft.year,
+    clearYear: draft.year == null,
+    trackNumber: draft.trackNumber,
+    clearTrackNumber: draft.trackNumber == null,
     genre: draft.genre,
   );
 
@@ -1857,6 +1869,9 @@ Future<void> _showTrackMetadataEditor(
             title: updated.title,
             artist: updated.artist,
             album: updated.album,
+            albumArtist: updated.albumArtist,
+            year: updated.year,
+            trackNumber: updated.trackNumber,
             genre: updated.genre,
           );
         } else if (_isLocalFlac(updated)) {
@@ -1865,6 +1880,9 @@ Future<void> _showTrackMetadataEditor(
             title: updated.title,
             artist: updated.artist,
             album: updated.album,
+            albumArtist: updated.albumArtist,
+            year: updated.year,
+            trackNumber: updated.trackNumber,
             genre: updated.genre,
           );
         } else if (_isLocalM4a(updated)) {
@@ -1873,6 +1891,9 @@ Future<void> _showTrackMetadataEditor(
             title: updated.title,
             artist: updated.artist,
             album: updated.album,
+            albumArtist: updated.albumArtist ?? '',
+            year: updated.year ?? 0,
+            trackNumber: updated.trackNumber ?? 0,
             genre: updated.genre,
           );
         } else if (_isLocalOggOrOpus(updated)) {
@@ -1881,6 +1902,9 @@ Future<void> _showTrackMetadataEditor(
             title: updated.title,
             artist: updated.artist,
             album: updated.album,
+            albumArtist: updated.albumArtist,
+            year: updated.year,
+            trackNumber: updated.trackNumber,
             genre: updated.genre,
           );
         } else {
@@ -1889,6 +1913,8 @@ Future<void> _showTrackMetadataEditor(
             title: updated.title,
             artist: updated.artist,
             album: updated.album,
+            year: updated.year,
+            trackNumber: updated.trackNumber,
             genre: updated.genre,
           );
         }
@@ -1922,8 +1948,19 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
   final titleController = TextEditingController(text: track.title);
   final artistController = TextEditingController(text: track.artist);
   final albumController = TextEditingController(text: track.album);
+  final albumArtistController = TextEditingController(
+    text: track.albumArtist ?? '',
+  );
+  final yearController = TextEditingController(
+    text: track.year?.toString() ?? '',
+  );
+  final trackNumberController = TextEditingController(
+    text: track.trackNumber?.toString() ?? '',
+  );
   final genreController = TextEditingController(text: track.genre);
   String? titleErrorText;
+  String? yearErrorText;
+  String? trackNumberErrorText;
 
   try {
     return showDialog<_TrackMetadataDraft>(
@@ -1940,11 +1977,36 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
                 return;
               }
 
+              final yearText = yearController.text.trim();
+              final year = yearText.isEmpty ? null : int.tryParse(yearText);
+              final trackNumberText = trackNumberController.text.trim();
+              final trackNumber = trackNumberText.isEmpty
+                  ? null
+                  : int.tryParse(trackNumberText);
+              if ((yearText.isNotEmpty && (year == null || year < 1000 || year > 9999)) ||
+                  (trackNumberText.isNotEmpty &&
+                      (trackNumber == null || trackNumber <= 0))) {
+                setDialogState(() {
+                  yearErrorText = yearText.isNotEmpty &&
+                          (year == null || year < 1000 || year > 9999)
+                      ? 'Use a four-digit year'
+                      : null;
+                  trackNumberErrorText = trackNumberText.isNotEmpty &&
+                          (trackNumber == null || trackNumber <= 0)
+                      ? 'Use a positive whole number'
+                      : null;
+                });
+                return;
+              }
+
               Navigator.of(dialogContext).pop(
                 _TrackMetadataDraft(
                   title: title,
                   artist: artistController.text,
                   album: albumController.text,
+                  albumArtist: albumArtistController.text,
+                  year: year,
+                  trackNumber: trackNumber,
                   genre: genreController.text,
                 ),
               );
@@ -1983,6 +2045,45 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
                         controller: albumController,
                         decoration: const InputDecoration(labelText: 'Album'),
                         textInputAction: TextInputAction.next,
+                      ),
+                      TextField(
+                        controller: albumArtistController,
+                        decoration: const InputDecoration(
+                          labelText: 'Album artist',
+                        ),
+                        textInputAction: TextInputAction.next,
+                      ),
+                      TextField(
+                        controller: yearController,
+                        decoration: InputDecoration(
+                          errorText: yearErrorText,
+                          labelText: 'Release year',
+                        ),
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (yearErrorText != null) {
+                            setDialogState(() {
+                              yearErrorText = null;
+                            });
+                          }
+                        },
+                      ),
+                      TextField(
+                        controller: trackNumberController,
+                        decoration: InputDecoration(
+                          errorText: trackNumberErrorText,
+                          labelText: 'Track number',
+                        ),
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (trackNumberErrorText != null) {
+                            setDialogState(() {
+                              trackNumberErrorText = null;
+                            });
+                          }
+                        },
                       ),
                       TextField(
                         controller: genreController,
@@ -2061,6 +2162,9 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
     titleController.dispose();
     artistController.dispose();
     albumController.dispose();
+    albumArtistController.dispose();
+    yearController.dispose();
+    trackNumberController.dispose();
     genreController.dispose();
   }
 }

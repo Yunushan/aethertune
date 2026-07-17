@@ -11,6 +11,9 @@ class FlacVorbisCommentWriter {
     required String artist,
     required String album,
     required String genre,
+    String? albumArtist,
+    int? year,
+    int? trackNumber,
   }) async {
     if (!path.toLowerCase().endsWith('.flac')) {
       throw const FormatException('Only local FLAC files can be updated.');
@@ -30,6 +33,9 @@ class FlacVorbisCommentWriter {
         artist: artist,
         album: album,
         genre: genre,
+        albumArtist: albumArtist,
+        year: year,
+        trackNumber: trackNumber,
       );
     } finally {
       await access.close();
@@ -98,6 +104,9 @@ Future<_FlacWritePlan> _buildWritePlan(
   required String artist,
   required String album,
   required String genre,
+  required String? albumArtist,
+  required int? year,
+  required int? trackNumber,
 }) async {
   if (fileLength < 8) {
     throw const FormatException('FLAC file is too short to contain metadata.');
@@ -224,6 +233,10 @@ Uint8List _updatedVorbisCommentBlock({
     if (title.trim().isNotEmpty) 'TITLE=${title.trim()}',
     if (artist.trim().isNotEmpty) 'ARTIST=${artist.trim()}',
     if (album.trim().isNotEmpty) 'ALBUM=${album.trim()}',
+    if (albumArtist?.trim().isNotEmpty == true)
+      'ALBUMARTIST=${albumArtist!.trim()}',
+    if (year != null) 'DATE=$year',
+    if (trackNumber != null) 'TRACKNUMBER=$trackNumber',
     if (genre.trim().isNotEmpty) 'GENRE=${genre.trim()}',
   ];
   final vendorBytes = utf8.encode(vendor);
@@ -360,4 +373,13 @@ Uint8List _uint32LeBytes(int value) {
 }
 
 const _vorbisCommentBlockType = 4;
-const _editableCommentKeys = <String>{'TITLE', 'ARTIST', 'ALBUM', 'GENRE'};
+const _editableCommentKeys = <String>{
+  'TITLE',
+  'ARTIST',
+  'ALBUM',
+  'ALBUMARTIST',
+  'DATE',
+  'YEAR',
+  'TRACKNUMBER',
+  'GENRE',
+};

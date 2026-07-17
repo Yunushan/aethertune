@@ -46,6 +46,9 @@ void main() {
       title: 'Nehir Şarkısı',
       artist: 'Björk',
       album: 'Canlı Kayıt',
+      albumArtist: 'Björk Ensemble',
+      year: 2024,
+      trackNumber: 7,
       genre: 'Türkçe fusion',
     );
 
@@ -57,6 +60,9 @@ void main() {
     expect(track.title, 'Nehir Şarkısı');
     expect(track.artist, 'Björk');
     expect(track.album, 'Canlı Kayıt');
+    expect(track.albumArtist, 'Björk Ensemble');
+    expect(track.year, 2024);
+    expect(track.trackNumber, 7);
     expect(track.genre, 'Türkçe fusion');
 
     final bytes = await file.readAsBytes();
@@ -82,6 +88,9 @@ void main() {
       title: 'Updated episode',
       artist: 'Host',
       album: 'Season one',
+      albumArtist: 'Aether Network',
+      year: 2024,
+      trackNumber: 2,
       genre: 'Podcast',
     );
 
@@ -93,6 +102,9 @@ void main() {
     expect(track.title, 'Updated episode');
     expect(track.artist, 'Host');
     expect(track.album, 'Season one');
+    expect(track.albumArtist, 'Aether Network');
+    expect(track.year, 2024);
+    expect(track.trackNumber, 2);
     expect(track.genre, 'Podcast');
   });
 

@@ -29,6 +29,9 @@ void main() {
       title: 'Nehir Şarkısı',
       artist: 'Björk',
       album: 'Canlı Kayıt',
+      albumArtist: 'Björk Ensemble',
+      year: 2024,
+      trackNumber: 7,
       genre: 'Türkçe fusion',
     );
 
@@ -41,6 +44,9 @@ void main() {
     expect(result.tracks.single.title, 'Nehir Şarkısı');
     expect(result.tracks.single.artist, 'Björk');
     expect(result.tracks.single.album, 'Canlı Kayıt');
+    expect(result.tracks.single.albumArtist, 'Björk Ensemble');
+    expect(result.tracks.single.year, 2024);
+    expect(result.tracks.single.trackNumber, 7);
     expect(result.tracks.single.genre, 'Türkçe fusion');
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
@@ -70,6 +76,44 @@ void main() {
     expect(_mdatPayload(bytes), <int>[9, 8, 7]);
     expect(_containsBytes(bytes, artwork), isTrue);
     expect(_containsBytes(bytes, customPayload), isTrue);
+  });
+
+  test('clears optional M4A album fields without touching media bytes',
+      () async {
+    final file = File('${temporaryDirectory.path}/clear-fields.m4a');
+    await file.writeAsBytes(_m4aFile(audio: <int>[8, 7, 6]));
+    const writer = M4aMetadataWriter();
+    await writer.write(
+      path: file.path,
+      title: 'Track',
+      artist: 'Artist',
+      album: 'Album',
+      albumArtist: 'Album Artist',
+      year: 2024,
+      trackNumber: 3,
+      genre: 'Genre',
+    );
+
+    await writer.write(
+      path: file.path,
+      title: 'Track',
+      artist: 'Artist',
+      album: 'Album',
+      albumArtist: '',
+      year: 0,
+      trackNumber: 0,
+      genre: 'Genre',
+    );
+
+    final result = await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+      importedAt: DateTime.utc(2026, 1, 1),
+    );
+    final track = result.tracks.single;
+    expect(track.albumArtist, isNull);
+    expect(track.year, isNull);
+    expect(track.trackNumber, isNull);
+    expect(_mdatPayload(await file.readAsBytes()), <int>[8, 7, 6]);
   });
 
   test('replaces embedded M4A artwork and preserves text, audio, and custom metadata', () async {

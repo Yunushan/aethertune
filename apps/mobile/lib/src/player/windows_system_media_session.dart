@@ -56,7 +56,7 @@ class WindowsSystemMediaSession implements DesktopMediaSession {
         title: state.track?.title ?? 'AetherTune',
         artist: state.track?.artist,
         album: state.track?.album,
-        albumArtist: state.track?.artist,
+        albumArtist: state.track?.albumArtist ?? state.track?.artist,
         thumbnail: _safeThumbnail(state.track),
       ),
     );

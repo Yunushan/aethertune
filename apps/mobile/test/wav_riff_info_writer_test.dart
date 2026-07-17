@@ -28,6 +28,8 @@ void main() {
       title: 'WAV Title',
       artist: 'WAV Artist',
       album: 'WAV Album',
+      year: 2024,
+      trackNumber: 7,
       genre: 'Jazz Fusion',
     );
 
@@ -40,6 +42,8 @@ void main() {
     expect(result.tracks.single.title, 'WAV Title');
     expect(result.tracks.single.artist, 'WAV Artist');
     expect(result.tracks.single.album, 'WAV Album');
+    expect(result.tracks.single.year, 2024);
+    expect(result.tracks.single.trackNumber, 7);
     expect(result.tracks.single.genre, 'Jazz Fusion');
     expect(_dataPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });

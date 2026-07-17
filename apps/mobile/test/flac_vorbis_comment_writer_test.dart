@@ -28,6 +28,9 @@ void main() {
       title: 'Nehir Şarkısı',
       artist: 'Björk',
       album: 'Canlı Kayıt',
+      albumArtist: 'Björk Ensemble',
+      year: 2024,
+      trackNumber: 7,
       genre: 'Türkçe fusion',
     );
 
@@ -40,6 +43,9 @@ void main() {
     expect(result.tracks.single.title, 'Nehir Şarkısı');
     expect(result.tracks.single.artist, 'Björk');
     expect(result.tracks.single.album, 'Canlı Kayıt');
+    expect(result.tracks.single.albumArtist, 'Björk Ensemble');
+    expect(result.tracks.single.year, 2024);
+    expect(result.tracks.single.trackNumber, 7);
     expect(result.tracks.single.genre, 'Türkçe fusion');
     expect(_audioPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });

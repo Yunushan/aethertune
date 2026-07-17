@@ -11,6 +11,9 @@ class Mp3Id3v1TagWriter {
     required String artist,
     required String album,
     required String genre,
+    String? albumArtist,
+    int? year,
+    int? trackNumber,
   }) async {
     if (!path.toLowerCase().endsWith('.mp3')) {
       throw const FormatException('Only local MP3 files can be updated.');
@@ -38,6 +41,9 @@ class Mp3Id3v1TagWriter {
           artist: artist,
           album: album,
           genre: genre,
+          albumArtist: albumArtist,
+          year: year,
+          trackNumber: trackNumber,
         ),
         trailingTag: _updatedId3v1Tag(
           id3v1.bytes,
@@ -192,6 +198,9 @@ Uint8List _updatedId3v2Tag({
   required String artist,
   required String album,
   required String genre,
+  required String? albumArtist,
+  required int? year,
+  required int? trackNumber,
 }) {
   final majorVersion = existing?.majorVersion ?? 3;
   final frames = BytesBuilder(copy: false);
@@ -203,6 +212,21 @@ Uint8List _updatedId3v2Tag({
     ..add(_id3v2TextFrame(majorVersion, 'TPE1', artist))
     ..add(_id3v2TextFrame(majorVersion, 'TALB', album))
     ..add(_id3v2TextFrame(majorVersion, 'TCON', genre));
+  if (albumArtist?.trim().isNotEmpty == true) {
+    frames.add(_id3v2TextFrame(majorVersion, 'TPE2', albumArtist!));
+  }
+  if (year != null) {
+    frames.add(
+      _id3v2TextFrame(
+        majorVersion,
+        majorVersion == 3 ? 'TYER' : 'TDRC',
+        year.toString(),
+      ),
+    );
+  }
+  if (trackNumber != null) {
+    frames.add(_id3v2TextFrame(majorVersion, 'TRCK', trackNumber.toString()));
+  }
 
   final payload = frames.takeBytes();
   final header = BytesBuilder(copy: false)
@@ -392,7 +416,16 @@ void _writeField(Uint8List tag, int start, int length, String value) {
   }
 }
 
-const _editableFrameIds = <String>{'TIT2', 'TPE1', 'TALB', 'TCON'};
+const _editableFrameIds = <String>{
+  'TIT2',
+  'TPE1',
+  'TPE2',
+  'TALB',
+  'TYER',
+  'TDRC',
+  'TRCK',
+  'TCON',
+};
 
 const _id3v1Genres = <String, int>{
   'blues': 0,

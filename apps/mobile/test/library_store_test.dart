@@ -4041,6 +4041,9 @@ void main() {
       title: '  Aether Bloom  ',
       artist: '  Mira Vale  ',
       album: '  Dawn Signals  ',
+      albumArtist: '  Mira Vale and Friends  ',
+      year: 2024,
+      trackNumber: 7,
       genre: '  Synthwave  ',
     );
 
@@ -4049,6 +4052,9 @@ void main() {
     expect(updated.title, 'Aether Bloom');
     expect(updated.artist, 'Mira Vale');
     expect(updated.album, 'Dawn Signals');
+    expect(updated.albumArtist, 'Mira Vale and Friends');
+    expect(updated.year, 2024);
+    expect(updated.trackNumber, 7);
     expect(updated.genre, 'Synthwave');
     expect(store.search('untitled'), isEmpty);
     expect(store.search('synthwave').single.id, '1');
@@ -4065,7 +4071,62 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.tracks.single.title, 'Aether Bloom');
+    expect(secondStore.tracks.single.albumArtist, 'Mira Vale and Friends');
+    expect(secondStore.tracks.single.year, 2024);
+    expect(secondStore.tracks.single.trackNumber, 7);
     expect(secondStore.search('mira').single.id, '1');
+  });
+
+  test('track metadata edits validate and clear optional album fields',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        '1',
+        albumArtist: 'Album Artist',
+        year: 2024,
+        trackNumber: 3,
+      ),
+    ]);
+
+    expect(
+      store.updateTrackMetadata(
+        '1',
+        title: 'Track 1',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Genre',
+        year: 999,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      store.updateTrackMetadata(
+        '1',
+        title: 'Track 1',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Genre',
+        trackNumber: 0,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+
+    final cleared = await store.updateTrackMetadata(
+      '1',
+      title: 'Track 1',
+      artist: 'Artist',
+      album: 'Album',
+      genre: 'Genre',
+      clearAlbumArtist: true,
+      clearYear: true,
+      clearTrackNumber: true,
+    );
+
+    expect(cleared!.albumArtist, isNull);
+    expect(cleared.year, isNull);
+    expect(cleared.trackNumber, isNull);
   });
 
   test('track metadata edits require a title and normalize empty fields', () async {

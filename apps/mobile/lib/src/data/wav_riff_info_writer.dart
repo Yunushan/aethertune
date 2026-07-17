@@ -10,6 +10,8 @@ class WavRiffInfoWriter {
     required String artist,
     required String album,
     required String genre,
+    int? year,
+    int? trackNumber,
   }) async {
     if (!path.toLowerCase().endsWith('.wav')) {
       throw const FormatException('Only local WAV files can be updated.');
@@ -29,6 +31,8 @@ class WavRiffInfoWriter {
         artist: artist,
         album: album,
         genre: genre,
+        year: year,
+        trackNumber: trackNumber,
       );
     } finally {
       await access.close();
@@ -87,6 +91,8 @@ Future<_WavWritePlan> _buildWritePlan(
   required String artist,
   required String album,
   required String genre,
+  required int? year,
+  required int? trackNumber,
 }) async {
   if (fileLength < 12) {
     throw const FormatException('WAV file is too short to contain RIFF data.');
@@ -153,6 +159,8 @@ Future<_WavWritePlan> _buildWritePlan(
         artist: artist,
         album: album,
         genre: genre,
+        year: year,
+        trackNumber: trackNumber,
       ),
     ),
   ];
@@ -208,6 +216,8 @@ Uint8List _updatedInfoList({
   required String artist,
   required String album,
   required String genre,
+  required int? year,
+  required int? trackNumber,
 }) {
   final output = BytesBuilder(copy: false)..add(const <int>[0x49, 0x4e, 0x46, 0x4f]);
   for (final entry in retainedEntries) {
@@ -216,6 +226,8 @@ Uint8List _updatedInfoList({
   _writeEditableInfoEntry(output, 'INAM', title);
   _writeEditableInfoEntry(output, 'IART', artist);
   _writeEditableInfoEntry(output, 'IPRD', album);
+  _writeEditableInfoEntry(output, 'ICRD', year?.toString() ?? '');
+  _writeEditableInfoEntry(output, 'ITRK', trackNumber?.toString() ?? '');
   _writeEditableInfoEntry(output, 'IGNR', genre);
   return output.takeBytes();
 }
@@ -349,4 +361,11 @@ Uint8List _uint32LeBytes(int value) {
   ]);
 }
 
-const _editableInfoIds = <String>{'INAM', 'IART', 'IPRD', 'IGNR'};
+const _editableInfoIds = <String>{
+  'INAM',
+  'IART',
+  'IPRD',
+  'ICRD',
+  'ITRK',
+  'IGNR',
+};

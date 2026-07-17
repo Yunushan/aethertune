@@ -2252,6 +2252,12 @@ class LibraryStore extends ChangeNotifier {
     required String artist,
     required String album,
     required String genre,
+    String? albumArtist,
+    bool clearAlbumArtist = false,
+    int? year,
+    bool clearYear = false,
+    int? trackNumber,
+    bool clearTrackNumber = false,
   }) async {
     final index = _tracks.indexWhere((track) => track.id == id);
     if (index == -1) {
@@ -2264,16 +2270,35 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final current = _tracks[index];
+    if (year != null && (year < 1000 || year > 9999)) {
+      throw ArgumentError.value(year, 'year', 'Year must be between 1000 and 9999.');
+    }
+    if (trackNumber != null && trackNumber <= 0) {
+      throw ArgumentError.value(
+        trackNumber,
+        'trackNumber',
+        'Track number must be greater than zero.',
+      );
+    }
     final updated = current.copyWith(
       title: normalizedTitle,
       artist: _nonEmptyMetadata(artist, 'Unknown Artist'),
       album: _nonEmptyMetadata(album, 'Unknown Album'),
+      albumArtist: albumArtist?.trim(),
+      clearAlbumArtist: clearAlbumArtist,
+      year: year,
+      clearYear: clearYear,
+      trackNumber: trackNumber,
+      clearTrackNumber: clearTrackNumber,
       genre: _nonEmptyMetadata(genre, 'Unknown Genre'),
     );
 
     if (updated.title == current.title &&
         updated.artist == current.artist &&
         updated.album == current.album &&
+        updated.albumArtist == current.albumArtist &&
+        updated.year == current.year &&
+        updated.trackNumber == current.trackNumber &&
         updated.genre == current.genre) {
       return updated;
     }
