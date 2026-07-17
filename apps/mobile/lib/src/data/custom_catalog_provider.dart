@@ -16,7 +16,10 @@ typedef CustomCatalogJsonLoader = Future<String> Function(Uri catalogUri);
 /// Expected document shape:
 /// `{ "version": 1, "tracks": [{ "id": "...", "title": "...",
 /// "streamUrl": "https://declared-host/..." }] }`.
-final class CustomCatalogProvider implements MusicSourceProvider {
+final class CustomCatalogProvider
+    implements
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   CustomCatalogProvider(
     this.definition, {
     CustomCatalogJsonLoader? catalogLoader,
@@ -39,6 +42,7 @@ final class CustomCatalogProvider implements MusicSourceProvider {
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
         MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
         MusicSourceCapability.artwork,
@@ -51,7 +55,71 @@ final class CustomCatalogProvider implements MusicSourceProvider {
       );
 
   @override
-  Future<List<Track>> search(String query) async {
+  Future<List<Track>> search(String query) => _matchingTracks(query);
+
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const MusicSourceSearchPage(tracks: <Track>[]);
+    }
+    final tracks = await _matchingTracks(normalizedQuery);
+    final requestedOffset = _parseCatalogOffset(cursor);
+    final start = requestedOffset > tracks.length
+        ? tracks.length
+        : requestedOffset;
+    final boundedLimit = limit > 50 ? 50 : limit;
+    final requestedEnd = start + boundedLimit;
+    final end = requestedEnd > tracks.length ? tracks.length : requestedEnd;
+    return MusicSourceSearchPage(
+      tracks: List<Track>.unmodifiable(tracks.sublist(start, end)),
+      totalCount: tracks.length,
+      nextCursor: end < tracks.length ? end.toString() : null,
+    );
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+    final page = await searchPage(normalizedQuery, limit: limit.clamp(1, 50));
+    final seen = <String>{};
+    final suggestions = <MusicSourceSearchSuggestion>[];
+    for (final track in page.tracks) {
+      final value = track.title.trim();
+      if (value.isEmpty || !seen.add(value.toLowerCase())) {
+        continue;
+      }
+      suggestions.add(
+        MusicSourceSearchSuggestion(
+          value: value,
+          kind: MusicSourceSearchSuggestionKind.track,
+          subtitle: '${track.artist} - ${track.album}',
+        ),
+      );
+      if (suggestions.length == limit) {
+        break;
+      }
+    }
+    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
+  }
+
+  Future<List<Track>> _matchingTracks(String query) async {
     final document = await _catalogLoader(definition.catalogUri);
     final tracks = parseCustomCatalogTracks(document, definition);
     final normalizedQuery = query.trim().toLowerCase();
@@ -74,6 +142,11 @@ final class CustomCatalogProvider implements MusicSourceProvider {
     final uri = Uri.tryParse(track.streamUrl!);
     return uri != null && definition.allowsRemoteUri(uri) ? uri : null;
   }
+}
+
+int _parseCatalogOffset(String? cursor) {
+  final offset = int.tryParse(cursor?.trim() ?? '');
+  return offset == null || offset < 0 ? 0 : offset;
 }
 
 List<Track> parseCustomCatalogTracks(

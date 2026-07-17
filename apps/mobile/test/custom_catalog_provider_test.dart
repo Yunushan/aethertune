@@ -135,6 +135,69 @@ void main() {
     );
   });
 
+  test('pages and suggests bounded matching catalog tracks', () async {
+    final definition = CustomCatalogDefinition.create(
+      id: 'catalog-006',
+      name: 'Paged catalog',
+      catalogUrl: 'https://catalog.example.test/music.json',
+      mediaDomains: const <String>['cdn.example.test'],
+      allowInsecureHttp: false,
+    );
+    var requests = 0;
+    final provider = CustomCatalogProvider(
+      definition,
+      catalogLoader: (_) async {
+        requests += 1;
+        return jsonEncode(<String, Object?>{
+          'version': 1,
+          'tracks': <Object?>[
+            <String, Object?>{
+              'id': 'night-drive',
+              'title': 'Night Drive',
+              'artist': 'Mira',
+              'album': 'City Lights',
+              'streamUrl': 'https://cdn.example.test/night-drive.mp3',
+            },
+            <String, Object?>{
+              'id': 'day-drive',
+              'title': 'Day Drive',
+              'artist': 'Orbit',
+              'album': 'Signals',
+              'streamUrl': 'https://cdn.example.test/day-drive.mp3',
+            },
+          ],
+        });
+      },
+    );
+
+    final firstPage = await provider.searchPage(' drive ', limit: 1);
+    expect(firstPage.totalCount, 2);
+    expect(firstPage.tracks.single.title, 'Night Drive');
+    expect(firstPage.nextCursor, '1');
+
+    final secondPage = await provider.searchPage(
+      'drive',
+      cursor: firstPage.nextCursor,
+      limit: 100,
+    );
+    expect(secondPage.tracks.single.title, 'Day Drive');
+    expect(secondPage.nextCursor, isNull);
+
+    final suggestions = await provider.suggest('drive', limit: 1);
+    expect(suggestions, hasLength(1));
+    expect(suggestions.single.value, 'Night Drive');
+    expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.track);
+    expect(suggestions.single.subtitle, 'Mira - City Lights');
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.searchSuggestions),
+    );
+    expect(await provider.suggest('  '), isEmpty);
+    expect(requests, 3);
+    await expectLater(provider.searchPage('drive', limit: 0), throwsArgumentError);
+    await expectLater(provider.suggest('drive', limit: 0), throwsArgumentError);
+  });
+
   test('persists bounded custom catalog definitions without provider secrets',
       () async {
     final store = CustomCatalogStore();
