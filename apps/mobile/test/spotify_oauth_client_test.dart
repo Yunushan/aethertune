@@ -1,4 +1,5 @@
 import 'package:aethertune/src/data/spotify_oauth_client.dart';
+import 'package:aethertune/src/data/spotify_settings_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -42,6 +43,22 @@ void main() {
 
     expect(request.scopes, const <String>['user-library-read']);
     expect(request.uri.queryParameters['scope'], 'user-library-read');
+  });
+
+  test('requests the read-only Spotify library and playlist scopes', () {
+    expect(
+      SpotifySettingsStore.authorizationScopes,
+      containsAll(<String>['user-library-read', 'playlist-read-private']),
+    );
+    final request = SpotifyAuthorizationRequest.create(
+      clientId: 'client-id',
+      redirectUri: Uri.parse('http://127.0.0.1:45678/spotify-callback'),
+      scopes: SpotifySettingsStore.authorizationScopes,
+    );
+    expect(
+      request.uri.queryParameters['scope'],
+      'user-library-read playlist-read-private',
+    );
   });
 
   test('exchanges a code without a client secret', () async {

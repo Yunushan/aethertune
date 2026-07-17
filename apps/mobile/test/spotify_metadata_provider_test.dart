@@ -184,6 +184,85 @@ void main() {
     expect(await provider.resolveStream(tracks.tracks.single), isNull);
   });
 
+  test('loads read-only playlists and playlist-item metadata', () async {
+    Uri? playlistsRequest;
+    Uri? itemsRequest;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      playlistsLoader: (uri, token) async {
+        playlistsRequest = uri;
+        expect(token, 'access-token');
+        return '''
+          {
+            "offset": 3,
+            "total": 5,
+            "next": "https://api.spotify.com/v1/me/playlists?offset=4",
+            "items": [{
+              "id": "playlist-id",
+              "name": "Signal Queue",
+              "description": "For focused work",
+              "owner": {"display_name": "Mira"},
+              "tracks": {"total": 2},
+              "images": [{"url": "https://i.scdn.co/image/playlist"}]
+            }]
+          }
+        ''';
+      },
+      playlistItemsLoader: (uri, token) async {
+        itemsRequest = uri;
+        expect(token, 'access-token');
+        return '''
+          {
+            "offset": 0,
+            "total": 2,
+            "next": "https://api.spotify.com/v1/playlists/playlist-id/items?offset=1",
+            "items": [
+              {"item": null},
+              {
+                "added_at": "2026-07-17T12:00:00Z",
+                "item": {
+                  "id": "playlist-track-id",
+                  "name": "Playlist Signal",
+                  "duration_ms": 195000,
+                  "artists": [{"name": "Aether"}],
+                  "album": {"name": "Signals"}
+                }
+              }
+            ]
+          }
+        ''';
+      },
+    );
+
+    final playlists = await provider.loadSavedPlaylistsPage(
+      offset: 3,
+      limit: 100,
+    );
+
+    expect(playlistsRequest!.path, '/v1/me/playlists');
+    expect(playlistsRequest!.queryParameters['offset'], '3');
+    expect(playlistsRequest!.queryParameters['limit'], '50');
+    expect(playlists.total, 5);
+    expect(playlists.hasMore, isTrue);
+    final playlist = playlists.playlists.single;
+    expect(playlist.title, 'Signal Queue');
+    expect(playlist.ownerName, 'Mira');
+    expect(playlist.totalTracks, 2);
+    expect(playlist.artworkUri, Uri.parse('https://i.scdn.co/image/playlist'));
+
+    final tracks = await provider.loadPlaylistTracksPage(playlist, limit: 1);
+
+    expect(itemsRequest!.path, '/v1/playlists/playlist-id/items');
+    expect(itemsRequest!.queryParameters['offset'], '0');
+    expect(itemsRequest!.queryParameters['limit'], '1');
+    expect(tracks.total, 2);
+    expect(tracks.hasMore, isTrue);
+    expect(tracks.tracks, hasLength(1));
+    expect(tracks.tracks.single.title, 'Playlist Signal');
+    expect(tracks.tracks.single.isPlayable, isFalse);
+    expect(await provider.resolveStream(tracks.tracks.single), isNull);
+  });
+
   test('returns bounded official Spotify track suggestions', () async {
     Uri? requestUri;
     String? requestToken;

@@ -169,6 +169,7 @@
 - [x] Internet Archive dedicated collection detail pages
 - [x] Spotify official saved-track metadata browse and local-library save
 - [x] Spotify official saved-album and album-track metadata browse
+- [x] Spotify official read-only playlist metadata browse
 - [x] YouTube Data official Music-category chart metadata browse and local-library save
 - [x] Jellyfin provider foundation
 - [x] Jellyfin settings UI and secure credential storage
