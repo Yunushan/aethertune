@@ -334,6 +334,12 @@ abstract interface class SharedPlaylistInviteStore {
   });
 
   Future<SharedPlaylistInvite?> lookup(String inviteCode);
+
+  /// Atomically returns and invalidates an invitation code.
+  ///
+  /// Invitations are capability tokens, so a successful consumption is final
+  /// even if a later playlist mutation conflicts and the caller must retry.
+  Future<SharedPlaylistInvite?> consume(String inviteCode);
 }
 
 class MemorySharedPlaylistInviteStore implements SharedPlaylistInviteStore {
@@ -353,6 +359,14 @@ class MemorySharedPlaylistInviteStore implements SharedPlaylistInviteStore {
   @override
   Future<SharedPlaylistInvite?> lookup(String inviteCode) async =>
       isSharedPlaylistInviteCode(inviteCode) ? _invites[inviteCode] : null;
+
+  @override
+  Future<SharedPlaylistInvite?> consume(String inviteCode) async {
+    if (!isSharedPlaylistInviteCode(inviteCode)) {
+      return null;
+    }
+    return _invites.remove(inviteCode);
+  }
 }
 
 class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
@@ -393,6 +407,44 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
     if (!await file.exists()) {
       return null;
     }
+    return _readInviteFile(file);
+  }
+
+  @override
+  Future<SharedPlaylistInvite?> consume(String inviteCode) async {
+    if (!isSharedPlaylistInviteCode(inviteCode)) {
+      return null;
+    }
+    final source = _fileFor(inviteCode);
+    if (!await source.exists()) {
+      return null;
+    }
+    final claimed = File(
+      p.join(
+        rootDirectory.path,
+        '.${source.uri.pathSegments.last}.${DateTime.now().microsecondsSinceEpoch}.claimed',
+      ),
+    );
+    try {
+      await source.rename(claimed.path);
+    } on FileSystemException {
+      return null;
+    }
+    try {
+      return await _readInviteFile(claimed);
+    } finally {
+      if (await claimed.exists()) {
+        await claimed.delete();
+      }
+    }
+  }
+
+  File _fileFor(String code) {
+    final digest = sha256.convert(utf8.encode(code)).toString();
+    return File(p.join(rootDirectory.path, '$digest.json'));
+  }
+
+  Future<SharedPlaylistInvite?> _readInviteFile(File file) async {
     try {
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) {
@@ -400,18 +452,15 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
       }
       final playlistId = decoded['playlistId'];
       final role = sharedPlaylistRoleFromWire(decoded['role']);
-      if (playlistId is! String || !_isSharedPlaylistId(playlistId) || role == null) {
+      if (playlistId is! String ||
+          !_isSharedPlaylistId(playlistId) ||
+          role == null) {
         return null;
       }
       return SharedPlaylistInvite(playlistId: playlistId, role: role);
     } on Object {
       return null;
     }
-  }
-
-  File _fileFor(String code) {
-    final digest = sha256.convert(utf8.encode(code)).toString();
-    return File(p.join(rootDirectory.path, '$digest.json'));
   }
 }
 

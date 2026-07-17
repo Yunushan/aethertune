@@ -865,7 +865,9 @@ Future<Response> _handleSharedPlaylistItem(
   final playlistId = segments[3];
   final isInviteEndpoint =
       segments.length == 5 && segments[4] == 'invites';
-  if (segments.length != 4 && !isInviteEndpoint) {
+  final isCollaboratorEndpoint =
+      segments.length == 6 && segments[4] == 'collaborators';
+  if (segments.length != 4 && !isInviteEndpoint && !isCollaboratorEndpoint) {
     return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
   }
   final record = await playlists.read(playlistId);
@@ -903,6 +905,57 @@ Future<Response> _handleSharedPlaylistItem(
         400,
         <String, Object?>{
           'error': 'invalid_shared_playlist_invite',
+          'message': error.message,
+        },
+      );
+    }
+  }
+  if (isCollaboratorEndpoint) {
+    if (request.method != 'DELETE') {
+      return _methodNotAllowed(request);
+    }
+    if (!record.isOwner(accountId)) {
+      return _sharedPlaylistForbidden();
+    }
+    final collaboratorId = segments[5];
+    if (collaboratorId.trim().isEmpty ||
+        collaboratorId.length > 256 ||
+        !record.collaborators.containsKey(collaboratorId)) {
+      return _jsonResponse(
+        404,
+        <String, Object?>{'error': 'shared_playlist_collaborator_not_found'},
+      );
+    }
+    try {
+      final mutation = _syncMutationFields(
+        await _readBoundedJson(request, maxBytes: maxSharedPlaylistBytes),
+      );
+      final collaborators = <String, SharedPlaylistRole>{
+        ...record.collaborators,
+      }..remove(collaboratorId);
+      final result = await playlists.write(
+        playlistId: record.id,
+        ownerId: record.ownerId,
+        baseRevision: mutation.baseRevision,
+        deviceId: mutation.deviceId,
+        document: record.document,
+        collaborators: collaborators,
+        updatedAt: now().toUtc(),
+      );
+      if (result.isConflict) {
+        return _sharedPlaylistConflict(result.record);
+      }
+      return _jsonResponse(200, _sharedPlaylistResponse(result.record!, accountId));
+    } on _PayloadTooLarge catch (error) {
+      return _jsonResponse(
+        413,
+        <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
+      );
+    } on FormatException catch (error) {
+      return _jsonResponse(
+        400,
+        <String, Object?>{
+          'error': 'invalid_shared_playlist',
           'message': error.message,
         },
       );
@@ -1006,7 +1059,7 @@ Future<Response> _handleSharedPlaylistInviteJoin(
         : _jsonResponse(503, <String, Object?>{'error': 'sync_not_configured'});
   }
   final code = request.url.pathSegments.last;
-  final invite = await invites.lookup(code);
+  final invite = await invites.consume(code);
   final record = invite == null ? null : await playlists.read(invite.playlistId);
   if (record == null || invite == null) {
     return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_invite_not_found'});

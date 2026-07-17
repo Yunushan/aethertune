@@ -84,6 +84,7 @@ Available endpoints:
 - `POST /api/v1/shared-playlists`
 - `GET`/`PUT`/`DELETE /api/v1/shared-playlists/{playlistId}`
 - `POST /api/v1/shared-playlists/{playlistId}/invites`
+- `DELETE /api/v1/shared-playlists/{playlistId}/collaborators/{accountId}`
 - `POST /api/v1/shared-playlist-invites/{inviteCode}`
 
 The snapshot endpoints are disabled until either a static or managed device
@@ -111,12 +112,13 @@ does not return the host account identity to guests.
 Private shared playlists are unlisted and have a distinct owner, editor, or
 viewer role. They contain only a versioned playlist name and ordered portable
 track IDs; stream URLs, local paths, credentials, artwork, and playback state
-are rejected. Owners create opaque 144-bit viewer/editor invite codes and can
-delete the server playlist. Editors can update against its current revision;
-viewers can only fetch it. Shared playlists and invite records are stored under
-`AETHERTUNE_DATA_DIR`, using SHA-256-derived filenames for IDs/codes. Clients
-must refresh explicitly after a revision conflict; there is no automatic merge
-or collaborator-by-collaborator revocation endpoint yet.
+are rejected. Owners create opaque 144-bit viewer/editor invite codes, revoke
+existing collaborators, and can delete the server playlist. Editors can update
+against its current revision; viewers can only fetch it. Each invitation is
+atomically consumed on a join, so it cannot be reused. Shared playlists and
+invite records are stored under `AETHERTUNE_DATA_DIR`, using SHA-256-derived
+filenames for IDs/codes. Clients must refresh explicitly after a revision
+conflict; there is no automatic merge or revision history yet.
 
 ## Managed accounts and device tokens
 

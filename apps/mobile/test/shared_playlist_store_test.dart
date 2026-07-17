@@ -60,6 +60,37 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('owners can revoke a collaborator and retain the new revision',
+      () async {
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist(
+      'Road mix',
+      trackIds: const <String>['one'],
+    );
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final hosted = await store.host(library, playlist);
+    gateway.remote = _remote(
+      role: SharedPlaylistAccessRole.owner,
+      revision: 2,
+      trackIds: const <String>['one'],
+      collaborators: const <String, SharedPlaylistAccessRole>{
+        'viewer-account': SharedPlaylistAccessRole.viewer,
+      },
+    );
+    final refreshed = await store.refresh(hosted, library);
+
+    final revoked = await store.revokeCollaborator(
+      refreshed,
+      'viewer-account',
+      library,
+    );
+
+    expect(revoked.revision, 3);
+    expect(revoked.collaborators, isEmpty);
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {
@@ -115,6 +146,28 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
   }) async => 'BBBBBBBBBBBBBBBBBBBBBBBB';
 
   @override
+  Future<SharedPlaylistRemote> revokeSharedPlaylistCollaborator({
+    required String playlistId,
+    required String collaboratorId,
+    required int baseRevision,
+  }) async {
+    if (baseRevision != remote.revision) {
+      throw SharedPlaylistConflictException(currentRevision: remote.revision);
+    }
+    final collaborators = <String, SharedPlaylistAccessRole>{
+      ...remote.collaborators,
+    }..remove(collaboratorId);
+    remote = _remote(
+      role: remote.role,
+      revision: remote.revision + 1,
+      name: remote.name,
+      trackIds: remote.trackIds,
+      collaborators: collaborators,
+    );
+    return remote;
+  }
+
+  @override
   Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode) async =>
       remote;
 
@@ -133,6 +186,7 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
       revision: remote.revision + 1,
       name: name,
       trackIds: trackIds,
+      collaborators: remote.collaborators,
     );
     return remote;
   }
@@ -143,6 +197,8 @@ SharedPlaylistRemote _remote({
   required int revision,
   required List<String> trackIds,
   String name = 'Shared mix',
+  Map<String, SharedPlaylistAccessRole> collaborators =
+      const <String, SharedPlaylistAccessRole>{},
 }) {
   return SharedPlaylistRemote(
     id: _MemorySharedPlaylistGateway.id,
@@ -152,5 +208,6 @@ SharedPlaylistRemote _remote({
     trackIds: trackIds,
     updatedAt: DateTime.utc(2026, 7, 17),
     updatedByDevice: 'Test device',
+    collaborators: collaborators,
   );
 }

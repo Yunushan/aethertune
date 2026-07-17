@@ -709,6 +709,56 @@ void main() {
       ),
     );
   });
+
+  test('revokes a shared playlist collaborator against the current revision',
+      () async {
+    final playlist = <String, Object?>{
+      'version': 1,
+      'name': 'Collaborative mix',
+      'trackIds': <String>['track-1'],
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'DELETE');
+        expect(
+          uri,
+          _account().sharedPlaylistCollaboratorEndpointUri(
+            'AAAAAAAAAAAAAAAAAAAAAAAA',
+            'viewer-account',
+          ),
+        );
+        expect(jsonDecode(body!), <String, Object?>{
+          'baseRevision': 4,
+          'deviceId': 'Test device',
+        });
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+            'revision': 5,
+            'role': 'owner',
+            'updatedAt': '2026-07-17T11:00:00.000Z',
+            'updatedByDevice': 'Test device',
+            'checksum': checksum,
+            'playlist': playlist,
+            'collaborators': <String, Object?>{},
+          }),
+        );
+      },
+    );
+
+    final remote = await client.revokeSharedPlaylistCollaborator(
+      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      collaboratorId: 'viewer-account',
+      baseRevision: 4,
+    );
+
+    expect(remote.revision, 5);
+    expect(remote.collaborators, isEmpty);
+  });
 }
 
 LibrarySyncAccount _account() {

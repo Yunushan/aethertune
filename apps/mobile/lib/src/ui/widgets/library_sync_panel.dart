@@ -680,6 +680,92 @@ class LibrarySyncPanel extends StatelessWidget {
     }
   }
 
+  static Future<void> _manageSharedPlaylistCollaborators(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    if (binding.collaborators.isEmpty) {
+      _showError(context, 'There are no collaborators to manage.');
+      return;
+    }
+    final collaboratorId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Manage collaborators'),
+        content: SizedBox(
+          width: 440,
+          child: ListView(
+            shrinkWrap: true,
+            children: binding.collaborators.entries
+                .map(
+                  (entry) => ListTile(
+                    leading: Icon(
+                      entry.value == SharedPlaylistAccessRole.editor
+                          ? Icons.edit_note_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    title: Text(entry.key),
+                    subtitle: Text('${entry.value.name} access'),
+                    trailing: const Icon(Icons.person_remove_outlined),
+                    onTap: () => Navigator.of(dialogContext).pop(entry.key),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    if (collaboratorId == null || !context.mounted) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Revoke collaborator access?'),
+        content: Text(
+          '$collaboratorId will no longer be able to refresh or publish this private playlist.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Revoke'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().revokeCollaborator(
+        binding,
+        collaboratorId,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Collaborator access revoked.');
+      }
+    } on SharedPlaylistConflictException catch (_) {
+      if (context.mounted) {
+        _showError(context, 'A collaborator updated it first. Refresh before revoking access.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not revoke collaborator access: $error');
+      }
+    }
+  }
+
   static Future<void> _unlinkSharedPlaylist(
     BuildContext context,
     SharedPlaylistBinding binding,
@@ -1099,6 +1185,12 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
             case _SharedPlaylistAction.invite:
               LibrarySyncPanel._createSharedPlaylistInvite(context, binding);
               break;
+            case _SharedPlaylistAction.collaborators:
+              LibrarySyncPanel._manageSharedPlaylistCollaborators(
+                context,
+                binding,
+              );
+              break;
             case _SharedPlaylistAction.unlink:
               LibrarySyncPanel._unlinkSharedPlaylist(context, binding);
               break;
@@ -1131,6 +1223,14 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
                 title: Text('Create invite code'),
               ),
             ),
+          if (binding.isOwner && binding.collaborators.isNotEmpty)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.collaborators,
+              child: ListTile(
+                leading: Icon(Icons.manage_accounts_outlined),
+                title: Text('Manage collaborators'),
+              ),
+            ),
           const PopupMenuDivider(),
           if (binding.isOwner)
             const PopupMenuItem(
@@ -1153,7 +1253,14 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
   }
 }
 
-enum _SharedPlaylistAction { refresh, publish, invite, unlink, delete }
+enum _SharedPlaylistAction {
+  refresh,
+  publish,
+  invite,
+  collaborators,
+  unlink,
+  delete,
+}
 
 class _LibrarySyncProfileDialog extends StatefulWidget {
   const _LibrarySyncProfileDialog({required this.profile});

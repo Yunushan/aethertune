@@ -17,6 +17,7 @@ class SharedPlaylistBinding {
     required this.role,
     this.updatedAt,
     this.updatedByDevice,
+    this.collaborators = const <String, SharedPlaylistAccessRole>{},
   });
 
   final String remoteId;
@@ -25,6 +26,7 @@ class SharedPlaylistBinding {
   final SharedPlaylistAccessRole role;
   final DateTime? updatedAt;
   final String? updatedByDevice;
+  final Map<String, SharedPlaylistAccessRole> collaborators;
 
   bool get canEdit => role != SharedPlaylistAccessRole.viewer;
   bool get isOwner => role == SharedPlaylistAccessRole.owner;
@@ -37,6 +39,7 @@ class SharedPlaylistBinding {
       role: remote.role,
       updatedAt: remote.updatedAt,
       updatedByDevice: remote.updatedByDevice,
+      collaborators: remote.collaborators,
     );
   }
 
@@ -47,6 +50,12 @@ class SharedPlaylistBinding {
     'role': role.name,
     'updatedAt': updatedAt?.toUtc().toIso8601String(),
     'updatedByDevice': updatedByDevice,
+    'collaborators': collaborators.map(
+      (accountId, accessRole) => MapEntry<String, String>(
+        accountId,
+        accessRole.name,
+      ),
+    ),
   };
 
   static SharedPlaylistBinding? tryFromJson(Map<String, Object?> json) {
@@ -54,13 +63,16 @@ class SharedPlaylistBinding {
     final localPlaylistId = json['localPlaylistId'];
     final revision = json['revision'];
     final role = _roleFromName(json['role']);
+    final collaborators = _collaboratorsFromJson(json['collaborators']);
     if (remoteId is! String ||
         !_isIdentifier(remoteId) ||
         localPlaylistId is! String ||
         localPlaylistId.trim().isEmpty ||
         revision is! int ||
         revision <= 0 ||
-        role == null) {
+        role == null ||
+        collaborators == null ||
+        (role != SharedPlaylistAccessRole.owner && collaborators.isNotEmpty)) {
       return null;
     }
     return SharedPlaylistBinding(
@@ -70,6 +82,7 @@ class SharedPlaylistBinding {
       role: role,
       updatedAt: _optionalDate(json['updatedAt']),
       updatedByDevice: _optionalString(json['updatedByDevice']),
+      collaborators: collaborators,
     );
   }
 }
@@ -168,6 +181,7 @@ class SharedPlaylistStore extends ChangeNotifier {
         role: remote.role,
         updatedAt: remote.updatedAt,
         updatedByDevice: remote.updatedByDevice,
+        collaborators: remote.collaborators,
       );
       await _addBinding(binding);
       return binding;
@@ -196,6 +210,7 @@ class SharedPlaylistStore extends ChangeNotifier {
         role: remote.role,
         updatedAt: remote.updatedAt,
         updatedByDevice: remote.updatedByDevice,
+        collaborators: remote.collaborators,
       );
       await _addBinding(binding);
       return binding;
@@ -250,6 +265,30 @@ class SharedPlaylistStore extends ChangeNotifier {
         playlistId: binding.remoteId,
         role: role,
       );
+    });
+  }
+
+  Future<SharedPlaylistBinding> revokeCollaborator(
+    SharedPlaylistBinding binding,
+    String collaboratorId,
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (!binding.isOwner) {
+        throw StateError('Only the shared playlist owner can revoke access.');
+      }
+      final normalizedCollaboratorId = collaboratorId.trim();
+      if (!binding.collaborators.containsKey(normalizedCollaboratorId)) {
+        throw StateError('That collaborator no longer has access.');
+      }
+      final remote = await _requireGateway().revokeSharedPlaylistCollaborator(
+        playlistId: binding.remoteId,
+        collaboratorId: normalizedCollaboratorId,
+        baseRevision: binding.revision,
+      );
+      await _replaceBinding(binding.fromRemote(remote));
+      return bindingForLocalPlaylist(binding.localPlaylistId)!;
     });
   }
 
@@ -361,6 +400,29 @@ SharedPlaylistAccessRole? _roleFromName(Object? value) => switch (value) {
   'viewer' => SharedPlaylistAccessRole.viewer,
   _ => null,
 };
+
+Map<String, SharedPlaylistAccessRole>? _collaboratorsFromJson(Object? value) {
+  if (value == null) {
+    return const <String, SharedPlaylistAccessRole>{};
+  }
+  if (value is! Map) {
+    return null;
+  }
+  final collaborators = <String, SharedPlaylistAccessRole>{};
+  for (final entry in value.entries) {
+    final accountId = entry.key;
+    final role = _roleFromName(entry.value);
+    if (accountId is! String ||
+        accountId.trim().isEmpty ||
+        accountId.length > 256 ||
+        role == null ||
+        role == SharedPlaylistAccessRole.owner) {
+      return null;
+    }
+    collaborators[accountId] = role;
+  }
+  return Map<String, SharedPlaylistAccessRole>.unmodifiable(collaborators);
+}
 
 String? _optionalString(Object? value) {
   final normalized = value?.toString().trim() ?? '';

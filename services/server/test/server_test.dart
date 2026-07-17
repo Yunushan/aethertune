@@ -722,6 +722,36 @@ void main() {
     expect(files.single.path, isNot(contains(code)));
   });
 
+  test('file shared-playlist invites are consumed once without raw codes',
+      () async {
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-server-shared-invite-test-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final firstStore = FileSharedPlaylistInviteStore(root);
+    final code = await firstStore.issue(
+      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      role: SharedPlaylistRole.editor,
+    );
+    final restartedStore = FileSharedPlaylistInviteStore(root);
+
+    final consumed = await restartedStore.consume(code);
+
+    expect(consumed?.playlistId, 'AAAAAAAAAAAAAAAAAAAAAAAA');
+    expect(consumed?.role, SharedPlaylistRole.editor);
+    expect(await restartedStore.lookup(code), isNull);
+    final files = await root
+        .list(recursive: true)
+        .where((entity) => entity is File)
+        .cast<File>()
+        .toList();
+    expect(files, isEmpty);
+  });
+
   group('shared playlists', () {
     const ownerToken = 'shared-owner-token';
     const viewerToken = 'shared-viewer-token';
@@ -785,6 +815,15 @@ void main() {
       expect(viewerJoin.statusCode, 200);
       expect((await _json(viewerJoin))['role'], 'viewer');
 
+      final reusedViewerInvite = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$viewerCode',
+          token: viewerToken,
+        ),
+      );
+      expect(reusedViewerInvite.statusCode, 404);
+
       final viewerWrite = await server(
         _request(
           'PUT',
@@ -802,6 +841,19 @@ void main() {
         ),
       );
       expect(viewerWrite.statusCode, 403);
+
+      final viewerRevoke = await server(
+        _request(
+          'DELETE',
+          '/api/v1/shared-playlists/$playlistId/collaborators/viewer-account',
+          token: viewerToken,
+          jsonBody: const <String, Object?>{
+            'baseRevision': 2,
+            'deviceId': 'viewer-desktop',
+          },
+        ),
+      );
+      expect(viewerRevoke.statusCode, 403);
 
       final editorInvite = await server(
         _request(
@@ -872,6 +924,33 @@ void main() {
       expect((ownerBody['playlist'] as Map)['name'], 'Road trip updated');
       expect((ownerBody['collaborators'] as Map)['viewer-account'], 'viewer');
       expect((ownerBody['collaborators'] as Map)['editor-account'], 'editor');
+
+      final revokedEditor = await server(
+        _request(
+          'DELETE',
+          '/api/v1/shared-playlists/$playlistId/collaborators/editor-account',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{
+            'baseRevision': 4,
+            'deviceId': 'owner-phone',
+          },
+        ),
+      );
+      expect(revokedEditor.statusCode, 200);
+      final revokedBody = await _json(revokedEditor);
+      expect(revokedBody['revision'], 5);
+      final remainingCollaborators = revokedBody['collaborators'] as Map;
+      expect(remainingCollaborators['viewer-account'], 'viewer');
+      expect(remainingCollaborators.containsKey('editor-account'), isFalse);
+
+      final editorReadAfterRevocation = await server(
+        _request(
+          'GET',
+          '/api/v1/shared-playlists/$playlistId',
+          token: editorToken,
+        ),
+      );
+      expect(editorReadAfterRevocation.statusCode, 404);
     });
 
     test('rejects stream URLs and unauthenticated invitation joins', () async {

@@ -194,6 +194,12 @@ abstract interface class SharedPlaylistGateway {
     required SharedPlaylistAccessRole role,
   });
 
+  Future<SharedPlaylistRemote> revokeSharedPlaylistCollaborator({
+    required String playlistId,
+    required String collaboratorId,
+    required int baseRevision,
+  });
+
   Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode);
 }
 
@@ -494,6 +500,39 @@ class LibrarySyncClient
       throw const FormatException('Shared playlist invite code is invalid.');
     }
     return code;
+  }
+
+  @override
+  Future<SharedPlaylistRemote> revokeSharedPlaylistCollaborator({
+    required String playlistId,
+    required String collaboratorId,
+    required int baseRevision,
+  }) async {
+    final normalizedPlaylistId = _requireSharedPlaylistId(playlistId);
+    final normalizedCollaboratorId = collaboratorId.trim();
+    if (baseRevision <= 0 ||
+        normalizedCollaboratorId.isEmpty ||
+        normalizedCollaboratorId.length > 256) {
+      throw const FormatException('Shared playlist collaborator is invalid.');
+    }
+    final response = await _execute(
+      'DELETE',
+      endpoint: account.sharedPlaylistCollaboratorEndpointUri(
+        normalizedPlaylistId,
+        normalizedCollaboratorId,
+      ),
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseSharedPlaylist(response.body);
   }
 
   @override
