@@ -87,7 +87,13 @@ void main() {
       findsNWidgets(2),
     );
 
-    await tester.tap(find.text('Focus mix').first);
+    final focusMix = find.text('Focus mix').first;
+    await Scrollable.ensureVisible(
+      tester.element(focusMix),
+      alignment: 0.2,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(focusMix);
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Play mix'), findsOneWidget);

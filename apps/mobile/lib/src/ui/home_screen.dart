@@ -807,6 +807,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   track,
                 ),
+                internetArchiveProvider: widget.internetArchiveProvider,
                 radioBrowserProvider: widget.radioBrowserProvider,
               ),
               _LibraryTab(
@@ -3417,6 +3418,7 @@ class _HomeTab extends StatefulWidget {
     required this.onImportFolder,
     required this.onAddToPlaylist,
     required this.onLyrics,
+    this.internetArchiveProvider,
     this.radioBrowserProvider,
   });
 
@@ -3424,6 +3426,7 @@ class _HomeTab extends StatefulWidget {
   final VoidCallback onImportFolder;
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
+  final InternetArchiveProvider? internetArchiveProvider;
   final RadioBrowserProvider? radioBrowserProvider;
 
   @override
@@ -3434,6 +3437,7 @@ class _HomeTabState extends State<_HomeTab> {
   static const ProviderHomeFeedCoordinator _providerHomeCoordinator =
       ProviderHomeFeedCoordinator();
 
+  late final InternetArchiveProvider _archiveProvider;
   late final RadioBrowserProvider _radioProvider;
   LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
   FollowingFeedSource _followingFeedSource = FollowingFeedSource.all;
@@ -3447,6 +3451,8 @@ class _HomeTabState extends State<_HomeTab> {
   @override
   void initState() {
     super.initState();
+    _archiveProvider =
+        widget.internetArchiveProvider ?? InternetArchiveProvider();
     _radioProvider = widget.radioBrowserProvider ?? RadioBrowserProvider();
   }
 
@@ -3549,6 +3555,8 @@ class _HomeTabState extends State<_HomeTab> {
           _SpotifySavedTracksShelf(provider: spotifyProvider),
           const SizedBox(height: 12),
         ],
+        _PopularInternetArchiveShelf(provider: _archiveProvider),
+        const SizedBox(height: 12),
         if (sections.isEmpty)
           _EmptyHomeFeed(
             title: 'Your local feed is empty',
@@ -4734,6 +4742,156 @@ String _radioStationSummary(RadioBrowserStation station) {
     if (station.bitrateKbps > 0) '${station.bitrateKbps} kbps',
   ];
   return parts.isEmpty ? 'Station details' : parts.join(' / ');
+}
+
+final class _PopularInternetArchiveShelf extends StatefulWidget {
+  const _PopularInternetArchiveShelf({required this.provider});
+
+  final InternetArchiveProvider provider;
+
+  @override
+  State<_PopularInternetArchiveShelf> createState() =>
+      _PopularInternetArchiveShelfState();
+}
+
+final class _PopularInternetArchiveShelfState
+    extends State<_PopularInternetArchiveShelf> {
+  List<InternetArchiveItem> _items = const <InternetArchiveItem>[];
+  bool _loading = false;
+  bool _loaded = false;
+  bool _failed = false;
+  int _requestSerial = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final offline = context.watch<LibraryStore>().offlineModeEnabled;
+    return Column(
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.library_music_outlined),
+          title: const Text('Popular Archive audio'),
+          subtitle: const Text(
+            'Public audio ranked by Internet Archive downloads',
+          ),
+          trailing: IconButton.filled(
+            key: const Key('home-popular-archive-refresh'),
+            tooltip: 'Refresh popular Archive audio',
+            onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+            icon: const Icon(Icons.refresh),
+          ),
+        ),
+        if (offline && !_loaded)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_off_outlined),
+            title: Text('Offline mode'),
+          ),
+        if (_loading && !_loaded)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: LinearProgressIndicator(),
+          ),
+        if (_failed && !_loaded)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Popular Archive audio is unavailable'),
+            trailing: IconButton(
+              tooltip: 'Retry popular Archive audio',
+              onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        for (final item in _items)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.audio_file_outlined),
+            title: Text(item.title.isEmpty ? item.identifier : item.title),
+            subtitle: Text(_archiveHomeItemSubtitle(item)),
+            onTap: () => _openItem(context, item),
+          ),
+        if (_loading && _loaded)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final request = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final page = await widget.provider.searchAudioPage(
+        '',
+        includeFacets: false,
+        pageSize: 6,
+      );
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _items = List<InternetArchiveItem>.unmodifiable(page.items);
+        _loading = false;
+        _loaded = true;
+      });
+    } on Object {
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  Future<void> _openItem(BuildContext context, InternetArchiveItem item) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => InternetArchiveItemScreen(
+          item: item,
+          provider: widget.provider,
+          onOpenCollection: (collection) =>
+              _openCollection(context, collection),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCollection(BuildContext context, String collection) {
+    final normalized = collection.trim();
+    if (normalized.isEmpty) {
+      return Future<void>.value();
+    }
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => InternetArchiveCollectionScreen(
+          collection: normalized,
+          provider: widget.provider,
+        ),
+      ),
+    );
+  }
+}
+
+String _archiveHomeItemSubtitle(InternetArchiveItem item) {
+  final playableFileCount =
+      item.files.where((file) => file.isPlayableAudio).length;
+  final parts = <String>[
+    if (item.creator.isNotEmpty) item.creator,
+    if (item.year.isNotEmpty) item.year,
+    '$playableFileCount playable ${playableFileCount == 1 ? 'file' : 'files'}',
+  ];
+  return parts.join(' / ');
 }
 
 class _ProviderHomeDiscovery extends StatelessWidget {

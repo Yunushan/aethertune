@@ -10,6 +10,7 @@ import 'package:aethertune/l10n/app_localizations.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
+import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
@@ -173,7 +174,7 @@ void main() {
     await _pumpHome(tester, fixture);
 
     expect(find.text('From your servers'), findsOneWidget);
-    expect(find.text('Offline mode'), findsNWidgets(2));
+    expect(find.text('Offline mode'), findsNWidgets(3));
     final refresh = tester.widget<IconButton>(
       find.byKey(const ValueKey<String>('provider-home-refresh')),
     );
@@ -322,6 +323,70 @@ void main() {
       tester
           .widget<IconButton>(
             find.byKey(const ValueKey<String>('home-popular-radio-refresh')),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('loads popular public Archive audio explicitly on Home', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1200);
+    addTearDown(tester.view.reset);
+
+    final fixture = await _HomeFixture.create(
+      provider: _FakeProviderHomeCatalog(),
+    );
+    addTearDown(fixture.dispose);
+    Uri? requestedSearchUri;
+    final archive = InternetArchiveProvider(
+      baseUri: Uri.parse('https://archive.example.test'),
+      searchLoader: (uri) async {
+        requestedSearchUri = uri;
+        return _popularArchiveSearchPage;
+      },
+      metadataLoader: (_) async => _popularArchiveItemMetadata,
+    );
+
+    await _pumpHome(tester, fixture, internetArchiveProvider: archive);
+
+    expect(find.text('Popular Archive audio'), findsOneWidget);
+    expect(requestedSearchUri, isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-popular-archive-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedSearchUri!.path, '/advancedsearch.php');
+    expect(requestedSearchUri!.queryParameters['q'], 'mediatype:audio');
+    expect(requestedSearchUri!.queryParametersAll['sort[]'], <String>[
+      'downloads desc',
+    ]);
+    expect(requestedSearchUri!.queryParameters['rows'], '6');
+    expect(
+      requestedSearchUri!.queryParametersAll.containsKey('facet[]'),
+      isFalse,
+    );
+    expect(find.text('Public Archive Session'), findsOneWidget);
+
+    await tester.tap(find.text('Public Archive Session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Archive item'), findsOneWidget);
+    expect(find.text('Playable files'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await fixture.library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(
+              const ValueKey<String>('home-popular-archive-refresh'),
+            ),
           )
           .onPressed,
       isNull,
@@ -516,6 +581,7 @@ Future<void> _pumpHome(
   YouTubeDataSettingsStore? youtube,
   YouTubeChannelFollowStore? youtubeFollows,
   SpotifySettingsStore? spotify,
+  InternetArchiveProvider? internetArchiveProvider,
   RadioBrowserProvider? radioBrowserProvider,
 }) async {
   await tester.pumpWidget(
@@ -546,6 +612,7 @@ Future<void> _pumpHome(
         supportedLocales: AppLocalizations.supportedLocales,
         home: HomeScreen(
           initialTab: 0,
+          internetArchiveProvider: internetArchiveProvider,
           radioBrowserProvider: radioBrowserProvider,
         ),
       ),
@@ -640,6 +707,38 @@ const _popularRadioStationsPage = '''
     "lastcheckok": 1
   }
 ]
+''';
+
+const _popularArchiveSearchPage = '''
+{
+  "response": {
+    "numFound": 1,
+    "docs": [
+      {"identifier": "public_archive_session"}
+    ]
+  }
+}
+''';
+
+const _popularArchiveItemMetadata = '''
+{
+  "metadata": {
+    "identifier": "public_archive_session",
+    "title": "Public Archive Session",
+    "creator": "Open Artist",
+    "year": "2024",
+    "collection": "opensource_audio"
+  },
+  "files": [
+    {
+      "name": "public-session.mp3",
+      "format": "VBR MP3",
+      "title": "Public Session",
+      "source": "original",
+      "length": "120"
+    }
+  ]
+}
 ''';
 
 String _followedChannelPage(String title, String id, String publishedAt) => '''
