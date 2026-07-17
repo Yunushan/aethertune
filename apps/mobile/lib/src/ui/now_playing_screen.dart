@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
 import '../domain/track.dart';
+import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
@@ -99,6 +100,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final savedTrack = _findTrack(library.tracks, current.id);
+                  final bookmarks = savedTrack == null
+                      ? const <TrackBookmark>[]
+                      : library.bookmarksForTrack(current.id);
                   final currentQueueIndex = player.queue.indexWhere(
                     (track) => track.id == current.id,
                   );
@@ -108,9 +112,24 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     canFavorite: savedTrack != null,
                     player: player,
                     chapters: savedTrack?.chapters ?? current.chapters,
+                    bookmarks: bookmarks,
                     onToggleFavorite: savedTrack == null
                         ? null
                         : () => library.toggleFavorite(current.id),
+                    onAddBookmark: savedTrack == null
+                        ? null
+                        : () async {
+                            await library.addTrackBookmark(
+                              current.id,
+                              player.position,
+                            );
+                          },
+                    onRemoveBookmark: savedTrack == null
+                        ? null
+                        : (bookmark) => library.removeTrackBookmark(
+                              current.id,
+                              bookmark.id,
+                            ),
                     onOpenQueue: widget.onOpenQueue,
                     onOpenLyrics: widget.onOpenLyrics,
                     onHorizontalDragStart: () => _horizontalDragDistance = 0,
@@ -138,7 +157,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                             children: <Widget>[
                               Expanded(child: content.artwork),
                               const SizedBox(width: 56),
-                              Expanded(child: content.controls),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: content.controls,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -230,13 +253,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         allowedExtensions: const <String>['png'],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) return;
+      if (outputPath == null || outputPath.isEmpty) {
+        return;
+      }
       if (!Platform.isAndroid && !Platform.isIOS) {
         await File(outputPath).writeAsBytes(bytes, flush: true);
       }
-      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
+      }
     } on Object catch (error) {
-      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('Could not save track share card: $error')));
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('Could not save track share card: $error')));
+      }
     }
   }
 
@@ -312,7 +341,10 @@ class _NowPlayingContent {
     required bool canFavorite,
     required PlayerController player,
     required List<TrackChapter> chapters,
+    required List<TrackBookmark> bookmarks,
     required Future<void> Function()? onToggleFavorite,
+    required Future<void> Function()? onAddBookmark,
+    required Future<bool> Function(TrackBookmark bookmark)? onRemoveBookmark,
     required VoidCallback onOpenQueue,
     required VoidCallback onOpenLyrics,
     required VoidCallback onHorizontalDragStart,
@@ -334,7 +366,10 @@ class _NowPlayingContent {
           canFavorite: canFavorite,
           player: player,
           chapters: chapters,
+          bookmarks: bookmarks,
           onToggleFavorite: onToggleFavorite,
+          onAddBookmark: onAddBookmark,
+          onRemoveBookmark: onRemoveBookmark,
           onOpenQueue: onOpenQueue,
           onOpenLyrics: onOpenLyrics,
         );
@@ -412,7 +447,10 @@ class _NowPlayingControls extends StatelessWidget {
     required this.canFavorite,
     required this.player,
     required this.chapters,
+    required this.bookmarks,
     required this.onToggleFavorite,
+    required this.onAddBookmark,
+    required this.onRemoveBookmark,
     required this.onOpenQueue,
     required this.onOpenLyrics,
   });
@@ -422,7 +460,10 @@ class _NowPlayingControls extends StatelessWidget {
   final bool canFavorite;
   final PlayerController player;
   final List<TrackChapter> chapters;
+  final List<TrackBookmark> bookmarks;
   final Future<void> Function()? onToggleFavorite;
+  final Future<void> Function()? onAddBookmark;
+  final Future<bool> Function(TrackBookmark bookmark)? onRemoveBookmark;
   final VoidCallback onOpenQueue;
   final VoidCallback onOpenLyrics;
 
@@ -513,6 +554,14 @@ class _NowPlayingControls extends StatelessWidget {
           if (chapters.isNotEmpty) ...<Widget>[
             const SizedBox(height: 4),
             _ChapterMarkers(player: player, chapters: chapters),
+          ],
+          if (bookmarks.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            _TrackBookmarks(
+              player: player,
+              bookmarks: bookmarks,
+              onRemove: onRemoveBookmark,
+            ),
           ],
           if (player.supportsVisualizer) ...<Widget>[
             const SizedBox(height: 12),
@@ -627,10 +676,62 @@ class _NowPlayingControls extends StatelessWidget {
                 ),
                 label: Text(_aBRepeatLabel(player)),
               ),
+              TextButton.icon(
+                key: const Key('now-playing-add-bookmark'),
+                onPressed: onAddBookmark == null
+                    ? null
+                    : () => unawaited(onAddBookmark!()),
+                icon: const Icon(Icons.bookmark_add_outlined),
+                label: const Text('Bookmark'),
+              ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TrackBookmarks extends StatelessWidget {
+  const _TrackBookmarks({
+    required this.player,
+    required this.bookmarks,
+    required this.onRemove,
+  });
+
+  final PlayerController player;
+  final List<TrackBookmark> bookmarks;
+  final Future<bool> Function(TrackBookmark bookmark)? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text('Bookmarks', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: bookmarks
+              .map(
+                (bookmark) => InputChip(
+                  key: Key('now-playing-bookmark-${bookmark.id}'),
+                  avatar: const Icon(Icons.bookmark_outline, size: 18),
+                  label: Text(_formatPlaybackTime(bookmark.position)),
+                  tooltip: 'Seek to ${_formatPlaybackTime(bookmark.position)}',
+                  onPressed: () {
+                    player.clearABRepeat();
+                    unawaited(player.seek(bookmark.position));
+                  },
+                  onDeleted: onRemove == null
+                      ? null
+                      : () => unawaited(onRemove!(bookmark)),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 }

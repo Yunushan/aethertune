@@ -131,6 +131,16 @@ void main() {
     await tester.pump();
     expect(player.isABRepeatActive, isTrue);
     expect(find.text('Clear A-B'), findsOneWidget);
+    final bookmarkPosition = player.position;
+    await tester.tap(find.byKey(const Key('now-playing-add-bookmark')));
+    await tester.pump();
+    final bookmark = library.bookmarksForTrack(first.id).single;
+    expect(bookmark.position, bookmarkPosition);
+    await engine.seek(const Duration(seconds: 5));
+    await tester.pump();
+    await tester.tap(find.byKey(Key('now-playing-bookmark-${bookmark.id}')));
+    await tester.pump();
+    expect(engine.positionValue, bookmark.position);
     await tester.tap(find.byKey(const Key('now-playing-speed')));
     await tester.pumpAndSettle();
     final speedItem = find.widgetWithText(CheckedPopupMenuItem<double>, '1.5x');

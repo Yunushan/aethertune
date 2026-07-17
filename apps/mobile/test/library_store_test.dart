@@ -3006,6 +3006,47 @@ void main() {
     expect(secondStore.playbackProgressForTrack('podcast'), isNull);
   });
 
+  test('persists, removes, and cleans up local track bookmarks', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 14, 15);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('podcast')]);
+
+    final bookmark = await firstStore.addTrackBookmark(
+      'podcast',
+      const Duration(minutes: 12, seconds: 34),
+    );
+
+    expect(bookmark, isNotNull);
+    expect(
+      firstStore.bookmarksForTrack('podcast').single.position,
+      const Duration(minutes: 12, seconds: 34),
+    );
+    expect(
+      await firstStore.addTrackBookmark('missing', const Duration(seconds: 1)),
+      isNull,
+    );
+
+    final restored = LibraryStore(clock: clock);
+    await restored.load();
+    expect(
+      restored.bookmarksForTrack('podcast').single.id,
+      bookmark!.id,
+    );
+
+    expect(await restored.removeTrackBookmark('podcast', bookmark.id), isTrue);
+    expect(restored.bookmarksForTrack('podcast'), isEmpty);
+
+    await restored.addTrackBookmark('podcast', const Duration(seconds: 45));
+    await restored.removeTrack('podcast');
+    expect(restored.bookmarksForTrack('podcast'), isEmpty);
+
+    await restored.addTracks(<Track>[_track('podcast')]);
+    await restored.addTrackBookmark('podcast', const Duration(seconds: 45));
+    await restored.clear();
+    expect(restored.bookmarksForTrack('podcast'), isEmpty);
+  });
+
   test('saves persists and deletes podcast feed subscriptions', () async {
     var now = DateTime.utc(2026, 1, 15);
     DateTime clock() => now;

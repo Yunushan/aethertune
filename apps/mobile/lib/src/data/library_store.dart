@@ -16,6 +16,7 @@ import '../domain/playlist.dart';
 import '../domain/podcast_subscription.dart';
 import '../domain/search_matcher.dart';
 import '../domain/track.dart';
+import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 
@@ -1140,6 +1141,7 @@ class LibraryStore extends ChangeNotifier {
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _progressKey = 'aethertune.playback_progress.v1';
+  static const _trackBookmarksKey = 'aethertune.track_bookmarks.v1';
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _pauseListeningHistoryKey =
       'aethertune.pause_listening_history.v1';
@@ -1185,6 +1187,7 @@ class LibraryStore extends ChangeNotifier {
   static const _maxSearchQueryHistoryEntries = 20;
   static const _minSavedProgress = Duration(seconds: 5);
   static const _completedProgressThreshold = Duration(seconds: 20);
+  static const _maxTrackBookmarksPerTrack = 50;
   static final _posixPathContext = path.Context(style: path.Style.posix);
   static final _windowsPathContext = path.Context(style: path.Style.windows);
 
@@ -1201,6 +1204,8 @@ class LibraryStore extends ChangeNotifier {
   final List<String> _searchQueryHistory = <String>[];
   final Map<String, PlaybackProgressEntry> _progressByTrackId =
       <String, PlaybackProgressEntry>{};
+  final Map<String, List<TrackBookmark>> _bookmarksByTrackId =
+      <String, List<TrackBookmark>>{};
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final Map<String, double> _trackPlaybackSpeedOverrides = <String, double>{};
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
@@ -1259,6 +1264,9 @@ class LibraryStore extends ChangeNotifier {
       List.unmodifiable(_searchQueryHistory);
   List<PlaybackProgressEntry> get playbackProgress =>
       List.unmodifiable(_progressByTrackId.values);
+  List<TrackBookmark> bookmarksForTrack(String trackId) => List.unmodifiable(
+        _bookmarksByTrackId[trackId] ?? const <TrackBookmark>[],
+      );
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   Map<String, double> get trackPlaybackSpeedOverrides =>
       Map.unmodifiable(_trackPlaybackSpeedOverrides);
@@ -1474,6 +1482,35 @@ class LibraryStore extends ChangeNotifier {
               ),
         );
     }
+    final rawTrackBookmarks = prefs.getString(_trackBookmarksKey);
+    if (rawTrackBookmarks != null && rawTrackBookmarks.isNotEmpty) {
+      final knownTrackIds = _tracks.map((track) => track.id).toSet();
+      final decoded = jsonDecode(rawTrackBookmarks) as List<dynamic>;
+      _bookmarksByTrackId
+        ..clear()
+        ..addEntries(
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) => TrackBookmark.tryFromJson(
+                  Map<String, Object?>.from(item),
+                ),
+              )
+              .whereType<TrackBookmark>()
+              .where((bookmark) => knownTrackIds.contains(bookmark.trackId))
+              .fold(<String, List<TrackBookmark>>{}, (bookmarks, bookmark) {
+                final entries = bookmarks.putIfAbsent(
+                  bookmark.trackId,
+                  () => <TrackBookmark>[],
+                );
+                if (entries.length < _maxTrackBookmarksPerTrack) {
+                  entries.add(bookmark);
+                }
+                return bookmarks;
+              })
+              .entries,
+        );
+    }
     _pauseListeningHistory =
         prefs.getBool(_pauseListeningHistoryKey) ?? false;
     _recommendationFavoriteSignalsEnabled =
@@ -1555,6 +1592,7 @@ class LibraryStore extends ChangeNotifier {
     _removeMissingLyrics();
     _removeMissingHistory();
     _removeMissingProgress();
+    _removeMissingBookmarks();
     _sortHistory();
     _trimSearchQueryHistory();
     _sortCustomSmartPlaylists();
@@ -1647,6 +1685,7 @@ class LibraryStore extends ChangeNotifier {
         _lyricsByTrackId.remove(trackId);
         _history.removeWhere((entry) => entry.trackId == trackId);
         _progressByTrackId.remove(trackId);
+        _bookmarksByTrackId.remove(trackId);
         changed = true;
       }
     }
@@ -1698,6 +1737,7 @@ class LibraryStore extends ChangeNotifier {
     _trackPlaybackSpeedOverrides.remove(id);
     _history.removeWhere((entry) => entry.trackId == id);
     _progressByTrackId.remove(id);
+    _bookmarksByTrackId.remove(id);
     await _save();
     notifyListeners();
   }
@@ -1744,6 +1784,7 @@ class LibraryStore extends ChangeNotifier {
       );
     }
 
+    _removeMissingBookmarks();
     _sortTracks();
     _sortPlaylists();
     _sortHistory();
@@ -1797,6 +1838,7 @@ class LibraryStore extends ChangeNotifier {
     _history.clear();
     _searchQueryHistory.clear();
     _progressByTrackId.clear();
+    _bookmarksByTrackId.clear();
     _lyricsByTrackId.clear();
     _trackPlaybackSpeedOverrides.clear();
     _offlineCacheQueue.clear();
@@ -4896,6 +4938,7 @@ class LibraryStore extends ChangeNotifier {
     _tracks
       ..clear()
       ..addAll(uniqueTracks.values);
+    _removeMissingBookmarks();
     _playlists
       ..clear()
       ..addAll(sanitizedPlaylists);
@@ -5928,6 +5971,54 @@ class LibraryStore extends ChangeNotifier {
     _progressByTrackId.remove(trackId);
     await _save();
     notifyListeners();
+  }
+
+  Future<TrackBookmark?> addTrackBookmark(
+    String trackId,
+    Duration position,
+  ) async {
+    if (!_tracks.any((track) => track.id == trackId) || position.isNegative) {
+      return null;
+    }
+
+    final bookmarks = _bookmarksByTrackId.putIfAbsent(
+      trackId,
+      () => <TrackBookmark>[],
+    );
+    final now = _clock();
+    final bookmark = TrackBookmark(
+      id: '$trackId-${now.microsecondsSinceEpoch}-${bookmarks.length}',
+      trackId: trackId,
+      position: position,
+      createdAt: now,
+    );
+    bookmarks.add(bookmark);
+    if (bookmarks.length > _maxTrackBookmarksPerTrack) {
+      bookmarks.removeAt(0);
+    }
+    await _save();
+    notifyListeners();
+    return bookmark;
+  }
+
+  Future<bool> removeTrackBookmark(String trackId, String bookmarkId) async {
+    final bookmarks = _bookmarksByTrackId[trackId];
+    if (bookmarks == null) {
+      return false;
+    }
+    final bookmarkCount = bookmarks.length;
+    bookmarks.removeWhere(
+      (bookmark) => bookmark.id == bookmarkId,
+    );
+    if (bookmarks.length == bookmarkCount) {
+      return false;
+    }
+    if (bookmarks.isEmpty) {
+      _bookmarksByTrackId.remove(trackId);
+    }
+    await _save();
+    notifyListeners();
+    return true;
   }
 
   PodcastSubscription? podcastSubscriptionById(String id) {
@@ -8077,6 +8168,13 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  void _removeMissingBookmarks() {
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+    _bookmarksByTrackId.removeWhere(
+      (trackId, _) => !knownTrackIds.contains(trackId),
+    );
+  }
+
   void _sortHistory() {
     _history.sort((a, b) => b.playedAt.compareTo(a.playedAt));
   }
@@ -8645,6 +8743,11 @@ class LibraryStore extends ChangeNotifier {
     final encodedProgress = jsonEncode(
       _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
     );
+    final encodedTrackBookmarks = jsonEncode(
+      _bookmarksByTrackId.values.expand((entries) => entries).map(
+        (bookmark) => bookmark.toJson(),
+      ).toList(),
+    );
     final encodedLyrics = jsonEncode(
       _lyricsByTrackId.values.map((lyrics) => lyrics.toJson()).toList(),
     );
@@ -8667,6 +8770,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_historyKey, encodedHistory);
     await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
     await prefs.setString(_progressKey, encodedProgress);
+    await prefs.setString(_trackBookmarksKey, encodedTrackBookmarks);
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_pauseListeningHistoryKey, _pauseListeningHistory);
     await prefs.setBool(
