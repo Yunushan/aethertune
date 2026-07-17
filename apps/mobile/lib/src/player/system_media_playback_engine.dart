@@ -59,6 +59,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       'aethertune:android-auto:library:all-tracks';
   static const _androidAutoPlaylistsId =
       'aethertune:android-auto:library:playlists';
+  static const _androidAutoArtistsId =
+      'aethertune:android-auto:library:artists';
+  static const _androidAutoAlbumsId =
+      'aethertune:android-auto:library:albums';
   static const _androidAutoPlaylistIdPrefix =
       'aethertune:android-auto:library:playlist:';
   static const _androidAutoPlaylistTrackIdPrefix =
@@ -416,12 +420,21 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       case _androidAutoLibraryId:
         return <MediaItem>[
           _androidAutoAllTracksFolder(),
-          if (_libraryBrowsePlaylists.isNotEmpty) _androidAutoPlaylistsFolder(),
+          if (_hasBrowseCategory(MediaLibraryBrowseCategory.playlist))
+            _androidAutoPlaylistsFolder(),
+          if (_hasBrowseCategory(MediaLibraryBrowseCategory.artist))
+            _androidAutoArtistsFolder(),
+          if (_hasBrowseCategory(MediaLibraryBrowseCategory.album))
+            _androidAutoAlbumsFolder(),
         ];
       case _androidAutoAllTracksId:
         return _libraryBrowseMediaItems();
       case _androidAutoPlaylistsId:
-        return _playlistBrowseFolders();
+        return _playlistBrowseFolders(MediaLibraryBrowseCategory.playlist);
+      case _androidAutoArtistsId:
+        return _playlistBrowseFolders(MediaLibraryBrowseCategory.artist);
+      case _androidAutoAlbumsId:
+        return _playlistBrowseFolders(MediaLibraryBrowseCategory.album);
       default:
         final playlist = _playlistForMediaId(parentMediaId);
         if (playlist != null) {
@@ -444,6 +457,12 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     }
     if (mediaId == _androidAutoPlaylistsId) {
       return _androidAutoPlaylistsFolder();
+    }
+    if (mediaId == _androidAutoArtistsId) {
+      return _androidAutoArtistsFolder();
+    }
+    if (mediaId == _androidAutoAlbumsId) {
+      return _androidAutoAlbumsFolder();
     }
     for (var index = 0; index < _tracks.length; index += 1) {
       if (_tracks[index].id == mediaId) {
@@ -660,8 +679,33 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     );
   }
 
-  List<MediaItem> _playlistBrowseFolders() {
+  MediaItem _androidAutoArtistsFolder() {
+    return const MediaItem(
+      id: _androidAutoArtistsId,
+      title: 'Artists',
+      displaySubtitle: 'AetherTune library',
+      playable: false,
+    );
+  }
+
+  MediaItem _androidAutoAlbumsFolder() {
+    return const MediaItem(
+      id: _androidAutoAlbumsId,
+      title: 'Albums',
+      displaySubtitle: 'AetherTune library',
+      playable: false,
+    );
+  }
+
+  bool _hasBrowseCategory(MediaLibraryBrowseCategory category) {
+    return _libraryBrowsePlaylists.any(
+      (collection) => collection.category == category,
+    );
+  }
+
+  List<MediaItem> _playlistBrowseFolders(MediaLibraryBrowseCategory category) {
     return _libraryBrowsePlaylists
+        .where((collection) => collection.category == category)
         .map(_playlistBrowseFolder)
         .toList(growable: false);
   }
@@ -724,7 +768,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   String _playlistMediaId(MediaLibraryBrowsePlaylist playlist) =>
-      '$_androidAutoPlaylistIdPrefix${Uri.encodeComponent(playlist.id)}';
+      '$_androidAutoPlaylistIdPrefix${playlist.category.name}:'
+      '${Uri.encodeComponent(playlist.id)}';
 
   void _publishState() {
     playbackState.add(
@@ -906,7 +951,7 @@ class _PlaylistTrackSelection {
 
   String get mediaId =>
       '${SystemMediaPlaybackEngine._androidAutoPlaylistTrackIdPrefix}'
-      '${Uri.encodeComponent(playlist.id)}:$index';
+      '${playlist.category.name}:${Uri.encodeComponent(playlist.id)}:$index';
 }
 
 AudioProcessingState _audioProcessingState(ProcessingState state) {

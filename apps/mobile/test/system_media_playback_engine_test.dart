@@ -377,6 +377,18 @@ void main() {
           artworkUri: Uri.parse('https://example.test/favorites.jpg'),
           tracks: <Track>[tracks.last, tracks.first, tracks.last],
         ),
+        MediaLibraryBrowsePlaylist(
+          id: 'artist:artist-one',
+          title: 'Artist one',
+          category: MediaLibraryBrowseCategory.artist,
+          tracks: <Track>[tracks.first, tracks.last],
+        ),
+        MediaLibraryBrowsePlaylist(
+          id: 'album:album-one',
+          title: 'Album one',
+          category: MediaLibraryBrowseCategory.album,
+          tracks: <Track>[tracks.last, tracks.first],
+        ),
       ],
       onPlaylistTrackSelected: (track, queue, queueIndex) async {
         selectedTrack = track;
@@ -404,11 +416,38 @@ void main() {
     );
     expect(playlistTracks.map((item) => item.id).toSet(), hasLength(3));
 
+    final artistsFolder = libraryChildren.singleWhere(
+      (item) => item.title == 'Artists',
+    );
+    final artistFolder = (await engine.getChildren(artistsFolder.id)).single;
+    expect(artistFolder.title, 'Artist one');
+    final artistTracks = await engine.getChildren(artistFolder.id);
+    expect(
+      artistTracks.map((item) => item.title),
+      <String>['Track one', 'Track two'],
+    );
+
+    final albumsFolder = libraryChildren.singleWhere(
+      (item) => item.title == 'Albums',
+    );
+    final albumFolder = (await engine.getChildren(albumsFolder.id)).single;
+    expect(albumFolder.title, 'Album one');
+    final albumTracks = await engine.getChildren(albumFolder.id);
+    expect(
+      albumTracks.map((item) => item.title),
+      <String>['Track two', 'Track one'],
+    );
+
     await engine.playFromMediaId(playlistTracks.last.id);
     expect(selectedTrack, same(tracks.last));
     expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
     expect(selectedQueueIndex, 2);
     expect(delegate.playingValue, isFalse);
+
+    await engine.playFromMediaId(albumTracks.first.id);
+    expect(selectedTrack, same(tracks.last));
+    expect(selectedQueue, <Track>[tracks.last, tracks.first]);
+    expect(selectedQueueIndex, 0);
   });
 
   test('forwards an opt-in visualizer through the system media wrapper',

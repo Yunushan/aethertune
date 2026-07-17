@@ -163,6 +163,32 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                   tracks: library.tracksForCustomSmartPlaylist(playlist.id),
                 ),
               ),
+              ...library
+                  .browseGroups(LibraryBrowseType.artist)
+                  .map(
+                    (group) => MediaLibraryBrowsePlaylist(
+                      id: 'artist:${group.key}',
+                      title: group.label,
+                      category: MediaLibraryBrowseCategory.artist,
+                      tracks: library.tracksForBrowseGroup(
+                        LibraryBrowseType.artist,
+                        group.key,
+                      ),
+                    ),
+                  ),
+              ...library
+                  .browseGroups(LibraryBrowseType.album)
+                  .map(
+                    (group) => MediaLibraryBrowsePlaylist(
+                      id: 'album:${group.key}',
+                      title: group.label,
+                      category: MediaLibraryBrowseCategory.album,
+                      tracks: library.tracksForBrowseGroup(
+                        LibraryBrowseType.album,
+                        group.key,
+                      ),
+                    ),
+                  ),
             ];
             controller.setMediaLibraryBrowseTracks(
               library.tracks,

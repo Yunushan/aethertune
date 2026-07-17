@@ -14,19 +14,24 @@ typedef MediaLibraryTrackSelectionHandler = Future<void> Function(Track track);
 typedef MediaLibraryPlaylistTrackSelectionHandler =
     Future<void> Function(Track track, List<Track> queue, int queueIndex);
 
-/// A playlist that can be exposed to a system-media library browser.
+/// The top-level category where a collection appears in a system-media browser.
+enum MediaLibraryBrowseCategory { playlist, artist, album }
+
+/// A track collection that can be exposed to a system-media library browser.
 class MediaLibraryBrowsePlaylist {
   MediaLibraryBrowsePlaylist({
     required this.id,
     required this.title,
     required Iterable<Track> tracks,
     this.artworkUri,
+    this.category = MediaLibraryBrowseCategory.playlist,
   }) : tracks = List<Track>.unmodifiable(tracks);
 
   final String id;
   final String title;
   final List<Track> tracks;
   final Uri? artworkUri;
+  final MediaLibraryBrowseCategory category;
 }
 
 abstract interface class PlaybackAudioEngine {

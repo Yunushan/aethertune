@@ -56,8 +56,18 @@ void main() {
     final customPlaylist = audio.browsePlaylists.singleWhere(
       (playlist) => playlist.id == 'custom-smart:${customSmartPlaylist.id}',
     );
+    final artistCollection = audio.browsePlaylists.singleWhere(
+      (playlist) => playlist.id == 'artist:aethertune test artist',
+    );
+    final albumCollection = audio.browsePlaylists.singleWhere(
+      (playlist) => playlist.id == 'album:smoke session',
+    );
     expect(favoritesPlaylist.tracks.map((item) => item.id), <String>[track.id]);
     expect(customPlaylist.tracks.map((item) => item.id), <String>[track.id]);
+    expect(artistCollection.category, MediaLibraryBrowseCategory.artist);
+    expect(albumCollection.category, MediaLibraryBrowseCategory.album);
+    expect(artistCollection.tracks.map((item) => item.id), <String>[track.id]);
+    expect(albumCollection.tracks.map((item) => item.id), <String>[track.id]);
 
     final playCallsBefore = audio.playCalls;
     await player.playTrack(track);
