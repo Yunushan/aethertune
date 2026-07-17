@@ -555,6 +555,7 @@ class HomeScreen extends StatefulWidget {
     this.initialTab = 0,
     this.onRestartOnboarding,
     this.internetArchiveProvider,
+    this.radioBrowserProvider,
     this.podcastDirectory,
     this.podcastProviderFactory,
     this.providerSearchProviders,
@@ -566,6 +567,7 @@ class HomeScreen extends StatefulWidget {
   final int initialTab;
   final VoidCallback? onRestartOnboarding;
   final InternetArchiveProvider? internetArchiveProvider;
+  final RadioBrowserProvider? radioBrowserProvider;
   final ItunesPodcastDirectory? podcastDirectory;
   final PodcastRssProvider Function(Uri feedUri)? podcastProviderFactory;
   final List<MusicSourceProvider>? providerSearchProviders;
@@ -576,7 +578,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
-  final _radioClickProvider = RadioBrowserProvider();
+  late final RadioBrowserProvider _radioClickProvider;
   final _lyricsProvider = LrcLibLyricsProvider();
   final _lyricsCacheSettings = LyricsSearchCacheSettingsStore();
   late int _tabIndex;
@@ -600,6 +602,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _tabIndex = widget.initialTab;
+    _radioClickProvider = widget.radioBrowserProvider ??
+        RadioBrowserProvider();
     unawaited(_loadLyricsSearchCacheLifetime());
   }
 
@@ -803,6 +807,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   track,
                 ),
+                radioBrowserProvider: widget.radioBrowserProvider,
               ),
               _LibraryTab(
                 searchController: _searchController,
@@ -3412,12 +3417,14 @@ class _HomeTab extends StatefulWidget {
     required this.onImportFolder,
     required this.onAddToPlaylist,
     required this.onLyrics,
+    this.radioBrowserProvider,
   });
 
   final VoidCallback onImport;
   final VoidCallback onImportFolder;
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
+  final RadioBrowserProvider? radioBrowserProvider;
 
   @override
   State<_HomeTab> createState() => _HomeTabState();
@@ -3427,6 +3434,7 @@ class _HomeTabState extends State<_HomeTab> {
   static const ProviderHomeFeedCoordinator _providerHomeCoordinator =
       ProviderHomeFeedCoordinator();
 
+  late final RadioBrowserProvider _radioProvider;
   LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
   FollowingFeedSource _followingFeedSource = FollowingFeedSource.all;
   ProviderHomeFeed? _providerHomeFeed;
@@ -3435,6 +3443,12 @@ class _HomeTabState extends State<_HomeTab> {
   final Set<String> _providerHomeLoadingMoreSections = <String>{};
   final Set<String> _providerHomeLoadMoreFailures = <String>{};
   int _providerHomeRequest = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _radioProvider = widget.radioBrowserProvider ?? RadioBrowserProvider();
+  }
 
   @override
   void didChangeDependencies() {
@@ -3498,20 +3512,12 @@ class _HomeTabState extends State<_HomeTab> {
         break;
       }
     }
-    if (sections.isEmpty &&
-        providerCatalogs.isEmpty &&
-        youtubeProvider == null &&
-        spotifyProvider == null) {
-      return _EmptyHomeFeed(
-        onImport: widget.onImport,
-        onImportFolder: widget.onImportFolder,
-      );
-    }
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: <Widget>[
         Text('Home', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        _PopularRadioStationsShelf(provider: _radioProvider),
         const SizedBox(height: 12),
         if (providerCatalogs.isNotEmpty) ...<Widget>[
           _ProviderHomeDiscovery(
@@ -4408,6 +4414,175 @@ String _spotifyTrackSubtitle(Track track) {
   return <String>[track.artist, track.album]
       .where((part) => part.trim().isNotEmpty)
       .join(' - ');
+}
+
+final class _PopularRadioStationsShelf extends StatefulWidget {
+  const _PopularRadioStationsShelf({required this.provider});
+
+  final RadioBrowserProvider provider;
+
+  @override
+  State<_PopularRadioStationsShelf> createState() =>
+      _PopularRadioStationsShelfState();
+}
+
+final class _PopularRadioStationsShelfState
+    extends State<_PopularRadioStationsShelf> {
+  List<RadioBrowserStation> _stations = const <RadioBrowserStation>[];
+  bool _loading = false;
+  bool _loaded = false;
+  bool _failed = false;
+  int _requestSerial = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final offline = library.offlineModeEnabled;
+    final tracks = _stations
+        .map((station) => station.toTrack(sourceId: widget.provider.id))
+        .toList(growable: false);
+    return Column(
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.radio_outlined),
+          title: const Text('Popular radio stations'),
+          subtitle: const Text('Public stations ranked by Radio Browser clicks'),
+          trailing: IconButton.filled(
+            key: const Key('home-popular-radio-refresh'),
+            tooltip: 'Refresh popular radio stations',
+            onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+            icon: const Icon(Icons.refresh),
+          ),
+        ),
+        if (offline && !_loaded)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_off_outlined),
+            title: Text('Offline mode'),
+          ),
+        if (_loading && !_loaded)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: LinearProgressIndicator(),
+          ),
+        if (_failed && !_loaded)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Popular stations are unavailable'),
+            trailing: IconButton(
+              tooltip: 'Retry popular radio stations',
+              onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        for (var index = 0; index < _stations.length; index++)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.radio_outlined),
+            title: Text(_stations[index].name),
+            subtitle: Text(_radioStationSummary(_stations[index])),
+            onTap: () => _openStation(
+              context,
+              _stations[index],
+              tracks,
+            ),
+            trailing: IconButton(
+              tooltip: library.tracks.any(
+                (saved) => saved.id == tracks[index].id,
+              )
+                  ? 'Saved to library'
+                  : 'Save station to library',
+              onPressed: () => unawaited(_saveTrack(context, tracks[index])),
+              icon: Icon(
+                library.tracks.any((saved) => saved.id == tracks[index].id)
+                    ? Icons.bookmark
+                    : Icons.bookmark_add_outlined,
+              ),
+            ),
+          ),
+        if (_loading && _loaded)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final request = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final page = await widget.provider.searchStationPage('', pageSize: 6);
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _stations = List<RadioBrowserStation>.unmodifiable(page.stations);
+        _loading = false;
+        _loaded = true;
+      });
+    } on Object {
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  Future<void> _saveTrack(BuildContext context, Track track) async {
+    await context.read<LibraryStore>().addTracks(<Track>[track]);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${track.title} saved to your library.')),
+    );
+  }
+
+  Future<void> _openStation(
+    BuildContext context,
+    RadioBrowserStation station,
+    List<Track> tracks,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => RadioBrowserStationScreen(
+          station: station,
+          provider: widget.provider,
+          onPlay: (track) => _playTrackWithResume(
+            context,
+            context.read<PlayerController>(),
+            context.read<LibraryStore>(),
+            track,
+            queue: tracks,
+          ),
+          onSave: (track) => _saveTrack(context, track),
+        ),
+      ),
+    );
+  }
+}
+
+String _radioStationSummary(RadioBrowserStation station) {
+  final parts = <String>[
+    if (station.countryCode.isNotEmpty) station.countryCode,
+    if (station.language.isNotEmpty) station.language,
+    if (station.codec.isNotEmpty) station.codec,
+    if (station.bitrateKbps > 0) '${station.bitrateKbps} kbps',
+  ];
+  return parts.isEmpty ? 'Station details' : parts.join(' / ');
 }
 
 class _ProviderHomeDiscovery extends StatelessWidget {

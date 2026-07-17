@@ -11,6 +11,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
+import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/data/spotify_metadata_provider.dart';
 import 'package:aethertune/src/data/spotify_oauth_client.dart';
@@ -172,7 +173,7 @@ void main() {
     await _pumpHome(tester, fixture);
 
     expect(find.text('From your servers'), findsOneWidget);
-    expect(find.text('Offline mode'), findsOneWidget);
+    expect(find.text('Offline mode'), findsNWidgets(2));
     final refresh = tester.widget<IconButton>(
       find.byKey(const ValueKey<String>('provider-home-refresh')),
     );
@@ -183,7 +184,7 @@ void main() {
 
   testWidgets('loads more from a paged server discovery shelf', (tester) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = const Size(390, 1200);
     addTearDown(tester.view.reset);
 
     final provider = _FakePagedProviderHomeDiscoveryCatalog();
@@ -274,6 +275,57 @@ void main() {
       isNull,
     );
     expect(requestedRegions, <String>['TR']);
+  });
+
+  testWidgets('loads popular public radio stations explicitly on Home', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1200);
+    addTearDown(tester.view.reset);
+
+    final fixture = await _HomeFixture.create(
+      provider: _FakeProviderHomeCatalog(),
+    );
+    addTearDown(fixture.dispose);
+    Uri? requestedUri;
+    final radio = RadioBrowserProvider(
+      baseUri: Uri.parse('https://radio.example.test'),
+      searchLoader: (uri) async {
+        requestedUri = uri;
+        return _popularRadioStationsPage;
+      },
+    );
+
+    await _pumpHome(tester, fixture, radioBrowserProvider: radio);
+
+    expect(find.text('Popular radio stations'), findsOneWidget);
+    expect(requestedUri, isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-popular-radio-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedUri!.queryParameters.containsKey('name'), isFalse);
+    expect(requestedUri!.queryParameters['limit'], '6');
+    expect(requestedUri!.queryParameters['order'], 'clickcount');
+    expect(requestedUri!.queryParameters['reverse'], 'true');
+    expect(find.text('Aether Radio'), findsOneWidget);
+    await tester.tap(find.byTooltip('Save station to library').first);
+    await tester.pumpAndSettle();
+    expect(fixture.library.tracks.single.isPlayable, isTrue);
+
+    await fixture.library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey<String>('home-popular-radio-refresh')),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('loads followed YouTube channel metadata explicitly on Home', (
@@ -438,6 +490,7 @@ Future<void> _pumpHome(
   YouTubeDataSettingsStore? youtube,
   YouTubeChannelFollowStore? youtubeFollows,
   SpotifySettingsStore? spotify,
+  RadioBrowserProvider? radioBrowserProvider,
 }) async {
   await tester.pumpWidget(
     MultiProvider(
@@ -462,10 +515,13 @@ Future<void> _pumpHome(
         if (spotify != null)
           ChangeNotifierProvider<SpotifySettingsStore>.value(value: spotify),
       ],
-      child: const MaterialApp(
+      child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: HomeScreen(initialTab: 0),
+        home: HomeScreen(
+          initialTab: 0,
+          radioBrowserProvider: radioBrowserProvider,
+        ),
       ),
     ),
   );
@@ -500,6 +556,33 @@ const _spotifySavedTracksPage = '''
     }
   }]
 }
+''';
+
+const _popularRadioStationsPage = '''
+[
+  {
+    "stationuuid": "popular-station-one",
+    "name": "Aether Radio",
+    "url_resolved": "https://stream.example.test/aether",
+    "tags": "ambient, electronic",
+    "countrycode": "US",
+    "language": "english",
+    "codec": "AAC",
+    "bitrate": 128,
+    "lastcheckok": 1
+  },
+  {
+    "stationuuid": "popular-station-two",
+    "name": "Signal Radio",
+    "url_resolved": "https://stream.example.test/signal",
+    "tags": "indie",
+    "countrycode": "GB",
+    "language": "english",
+    "codec": "MP3",
+    "bitrate": 192,
+    "lastcheckok": 1
+  }
+]
 ''';
 
 String _followedChannelPage(String title, String id, String publishedAt) => '''
