@@ -8,7 +8,10 @@ typedef SpotifyAccessTokenReader = Future<String> Function();
 typedef SpotifySearchLoader = Future<String> Function(Uri uri, String token);
 
 /// Official Spotify Web API metadata search. It has no playback surface.
-final class SpotifyMetadataProvider implements MusicSourceSearchPagingProvider {
+final class SpotifyMetadataProvider
+    implements
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   SpotifyMetadataProvider({
     required SpotifyAccessTokenReader accessTokenReader,
     Uri? searchUri,
@@ -38,6 +41,7 @@ final class SpotifyMetadataProvider implements MusicSourceSearchPagingProvider {
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
     MusicSourceCapability.artwork,
     MusicSourceCapability.authentication,
   };
@@ -57,6 +61,44 @@ final class SpotifyMetadataProvider implements MusicSourceSearchPagingProvider {
   Future<List<Track>> search(String query) async {
     final page = await searchPage(query);
     return page.tracks;
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+
+    final page = await searchPage(normalizedQuery, limit: limit.clamp(1, 50));
+    final seen = <String>{};
+    final suggestions = <MusicSourceSearchSuggestion>[];
+    for (final track in page.tracks) {
+      final value = track.title.trim();
+      if (value.isEmpty || !seen.add(value.toLowerCase())) {
+        continue;
+      }
+      final subtitleParts = <String>[track.artist, track.album]
+          .where((part) => part.trim().isNotEmpty)
+          .toList(growable: false);
+      suggestions.add(
+        MusicSourceSearchSuggestion(
+          value: value,
+          kind: MusicSourceSearchSuggestionKind.track,
+          subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(' - '),
+        ),
+      );
+      if (suggestions.length == limit) {
+        break;
+      }
+    }
+    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
   }
 
   @override
