@@ -27,6 +27,7 @@ import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/m4a_metadata_writer.dart';
+import '../data/musicbrainz_metadata_provider.dart';
 import '../data/mp3_id3v1_tag_writer.dart';
 import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/offline_cache_manager.dart';
@@ -75,6 +76,7 @@ import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
+import 'widgets/musicbrainz_metadata_search_sheet.dart';
 import 'widgets/artwork_crop_editor.dart';
 import 'widgets/audio_effects_settings.dart';
 import 'widgets/collection_share_card.dart';
@@ -357,6 +359,7 @@ final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
 
 final _playlistArtworkFileStore = PlaylistArtworkFileStore();
 final _trackArtworkFileStore = TrackArtworkFileStore();
+final _musicBrainzMetadataProvider = MusicBrainzMetadataProvider();
 const _platformTextShareService = SharePlusTextShareService();
 
 List<NavigationDestination> _navigationBarDestinations(
@@ -1730,6 +1733,7 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
   BuildContext context,
   Track track,
 ) async {
+  final library = context.read<LibraryStore>();
   final titleController = TextEditingController(text: track.title);
   final artistController = TextEditingController(text: track.artist);
   final albumController = TextEditingController(text: track.album);
@@ -1801,6 +1805,54 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => submit(),
                       ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: const Key('track-metadata-find-musicbrainz'),
+                          onPressed: library.offlineModeEnabled
+                              ? null
+                              : () async {
+                                  final candidate =
+                                      await showMusicBrainzMetadataSearchSheet(
+                                        dialogContext,
+                                        track: Track(
+                                          id: track.id,
+                                          title: titleController.text,
+                                          artist: artistController.text,
+                                          album: albumController.text,
+                                          genre: genreController.text,
+                                          duration: track.duration,
+                                        ),
+                                        provider: _musicBrainzMetadataProvider,
+                                        offlineModeEnabled:
+                                            library.offlineModeEnabled,
+                                      );
+                                  if (candidate == null ||
+                                      !dialogContext.mounted) {
+                                    return;
+                                  }
+                                  setDialogState(() {
+                                    titleController.text = candidate.title;
+                                    artistController.text = candidate.artist;
+                                    albumController.text = candidate.album;
+                                    if (candidate.genre.isNotEmpty) {
+                                      genreController.text = candidate.genre;
+                                    }
+                                    titleErrorText = null;
+                                  });
+                                },
+                          icon: const Icon(Icons.manage_search_outlined),
+                          label: const Text('Find metadata'),
+                        ),
+                      ),
+                      if (library.offlineModeEnabled)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Offline mode prevents metadata lookup.',
+                          ),
+                        ),
                     ],
                   ),
                 ),
