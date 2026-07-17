@@ -237,6 +237,8 @@ class PlayerController extends ChangeNotifier {
     Iterable<Track> tracks, {
     Iterable<MediaLibraryBrowsePlaylist> playlists =
         const <MediaLibraryBrowsePlaylist>[],
+    Iterable<MediaLibraryBrowseFolder> folders =
+        const <MediaLibraryBrowseFolder>[],
   }) {
     final engine = _audio;
     if (engine is! MediaLibraryBrowsePlaybackAudioEngine) {
@@ -245,8 +247,9 @@ class PlayerController extends ChangeNotifier {
     final browseTracks = List<Track>.unmodifiable(tracks);
     engine.setMediaLibraryBrowseTracks(
       browseTracks,
-      onTrackSelected: (track) => playTrack(track, queue: browseTracks),
-      playlists: playlists,
+        onTrackSelected: (track) => playTrack(track, queue: browseTracks),
+        playlists: playlists,
+        folders: folders,
       onPlaylistTrackSelected: (track, queue, queueIndex) =>
           playTrack(track, queue: queue, queueIndex: queueIndex),
     );

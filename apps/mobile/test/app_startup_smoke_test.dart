@@ -73,6 +73,21 @@ void main() {
     expect(artistCollection.tracks.map((item) => item.id), <String>[track.id]);
     expect(albumCollection.tracks.map((item) => item.id), <String>[track.id]);
     expect(genreCollection.tracks.map((item) => item.id), <String>[track.id]);
+    Iterable<MediaLibraryBrowseFolder> allFolders(
+      Iterable<MediaLibraryBrowseFolder> folders,
+    ) sync* {
+      for (final folder in folders) {
+        yield folder;
+        yield* allFolders(folder.children);
+      }
+    }
+
+    final directTrackFolder = allFolders(audio.browseFolders).singleWhere(
+      (folder) => folder.directTracks.any((item) => item.id == track.id),
+    );
+    expect(directTrackFolder.queueTracks.map((item) => item.id), <String>[
+      track.id,
+    ]);
 
     final playCallsBefore = audio.playCalls;
     await player.playTrack(track);
@@ -101,6 +116,8 @@ class _SmokePlaybackAudioEngine
   List<Track> queue = const <Track>[];
   List<MediaLibraryBrowsePlaylist> browsePlaylists =
       const <MediaLibraryBrowsePlaylist>[];
+  List<MediaLibraryBrowseFolder> browseFolders =
+      const <MediaLibraryBrowseFolder>[];
   int playCalls = 0;
 
   @override
@@ -161,9 +178,12 @@ class _SmokePlaybackAudioEngine
     required MediaLibraryTrackSelectionHandler onTrackSelected,
     Iterable<MediaLibraryBrowsePlaylist> playlists =
         const <MediaLibraryBrowsePlaylist>[],
+    Iterable<MediaLibraryBrowseFolder> folders =
+        const <MediaLibraryBrowseFolder>[],
     MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
   }) {
     browsePlaylists = List<MediaLibraryBrowsePlaylist>.unmodifiable(playlists);
+    browseFolders = List<MediaLibraryBrowseFolder>.unmodifiable(folders);
   }
 
   @override

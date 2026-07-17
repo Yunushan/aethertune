@@ -65,10 +65,16 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       'aethertune:android-auto:library:albums';
   static const _androidAutoGenresId =
       'aethertune:android-auto:library:genres';
+  static const _androidAutoFoldersId =
+      'aethertune:android-auto:library:folders';
   static const _androidAutoPlaylistIdPrefix =
       'aethertune:android-auto:library:playlist:';
   static const _androidAutoPlaylistTrackIdPrefix =
       'aethertune:android-auto:library:playlist-track:';
+  static const _androidAutoFolderIdPrefix =
+      'aethertune:android-auto:library:folder:';
+  static const _androidAutoFolderTrackIdPrefix =
+      'aethertune:android-auto:library:folder-track:';
   static const _androidAutoLibraryTrackIdPrefix =
       'aethertune:android-auto:library-track:';
 
@@ -79,6 +85,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   final List<Track> _libraryBrowseTracks = <Track>[];
   final List<MediaLibraryBrowsePlaylist> _libraryBrowsePlaylists =
       <MediaLibraryBrowsePlaylist>[];
+  final List<MediaLibraryBrowseFolder> _libraryBrowseFolders =
+      <MediaLibraryBrowseFolder>[];
   MediaLibraryTrackSelectionHandler? _onLibraryTrackSelected;
   MediaLibraryPlaylistTrackSelectionHandler? _onPlaylistTrackSelected;
   StreamSubscription<Object?>? _stateSubscription;
@@ -228,6 +236,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     required MediaLibraryTrackSelectionHandler onTrackSelected,
     Iterable<MediaLibraryBrowsePlaylist> playlists =
         const <MediaLibraryBrowsePlaylist>[],
+    Iterable<MediaLibraryBrowseFolder> folders =
+        const <MediaLibraryBrowseFolder>[],
     MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
   }) {
     _libraryBrowseTracks
@@ -236,6 +246,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     _libraryBrowsePlaylists
       ..clear()
       ..addAll(playlists);
+    _libraryBrowseFolders
+      ..clear()
+      ..addAll(folders);
     _onLibraryTrackSelected = onTrackSelected;
     _onPlaylistTrackSelected = onPlaylistTrackSelected;
   }
@@ -430,6 +443,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
             _androidAutoAlbumsFolder(),
           if (_hasBrowseCategory(MediaLibraryBrowseCategory.genre))
             _androidAutoGenresFolder(),
+          if (_libraryBrowseFolders.isNotEmpty) _androidAutoFoldersFolder(),
         ];
       case _androidAutoAllTracksId:
         return _libraryBrowseMediaItems();
@@ -441,7 +455,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.album);
       case _androidAutoGenresId:
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.genre);
+      case _androidAutoFoldersId:
+        return _libraryBrowseFolders.map(_folderBrowseFolder).toList(
+          growable: false,
+        );
       default:
+        final folder = _folderForMediaId(parentMediaId);
+        if (folder != null) {
+          return _folderBrowseChildren(folder);
+        }
         final playlist = _playlistForMediaId(parentMediaId);
         if (playlist != null) {
           return _playlistBrowseTrackItems(playlist);
@@ -473,6 +495,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     if (mediaId == _androidAutoGenresId) {
       return _androidAutoGenresFolder();
     }
+    if (mediaId == _androidAutoFoldersId) {
+      return _androidAutoFoldersFolder();
+    }
     for (var index = 0; index < _tracks.length; index += 1) {
       if (_tracks[index].id == mediaId) {
         final runtimeDuration = index == _currentIndex
@@ -487,6 +512,18 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         libraryTrack,
         null,
         mediaId: mediaId,
+      );
+    }
+    final folder = _folderForMediaId(mediaId);
+    if (folder != null) {
+      return _folderBrowseFolder(folder);
+    }
+    final folderSelection = _folderTrackSelectionForMediaId(mediaId);
+    if (folderSelection != null) {
+      return _mediaItemForTrack(
+        folderSelection.track,
+        null,
+        mediaId: folderSelection.mediaId,
       );
     }
     final playlist = _playlistForMediaId(mediaId);
@@ -519,8 +556,17 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         }
         return;
       }
-      final playlistSelection = _playlistTrackSelectionForMediaId(mediaId);
+      final folderSelection = _folderTrackSelectionForMediaId(mediaId);
       final onPlaylistTrackSelected = _onPlaylistTrackSelected;
+      if (folderSelection != null && onPlaylistTrackSelected != null) {
+        await onPlaylistTrackSelected(
+          folderSelection.track,
+          folderSelection.folder.queueTracks,
+          folderSelection.queueIndex,
+        );
+        return;
+      }
+      final playlistSelection = _playlistTrackSelectionForMediaId(mediaId);
       if (playlistSelection != null && onPlaylistTrackSelected != null) {
         await onPlaylistTrackSelected(
           playlistSelection.track,
@@ -715,6 +761,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     );
   }
 
+  MediaItem _androidAutoFoldersFolder() {
+    return const MediaItem(
+      id: _androidAutoFoldersId,
+      title: 'Folders',
+      displaySubtitle: 'AetherTune library',
+      playable: false,
+    );
+  }
+
   bool _hasBrowseCategory(MediaLibraryBrowseCategory category) {
     return _libraryBrowsePlaylists.any(
       (collection) => collection.category == category,
@@ -727,6 +782,93 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         .map(_playlistBrowseFolder)
         .toList(growable: false);
   }
+
+  MediaItem _folderBrowseFolder(MediaLibraryBrowseFolder folder) {
+    final childCount = folder.children.length;
+    final directTrackCount = folder.directTracks.length;
+    final subtitle = <String>[
+      if (childCount > 0)
+        childCount == 1 ? '1 folder' : '$childCount folders',
+      if (directTrackCount > 0)
+        directTrackCount == 1 ? '1 track' : '$directTrackCount tracks',
+    ].join(', ');
+    return MediaItem(
+      id: _folderMediaId(folder),
+      title: folder.title,
+      displaySubtitle: subtitle,
+      playable: false,
+    );
+  }
+
+  List<MediaItem> _folderBrowseChildren(MediaLibraryBrowseFolder folder) {
+    return <MediaItem>[
+      ...folder.children.map(_folderBrowseFolder),
+      ..._folderTrackSelections(folder).map(
+        (selection) => _mediaItemForTrack(
+          selection.track,
+          null,
+          mediaId: selection.mediaId,
+        ),
+      ),
+    ];
+  }
+
+  MediaLibraryBrowseFolder? _folderForMediaId(String mediaId) {
+    for (final folder in _allBrowseFolders()) {
+      if (_folderMediaId(folder) == mediaId) {
+        return folder;
+      }
+    }
+    return null;
+  }
+
+  _FolderTrackSelection? _folderTrackSelectionForMediaId(String mediaId) {
+    for (final folder in _allBrowseFolders()) {
+      for (final selection in _folderTrackSelections(folder)) {
+        if (selection.mediaId == mediaId) {
+          return selection;
+        }
+      }
+    }
+    return null;
+  }
+
+  Iterable<MediaLibraryBrowseFolder> _allBrowseFolders() sync* {
+    for (final folder in _libraryBrowseFolders) {
+      yield folder;
+      yield* _descendantBrowseFolders(folder);
+    }
+  }
+
+  Iterable<MediaLibraryBrowseFolder> _descendantBrowseFolders(
+    MediaLibraryBrowseFolder folder,
+  ) sync* {
+    for (final child in folder.children) {
+      yield child;
+      yield* _descendantBrowseFolders(child);
+    }
+  }
+
+  Iterable<_FolderTrackSelection> _folderTrackSelections(
+    MediaLibraryBrowseFolder folder,
+  ) sync* {
+    for (final track in folder.directTracks) {
+      final queueIndex = folder.queueTracks.indexWhere(
+        (candidate) => candidate.id == track.id,
+      );
+      if (queueIndex < 0) {
+        continue;
+      }
+      yield _FolderTrackSelection(
+        folder: folder,
+        track: track,
+        queueIndex: queueIndex,
+      );
+    }
+  }
+
+  String _folderMediaId(MediaLibraryBrowseFolder folder) =>
+      '$_androidAutoFolderIdPrefix${Uri.encodeComponent(folder.id)}';
 
   MediaItem _playlistBrowseFolder(MediaLibraryBrowsePlaylist playlist) {
     final count = playlist.tracks.length;
@@ -954,6 +1096,22 @@ MediaItem _mediaItemForTrack(
       if (track.externalId != null) 'externalId': track.externalId!,
     },
   );
+}
+
+class _FolderTrackSelection {
+  const _FolderTrackSelection({
+    required this.folder,
+    required this.track,
+    required this.queueIndex,
+  });
+
+  final MediaLibraryBrowseFolder folder;
+  final Track track;
+  final int queueIndex;
+
+  String get mediaId =>
+      '${SystemMediaPlaybackEngine._androidAutoFolderTrackIdPrefix}'
+      '${Uri.encodeComponent(folder.id)}:$queueIndex';
 }
 
 class _PlaylistTrackSelection {

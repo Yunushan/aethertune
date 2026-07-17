@@ -1543,6 +1543,8 @@ class _FakeMediaLibraryBrowseEngine extends _FakePlaybackAudioEngine
   List<Track> browseTracks = <Track>[];
   List<MediaLibraryBrowsePlaylist> browsePlaylists =
       <MediaLibraryBrowsePlaylist>[];
+  List<MediaLibraryBrowseFolder> browseFolders =
+      <MediaLibraryBrowseFolder>[];
   MediaLibraryTrackSelectionHandler? _onTrackSelected;
   MediaLibraryPlaylistTrackSelectionHandler? _onPlaylistTrackSelected;
 
@@ -1552,10 +1554,13 @@ class _FakeMediaLibraryBrowseEngine extends _FakePlaybackAudioEngine
     required MediaLibraryTrackSelectionHandler onTrackSelected,
     Iterable<MediaLibraryBrowsePlaylist> playlists =
         const <MediaLibraryBrowsePlaylist>[],
+    Iterable<MediaLibraryBrowseFolder> folders =
+        const <MediaLibraryBrowseFolder>[],
     MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
   }) {
     browseTracks = List<Track>.from(tracks);
     browsePlaylists = List<MediaLibraryBrowsePlaylist>.from(playlists);
+    browseFolders = List<MediaLibraryBrowseFolder>.from(folders);
     _onTrackSelected = onTrackSelected;
     _onPlaylistTrackSelected = onPlaylistTrackSelected;
   }

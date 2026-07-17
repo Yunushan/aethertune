@@ -34,6 +34,26 @@ class MediaLibraryBrowsePlaylist {
   final MediaLibraryBrowseCategory category;
 }
 
+/// A nested library folder exposed to a system-media browser.
+class MediaLibraryBrowseFolder {
+  MediaLibraryBrowseFolder({
+    required this.id,
+    required this.title,
+    required Iterable<Track> queueTracks,
+    Iterable<Track> directTracks = const <Track>[],
+    Iterable<MediaLibraryBrowseFolder> children =
+        const <MediaLibraryBrowseFolder>[],
+  })  : queueTracks = List<Track>.unmodifiable(queueTracks),
+        directTracks = List<Track>.unmodifiable(directTracks),
+        children = List<MediaLibraryBrowseFolder>.unmodifiable(children);
+
+  final String id;
+  final String title;
+  final List<Track> queueTracks;
+  final List<Track> directTracks;
+  final List<MediaLibraryBrowseFolder> children;
+}
+
 abstract interface class PlaybackAudioEngine {
   Stream<Object?> get stateChanges;
   Stream<Duration?> get durationStream;
@@ -86,6 +106,8 @@ abstract interface class MediaLibraryBrowsePlaybackAudioEngine
     required MediaLibraryTrackSelectionHandler onTrackSelected,
     Iterable<MediaLibraryBrowsePlaylist> playlists =
         const <MediaLibraryBrowsePlaylist>[],
+    Iterable<MediaLibraryBrowseFolder> folders =
+        const <MediaLibraryBrowseFolder>[],
     MediaLibraryPlaylistTrackSelectionHandler? onPlaylistTrackSelected,
   });
 }

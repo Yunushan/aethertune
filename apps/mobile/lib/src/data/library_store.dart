@@ -300,6 +300,7 @@ class LibraryBrowseGroup {
 class LibraryFolderNode {
   const LibraryFolderNode({
     required this.key,
+    required this.parentKey,
     required this.path,
     required this.label,
     required this.depth,
@@ -310,6 +311,7 @@ class LibraryFolderNode {
   });
 
   final String key;
+  final String? parentKey;
   final String path;
   final String label;
   final int depth;
@@ -2755,6 +2757,7 @@ class LibraryStore extends ChangeNotifier {
           key,
           () => _MutableFolderNode(
             key: key,
+            parentKey: parentKey,
             path: ancestorPath,
             label: _folderTreeLabel(ancestorPath, context),
             depth: index,
@@ -2801,6 +2804,25 @@ class LibraryStore extends ChangeNotifier {
       final folderKey = _folderTreeKey(_folderLabelForTrack(track));
       return folderKey == normalizedKey ||
           folderKey.startsWith('$normalizedKey/');
+    }).toList(growable: false);
+
+    return _sortTrackResults(tracks, sortMode);
+  }
+
+  List<Track> tracksDirectlyInFolderNode(
+    String key, {
+    LibrarySortMode sortMode = LibrarySortMode.album,
+  }) {
+    final normalizedKey = _folderTreeKey(key);
+    if (normalizedKey.isEmpty) {
+      return <Track>[];
+    }
+
+    final tracks = _tracks.where((track) {
+      final localPath = track.localPath?.trim();
+      return localPath != null &&
+          localPath.isNotEmpty &&
+          _folderTreeKey(_folderLabelForTrack(track)) == normalizedKey;
     }).toList(growable: false);
 
     return _sortTrackResults(tracks, sortMode);
@@ -8777,12 +8799,14 @@ class _MutableBrowseGroup {
 class _MutableFolderNode {
   _MutableFolderNode({
     required this.key,
+    required this.parentKey,
     required this.path,
     required this.label,
     required this.depth,
   });
 
   final String key;
+  final String? parentKey;
   final String path;
   final String label;
   final int depth;
@@ -8807,6 +8831,7 @@ class _MutableFolderNode {
   LibraryFolderNode toFolderNode() {
     return LibraryFolderNode(
       key: key,
+      parentKey: parentKey,
       path: path,
       label: label,
       depth: depth,

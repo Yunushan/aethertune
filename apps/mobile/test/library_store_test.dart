@@ -4985,6 +4985,7 @@ void main() {
     expect(ariNode.trackCount, 2);
     expect(ariNode.directTrackCount, 0);
     expect(ariNode.childCount, 2);
+    expect(ariNode.parentKey, isNotNull);
     expect(ariNode.totalDuration, const Duration(minutes: 5));
     expect(ariDawnNode.trackCount, 1);
     expect(windowsDawnNode.trackCount, 1);
@@ -4995,6 +4996,11 @@ void main() {
     );
     expect(
       store.tracksForFolderNode(ariDawnNode.key).map((track) => track.id),
+      <String>['1'],
+    );
+    expect(ariDawnNode.parentKey, ariNode.key);
+    expect(
+      store.tracksDirectlyInFolderNode(ariDawnNode.key).map((track) => track.id),
       <String>['1'],
     );
 

@@ -134,6 +134,29 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             final tracksById = <String, Track>{
               for (final track in library.tracks) track.id: track,
             };
+            final folderNodesByParent = <String?, List<LibraryFolderNode>>{};
+            for (final node in library.folderTree()) {
+              folderNodesByParent
+                  .putIfAbsent(node.parentKey, () => <LibraryFolderNode>[])
+                  .add(node);
+            }
+            late List<MediaLibraryBrowseFolder> Function(String? parentKey)
+                buildFolderChildren;
+            buildFolderChildren = (parentKey) {
+              return (folderNodesByParent[parentKey] ??
+                      const <LibraryFolderNode>[])
+                  .map(
+                    (node) => MediaLibraryBrowseFolder(
+                      id: node.key,
+                      title: node.label,
+                      queueTracks: library.tracksForFolderNode(node.key),
+                      directTracks: library.tracksDirectlyInFolderNode(node.key),
+                      children: buildFolderChildren(node.key),
+                    ),
+                  )
+                  .toList(growable: false);
+            };
+            final folders = buildFolderChildren(null);
             final playlists = <MediaLibraryBrowsePlaylist>[
               ...library.playlists.map(
                 (playlist) => MediaLibraryBrowsePlaylist(
@@ -206,6 +229,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             controller.setMediaLibraryBrowseTracks(
               library.tracks,
               playlists: playlists,
+              folders: folders,
             );
             unawaited(controller.reconcileLibraryTracks(library.tracks));
             return controller;
