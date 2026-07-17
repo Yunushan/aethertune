@@ -29,6 +29,21 @@ void main() {
     expect(request.uri.queryParameters['code_challenge'], request.codeChallenge);
   });
 
+  test('deduplicates and requests explicit Spotify OAuth scopes', () {
+    final request = SpotifyAuthorizationRequest.create(
+      clientId: 'client-id',
+      redirectUri: Uri.parse('http://127.0.0.1:45678/spotify-callback'),
+      scopes: const <String>[
+        'user-library-read',
+        ' user-library-read ',
+        '',
+      ],
+    );
+
+    expect(request.scopes, const <String>['user-library-read']);
+    expect(request.uri.queryParameters['scope'], 'user-library-read');
+  });
+
   test('exchanges a code without a client secret', () async {
     String? requestBody;
     Map<String, String>? capturedHeaders;

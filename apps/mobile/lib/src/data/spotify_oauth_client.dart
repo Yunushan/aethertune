@@ -59,6 +59,7 @@ final class SpotifyAuthorizationRequest {
     required this.redirectUri,
     required this.state,
     required this.codeVerifier,
+    this.scopes = const <String>[],
   }) : codeChallenge = spotifyPkceChallenge(codeVerifier);
 
   final String clientId;
@@ -66,6 +67,7 @@ final class SpotifyAuthorizationRequest {
   final String state;
   final String codeVerifier;
   final String codeChallenge;
+  final List<String> scopes;
 
   Uri get uri => Uri.https('accounts.spotify.com', '/authorize', <String, String>{
     'client_id': clientId,
@@ -74,12 +76,14 @@ final class SpotifyAuthorizationRequest {
     'state': state,
     'code_challenge_method': 'S256',
     'code_challenge': codeChallenge,
+    if (scopes.isNotEmpty) 'scope': scopes.join(' '),
   });
 
   static SpotifyAuthorizationRequest create({
     required String clientId,
     required Uri redirectUri,
     Random? random,
+    Iterable<String> scopes = const <String>[],
   }) {
     final normalizedClientId = clientId.trim();
     if (normalizedClientId.isEmpty) {
@@ -94,8 +98,20 @@ final class SpotifyAuthorizationRequest {
       redirectUri: redirectUri,
       state: _randomUrlSafeString(source, 32),
       codeVerifier: _randomUrlSafeString(source, 64),
+      scopes: _normalizeScopes(scopes),
     );
   }
+}
+
+List<String> _normalizeScopes(Iterable<String> scopes) {
+  final unique = <String>{};
+  for (final scope in scopes) {
+    final normalized = scope.trim();
+    if (normalized.isNotEmpty) {
+      unique.add(normalized);
+    }
+  }
+  return List<String>.unmodifiable(unique);
 }
 
 String spotifyPkceChallenge(String verifier) {

@@ -137,8 +137,12 @@ final class SpotifySettingsStore extends ChangeNotifier {
   }
 
   Future<SpotifyOAuthToken> _authorize(String clientId) {
-    return SpotifyOAuthFlow(oauthClient: _oauthClient).authorize(clientId);
+    return SpotifyOAuthFlow(
+      oauthClient: _oauthClient,
+    ).authorize(clientId, scopes: _requiredScopes);
   }
+
+  static const Set<String> _requiredScopes = <String>{'user-library-read'};
 
   Future<String> _refreshAccessToken(SpotifyOAuthSession session) async {
     try {

@@ -68,6 +68,50 @@ void main() {
     expect(await provider.resolveStream(page.tracks.single), isNull);
   });
 
+  test('loads bounded saved-track metadata without a playable URI', () async {
+    Uri? requestUri;
+    String? requestToken;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      savedTracksLoader: (uri, token) async {
+        requestUri = uri;
+        requestToken = token;
+        return '''
+          {
+            "offset": 2,
+            "total": 4,
+            "next": "https://api.spotify.com/v1/me/tracks?offset=3",
+            "items": [{
+              "added_at": "2026-07-17T12:00:00Z",
+              "track": {
+                "id": "saved-track-id",
+                "name": "Saved Signal",
+                "duration_ms": 201000,
+                "artists": [{"name": "Aether"}],
+                "album": {"name": "Archive"}
+              }
+            }]
+          }
+        ''';
+      },
+    );
+
+    final page = await provider.loadSavedTracksPage(offset: 2, limit: 100);
+
+    expect(requestToken, 'access-token');
+    expect(requestUri!.path, '/v1/me/tracks');
+    expect(requestUri!.queryParameters['limit'], '50');
+    expect(requestUri!.queryParameters['offset'], '2');
+    expect(page.offset, 2);
+    expect(page.total, 4);
+    expect(page.hasMore, isTrue);
+    final track = page.tracks.single;
+    expect(track.title, 'Saved Signal');
+    expect(track.addedAt, DateTime.utc(2026, 7, 17, 12));
+    expect(track.isPlayable, isFalse);
+    expect(await provider.resolveStream(track), isNull);
+  });
+
   test('returns bounded official Spotify track suggestions', () async {
     Uri? requestUri;
     String? requestToken;

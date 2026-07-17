@@ -38,6 +38,7 @@ import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
+import '../data/spotify_metadata_provider.dart';
 import '../data/spotify_settings_store.dart';
 import '../data/subsonic_provider.dart';
 import '../data/track_artwork_file_store.dart';
@@ -78,6 +79,7 @@ import 'platform_text_share.dart';
 import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
+import 'spotify_saved_tracks_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/musicbrainz_metadata_search_sheet.dart';
@@ -11740,7 +11742,7 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { configure, remove }
 
-enum _SpotifyAction { configure, remove }
+enum _SpotifyAction { savedTracks, configure, remove }
 
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
@@ -11870,9 +11872,13 @@ class _SourcesTabState extends State<_SourcesTab> {
     final spotify = context.watch<SpotifySettingsStore?>();
     final spotifyProviders = spotify?.musicProviders ??
         const <MusicSourceProvider>[];
-    final spotifyProvider = spotifyProviders.isEmpty
-        ? null
-        : spotifyProviders.first;
+    SpotifyMetadataProvider? spotifyProvider;
+    for (final candidate in spotifyProviders) {
+      if (candidate is SpotifyMetadataProvider) {
+        spotifyProvider = candidate;
+        break;
+      }
+    }
     final podcastSubscriptions = library.podcastSubscriptions;
     final offlineModeEnabled = library.offlineModeEnabled;
     final selfHostedActionsEnabled = selfHosted.loaded &&
@@ -12032,8 +12038,8 @@ class _SourcesTabState extends State<_SourcesTab> {
           title: 'Spotify Web API',
           status: spotify?.isConfigured == true ? 'Enabled' : 'Optional',
           description: spotify?.isConfigured == true
-              ? 'Searches official Spotify track metadata only. Playback and offline media are unavailable.'
-              : 'Connect your own Spotify developer app for official metadata search only.',
+              ? 'Searches and reads saved Spotify track metadata. Playback and offline media are unavailable.'
+              : 'Connect your own Spotify developer app for official metadata access.',
           icon: Icons.library_music_outlined,
           capabilities: spotifyProvider?.capabilities ??
               const <MusicSourceCapability>{
@@ -12053,6 +12059,11 @@ class _SourcesTabState extends State<_SourcesTab> {
             tooltip: 'Manage Spotify Web API',
             onSelected: (action) {
               switch (action) {
+                case _SpotifyAction.savedTracks:
+                  if (spotifyProvider != null) {
+                    _openSpotifySavedTracks(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.configure:
                   unawaited(_configureSpotify(context));
                   break;
@@ -12062,6 +12073,15 @@ class _SourcesTabState extends State<_SourcesTab> {
               }
             },
             itemBuilder: (_) => <PopupMenuEntry<_SpotifyAction>>[
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.savedTracks,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.library_music_outlined),
+                  title: Text('Saved tracks'),
+                ),
+              ),
               PopupMenuItem<_SpotifyAction>(
                 value: _SpotifyAction.configure,
                 enabled: spotify?.loaded == true &&
@@ -13283,7 +13303,7 @@ class _SourcesTabState extends State<_SourcesTab> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Spotify searches official track metadata and artwork only. It does not play, download, cache, or copy Spotify audio.',
+                      'Spotify searches and reads saved-track metadata and artwork only. It does not play, download, cache, or copy Spotify audio.',
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -13370,6 +13390,17 @@ class _SourcesTabState extends State<_SourcesTab> {
     } finally {
       clientIdController.dispose();
     }
+  }
+
+  void _openSpotifySavedTracks(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifySavedTracksScreen(provider: provider),
+      ),
+    );
   }
 
   Future<void> _removeSpotify(BuildContext context) async {

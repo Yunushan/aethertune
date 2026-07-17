@@ -19,7 +19,10 @@ final class SpotifyOAuthFlow {
   final SpotifyAuthorizationLauncher _authorizationLauncher;
   final Duration callbackTimeout;
 
-  Future<SpotifyOAuthToken> authorize(String clientId) async {
+  Future<SpotifyOAuthToken> authorize(
+    String clientId, {
+    Iterable<String> scopes = const <String>[],
+  }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     try {
       final authorization = SpotifyAuthorizationRequest.create(
@@ -30,6 +33,7 @@ final class SpotifyOAuthFlow {
           port: server.port,
           path: '/spotify-callback',
         ),
+        scopes: scopes,
       );
       final launched = await _authorizationLauncher(authorization.uri);
       if (!launched) {
