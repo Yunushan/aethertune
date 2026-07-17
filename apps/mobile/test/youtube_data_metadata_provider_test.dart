@@ -175,6 +175,55 @@ void main() {
     expect(requests, hasLength(1));
     await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
   });
+
+  test('searches and pages public channel metadata only', () async {
+    final requests = <Uri>[];
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async {
+        requests.add(uri);
+        return uri.queryParameters['pageToken'] == null
+            ? '''
+              {"nextPageToken":"next","pageInfo":{"totalResults":2},"items":[
+                {"id":{"channelId":"channel-1"},"snippet":{"title":"Aether Radio","description":"Open sessions","thumbnails":{"high":{"url":"https://i.ytimg.com/channel-1.jpg"}}}},
+                {"id":{"videoId":"not-a-channel"},"snippet":{"title":"Skip"}}
+              ]}
+            '''
+            : '''
+              {"pageInfo":{"totalResults":2},"items":[
+                {"id":{"channelId":"channel-2"},"snippet":{"title":"Orbit","thumbnails":{"high":{"url":"http://unsafe.example/image.jpg"}}}}
+              ]}
+            ''';
+      },
+    );
+
+    final first = await provider.searchChannelsPage('  aether  ');
+    final second = await provider.searchChannelsPage('aether', cursor: 'next');
+
+    expect(requests.first.queryParameters, <String, String>{
+      'part': 'snippet',
+      'type': 'channel',
+      'q': 'aether',
+      'maxResults': '20',
+      'key': 'project-key',
+    });
+    expect(requests.last.queryParameters['pageToken'], 'next');
+    expect(first.totalResults, 2);
+    expect(first.nextPageToken, 'next');
+    expect(first.channels.single.id, 'channel-1');
+    expect(first.channels.single.title, 'Aether Radio');
+    expect(first.channels.single.description, 'Open sessions');
+    expect(
+      first.channels.single.thumbnailUri,
+      Uri.parse('https://i.ytimg.com/channel-1.jpg'),
+    );
+    expect(second.channels.single.thumbnailUri, isNull);
+    expect((await provider.searchChannelsPage('  ')).channels, isEmpty);
+    await expectLater(
+      provider.searchChannelsPage('aether', limit: 0),
+      throwsArgumentError,
+    );
+  });
 }
 
 const _searchJson = '''

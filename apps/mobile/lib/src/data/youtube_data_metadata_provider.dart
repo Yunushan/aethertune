@@ -48,8 +48,9 @@ final class YouTubeDataMetadataProvider
 
   @override
   String get description =>
-      'Official YouTube Data API video metadata search and music-chart browse. '
-      'Playback, downloads, offline media, and account access are not provided.';
+      'Official YouTube Data API video metadata search, music-chart browse, '
+      'and public channel discovery. Playback, downloads, offline media, and '
+      'account access are not provided.';
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
@@ -139,6 +140,34 @@ final class YouTubeDataMetadataProvider
     );
   }
 
+  /// Searches public channel metadata using the documented `type=channel`
+  /// request. This is discovery only; it does not read or change a YouTube
+  /// account's subscriptions.
+  Future<YouTubeDataChannelPage> searchChannelsPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const YouTubeDataChannelPage(channels: <YouTubeDataChannel>[]);
+    }
+    final normalizedCursor = cursor?.trim();
+    return parseYouTubeDataChannelPage(
+      await _searchLoader(
+        _requestUri(
+          normalizedQuery,
+          type: 'channel',
+          cursor: normalizedCursor,
+          limit: limit.clamp(1, 50),
+        ),
+      ),
+    );
+  }
+
   /// Loads the official YouTube Music-category popular chart as metadata only.
   Future<YouTubeDataPopularPage> loadPopularMusicPage({
     String regionCode = 'US',
@@ -170,11 +199,16 @@ final class YouTubeDataMetadataProvider
   @override
   Future<Uri?> resolveStream(Track track) async => null;
 
-  Uri _requestUri(String query, {String? cursor, required int limit}) {
+  Uri _requestUri(
+    String query, {
+    String type = 'video',
+    String? cursor,
+    required int limit,
+  }) {
     return searchUri.replace(
       queryParameters: <String, String>{
         'part': 'snippet',
-        'type': 'video',
+        'type': type,
         'q': query,
         'maxResults': limit.toString(),
         'key': _apiKey,
@@ -204,6 +238,32 @@ final class YouTubeDataPopularPage {
   });
 
   final List<Track> tracks;
+  final String? nextPageToken;
+  final int? totalResults;
+}
+
+final class YouTubeDataChannel {
+  const YouTubeDataChannel({
+    required this.id,
+    required this.title,
+    this.description,
+    this.thumbnailUri,
+  });
+
+  final String id;
+  final String title;
+  final String? description;
+  final Uri? thumbnailUri;
+}
+
+final class YouTubeDataChannelPage {
+  const YouTubeDataChannelPage({
+    required this.channels,
+    this.nextPageToken,
+    this.totalResults,
+  });
+
+  final List<YouTubeDataChannel> channels;
   final String? nextPageToken;
   final int? totalResults;
 }
@@ -254,6 +314,29 @@ YouTubeDataPopularPage parseYouTubeDataPopularPage(String jsonText) {
   );
 }
 
+YouTubeDataChannelPage parseYouTubeDataChannelPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('YouTube Data API response must be a map.');
+  }
+  final json = decoded.cast<String, Object?>();
+  final items = json['items'];
+  final channels = items is List<dynamic>
+      ? items
+            .whereType<Map<dynamic, dynamic>>()
+            .map((item) => _channelFromSearchItem(item.cast<String, Object?>()))
+            .whereType<YouTubeDataChannel>()
+            .toList(growable: false)
+      : const <YouTubeDataChannel>[];
+  return YouTubeDataChannelPage(
+    channels: channels,
+    nextPageToken: _nonEmptyString(json['nextPageToken']),
+    totalResults: _nonNegativeInt(
+      (json['pageInfo'] as Map<dynamic, dynamic>?)?['totalResults'],
+    ),
+  );
+}
+
 Track? _trackFromSearchItem(Map<String, Object?> json) {
   final id = json['id'] as Map<dynamic, dynamic>?;
   final videoId = _nonEmptyString(id?['videoId']);
@@ -271,6 +354,22 @@ Track? _trackFromVideoItem(Map<String, Object?> json) {
     return null;
   }
   return _trackFromVideoMetadata(videoId, snippet);
+}
+
+YouTubeDataChannel? _channelFromSearchItem(Map<String, Object?> json) {
+  final id = json['id'] as Map<dynamic, dynamic>?;
+  final channelId = _nonEmptyString(id?['channelId']);
+  final snippet = json['snippet'] as Map<dynamic, dynamic>?;
+  final title = _nonEmptyString(snippet?['title']);
+  if (channelId == null || title == null || snippet == null) {
+    return null;
+  }
+  return YouTubeDataChannel(
+    id: channelId,
+    title: title,
+    description: _nonEmptyString(snippet['description']),
+    thumbnailUri: _thumbnailUri(snippet['thumbnails']),
+  );
 }
 
 Track _trackFromVideoMetadata(
