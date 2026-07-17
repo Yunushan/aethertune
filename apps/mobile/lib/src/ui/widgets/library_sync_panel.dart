@@ -611,11 +611,61 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on SharedPlaylistConflictException catch (_) {
       if (context.mounted) {
-        _showError(context, 'A collaborator updated it first. Refresh before publishing.');
+        _showError(context, 'A collaborator updated it first. Refresh or merge local changes.');
       }
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, 'Could not publish shared playlist: $error');
+      }
+    }
+  }
+
+  static Future<void> _mergeSharedPlaylist(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final preferLocalName = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Merge local changes'),
+        content: const Text(
+          'The current server order stays first. Local track occurrences not already present on the server are appended. Choose which playlist name to keep.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep server name'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Keep local name'),
+          ),
+        ],
+      ),
+    );
+    if (preferLocalName == null || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().mergeAndPublish(
+        binding,
+        context.read<LibraryStore>(),
+        preferLocalName: preferLocalName,
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Local and server playlist changes merged.');
+      }
+    } on SharedPlaylistConflictException catch (_) {
+      if (context.mounted) {
+        _showError(context, 'A collaborator updated it again. Refresh and retry the merge.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not merge shared playlist: $error');
       }
     }
   }
@@ -1364,6 +1414,9 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
             case _SharedPlaylistAction.publish:
               LibrarySyncPanel._publishSharedPlaylist(context, binding);
               break;
+            case _SharedPlaylistAction.merge:
+              LibrarySyncPanel._mergeSharedPlaylist(context, binding);
+              break;
             case _SharedPlaylistAction.invite:
               LibrarySyncPanel._createSharedPlaylistInvite(context, binding);
               break;
@@ -1405,6 +1458,14 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.publish_outlined),
                 title: Text('Publish local changes'),
+              ),
+            ),
+          if (binding.canEdit)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.merge,
+              child: ListTile(
+                leading: Icon(Icons.merge_type),
+                title: Text('Merge local changes'),
               ),
             ),
           if (binding.isOwner)
@@ -1457,6 +1518,7 @@ enum _SharedPlaylistAction {
   refresh,
   history,
   publish,
+  merge,
   invite,
   collaborators,
   rotateInvites,

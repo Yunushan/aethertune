@@ -150,6 +150,46 @@ void main() {
     expect(library.playlistById(playlist.id)?.name, 'Earlier mix');
     expect(library.playlistById(playlist.id)?.trackIds, <String>['one', 'one']);
   });
+
+  test('merges current server order with local-only track occurrences',
+      () async {
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist(
+      'Local mix',
+      trackIds: const <String>['two'],
+    );
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final hosted = await store.host(library, playlist);
+    gateway.remote = _remote(
+      role: SharedPlaylistAccessRole.owner,
+      revision: 2,
+      name: 'Server mix',
+      trackIds: const <String>['one'],
+    );
+
+    final merged = await store.mergeAndPublish(
+      hosted,
+      library,
+      preferLocalName: true,
+    );
+
+    expect(merged.revision, 3);
+    expect(gateway.remote.name, 'Local mix');
+    expect(gateway.remote.trackIds, <String>['one', 'two']);
+    expect(library.playlistById(playlist.id)?.trackIds, <String>['one', 'two']);
+  });
+
+  test('preserves server order and duplicate counts while merging', () {
+    expect(
+      mergeSharedPlaylistTrackIds(
+        const <String>['one', 'two', 'one'],
+        const <String>['one', 'three', 'one', 'one', 'two'],
+      ),
+      <String>['one', 'two', 'one', 'three', 'one'],
+    );
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {

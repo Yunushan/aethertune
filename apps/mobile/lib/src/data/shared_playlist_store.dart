@@ -263,6 +263,40 @@ class SharedPlaylistStore extends ChangeNotifier {
     });
   }
 
+  Future<SharedPlaylistBinding> mergeAndPublish(
+    SharedPlaylistBinding binding,
+    LibraryStore library, {
+    required bool preferLocalName,
+  }) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (!binding.canEdit) {
+        throw StateError('This shared playlist is view-only.');
+      }
+      final playlist = library.playlistById(binding.localPlaylistId);
+      if (playlist == null) {
+        throw StateError('The linked local playlist no longer exists.');
+      }
+      final current = await _requireGateway().fetchSharedPlaylist(
+        binding.remoteId,
+      );
+      if (!current.canEdit) {
+        throw StateError('This shared playlist is view-only.');
+      }
+      final remote = await _requireGateway().updateSharedPlaylist(
+        playlistId: binding.remoteId,
+        baseRevision: current.revision,
+        name: preferLocalName ? playlist.name : current.name,
+        trackIds: mergeSharedPlaylistTrackIds(
+          current.trackIds,
+          playlist.trackIds,
+        ),
+      );
+      await _applyRemote(binding, remote, library);
+      return bindingForLocalPlaylist(binding.localPlaylistId)!;
+    });
+  }
+
   Future<SharedPlaylistBinding> publish(
     SharedPlaylistBinding binding,
     LibraryStore library,
@@ -485,3 +519,29 @@ DateTime? _optionalDate(Object? value) {
 
 bool _isIdentifier(String value) =>
     RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
+
+/// Produces a non-destructive ordered merge for a shared playlist.
+///
+/// The current server order remains first. Only local occurrences beyond the
+/// server's occurrence counts are appended, so this operation cannot silently
+/// delete a collaborator's tracks or reshuffle their sequence.
+List<String> mergeSharedPlaylistTrackIds(
+  List<String> serverTrackIds,
+  List<String> localTrackIds,
+) {
+  final remainingServerOccurrences = <String, int>{};
+  for (final trackId in serverTrackIds) {
+    remainingServerOccurrences[trackId] =
+        (remainingServerOccurrences[trackId] ?? 0) + 1;
+  }
+  final merged = <String>[...serverTrackIds];
+  for (final trackId in localTrackIds) {
+    final remaining = remainingServerOccurrences[trackId] ?? 0;
+    if (remaining > 0) {
+      remainingServerOccurrences[trackId] = remaining - 1;
+    } else {
+      merged.add(trackId);
+    }
+  }
+  return List<String>.unmodifiable(merged);
+}

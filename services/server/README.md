@@ -121,11 +121,13 @@ days if unused. Owners can invalidate every remaining unused code and issue
 fresh replacements. Shared playlists and invite records are stored under
 `AETHERTUNE_DATA_DIR`, using SHA-256-derived filenames for IDs/codes. Clients
 must refresh explicitly after a revision conflict; there is no automatic merge
-workflow. An editor can restore an earlier document through the regular
-revision-checked update endpoint, which records it as a new revision. The
-server retains the latest 25 private playlist revisions, and any authorized
-collaborator can inspect their checksum-verified name, ordered track IDs,
-timestamp, and updating device.
+workflow. The mobile client provides an explicit non-destructive merge that
+keeps the current server order and appends local-only track occurrences; the
+editor chooses the local or server name. An editor can also restore an earlier
+document through the regular revision-checked update endpoint, which records
+it as a new revision. The server retains the latest 25 private playlist
+revisions, and any authorized collaborator can inspect their checksum-verified
+name, ordered track IDs, timestamp, and updating device.
 
 ## Managed accounts and device tokens
 
