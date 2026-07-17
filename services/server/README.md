@@ -51,6 +51,12 @@ deployment needs another interface. Docker sets its own listener to `0.0.0.0`
 inside the container; its published host port remains controlled separately by
 `AETHERTUNE_BIND_ADDRESS`.
 
+The in-process request limiter defaults to 120 requests per minute for each
+bearer-token digest and one anonymous bucket. Set
+`AETHERTUNE_RATE_LIMIT_PER_MINUTE` to a positive integer to tune that budget;
+invalid values stop startup. Keep an additional rate limit at the reverse
+proxy for IP-based protection.
+
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
 public internet, and do not commit populated `.env` files. The named
