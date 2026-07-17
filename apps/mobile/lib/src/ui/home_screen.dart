@@ -2970,6 +2970,10 @@ class _QueueSheet extends StatelessWidget {
     final queue = player.queue;
     final current = player.current;
     final savedQueues = player.savedQueues;
+    final currentIndex = current == null
+        ? -1
+        : queue.indexWhere((track) => track.id == current.id);
+    final hasUpcomingTracks = currentIndex >= 0 && currentIndex < queue.length - 1;
 
     return SafeArea(
       child: ListView(
@@ -3005,6 +3009,22 @@ class _QueueSheet extends StatelessWidget {
                       child: const ListTile(
                         leading: Icon(Icons.delete_outline),
                         title: Text('Delete queue'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _SavedQueueAction.clearUpcoming,
+                      enabled: hasUpcomingTracks,
+                      child: const ListTile(
+                        leading: Icon(Icons.playlist_remove),
+                        title: Text('Clear upcoming tracks'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _SavedQueueAction.clear,
+                      enabled: queue.isNotEmpty,
+                      child: const ListTile(
+                        leading: Icon(Icons.delete_sweep_outlined),
+                        title: Text('Clear queue'),
                       ),
                     ),
                   ],
@@ -3120,6 +3140,40 @@ class _QueueSheet extends StatelessWidget {
         if (confirmed == true && context.mounted) {
           await player.deleteSavedQueue(player.activeQueueId);
         }
+        return;
+      case _SavedQueueAction.clearUpcoming:
+      case _SavedQueueAction.clear:
+        final upcomingOnly = action == _SavedQueueAction.clearUpcoming;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(upcomingOnly ? 'Clear upcoming tracks?' : 'Clear queue?'),
+            content: Text(
+              upcomingOnly
+                  ? 'The current track will keep playing.'
+                  : 'This stops playback and removes every track from ${player.activeQueueName}.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !context.mounted) {
+          return;
+        }
+        if (upcomingOnly) {
+          await player.clearUpcomingTracks();
+        } else {
+          await player.clearActiveQueue();
+        }
+        return;
     }
   }
 
@@ -3233,7 +3287,7 @@ class _QueueTrackTile extends StatelessWidget {
 
 enum _QueueTrackAction { moveUp, moveDown, remove }
 
-enum _SavedQueueAction { rename, delete }
+enum _SavedQueueAction { rename, delete, clearUpcoming, clear }
 
 class _HomeTab extends StatefulWidget {
   const _HomeTab({

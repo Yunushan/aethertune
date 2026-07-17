@@ -893,6 +893,44 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Removes tracks after the selected item while keeping it playing.
+  ///
+  /// This is intentionally a no-op when no selected item has following tracks,
+  /// so a saved queue that has not begun playback is never cleared by mistake.
+  Future<void> clearUpcomingTracks() async {
+    final current = _current;
+    if (current == null) {
+      return;
+    }
+    final currentIndex = _queue.indexWhere((track) => track.id == current.id);
+    if (currentIndex < 0 || currentIndex == _queue.length - 1) {
+      return;
+    }
+
+    _queue.removeRange(currentIndex + 1, _queue.length);
+    await _saveQueueSnapshot(touch: true);
+    if (_loadedPlaybackQueue.isNotEmpty) {
+      await _reloadQueuePreservingPlayback();
+    }
+    notifyListeners();
+  }
+
+  /// Stops playback and clears the currently active saved queue.
+  Future<void> clearActiveQueue() async {
+    if (_queue.isEmpty && _current == null) {
+      return;
+    }
+
+    _cancelSleepFadeSteps(restoreVolume: true);
+    await _audio.stop();
+    _queue.clear();
+    _current = null;
+    _loadedTrackId = null;
+    _loadedPlaybackQueue.clear();
+    await _saveQueueSnapshot(touch: true);
+    notifyListeners();
+  }
+
   void moveTrackInQueue(int fromIndex, int toIndex) {
     final reordered = moveQueueItem(_queue, fromIndex, toIndex);
     if (_sameQueueOrder(_queue, reordered)) {

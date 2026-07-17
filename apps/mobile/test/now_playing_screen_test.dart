@@ -312,6 +312,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('desktop queue pane clears upcoming tracks and the active queue', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(tester.view.reset);
+
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    final first = _track('first', title: 'First Song', durationSeconds: 240);
+    final second = _track('second', title: 'Second Song', durationSeconds: 180);
+    await player.playTrack(first, queue: <Track>[first, second]);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlayerController>.value(
+        value: player,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              child: DesktopQueuePane(
+                onOpenNowPlaying: () {},
+                onOpenQueue: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Clear upcoming tracks'));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear upcoming tracks?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
+    await tester.pumpAndSettle();
+    expect(player.queue, <Track>[first]);
+    expect(player.current, first);
+
+    await tester.tap(find.byTooltip('Clear queue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear queue?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
+    await tester.pumpAndSettle();
+    expect(player.queue, isEmpty);
+    expect(player.current, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('desktop queue resize handle reports drag changes and completion', (
     tester,
   ) async {

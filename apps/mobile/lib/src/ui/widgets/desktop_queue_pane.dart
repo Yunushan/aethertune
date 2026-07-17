@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -49,6 +51,10 @@ class DesktopQueuePane extends StatelessWidget {
     final player = context.watch<PlayerController>();
     final current = player.current;
     final queue = player.queue;
+    final currentIndex = current == null
+        ? -1
+        : queue.indexWhere((track) => track.id == current.id);
+    final hasUpcomingTracks = currentIndex >= 0 && currentIndex < queue.length - 1;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -73,6 +79,32 @@ class DesktopQueuePane extends StatelessWidget {
                   tooltip: 'Open queue editor',
                   onPressed: queue.isEmpty ? null : onOpenQueue,
                   icon: const Icon(Icons.open_in_full),
+                ),
+                IconButton(
+                  tooltip: 'Clear upcoming tracks',
+                  onPressed: hasUpcomingTracks
+                      ? () => unawaited(
+                            _confirmQueueClear(
+                              context,
+                              player,
+                              upcomingOnly: true,
+                            ),
+                          )
+                      : null,
+                  icon: const Icon(Icons.playlist_remove),
+                ),
+                IconButton(
+                  tooltip: 'Clear queue',
+                  onPressed: queue.isEmpty
+                      ? null
+                      : () => unawaited(
+                            _confirmQueueClear(
+                              context,
+                              player,
+                              upcomingOnly: false,
+                            ),
+                          ),
+                  icon: const Icon(Icons.delete_sweep_outlined),
                 ),
               ],
             ),
@@ -154,6 +186,42 @@ class DesktopQueuePane extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
       );
+    }
+  }
+
+  Future<void> _confirmQueueClear(
+    BuildContext context,
+    PlayerController player, {
+    required bool upcomingOnly,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(upcomingOnly ? 'Clear upcoming tracks?' : 'Clear queue?'),
+        content: Text(
+          upcomingOnly
+              ? 'The current track will keep playing.'
+              : 'This stops playback and removes every track from ${player.activeQueueName}.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    if (upcomingOnly) {
+      await player.clearUpcomingTracks();
+    } else {
+      await player.clearActiveQueue();
     }
   }
 }

@@ -691,6 +691,56 @@ void main() {
     expect(controller.queue, <Track>[local]);
   });
 
+  test('clears upcoming tracks without interrupting playback and persists it',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    final first = _track('1');
+    final second = _track('2');
+    final third = _track('3');
+    await controller.playTrack(first, queue: <Track>[first, second, third]);
+    engine.positionValue = const Duration(seconds: 41);
+
+    await controller.clearUpcomingTracks();
+
+    expect(controller.queue, <Track>[first]);
+    expect(controller.current, first);
+    expect(engine.queue, <Track>[first]);
+    expect(engine.initialIndex, 0);
+    expect(engine.initialPosition, const Duration(seconds: 41));
+    expect(engine.playing, isTrue);
+    controller.dispose();
+
+    final restored = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(restored.dispose);
+    await restored.loadPersistedQueue();
+    expect(restored.queue, <Track>[first]);
+    expect(restored.current, first);
+  });
+
+  test('clears the active queue, stops playback, and persists an empty queue',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    final first = _track('1');
+    final second = _track('2');
+    await controller.playTrack(first, queue: <Track>[first, second]);
+
+    await controller.clearActiveQueue();
+
+    expect(controller.queue, isEmpty);
+    expect(controller.current, isNull);
+    expect(engine.stopCalls, 1);
+    expect(engine.playing, isFalse);
+    controller.dispose();
+
+    final restored = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(restored.dispose);
+    await restored.loadPersistedQueue();
+    expect(restored.queue, isEmpty);
+    expect(restored.current, isNull);
+  });
+
   test('restores a persisted queue into the native gapless engine', () async {
     final firstEngine = _FakePlaybackAudioEngine();
     final firstController = PlayerController(audioEngine: firstEngine);
