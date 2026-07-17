@@ -44,6 +44,14 @@ void main() {
     await remote.load();
     await local.addTracks(<Track>[_track('local'), _track('shared')]);
     await remote.addTracks(<Track>[_track('remote'), _track('shared')]);
+    await local.addTrackBookmark('shared', const Duration(seconds: 15));
+    await remote.addTrackBookmark('shared', const Duration(seconds: 45));
+    final localSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
+    final portableBookmark = (localSnapshot['bookmarks'] as List).single as Map;
+    expect(
+      portableBookmark.keys,
+      unorderedEquals(<String>['id', 'trackId', 'positionMs', 'createdAt']),
+    );
     await remote.toggleFavorite('shared');
     final localPlaylist = await local.createPlaylist(
       'Merged',
@@ -91,6 +99,15 @@ void main() {
       <String>['local-episode', 'remote-episode'],
     );
     expect(local.followedArtists, <String>['Mira', 'Orion']);
+    expect(
+      local
+          .bookmarksForTrack('shared')
+          .map((bookmark) => bookmark.position),
+      containsAll(<Duration>[
+        const Duration(seconds: 15),
+        const Duration(seconds: 45),
+      ]),
+    );
   });
 
   test('persists local artist follows and builds the newest follow feed',
@@ -941,6 +958,7 @@ void main() {
       const Duration(minutes: 10),
       const Duration(minutes: 30),
     );
+    await store.addTrackBookmark('duplicate', const Duration(seconds: 42));
     await store.toggleFavorite('duplicate');
 
     final removed = await store.resolveDuplicateTracks(
@@ -972,6 +990,11 @@ void main() {
       const Duration(minutes: 10),
     );
     expect(store.playbackProgressForTrack('duplicate'), isNull);
+    expect(
+      store.bookmarksForTrack('keep').single.position,
+      const Duration(seconds: 42),
+    );
+    expect(store.bookmarksForTrack('duplicate'), isEmpty);
     expect(store.duplicateTrackGroups(), isEmpty);
 
     final secondStore = LibraryStore(clock: () => now);
@@ -988,6 +1011,10 @@ void main() {
     expect(secondStore.lyricsForTrack('keep')!.plainText, 'new lyrics');
     expect(secondStore.lyricsForTrack('keep')!.sourceName, 'LRCLIB');
     expect(secondStore.playCountForTrack('keep'), 2);
+    expect(
+      secondStore.bookmarksForTrack('keep').single.position,
+      const Duration(seconds: 42),
+    );
   });
 
   test('undoes the last duplicate merge with all rewritten state restored',
@@ -1022,6 +1049,8 @@ void main() {
       const Duration(minutes: 2),
       const Duration(minutes: 3),
     );
+    await store.addTrackBookmark('keep', const Duration(seconds: 15));
+    await store.addTrackBookmark('duplicate', const Duration(seconds: 45));
     await store.setTrackPlaybackSpeed('duplicate', 1.5);
     await store.toggleFavorite('duplicate');
 
@@ -1035,6 +1064,13 @@ void main() {
     expect(store.canUndoDuplicateResolution, isTrue);
     expect(store.playbackSpeedForTrack('keep'), 1.5);
     expect(store.playbackSpeedForTrack('duplicate'), isNull);
+    expect(
+      store.bookmarksForTrack('keep').map((bookmark) => bookmark.position),
+      containsAll(<Duration>[
+        const Duration(seconds: 15),
+        const Duration(seconds: 45),
+      ]),
+    );
 
     expect(await store.undoLastDuplicateResolution(), isTrue);
     expect(store.canUndoDuplicateResolution, isFalse);
@@ -1059,6 +1095,14 @@ void main() {
     );
     expect(store.playbackSpeedForTrack('keep'), isNull);
     expect(store.playbackSpeedForTrack('duplicate'), 1.5);
+    expect(
+      store.bookmarksForTrack('keep').map((bookmark) => bookmark.position),
+      <Duration>[const Duration(seconds: 15)],
+    );
+    expect(
+      store.bookmarksForTrack('duplicate').map((bookmark) => bookmark.position),
+      <Duration>[const Duration(seconds: 45)],
+    );
     expect(
       store.tracks.firstWhere((track) => track.id == 'keep').isFavorite,
       isFalse,
@@ -3032,6 +3076,15 @@ void main() {
     expect(
       restored.bookmarksForTrack('podcast').single.id,
       bookmark!.id,
+    );
+
+    final backup = firstStore.exportBackupJson();
+    final backupRestored = LibraryStore(clock: clock);
+    await backupRestored.load();
+    await backupRestored.restoreBackupJson(backup);
+    expect(
+      backupRestored.bookmarksForTrack('podcast').single.position,
+      const Duration(minutes: 12, seconds: 34),
     );
 
     expect(await restored.removeTrackBookmark('podcast', bookmark.id), isTrue);

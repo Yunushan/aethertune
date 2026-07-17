@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
@@ -256,6 +257,7 @@ class _DuplicateResolutionSnapshot {
     required this.playlists,
     required this.history,
     required this.progressByTrackId,
+    required this.bookmarksByTrackId,
     required this.lyricsByTrackId,
     required this.playbackSpeedOverrides,
     required this.stateRevision,
@@ -265,6 +267,7 @@ class _DuplicateResolutionSnapshot {
   final List<Playlist> playlists;
   final List<PlaybackHistoryEntry> history;
   final Map<String, PlaybackProgressEntry> progressByTrackId;
+  final Map<String, List<TrackBookmark>> bookmarksByTrackId;
   final Map<String, TrackLyrics> lyricsByTrackId;
   final Map<String, double> playbackSpeedOverrides;
   final int stateRevision;
@@ -275,6 +278,7 @@ class _DuplicateResolutionSnapshot {
       playlists: playlists,
       history: history,
       progressByTrackId: progressByTrackId,
+      bookmarksByTrackId: bookmarksByTrackId,
       lyricsByTrackId: lyricsByTrackId,
       playbackSpeedOverrides: playbackSpeedOverrides,
       stateRevision: stateRevision,
@@ -1206,6 +1210,7 @@ class LibraryStore extends ChangeNotifier {
       <String, PlaybackProgressEntry>{};
   final Map<String, List<TrackBookmark>> _bookmarksByTrackId =
       <String, List<TrackBookmark>>{};
+  final Random _bookmarkRandom = Random();
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final Map<String, double> _trackPlaybackSpeedOverrides = <String, double>{};
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
@@ -1769,6 +1774,10 @@ class LibraryStore extends ChangeNotifier {
       progressByTrackId: Map<String, PlaybackProgressEntry>.from(
         _progressByTrackId,
       ),
+      bookmarksByTrackId: <String, List<TrackBookmark>>{
+        for (final entry in _bookmarksByTrackId.entries)
+          entry.key: List<TrackBookmark>.from(entry.value),
+      },
       lyricsByTrackId: Map<String, TrackLyrics>.from(_lyricsByTrackId),
       playbackSpeedOverrides: Map<String, double>.from(
         _trackPlaybackSpeedOverrides,
@@ -1815,6 +1824,9 @@ class LibraryStore extends ChangeNotifier {
     _progressByTrackId
       ..clear()
       ..addAll(previousState.progressByTrackId);
+    _bookmarksByTrackId
+      ..clear()
+      ..addAll(previousState.bookmarksByTrackId);
     _lyricsByTrackId
       ..clear()
       ..addAll(previousState.lyricsByTrackId);
@@ -4133,6 +4145,10 @@ class LibraryStore extends ChangeNotifier {
       'searchQueryHistory': _searchQueryHistory,
       'progress':
           _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
+      'bookmarks': _bookmarksByTrackId.values
+          .expand((entries) => entries)
+          .map((bookmark) => bookmark.toJson())
+          .toList(growable: false),
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
           .toList(),
@@ -4747,6 +4763,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredHistory = <PlaybackHistoryEntry>[];
     final restoredSearchQueryHistory = <String>[];
     final restoredProgress = <PlaybackProgressEntry>[];
+    final restoredBookmarks = <TrackBookmark>[];
     final restoredLyrics = <TrackLyrics>[];
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredPauseListeningHistory = false;
@@ -4876,6 +4893,11 @@ class LibraryStore extends ChangeNotifier {
           PlaybackProgressEntry.fromJson,
         ),
       );
+      restoredBookmarks.addAll(
+        _jsonObjectList(backup, 'bookmarks', isRequired: false)
+            .map(TrackBookmark.tryFromJson)
+            .whereType<TrackBookmark>(),
+      );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
       );
@@ -4916,6 +4938,10 @@ class LibraryStore extends ChangeNotifier {
             entry.position >= _minSavedProgress)
           entry.trackId: entry,
     };
+    final sanitizedBookmarks = _sanitizeTrackBookmarks(
+      restoredBookmarks,
+      knownTrackIds: knownTrackIds,
+    );
     final sanitizedSearchQueryHistory = _dedupeSearchQueryHistory(
       restoredSearchQueryHistory,
     );
@@ -4966,6 +4992,9 @@ class LibraryStore extends ChangeNotifier {
     _progressByTrackId
       ..clear()
       ..addAll(sanitizedProgress);
+    _bookmarksByTrackId
+      ..clear()
+      ..addAll(sanitizedBookmarks);
     _lyricsByTrackId
       ..clear()
       ..addAll(sanitizedLyrics);
@@ -5120,6 +5149,11 @@ class LibraryStore extends ChangeNotifier {
         final playedAt = _syncString(item['playedAt']);
         return trackId == null || playedAt == null ? null : '$trackId|$playedAt';
       },
+    );
+    merged['bookmarks'] = _mergeSyncObjectLists(
+      local['bookmarks'],
+      remote['bookmarks'],
+      identity: (item) => _syncString(item['id']),
     );
     merged['playlists'] = _mergeSyncPlaylists(local['playlists'], remote['playlists']);
     for (final key in const <String>['progress', 'lyrics']) {
@@ -5987,7 +6021,7 @@ class LibraryStore extends ChangeNotifier {
     );
     final now = _clock();
     final bookmark = TrackBookmark(
-      id: '$trackId-${now.microsecondsSinceEpoch}-${bookmarks.length}',
+      id: '$trackId-${now.microsecondsSinceEpoch}-${_bookmarkRandom.nextInt(1 << 32)}',
       trackId: trackId,
       position: position,
       createdAt: now,
@@ -7303,6 +7337,7 @@ class LibraryStore extends ChangeNotifier {
     _rewritePlaylistDuplicateReferences(keepTrackId, removeIds);
     _rewriteHistoryDuplicateReferences(keepTrackId, removeIds);
     _mergeDuplicateProgress(keepTrackId, removeIds);
+    _mergeDuplicateBookmarks(keepTrackId, removeIds);
     _mergeDuplicateLyrics(keepTrackId, removeIds);
     _mergeDuplicatePlaybackSpeed(keepTrackId, removeIds);
     _tracks.removeWhere((track) => removeIds.contains(track.id));
@@ -7371,6 +7406,39 @@ class LibraryStore extends ChangeNotifier {
       duration: latest.duration,
       updatedAt: latest.updatedAt,
     );
+  }
+
+  void _mergeDuplicateBookmarks(String keepTrackId, Set<String> removeIds) {
+    final candidates = <TrackBookmark>[
+      ...?_bookmarksByTrackId[keepTrackId],
+      for (final trackId in removeIds) ...?_bookmarksByTrackId[trackId],
+    ];
+    for (final trackId in removeIds) {
+      _bookmarksByTrackId.remove(trackId);
+    }
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    final seenIds = <String>{};
+    final merged = candidates
+        .where((bookmark) => seenIds.add(bookmark.id))
+        .map(
+          (bookmark) => bookmark.trackId == keepTrackId
+              ? bookmark
+              : TrackBookmark(
+                  id: bookmark.id,
+                  trackId: keepTrackId,
+                  position: bookmark.position,
+                  createdAt: bookmark.createdAt,
+                ),
+        )
+        .toList(growable: false)
+      ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+    _bookmarksByTrackId[keepTrackId] = merged.length <=
+            _maxTrackBookmarksPerTrack
+        ? merged
+        : merged.sublist(merged.length - _maxTrackBookmarksPerTrack);
   }
 
   void _mergeDuplicateLyrics(String keepTrackId, Set<String> removeIds) {
@@ -8173,6 +8241,30 @@ class LibraryStore extends ChangeNotifier {
     _bookmarksByTrackId.removeWhere(
       (trackId, _) => !knownTrackIds.contains(trackId),
     );
+  }
+
+  Map<String, List<TrackBookmark>> _sanitizeTrackBookmarks(
+    Iterable<TrackBookmark> bookmarks, {
+    required Set<String> knownTrackIds,
+  }) {
+    final byTrackId = <String, List<TrackBookmark>>{};
+    final seenIds = <String>{};
+    for (final bookmark in bookmarks) {
+      if (!knownTrackIds.contains(bookmark.trackId) ||
+          !seenIds.add(bookmark.id)) {
+        continue;
+      }
+      byTrackId.putIfAbsent(bookmark.trackId, () => <TrackBookmark>[]).add(
+        bookmark,
+      );
+    }
+    for (final entries in byTrackId.values) {
+      entries.sort((left, right) => left.createdAt.compareTo(right.createdAt));
+      if (entries.length > _maxTrackBookmarksPerTrack) {
+        entries.removeRange(0, entries.length - _maxTrackBookmarksPerTrack);
+      }
+    }
+    return byTrackId;
   }
 
   void _sortHistory() {
