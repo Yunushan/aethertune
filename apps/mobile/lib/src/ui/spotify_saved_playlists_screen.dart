@@ -233,7 +233,18 @@ final class _SpotifyPlaylistTracksScreenState
     final library = context.watch<LibraryStore>();
     final offlineModeEnabled = library.offlineModeEnabled;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.playlist.title)),
+      appBar: AppBar(
+        title: Text(widget.playlist.title),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Save loaded metadata as local playlist',
+            onPressed: _tracks.isEmpty || _loading
+                ? null
+                : () => unawaited(_saveLoadedTracksAsPlaylist()),
+            icon: const Icon(Icons.playlist_add),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
@@ -344,7 +355,9 @@ final class _SpotifyPlaylistTracksScreenState
       if (!mounted) {
         return;
       }
-      final tracks = reset ? page.tracks : _mergeTracks(_tracks, page.tracks);
+      final tracks = reset
+          ? page.tracks
+          : <Track>[..._tracks, ...page.tracks];
       setState(() {
         _tracks = tracks;
         _nextOffset = page.offset + page.tracks.length;
@@ -373,13 +386,31 @@ final class _SpotifyPlaylistTracksScreenState
     );
   }
 
-  List<Track> _mergeTracks(List<Track> current, List<Track> incoming) {
-    final ids = current.map((track) => track.id).toSet();
-    return <Track>[
-      ...current,
-      for (final track in incoming)
-        if (ids.add(track.id)) track,
-    ];
+  Future<void> _saveLoadedTracksAsPlaylist() async {
+    if (_tracks.isEmpty) {
+      return;
+    }
+    final library = context.read<LibraryStore>();
+    await library.addTracks(_tracks);
+    final playlist = await library.createPlaylist(
+      widget.playlist.title,
+      trackIds: _tracks.map((track) => track.id).toList(growable: false),
+    );
+    final orderedPlaylist = await library.replacePlaylistTracks(
+      playlist.id,
+      _tracks.map((track) => track.id),
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Saved ${orderedPlaylist?.trackIds.length ?? playlist.trackIds.length} '
+          'loaded tracks as ${playlist.name}.',
+        ),
+      ),
+    );
   }
 
   String get _loadMoreLabel {

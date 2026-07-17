@@ -38,9 +38,17 @@ void main() {
     await tester.tap(find.text('Signal Queue'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Playlist Signal'), findsOneWidget);
-    await tester.tap(find.byTooltip('Save metadata to library'));
+    expect(find.text('Playlist Signal'), findsNWidgets(2));
+    await tester.tap(
+      find.byTooltip('Save loaded metadata as local playlist'),
+    );
     await tester.pumpAndSettle();
+
+    expect(library.playlists.single.name, 'Signal Queue');
+    expect(library.playlists.single.trackIds, <String>[
+      library.tracks.single.id,
+      library.tracks.single.id,
+    ]);
 
     expect(library.tracks.single.title, 'Playlist Signal');
     expect(library.tracks.single.isPlayable, isFalse);
@@ -64,15 +72,25 @@ const _playlistsJson = '''
 const _playlistItemsJson = '''
 {
   "offset": 0,
-  "total": 1,
+  "total": 2,
   "next": null,
-  "items": [{
-    "item": {
-      "id": "playlist-track-id",
-      "name": "Playlist Signal",
-      "artists": [{"name": "Aether"}],
-      "album": {"name": "Signals"}
+  "items": [
+    {
+      "item": {
+        "id": "playlist-track-id",
+        "name": "Playlist Signal",
+        "artists": [{"name": "Aether"}],
+        "album": {"name": "Signals"}
+      }
+    },
+    {
+      "item": {
+        "id": "playlist-track-id",
+        "name": "Playlist Signal",
+        "artists": [{"name": "Aether"}],
+        "album": {"name": "Signals"}
+      }
     }
-  }]
+  ]
 }
 ''';
