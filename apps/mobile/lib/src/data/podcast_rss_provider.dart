@@ -13,6 +13,7 @@ typedef ExternalPodcastChapterUriApproval = bool Function(Uri chapterUri);
 
 class PodcastRssProvider implements MusicSourceProvider {
   static const maxExternalChapterDocumentsPerFeed = 20;
+  static const maxUnapprovedExternalChapterHostsPerFeed = 8;
 
   PodcastRssProvider({
     required this.feedUri,
@@ -90,11 +91,19 @@ class PodcastRssProvider implements MusicSourceProvider {
   Future<PodcastRssFeed> _loadExternalChapters(PodcastRssFeed feed) async {
     var remaining = maxExternalChapterDocumentsPerFeed;
     final episodes = <PodcastEpisode>[];
+    final unapprovedHosts = <String>{};
     for (final episode in feed.episodes) {
       final chapterUri = episode.chapterUri;
-      if (remaining <= 0 ||
-          chapterUri == null ||
-          !_isApprovedChapterUri(chapterUri)) {
+      if (chapterUri == null || remaining <= 0) {
+        episodes.add(episode);
+        continue;
+      }
+      if (!_isApprovedChapterUri(chapterUri)) {
+        final host = _unapprovedExternalChapterHost(chapterUri);
+        if (host != null &&
+            unapprovedHosts.length < maxUnapprovedExternalChapterHostsPerFeed) {
+          unapprovedHosts.add(host);
+        }
         episodes.add(episode);
         continue;
       }
@@ -118,7 +127,10 @@ class PodcastRssProvider implements MusicSourceProvider {
         episodes.add(episode);
       }
     }
-    return feed.copyWith(episodes: episodes);
+    return feed.copyWith(
+      episodes: episodes,
+      unapprovedExternalChapterHosts: unapprovedHosts.toList()..sort(),
+    );
   }
 
   bool _isApprovedChapterUri(Uri uri) {
@@ -131,6 +143,15 @@ class PodcastRssProvider implements MusicSourceProvider {
   }
 
   static bool _denyExternalChapterUri(Uri _) => false;
+
+  String? _unapprovedExternalChapterHost(Uri uri) {
+    if (uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.origin == feedUri.origin) {
+      return null;
+    }
+    return uri.host.toLowerCase();
+  }
 
   @override
   Future<Uri?> resolveStream(Track track) async {
@@ -150,6 +171,7 @@ final class PodcastRssFeed {
     required this.author,
     required this.episodes,
     this.artworkUri,
+    this.unapprovedExternalChapterHosts = const <String>[],
   });
 
   final Uri feedUri;
@@ -158,8 +180,12 @@ final class PodcastRssFeed {
   final String author;
   final Uri? artworkUri;
   final List<PodcastEpisode> episodes;
+  final List<String> unapprovedExternalChapterHosts;
 
-  PodcastRssFeed copyWith({List<PodcastEpisode>? episodes}) {
+  PodcastRssFeed copyWith({
+    List<PodcastEpisode>? episodes,
+    List<String>? unapprovedExternalChapterHosts,
+  }) {
     return PodcastRssFeed(
       feedUri: feedUri,
       title: title,
@@ -167,6 +193,8 @@ final class PodcastRssFeed {
       author: author,
       episodes: episodes ?? this.episodes,
       artworkUri: artworkUri,
+      unapprovedExternalChapterHosts:
+          unapprovedExternalChapterHosts ?? this.unapprovedExternalChapterHosts,
     );
   }
 }

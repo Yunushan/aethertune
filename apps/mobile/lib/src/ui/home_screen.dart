@@ -15074,8 +15074,28 @@ class _SourcesTabState extends State<_SourcesTab> {
         _podcastLoading = false;
       });
 
+      final unapprovedChapterHosts = feed.unapprovedExternalChapterHosts;
       messenger.showSnackBar(
-        SnackBar(content: Text('Loaded ${feed.title}.')),
+        SnackBar(
+          content: Text(
+            unapprovedChapterHosts.isEmpty
+                ? 'Loaded ${feed.title}.'
+                : 'Chapters from ${unapprovedChapterHosts.first} need approval.',
+          ),
+          action: unapprovedChapterHosts.isEmpty
+              ? null
+              : SnackBarAction(
+                  label: 'Review',
+                  onPressed: () {
+                    unawaited(
+                      _showPodcastChapterHostManager(
+                        context,
+                        initialHost: unapprovedChapterHosts.first,
+                      ),
+                    );
+                  },
+                ),
+        ),
       );
     } catch (error) {
       await library.markPodcastSubscriptionFetchFailed(
@@ -15141,12 +15161,15 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
-  Future<void> _showPodcastChapterHostManager(BuildContext context) async {
+  Future<void> _showPodcastChapterHostManager(
+    BuildContext context, {
+    String? initialHost,
+  }) async {
     final policy = context.read<PodcastChapterHostPolicy?>();
     if (policy == null) {
       return;
     }
-    final controller = TextEditingController();
+    final controller = TextEditingController(text: initialHost ?? '');
     String? errorMessage;
     try {
       await showDialog<void>(

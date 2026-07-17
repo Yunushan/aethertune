@@ -129,6 +129,10 @@ void main() {
 
     expect(chapterRequests, 0);
     expect(feed.episodes.single.chapters, isEmpty);
+    expect(
+      feed.unapprovedExternalChapterHosts,
+      <String>['cdn.example.test'],
+    );
   });
 
   test('loads approved HTTPS external chapter URLs', () async {
@@ -155,6 +159,7 @@ void main() {
       feed.episodes.single.chapters.map((chapter) => chapter.title),
       <String>['Approved opening'],
     );
+    expect(feed.unapprovedExternalChapterHosts, isEmpty);
   });
 
   test('rejects malformed external chapter documents', () {
