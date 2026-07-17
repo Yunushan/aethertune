@@ -4,15 +4,24 @@ import '../domain/music_source_provider.dart';
 import 'provider_credential_vault.dart';
 import 'youtube_data_metadata_provider.dart';
 
+typedef YouTubeDataProviderFactory = YouTubeDataMetadataProvider Function(
+  String apiKey,
+);
+
 /// Holds the optional, user-owned API key outside regular app preferences.
 final class YouTubeDataSettingsStore extends ChangeNotifier {
-  YouTubeDataSettingsStore({ProviderCredentialVault? credentialVault})
-    : _credentialVault = credentialVault ?? SecureProviderCredentialVault();
+  YouTubeDataSettingsStore({
+    ProviderCredentialVault? credentialVault,
+    YouTubeDataProviderFactory? providerFactory,
+  }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
+       _providerFactory = providerFactory ?? _createProvider;
 
   static const _credentialId = 'youtube-data-metadata';
 
   final ProviderCredentialVault _credentialVault;
+  final YouTubeDataProviderFactory _providerFactory;
   String? _apiKey;
+  YouTubeDataMetadataProvider? _provider;
   bool _loaded = false;
   String? _loadError;
 
@@ -20,9 +29,15 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
   String? get loadError => _loadError;
   bool get isConfigured => (_apiKey ?? '').isNotEmpty;
 
-  List<MusicSourceProvider> get musicProviders => isConfigured
-      ? <MusicSourceProvider>[YouTubeDataMetadataProvider(apiKey: _apiKey!)]
-      : const <MusicSourceProvider>[];
+  List<MusicSourceProvider> get musicProviders {
+    final apiKey = _apiKey;
+    if (apiKey == null || apiKey.isEmpty) {
+      return const <MusicSourceProvider>[];
+    }
+    return <MusicSourceProvider>[
+      _provider ??= _providerFactory(apiKey),
+    ];
+  }
 
   Future<void> load() async {
     if (_loaded) {
@@ -30,6 +45,7 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
     }
     try {
       _apiKey = _normalize(await _credentialVault.read(_credentialId));
+      _provider = null;
       _loadError = null;
     } on Object {
       _apiKey = null;
@@ -46,6 +62,7 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
     }
     await _credentialVault.write(_credentialId, normalized);
     _apiKey = normalized;
+    _provider = null;
     _loadError = null;
     notifyListeners();
   }
@@ -53,9 +70,14 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
   Future<void> removeApiKey() async {
     await _credentialVault.delete(_credentialId);
     _apiKey = null;
+    _provider = null;
     _loadError = null;
     notifyListeners();
   }
+}
+
+YouTubeDataMetadataProvider _createProvider(String apiKey) {
+  return YouTubeDataMetadataProvider(apiKey: apiKey);
 }
 
 String? _normalize(String? value) {

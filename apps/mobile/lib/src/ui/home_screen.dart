@@ -3453,6 +3453,7 @@ class _HomeTabState extends State<_HomeTab> {
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final providerStore = context.watch<SelfHostedProviderStore>();
+    final youtubeData = context.watch<YouTubeDataSettingsStore?>();
     final player = context.read<PlayerController>();
 
     if (!library.loaded) {
@@ -3476,7 +3477,15 @@ class _HomeTabState extends State<_HomeTab> {
     };
     final moodMixes = library.localMoodMixes(limit: 5);
     final providerCatalogs = _providerHomeCatalogs(providerStore);
-    if (sections.isEmpty && providerCatalogs.isEmpty) {
+    YouTubeDataMetadataProvider? youtubeProvider;
+    for (final provider in youtubeData?.musicProviders ??
+        const <MusicSourceProvider>[]) {
+      if (provider is YouTubeDataMetadataProvider) {
+        youtubeProvider = provider;
+        break;
+      }
+    }
+    if (sections.isEmpty && providerCatalogs.isEmpty && youtubeProvider == null) {
       return _EmptyHomeFeed(
         onImport: widget.onImport,
         onImportFolder: widget.onImportFolder,
@@ -3502,6 +3511,10 @@ class _HomeTabState extends State<_HomeTab> {
               _openProviderHomeCollection(provider, collection),
             ),
           ),
+          const SizedBox(height: 12),
+        ],
+        if (youtubeProvider != null) ...<Widget>[
+          _OfficialYouTubeMusicChartShelf(provider: youtubeProvider),
           const SizedBox(height: 12),
         ],
         if (sections.isEmpty)
@@ -3886,6 +3899,178 @@ String _providerHomeStoreSignature(SelfHostedProviderStore store) {
     ].join(':'),
   );
   return '${store.artworkRevision}|${accounts.join('|')}';
+}
+
+final class _OfficialYouTubeMusicChartShelf extends StatefulWidget {
+  const _OfficialYouTubeMusicChartShelf({required this.provider});
+
+  final YouTubeDataMetadataProvider provider;
+
+  @override
+  State<_OfficialYouTubeMusicChartShelf> createState() =>
+      _OfficialYouTubeMusicChartShelfState();
+}
+
+final class _OfficialYouTubeMusicChartShelfState
+    extends State<_OfficialYouTubeMusicChartShelf> {
+  final _regionController = TextEditingController(text: 'US');
+  List<Track> _tracks = const <Track>[];
+  bool _loading = false;
+  String? _error;
+  int _requestSerial = 0;
+
+  @override
+  void dispose() {
+    _regionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final offline = library.offlineModeEnabled;
+    return Column(
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.leaderboard_outlined),
+          title: const Text('Official YouTube music chart'),
+          subtitle: const Text('Public Music-category video metadata'),
+          trailing: IconButton(
+            tooltip: 'Open YouTube music chart',
+            onPressed: () => _openFullChart(context),
+            icon: const Icon(Icons.open_in_new),
+          ),
+        ),
+        Row(
+          children: <Widget>[
+            SizedBox(
+              width: 96,
+              child: TextField(
+                controller: _regionController,
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLength: 2,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.allow(RegExp('[a-zA-Z]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Region',
+                  counterText: '',
+                ),
+                onSubmitted: (_) => unawaited(_load()),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              key: const Key('home-youtube-music-chart-refresh'),
+              tooltip: 'Refresh YouTube music chart',
+              onPressed: _loading || offline ? null : () => unawaited(_load()),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        if (offline && _tracks.isEmpty)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_off_outlined),
+            title: Text('Offline mode'),
+          ),
+        if (_loading && _tracks.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: LinearProgressIndicator(),
+          ),
+        if (_error != null && _tracks.isEmpty)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Could not load the music chart'),
+            subtitle: Text(_error!),
+            trailing: IconButton(
+              tooltip: 'Retry YouTube music chart',
+              onPressed: _loading || offline ? null : () => unawaited(_load()),
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        for (final track in _tracks)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.music_video_outlined),
+            title: Text(track.title),
+            subtitle: Text(track.artist),
+            onTap: () => _openFullChart(context),
+            trailing: IconButton(
+              tooltip: library.tracks.any((saved) => saved.id == track.id)
+                  ? 'Saved to library'
+                  : 'Save metadata to library',
+              onPressed: () => unawaited(_saveTrack(context, track)),
+              icon: Icon(
+                library.tracks.any((saved) => saved.id == track.id)
+                    ? Icons.bookmark
+                    : Icons.bookmark_add_outlined,
+              ),
+            ),
+          ),
+        if (_loading && _tracks.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _load() async {
+    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final request = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await widget.provider.loadPopularMusicPage(
+        regionCode: _regionController.text,
+        limit: 6,
+      );
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _tracks = page.tracks;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _error = error.toString();
+      });
+    }
+  }
+
+  Future<void> _saveTrack(BuildContext context, Track track) async {
+    await context.read<LibraryStore>().addTracks(<Track>[track]);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${track.title} metadata saved to your library.')),
+    );
+  }
+
+  void _openFullChart(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeMusicChartScreen(provider: widget.provider),
+      ),
+    );
+  }
 }
 
 class _ProviderHomeDiscovery extends StatelessWidget {

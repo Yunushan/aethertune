@@ -12,6 +12,8 @@ import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
+import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
+import 'package:aethertune/src/data/youtube_data_settings_store.dart';
 import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
@@ -209,9 +211,67 @@ void main() {
     expect(find.text('Load more'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('loads an explicit official music chart on Home', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final fixture = await _HomeFixture.create(
+      provider: _FakeProviderHomeCatalog(),
+    );
+    addTearDown(fixture.dispose);
+    final requestedRegions = <String>[];
+    final youtube = YouTubeDataSettingsStore(
+      credentialVault: _MemoryCredentialVault(),
+      providerFactory: (apiKey) => YouTubeDataMetadataProvider(
+        apiKey: apiKey,
+        videosLoader: (uri) async {
+          requestedRegions.add(uri.queryParameters['regionCode']!);
+          return _youTubeChartPage;
+        },
+      ),
+    );
+    await youtube.load();
+    await youtube.saveApiKey('project-key');
+    addTearDown(youtube.dispose);
+
+    await _pumpHome(tester, fixture, youtube: youtube);
+
+    expect(find.text('Official YouTube music chart'), findsOneWidget);
+    expect(requestedRegions, isEmpty);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-youtube-music-chart-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedRegions, <String>['US']);
+    expect(find.text('Home chart result'), findsOneWidget);
+    await tester.tap(find.byTooltip('Save metadata to library'));
+    await tester.pumpAndSettle();
+    expect(fixture.library.tracks.single.isPlayable, isFalse);
+
+    await fixture.library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(
+              const ValueKey<String>('home-youtube-music-chart-refresh'),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(requestedRegions, <String>['US']);
+  });
 }
 
-Future<void> _pumpHome(WidgetTester tester, _HomeFixture fixture) async {
+Future<void> _pumpHome(
+  WidgetTester tester,
+  _HomeFixture fixture, {
+  YouTubeDataSettingsStore? youtube,
+}) async {
   await tester.pumpWidget(
     MultiProvider(
       providers: [
@@ -224,6 +284,10 @@ Future<void> _pumpHome(WidgetTester tester, _HomeFixture fixture) async {
           value: fixture.folderWatch,
         ),
         ChangeNotifierProvider<PlayerController>.value(value: fixture.player),
+        if (youtube != null)
+          ChangeNotifierProvider<YouTubeDataSettingsStore>.value(
+            value: youtube,
+          ),
       ],
       child: const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -234,6 +298,19 @@ Future<void> _pumpHome(WidgetTester tester, _HomeFixture fixture) async {
   );
   await tester.pumpAndSettle();
 }
+
+const _youTubeChartPage = '''
+{
+  "pageInfo": {"totalResults": 1},
+  "items": [{
+    "id": "home-chart-result",
+    "snippet": {
+      "title": "Home chart result",
+      "channelTitle": "Official Channel"
+    }
+  }]
+}
+''';
 
 final class _HomeFixture {
   _HomeFixture({
