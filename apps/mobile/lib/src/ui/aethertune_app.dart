@@ -107,6 +107,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                   ..loadPersistedPlaybackSettings());
             controller.setOfflineModeEnabled(library.offlineModeEnabled);
             controller.setTrackResolver(selfHosted.resolveTrack);
+            controller.setMediaLibraryBrowseTracks(library.tracks);
             return controller;
           },
         ),

@@ -14,6 +14,33 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
+  test('routes system-media library selections through queue playback', () async {
+    final engine = _FakeMediaLibraryBrowseEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final tracks = <Track>[
+      Track(id: 'one', title: 'One', localPath: '/music/one.mp3'),
+      Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
+    ];
+
+    controller.setMediaLibraryBrowseTracks(tracks);
+
+    expect(
+      engine.browseTracks.map((track) => track.id),
+      <String>['one', 'two'],
+    );
+    await engine.selectBrowseTrack(tracks.last);
+
+    expect(controller.current?.id, 'two');
+    expect(
+      controller.queue.map((track) => track.id),
+      <String>['one', 'two'],
+    );
+    expect(engine.queue.map((track) => track.id), <String>['one', 'two']);
+    expect(engine.initialIndex, 1);
+    expect(engine.playingValue, isTrue);
+  });
+
   test('persists supported playback speed and rejects unsupported values',
       () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -1238,5 +1265,24 @@ class _FakeSkipSilenceEngine extends _FakePlaybackAudioEngine
   @override
   Future<void> setSkipSilenceEnabled(bool enabled) async {
     skipSilenceEnabledValue = enabled;
+  }
+}
+
+class _FakeMediaLibraryBrowseEngine extends _FakePlaybackAudioEngine
+    implements MediaLibraryBrowsePlaybackAudioEngine {
+  List<Track> browseTracks = <Track>[];
+  MediaLibraryTrackSelectionHandler? _onTrackSelected;
+
+  @override
+  void setMediaLibraryBrowseTracks(
+    Iterable<Track> tracks, {
+    required MediaLibraryTrackSelectionHandler onTrackSelected,
+  }) {
+    browseTracks = List<Track>.from(tracks);
+    _onTrackSelected = onTrackSelected;
+  }
+
+  Future<void> selectBrowseTrack(Track track) async {
+    await _onTrackSelected!(track);
   }
 }

@@ -18,7 +18,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         AudioVisualizationPlaybackAudioEngine,
         SkipSilencePlaybackAudioEngine,
         PitchPlaybackAudioEngine,
-        PlaybackErrorAudioEngine {
+        PlaybackErrorAudioEngine,
+        MediaLibraryBrowsePlaybackAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
     PlaybackWidgetBridge? playbackWidgetBridge,
@@ -48,10 +49,17 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   static const _widgetProgressUpdateInterval = Duration(seconds: 1);
   static const _androidAutoQueueId = 'aethertune:android-auto:queue';
+  static const _androidAutoLibraryId = 'aethertune:android-auto:library';
+  static const _androidAutoAllTracksId =
+      'aethertune:android-auto:library:all-tracks';
+  static const _androidAutoLibraryTrackIdPrefix =
+      'aethertune:android-auto:library-track:';
 
   final PlaybackAudioEngine _engine;
   final PlaybackWidgetBridge _playbackWidgetBridge;
   final List<Track> _tracks = <Track>[];
+  final List<Track> _libraryBrowseTracks = <Track>[];
+  MediaLibraryTrackSelectionHandler? _onLibraryTrackSelected;
   StreamSubscription<Object?>? _stateSubscription;
   StreamSubscription<ProcessingState>? _processingSubscription;
   StreamSubscription<int?>? _indexSubscription;
@@ -190,6 +198,17 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       _publishQueueAndCurrentItem();
       rethrow;
     }
+  }
+
+  @override
+  void setMediaLibraryBrowseTracks(
+    Iterable<Track> tracks, {
+    required MediaLibraryTrackSelectionHandler onTrackSelected,
+  }) {
+    _libraryBrowseTracks
+      ..clear()
+      ..addAll(tracks);
+    _onLibraryTrackSelected = onTrackSelected;
   }
 
   @override
@@ -360,7 +379,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   ]) async {
     switch (parentMediaId) {
       case AudioService.browsableRootId:
-        return <MediaItem>[_androidAutoQueueFolder()];
+        return <MediaItem>[
+          _androidAutoQueueFolder(),
+          _androidAutoLibraryFolder(),
+        ];
       case AudioService.recentRootId:
         final currentItem = _currentQueueMediaItem();
         return currentItem == null
@@ -368,6 +390,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
             : <MediaItem>[currentItem];
       case _androidAutoQueueId:
         return _queueMediaItems();
+      case _androidAutoLibraryId:
+        return <MediaItem>[_androidAutoAllTracksFolder()];
+      case _androidAutoAllTracksId:
+        return _libraryBrowseMediaItems();
       default:
         return const <MediaItem>[];
     }
@@ -378,6 +404,12 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     if (mediaId == _androidAutoQueueId) {
       return _androidAutoQueueFolder();
     }
+    if (mediaId == _androidAutoLibraryId) {
+      return _androidAutoLibraryFolder();
+    }
+    if (mediaId == _androidAutoAllTracksId) {
+      return _androidAutoAllTracksFolder();
+    }
     for (var index = 0; index < _tracks.length; index += 1) {
       if (_tracks[index].id == mediaId) {
         final runtimeDuration = index == _currentIndex
@@ -385,6 +417,14 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
             : null;
         return _mediaItemForTrack(_tracks[index], runtimeDuration);
       }
+    }
+    final libraryTrack = _libraryTrackForMediaId(mediaId);
+    if (libraryTrack != null) {
+      return _mediaItemForTrack(
+        libraryTrack,
+        null,
+        mediaId: mediaId,
+      );
     }
     return null;
   }
@@ -396,6 +436,12 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   ]) async {
     final index = _tracks.indexWhere((track) => track.id == mediaId);
     if (index < 0) {
+      final libraryTrack = _libraryTrackForMediaId(mediaId);
+      final onLibraryTrackSelected = _onLibraryTrackSelected;
+      if (libraryTrack == null || onLibraryTrackSelected == null) {
+        return;
+      }
+      await onLibraryTrackSelected(libraryTrack);
       return;
     }
     await _engine.seek(Duration.zero, index: index);
@@ -483,6 +529,34 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     }, growable: false);
   }
 
+  List<MediaItem> _libraryBrowseMediaItems() {
+    return _libraryBrowseTracks
+        .map(
+          (track) => _mediaItemForTrack(
+            track,
+            null,
+            mediaId: _libraryMediaId(track),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Track? _libraryTrackForMediaId(String mediaId) {
+    if (!mediaId.startsWith(_androidAutoLibraryTrackIdPrefix)) {
+      return null;
+    }
+    final trackId = mediaId.substring(_androidAutoLibraryTrackIdPrefix.length);
+    for (final track in _libraryBrowseTracks) {
+      if (track.id == trackId) {
+        return track;
+      }
+    }
+    return null;
+  }
+
+  String _libraryMediaId(Track track) =>
+      '$_androidAutoLibraryTrackIdPrefix${track.id}';
+
   MediaItem? _currentQueueMediaItem() {
     final index = _currentIndex;
     if (index == null || index < 0 || index >= _tracks.length) {
@@ -496,6 +570,24 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       id: _androidAutoQueueId,
       title: 'Current queue',
       displaySubtitle: 'AetherTune',
+      playable: false,
+    );
+  }
+
+  MediaItem _androidAutoLibraryFolder() {
+    return const MediaItem(
+      id: _androidAutoLibraryId,
+      title: 'Library',
+      displaySubtitle: 'AetherTune',
+      playable: false,
+    );
+  }
+
+  MediaItem _androidAutoAllTracksFolder() {
+    return const MediaItem(
+      id: _androidAutoAllTracksId,
+      title: 'All tracks',
+      displaySubtitle: 'AetherTune library',
       playable: false,
     );
   }
@@ -567,10 +659,14 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 }
 
-MediaItem _mediaItemForTrack(Track track, Duration? runtimeDuration) {
+MediaItem _mediaItemForTrack(
+  Track track,
+  Duration? runtimeDuration, {
+  String? mediaId,
+}) {
   final knownDuration = runtimeDuration ?? track.duration;
   return MediaItem(
-    id: track.id,
+    id: mediaId ?? track.id,
     title: track.title,
     artist: track.artist,
     album: track.album,

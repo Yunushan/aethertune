@@ -249,7 +249,7 @@ void main() {
     expect(await engine.loadEqualizerBands(), delegate.bands);
   });
 
-  test('browses and plays the current queue through Android Auto', () async {
+  test('browses the current queue and library through Android Auto', () async {
     final delegate = _FakePlaybackAudioEngine();
     final engine = SystemMediaPlaybackEngine(delegate);
     addTearDown(engine.dispose);
@@ -259,11 +259,13 @@ void main() {
     );
 
     final rootItems = await engine.getChildren(AudioService.browsableRootId);
-    expect(rootItems, hasLength(1));
-    expect(rootItems.single.title, 'Current queue');
-    expect(rootItems.single.playable, isFalse);
+    expect(rootItems.map((item) => item.title), <String>[
+      'Current queue',
+      'Library',
+    ]);
+    expect(rootItems.every((item) => item.playable == false), isTrue);
 
-    final queueItems = await engine.getChildren(rootItems.single.id);
+    final queueItems = await engine.getChildren(rootItems.first.id);
     expect(queueItems.map((item) => item.id), <String>['one', 'two']);
     expect(queueItems.every((item) => item.playable == true), isTrue);
     expect(
@@ -276,6 +278,46 @@ void main() {
     await engine.playFromMediaId('one');
     expect(delegate.currentIndex, 0);
     expect(delegate.playingValue, isTrue);
+  });
+
+  test('routes an Android Auto library selection back to the app', () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+    final libraryTracks = <Track>[_track('one'), _track('two')];
+    Track? selectedTrack;
+    engine.setMediaLibraryBrowseTracks(
+      libraryTracks,
+      onTrackSelected: (track) async {
+        selectedTrack = track;
+      },
+    );
+
+    final rootItems = await engine.getChildren(AudioService.browsableRootId);
+    final libraryFolder = rootItems.singleWhere(
+      (item) => item.title == 'Library',
+    );
+    final allTracksFolder =
+        (await engine.getChildren(libraryFolder.id)).single;
+    expect(allTracksFolder.title, 'All tracks');
+    expect(allTracksFolder.playable, isFalse);
+
+    final libraryItems = await engine.getChildren(allTracksFolder.id);
+    expect(
+      libraryItems.map((item) => item.id),
+      <String>[
+        'aethertune:android-auto:library-track:one',
+        'aethertune:android-auto:library-track:two',
+      ],
+    );
+    expect(
+      (await engine.getMediaItem(libraryItems.last.id))?.title,
+      'Track two',
+    );
+
+    await engine.playFromMediaId(libraryItems.last.id);
+    expect(selectedTrack, same(libraryTracks.last));
+    expect(delegate.playingValue, isFalse);
   });
 
   test('forwards an opt-in visualizer through the system media wrapper',

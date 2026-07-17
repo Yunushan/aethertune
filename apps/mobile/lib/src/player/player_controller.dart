@@ -216,6 +216,23 @@ class PlayerController extends ChangeNotifier {
     _trackResolver = resolver;
   }
 
+  /// Publishes the current app library to supported system-media browsers.
+  ///
+  /// Browsing is intentionally delegated back to [playTrack] so a selection
+  /// obeys the same offline policy, provider resolution, queue persistence,
+  /// and output settings as a selection made inside the app.
+  void setMediaLibraryBrowseTracks(Iterable<Track> tracks) {
+    final engine = _audio;
+    if (engine is! MediaLibraryBrowsePlaybackAudioEngine) {
+      return;
+    }
+    final browseTracks = List<Track>.unmodifiable(tracks);
+    engine.setMediaLibraryBrowseTracks(
+      browseTracks,
+      onTrackSelected: (track) => playTrack(track, queue: browseTracks),
+    );
+  }
+
   /// Exports only queue references that can be resolved from a synced library.
   ///
   /// Search-only and credential-backed items are intentionally omitted rather

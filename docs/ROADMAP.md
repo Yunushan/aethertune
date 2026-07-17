@@ -105,8 +105,8 @@
 - [ ] Physical-device audio-effect and acoustic transition fixtures
 - [ ] iOS and desktop DSP backends
 - [x] Android virtualizer mirrored through crossfade
-- [x] Android Auto current-queue browsing and playback routing
-- [ ] Android Auto emulator/vehicle validation and richer library browsing
+- [x] Android Auto current-queue and library browsing with playback routing
+- [ ] Android Auto emulator/vehicle validation and distraction-optimized UX review
 - [x] iOS Control Center and lock-screen controls
 - [x] iOS background music audio session and wrapper mode
 - [x] macOS Control Center media session

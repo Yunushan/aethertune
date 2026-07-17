@@ -8,6 +8,7 @@ import 'android_audio_virtualizer_bridge.dart';
 import 'playback_audio_effects.dart';
 
 typedef CrossfadeTrackVolumeResolver = double Function(Track track);
+typedef MediaLibraryTrackSelectionHandler = Future<void> Function(Track track);
 
 abstract interface class PlaybackAudioEngine {
   Stream<Object?> get stateChanges;
@@ -47,6 +48,19 @@ abstract interface class PlaybackAudioEngine {
 
 abstract interface class PlaybackErrorAudioEngine {
   Stream<Object> get errorStream;
+}
+
+/// Optional system-media browsing bridge for an app-owned music library.
+///
+/// The handler supplies the selected track back to the application instead of
+/// loading it directly, so normal playback policy, source resolution, queue
+/// persistence, and output settings remain authoritative.
+abstract interface class MediaLibraryBrowsePlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  void setMediaLibraryBrowseTracks(
+    Iterable<Track> tracks, {
+    required MediaLibraryTrackSelectionHandler onTrackSelected,
+  });
 }
 
 abstract interface class CrossfadePlaybackAudioEngine
