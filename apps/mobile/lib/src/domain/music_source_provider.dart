@@ -3,6 +3,7 @@ import 'track.dart';
 /// Feature flags that a provider can expose to the app.
 enum MusicSourceCapability {
   metadataSearch,
+  searchSuggestions,
   radioDirectory,
   streamResolution,
   directPlayback,
@@ -26,6 +27,8 @@ extension MusicSourceCapabilityLabel on MusicSourceCapability {
     switch (this) {
       case MusicSourceCapability.metadataSearch:
         return 'Search';
+      case MusicSourceCapability.searchSuggestions:
+        return 'Search suggestions';
       case MusicSourceCapability.radioDirectory:
         return 'Radio directory';
       case MusicSourceCapability.streamResolution:
@@ -251,6 +254,35 @@ final class MusicSourceSearchPage {
   bool get hasMore => nextCursor != null;
 }
 
+enum MusicSourceSearchSuggestionKind { track, artist, album }
+
+extension MusicSourceSearchSuggestionKindLabel
+    on MusicSourceSearchSuggestionKind {
+  String get label {
+    switch (this) {
+      case MusicSourceSearchSuggestionKind.track:
+        return 'Track';
+      case MusicSourceSearchSuggestionKind.artist:
+        return 'Artist';
+      case MusicSourceSearchSuggestionKind.album:
+        return 'Album';
+    }
+  }
+}
+
+/// A short, user-selectable query proposed by a provider.
+final class MusicSourceSearchSuggestion {
+  const MusicSourceSearchSuggestion({
+    required this.value,
+    required this.kind,
+    this.subtitle,
+  });
+
+  final String value;
+  final MusicSourceSearchSuggestionKind kind;
+  final String? subtitle;
+}
+
 /// Implement this contract to add a legal source adapter.
 ///
 /// Examples: local files, user-owned Jellyfin/Navidrome server, podcasts,
@@ -280,5 +312,17 @@ abstract interface class MusicSourceSearchPagingProvider
     String query, {
     String? cursor,
     int limit = 20,
+  });
+}
+
+/// Optional provider extension for bounded, capability-disclosed type-ahead.
+///
+/// Callers should debounce this operation and must not request it while the
+/// user has enabled the app's offline mode.
+abstract interface class MusicSourceSearchSuggestionProvider
+    implements MusicSourceProvider {
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
   });
 }

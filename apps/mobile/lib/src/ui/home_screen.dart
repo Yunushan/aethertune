@@ -11148,6 +11148,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   List<ProviderSearchError> _providerSearchErrors = <ProviderSearchError>[];
   List<ProviderSearchError> _providerSearchLoadMoreErrors =
       <ProviderSearchError>[];
+  List<ProviderSearchSuggestion> _providerSearchSuggestions =
+      <ProviderSearchSuggestion>[];
   Map<String, String> _providerSearchContinuations = <String, String>{};
   Map<String, String> _providerSearchFailedContinuations = <String, String>{};
   List<Track> _radioTracks = <Track>[];
@@ -11167,8 +11169,11 @@ class _SourcesTabState extends State<_SourcesTab> {
   String? _selectedPodcastSubscriptionId;
   bool _providerSearchLoading = false;
   bool _providerSearchLoadingMore = false;
+  bool _providerSearchSuggestionsLoading = false;
   bool _providerSearchLocalOnly = false;
   int _providerSearchRequestSerial = 0;
+  int _providerSearchSuggestionRequestSerial = 0;
+  Timer? _providerSearchSuggestionDebounce;
   String _providerSearchQuery = '';
   String? _providerSearchMessage;
   bool _radioLoading = false;
@@ -11189,6 +11194,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   @override
   void dispose() {
+    _providerSearchSuggestionDebounce?.cancel();
     _providerSearchController.dispose();
     _archiveSearchController.dispose();
     _archiveCollectionController.dispose();
@@ -11635,18 +11641,56 @@ class _SourcesTabState extends State<_SourcesTab> {
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _searchProviderCatalogs(),
+                onChanged: _scheduleProviderSearchSuggestions,
+                onSubmitted: (_) => _submitProviderSearch(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search library and providers',
-              onPressed:
-                  _providerSearchLoading ? null : _searchProviderCatalogs,
+              onPressed: _providerSearchLoading
+                  ? null
+                  : _submitProviderSearch,
               icon: const Icon(Icons.search),
             ),
           ],
         ),
+        if (_providerSearchSuggestionsLoading) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(
+            key: ValueKey<String>('provider-search-suggestions-progress'),
+          ),
+        ],
+        if (_providerSearchSuggestions.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final suggestion in _providerSearchSuggestions)
+                ActionChip(
+                  key: ValueKey<String>(
+                    'provider-search-suggestion-${suggestion.providerId}-'
+                    '${suggestion.suggestion.value}',
+                  ),
+                  avatar: Icon(
+                    _providerSearchSuggestionIcon(suggestion.suggestion.kind),
+                  ),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(
+                      suggestion.suggestion.value,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  tooltip: '${suggestion.providerName} '
+                      '${suggestion.suggestion.kind.label}: '
+                      '${suggestion.suggestion.value}',
+                  onPressed: () => _selectProviderSearchSuggestion(suggestion),
+                ),
+            ],
+          ),
+        ],
         if (_providerSearchLoading) ...<Widget>[
           const SizedBox(height: 12),
           const LinearProgressIndicator(
@@ -12959,6 +13003,8 @@ class _SourcesTabState extends State<_SourcesTab> {
         _providerSearchFailedContinuations = <String, String>{};
         _providerSearchLoading = false;
         _providerSearchLoadingMore = false;
+        _providerSearchSuggestionsLoading = false;
+        _providerSearchSuggestions = <ProviderSearchSuggestion>[];
         _providerSearchMessage = 'Enter a search term.';
       });
       return;
@@ -12970,6 +13016,8 @@ class _SourcesTabState extends State<_SourcesTab> {
       _providerSearchLocalOnly = localOnly;
       _providerSearchLoading = true;
       _providerSearchLoadingMore = false;
+      _providerSearchSuggestionsLoading = false;
+      _providerSearchSuggestions = <ProviderSearchSuggestion>[];
       _providerSearchMessage = null;
       _providerSearchErrors = <ProviderSearchError>[];
       _providerSearchLoadMoreErrors = <ProviderSearchError>[];
@@ -13010,6 +13058,81 @@ class _SourcesTabState extends State<_SourcesTab> {
         _providerSearchLoading = false;
         _providerSearchMessage = error.toString();
       });
+    }
+  }
+
+  void _scheduleProviderSearchSuggestions(String value) {
+    _providerSearchSuggestionDebounce?.cancel();
+    final requestSerial = ++_providerSearchSuggestionRequestSerial;
+    final query = value.trim();
+    if (query.length < 2 || context.read<LibraryStore>().offlineModeEnabled) {
+      setState(() {
+        _providerSearchSuggestionsLoading = false;
+        _providerSearchSuggestions = <ProviderSearchSuggestion>[];
+      });
+      return;
+    }
+    setState(() {
+      _providerSearchSuggestionsLoading = true;
+      _providerSearchSuggestions = <ProviderSearchSuggestion>[];
+    });
+    _providerSearchSuggestionDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => unawaited(
+        _loadProviderSearchSuggestions(query, requestSerial),
+      ),
+    );
+  }
+
+  Future<void> _loadProviderSearchSuggestions(
+    String query,
+    int requestSerial,
+  ) async {
+    if (!mounted || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final response = await _providerSearchCoordinator.suggest(query);
+    if (!mounted || requestSerial != _providerSearchSuggestionRequestSerial) {
+      return;
+    }
+    if (context.read<LibraryStore>().offlineModeEnabled) {
+      setState(() {
+        _providerSearchSuggestionsLoading = false;
+        _providerSearchSuggestions = <ProviderSearchSuggestion>[];
+      });
+      return;
+    }
+    setState(() {
+      _providerSearchSuggestionsLoading = false;
+      _providerSearchSuggestions = response.suggestions;
+    });
+  }
+
+  void _selectProviderSearchSuggestion(ProviderSearchSuggestion suggestion) {
+    _providerSearchController
+      ..text = suggestion.suggestion.value
+      ..selection = TextSelection.collapsed(
+        offset: suggestion.suggestion.value.length,
+      );
+    _submitProviderSearch();
+  }
+
+  void _submitProviderSearch() {
+    _providerSearchSuggestionDebounce?.cancel();
+    _providerSearchSuggestionRequestSerial += 1;
+    _searchProviderCatalogs();
+  }
+
+  IconData _providerSearchSuggestionIcon(
+    MusicSourceSearchSuggestionKind kind,
+  ) {
+    switch (kind) {
+      case MusicSourceSearchSuggestionKind.track:
+        return Icons.music_note_outlined;
+      case MusicSourceSearchSuggestionKind.artist:
+        return Icons.person_outline;
+      case MusicSourceSearchSuggestionKind.album:
+        return Icons.album_outlined;
     }
   }
 

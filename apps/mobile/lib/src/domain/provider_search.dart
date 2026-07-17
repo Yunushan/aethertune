@@ -98,6 +98,86 @@ final class ProviderSearchCoordinator {
     );
   }
 
+  /// Gets bounded type-ahead suggestions from providers that explicitly
+  /// declare and implement that capability. A single provider failure never
+  /// prevents suggestions from another configured source.
+  Future<ProviderSearchSuggestionResponse> suggest(String query) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const ProviderSearchSuggestionResponse(
+        query: '',
+        suggestions: <ProviderSearchSuggestion>[],
+        errors: <ProviderSearchError>[],
+      );
+    }
+
+    final outcomes = await Future.wait(
+      <Future<_ProviderSuggestionOutcome>>[
+        for (var index = 0; index < providers.length; index += 1)
+          _suggestProvider(providers[index], normalizedQuery, index),
+      ],
+    );
+    final suggestions = <ProviderSearchSuggestion>[];
+    final errors = <ProviderSearchError>[];
+    for (final outcome in outcomes) {
+      if (outcome.error != null) {
+        errors.add(outcome.error!);
+      } else {
+        suggestions.addAll(outcome.suggestions);
+      }
+    }
+    return ProviderSearchSuggestionResponse(
+      query: normalizedQuery,
+      suggestions: List<ProviderSearchSuggestion>.unmodifiable(
+        _deduplicateProviderSuggestions(suggestions),
+      ),
+      errors: List<ProviderSearchError>.unmodifiable(errors),
+    );
+  }
+
+  Future<_ProviderSuggestionOutcome> _suggestProvider(
+    MusicSourceProvider provider,
+    String query,
+    int providerIndex,
+  ) async {
+    if (!provider.capabilities.contains(
+          MusicSourceCapability.searchSuggestions,
+        ) ||
+        provider is! MusicSourceSearchSuggestionProvider) {
+      return const _ProviderSuggestionOutcome(
+        suggestions: <ProviderSearchSuggestion>[],
+      );
+    }
+    try {
+      final suggestions = await provider.suggest(
+        query,
+        limit: maxResultsPerProvider,
+      );
+      return _ProviderSuggestionOutcome(
+        suggestions: suggestions
+            .where((suggestion) => suggestion.value.trim().isNotEmpty)
+            .map(
+              (suggestion) => ProviderSearchSuggestion(
+                providerId: provider.id,
+                providerName: provider.name,
+                providerIndex: providerIndex,
+                suggestion: suggestion,
+              ),
+            )
+            .toList(growable: false),
+      );
+    } catch (error) {
+      return _ProviderSuggestionOutcome(
+        suggestions: const <ProviderSearchSuggestion>[],
+        error: ProviderSearchError(
+          providerId: provider.id,
+          providerName: provider.name,
+          message: error.toString(),
+        ),
+      );
+    }
+  }
+
   Future<ProviderSearchResponse> continueSearch(
     String query,
     Map<String, String> continuations,
@@ -272,6 +352,32 @@ final class ProviderSearchResult {
   final int score;
 }
 
+final class ProviderSearchSuggestionResponse {
+  const ProviderSearchSuggestionResponse({
+    required this.query,
+    required this.suggestions,
+    required this.errors,
+  });
+
+  final String query;
+  final List<ProviderSearchSuggestion> suggestions;
+  final List<ProviderSearchError> errors;
+}
+
+final class ProviderSearchSuggestion {
+  const ProviderSearchSuggestion({
+    required this.providerId,
+    required this.providerName,
+    required this.providerIndex,
+    required this.suggestion,
+  });
+
+  final String providerId;
+  final String providerName;
+  final int providerIndex;
+  final MusicSourceSearchSuggestion suggestion;
+}
+
 final class ProviderSearchError {
   const ProviderSearchError({
     required this.providerId,
@@ -295,6 +401,16 @@ final class _ProviderSearchOutcome {
   final String providerId;
   final List<ProviderSearchResult> results;
   final String? nextCursor;
+  final ProviderSearchError? error;
+}
+
+final class _ProviderSuggestionOutcome {
+  const _ProviderSuggestionOutcome({
+    required this.suggestions,
+    this.error,
+  });
+
+  final List<ProviderSearchSuggestion> suggestions;
   final ProviderSearchError? error;
 }
 
@@ -343,6 +459,28 @@ int _compareProviderSearchResults(
   return left.track.title.toLowerCase().compareTo(
         right.track.title.toLowerCase(),
       );
+}
+
+List<ProviderSearchSuggestion> _deduplicateProviderSuggestions(
+  Iterable<ProviderSearchSuggestion> suggestions,
+) {
+  final unique = <String, ProviderSearchSuggestion>{};
+  for (final suggestion in suggestions) {
+    final value = suggestion.suggestion.value.trim();
+    final key = '${suggestion.providerId}\u0000${value.toLowerCase()}';
+    unique.putIfAbsent(key, () => suggestion);
+  }
+  final sorted = unique.values.toList(growable: false)
+    ..sort((left, right) {
+      final providerCompare = left.providerIndex.compareTo(right.providerIndex);
+      if (providerCompare != 0) {
+        return providerCompare;
+      }
+      return left.suggestion.value.toLowerCase().compareTo(
+            right.suggestion.value.toLowerCase(),
+          );
+    });
+  return sorted;
 }
 
 int _scoreTrack(Track track, SearchQuery query) {

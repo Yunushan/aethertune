@@ -184,6 +184,52 @@ void main() {
     expect(provider.searchCount, 0);
   });
 
+  test('returns declared provider suggestions and isolates failures',
+      () async {
+    final healthy = _FakeSuggestionProvider(
+      id: 'healthy',
+      name: 'Healthy',
+      suggestions: const <MusicSourceSearchSuggestion>[
+        MusicSourceSearchSuggestion(
+          value: 'Mira Sol',
+          kind: MusicSourceSearchSuggestionKind.artist,
+        ),
+        MusicSourceSearchSuggestion(
+          value: 'Blue Rooms',
+          kind: MusicSourceSearchSuggestionKind.album,
+          subtitle: 'Mira Sol',
+        ),
+      ],
+    );
+    final failing = _FakeSuggestionProvider(
+      id: 'failing',
+      name: 'Failing',
+      error: StateError('unavailable'),
+    );
+    final omitted = _FakeProvider(
+      id: 'omitted',
+      name: 'Omitted',
+      capabilities: const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+      },
+    );
+    final response = await ProviderSearchCoordinator(<MusicSourceProvider>[
+      healthy,
+      failing,
+      omitted,
+    ]).suggest(' mira ');
+
+    expect(healthy.queries, <String>['mira']);
+    expect(failing.queries, <String>['mira']);
+    expect(omitted.searchCount, 0);
+    expect(
+      response.suggestions.map((item) => item.suggestion.value),
+      <String>['Blue Rooms', 'Mira Sol'],
+    );
+    expect(response.suggestions.first.providerName, 'Healthy');
+    expect(response.errors.single.providerId, 'failing');
+  });
+
   test('limits results per provider before merging', () async {
     final coordinator = ProviderSearchCoordinator(
       <MusicSourceProvider>[
@@ -502,4 +548,54 @@ final class _FakeProvider implements MusicSourceProvider {
 
   @override
   Future<Uri?> resolveStream(Track track) async => resolvedStreamUri;
+}
+
+final class _FakeSuggestionProvider
+    implements MusicSourceSearchSuggestionProvider {
+  _FakeSuggestionProvider({
+    required this.id,
+    required this.name,
+    this.suggestions = const <MusicSourceSearchSuggestion>[],
+    this.error,
+  });
+
+  @override
+  final String id;
+
+  @override
+  final String name;
+
+  final List<MusicSourceSearchSuggestion> suggestions;
+  final Object? error;
+  final List<String> queries = <String>[];
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{MusicSourceCapability.searchSuggestions};
+
+  @override
+  String get description => name;
+
+  @override
+  ProviderPrivacyDisclosure get disclosure =>
+      const ProviderPrivacyDisclosure();
+
+  @override
+  Future<List<Track>> search(String query) async => const <Track>[];
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    queries.add(query);
+    final error = this.error;
+    if (error != null) {
+      throw error;
+    }
+    return suggestions.take(limit).toList(growable: false);
+  }
 }

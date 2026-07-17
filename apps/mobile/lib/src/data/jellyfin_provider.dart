@@ -22,7 +22,8 @@ class JellyfinProvider
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
-        MusicSourceSearchPagingProvider {
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   JellyfinProvider({
     required this.baseUri,
     required this.userId,
@@ -41,6 +42,7 @@ class JellyfinProvider
 
   static const defaultCapabilities = <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
@@ -83,6 +85,7 @@ class JellyfinProvider
           'API key credential',
           'Jellyfin user identifier',
           'audio search query',
+          'audio search suggestion query',
           'artist, album, and playlist browse identifiers',
           'Home discovery list selection and result limit',
           'radio seed item identifier and result limit',
@@ -104,6 +107,27 @@ class JellyfinProvider
   Future<List<Track>> searchAudio(String query) async {
     final page = await searchPage(query, limit: limit);
     return page.tracks;
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    return _guardRequest(() async {
+      return parseJellyfinSearchHintsResponse(
+        await _requestLoader(
+          _searchHintsUri(normalizedQuery, limit: limit.clamp(1, 50)),
+        ),
+      );
+    });
   }
 
   @override
@@ -557,6 +581,18 @@ class JellyfinProvider
     );
   }
 
+  Uri _searchHintsUri(String query, {required int limit}) {
+    return _requestUri(
+      '/Search/Hints',
+      <String, String>{
+        'SearchTerm': query,
+        'UserId': userId,
+        'IncludeItemTypes': 'Audio,MusicAlbum,MusicArtist',
+        'Limit': limit.toString(),
+      },
+    );
+  }
+
   Uri _itemsUri({
     required String itemType,
     Map<String, String> extra = const <String, String>{},
@@ -723,6 +759,58 @@ MusicSourceSearchPage parseJellyfinSearchPageResponse(
     nextCursor: hasMore ? nextOffset.toString() : null,
     totalCount: totalCount,
   );
+}
+
+List<MusicSourceSearchSuggestion> parseJellyfinSearchHintsResponse(
+  String jsonText,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('Jellyfin response must be a JSON object.');
+  }
+  final values = <String, MusicSourceSearchSuggestion>{};
+  for (final rawHint in _jsonList(decoded['SearchHints'])) {
+    if (rawHint is! Map<dynamic, dynamic>) {
+      continue;
+    }
+    final hint = rawHint.cast<String, Object?>();
+    final value = (hint['Name'] as String? ?? '').trim();
+    if (value.isEmpty) {
+      continue;
+    }
+    final type = hint['Type'] as String? ?? '';
+    final kind = switch (type) {
+      'MusicArtist' => MusicSourceSearchSuggestionKind.artist,
+      'MusicAlbum' => MusicSourceSearchSuggestionKind.album,
+      _ => MusicSourceSearchSuggestionKind.track,
+    };
+    final artists = _jsonList(hint['Artists'])
+        .whereType<String>()
+        .map((artist) => artist.trim())
+        .where((artist) => artist.isNotEmpty)
+        .join(', ');
+    final album = (hint['Album'] as String? ?? '').trim();
+    final subtitle = switch (kind) {
+      MusicSourceSearchSuggestionKind.track => artists.isNotEmpty
+          ? artists
+          : album.isEmpty
+          ? null
+          : album,
+      MusicSourceSearchSuggestionKind.album => artists.isEmpty
+          ? null
+          : artists,
+      MusicSourceSearchSuggestionKind.artist => null,
+    };
+    values.putIfAbsent(
+      value.toLowerCase(),
+      () => MusicSourceSearchSuggestion(
+        value: value,
+        kind: kind,
+        subtitle: subtitle,
+      ),
+    );
+  }
+  return List<MusicSourceSearchSuggestion>.unmodifiable(values.values);
 }
 
 List<MusicCatalogCollection> parseJellyfinCollectionsResponse(

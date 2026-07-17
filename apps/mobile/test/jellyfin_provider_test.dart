@@ -107,6 +107,54 @@ void main() {
     expect(requests, hasLength(1));
   });
 
+  test('requests and parses bounded Jellyfin search suggestions', () async {
+    Uri? capturedUri;
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        capturedUri = uri;
+        return _jellyfinSearchHintsJson;
+      },
+    );
+
+    final suggestions = await provider.suggest(' mira ', limit: 3);
+
+    expect(provider, isA<MusicSourceSearchSuggestionProvider>());
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.searchSuggestions),
+    );
+    expect(capturedUri!.path, '/jellyfin/Search/Hints');
+    expect(capturedUri!.queryParameters['api_key'], 'api-secret');
+    expect(capturedUri!.queryParameters['SearchTerm'], 'mira');
+    expect(capturedUri!.queryParameters['UserId'], 'user-1');
+    expect(
+      capturedUri!.queryParameters['IncludeItemTypes'],
+      'Audio,MusicAlbum,MusicArtist',
+    );
+    expect(capturedUri!.queryParameters['Limit'], '3');
+    expect(
+      suggestions.map((suggestion) => suggestion.value),
+      <String>['Mira Sol', 'Blue Rooms', 'Sea Glass'],
+    );
+    expect(
+      suggestions.map((suggestion) => suggestion.kind),
+      <MusicSourceSearchSuggestionKind>[
+        MusicSourceSearchSuggestionKind.artist,
+        MusicSourceSearchSuggestionKind.album,
+        MusicSourceSearchSuggestionKind.track,
+      ],
+    );
+    expect(suggestions.last.subtitle, 'Mira Sol');
+
+    await expectLater(
+      provider.suggest('mira', limit: 0),
+      throwsArgumentError,
+    );
+  });
+
   test('redacts authenticated request URLs from provider errors', () async {
     final provider = JellyfinProvider(
       baseUri: Uri.parse('https://media.example.test'),
@@ -656,6 +704,18 @@ const _jellyfinSearchPageJson = '''
   ],
   "StartIndex": 3,
   "TotalRecordCount": 5
+}
+''';
+
+const _jellyfinSearchHintsJson = '''
+{
+  "SearchHints": [
+    {"Name": "Mira Sol", "Type": "MusicArtist"},
+    {"Name": "Blue Rooms", "Type": "MusicAlbum", "Artists": ["Mira Sol"]},
+    {"Name": "Sea Glass", "Type": "Audio", "Artists": ["Mira Sol"], "Album": "Blue Rooms"},
+    {"Name": "Sea Glass", "Type": "Audio"},
+    {"Name": "", "Type": "Audio"}
+  ]
 }
 ''';
 

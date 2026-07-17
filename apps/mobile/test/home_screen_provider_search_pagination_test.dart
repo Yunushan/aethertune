@@ -174,6 +174,93 @@ void main() {
       ]);
     },
   );
+
+  testWidgets('uses a provider suggestion to launch unified search',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    final provider = _SuggestionSearchProvider();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(
+            initialTab: 4,
+            providerSearchProviders: <MusicSourceProvider>[provider],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final searchField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == 'Search library and providers',
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(searchField, 300, scrollable: scrollable);
+    await tester.enterText(searchField, 'mi');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(provider.suggestionQueries, <String>['mi']);
+    final suggestion = find.byKey(
+      const ValueKey<String>('provider-search-suggestion-suggested-Mira Sol'),
+    );
+    await tester.scrollUntilVisible(suggestion, 100, scrollable: scrollable);
+    expect(suggestion, findsOneWidget);
+    await tester.tap(suggestion);
+    await tester.pumpAndSettle();
+
+    expect(provider.searchQueries, <String>['Mira Sol']);
+    expect(find.text('Mira Sol Result'), findsOneWidget);
+
+    await library.setOfflineModeEnabled(true);
+    final offlineSearchField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == 'Search library and providers',
+      skipOffstage: false,
+    );
+    await tester.scrollUntilVisible(
+      offlineSearchField,
+      -300,
+      scrollable: scrollable,
+    );
+    await tester.enterText(offlineSearchField, 'offline');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(provider.suggestionQueries, <String>['mi']);
+  });
 }
 
 final class _PagedSearchProvider implements MusicSourceSearchPagingProvider {
@@ -243,6 +330,62 @@ final class _PagedSearchProvider implements MusicSourceSearchPagingProvider {
 
   @override
   Future<Uri?> resolveStream(Track track) async => null;
+}
+
+final class _SuggestionSearchProvider
+    implements MusicSourceSearchSuggestionProvider {
+  final List<String> suggestionQueries = <String>[];
+  final List<String> searchQueries = <String>[];
+
+  @override
+  String get id => 'suggested';
+
+  @override
+  String get name => 'Suggested provider';
+
+  @override
+  String get description => name;
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
+      };
+
+  @override
+  ProviderPrivacyDisclosure get disclosure =>
+      const ProviderPrivacyDisclosure();
+
+  @override
+  Future<List<Track>> search(String query) async {
+    searchQueries.add(query);
+    return <Track>[
+      Track(
+        id: 'mira-result',
+        title: 'Mira Sol Result',
+        artist: 'Mira Sol',
+        sourceId: id,
+      ),
+    ];
+  }
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    suggestionQueries.add(query);
+    return const <MusicSourceSearchSuggestion>[
+      MusicSourceSearchSuggestion(
+        value: 'Mira Sol',
+        kind: MusicSourceSearchSuggestionKind.artist,
+      ),
+    ];
+  }
 }
 
 class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
