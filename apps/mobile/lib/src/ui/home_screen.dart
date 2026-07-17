@@ -85,6 +85,7 @@ import 'spotify_saved_albums_screen.dart';
 import 'spotify_saved_playlists_screen.dart';
 import 'youtube_music_chart_screen.dart';
 import 'youtube_channel_follow_screen.dart';
+import 'youtube_public_playlists_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/musicbrainz_metadata_search_sheet.dart';
@@ -11745,7 +11746,7 @@ enum _SelfHostedAccountAction { browse, edit, rotateCredential, remove }
 
 enum _CustomCatalogAction { edit, remove }
 
-enum _YouTubeDataAction { musicChart, channels, configure, remove }
+enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
 enum _SpotifyAction { savedTracks, savedAlbums, playlists, configure, remove }
 
@@ -12007,6 +12008,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openYouTubeChannels(context, youtubeProvider);
                   }
                   break;
+                case _YouTubeDataAction.playlists:
+                  if (youtubeProvider != null) {
+                    _openYouTubePublicPlaylists(context, youtubeProvider);
+                  }
+                  break;
                 case _YouTubeDataAction.configure:
                   unawaited(_configureYouTubeData(context));
                   break;
@@ -12032,6 +12038,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.person_search_outlined),
                   title: Text('Public channels'),
+                ),
+              ),
+              PopupMenuItem<_YouTubeDataAction>(
+                value: _YouTubeDataAction.playlists,
+                enabled: youtubeProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.queue_music_outlined),
+                  title: Text('Public playlists'),
                 ),
               ),
               PopupMenuItem<_YouTubeDataAction>(
@@ -13310,6 +13325,17 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => YouTubeChannelFollowScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openYouTubePublicPlaylists(
+    BuildContext context,
+    YouTubeDataMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubePublicPlaylistsScreen(provider: provider),
       ),
     );
   }

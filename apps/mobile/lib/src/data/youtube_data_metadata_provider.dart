@@ -21,11 +21,15 @@ final class YouTubeDataMetadataProvider
     YouTubeDataSearchLoader? searchLoader,
     Uri? videosUri,
     YouTubeDataSearchLoader? videosLoader,
+    Uri? playlistItemsUri,
+    YouTubeDataSearchLoader? playlistItemsLoader,
   }) : _apiKey = _requireApiKey(apiKey),
        searchUri = searchUri ?? _defaultSearchUri,
        _searchLoader = searchLoader ?? _loadYouTubeDataJson,
        videosUri = videosUri ?? _defaultVideosUri,
-       _videosLoader = videosLoader ?? _loadYouTubeDataJson;
+       _videosLoader = videosLoader ?? _loadYouTubeDataJson,
+       playlistItemsUri = playlistItemsUri ?? _defaultPlaylistItemsUri,
+       _playlistItemsLoader = playlistItemsLoader ?? _loadYouTubeDataJson;
 
   static final Uri _defaultSearchUri = Uri.parse(
     'https://www.googleapis.com/youtube/v3/search',
@@ -33,12 +37,17 @@ final class YouTubeDataMetadataProvider
   static final Uri _defaultVideosUri = Uri.parse(
     'https://www.googleapis.com/youtube/v3/videos',
   );
+  static final Uri _defaultPlaylistItemsUri = Uri.parse(
+    'https://www.googleapis.com/youtube/v3/playlistItems',
+  );
 
   final String _apiKey;
   final Uri searchUri;
   final YouTubeDataSearchLoader _searchLoader;
   final Uri videosUri;
   final YouTubeDataSearchLoader _videosLoader;
+  final Uri playlistItemsUri;
+  final YouTubeDataSearchLoader _playlistItemsLoader;
 
   @override
   String get id => 'youtube-data-metadata';
@@ -163,6 +172,70 @@ final class YouTubeDataMetadataProvider
           type: 'channel',
           cursor: normalizedCursor,
           limit: limit.clamp(1, 50),
+        ),
+      ),
+    );
+  }
+
+  /// Searches public playlist metadata through the documented
+  /// `search.list?type=playlist` request.
+  Future<YouTubeDataPlaylistPage> searchPlaylistsPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const YouTubeDataPlaylistPage(playlists: <YouTubeDataPlaylist>[]);
+    }
+    final normalizedCursor = cursor?.trim();
+    return parseYouTubeDataPlaylistPage(
+      await _searchLoader(
+        _requestUri(
+          normalizedQuery,
+          type: 'playlist',
+          cursor: normalizedCursor,
+          limit: limit.clamp(1, 50),
+        ),
+      ),
+    );
+  }
+
+  /// Loads metadata for items in a public YouTube playlist.
+  ///
+  /// Private and restricted playlists remain inaccessible through this
+  /// unauthenticated, read-only adapter.
+  Future<YouTubeDataPlaylistItemsPage> loadPlaylistItemsPage(
+    String playlistId, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedPlaylistId = playlistId.trim();
+    if (normalizedPlaylistId.isEmpty) {
+      throw ArgumentError.value(
+        playlistId,
+        'playlistId',
+        'Must not be empty.',
+      );
+    }
+    final normalizedCursor = cursor?.trim();
+    return parseYouTubeDataPlaylistItemsPage(
+      await _playlistItemsLoader(
+        playlistItemsUri.replace(
+          queryParameters: <String, String>{
+            'part': 'snippet',
+            'playlistId': normalizedPlaylistId,
+            'maxResults': limit.clamp(1, 50).toString(),
+            'key': _apiKey,
+            if (normalizedCursor != null && normalizedCursor.isNotEmpty)
+              'pageToken': normalizedCursor,
+          },
         ),
       ),
     );
@@ -301,6 +374,46 @@ final class YouTubeDataChannelPage {
   final int? totalResults;
 }
 
+final class YouTubeDataPlaylist {
+  const YouTubeDataPlaylist({
+    required this.id,
+    required this.title,
+    this.channelTitle,
+    this.description,
+    this.thumbnailUri,
+  });
+
+  final String id;
+  final String title;
+  final String? channelTitle;
+  final String? description;
+  final Uri? thumbnailUri;
+}
+
+final class YouTubeDataPlaylistPage {
+  const YouTubeDataPlaylistPage({
+    required this.playlists,
+    this.nextPageToken,
+    this.totalResults,
+  });
+
+  final List<YouTubeDataPlaylist> playlists;
+  final String? nextPageToken;
+  final int? totalResults;
+}
+
+final class YouTubeDataPlaylistItemsPage {
+  const YouTubeDataPlaylistItemsPage({
+    required this.tracks,
+    this.nextPageToken,
+    this.totalResults,
+  });
+
+  final List<Track> tracks;
+  final String? nextPageToken;
+  final int? totalResults;
+}
+
 YouTubeDataSearchPage parseYouTubeDataSearchPage(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
@@ -370,6 +483,54 @@ YouTubeDataChannelPage parseYouTubeDataChannelPage(String jsonText) {
   );
 }
 
+YouTubeDataPlaylistPage parseYouTubeDataPlaylistPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('YouTube Data API response must be a map.');
+  }
+  final json = decoded.cast<String, Object?>();
+  final items = json['items'];
+  final playlists = items is List<dynamic>
+      ? items
+            .whereType<Map<dynamic, dynamic>>()
+            .map((item) => _playlistFromSearchItem(item.cast<String, Object?>()))
+            .whereType<YouTubeDataPlaylist>()
+            .toList(growable: false)
+      : const <YouTubeDataPlaylist>[];
+  return YouTubeDataPlaylistPage(
+    playlists: playlists,
+    nextPageToken: _nonEmptyString(json['nextPageToken']),
+    totalResults: _nonNegativeInt(
+      (json['pageInfo'] as Map<dynamic, dynamic>?)?['totalResults'],
+    ),
+  );
+}
+
+YouTubeDataPlaylistItemsPage parseYouTubeDataPlaylistItemsPage(
+  String jsonText,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('YouTube Data API response must be a map.');
+  }
+  final json = decoded.cast<String, Object?>();
+  final items = json['items'];
+  final tracks = items is List<dynamic>
+      ? items
+            .whereType<Map<dynamic, dynamic>>()
+            .map((item) => _trackFromPlaylistItem(item.cast<String, Object?>()))
+            .whereType<Track>()
+            .toList(growable: false)
+      : const <Track>[];
+  return YouTubeDataPlaylistItemsPage(
+    tracks: tracks,
+    nextPageToken: _nonEmptyString(json['nextPageToken']),
+    totalResults: _nonNegativeInt(
+      (json['pageInfo'] as Map<dynamic, dynamic>?)?['totalResults'],
+    ),
+  );
+}
+
 Track? _trackFromSearchItem(Map<String, Object?> json) {
   final id = json['id'] as Map<dynamic, dynamic>?;
   final videoId = _nonEmptyString(id?['videoId']);
@@ -402,6 +563,45 @@ YouTubeDataChannel? _channelFromSearchItem(Map<String, Object?> json) {
     title: title,
     description: _nonEmptyString(snippet['description']),
     thumbnailUri: _thumbnailUri(snippet['thumbnails']),
+  );
+}
+
+YouTubeDataPlaylist? _playlistFromSearchItem(Map<String, Object?> json) {
+  final id = json['id'] as Map<dynamic, dynamic>?;
+  final playlistId = _nonEmptyString(id?['playlistId']);
+  final snippet = json['snippet'] as Map<dynamic, dynamic>?;
+  final title = _nonEmptyString(snippet?['title']);
+  if (playlistId == null || title == null || snippet == null) {
+    return null;
+  }
+  return YouTubeDataPlaylist(
+    id: playlistId,
+    title: title,
+    channelTitle: _nonEmptyString(snippet['channelTitle']),
+    description: _nonEmptyString(snippet['description']),
+    thumbnailUri: _thumbnailUri(snippet['thumbnails']),
+  );
+}
+
+Track? _trackFromPlaylistItem(Map<String, Object?> json) {
+  final snippet = json['snippet'] as Map<dynamic, dynamic>?;
+  final resourceId = snippet?['resourceId'] as Map<dynamic, dynamic>?;
+  final videoId = _nonEmptyString(resourceId?['videoId']);
+  if (snippet == null || videoId == null) {
+    return null;
+  }
+  return Track(
+    id: Track.stableLocalId('youtube-data-metadata|$videoId'),
+    title: _nonEmptyString(snippet['title']) ?? 'Untitled YouTube video',
+    artist:
+        _nonEmptyString(snippet['videoOwnerChannelTitle']) ??
+        _nonEmptyString(snippet['channelTitle']) ??
+        'YouTube',
+    album: 'YouTube playlist',
+    genre: 'YouTube metadata',
+    artworkUri: _thumbnailUri(snippet['thumbnails']),
+    sourceId: 'youtube-data-metadata',
+    externalId: videoId,
   );
 }
 

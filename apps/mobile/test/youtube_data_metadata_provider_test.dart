@@ -262,6 +262,67 @@ void main() {
     expect(await provider.resolveStream(page.tracks.single), isNull);
     await expectLater(provider.loadChannelVideosPage(' '), throwsArgumentError);
   });
+
+  test('searches public playlists and pages their item metadata', () async {
+    Uri? searchUri;
+    Uri? playlistItemsUri;
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async {
+        searchUri = uri;
+        return '''
+          {"nextPageToken":"playlist-next","pageInfo":{"totalResults":1},"items":[
+            {"id":{"playlistId":"playlist-1"},"snippet":{"title":"Open Mix","channelTitle":"Aether Radio","thumbnails":{"high":{"url":"https://i.ytimg.com/playlist.jpg"}}}}
+          ]}
+        ''';
+      },
+      playlistItemsLoader: (uri) async {
+        playlistItemsUri = uri;
+        return '''
+          {"nextPageToken":"item-next","pageInfo":{"totalResults":1},"items":[
+            {"snippet":{"title":"Playlist Signal","channelTitle":"Aether Radio","resourceId":{"videoId":"playlist-video"}}}
+          ]}
+        ''';
+      },
+    );
+
+    final playlists = await provider.searchPlaylistsPage('  open mix  ');
+    final items = await provider.loadPlaylistItemsPage(
+      ' playlist-1 ',
+      cursor: 'item-cursor',
+      limit: 100,
+    );
+
+    expect(searchUri!.queryParameters, <String, String>{
+      'part': 'snippet',
+      'type': 'playlist',
+      'q': 'open mix',
+      'maxResults': '20',
+      'key': 'project-key',
+    });
+    expect(playlists.nextPageToken, 'playlist-next');
+    expect(playlists.playlists.single.id, 'playlist-1');
+    expect(playlists.playlists.single.channelTitle, 'Aether Radio');
+    expect(
+      playlists.playlists.single.thumbnailUri,
+      Uri.parse('https://i.ytimg.com/playlist.jpg'),
+    );
+    expect(playlistItemsUri!.path, '/youtube/v3/playlistItems');
+    expect(playlistItemsUri!.queryParameters, <String, String>{
+      'part': 'snippet',
+      'playlistId': 'playlist-1',
+      'maxResults': '50',
+      'key': 'project-key',
+      'pageToken': 'item-cursor',
+    });
+    expect(items.nextPageToken, 'item-next');
+    expect(items.tracks.single.title, 'Playlist Signal');
+    expect(items.tracks.single.artist, 'Aether Radio');
+    expect(items.tracks.single.isPlayable, isFalse);
+    expect(await provider.resolveStream(items.tracks.single), isNull);
+    expect((await provider.searchPlaylistsPage('  ')).playlists, isEmpty);
+    await expectLater(provider.loadPlaylistItemsPage(' '), throwsArgumentError);
+  });
 }
 
 const _searchJson = '''
