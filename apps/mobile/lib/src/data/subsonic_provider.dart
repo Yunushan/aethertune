@@ -22,6 +22,7 @@ class SubsonicProvider
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
+        MusicSourceSearchSuggestionProvider,
         MusicSourceSearchPagingProvider {
   SubsonicProvider({
     required this.baseUri,
@@ -43,6 +44,7 @@ class SubsonicProvider
 
   static const defaultCapabilities = <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
     MusicSourceCapability.streamResolution,
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
@@ -87,6 +89,7 @@ class SubsonicProvider
           'username credential',
           'salted authentication token',
           'song search query',
+          'audio search suggestion query',
           'artist, album, and playlist browse identifiers',
           'Home discovery list selection and result limit',
           'radio seed item identifier and result limit',
@@ -108,6 +111,29 @@ class SubsonicProvider
   Future<List<Track>> searchSongs(String query) async {
     final page = await searchPage(query, limit: limit);
     return page.tracks;
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+    final boundedLimit = limit.clamp(1, 20);
+    return _guardRequest(() async {
+      return parseSubsonicSearchSuggestionsResponse(
+        await _requestLoader(
+          _suggestionsUri(normalizedQuery, limit: boundedLimit),
+        ),
+        limit: boundedLimit,
+      );
+    });
   }
 
   @override
@@ -570,6 +596,21 @@ class SubsonicProvider
     );
   }
 
+  Uri _suggestionsUri(String query, {required int limit}) {
+    return _requestUri(
+      '/rest/search3.view',
+      <String, String>{
+        'query': query,
+        'artistCount': limit.toString(),
+        'artistOffset': '0',
+        'albumCount': limit.toString(),
+        'albumOffset': '0',
+        'songCount': limit.toString(),
+        'songOffset': '0',
+      },
+    );
+  }
+
   Uri _requestUri(String endpointPath, Map<String, Object?> parameters) {
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, endpointPath),
@@ -690,6 +731,80 @@ MusicSourceSearchPage parseSubsonicSearchPageResponse(
     tracks: List<Track>.unmodifiable(tracks),
     nextCursor: hasMore ? nextOffset.toString() : null,
   );
+}
+
+List<MusicSourceSearchSuggestion> parseSubsonicSearchSuggestionsResponse(
+  String jsonText, {
+  required int limit,
+}) {
+  if (limit <= 0) {
+    throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+  }
+  final response = _subsonicResponse(jsonText);
+  final searchResult = response['searchResult3'];
+  if (searchResult is! Map<dynamic, dynamic>) {
+    return const <MusicSourceSearchSuggestion>[];
+  }
+
+  final suggestions = <MusicSourceSearchSuggestion>[];
+  final seen = <String>{};
+  void add(
+    String value,
+    MusicSourceSearchSuggestionKind kind, {
+    String? subtitle,
+  }) {
+    final normalizedValue = value.trim();
+    if (normalizedValue.isEmpty || suggestions.length == limit) {
+      return;
+    }
+    if (!seen.add(normalizedValue.toLowerCase())) {
+      return;
+    }
+    final normalizedSubtitle = subtitle?.trim();
+    suggestions.add(
+      MusicSourceSearchSuggestion(
+        value: normalizedValue,
+        kind: kind,
+        subtitle: normalizedSubtitle == null || normalizedSubtitle.isEmpty
+            ? null
+            : normalizedSubtitle,
+      ),
+    );
+  }
+
+  for (final rawArtist in _jsonList(searchResult['artist'])) {
+    if (rawArtist is! Map<dynamic, dynamic>) {
+      continue;
+    }
+    final artist = rawArtist.cast<String, Object?>();
+    add(
+      _stringValue(artist['name']),
+      MusicSourceSearchSuggestionKind.artist,
+    );
+  }
+  for (final rawAlbum in _jsonList(searchResult['album'])) {
+    if (rawAlbum is! Map<dynamic, dynamic>) {
+      continue;
+    }
+    final album = rawAlbum.cast<String, Object?>();
+    add(
+      _stringValue(album['name']),
+      MusicSourceSearchSuggestionKind.album,
+      subtitle: _stringValue(album['artist']),
+    );
+  }
+  for (final rawSong in _jsonList(searchResult['song'])) {
+    if (rawSong is! Map<dynamic, dynamic>) {
+      continue;
+    }
+    final song = rawSong.cast<String, Object?>();
+    add(
+      _stringValue(song['title']),
+      MusicSourceSearchSuggestionKind.track,
+      subtitle: _stringValue(song['artist']),
+    );
+  }
+  return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
 }
 
 List<MusicCatalogCollection> parseSubsonicArtistsResponse(String jsonText) {

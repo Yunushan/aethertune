@@ -28,6 +28,7 @@ void main() {
       provider.capabilities,
       containsAll(const <MusicSourceCapability>[
         MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.libraryBrowse,
         MusicSourceCapability.playlistMutation,
@@ -131,6 +132,48 @@ void main() {
       throwsArgumentError,
     );
     expect(requests, hasLength(1));
+  });
+
+  test('requests and parses bounded Subsonic search suggestions', () async {
+    Uri? capturedUri;
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        capturedUri = uri;
+        return _searchSuggestionsResponseJson;
+      },
+    );
+
+    final suggestions = await provider.suggest('  aether  ', limit: 2);
+
+    expect(provider, isA<MusicSourceSearchSuggestionProvider>());
+    expect(capturedUri!.path, '/navidrome/rest/search3.view');
+    expect(capturedUri!.queryParameters['query'], 'aether');
+    expect(capturedUri!.queryParameters['artistCount'], '2');
+    expect(capturedUri!.queryParameters['artistOffset'], '0');
+    expect(capturedUri!.queryParameters['albumCount'], '2');
+    expect(capturedUri!.queryParameters['albumOffset'], '0');
+    expect(capturedUri!.queryParameters['songCount'], '2');
+    expect(capturedUri!.queryParameters['songOffset'], '0');
+    expect(capturedUri!.queryParameters['t'], _secretToken);
+    expect(
+      suggestions.map((suggestion) => suggestion.value),
+      <String>['Aether Artist', 'Aether Album'],
+    );
+    expect(
+      suggestions.map((suggestion) => suggestion.kind),
+      <MusicSourceSearchSuggestionKind>[
+        MusicSourceSearchSuggestionKind.artist,
+        MusicSourceSearchSuggestionKind.album,
+      ],
+    );
+    expect(suggestions.last.subtitle, 'Aether Artist');
+
+    expect(await provider.suggest('   '), isEmpty);
+    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
   });
 
   test('redacts salted authentication tokens from provider errors', () async {
@@ -677,6 +720,38 @@ const _searchResponseJson = '''
           "artist": "Server Artist",
           "album": "Self Hosted Album",
           "duration": 125
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _searchSuggestionsResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "searchResult3": {
+      "artist": [
+        {"id": "artist-1", "name": "Aether Artist"}
+      ],
+      "album": [
+        {
+          "id": "album-1",
+          "name": "Aether Album",
+          "artist": "Aether Artist"
+        }
+      ],
+      "song": [
+        {
+          "id": "song-1",
+          "title": "Aether Artist",
+          "artist": "Aether Artist"
+        },
+        {
+          "id": "song-2",
+          "title": "Aether Song",
+          "artist": "Second Artist"
         }
       ]
     }
