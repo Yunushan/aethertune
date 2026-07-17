@@ -168,6 +168,7 @@
 - [x] Internet Archive facet suggestion UI and collection filter chips
 - [x] Internet Archive dedicated collection detail pages
 - [x] Spotify official saved-track metadata browse and local-library save
+- [x] Spotify official saved-album and album-track metadata browse
 - [x] YouTube Data official Music-category chart metadata browse and local-library save
 - [x] Jellyfin provider foundation
 - [x] Jellyfin settings UI and secure credential storage
@@ -212,7 +213,8 @@
 - [x] User-triggered LRCLIB plain/synced lyrics search
 - [x] Local lyrics match ranking and attributed cache persistence
 - [x] Lyrics provider loading, empty, error, retry, and instrumental states
-- [ ] Additional lyrics providers and native file-save export
+- [x] Native lyrics file-save export
+- [ ] Additional legal lyrics providers
 
 ## 1.0.0: Stable
 

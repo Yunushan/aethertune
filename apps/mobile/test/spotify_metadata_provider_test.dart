@@ -112,6 +112,78 @@ void main() {
     expect(await provider.resolveStream(track), isNull);
   });
 
+  test('loads saved albums and album tracks as non-playable metadata',
+      () async {
+    Uri? albumsRequest;
+    Uri? tracksRequest;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      savedAlbumsLoader: (uri, token) async {
+        albumsRequest = uri;
+        expect(token, 'access-token');
+        return '''
+          {
+            "offset": 1,
+            "total": 3,
+            "next": "https://api.spotify.com/v1/me/albums?offset=2",
+            "items": [{
+              "added_at": "2026-07-17T12:00:00Z",
+              "album": {
+                "id": "album-id",
+                "name": "Signal Archive",
+                "total_tracks": 2,
+                "artists": [{"name": "Aether"}],
+                "images": [{"url": "https://i.scdn.co/image/album"}]
+              }
+            }]
+          }
+        ''';
+      },
+      albumTracksLoader: (uri, token) async {
+        tracksRequest = uri;
+        expect(token, 'access-token');
+        return '''
+          {
+            "offset": 0,
+            "total": 2,
+            "next": "https://api.spotify.com/v1/albums/album-id/tracks?offset=1",
+            "items": [{
+              "id": "album-track-id",
+              "name": "Album Signal",
+              "duration_ms": 180000,
+              "artists": [{"name": "Aether"}]
+            }]
+          }
+        ''';
+      },
+    );
+
+    final albums = await provider.loadSavedAlbumsPage(offset: 1, limit: 100);
+
+    expect(albumsRequest!.path, '/v1/me/albums');
+    expect(albumsRequest!.queryParameters['offset'], '1');
+    expect(albumsRequest!.queryParameters['limit'], '50');
+    expect(albums.offset, 1);
+    expect(albums.total, 3);
+    expect(albums.hasMore, isTrue);
+    final album = albums.albums.single;
+    expect(album.title, 'Signal Archive');
+    expect(album.artist, 'Aether');
+    expect(album.totalTracks, 2);
+    expect(album.artworkUri, Uri.parse('https://i.scdn.co/image/album'));
+
+    final tracks = await provider.loadAlbumTracksPage(album, limit: 1);
+
+    expect(tracksRequest!.path, '/v1/albums/album-id/tracks');
+    expect(tracksRequest!.queryParameters['offset'], '0');
+    expect(tracksRequest!.queryParameters['limit'], '1');
+    expect(tracks.hasMore, isTrue);
+    expect(tracks.tracks.single.album, 'Signal Archive');
+    expect(tracks.tracks.single.artworkUri, album.artworkUri);
+    expect(tracks.tracks.single.isPlayable, isFalse);
+    expect(await provider.resolveStream(tracks.tracks.single), isNull);
+  });
+
   test('returns bounded official Spotify track suggestions', () async {
     Uri? requestUri;
     String? requestToken;

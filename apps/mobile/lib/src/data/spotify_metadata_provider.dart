@@ -18,22 +18,38 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? searchLoader,
     Uri? savedTracksUri,
     SpotifySearchLoader? savedTracksLoader,
+    Uri? savedAlbumsUri,
+    SpotifySearchLoader? savedAlbumsLoader,
+    Uri? albumsUri,
+    SpotifySearchLoader? albumTracksLoader,
   }) : _accessTokenReader = accessTokenReader,
        searchUri = searchUri ?? _defaultSearchUri,
        _searchLoader = searchLoader ?? _loadSpotifyJson,
        savedTracksUri = savedTracksUri ?? _defaultSavedTracksUri,
-       _savedTracksLoader = savedTracksLoader ?? _loadSpotifyJson;
+       _savedTracksLoader = savedTracksLoader ?? _loadSpotifyJson,
+       savedAlbumsUri = savedAlbumsUri ?? _defaultSavedAlbumsUri,
+       _savedAlbumsLoader = savedAlbumsLoader ?? _loadSpotifyJson,
+       albumsUri = albumsUri ?? _defaultAlbumsUri,
+       _albumTracksLoader = albumTracksLoader ?? _loadSpotifyJson;
 
   static final Uri _defaultSearchUri =
       Uri.parse('https://api.spotify.com/v1/search');
   static final Uri _defaultSavedTracksUri =
       Uri.parse('https://api.spotify.com/v1/me/tracks');
+  static final Uri _defaultSavedAlbumsUri =
+      Uri.parse('https://api.spotify.com/v1/me/albums');
+  static final Uri _defaultAlbumsUri =
+      Uri.parse('https://api.spotify.com/v1/albums');
 
   final SpotifyAccessTokenReader _accessTokenReader;
   final Uri searchUri;
   final SpotifySearchLoader _searchLoader;
   final Uri savedTracksUri;
   final SpotifySearchLoader _savedTracksLoader;
+  final Uri savedAlbumsUri;
+  final SpotifySearchLoader _savedAlbumsLoader;
+  final Uri albumsUri;
+  final SpotifySearchLoader _albumTracksLoader;
 
   @override
   String get id => 'spotify-metadata';
@@ -173,6 +189,64 @@ final class SpotifyMetadataProvider
     );
   }
 
+  /// Reads saved album metadata through the user's official Spotify library.
+  Future<SpotifySavedAlbumsPage> loadSavedAlbumsPage({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final token = await _accessTokenReader();
+    return parseSpotifySavedAlbumsPage(
+      await _savedAlbumsLoader(
+        savedAlbumsUri.replace(
+          queryParameters: <String, String>{
+            'limit': limit.clamp(1, 50).toString(),
+            'offset': offset.toString(),
+          },
+        ),
+        token,
+      ),
+    );
+  }
+
+  /// Reads the catalog metadata for tracks in a saved Spotify album.
+  Future<SpotifyAlbumTracksPage> loadAlbumTracksPage(
+    SpotifySavedAlbum album, {
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final albumId = _nonEmpty(album.id);
+    if (albumId == null) {
+      throw ArgumentError.value(album.id, 'album.id', 'Must not be empty.');
+    }
+    final token = await _accessTokenReader();
+    final path = '${albumsUri.path}/${Uri.encodeComponent(albumId)}/tracks';
+    return parseSpotifyAlbumTracksPage(
+      await _albumTracksLoader(
+        albumsUri.replace(
+          path: path,
+          queryParameters: <String, String>{
+            'limit': limit.clamp(1, 50).toString(),
+            'offset': offset.toString(),
+          },
+        ),
+        token,
+      ),
+      album,
+    );
+  }
+
   @override
   Future<Uri?> resolveStream(Track track) async => null;
 }
@@ -191,6 +265,52 @@ final class SpotifySearchPage {
 
 final class SpotifySavedTracksPage {
   const SpotifySavedTracksPage({
+    required this.tracks,
+    required this.offset,
+    required this.total,
+    required this.hasMore,
+  });
+
+  final List<Track> tracks;
+  final int offset;
+  final int total;
+  final bool hasMore;
+}
+
+final class SpotifySavedAlbum {
+  const SpotifySavedAlbum({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.totalTracks,
+    required this.addedAt,
+    this.artworkUri,
+  });
+
+  final String id;
+  final String title;
+  final String artist;
+  final int totalTracks;
+  final DateTime addedAt;
+  final Uri? artworkUri;
+}
+
+final class SpotifySavedAlbumsPage {
+  const SpotifySavedAlbumsPage({
+    required this.albums,
+    required this.offset,
+    required this.total,
+    required this.hasMore,
+  });
+
+  final List<SpotifySavedAlbum> albums;
+  final int offset;
+  final int total;
+  final bool hasMore;
+}
+
+final class SpotifyAlbumTracksPage {
+  const SpotifyAlbumTracksPage({
     required this.tracks,
     required this.offset,
     required this.total,
@@ -265,23 +385,98 @@ SpotifySavedTracksPage parseSpotifySavedTracksPage(String jsonText) {
   );
 }
 
+SpotifySavedAlbumsPage parseSpotifySavedAlbumsPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify saved albums response must be a map.');
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final items = root['items'];
+  final albums = items is List
+      ? items
+            .whereType<Map>()
+            .map((item) => _savedAlbumFromSpotifyJson(
+                  Map<String, Object?>.from(item),
+                ))
+            .whereType<SpotifySavedAlbum>()
+            .toList(growable: false)
+      : const <SpotifySavedAlbum>[];
+  final offset = _nonNegativeInt(root['offset']) ?? 0;
+  final total = _nonNegativeInt(root['total']) ?? 0;
+  return SpotifySavedAlbumsPage(
+    albums: albums,
+    offset: offset,
+    total: total,
+    hasMore: _nonEmpty(root['next']) != null || offset + albums.length < total,
+  );
+}
+
+SpotifyAlbumTracksPage parseSpotifyAlbumTracksPage(
+  String jsonText,
+  SpotifySavedAlbum album,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify album tracks response must be a map.');
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final items = root['items'];
+  final tracks = items is List
+      ? items
+            .whereType<Map>()
+            .map((item) => _trackFromSpotifyJson(
+                  Map<String, Object?>.from(item),
+                  albumName: album.title,
+                  artworkUri: album.artworkUri,
+                  addedAt: album.addedAt,
+                ))
+            .whereType<Track>()
+            .toList(growable: false)
+      : const <Track>[];
+  final offset = _nonNegativeInt(root['offset']) ?? 0;
+  final total = _nonNegativeInt(root['total']) ?? 0;
+  return SpotifyAlbumTracksPage(
+    tracks: tracks,
+    offset: offset,
+    total: total,
+    hasMore: _nonEmpty(root['next']) != null || offset + tracks.length < total,
+  );
+}
+
+SpotifySavedAlbum? _savedAlbumFromSpotifyJson(Map<String, Object?> json) {
+  final album = json['album'];
+  if (album is! Map) {
+    return null;
+  }
+  final albumJson = Map<String, Object?>.from(album);
+  final id = _nonEmpty(albumJson['id']);
+  final title = _nonEmpty(albumJson['name']);
+  if (id == null || title == null) {
+    return null;
+  }
+  return SpotifySavedAlbum(
+    id: id,
+    title: title,
+    artist: _spotifyArtistNames(albumJson['artists']) ?? 'Unknown Artist',
+    totalTracks: _nonNegativeInt(albumJson['total_tracks']) ?? 0,
+    addedAt: DateTime.tryParse(json['added_at']?.toString() ?? '')?.toUtc() ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    artworkUri: _spotifyArtworkUri(albumJson['images']),
+  );
+}
+
 Track? _trackFromSpotifyJson(
   Map<String, Object?> json, {
   DateTime? addedAt,
+  String? albumName,
+  Uri? artworkUri,
 }) {
   final id = _nonEmpty(json['id']);
   final title = _nonEmpty(json['name']);
   if (id == null || title == null) {
     return null;
   }
-  final artists = json['artists'];
-  final artist = artists is List
-      ? artists
-            .whereType<Map>()
-            .map((item) => _nonEmpty(item['name']))
-            .whereType<String>()
-            .join(', ')
-      : '';
+  final artist = _spotifyArtistNames(json['artists']) ?? '';
   final album = json['album'] is Map
       ? Map<String, Object?>.from(json['album'] as Map)
       : const <String, Object?>{};
@@ -289,13 +484,25 @@ Track? _trackFromSpotifyJson(
     id: Track.stableLocalId('spotify-metadata|$id'),
     title: title,
     artist: artist.isEmpty ? 'Unknown Artist' : artist,
-    album: _nonEmpty(album['name']) ?? 'Unknown Album',
+    album: albumName ?? _nonEmpty(album['name']) ?? 'Unknown Album',
     duration: Duration(milliseconds: _nonNegativeInt(json['duration_ms']) ?? 0),
-    artworkUri: _spotifyArtworkUri(album['images']),
+    artworkUri: artworkUri ?? _spotifyArtworkUri(album['images']),
     sourceId: 'spotify-metadata',
     externalId: id,
     addedAt: addedAt,
   );
+}
+
+String? _spotifyArtistNames(Object? artists) {
+  if (artists is! List) {
+    return null;
+  }
+  final names = artists
+      .whereType<Map>()
+      .map((item) => _nonEmpty(item['name']))
+      .whereType<String>()
+      .toList(growable: false);
+  return names.isEmpty ? null : names.join(', ');
 }
 
 Uri? _spotifyArtworkUri(Object? images) {

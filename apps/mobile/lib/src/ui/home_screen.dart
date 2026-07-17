@@ -81,6 +81,7 @@ import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
 import 'spotify_saved_tracks_screen.dart';
+import 'spotify_saved_albums_screen.dart';
 import 'youtube_music_chart_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
@@ -11744,7 +11745,7 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { musicChart, configure, remove }
 
-enum _SpotifyAction { savedTracks, configure, remove }
+enum _SpotifyAction { savedTracks, savedAlbums, configure, remove }
 
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
@@ -12084,6 +12085,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifySavedTracks(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.savedAlbums:
+                  if (spotifyProvider != null) {
+                    _openSpotifySavedAlbums(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.configure:
                   unawaited(_configureSpotify(context));
                   break;
@@ -12100,6 +12106,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.library_music_outlined),
                   title: Text('Saved tracks'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.savedAlbums,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.album_outlined),
+                  title: Text('Saved albums'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -13430,6 +13445,17 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SpotifySavedTracksScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openSpotifySavedAlbums(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifySavedAlbumsScreen(provider: provider),
       ),
     );
   }
