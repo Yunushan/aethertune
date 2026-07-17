@@ -233,7 +233,7 @@ void main() {
         capturedUri = uri;
         return '''
           {"nextPageToken":"channel-next","pageInfo":{"totalResults":2},"items":[
-            {"id":{"videoId":"channel-video"},"snippet":{"title":"Channel Signal","channelTitle":"Aether Radio"}}
+            {"id":{"videoId":"channel-video"},"snippet":{"title":"Channel Signal","channelTitle":"Aether Radio","publishedAt":"2026-07-17T12:34:56Z"}}
           ]}
         ''';
       },
@@ -258,6 +258,7 @@ void main() {
     expect(page.totalResults, 2);
     expect(page.tracks.single.title, 'Channel Signal');
     expect(page.tracks.single.artist, 'Aether Radio');
+    expect(page.videos.single.publishedAt, DateTime.utc(2026, 7, 17, 12, 34, 56));
     expect(page.tracks.single.isPlayable, isFalse);
     expect(await provider.resolveStream(page.tracks.single), isNull);
     await expectLater(provider.loadChannelVideosPage(' '), throwsArgumentError);

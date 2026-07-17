@@ -7,12 +7,14 @@ import '../data/library_store.dart';
 import '../data/youtube_channel_follow_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import 'youtube_channel_videos_screen.dart';
+import 'youtube_followed_channel_feed_screen.dart';
 import 'widgets/track_artwork.dart';
 
 /// Public YouTube channel discovery with device-local follows.
 ///
 /// The screen never reads or changes the user's YouTube subscriptions and does
-/// not provide video playback, downloads, or a remote activity feed.
+/// not provide video playback or downloads. Followed public metadata is only
+/// refreshed when the user explicitly opens the separate feed and requests it.
 final class YouTubeChannelFollowScreen extends StatefulWidget {
   const YouTubeChannelFollowScreen({super.key, required this.provider});
 
@@ -47,7 +49,18 @@ final class _YouTubeChannelFollowScreenState
     final hasSearch = (_query ?? '').isNotEmpty;
     final hasMore = _nextCursor != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('YouTube channels')),
+      appBar: AppBar(
+        title: const Text('YouTube channels'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Refresh followed channel feed',
+            onPressed: follows.follows.isEmpty || offlineModeEnabled
+                ? null
+                : () => _openFollowedChannelFeed(context),
+            icon: const Icon(Icons.dynamic_feed_outlined),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
@@ -70,7 +83,7 @@ final class _YouTubeChannelFollowScreenState
           ),
           const SizedBox(height: 8),
           const Text(
-            'Follows stay on this device. They are not YouTube account subscriptions and do not create a remote feed.',
+            'Follows stay on this device and are not YouTube account subscriptions. You can explicitly refresh public metadata for followed channels.',
           ),
           if (offlineModeEnabled && !hasSearch)
             const Padding(
@@ -269,6 +282,16 @@ final class _YouTubeChannelFollowScreenState
         builder: (_) => YouTubeChannelVideosScreen(
           provider: widget.provider,
           channel: channel,
+        ),
+      ),
+    );
+  }
+
+  void _openFollowedChannelFeed(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeFollowedChannelFeedScreen(
+          provider: widget.provider,
         ),
       ),
     );

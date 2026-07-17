@@ -243,7 +243,7 @@ final class YouTubeDataMetadataProvider
 
   /// Loads recent public video metadata for a channel with the documented
   /// channel-filtered video search. It does not expose a stream URI.
-  Future<YouTubeDataSearchPage> loadChannelVideosPage(
+  Future<YouTubeDataChannelVideosPage> loadChannelVideosPage(
     String channelId, {
     String? cursor,
     int limit = 20,
@@ -256,7 +256,7 @@ final class YouTubeDataMetadataProvider
       throw ArgumentError.value(channelId, 'channelId', 'Must not be empty.');
     }
     final normalizedCursor = cursor?.trim();
-    return parseYouTubeDataSearchPage(
+    return parseYouTubeDataChannelVideosPage(
       await _searchLoader(
         searchUri.replace(
           queryParameters: <String, String>{
@@ -372,6 +372,31 @@ final class YouTubeDataChannelPage {
   final List<YouTubeDataChannel> channels;
   final String? nextPageToken;
   final int? totalResults;
+}
+
+final class YouTubeDataChannelVideo {
+  const YouTubeDataChannelVideo({
+    required this.track,
+    this.publishedAt,
+  });
+
+  final Track track;
+  final DateTime? publishedAt;
+}
+
+final class YouTubeDataChannelVideosPage {
+  const YouTubeDataChannelVideosPage({
+    required this.videos,
+    this.nextPageToken,
+    this.totalResults,
+  });
+
+  final List<YouTubeDataChannelVideo> videos;
+  final String? nextPageToken;
+  final int? totalResults;
+
+  List<Track> get tracks =>
+      List<Track>.unmodifiable(videos.map((video) => video.track));
 }
 
 final class YouTubeDataPlaylist {
@@ -506,6 +531,35 @@ YouTubeDataPlaylistPage parseYouTubeDataPlaylistPage(String jsonText) {
   );
 }
 
+YouTubeDataChannelVideosPage parseYouTubeDataChannelVideosPage(
+  String jsonText,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('YouTube Data API response must be a map.');
+  }
+  final json = decoded.cast<String, Object?>();
+  final items = json['items'];
+  final videos = items is List<dynamic>
+      ? items
+            .whereType<Map<dynamic, dynamic>>()
+            .map(
+              (item) => _channelVideoFromSearchItem(
+                item.cast<String, Object?>(),
+              ),
+            )
+            .whereType<YouTubeDataChannelVideo>()
+            .toList(growable: false)
+      : const <YouTubeDataChannelVideo>[];
+  return YouTubeDataChannelVideosPage(
+    videos: videos,
+    nextPageToken: _nonEmptyString(json['nextPageToken']),
+    totalResults: _nonNegativeInt(
+      (json['pageInfo'] as Map<dynamic, dynamic>?)?['totalResults'],
+    ),
+  );
+}
+
 YouTubeDataPlaylistItemsPage parseYouTubeDataPlaylistItemsPage(
   String jsonText,
 ) {
@@ -548,6 +602,20 @@ Track? _trackFromVideoItem(Map<String, Object?> json) {
     return null;
   }
   return _trackFromVideoMetadata(videoId, snippet);
+}
+
+YouTubeDataChannelVideo? _channelVideoFromSearchItem(
+  Map<String, Object?> json,
+) {
+  final track = _trackFromSearchItem(json);
+  final snippet = json['snippet'] as Map<dynamic, dynamic>?;
+  if (track == null || snippet == null) {
+    return null;
+  }
+  final publishedAt = DateTime.tryParse(
+    _nonEmptyString(snippet['publishedAt']) ?? '',
+  )?.toUtc();
+  return YouTubeDataChannelVideo(track: track, publishedAt: publishedAt);
 }
 
 YouTubeDataChannel? _channelFromSearchItem(Map<String, Object?> json) {
