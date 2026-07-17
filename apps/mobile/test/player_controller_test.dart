@@ -741,6 +741,73 @@ void main() {
     expect(restored.current, isNull);
   });
 
+  test(
+    'reconciles library metadata into active and inactive queues without losing resolved provider media',
+    () async {
+      const ephemeralStream =
+          'https://music.example.test/stream/song-1?token=private-token';
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final activeQueued = Track(
+        id: 'provider-1',
+        title: 'Original title',
+        artist: 'Original artist',
+        sourceId: 'self-hosted',
+        externalId: 'song-1',
+        streamUrl: ephemeralStream,
+        streamUrlIsEphemeral: true,
+        artworkUri: Uri.parse('https://music.example.test/art/old?token=private-token'),
+        artworkUriIsEphemeral: true,
+      );
+      final inactiveQueued = _track('local-2', title: 'Original inactive');
+      final savedQueue = await controller.createSavedQueue('Later');
+      expect(savedQueue, isNotNull);
+      await controller.switchSavedQueue(savedQueue!.id);
+      await controller.enqueueTrack(inactiveQueued);
+      await controller.switchSavedQueue('default');
+      await controller.playTrack(activeQueued);
+      engine.positionValue = const Duration(seconds: 27);
+
+      final activeLibrary = Track(
+        id: activeQueued.id,
+        title: 'Updated title',
+        artist: 'Updated artist',
+        album: 'Updated album',
+        genre: 'Updated genre',
+        sourceId: activeQueued.sourceId,
+        externalId: activeQueued.externalId,
+        providerArtworkId: 'fresh-cover',
+      );
+      final inactiveLibrary = inactiveQueued.copyWith(
+        title: 'Updated inactive',
+        artist: 'Updated inactive artist',
+      );
+
+      await controller.reconcileLibraryTracks(<Track>[
+        activeLibrary,
+        inactiveLibrary,
+      ]);
+
+      expect(controller.current?.title, 'Updated title');
+      expect(controller.queue.single.streamUrl, ephemeralStream);
+      expect(controller.queue.single.streamUrlIsEphemeral, isTrue);
+      expect(controller.queue.single.providerArtworkId, 'fresh-cover');
+      expect(engine.queue.single.title, 'Updated title');
+      expect(engine.initialPosition, const Duration(seconds: 27));
+      expect(engine.playing, isTrue);
+      final inactiveSnapshot = controller.savedQueues.singleWhere(
+        (queue) => queue.id == savedQueue.id,
+      ).snapshot;
+      expect(inactiveSnapshot.tracks.single.title, 'Updated inactive');
+
+      final prefs = await SharedPreferences.getInstance();
+      final persisted = prefs.getString('aethertune.player_queues.v2')!;
+      expect(persisted, contains('Updated inactive'));
+      expect(persisted, isNot(contains('private-token')));
+    },
+  );
+
   test('restores a persisted queue into the native gapless engine', () async {
     final firstEngine = _FakePlaybackAudioEngine();
     final firstController = PlayerController(audioEngine: firstEngine);

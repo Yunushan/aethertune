@@ -98,6 +98,7 @@ class PlayerController extends ChangeNotifier {
   final List<Track> _queue = <Track>[];
   final List<Track> _loadedPlaybackQueue = <Track>[];
   final List<SavedTrackQueue> _savedQueues = <SavedTrackQueue>[];
+  final Map<String, Track> _libraryTracksById = <String, Track>{};
 
   StreamSubscription<Object?>? _playerStateSub;
   StreamSubscription<Duration?>? _durationSub;
@@ -244,6 +245,24 @@ class PlayerController extends ChangeNotifier {
     );
   }
 
+  /// Reconciles durable queue metadata with the current app library.
+  ///
+  /// Queued items that are no longer present in the library are intentionally
+  /// retained. Resolved provider media is runtime-only and is preserved while
+  /// the catalog record replaces the rest of a matching track's metadata.
+  Future<void> reconcileLibraryTracks(Iterable<Track> tracks) async {
+    _libraryTracksById
+      ..clear()
+      ..addEntries(
+        tracks
+            .where((track) => track.id.trim().isNotEmpty)
+            .map((track) => MapEntry<String, Track>(track.id, track)),
+      );
+    if (await _reconcileQueuedTracksFromLibrary()) {
+      notifyListeners();
+    }
+  }
+
   /// Exports only queue references that can be resolved from a synced library.
   ///
   /// Search-only and credential-backed items are intentionally omitted rather
@@ -374,6 +393,7 @@ class PlayerController extends ChangeNotifier {
     }
 
     _queueSnapshotLoaded = true;
+    await _reconcileQueuedTracksFromLibrary();
     notifyListeners();
   }
 
@@ -1792,6 +1812,96 @@ class PlayerController extends ChangeNotifier {
         ),
       );
     }
+  }
+
+  Future<bool> _reconcileQueuedTracksFromLibrary() async {
+    if (_libraryTracksById.isEmpty) {
+      return false;
+    }
+
+    final reconciledActiveQueue = _queue
+        .map(_reconcileLibraryTrack)
+        .toList(growable: false);
+    final activeQueueChanged = !_sameTrackSnapshots(
+      _queue,
+      reconciledActiveQueue,
+    );
+    var savedQueueChanged = false;
+
+    for (var index = 0; index < _savedQueues.length; index += 1) {
+      final savedQueue = _savedQueues[index];
+      if (savedQueue.id == _activeQueueId) {
+        continue;
+      }
+      final reconciledTracks = savedQueue.snapshot.tracks
+          .map(_reconcileLibraryTrack)
+          .toList(growable: false);
+      if (_sameTrackSnapshots(savedQueue.snapshot.tracks, reconciledTracks)) {
+        continue;
+      }
+      savedQueueChanged = true;
+      _savedQueues[index] = savedQueue.copyWith(
+        snapshot: TrackQueueSnapshot(
+          tracks: reconciledTracks,
+          currentTrackId: savedQueue.snapshot.currentTrackId,
+          updatedAt: savedQueue.snapshot.updatedAt,
+        ),
+      );
+    }
+
+    if (!activeQueueChanged && !savedQueueChanged) {
+      return false;
+    }
+
+    if (activeQueueChanged) {
+      _queue
+        ..clear()
+        ..addAll(reconciledActiveQueue);
+      final current = _current;
+      if (current != null) {
+        _current = _reconcileLibraryTrack(current);
+      }
+    }
+    await _saveQueueSnapshot();
+    if (activeQueueChanged && _loadedPlaybackQueue.isNotEmpty) {
+      await _reloadQueuePreservingPlayback();
+    }
+    return true;
+  }
+
+  Track _reconcileLibraryTrack(Track queuedTrack) {
+    final libraryTrack = _libraryTracksById[queuedTrack.id];
+    if (libraryTrack == null) {
+      return queuedTrack;
+    }
+
+    var reconciled = libraryTrack;
+    if (queuedTrack.streamUrlIsEphemeral && queuedTrack.streamUrl != null) {
+      reconciled = reconciled.copyWith(
+        streamUrl: queuedTrack.streamUrl,
+        streamUrlIsEphemeral: true,
+      );
+    }
+    if (queuedTrack.artworkUriIsEphemeral && queuedTrack.artworkUri != null) {
+      reconciled = reconciled.copyWith(
+        artworkUri: queuedTrack.artworkUri,
+        artworkUriIsEphemeral: true,
+      );
+    }
+    return reconciled;
+  }
+
+  bool _sameTrackSnapshots(List<Track> first, List<Track> second) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (jsonEncode(first[index].toJson()) !=
+          jsonEncode(second[index].toJson())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   TrackQueueSnapshot _activeQueueSnapshot() {

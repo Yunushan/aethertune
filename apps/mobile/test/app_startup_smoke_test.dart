@@ -50,6 +50,18 @@ void main() {
     expect(player.current?.id, track.id);
     expect(audio.queue.map((item) => item.id), <String>[track.id]);
     expect(audio.playCalls, 1);
+
+    await library.updateTrackMetadata(
+      track.id,
+      title: 'Morning Signal (Edited)',
+      artist: track.artist,
+      album: track.album,
+      genre: 'Electronic',
+    );
+    await tester.pumpAndSettle();
+
+    expect(player.current?.title, 'Morning Signal (Edited)');
+    expect(audio.queue.single.title, 'Morning Signal (Edited)');
   });
 }
 
