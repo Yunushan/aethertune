@@ -49,6 +49,7 @@ import '../data/youtube_followed_channel_feed.dart';
 import '../data/youtube_data_settings_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/backup_file_document.dart';
+import '../domain/artwork_crop.dart';
 import '../domain/custom_catalog_definition.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/lyrics_translator.dart';
@@ -2217,6 +2218,16 @@ Future<void> _editTrackArtwork(BuildContext context, Track track) async {
                 await _setTrackArtworkUrl(context, track);
               },
             ),
+            if (track.artworkUri != null)
+              ListTile(
+                leading: const Icon(Icons.crop_outlined),
+                title: const Text('Crop and position'),
+                subtitle: const Text('Pan and zoom the current artwork.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _editTrackArtworkCrop(context, track);
+                },
+              ),
             if (_isLocalM4a(track))
               ListTile(
                 leading: const Icon(Icons.save_alt_outlined),
@@ -2442,6 +2453,31 @@ Future<void> _restoreTrackArtwork(BuildContext context, Track track) async {
   }
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text('Restored scanned artwork for ${updated.title}.')),
+  );
+}
+
+Future<void> _editTrackArtworkCrop(BuildContext context, Track track) async {
+  final artworkUri = track.artworkUri;
+  if (artworkUri == null) {
+    return;
+  }
+  final crop = await showArtworkCropEditor(
+    context,
+    artworkUri: artworkUri,
+    initialCrop: track.artworkCrop,
+  );
+  if (!context.mounted || crop == null) {
+    return;
+  }
+  final updated = await context.read<LibraryStore>().updateTrackArtworkCrop(
+    track.id,
+    crop,
+  );
+  if (!context.mounted || updated == null) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Updated artwork crop for ${updated.title}.')),
   );
 }
 
@@ -6818,6 +6854,7 @@ class _LibraryCollectionDetailHeader extends StatelessWidget {
           providerId: track?.sourceId,
           providerArtworkId: track?.providerArtworkId,
           providerArtworkVersion: track?.providerArtworkVersion,
+          artworkCrop: track?.artworkCrop ?? ArtworkCrop.centered,
           size: artworkSize,
           borderRadius: 8,
           fallbackIcon: kind == 'Artist'
@@ -6973,6 +7010,7 @@ class _LibraryAlbumTile extends StatelessWidget {
               providerId: track?.sourceId,
               providerArtworkId: track?.providerArtworkId,
               providerArtworkVersion: track?.providerArtworkVersion,
+              artworkCrop: track?.artworkCrop ?? ArtworkCrop.centered,
               size: 124,
               borderRadius: 8,
               fallbackIcon: Icons.album_outlined,
@@ -10241,6 +10279,7 @@ class _CustomSmartPlaylistArtwork extends StatelessWidget {
         providerId: track.sourceId,
         providerArtworkId: track.providerArtworkId,
         providerArtworkVersion: track.providerArtworkVersion,
+        artworkCrop: track.artworkCrop,
         size: 40,
         borderRadius: 10,
         fallbackIcon: Icons.filter_alt_outlined,
@@ -12125,6 +12164,7 @@ Future<void> _showBrowseGroupShareCard(
       providerId: representative.sourceId,
       providerArtworkId: representative.providerArtworkId,
       providerArtworkVersion: representative.providerArtworkVersion,
+      artworkCrop: representative.artworkCrop,
       size: 184,
       borderRadius: 12,
       fallbackIcon: type == LibraryBrowseType.artist

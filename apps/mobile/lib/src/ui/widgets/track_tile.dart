@@ -52,6 +52,7 @@ class TrackTile extends StatelessWidget {
         providerId: track.sourceId,
         providerArtworkId: track.providerArtworkId,
         providerArtworkVersion: track.providerArtworkVersion,
+        artworkCrop: track.artworkCrop,
         borderRadius: 22,
       ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),

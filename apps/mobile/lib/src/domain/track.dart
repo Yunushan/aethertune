@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'artwork_crop.dart';
 import 'replay_gain.dart';
 import 'track_chapter.dart';
 
@@ -20,6 +21,7 @@ class Track {
     this.duration = Duration.zero,
     this.artworkUri,
     this.artworkSourceUri,
+    this.artworkCrop = ArtworkCrop.centered,
     this.artworkIsUserManaged = false,
     this.artworkUriIsEphemeral = false,
     this.providerArtworkId,
@@ -52,6 +54,7 @@ class Track {
   final Duration duration;
   final Uri? artworkUri;
   final Uri? artworkSourceUri;
+  final ArtworkCrop artworkCrop;
   final bool artworkIsUserManaged;
   final bool artworkUriIsEphemeral;
   final String? providerArtworkId;
@@ -89,6 +92,7 @@ class Track {
     bool clearArtworkUri = false,
     Uri? artworkSourceUri,
     bool clearArtworkSourceUri = false,
+    ArtworkCrop? artworkCrop,
     bool? artworkIsUserManaged,
     bool? artworkUriIsEphemeral,
     String? providerArtworkId,
@@ -119,6 +123,7 @@ class Track {
       artworkSourceUri: clearArtworkSourceUri
           ? null
           : artworkSourceUri ?? this.artworkSourceUri,
+      artworkCrop: artworkCrop ?? this.artworkCrop,
       artworkIsUserManaged:
           artworkIsUserManaged ?? this.artworkIsUserManaged,
       artworkUriIsEphemeral:
@@ -156,6 +161,7 @@ class Track {
       duration: duration,
       artworkUri: artworkUriIsEphemeral ? null : artworkUri,
       artworkSourceUri: artworkSourceUri,
+      artworkCrop: artworkCrop,
       artworkIsUserManaged: artworkIsUserManaged,
       providerArtworkId: providerArtworkId,
       providerArtworkVersion: providerArtworkVersion,
@@ -185,6 +191,7 @@ class Track {
       'durationMs': duration.inMilliseconds,
       'artworkUri': artworkUriIsEphemeral ? null : artworkUri?.toString(),
       'artworkSourceUri': artworkSourceUri?.toString(),
+      if (!artworkCrop.isCentered) 'artworkCrop': artworkCrop.toJson(),
       'artworkIsUserManaged': artworkIsUserManaged,
       'providerArtworkId': providerArtworkId,
       'providerArtworkVersion': providerArtworkVersion,
@@ -215,6 +222,7 @@ class Track {
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
       artworkUri: _parseUri(json['artworkUri'] as String?),
       artworkSourceUri: _parseUri(json['artworkSourceUri'] as String?),
+      artworkCrop: ArtworkCrop.fromJson(json['artworkCrop']),
       artworkIsUserManaged: json['artworkIsUserManaged'] as bool? ?? false,
       providerArtworkId: json['providerArtworkId'] as String?,
       providerArtworkVersion: json['providerArtworkVersion'] as String?,

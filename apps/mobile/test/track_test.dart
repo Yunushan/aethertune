@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/domain/track.dart';
 
 void main() {
@@ -18,6 +19,11 @@ void main() {
       contentHash: 'fnv64-0011223344556677',
       replayGainTrackDb: -6.2,
       replayGainAlbumDb: -4.7,
+      artworkCrop: ArtworkCrop.normalized(
+        alignmentX: 0.5,
+        alignmentY: -0.25,
+        zoom: 1.8,
+      ),
       sourceId: 'local',
       isFavorite: true,
       addedAt: DateTime.utc(2026),
@@ -38,6 +44,9 @@ void main() {
     expect(decoded.contentHash, track.contentHash);
     expect(decoded.replayGainTrackDb, -6.2);
     expect(decoded.replayGainAlbumDb, -4.7);
+    expect(decoded.artworkCrop.alignmentX, 0.5);
+    expect(decoded.artworkCrop.alignmentY, -0.25);
+    expect(decoded.artworkCrop.zoom, 1.8);
     expect(decoded.isFavorite, isTrue);
   });
 

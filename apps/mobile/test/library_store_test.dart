@@ -1405,10 +1405,29 @@ void main() {
       _track('1', artworkUri: scannedArtwork),
     ]);
 
+    final crop = await store.updateTrackArtworkCrop(
+      '1',
+      ArtworkCrop.normalized(
+        alignmentX: 0.4,
+        alignmentY: -0.25,
+        zoom: 1.8,
+      ),
+    );
+    expect(crop!.artworkCrop.alignmentX, 0.4);
+    expect(crop.artworkCrop.alignmentY, -0.25);
+    expect(crop.artworkCrop.zoom, 1.8);
+
     final updated = await store.updateTrackArtwork('1', privateArtwork);
     expect(updated!.artworkUri, privateArtwork);
     expect(updated.artworkSourceUri, scannedArtwork);
     expect(updated.artworkIsUserManaged, isTrue);
+    expect(updated.artworkCrop.isCentered, isTrue);
+
+    final privateCrop = await store.updateTrackArtworkCrop(
+      '1',
+      ArtworkCrop.normalized(alignmentX: -0.2, zoom: 1.5),
+    );
+    expect(privateCrop!.artworkCrop.zoom, 1.5);
 
     final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
     final backupTrack = (backup['tracks'] as List<dynamic>).single
@@ -1416,6 +1435,7 @@ void main() {
     expect(backupTrack['artworkUri'], scannedArtwork.toString());
     expect(backupTrack['artworkSourceUri'], isNull);
     expect(backupTrack['artworkIsUserManaged'], isFalse);
+    expect(backupTrack['artworkCrop'], isNull);
 
     final playlist = await store.createPlaylist('Private track cover',
         trackIds: <String>['1']);
@@ -1432,6 +1452,7 @@ void main() {
     expect(snapshotTrack['artworkUri'], scannedArtwork.toString());
     expect(snapshotTrack['artworkSourceUri'], isNull);
     expect(snapshotTrack['artworkIsUserManaged'], isFalse);
+    expect(snapshotTrack['artworkCrop'], isNull);
 
     final remote = LibraryStore();
     await remote.load();
@@ -1444,6 +1465,7 @@ void main() {
     expect(restored!.artworkUri, scannedArtwork);
     expect(restored.artworkSourceUri, isNull);
     expect(restored.artworkIsUserManaged, isFalse);
+    expect(restored.artworkCrop.isCentered, isTrue);
   });
 
   test('updates scanned embedded artwork without replacing a private cover',

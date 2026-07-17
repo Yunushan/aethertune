@@ -393,6 +393,7 @@ class _NowPlayingArtwork extends StatelessWidget {
                 providerId: track.sourceId,
                 providerArtworkId: track.providerArtworkId,
                 providerArtworkVersion: track.providerArtworkVersion,
+                artworkCrop: track.artworkCrop,
                 size: size,
                 borderRadius: 8,
               ),

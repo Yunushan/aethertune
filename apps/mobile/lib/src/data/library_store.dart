@@ -2341,6 +2341,7 @@ class LibraryStore extends ChangeNotifier {
             artworkUri: current.artworkSourceUri,
             clearArtworkUri: current.artworkSourceUri == null,
             clearArtworkSourceUri: true,
+            artworkCrop: ArtworkCrop.centered,
             artworkIsUserManaged: false,
           )
         : current.copyWith(
@@ -2348,6 +2349,7 @@ class LibraryStore extends ChangeNotifier {
             artworkSourceUri: current.artworkIsUserManaged
                 ? current.artworkSourceUri
                 : current.artworkUri,
+            artworkCrop: ArtworkCrop.centered,
             artworkIsUserManaged: true,
           );
     _tracks[index] = updated;
@@ -2386,7 +2388,44 @@ class LibraryStore extends ChangeNotifier {
             clearArtworkUri: artworkUri == null,
             artworkSourceUri: artworkUri,
             clearArtworkSourceUri: artworkUri == null,
+            artworkCrop: ArtworkCrop.centered,
           );
+    _tracks[index] = updated;
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<Track?> updateTrackArtworkCrop(
+    String id,
+    ArtworkCrop artworkCrop,
+  ) async {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final current = _tracks[index];
+    if (current.sourceId != 'local') {
+      throw UnsupportedError(
+        'Artwork editing is available for local library tracks only.',
+      );
+    }
+    if (current.artworkUri == null) {
+      return current;
+    }
+    final normalized = ArtworkCrop.normalized(
+      alignmentX: artworkCrop.alignmentX,
+      alignmentY: artworkCrop.alignmentY,
+      zoom: artworkCrop.zoom,
+    );
+    if (current.artworkCrop.alignmentX == normalized.alignmentX &&
+        current.artworkCrop.alignmentY == normalized.alignmentY &&
+        current.artworkCrop.zoom == normalized.zoom) {
+      return current;
+    }
+
+    final updated = current.copyWith(artworkCrop: normalized);
     _tracks[index] = updated;
     await _save();
     notifyListeners();
@@ -6779,6 +6818,9 @@ class LibraryStore extends ChangeNotifier {
           ? portableSourceArtwork
           : null
       ..['artworkIsUserManaged'] = hasPortableManagedArtwork;
+    if (track.artworkIsUserManaged && portableArtwork == null) {
+      json.remove('artworkCrop');
+    }
     return json;
   }
 
