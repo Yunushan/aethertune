@@ -92,6 +92,49 @@ class ListenTogetherConflictException implements Exception {
   final String? checksum;
 }
 
+enum SharedPlaylistAccessRole { owner, editor, viewer }
+
+class SharedPlaylistRemote {
+  const SharedPlaylistRemote({
+    required this.id,
+    required this.revision,
+    required this.role,
+    required this.name,
+    required this.trackIds,
+    this.updatedAt,
+    this.updatedByDevice,
+    this.checksum,
+    this.collaborators = const <String, SharedPlaylistAccessRole>{},
+  });
+
+  final String id;
+  final int revision;
+  final SharedPlaylistAccessRole role;
+  final String name;
+  final List<String> trackIds;
+  final DateTime? updatedAt;
+  final String? updatedByDevice;
+  final String? checksum;
+  final Map<String, SharedPlaylistAccessRole> collaborators;
+
+  bool get canEdit => role != SharedPlaylistAccessRole.viewer;
+  bool get isOwner => role == SharedPlaylistAccessRole.owner;
+}
+
+class SharedPlaylistConflictException implements Exception {
+  const SharedPlaylistConflictException({
+    required this.currentRevision,
+    this.updatedAt,
+    this.updatedByDevice,
+    this.checksum,
+  });
+
+  final int currentRevision;
+  final DateTime? updatedAt;
+  final String? updatedByDevice;
+  final String? checksum;
+}
+
 abstract interface class LibrarySyncGateway {
   Future<LibrarySyncRemoteSnapshot> fetch();
 
@@ -126,6 +169,34 @@ abstract interface class ListenTogetherGateway {
   );
 }
 
+abstract interface class SharedPlaylistGateway {
+  Future<SharedPlaylistRemote> createSharedPlaylist({
+    required String name,
+    required List<String> trackIds,
+  });
+
+  Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId);
+
+  Future<SharedPlaylistRemote> updateSharedPlaylist({
+    required String playlistId,
+    required int baseRevision,
+    required String name,
+    required List<String> trackIds,
+  });
+
+  Future<void> deleteSharedPlaylist({
+    required String playlistId,
+    required int baseRevision,
+  });
+
+  Future<String> issueSharedPlaylistInvite({
+    required String playlistId,
+    required SharedPlaylistAccessRole role,
+  });
+
+  Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode);
+}
+
 abstract interface class LibrarySyncProfileGateway {
   Future<LibrarySyncProfile?> fetchProfile();
 }
@@ -142,6 +213,7 @@ class LibrarySyncClient
         LibrarySyncGateway,
         LibrarySyncMetadataGateway,
         ListenTogetherGateway,
+        SharedPlaylistGateway,
         LibrarySyncProfileGateway,
         LibrarySyncProfileEditorGateway {
   LibrarySyncClient({
@@ -316,6 +388,134 @@ class LibrarySyncClient
   }
 
   @override
+  Future<SharedPlaylistRemote> createSharedPlaylist({
+    required String name,
+    required List<String> trackIds,
+  }) async {
+    final document = _sharedPlaylistDocument(name, trackIds);
+    final response = await _execute(
+      'POST',
+      endpoint: account.sharedPlaylistCollectionEndpointUri,
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': 0,
+        'deviceId': account.deviceId,
+        'playlist': document,
+      }),
+    );
+    if (response.statusCode != 201) {
+      throw _requestFailure(response);
+    }
+    return _parseSharedPlaylist(response.body);
+  }
+
+  @override
+  Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    final response = await _execute(
+      'GET',
+      endpoint: account.sharedPlaylistEndpointUri(normalized),
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseSharedPlaylist(response.body);
+  }
+
+  @override
+  Future<SharedPlaylistRemote> updateSharedPlaylist({
+    required String playlistId,
+    required int baseRevision,
+    required String name,
+    required List<String> trackIds,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    if (baseRevision <= 0) {
+      throw const FormatException('Shared playlist revision is invalid.');
+    }
+    final response = await _execute(
+      'PUT',
+      endpoint: account.sharedPlaylistEndpointUri(normalized),
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+        'playlist': _sharedPlaylistDocument(name, trackIds),
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseSharedPlaylist(response.body);
+  }
+
+  @override
+  Future<void> deleteSharedPlaylist({
+    required String playlistId,
+    required int baseRevision,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    final response = await _execute(
+      'DELETE',
+      endpoint: account.sharedPlaylistEndpointUri(normalized),
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+  }
+
+  @override
+  Future<String> issueSharedPlaylistInvite({
+    required String playlistId,
+    required SharedPlaylistAccessRole role,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    if (role == SharedPlaylistAccessRole.owner) {
+      throw const FormatException('Shared playlist invites require viewer or editor access.');
+    }
+    final response = await _execute(
+      'POST',
+      endpoint: account.sharedPlaylistInviteIssueEndpointUri(normalized),
+      body: jsonEncode(<String, Object?>{'role': _sharedPlaylistRoleWire(role)}),
+    );
+    if (response.statusCode != 201) {
+      throw _requestFailure(response);
+    }
+    final code = _jsonObject(response.body)['inviteCode'];
+    if (code is! String || !_isSharedPlaylistInviteCode(code)) {
+      throw const FormatException('Shared playlist invite code is invalid.');
+    }
+    return code;
+  }
+
+  @override
+  Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode) async {
+    final normalized = inviteCode.trim();
+    if (!_isSharedPlaylistInviteCode(normalized)) {
+      throw const FormatException('Enter a valid shared playlist invite code.');
+    }
+    final response = await _execute(
+      'POST',
+      endpoint: account.sharedPlaylistInviteEndpointUri(normalized),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseSharedPlaylist(response.body);
+  }
+
+  @override
   Future<LibrarySyncRemoteSnapshot> push({
     required int baseRevision,
     required Map<String, Object?> snapshot,
@@ -409,7 +609,8 @@ class LibrarySyncClient
       );
     } on Object catch (error) {
       if (error is ProviderRequestException ||
-          error is LibrarySyncConflictException) {
+          error is LibrarySyncConflictException ||
+          error is SharedPlaylistConflictException) {
         rethrow;
       }
       throw ProviderRequestException(
@@ -539,6 +740,142 @@ ListenTogetherConflictException _parseListenTogetherConflict(String rawBody) {
     checksum: _optionalString(body['checksum']),
   );
 }
+
+SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
+  final body = _jsonObject(rawBody);
+  final id = body['id'];
+  final revision = body['revision'];
+  final role = _sharedPlaylistRoleFromWire(body['role']);
+  final rawPlaylist = body['playlist'];
+  if (id is! String ||
+      !_isSharedPlaylistId(id) ||
+      revision is! int ||
+      revision <= 0 ||
+      role == null ||
+      rawPlaylist is! Map) {
+    throw const FormatException('Shared playlist response is invalid.');
+  }
+  final document = Map<String, Object?>.from(rawPlaylist);
+  final name = document['name'];
+  final rawTrackIds = document['trackIds'];
+  if (document['version'] != 1 ||
+      name is! String ||
+      name != name.trim() ||
+      name.isEmpty ||
+      name.length > 160 ||
+      rawTrackIds is! List ||
+      rawTrackIds.length > 500) {
+    throw const FormatException('Shared playlist document is invalid.');
+  }
+  final trackIds = <String>[];
+  for (final value in rawTrackIds) {
+    if (value is! String ||
+        value != value.trim() ||
+        value.isEmpty ||
+        value.length > 256) {
+      throw const FormatException('Shared playlist track IDs are invalid.');
+    }
+    trackIds.add(value);
+  }
+  final checksum = _optionalString(body['checksum']);
+  final actualChecksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
+  if (checksum == null || checksum != actualChecksum) {
+    throw const ProviderRequestException(
+      'Shared playlist response checksum does not match.',
+    );
+  }
+  final collaborators = <String, SharedPlaylistAccessRole>{};
+  final rawCollaborators = body['collaborators'];
+  if (rawCollaborators != null) {
+    if (role != SharedPlaylistAccessRole.owner || rawCollaborators is! Map) {
+      throw const FormatException('Shared playlist collaborators are invalid.');
+    }
+    for (final entry in rawCollaborators.entries) {
+      final collaboratorRole = _sharedPlaylistRoleFromWire(entry.value);
+      if (entry.key is! String ||
+          entry.key.trim().isEmpty ||
+          entry.key.length > 256 ||
+          collaboratorRole == null ||
+          collaboratorRole == SharedPlaylistAccessRole.owner) {
+        throw const FormatException('Shared playlist collaborators are invalid.');
+      }
+      collaborators[entry.key as String] = collaboratorRole;
+    }
+  }
+  return SharedPlaylistRemote(
+    id: id,
+    revision: revision,
+    role: role,
+    name: name,
+    trackIds: List<String>.unmodifiable(trackIds),
+    updatedAt: _optionalDate(body['updatedAt']),
+    updatedByDevice: _optionalString(body['updatedByDevice']),
+    checksum: checksum,
+    collaborators: Map<String, SharedPlaylistAccessRole>.unmodifiable(
+      collaborators,
+    ),
+  );
+}
+
+SharedPlaylistConflictException _parseSharedPlaylistConflict(String rawBody) {
+  final body = _jsonObject(rawBody);
+  return SharedPlaylistConflictException(
+    currentRevision: body['currentRevision'] as int? ?? 0,
+    updatedAt: _optionalDate(body['updatedAt']),
+    updatedByDevice: _optionalString(body['updatedByDevice']),
+    checksum: _optionalString(body['checksum']),
+  );
+}
+
+Map<String, Object?> _sharedPlaylistDocument(
+  String name,
+  List<String> trackIds,
+) {
+  final normalizedName = name.trim();
+  if (normalizedName.isEmpty || normalizedName.length > 160 || trackIds.length > 500) {
+    throw const FormatException('Shared playlist document is invalid.');
+  }
+  final normalizedTrackIds = <String>[];
+  for (final trackId in trackIds) {
+    final normalized = trackId.trim();
+    if (normalized.isEmpty || normalized != trackId || normalized.length > 256) {
+      throw const FormatException('Shared playlist track IDs are invalid.');
+    }
+    normalizedTrackIds.add(normalized);
+  }
+  return <String, Object?>{
+    'version': 1,
+    'name': normalizedName,
+    'trackIds': normalizedTrackIds,
+  };
+}
+
+SharedPlaylistAccessRole? _sharedPlaylistRoleFromWire(Object? value) => switch (value) {
+  'owner' => SharedPlaylistAccessRole.owner,
+  'editor' => SharedPlaylistAccessRole.editor,
+  'viewer' => SharedPlaylistAccessRole.viewer,
+  _ => null,
+};
+
+String _sharedPlaylistRoleWire(SharedPlaylistAccessRole role) => switch (role) {
+  SharedPlaylistAccessRole.viewer => 'viewer',
+  SharedPlaylistAccessRole.editor => 'editor',
+  SharedPlaylistAccessRole.owner => throw ArgumentError.value(role, 'role'),
+};
+
+String _requireSharedPlaylistId(String value) {
+  final normalized = value.trim();
+  if (!_isSharedPlaylistId(normalized)) {
+    throw const FormatException('Shared playlist ID is invalid.');
+  }
+  return normalized;
+}
+
+bool _isSharedPlaylistId(String value) =>
+    RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
+
+bool _isSharedPlaylistInviteCode(String value) =>
+    RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
 
 bool _isListenTogetherInviteCode(String value) {
   return RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);

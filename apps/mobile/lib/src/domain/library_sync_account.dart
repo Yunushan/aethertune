@@ -27,6 +27,20 @@ class LibrarySyncAccount {
     <String>['api', 'v1', 'listen-together', 'invites', inviteCode],
   );
 
+  Uri get sharedPlaylistCollectionEndpointUri =>
+      _endpointUri(<String>['api', 'v1', 'shared-playlists']);
+
+  Uri sharedPlaylistEndpointUri(String playlistId) =>
+      _endpointUri(<String>['api', 'v1', 'shared-playlists', playlistId]);
+
+  Uri sharedPlaylistInviteIssueEndpointUri(String playlistId) => _endpointUri(
+    <String>['api', 'v1', 'shared-playlists', playlistId, 'invites'],
+  );
+
+  Uri sharedPlaylistInviteEndpointUri(String inviteCode) => _endpointUri(
+    <String>['api', 'v1', 'shared-playlist-invites', inviteCode],
+  );
+
   Uri get profileEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'auth', 'profile']);
 

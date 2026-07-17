@@ -5,6 +5,7 @@ import '../../data/library_store.dart';
 import '../../data/library_sync_client.dart';
 import '../../data/library_sync_store.dart';
 import '../../data/listen_together_store.dart';
+import '../../data/shared_playlist_store.dart';
 import '../../domain/library_sync_account.dart';
 import '../../domain/library_sync_profile.dart';
 import '../../player/player_controller.dart';
@@ -18,6 +19,7 @@ class LibrarySyncPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final sync = context.watch<LibrarySyncStore>();
     final listenTogether = context.watch<ListenTogetherStore?>();
+    final sharedPlaylists = context.watch<SharedPlaylistStore?>();
     final library = context.watch<LibraryStore>();
     final player = context.watch<PlayerController?>();
     final account = sync.account;
@@ -175,6 +177,61 @@ class LibrarySyncPanel extends StatelessWidget {
               ],
             ),
           ),
+        if (sync.isConfigured && sharedPlaylists != null) ...<Widget>[
+          ListTile(
+            key: const Key('shared-playlists'),
+            leading: const Icon(Icons.playlist_add_check_outlined),
+            title: const Text('Private shared playlists'),
+            subtitle: Text(
+              sharedPlaylists.loaded
+                  ? '${sharedPlaylists.bindings.length} linked playlist(s) · publish and refresh manually'
+                  : 'Loading shared playlist links...',
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  key: const Key('shared-playlists-host'),
+                  tooltip: 'Share a playlist privately',
+                  onPressed: actionsEnabled &&
+                          !sharedPlaylists.busy &&
+                          sharedPlaylists.loaded
+                      ? () => _hostSharedPlaylist(context)
+                      : null,
+                  icon: const Icon(Icons.add_link_outlined),
+                ),
+                IconButton(
+                  key: const Key('shared-playlists-join'),
+                  tooltip: 'Join with invite code',
+                  onPressed: actionsEnabled &&
+                          !sharedPlaylists.busy &&
+                          sharedPlaylists.loaded
+                      ? () => _joinSharedPlaylistInvite(context)
+                      : null,
+                  icon: const Icon(Icons.vpn_key_outlined),
+                ),
+              ],
+            ),
+          ),
+          if (sharedPlaylists.busy)
+            const LinearProgressIndicator(key: Key('shared-playlists-progress')),
+          for (final binding in sharedPlaylists.bindings)
+            _SharedPlaylistBindingTile(binding: binding),
+          if (sharedPlaylists.lastError != null && !sharedPlaylists.busy)
+            ListTile(
+              dense: true,
+              leading: Icon(
+                Icons.error_outline,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                sharedPlaylists.lastError!,
+                key: const Key('shared-playlists-error'),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
         if (sync.isConfigured)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -421,6 +478,287 @@ class LibrarySyncPanel extends StatelessWidget {
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, 'Could not join invite: $error');
+      }
+    }
+  }
+
+  static Future<void> _hostSharedPlaylist(BuildContext context) async {
+    final library = context.read<LibraryStore>();
+    if (library.playlists.isEmpty) {
+      _showError(context, 'Create a local playlist before sharing it.');
+      return;
+    }
+    final playlistId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Share a playlist privately'),
+        content: SizedBox(
+          width: 440,
+          child: ListView(
+            shrinkWrap: true,
+            children: library.playlists
+                .map(
+                  (playlist) => ListTile(
+                    title: Text(playlist.name),
+                    subtitle: Text('${playlist.trackCount} track(s)'),
+                    onTap: () => Navigator.of(dialogContext).pop(playlist.id),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (playlistId == null || !context.mounted) {
+      return;
+    }
+    final playlist = library.playlistById(playlistId);
+    if (playlist == null) {
+      _showError(context, 'That local playlist is no longer available.');
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().host(library, playlist);
+      if (context.mounted) {
+        _showSuccess(context, 'Private shared playlist created.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not share playlist: $error');
+      }
+    }
+  }
+
+  static Future<void> _joinSharedPlaylistInvite(BuildContext context) async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Join private shared playlist'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.none,
+          decoration: const InputDecoration(labelText: 'Invite code'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (code == null || code.trim().isEmpty || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().joinInvite(
+        code,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Private shared playlist added.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not join shared playlist: $error');
+      }
+    }
+  }
+
+  static Future<void> _refreshSharedPlaylist(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    try {
+      await context.read<SharedPlaylistStore>().refresh(
+        binding,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Shared playlist refreshed.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not refresh shared playlist: $error');
+      }
+    }
+  }
+
+  static Future<void> _publishSharedPlaylist(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    try {
+      await context.read<SharedPlaylistStore>().publish(
+        binding,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Shared playlist published.');
+      }
+    } on SharedPlaylistConflictException catch (_) {
+      if (context.mounted) {
+        _showError(context, 'A collaborator updated it first. Refresh before publishing.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not publish shared playlist: $error');
+      }
+    }
+  }
+
+  static Future<void> _createSharedPlaylistInvite(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final role = await showDialog<SharedPlaylistAccessRole>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Create private invite'),
+        content: const Text('Choose what the person can do with this playlist.'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(SharedPlaylistAccessRole.viewer),
+            child: const Text('Viewer'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(SharedPlaylistAccessRole.editor),
+            child: const Text('Editor'),
+          ),
+        ],
+      ),
+    );
+    if (role == null || !context.mounted) {
+      return;
+    }
+    try {
+      final code = await context.read<SharedPlaylistStore>().createInvite(
+        binding,
+        role,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${role.name} invite code'),
+          content: SelectableText(code),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not create invite code: $error');
+      }
+    }
+  }
+
+  static Future<void> _unlinkSharedPlaylist(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unlink shared playlist?'),
+        content: const Text(
+          'The local playlist stays on this device. Other collaborators keep their links.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Unlink'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().unlink(binding);
+      if (context.mounted) {
+        _showSuccess(context, 'Shared playlist unlinked from this device.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not unlink shared playlist: $error');
+      }
+    }
+  }
+
+  static Future<void> _deleteSharedPlaylist(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete shared playlist?'),
+        content: const Text(
+          'This deletes the private server copy for every collaborator. The local playlist stays on this device.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().deleteHosted(
+        binding,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Shared server playlist deleted.');
+      }
+    } on SharedPlaylistConflictException catch (_) {
+      if (context.mounted) {
+        _showError(context, 'A collaborator updated it first. Refresh before deleting.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not delete shared playlist: $error');
       }
     }
   }
@@ -724,6 +1062,98 @@ class LibrarySyncPanel extends StatelessWidget {
     ).showSnackBar(SnackBar(content: Text(error.toString())));
   }
 }
+
+class _SharedPlaylistBindingTile extends StatelessWidget {
+  const _SharedPlaylistBindingTile({required this.binding});
+
+  final SharedPlaylistBinding binding;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final sharedPlaylists = context.watch<SharedPlaylistStore>();
+    final playlist = library.playlistById(binding.localPlaylistId);
+    final title = playlist?.name ?? 'Missing local playlist';
+    final subtitle = '${binding.role.name} · revision ${binding.revision}';
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        binding.isOwner
+            ? Icons.admin_panel_settings_outlined
+            : binding.canEdit
+            ? Icons.edit_note_outlined
+            : Icons.visibility_outlined,
+      ),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(subtitle),
+      trailing: PopupMenuButton<_SharedPlaylistAction>(
+        tooltip: 'Shared playlist actions',
+        onSelected: (action) {
+          switch (action) {
+            case _SharedPlaylistAction.refresh:
+              LibrarySyncPanel._refreshSharedPlaylist(context, binding);
+              break;
+            case _SharedPlaylistAction.publish:
+              LibrarySyncPanel._publishSharedPlaylist(context, binding);
+              break;
+            case _SharedPlaylistAction.invite:
+              LibrarySyncPanel._createSharedPlaylistInvite(context, binding);
+              break;
+            case _SharedPlaylistAction.unlink:
+              LibrarySyncPanel._unlinkSharedPlaylist(context, binding);
+              break;
+            case _SharedPlaylistAction.delete:
+              LibrarySyncPanel._deleteSharedPlaylist(context, binding);
+              break;
+          }
+        },
+        itemBuilder: (menuContext) => <PopupMenuEntry<_SharedPlaylistAction>>[
+          const PopupMenuItem(
+            value: _SharedPlaylistAction.refresh,
+            child: ListTile(
+              leading: Icon(Icons.refresh_outlined),
+              title: Text('Refresh from server'),
+            ),
+          ),
+          if (binding.canEdit)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.publish,
+              child: ListTile(
+                leading: Icon(Icons.publish_outlined),
+                title: Text('Publish local changes'),
+              ),
+            ),
+          if (binding.isOwner)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.invite,
+              child: ListTile(
+                leading: Icon(Icons.person_add_alt_1_outlined),
+                title: Text('Create invite code'),
+              ),
+            ),
+          const PopupMenuDivider(),
+          if (binding.isOwner)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.delete,
+              child: ListTile(
+                leading: Icon(Icons.delete_outline),
+                title: Text('Delete server playlist'),
+              ),
+            ),
+          const PopupMenuItem(
+            value: _SharedPlaylistAction.unlink,
+            child: ListTile(
+              leading: Icon(Icons.link_off_outlined),
+              title: Text('Unlink this device'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _SharedPlaylistAction { refresh, publish, invite, unlink, delete }
 
 class _LibrarySyncProfileDialog extends StatefulWidget {
   const _LibrarySyncProfileDialog({required this.profile});

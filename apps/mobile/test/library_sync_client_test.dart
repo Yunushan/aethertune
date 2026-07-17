@@ -613,6 +613,102 @@ void main() {
     expect(result.hasSnapshot, isFalse);
     expect(result.updatedByDevice, 'Desktop');
   });
+
+  test('creates a private shared playlist with a portable document', () async {
+    final playlist = <String, Object?>{
+      'version': 1,
+      'name': 'Collaborative mix',
+      'trackIds': <String>['track-1', 'track-2'],
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'POST');
+        expect(uri, _account().sharedPlaylistCollectionEndpointUri);
+        expect(headers['authorization'], 'Bearer private-sync-token');
+        expect(jsonDecode(body!), <String, Object?>{
+          'baseRevision': 0,
+          'deviceId': 'Test device',
+          'playlist': playlist,
+        });
+        return LibrarySyncHttpResponse(
+          statusCode: 201,
+          body: jsonEncode(<String, Object?>{
+            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+            'revision': 1,
+            'role': 'owner',
+            'updatedAt': '2026-07-17T10:00:00.000Z',
+            'updatedByDevice': 'Test device',
+            'checksum': checksum,
+            'playlist': playlist,
+            'collaborators': <String, Object?>{},
+          }),
+        );
+      },
+    );
+
+    final shared = await client.createSharedPlaylist(
+      name: 'Collaborative mix',
+      trackIds: <String>['track-1', 'track-2'],
+    );
+
+    expect(shared.id, 'AAAAAAAAAAAAAAAAAAAAAAAA');
+    expect(shared.role, SharedPlaylistAccessRole.owner);
+    expect(shared.trackIds, <String>['track-1', 'track-2']);
+    expect(shared.collaborators, isEmpty);
+  });
+
+  test('issues private shared playlist invites and reports conflicts', () async {
+    var requests = 0;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        requests += 1;
+        if (requests == 1) {
+          expect(method, 'POST');
+          expect(
+            uri,
+            _account().sharedPlaylistInviteIssueEndpointUri(
+              'AAAAAAAAAAAAAAAAAAAAAAAA',
+            ),
+          );
+          expect(jsonDecode(body!), <String, Object?>{'role': 'editor'});
+          return const LibrarySyncHttpResponse(
+            statusCode: 201,
+            body: '{"inviteCode":"BBBBBBBBBBBBBBBBBBBBBBBB"}',
+          );
+        }
+        expect(method, 'PUT');
+        return const LibrarySyncHttpResponse(
+          statusCode: 409,
+          body: '{"currentRevision":4,"updatedByDevice":"Other device"}',
+        );
+      },
+    );
+
+    expect(
+      await client.issueSharedPlaylistInvite(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        role: SharedPlaylistAccessRole.editor,
+      ),
+      'BBBBBBBBBBBBBBBBBBBBBBBB',
+    );
+    await expectLater(
+      client.updateSharedPlaylist(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        baseRevision: 3,
+        name: 'Collaborative mix',
+        trackIds: const <String>['track-1'],
+      ),
+      throwsA(
+        isA<SharedPlaylistConflictException>()
+            .having((error) => error.currentRevision, 'current revision', 4),
+      ),
+    );
+  });
 }
 
 LibrarySyncAccount _account() {

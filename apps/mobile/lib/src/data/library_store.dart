@@ -6221,6 +6221,38 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces a shared playlist's ordered local-track projection.
+  ///
+  /// This is intentionally separate from manual playlist editing: remote
+  /// collaboration may preserve repeated track IDs, while the normal add action
+  /// continues to prevent accidental duplicates.
+  Future<Playlist?> replacePlaylistTracks(
+    String playlistId,
+    Iterable<String> trackIds,
+  ) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return null;
+    }
+    final knownTrackIds = _tracks.map((track) => track.id).toSet();
+    final resolved = trackIds
+        .where(knownTrackIds.contains)
+        .toList(growable: false);
+    final existing = _playlists[index];
+    if (listEquals(existing.trackIds, resolved)) {
+      return existing;
+    }
+    final updated = existing.copyWith(
+      trackIds: resolved,
+      updatedAt: _clock(),
+    );
+    _playlists[index] = updated;
+    _sortPlaylists();
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
   Future<void> removeTrackFromPlaylist(
     String playlistId,
     String trackId,

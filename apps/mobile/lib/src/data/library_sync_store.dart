@@ -563,6 +563,18 @@ class LibrarySyncStore extends ChangeNotifier {
     return client as ListenTogetherGateway;
   }
 
+  /// Creates the authenticated client used for private shared playlists.
+  /// The secure sync token stays owned by this store.
+  SharedPlaylistGateway createSharedPlaylistGateway() {
+    final client = _requireClient();
+    if (client is! SharedPlaylistGateway) {
+      throw StateError(
+        'This library sync server does not support private shared playlists.',
+      );
+    }
+    return client as SharedPlaylistGateway;
+  }
+
   void _requireOnline(LibraryStore library) {
     if (library.offlineModeEnabled) {
       throw StateError('Turn off offline mode before syncing the library.');
