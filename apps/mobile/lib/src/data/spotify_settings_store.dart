@@ -12,6 +12,9 @@ import 'spotify_oauth_flow.dart';
 typedef SpotifyAuthorizationRunner = Future<SpotifyOAuthToken> Function(
   String clientId,
 );
+typedef SpotifyMetadataProviderFactory = SpotifyMetadataProvider Function(
+  SpotifyAccessTokenReader accessTokenReader,
+);
 
 final class SpotifyOAuthSession {
   const SpotifyOAuthSession({required this.clientId, required this.token});
@@ -40,11 +43,15 @@ final class SpotifySettingsStore extends ChangeNotifier {
     ProviderCredentialVault? credentialVault,
     SpotifyOAuthClient? oauthClient,
     SpotifyAuthorizationRunner? authorizationRunner,
+    SpotifyMetadataProviderFactory? providerFactory,
     DateTime Function()? clock,
   }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
        _oauthClient = oauthClient ?? SpotifyOAuthClient(),
        _clock = clock ?? DateTime.now,
-       _authorizationRunner = authorizationRunner;
+       _authorizationRunner = authorizationRunner,
+       _providerFactory = providerFactory ??
+           ((accessTokenReader) =>
+               SpotifyMetadataProvider(accessTokenReader: accessTokenReader));
 
   static const _credentialId = 'spotify-oauth-session';
   static const _refreshSkew = Duration(minutes: 1);
@@ -52,6 +59,7 @@ final class SpotifySettingsStore extends ChangeNotifier {
   final ProviderCredentialVault _credentialVault;
   final SpotifyOAuthClient _oauthClient;
   final SpotifyAuthorizationRunner? _authorizationRunner;
+  final SpotifyMetadataProviderFactory _providerFactory;
   final DateTime Function() _clock;
 
   SpotifyOAuthSession? _session;
@@ -69,7 +77,7 @@ final class SpotifySettingsStore extends ChangeNotifier {
   List<MusicSourceProvider> get musicProviders => _session == null
       ? const <MusicSourceProvider>[]
       : <MusicSourceProvider>[
-          SpotifyMetadataProvider(accessTokenReader: readAccessToken),
+          _providerFactory(readAccessToken),
         ];
 
   Future<void> load() async {

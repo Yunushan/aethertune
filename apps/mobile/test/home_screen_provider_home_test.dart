@@ -12,6 +12,9 @@ import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
+import 'package:aethertune/src/data/spotify_metadata_provider.dart';
+import 'package:aethertune/src/data/spotify_oauth_client.dart';
+import 'package:aethertune/src/data/spotify_settings_store.dart';
 import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
 import 'package:aethertune/src/data/youtube_data_settings_store.dart';
 import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
@@ -271,12 +274,75 @@ void main() {
     );
     expect(requestedRegions, <String>['TR']);
   });
+
+  testWidgets('loads connected Spotify library metadata explicitly on Home', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final fixture = await _HomeFixture.create(
+      provider: _FakeProviderHomeCatalog(),
+    );
+    addTearDown(fixture.dispose);
+    final requestedOffsets = <String?>[];
+    final spotify = SpotifySettingsStore(
+      credentialVault: _MemoryCredentialVault(),
+      authorizationRunner: (_) async => SpotifyOAuthToken(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresAt: DateTime.utc(2030),
+      ),
+      providerFactory: (readAccessToken) => SpotifyMetadataProvider(
+        accessTokenReader: readAccessToken,
+        savedTracksLoader: (uri, token) async {
+          requestedOffsets.add(uri.queryParameters['offset']);
+          return _spotifySavedTracksPage;
+        },
+      ),
+    );
+    await spotify.load();
+    await spotify.connect('test-client');
+    addTearDown(spotify.dispose);
+
+    await _pumpHome(tester, fixture, spotify: spotify);
+
+    expect(find.text('Your Spotify library'), findsOneWidget);
+    expect(requestedOffsets, isEmpty);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-spotify-saved-tracks-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedOffsets, <String?>['0']);
+    expect(find.text('Home saved Spotify track'), findsOneWidget);
+    await tester.tap(find.byTooltip('Save metadata to library'));
+    await tester.pumpAndSettle();
+    expect(fixture.library.tracks.single.isPlayable, isFalse);
+
+    await fixture.library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(
+              const ValueKey<String>('home-spotify-saved-tracks-refresh'),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(requestedOffsets, <String?>['0']);
+  });
 }
 
 Future<void> _pumpHome(
   WidgetTester tester,
   _HomeFixture fixture, {
   YouTubeDataSettingsStore? youtube,
+  SpotifySettingsStore? spotify,
 }) async {
   await tester.pumpWidget(
     MultiProvider(
@@ -294,6 +360,8 @@ Future<void> _pumpHome(
           ChangeNotifierProvider<YouTubeDataSettingsStore>.value(
             value: youtube,
           ),
+        if (spotify != null)
+          ChangeNotifierProvider<SpotifySettingsStore>.value(value: spotify),
       ],
       child: const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -313,6 +381,23 @@ const _youTubeChartPage = '''
     "snippet": {
       "title": "Home chart result",
       "channelTitle": "Official Channel"
+    }
+  }]
+}
+''';
+
+const _spotifySavedTracksPage = '''
+{
+  "offset": 0,
+  "total": 1,
+  "next": null,
+  "items": [{
+    "added_at": "2026-07-17T12:00:00Z",
+    "track": {
+      "id": "spotify-home-saved-track",
+      "name": "Home saved Spotify track",
+      "artists": [{"name": "Aether"}],
+      "album": {"name": "Signals"}
     }
   }]
 }
