@@ -239,6 +239,30 @@ class SharedPlaylistStore extends ChangeNotifier {
     });
   }
 
+  Future<SharedPlaylistBinding> restoreRevision(
+    SharedPlaylistBinding binding,
+    SharedPlaylistRevision revision,
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (!binding.canEdit) {
+        throw StateError('This shared playlist is view-only.');
+      }
+      if (revision.revision >= binding.revision) {
+        throw StateError('Only an earlier playlist revision can be restored.');
+      }
+      final remote = await _requireGateway().updateSharedPlaylist(
+        playlistId: binding.remoteId,
+        baseRevision: binding.revision,
+        name: revision.name,
+        trackIds: revision.trackIds,
+      );
+      await _applyRemote(binding, remote, library);
+      return bindingForLocalPlaylist(binding.localPlaylistId)!;
+    });
+  }
+
   Future<SharedPlaylistBinding> publish(
     SharedPlaylistBinding binding,
     LibraryStore library,

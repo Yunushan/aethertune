@@ -116,6 +116,40 @@ void main() {
     expect(history.map((revision) => revision.revision), <int>[1]);
     expect(library.playlistById(playlist.id)?.trackIds, isEmpty);
   });
+
+  test('restores an earlier revision as a new shared playlist revision',
+      () async {
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist(
+      'Current mix',
+      trackIds: const <String>['two'],
+    );
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final hosted = await store.host(library, playlist);
+    await library.replacePlaylistTracks(playlist.id, const <String>['two']);
+    final current = await store.publish(hosted, library);
+
+    final restored = await store.restoreRevision(
+      current,
+      SharedPlaylistRevision(
+        revision: 1,
+        name: 'Earlier mix',
+        trackIds: const <String>['one', 'one'],
+        updatedAt: DateTime.utc(2026, 7, 17),
+        updatedByDevice: 'Phone',
+        checksum: 'a' * 64,
+      ),
+      library,
+    );
+
+    expect(restored.revision, 3);
+    expect(gateway.remote.name, 'Earlier mix');
+    expect(gateway.remote.trackIds, <String>['one', 'one']);
+    expect(library.playlistById(playlist.id)?.name, 'Earlier mix');
+    expect(library.playlistById(playlist.id)?.trackIds, <String>['one', 'one']);
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {

@@ -632,7 +632,7 @@ class LibrarySyncPanel extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      await showDialog<void>(
+      final selected = await showDialog<SharedPlaylistRevision>(
         context: context,
         builder: (dialogContext) {
           final localizations = MaterialLocalizations.of(dialogContext);
@@ -662,6 +662,18 @@ class LibrarySyncPanel extends StatelessWidget {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                trailing:
+                                    binding.canEdit &&
+                                        revision.revision < binding.revision
+                                    ? const Icon(Icons.restore_outlined)
+                                    : null,
+                                onTap:
+                                    binding.canEdit &&
+                                        revision.revision < binding.revision
+                                    ? () => Navigator.of(
+                                      dialogContext,
+                                    ).pop(revision)
+                                    : null,
                               );
                             },
                           )
@@ -677,9 +689,59 @@ class LibrarySyncPanel extends StatelessWidget {
           );
         },
       );
+      if (selected != null && binding.canEdit && context.mounted) {
+        await _restoreSharedPlaylistRevision(context, binding, selected);
+      }
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, 'Could not load playlist history: $error');
+      }
+    }
+  }
+
+  static Future<void> _restoreSharedPlaylistRevision(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+    SharedPlaylistRevision revision,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Restore revision ${revision.revision}?'),
+        content: Text(
+          'This replaces the current shared playlist with "${revision.name}" and creates a new revision.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<SharedPlaylistStore>().restoreRevision(
+        binding,
+        revision,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        _showSuccess(context, 'Shared playlist revision restored.');
+      }
+    } on SharedPlaylistConflictException catch (_) {
+      if (context.mounted) {
+        _showError(context, 'A collaborator updated it first. Refresh before restoring.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not restore playlist revision: $error');
       }
     }
   }
