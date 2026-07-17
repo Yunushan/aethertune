@@ -8,6 +8,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/local_folder_scanner.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/domain/track_chapter.dart';
 
 void main() {
   setUp(() {
@@ -29,10 +30,24 @@ void main() {
       hash: 'old-hash',
       artworkUri: Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
       addedAt: DateTime.utc(2026, 1, 1),
+      chapters: const <TrackChapter>[
+        TrackChapter(start: Duration(seconds: 30), title: 'Keep chapter'),
+      ],
     );
     await store.addTracks(<Track>[original]);
     await store.toggleFavorite(original.id);
     await store.setLyrics(original.id, 'Manual lyrics');
+    await store.recordPlayback(original.id);
+    await store.recordPlaybackProgress(
+      original.id,
+      const Duration(seconds: 45),
+      const Duration(minutes: 4),
+    );
+    await store.setTrackPlaybackSpeed(original.id, 1.25);
+    final playlist = await store.createPlaylist(
+      'Keep watched state',
+      trackIds: <String>[original.id],
+    );
     final privateArtwork = Uri.file('/private/manual-cover.png');
     await store.updateTrackArtwork(original.id, privateArtwork);
 
@@ -42,6 +57,12 @@ void main() {
       hash: 'new-hash',
       artworkUri: Uri.parse('data:image/png;base64,cmVzY2FubmVk'),
       addedAt: DateTime.utc(2026, 7, 12),
+      albumArtist: 'Rescanned album artist',
+      year: 2026,
+      trackNumber: 7,
+      duration: const Duration(minutes: 4, seconds: 12),
+      replayGainTrackDb: -6.5,
+      replayGainAlbumDb: -4.25,
     );
     final added = _track(
       path: '$root/two.mp3',
@@ -70,6 +91,12 @@ void main() {
 
     final updated = store.tracks.firstWhere((track) => track.id == original.id);
     expect(updated.title, 'Rescanned title');
+    expect(updated.albumArtist, 'Rescanned album artist');
+    expect(updated.year, 2026);
+    expect(updated.trackNumber, 7);
+    expect(updated.duration, const Duration(minutes: 4, seconds: 12));
+    expect(updated.replayGainTrackDb, -6.5);
+    expect(updated.replayGainAlbumDb, -4.25);
     expect(updated.isFavorite, isTrue);
     expect(updated.addedAt, DateTime.utc(2026, 1, 1));
     expect(updated.artworkUri, privateArtwork);
@@ -78,7 +105,15 @@ void main() {
       Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
     );
     expect(updated.artworkIsUserManaged, isTrue);
+    expect(updated.chapters.single.title, 'Keep chapter');
     expect(store.lyricsForTrack(original.id)?.plainText, 'Manual lyrics');
+    expect(store.playbackHistory.single.trackId, original.id);
+    expect(
+      store.playbackProgressForTrack(original.id)?.position,
+      const Duration(seconds: 45),
+    );
+    expect(store.playbackSpeedForTrack(original.id), 1.25);
+    expect(store.playlistById(playlist.id)?.trackIds, <String>[original.id]);
     expect(
       store.lyricsForTrack(added.id)?.plainText,
       '[00:01.00]New sidecar lyrics',
@@ -190,17 +225,31 @@ Track _track({
   required String hash,
   Uri? artworkUri,
   DateTime? addedAt,
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
+  Duration duration = Duration.zero,
+  double? replayGainTrackDb,
+  double? replayGainAlbumDb,
+  List<TrackChapter>? chapters,
 }) {
   return Track(
     id: Track.stableLocalId(path),
     title: title,
     artist: 'Watched artist',
     album: 'Watched album',
+    albumArtist: albumArtist,
+    year: year,
+    trackNumber: trackNumber,
+    duration: duration,
     localPath: path,
     contentHash: hash,
+    replayGainTrackDb: replayGainTrackDb,
+    replayGainAlbumDb: replayGainAlbumDb,
     artworkUri: artworkUri,
     sourceId: 'local',
     addedAt: addedAt,
+    chapters: chapters,
   );
 }
 

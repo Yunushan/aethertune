@@ -8699,6 +8699,9 @@ class LibraryStore extends ChangeNotifier {
       title: scanned.title,
       artist: scanned.artist,
       album: scanned.album,
+      albumArtist: scanned.albumArtist,
+      year: scanned.year,
+      trackNumber: scanned.trackNumber,
       genre: scanned.genre,
       duration: scanned.duration,
       artworkUri: current.artworkIsUserManaged
@@ -8713,6 +8716,8 @@ class LibraryStore extends ChangeNotifier {
       providerArtworkVersion: scanned.providerArtworkVersion,
       localPath: scanned.localPath,
       contentHash: scanned.contentHash,
+      replayGainTrackDb: scanned.replayGainTrackDb,
+      replayGainAlbumDb: scanned.replayGainAlbumDb,
       streamUrl: scanned.streamUrl,
       streamUrlIsEphemeral: scanned.streamUrlIsEphemeral,
       sourceId: scanned.sourceId,
