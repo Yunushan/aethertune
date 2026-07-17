@@ -425,14 +425,14 @@ void main() {
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = const Size(390, 1200);
     addTearDown(tester.view.reset);
 
     final fixture = await _HomeFixture.create(
       provider: _FakeProviderHomeCatalog(),
     );
     addTearDown(fixture.dispose);
-    final requestedOffsets = <String?>[];
+    final requests = <String>[];
     final spotify = SpotifySettingsStore(
       credentialVault: _MemoryCredentialVault(),
       authorizationRunner: (_) async => SpotifyOAuthToken(
@@ -443,8 +443,16 @@ void main() {
       providerFactory: (readAccessToken) => SpotifyMetadataProvider(
         accessTokenReader: readAccessToken,
         savedTracksLoader: (uri, token) async {
-          requestedOffsets.add(uri.queryParameters['offset']);
+          requests.add('tracks:${uri.queryParameters['offset']}');
           return _spotifySavedTracksPage;
+        },
+        savedAlbumsLoader: (uri, token) async {
+          requests.add('albums:${uri.queryParameters['offset']}');
+          return _spotifySavedAlbumsPage;
+        },
+        playlistsLoader: (uri, token) async {
+          requests.add('playlists:${uri.queryParameters['offset']}');
+          return _spotifySavedPlaylistsPage;
         },
       ),
     );
@@ -455,18 +463,36 @@ void main() {
     await _pumpHome(tester, fixture, spotify: spotify);
 
     expect(find.text('Your Spotify library'), findsOneWidget);
-    expect(requestedOffsets, isEmpty);
+    expect(requests, isEmpty);
 
     await tester.tap(
-      find.byKey(const ValueKey<String>('home-spotify-saved-tracks-refresh')),
+      find.byKey(const ValueKey<String>('home-spotify-library-refresh')),
     );
     await tester.pumpAndSettle();
 
-    expect(requestedOffsets, <String?>['0']);
+    expect(requests, <String>['tracks:0']);
     expect(find.text('Home saved Spotify track'), findsOneWidget);
     await tester.tap(find.byTooltip('Save metadata to library'));
     await tester.pumpAndSettle();
     expect(fixture.library.tracks.single.isPlayable, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey<String>('home-spotify-albums')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-spotify-library-refresh')),
+    );
+    await tester.pumpAndSettle();
+    expect(requests, <String>['tracks:0', 'albums:0']);
+    expect(find.text('Home saved Spotify album'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-spotify-playlists')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-spotify-library-refresh')),
+    );
+    await tester.pumpAndSettle();
+    expect(requests, <String>['tracks:0', 'albums:0', 'playlists:0']);
+    expect(find.text('Home saved Spotify playlist'), findsOneWidget);
 
     await fixture.library.setOfflineModeEnabled(true);
     await tester.pumpAndSettle();
@@ -474,13 +500,13 @@ void main() {
       tester
           .widget<IconButton>(
             find.byKey(
-              const ValueKey<String>('home-spotify-saved-tracks-refresh'),
+              const ValueKey<String>('home-spotify-library-refresh'),
             ),
           )
           .onPressed,
       isNull,
     );
-    expect(requestedOffsets, <String?>['0']);
+    expect(requests, <String>['tracks:0', 'albums:0', 'playlists:0']);
   });
 }
 
@@ -554,6 +580,37 @@ const _spotifySavedTracksPage = '''
       "artists": [{"name": "Aether"}],
       "album": {"name": "Signals"}
     }
+  }]
+}
+''';
+
+const _spotifySavedAlbumsPage = '''
+{
+  "offset": 0,
+  "total": 1,
+  "next": null,
+  "items": [{
+    "added_at": "2026-07-17T12:00:00Z",
+    "album": {
+      "id": "spotify-home-album",
+      "name": "Home saved Spotify album",
+      "total_tracks": 1,
+      "artists": [{"name": "Aether"}]
+    }
+  }]
+}
+''';
+
+const _spotifySavedPlaylistsPage = '''
+{
+  "offset": 0,
+  "total": 1,
+  "next": null,
+  "items": [{
+    "id": "spotify-home-playlist",
+    "name": "Home saved Spotify playlist",
+    "owner": {"display_name": "Aether"},
+    "tracks": {"total": 1}
   }]
 }
 ''';

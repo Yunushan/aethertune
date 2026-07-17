@@ -4267,6 +4267,8 @@ final class _FollowedYouTubeChannelShelfState
   }
 }
 
+enum _SpotifyHomeLibraryView { tracks, albums, playlists }
+
 final class _SpotifySavedTracksShelf extends StatefulWidget {
   const _SpotifySavedTracksShelf({required this.provider});
 
@@ -4280,6 +4282,9 @@ final class _SpotifySavedTracksShelf extends StatefulWidget {
 final class _SpotifySavedTracksShelfState
     extends State<_SpotifySavedTracksShelf> {
   List<Track> _tracks = const <Track>[];
+  List<SpotifySavedAlbum> _albums = const <SpotifySavedAlbum>[];
+  List<SpotifySavedPlaylist> _playlists = const <SpotifySavedPlaylist>[];
+  _SpotifyHomeLibraryView _view = _SpotifyHomeLibraryView.tracks;
   bool _loading = false;
   String? _error;
   int _requestSerial = 0;
@@ -4288,72 +4293,117 @@ final class _SpotifySavedTracksShelfState
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final offline = library.offlineModeEnabled;
+    final hasItems = switch (_view) {
+      _SpotifyHomeLibraryView.tracks => _tracks.isNotEmpty,
+      _SpotifyHomeLibraryView.albums => _albums.isNotEmpty,
+      _SpotifyHomeLibraryView.playlists => _playlists.isNotEmpty,
+    };
     return Column(
       children: <Widget>[
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.library_music_outlined),
           title: const Text('Your Spotify library'),
-          subtitle: const Text('Saved track metadata from your connected account'),
+          subtitle: Text(
+            'Saved ${_spotifyHomeLibraryViewLabel(_view)} metadata from your connected account',
+          ),
           trailing: IconButton(
-            key: const Key('home-spotify-saved-tracks-open'),
-            tooltip: 'Open Spotify saved tracks',
-            onPressed: () => _openSavedTracks(context),
+            key: const Key('home-spotify-library-open'),
+            tooltip: 'Open Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
+            onPressed: () => _openSelectedView(context),
             icon: const Icon(Icons.open_in_new),
           ),
         ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final view in _SpotifyHomeLibraryView.values)
+              ChoiceChip(
+                key: ValueKey<String>('home-spotify-${view.name}'),
+                label: Text(_spotifyHomeLibraryViewLabel(view)),
+                selected: _view == view,
+                onSelected: (_) => _selectView(view),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
           child: IconButton.filled(
-            key: const Key('home-spotify-saved-tracks-refresh'),
-            tooltip: 'Refresh Spotify saved tracks',
+            key: const Key('home-spotify-library-refresh'),
+            tooltip: 'Refresh Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
             onPressed: _loading || offline ? null : () => unawaited(_load()),
             icon: const Icon(Icons.refresh),
           ),
         ),
-        if (offline && _tracks.isEmpty)
+        if (offline && !hasItems)
           const ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.cloud_off_outlined),
             title: Text('Offline mode'),
           ),
-        if (_loading && _tracks.isEmpty)
+        if (_loading && !hasItems)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: LinearProgressIndicator(),
           ),
-        if (_error != null && _tracks.isEmpty)
+        if (_error != null && !hasItems)
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.error_outline),
-            title: const Text('Could not load saved Spotify tracks'),
+            title: Text(
+              'Could not load saved Spotify ${_spotifyHomeLibraryViewLabel(_view)}',
+            ),
             subtitle: Text(_error!),
             trailing: IconButton(
-              tooltip: 'Retry Spotify saved tracks',
+              tooltip:
+                  'Retry Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
               onPressed: _loading || offline ? null : () => unawaited(_load()),
               icon: const Icon(Icons.refresh),
             ),
           ),
         for (final track in _tracks)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.music_note_outlined),
-            title: Text(track.title),
-            subtitle: Text(_spotifyTrackSubtitle(track)),
-            onTap: () => _openSavedTracks(context),
-            trailing: IconButton(
-              tooltip: library.tracks.any((saved) => saved.id == track.id)
-                  ? 'Saved to library'
-                  : 'Save metadata to library',
-              onPressed: () => unawaited(_saveTrack(context, track)),
-              icon: Icon(
-                library.tracks.any((saved) => saved.id == track.id)
-                    ? Icons.bookmark
-                    : Icons.bookmark_add_outlined,
+          if (_view == _SpotifyHomeLibraryView.tracks)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.music_note_outlined),
+              title: Text(track.title),
+              subtitle: Text(_spotifyTrackSubtitle(track)),
+              onTap: () => _openSavedTracks(context),
+              trailing: IconButton(
+                tooltip: library.tracks.any((saved) => saved.id == track.id)
+                    ? 'Saved to library'
+                    : 'Save metadata to library',
+                onPressed: () => unawaited(_saveTrack(context, track)),
+                icon: Icon(
+                  library.tracks.any((saved) => saved.id == track.id)
+                      ? Icons.bookmark
+                      : Icons.bookmark_add_outlined,
+                ),
               ),
             ),
-          ),
-        if (_loading && _tracks.isNotEmpty)
+        for (final album in _albums)
+          if (_view == _SpotifyHomeLibraryView.albums)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: TrackArtwork(artworkUri: album.artworkUri),
+              title: Text(album.title),
+              subtitle: Text(_spotifyAlbumSubtitle(album)),
+              onTap: () => _openAlbum(context, album),
+              trailing: const Icon(Icons.chevron_right),
+            ),
+        for (final playlist in _playlists)
+          if (_view == _SpotifyHomeLibraryView.playlists)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: TrackArtwork(artworkUri: playlist.artworkUri),
+              title: Text(playlist.title),
+              subtitle: Text(_spotifyPlaylistSubtitle(playlist)),
+              onTap: () => _openPlaylist(context, playlist),
+              trailing: const Icon(Icons.chevron_right),
+            ),
+        if (_loading && hasItems)
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: LinearProgressIndicator(),
@@ -4366,20 +4416,45 @@ final class _SpotifySavedTracksShelfState
     if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
       return;
     }
+    final view = _view;
     final request = ++_requestSerial;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final page = await widget.provider.loadSavedTracksPage(limit: 6);
-      if (!mounted || request != _requestSerial) {
-        return;
+      switch (view) {
+        case _SpotifyHomeLibraryView.tracks:
+          final page = await widget.provider.loadSavedTracksPage(limit: 6);
+          if (!mounted || request != _requestSerial) {
+            return;
+          }
+          setState(() {
+            _tracks = page.tracks;
+            _loading = false;
+          });
+          return;
+        case _SpotifyHomeLibraryView.albums:
+          final page = await widget.provider.loadSavedAlbumsPage(limit: 6);
+          if (!mounted || request != _requestSerial) {
+            return;
+          }
+          setState(() {
+            _albums = page.albums;
+            _loading = false;
+          });
+          return;
+        case _SpotifyHomeLibraryView.playlists:
+          final page = await widget.provider.loadSavedPlaylistsPage(limit: 6);
+          if (!mounted || request != _requestSerial) {
+            return;
+          }
+          setState(() {
+            _playlists = page.playlists;
+            _loading = false;
+          });
+          return;
       }
-      setState(() {
-        _tracks = page.tracks;
-        _loading = false;
-      });
     } on Object catch (error) {
       if (!mounted || request != _requestSerial) {
         return;
@@ -4401,6 +4476,42 @@ final class _SpotifySavedTracksShelfState
     );
   }
 
+  void _selectView(_SpotifyHomeLibraryView view) {
+    if (_view == view) {
+      return;
+    }
+    _requestSerial += 1;
+    setState(() {
+      _view = view;
+      _loading = false;
+      _error = null;
+    });
+  }
+
+  void _openSelectedView(BuildContext context) {
+    switch (_view) {
+      case _SpotifyHomeLibraryView.tracks:
+        _openSavedTracks(context);
+        return;
+      case _SpotifyHomeLibraryView.albums:
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => SpotifySavedAlbumsScreen(provider: widget.provider),
+          ),
+        );
+        return;
+      case _SpotifyHomeLibraryView.playlists:
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => SpotifySavedPlaylistsScreen(
+              provider: widget.provider,
+            ),
+          ),
+        );
+        return;
+    }
+  }
+
   void _openSavedTracks(BuildContext context) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -4408,12 +4519,52 @@ final class _SpotifySavedTracksShelfState
       ),
     );
   }
+
+  void _openAlbum(BuildContext context, SpotifySavedAlbum album) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifyAlbumTracksScreen(
+          provider: widget.provider,
+          album: album,
+        ),
+      ),
+    );
+  }
+
+  void _openPlaylist(BuildContext context, SpotifySavedPlaylist playlist) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifyPlaylistTracksScreen(
+          provider: widget.provider,
+          playlist: playlist,
+        ),
+      ),
+    );
+  }
+}
+
+String _spotifyHomeLibraryViewLabel(_SpotifyHomeLibraryView view) {
+  return switch (view) {
+    _SpotifyHomeLibraryView.tracks => 'tracks',
+    _SpotifyHomeLibraryView.albums => 'albums',
+    _SpotifyHomeLibraryView.playlists => 'playlists',
+  };
 }
 
 String _spotifyTrackSubtitle(Track track) {
   return <String>[track.artist, track.album]
       .where((part) => part.trim().isNotEmpty)
       .join(' - ');
+}
+
+String _spotifyAlbumSubtitle(SpotifySavedAlbum album) {
+  final count = album.totalTracks;
+  return '${album.artist} - $count ${count == 1 ? 'track' : 'tracks'}';
+}
+
+String _spotifyPlaylistSubtitle(SpotifySavedPlaylist playlist) {
+  final count = playlist.totalTracks;
+  return '${playlist.ownerName} - $count ${count == 1 ? 'track' : 'tracks'}';
 }
 
 final class _PopularRadioStationsShelf extends StatefulWidget {
