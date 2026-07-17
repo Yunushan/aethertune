@@ -26,6 +26,7 @@
 - [x] Persisted saved history range/query views
 - [x] Queue
 - [x] Queue reorder/remove
+- [x] Add to queue and Play Next actions
 - [x] Persistent queue
 - [x] Native playlist-backed gapless queue engine
 - [x] Linux/Windows MediaKit audio backends with playlist prefetch

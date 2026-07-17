@@ -34,4 +34,30 @@ void main() {
 
     expect(artworkEdits, 1);
   });
+
+  testWidgets('offers Play Next and Add to queue from the track menu', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TrackTile(
+            track: Track(id: 'night-drive', title: 'Night Drive'),
+            onPlay: () {},
+            onFavorite: () {},
+            onAddToPlaylist: () {},
+            onLyrics: () {},
+            onEditMetadata: () {},
+            onRemove: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Play next'), findsOneWidget);
+    expect(find.text('Add to queue'), findsOneWidget);
+  });
 }

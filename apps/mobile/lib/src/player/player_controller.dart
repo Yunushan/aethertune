@@ -862,6 +862,37 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
+  /// Adds [track] to this saved queue without starting playback.
+  ///
+  /// A Play Next insertion follows the current item when one is selected;
+  /// otherwise the added track becomes the selected item.
+  Future<void> enqueueTrack(Track track, {bool playNext = false}) async {
+    if (_offlineModeEnabled) {
+      requireOfflineModePlaybackAllowed(track, offlineModeEnabled: true);
+    }
+
+    if (_queue.isEmpty) {
+      _queue.add(track);
+      _current = track;
+    } else {
+      final currentIndex = _current == null
+          ? -1
+          : _queue.indexWhere((item) => item.id == _current!.id);
+      if (currentIndex == -1) {
+        _queue.insert(0, track);
+        _current = track;
+      } else {
+        _queue.insert(playNext ? currentIndex + 1 : _queue.length, track);
+      }
+    }
+
+    await _saveQueueSnapshot(touch: true);
+    if (_loadedPlaybackQueue.isNotEmpty) {
+      await _reloadQueuePreservingPlayback();
+    }
+    notifyListeners();
+  }
+
   void moveTrackInQueue(int fromIndex, int toIndex) {
     final reordered = moveQueueItem(_queue, fromIndex, toIndex);
     if (_sameQueueOrder(_queue, reordered)) {

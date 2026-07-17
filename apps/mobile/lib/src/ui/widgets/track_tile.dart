@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../domain/track.dart';
+import '../../player/offline_playback_policy.dart';
+import '../../player/player_controller.dart';
 import 'track_artwork.dart';
 
 class TrackTile extends StatelessWidget {
@@ -71,6 +76,12 @@ class TrackTile extends StatelessWidget {
             case _TrackAction.share:
               onShare?.call();
               break;
+            case _TrackAction.playNext:
+              unawaited(_enqueue(context, playNext: true));
+              break;
+            case _TrackAction.addToQueue:
+              unawaited(_enqueue(context));
+              break;
             case _TrackAction.favorite:
               onFavorite();
               break;
@@ -123,6 +134,20 @@ class TrackTile extends StatelessWidget {
                 title: Text('Copy share text'),
               ),
             ),
+          const PopupMenuItem(
+            value: _TrackAction.playNext,
+            child: ListTile(
+              leading: Icon(Icons.queue_play_next),
+              title: Text('Play next'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: _TrackAction.addToQueue,
+            child: ListTile(
+              leading: Icon(Icons.playlist_add),
+              title: Text('Add to queue'),
+            ),
+          ),
           PopupMenuItem(
             value: _TrackAction.favorite,
             child: ListTile(
@@ -172,6 +197,43 @@ class TrackTile extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _enqueue(
+    BuildContext context, {
+    bool playNext = false,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<PlayerController>().enqueueTrack(
+        track,
+        playNext: playNext,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            playNext
+                ? '${track.title} will play next.'
+                : 'Added ${track.title} to the queue.',
+          ),
+        ),
+      );
+    } on OfflinePlaybackBlockedException catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
+        );
+      }
+    } on Object {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not update the queue.')),
+        );
+      }
+    }
+  }
 }
 
 enum _TrackAction {
@@ -179,6 +241,8 @@ enum _TrackAction {
   startRadio,
   similarTracks,
   share,
+  playNext,
+  addToQueue,
   favorite,
   addToPlaylist,
   lyrics,

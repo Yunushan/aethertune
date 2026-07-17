@@ -4,6 +4,7 @@ import 'package:aethertune/src/domain/replay_gain.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/playback_audio_effects.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
+import 'package:aethertune/src/player/offline_playback_policy.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -628,6 +629,66 @@ void main() {
     await _flushAsyncWork();
     expect(engine.queue.map((track) => track.id), <String>['3', '2']);
     expect(engine.initialIndex, 1);
+  });
+
+  test('appends and inserts Play Next tracks without interrupting playback',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final first = _track('1');
+    final second = _track('2');
+    final third = _track('3');
+    final fourth = _track('4');
+
+    await controller.playTrack(first, queue: <Track>[first, second]);
+    engine.positionValue = const Duration(seconds: 19);
+
+    await controller.enqueueTrack(third);
+    expect(controller.queue.map((track) => track.id), <String>['1', '2', '3']);
+    expect(controller.current?.id, '1');
+    expect(engine.setQueueCalls, 2);
+    expect(engine.initialIndex, 0);
+    expect(engine.initialPosition, const Duration(seconds: 19));
+    expect(engine.playing, isTrue);
+
+    await controller.enqueueTrack(fourth, playNext: true);
+    expect(
+      controller.queue.map((track) => track.id),
+      <String>['1', '4', '2', '3'],
+    );
+    expect(controller.current?.id, '1');
+    expect(engine.setQueueCalls, 3);
+    expect(engine.initialIndex, 0);
+    expect(engine.initialPosition, const Duration(seconds: 19));
+    expect(engine.playing, isTrue);
+  });
+
+  test('queues the first track without autoplay and honors offline policy',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final local = _track('local');
+
+    await controller.enqueueTrack(local, playNext: true);
+    expect(controller.queue, <Track>[local]);
+    expect(controller.current, local);
+    expect(engine.setQueueCalls, 0);
+    expect(engine.playing, isFalse);
+
+    controller.setOfflineModeEnabled(true);
+    await expectLater(
+      controller.enqueueTrack(
+        _track(
+          'stream',
+          localPath: '',
+          streamUrl: 'https://media.example.test/stream.mp3',
+        ),
+      ),
+      throwsA(isA<OfflinePlaybackBlockedException>()),
+    );
+    expect(controller.queue, <Track>[local]);
   });
 
   test('restores a persisted queue into the native gapless engine', () async {
