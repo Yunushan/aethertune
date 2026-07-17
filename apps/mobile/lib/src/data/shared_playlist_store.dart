@@ -229,6 +229,16 @@ class SharedPlaylistStore extends ChangeNotifier {
     });
   }
 
+  Future<List<SharedPlaylistRevision>> history(
+    SharedPlaylistBinding binding,
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      return _requireGateway().fetchSharedPlaylistHistory(binding.remoteId);
+    });
+  }
+
   Future<SharedPlaylistBinding> publish(
     SharedPlaylistBinding binding,
     LibraryStore library,

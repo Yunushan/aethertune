@@ -787,6 +787,56 @@ void main() {
       2,
     );
   });
+
+  test('fetches checksum-verified shared playlist revision history', () async {
+    final playlist = <String, Object?>{
+      'version': 1,
+      'name': 'Archive mix',
+      'trackIds': <String>['track-1', 'track-2'],
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'GET');
+        expect(
+          uri,
+          _account().sharedPlaylistHistoryEndpointUri(
+            'AAAAAAAAAAAAAAAAAAAAAAAA',
+          ),
+        );
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revisions': <Object?>[
+              <String, Object?>{
+                'revision': 3,
+                'updatedAt': '2026-07-17T12:00:00.000Z',
+                'updatedByDevice': 'Desktop',
+                'checksum': checksum,
+                'playlist': playlist,
+              },
+              <String, Object?>{
+                'revision': 2,
+                'updatedAt': '2026-07-17T11:00:00.000Z',
+                'updatedByDevice': 'Phone',
+                'checksum': checksum,
+                'playlist': playlist,
+              },
+            ],
+          }),
+        );
+      },
+    );
+
+    final history = await client.fetchSharedPlaylistHistory(
+      'AAAAAAAAAAAAAAAAAAAAAAAA',
+    );
+
+    expect(history.map((revision) => revision.revision), <int>[3, 2]);
+    expect(history.first.trackIds, <String>['track-1', 'track-2']);
+  });
 }
 
 LibrarySyncAccount _account() {

@@ -133,6 +133,24 @@ class SharedPlaylistInvitation {
   final DateTime expiresAt;
 }
 
+class SharedPlaylistRevision {
+  const SharedPlaylistRevision({
+    required this.revision,
+    required this.name,
+    required this.trackIds,
+    required this.updatedAt,
+    required this.updatedByDevice,
+    required this.checksum,
+  });
+
+  final int revision;
+  final String name;
+  final List<String> trackIds;
+  final DateTime updatedAt;
+  final String updatedByDevice;
+  final String checksum;
+}
+
 class SharedPlaylistConflictException implements Exception {
   const SharedPlaylistConflictException({
     required this.currentRevision,
@@ -188,6 +206,10 @@ abstract interface class SharedPlaylistGateway {
   });
 
   Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId);
+
+  Future<List<SharedPlaylistRevision>> fetchSharedPlaylistHistory(
+    String playlistId,
+  );
 
   Future<SharedPlaylistRemote> updateSharedPlaylist({
     required String playlistId,
@@ -441,6 +463,40 @@ class LibrarySyncClient
       throw _requestFailure(response);
     }
     return _parseSharedPlaylist(response.body);
+  }
+
+  @override
+  Future<List<SharedPlaylistRevision>> fetchSharedPlaylistHistory(
+    String playlistId,
+  ) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    final response = await _execute(
+      'GET',
+      endpoint: account.sharedPlaylistHistoryEndpointUri(normalized),
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final revisions = _jsonObject(response.body)['revisions'];
+    if (revisions is! List || revisions.length > 25) {
+      throw const FormatException('Shared playlist history is invalid.');
+    }
+    final parsed = <SharedPlaylistRevision>[];
+    var previousRevision = 1 << 62;
+    for (final value in revisions) {
+      if (value is! Map) {
+        throw const FormatException('Shared playlist history is invalid.');
+      }
+      final revision = _parseSharedPlaylistRevision(
+        Map<String, Object?>.from(value),
+      );
+      if (revision.revision >= previousRevision) {
+        throw const FormatException('Shared playlist history is invalid.');
+      }
+      previousRevision = revision.revision;
+      parsed.add(revision);
+    }
+    return List<SharedPlaylistRevision>.unmodifiable(parsed);
   }
 
   @override
@@ -899,6 +955,62 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
     collaborators: Map<String, SharedPlaylistAccessRole>.unmodifiable(
       collaborators,
     ),
+  );
+}
+
+SharedPlaylistRevision _parseSharedPlaylistRevision(
+  Map<String, Object?> body,
+) {
+  final revision = body['revision'];
+  final rawPlaylist = body['playlist'];
+  final updatedAt = _optionalDate(body['updatedAt']);
+  final updatedByDevice = _optionalString(body['updatedByDevice']);
+  final checksum = _optionalString(body['checksum']);
+  if (revision is! int ||
+      revision <= 0 ||
+      rawPlaylist is! Map ||
+      updatedAt == null ||
+      updatedByDevice == null ||
+      checksum == null) {
+    throw const FormatException('Shared playlist revision is invalid.');
+  }
+  final document = Map<String, Object?>.from(rawPlaylist);
+  final name = document['name'];
+  final rawTrackIds = document['trackIds'];
+  if (document['version'] != 1 ||
+      name is! String ||
+      name != name.trim() ||
+      name.isEmpty ||
+      name.length > 160 ||
+      rawTrackIds is! List ||
+      rawTrackIds.length > 500) {
+    throw const FormatException('Shared playlist revision is invalid.');
+  }
+  final trackIds = <String>[];
+  for (final value in rawTrackIds) {
+    if (value is! String ||
+        value != value.trim() ||
+        value.isEmpty ||
+        value.length > 256) {
+      throw const FormatException('Shared playlist revision is invalid.');
+    }
+    trackIds.add(value);
+  }
+  final actualChecksum = sha256
+      .convert(utf8.encode(jsonEncode(document)))
+      .toString();
+  if (checksum != actualChecksum) {
+    throw const ProviderRequestException(
+      'Shared playlist revision checksum does not match.',
+    );
+  }
+  return SharedPlaylistRevision(
+    revision: revision,
+    name: name,
+    trackIds: List<String>.unmodifiable(trackIds),
+    updatedAt: updatedAt,
+    updatedByDevice: updatedByDevice,
+    checksum: checksum,
   );
 }
 

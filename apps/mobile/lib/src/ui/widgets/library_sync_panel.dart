@@ -620,6 +620,70 @@ class LibrarySyncPanel extends StatelessWidget {
     }
   }
 
+  static Future<void> _showSharedPlaylistHistory(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    try {
+      final revisions = await context.read<SharedPlaylistStore>().history(
+        binding,
+        context.read<LibraryStore>(),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          final localizations = MaterialLocalizations.of(dialogContext);
+          return AlertDialog(
+            title: const Text('Playlist revision history'),
+            content: SizedBox(
+              width: 480,
+              height: revisions.isEmpty ? null : 360,
+              child: revisions.isEmpty
+                  ? const Text('No archived revisions are available yet.')
+                  : ListView(
+                      children: revisions
+                          .map(
+                            (revision) {
+                              final timestamp =
+                                  '${localizations.formatMediumDate(revision.updatedAt.toLocal())} '
+                                  '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(revision.updatedAt.toLocal()))}';
+                              return ListTile(
+                                leading: const Icon(Icons.history_outlined),
+                                title: Text(
+                                  'Revision ${revision.revision} · ${revision.name}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  '${revision.trackIds.length} track(s) · ${revision.updatedByDevice} · $timestamp',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            },
+                          )
+                          .toList(growable: false),
+                    ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      );
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not load playlist history: $error');
+      }
+    }
+  }
+
   static Future<void> _createSharedPlaylistInvite(
     BuildContext context,
     SharedPlaylistBinding binding,
@@ -1232,6 +1296,9 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
             case _SharedPlaylistAction.refresh:
               LibrarySyncPanel._refreshSharedPlaylist(context, binding);
               break;
+            case _SharedPlaylistAction.history:
+              LibrarySyncPanel._showSharedPlaylistHistory(context, binding);
+              break;
             case _SharedPlaylistAction.publish:
               LibrarySyncPanel._publishSharedPlaylist(context, binding);
               break;
@@ -1261,6 +1328,13 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
             child: ListTile(
               leading: Icon(Icons.refresh_outlined),
               title: Text('Refresh from server'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: _SharedPlaylistAction.history,
+            child: ListTile(
+              leading: Icon(Icons.history_outlined),
+              title: Text('Revision history'),
             ),
           ),
           if (binding.canEdit)
@@ -1319,6 +1393,7 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
 
 enum _SharedPlaylistAction {
   refresh,
+  history,
   publish,
   invite,
   collaborators,

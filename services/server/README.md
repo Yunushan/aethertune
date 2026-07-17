@@ -83,6 +83,7 @@ Available endpoints:
 - `GET /api/v1/listen-together/invites/{inviteCode}`
 - `POST /api/v1/shared-playlists`
 - `GET`/`PUT`/`DELETE /api/v1/shared-playlists/{playlistId}`
+- `GET /api/v1/shared-playlists/{playlistId}/revisions`
 - `POST`/`DELETE /api/v1/shared-playlists/{playlistId}/invites`
 - `DELETE /api/v1/shared-playlists/{playlistId}/collaborators/{accountId}`
 - `POST /api/v1/shared-playlist-invites/{inviteCode}`
@@ -120,7 +121,9 @@ days if unused. Owners can invalidate every remaining unused code and issue
 fresh replacements. Shared playlists and invite records are stored under
 `AETHERTUNE_DATA_DIR`, using SHA-256-derived filenames for IDs/codes. Clients
 must refresh explicitly after a revision conflict; there is no automatic merge
-or revision history yet.
+or restore/merge workflow. The server retains the latest 25 private playlist
+revisions, and any authorized collaborator can inspect their checksum-verified
+name, ordered track IDs, timestamp, and updating device.
 
 ## Managed accounts and device tokens
 

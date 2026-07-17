@@ -102,6 +102,20 @@ void main() {
 
     expect(await store.invalidateUnusedInvites(hosted, library), 2);
   });
+
+  test('loads revision history without changing the local playlist', () async {
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist('Road mix');
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final hosted = await store.host(library, playlist);
+
+    final history = await store.history(hosted, library);
+
+    expect(history.map((revision) => revision.revision), <int>[1]);
+    expect(library.playlistById(playlist.id)?.trackIds, isEmpty);
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {
@@ -149,6 +163,20 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
   @override
   Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId) async =>
       remote;
+
+  @override
+  Future<List<SharedPlaylistRevision>> fetchSharedPlaylistHistory(
+    String playlistId,
+  ) async => <SharedPlaylistRevision>[
+    SharedPlaylistRevision(
+      revision: remote.revision,
+      name: remote.name,
+      trackIds: remote.trackIds,
+      updatedAt: remote.updatedAt ?? DateTime.utc(2026, 7, 17),
+      updatedByDevice: remote.updatedByDevice ?? 'Test device',
+      checksum: 'a' * 64,
+    ),
+  ];
 
   @override
   Future<SharedPlaylistInvitation> issueSharedPlaylistInvite({

@@ -865,14 +865,33 @@ Future<Response> _handleSharedPlaylistItem(
   final playlistId = segments[3];
   final isInviteEndpoint =
       segments.length == 5 && segments[4] == 'invites';
+  final isHistoryEndpoint =
+      segments.length == 5 && segments[4] == 'revisions';
   final isCollaboratorEndpoint =
       segments.length == 6 && segments[4] == 'collaborators';
-  if (segments.length != 4 && !isInviteEndpoint && !isCollaboratorEndpoint) {
+  if (segments.length != 4 &&
+      !isInviteEndpoint &&
+      !isHistoryEndpoint &&
+      !isCollaboratorEndpoint) {
     return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
   }
   final record = await playlists.read(playlistId);
   if (record == null || record.roleFor(accountId) == null) {
     return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_not_found'});
+  }
+  if (isHistoryEndpoint) {
+    if (request.method != 'GET') {
+      return _methodNotAllowed(request);
+    }
+    final history = await playlists.readHistory(playlistId);
+    return _jsonResponse(
+      200,
+      <String, Object?>{
+        'revisions': history
+            .map(_sharedPlaylistRevisionResponse)
+            .toList(growable: false),
+      },
+    );
   }
   if (isInviteEndpoint) {
     if (!record.isOwner(accountId)) {
@@ -1151,6 +1170,18 @@ Map<String, Object?> _sharedPlaylistResponse(
           sharedPlaylistRoleToWire(collaboratorRole),
         ),
       ),
+  };
+}
+
+Map<String, Object?> _sharedPlaylistRevisionResponse(
+  SharedPlaylistRecord record,
+) {
+  return <String, Object?>{
+    'revision': record.revision,
+    'updatedAt': record.updatedAt.toIso8601String(),
+    'updatedByDevice': record.updatedByDevice,
+    'checksum': record.checksum,
+    'playlist': record.document,
   };
 }
 

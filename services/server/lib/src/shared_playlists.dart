@@ -12,6 +12,7 @@ enum SharedPlaylistRole {
 }
 
 const sharedPlaylistInviteLifetime = Duration(days: 7);
+const maxSharedPlaylistHistoryEntries = 25;
 
 SharedPlaylistRole? sharedPlaylistRoleFromWire(Object? value) {
   return switch (value) {
@@ -155,6 +156,8 @@ class SharedPlaylistWriteResult {
 abstract interface class SharedPlaylistStore {
   Future<SharedPlaylistRecord?> read(String playlistId);
 
+  Future<List<SharedPlaylistRecord>> readHistory(String playlistId);
+
   Future<SharedPlaylistWriteResult> write({
     required String playlistId,
     required String ownerId,
@@ -174,10 +177,18 @@ abstract interface class SharedPlaylistStore {
 class MemorySharedPlaylistStore implements SharedPlaylistStore {
   final Map<String, SharedPlaylistRecord> _records =
       <String, SharedPlaylistRecord>{};
+  final Map<String, List<SharedPlaylistRecord>> _history =
+      <String, List<SharedPlaylistRecord>>{};
 
   @override
   Future<SharedPlaylistRecord?> read(String playlistId) async =>
       _records[playlistId];
+
+  @override
+  Future<List<SharedPlaylistRecord>> readHistory(String playlistId) async {
+    final history = _history[playlistId] ?? const <SharedPlaylistRecord>[];
+    return List<SharedPlaylistRecord>.unmodifiable(history.reversed);
+  }
 
   @override
   Future<SharedPlaylistWriteResult> write({
@@ -203,6 +214,13 @@ class MemorySharedPlaylistStore implements SharedPlaylistStore {
       updatedAt: updatedAt,
     );
     _records[playlistId] = saved;
+    final history = _history.putIfAbsent(
+      playlistId,
+      () => <SharedPlaylistRecord>[],
+    )..add(saved);
+    if (history.length > maxSharedPlaylistHistoryEntries) {
+      history.removeRange(0, history.length - maxSharedPlaylistHistoryEntries);
+    }
     return SharedPlaylistWriteResult.saved(saved);
   }
 
@@ -216,6 +234,7 @@ class MemorySharedPlaylistStore implements SharedPlaylistStore {
       return SharedPlaylistWriteResult.conflict(current);
     }
     _records.remove(playlistId);
+    _history.remove(playlistId);
     return SharedPlaylistWriteResult.saved(current);
   }
 }
@@ -246,6 +265,41 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
     } on Object {
       return null;
     }
+  }
+
+  @override
+  Future<List<SharedPlaylistRecord>> readHistory(String playlistId) async {
+    if (!_isSharedPlaylistId(playlistId)) {
+      return const <SharedPlaylistRecord>[];
+    }
+    final directory = _historyDirectoryFor(playlistId);
+    if (!await directory.exists()) {
+      return const <SharedPlaylistRecord>[];
+    }
+    final records = <SharedPlaylistRecord>[];
+    await for (final entity in directory.list()) {
+      if (entity is! File || !entity.path.endsWith('.json')) {
+        continue;
+      }
+      try {
+        final decoded = jsonDecode(await entity.readAsString());
+        if (decoded is! Map) {
+          continue;
+        }
+        final record = SharedPlaylistRecord.fromStorageJson(
+          Map<String, Object?>.from(decoded),
+        );
+        if (record.id == playlistId) {
+          records.add(record);
+        }
+      } on Object {
+        // Ignore a corrupt archived revision while retaining valid history.
+      }
+    }
+    records.sort((left, right) => right.revision.compareTo(left.revision));
+    return List<SharedPlaylistRecord>.unmodifiable(
+      records.take(maxSharedPlaylistHistoryEntries),
+    );
   }
 
   @override
@@ -282,6 +336,7 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
       );
       await temporary.writeAsString(jsonEncode(saved.toStorageJson()), flush: true);
       await temporary.rename(target.path);
+      await _writeHistory(saved);
       return SharedPlaylistWriteResult.saved(saved);
     });
   }
@@ -300,6 +355,10 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
       if (await target.exists()) {
         await target.delete();
       }
+      final historyDirectory = _historyDirectoryFor(playlistId);
+      if (await historyDirectory.exists()) {
+        await historyDirectory.delete(recursive: true);
+      }
       return SharedPlaylistWriteResult.saved(current);
     });
   }
@@ -308,6 +367,41 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
     final digest = sha256.convert(utf8.encode(playlistId)).toString();
     return File(p.join(rootDirectory.path, '$digest.json'));
   }
+
+  Directory _historyDirectoryFor(String playlistId) {
+    final digest = sha256.convert(utf8.encode(playlistId)).toString();
+    return Directory(p.join(rootDirectory.path, 'history', digest));
+  }
+
+  Future<void> _writeHistory(SharedPlaylistRecord record) async {
+    final directory = _historyDirectoryFor(record.id);
+    await directory.create(recursive: true);
+    final target = File(p.join(directory.path, '${record.revision}.json'));
+    final temporary = File(
+      p.join(
+        directory.path,
+        '.${record.revision}.${DateTime.now().microsecondsSinceEpoch}.tmp',
+      ),
+    );
+    await temporary.writeAsString(jsonEncode(record.toStorageJson()), flush: true);
+    await temporary.rename(target.path);
+
+    final revisions = <File>[];
+    await for (final entity in directory.list()) {
+      if (entity is File && entity.path.endsWith('.json')) {
+        revisions.add(entity);
+      }
+    }
+    revisions.sort(
+      (left, right) => _historyRevision(right).compareTo(_historyRevision(left)),
+    );
+    for (final stale in revisions.skip(maxSharedPlaylistHistoryEntries)) {
+      await stale.delete();
+    }
+  }
+
+  int _historyRevision(File file) =>
+      int.tryParse(p.basenameWithoutExtension(file.path)) ?? -1;
 
   Future<T> _serialized<T>(String playlistId, Future<T> Function() action) {
     final previous = _writeTails[playlistId] ?? Future<void>.value();

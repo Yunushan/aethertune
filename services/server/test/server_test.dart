@@ -790,6 +790,45 @@ void main() {
     expect((await store.lookup(other))?.playlistId, 'BBBBBBBBBBBBBBBBBBBBBBBB');
   });
 
+  test('file shared-playlist history survives restart and retains 25 revisions',
+      () async {
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-server-shared-history-test-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final store = FileSharedPlaylistStore(root);
+    const playlistId = 'AAAAAAAAAAAAAAAAAAAAAAAA';
+    for (var revision = 0;
+        revision <= maxSharedPlaylistHistoryEntries;
+        revision += 1) {
+      final result = await store.write(
+        playlistId: playlistId,
+        ownerId: 'owner-account',
+        baseRevision: revision,
+        deviceId: 'desktop',
+        document: <String, Object?>{
+          'version': 1,
+          'name': 'Revision ${revision + 1}',
+          'trackIds': <String>['track-$revision'],
+        },
+        collaborators: const <String, SharedPlaylistRole>{},
+        updatedAt: DateTime.utc(2026, 7, 17, 12, revision),
+      );
+      expect(result.isConflict, isFalse);
+    }
+
+    final restarted = FileSharedPlaylistStore(root);
+    final history = await restarted.readHistory(playlistId);
+
+    expect(history, hasLength(maxSharedPlaylistHistoryEntries));
+    expect(history.first.revision, maxSharedPlaylistHistoryEntries + 1);
+    expect(history.last.revision, 2);
+  });
+
   group('shared playlists', () {
     const ownerToken = 'shared-owner-token';
     const viewerToken = 'shared-viewer-token';
@@ -990,6 +1029,21 @@ void main() {
         ),
       );
       expect(editorReadAfterRevocation.statusCode, 404);
+
+      final viewerHistory = await server(
+        _request(
+          'GET',
+          '/api/v1/shared-playlists/$playlistId/revisions',
+          token: viewerToken,
+        ),
+      );
+      expect(viewerHistory.statusCode, 200);
+      final revisions = (await _json(viewerHistory))['revisions'] as List;
+      expect(
+        revisions.map((value) => (value as Map)['revision']).toList(),
+        <int>[5, 4, 3, 2, 1],
+      );
+      expect((revisions[1] as Map)['playlist'], isA<Map>());
     });
 
     test('expires unused invitations after the configured lifetime', () async {
