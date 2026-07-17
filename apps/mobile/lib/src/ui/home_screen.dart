@@ -34,6 +34,7 @@ import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/offline_cache_manager.dart';
 import '../data/offline_cache_pressure_enforcer.dart';
 import '../data/podcast_rss_provider.dart';
+import '../data/podcast_chapter_host_policy.dart';
 import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
@@ -11985,6 +11986,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
+    final podcastChapterHosts = context.watch<PodcastChapterHostPolicy?>();
     final selfHosted = context.watch<SelfHostedProviderStore>();
     final customCatalogs = context.watch<CustomCatalogStore?>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
@@ -12919,6 +12921,14 @@ class _SourcesTabState extends State<_SourcesTab> {
               icon: const Icon(Icons.refresh),
               label: const Text('Refresh all'),
             ),
+            if (podcastChapterHosts != null)
+              OutlinedButton.icon(
+                onPressed: podcastChapterHosts.loaded
+                    ? () => _showPodcastChapterHostManager(context)
+                    : null,
+                icon: const Icon(Icons.policy_outlined),
+                label: const Text('Chapter hosts'),
+              ),
           ],
         ),
         if (_podcastLoading) ...<Widget>[
@@ -15022,9 +15032,13 @@ class _SourcesTabState extends State<_SourcesTab> {
     Uri feedUri,
   ) async {
     final library = context.read<LibraryStore>();
+    final chapterHosts = context.read<PodcastChapterHostPolicy?>();
     final messenger = ScaffoldMessenger.of(context);
     final provider = widget.podcastProviderFactory?.call(feedUri) ??
-        PodcastRssProvider(feedUri: feedUri);
+        PodcastRssProvider(
+          feedUri: feedUri,
+          isExternalChapterUriApproved: chapterHosts?.allows,
+        );
 
     setState(() {
       _podcastLoading = true;
@@ -15096,8 +15110,10 @@ class _SourcesTabState extends State<_SourcesTab> {
       _podcastError = null;
     });
 
-    final report = await PodcastSubscriptionRefreshWorker()
-        .refreshSubscriptions(library, subscriptions: subscriptions);
+    final report = await PodcastSubscriptionRefreshWorker(
+      isExternalChapterUriApproved:
+          context.read<PodcastChapterHostPolicy?>()?.allows,
+    ).refreshSubscriptions(library, subscriptions: subscriptions);
 
     if (!context.mounted) {
       return;
@@ -15123,6 +15139,106 @@ class _SourcesTabState extends State<_SourcesTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _showPodcastChapterHostManager(BuildContext context) async {
+    final policy = context.read<PodcastChapterHostPolicy?>();
+    if (policy == null) {
+      return;
+    }
+    final controller = TextEditingController();
+    String? errorMessage;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              return AlertDialog(
+                title: const Text('External chapter hosts'),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      TextField(
+                        controller: controller,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: const InputDecoration(
+                          labelText: 'HTTPS hostname',
+                          hintText: 'chapters.example.com',
+                        ),
+                        onChanged: (_) {
+                          if (errorMessage != null) {
+                            setDialogState(() => errorMessage = null);
+                          }
+                        },
+                      ),
+                      if (errorMessage != null) ...<Widget>[
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMessage!,
+                          style: TextStyle(
+                            color: Theme.of(dialogContext).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 240),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: <Widget>[
+                            for (final host in policy.approvedHosts)
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.verified_user_outlined),
+                                title: Text(host),
+                                trailing: IconButton(
+                                  tooltip: 'Revoke $host',
+                                  onPressed: () async {
+                                    await policy.revokeHost(host);
+                                    setDialogState(() {});
+                                  },
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Close'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      try {
+                        await policy.approveHost(controller.text);
+                        controller.clear();
+                        setDialogState(() => errorMessage = null);
+                      } on FormatException catch (error) {
+                        setDialogState(() => errorMessage = error.message);
+                      } on Exception catch (error) {
+                        setDialogState(() => errorMessage = error.toString());
+                      }
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Approve'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   String _podcastSubscriptionSubtitle(PodcastSubscription subscription) {

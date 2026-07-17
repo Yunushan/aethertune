@@ -9,6 +9,7 @@ import '../domain/track_chapter.dart';
 
 typedef PodcastFeedLoader = Future<String> Function(Uri feedUri);
 typedef PodcastChapterLoader = Future<String> Function(Uri chapterUri);
+typedef ExternalPodcastChapterUriApproval = bool Function(Uri chapterUri);
 
 class PodcastRssProvider implements MusicSourceProvider {
   static const maxExternalChapterDocumentsPerFeed = 20;
@@ -18,13 +19,17 @@ class PodcastRssProvider implements MusicSourceProvider {
     String? id,
     PodcastFeedLoader? feedLoader,
     PodcastChapterLoader? chapterLoader,
+    ExternalPodcastChapterUriApproval? isExternalChapterUriApproved,
   })  : id = id ?? 'podcast-${Track.stableLocalId(feedUri.toString())}',
         _feedLoader = feedLoader ?? _loadPodcastFeed,
-        _chapterLoader = chapterLoader ?? _loadPodcastChapters;
+        _chapterLoader = chapterLoader ?? _loadPodcastChapters,
+        _isExternalChapterUriApproved =
+            isExternalChapterUriApproved ?? _denyExternalChapterUri;
 
   final Uri feedUri;
   final PodcastFeedLoader _feedLoader;
   final PodcastChapterLoader _chapterLoader;
+  final ExternalPodcastChapterUriApproval _isExternalChapterUriApproved;
 
   @override
   final String id;
@@ -89,7 +94,7 @@ class PodcastRssProvider implements MusicSourceProvider {
       final chapterUri = episode.chapterUri;
       if (remaining <= 0 ||
           chapterUri == null ||
-          !_isSameOriginChapterUri(chapterUri)) {
+          !_isApprovedChapterUri(chapterUri)) {
         episodes.add(episode);
         continue;
       }
@@ -116,10 +121,16 @@ class PodcastRssProvider implements MusicSourceProvider {
     return feed.copyWith(episodes: episodes);
   }
 
-  bool _isSameOriginChapterUri(Uri uri) {
-    return uri.origin == feedUri.origin &&
-        (uri.scheme == 'http' || uri.scheme == 'https');
+  bool _isApprovedChapterUri(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (uri.origin == feedUri.origin &&
+        (scheme == 'http' || scheme == 'https')) {
+      return true;
+    }
+    return scheme == 'https' && _isExternalChapterUriApproved(uri);
   }
+
+  static bool _denyExternalChapterUri(Uri _) => false;
 
   @override
   Future<Uri?> resolveStream(Track track) async {

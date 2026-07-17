@@ -29,11 +29,14 @@ final class PodcastSubscriptionRefreshWorker {
   PodcastSubscriptionRefreshWorker({
     PodcastFeedFetcher? feedFetcher,
     DateTime Function()? clock,
-  }) : _feedFetcher = feedFetcher ?? _fetchFeed,
-       _clock = clock ?? DateTime.now;
+    ExternalPodcastChapterUriApproval? isExternalChapterUriApproved,
+  }) : _feedFetcher = feedFetcher,
+       _clock = clock ?? DateTime.now,
+       _isExternalChapterUriApproved = isExternalChapterUriApproved;
 
-  final PodcastFeedFetcher _feedFetcher;
+  final PodcastFeedFetcher? _feedFetcher;
   final DateTime Function() _clock;
+  final ExternalPodcastChapterUriApproval? _isExternalChapterUriApproved;
 
   Future<PodcastRefreshReport> refreshDue(LibraryStore library) {
     return refreshSubscriptions(
@@ -80,12 +83,15 @@ final class PodcastSubscriptionRefreshWorker {
       }
 
       try {
-        final feed = await _feedFetcher(feedUri);
+        final feed = await (_feedFetcher?.call(feedUri) ?? _fetchFeed(feedUri));
         if (library.podcastSubscriptionById(subscription.id) == null) {
           skipped += 1;
           continue;
         }
-        final provider = PodcastRssProvider(feedUri: feedUri);
+        final provider = PodcastRssProvider(
+          feedUri: feedUri,
+          isExternalChapterUriApproved: _isExternalChapterUriApproved,
+        );
         final episodes = feed.episodes
             .map(
               (episode) => episode.toTrack(sourceId: provider.id, feed: feed),
@@ -120,7 +126,10 @@ final class PodcastSubscriptionRefreshWorker {
     );
   }
 
-  static Future<PodcastRssFeed> _fetchFeed(Uri feedUri) {
-    return PodcastRssProvider(feedUri: feedUri).fetchFeed();
+  Future<PodcastRssFeed> _fetchFeed(Uri feedUri) {
+    return PodcastRssProvider(
+      feedUri: feedUri,
+      isExternalChapterUriApproved: _isExternalChapterUriApproved,
+    ).fetchFeed();
   }
 }

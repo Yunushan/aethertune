@@ -131,6 +131,32 @@ void main() {
     expect(feed.episodes.single.chapters, isEmpty);
   });
 
+  test('loads approved HTTPS external chapter URLs', () async {
+    final requestedUris = <Uri>[];
+    final provider = PodcastRssProvider(
+      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+      feedLoader: (_) async => _crossOriginChapterPodcastFeed,
+      chapterLoader: (uri) async {
+        requestedUris.add(uri);
+        return '''
+          {"version":"1.2.0","chapters":[
+            {"startTime":0,"title":"Approved opening"}
+          ]}
+        ''';
+      },
+      isExternalChapterUriApproved: (uri) =>
+          uri.host == 'cdn.example.test' && uri.scheme == 'https',
+    );
+
+    final feed = await provider.fetchFeed();
+
+    expect(requestedUris, <Uri>[Uri.parse('https://cdn.example.test/chapters.json')]);
+    expect(
+      feed.episodes.single.chapters.map((chapter) => chapter.title),
+      <String>['Approved opening'],
+    );
+  });
+
   test('rejects malformed external chapter documents', () {
     expect(
       () => parsePodcastingChapterDocument('{"version":"1.2"}'),

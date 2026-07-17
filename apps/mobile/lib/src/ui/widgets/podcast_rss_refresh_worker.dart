@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
+import '../../data/podcast_chapter_host_policy.dart';
 import '../../data/podcast_subscription_refresh_worker.dart';
 
 typedef PodcastRefreshRunner =
@@ -33,8 +34,11 @@ class _PodcastRssRefreshWorkerState extends State<PodcastRssRefreshWorker>
   @override
   void initState() {
     super.initState();
-    _runRefresh =
-        widget.runRefresh ?? PodcastSubscriptionRefreshWorker().refreshDue;
+    _runRefresh = widget.runRefresh ??
+        PodcastSubscriptionRefreshWorker(
+          isExternalChapterUriApproved:
+              context.read<PodcastChapterHostPolicy>().allows,
+        ).refreshDue;
     WidgetsBinding.instance.addObserver(this);
     _timer = Timer.periodic(const Duration(minutes: 15), (_) => _runIfDue());
     WidgetsBinding.instance.addPostFrameCallback((_) => _runIfDue());

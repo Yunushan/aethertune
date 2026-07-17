@@ -16,6 +16,7 @@ import '../data/shared_playlist_store.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/custom_catalog_store.dart';
+import '../data/podcast_chapter_host_policy.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/spotify_settings_store.dart';
 import '../data/youtube_data_settings_store.dart';
@@ -61,6 +62,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
       providers: [
         ChangeNotifierProvider<LibraryStore>(
           create: (_) => LibraryStore()..load(),
+        ),
+        ChangeNotifierProvider<PodcastChapterHostPolicy>(
+          create: (_) => PodcastChapterHostPolicy()..load(),
         ),
         ChangeNotifierProvider<LocalDiagnosticLog>(
           create: (_) => widget.diagnostics ?? LocalDiagnosticLog()..load(),
