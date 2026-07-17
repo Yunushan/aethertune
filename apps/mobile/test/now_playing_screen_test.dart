@@ -121,6 +121,16 @@ void main() {
 
     await tester.tap(find.byKey(const Key('now-playing-shuffle')));
     await tester.tap(find.byKey(const Key('now-playing-repeat')));
+    await tester.tap(find.byKey(const Key('now-playing-ab-repeat')));
+    await tester.pump();
+    expect(player.aBRepeatStart, Duration.zero);
+    expect(find.text('Set B'), findsOneWidget);
+    await engine.seek(const Duration(seconds: 12));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('now-playing-ab-repeat')));
+    await tester.pump();
+    expect(player.isABRepeatActive, isTrue);
+    expect(find.text('Clear A-B'), findsOneWidget);
     await tester.tap(find.byKey(const Key('now-playing-speed')));
     await tester.pumpAndSettle();
     final speedItem = find.widgetWithText(CheckedPopupMenuItem<double>, '1.5x');

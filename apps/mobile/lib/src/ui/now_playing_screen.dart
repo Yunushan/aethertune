@@ -445,6 +445,25 @@ class _NowPlayingControls extends StatelessWidget {
             fallbackDuration: track.duration,
             chapters: chapters,
           ),
+          if (player.hasABRepeatStart)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Icon(Icons.repeat, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    player.isABRepeatActive
+                        ? 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
+                            'B ${_formatPlaybackTime(player.aBRepeatEnd!)}'
+                        : 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
+                            'Choose B',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
+              ),
+            ),
           if (chapters.isNotEmpty) ...<Widget>[
             const SizedBox(height: 4),
             _ChapterMarkers(player: player, chapters: chapters),
@@ -535,6 +554,31 @@ class _NowPlayingControls extends StatelessWidget {
                 onPressed: player.queue.isEmpty ? null : onOpenQueue,
                 icon: const Icon(Icons.queue_music),
                 label: const Text('Queue'),
+              ),
+              TextButton.icon(
+                key: const Key('now-playing-ab-repeat'),
+                onPressed: player.duration > Duration.zero
+                    ? () {
+                        if (!player.hasABRepeatStart) {
+                          player.setABRepeatStart();
+                          return;
+                        }
+                        if (!player.isABRepeatActive) {
+                          if (!player.setABRepeatEnd()) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Choose a point at least half a second after A.'),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+                        player.clearABRepeat();
+                      },
+                icon: Icon(
+                  player.isABRepeatActive ? Icons.repeat_one : Icons.repeat,
+                ),
+                label: Text(_aBRepeatLabel(player)),
               ),
             ],
           ),
@@ -1235,6 +1279,16 @@ String _repeatTooltip(LoopMode mode) {
     case LoopMode.one:
       return 'Disable repeat';
   }
+}
+
+String _aBRepeatLabel(PlayerController player) {
+  if (!player.hasABRepeatStart) {
+    return 'Set A';
+  }
+  if (!player.isABRepeatActive) {
+    return 'Set B';
+  }
+  return 'Clear A-B';
 }
 
 String _formatPlaybackSpeed(double speed) {

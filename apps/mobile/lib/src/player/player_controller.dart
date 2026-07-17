@@ -44,6 +44,7 @@ class PlayerController extends ChangeNotifier {
     Duration(seconds: 5),
     Duration(seconds: 8),
   ];
+  static const minABRepeatDuration = Duration(milliseconds: 500);
   static const minLoudnessEnhancerGainDb = 0.0;
   static const maxLoudnessEnhancerGainDb = 12.0;
   static const minVirtualizerStrength = 0;
@@ -66,6 +67,7 @@ class PlayerController extends ChangeNotifier {
       _duration = duration ?? Duration.zero;
       notifyListeners();
     });
+    _positionSub = _audio.positionStream.listen(_handleABRepeatPosition);
     _completedSub = _audio.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
         unawaited(_handleTrackCompleted());
@@ -99,6 +101,7 @@ class PlayerController extends ChangeNotifier {
 
   StreamSubscription<Object?>? _playerStateSub;
   StreamSubscription<Duration?>? _durationSub;
+  StreamSubscription<Duration>? _positionSub;
   StreamSubscription<ProcessingState>? _completedSub;
   StreamSubscription<int?>? _currentIndexSub;
   StreamSubscription<Object>? _errorSub;
@@ -142,6 +145,9 @@ class PlayerController extends ChangeNotifier {
   final Map<String, double> _trackPlaybackPitchOverrides = <String, double>{};
   Duration _skipBackwardInterval = const Duration(seconds: 10);
   Duration _skipForwardInterval = const Duration(seconds: 30);
+  Duration? _aBRepeatStart;
+  Duration? _aBRepeatEnd;
+  bool _aBRepeatSeeking = false;
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
@@ -165,6 +171,11 @@ class PlayerController extends ChangeNotifier {
       Map<String, double>.unmodifiable(_trackPlaybackPitchOverrides);
   Duration get skipBackwardInterval => _skipBackwardInterval;
   Duration get skipForwardInterval => _skipForwardInterval;
+  Duration? get aBRepeatStart => _aBRepeatStart;
+  Duration? get aBRepeatEnd => _aBRepeatEnd;
+  bool get hasABRepeatStart => _aBRepeatStart != null;
+  bool get isABRepeatActive =>
+      _aBRepeatStart != null && _aBRepeatEnd != null;
   double get volume => _volume;
   bool get loudnessNormalizationEnabled => _loudnessNormalizationEnabled;
   ReplayGainMode get replayGainMode => _replayGainMode;
@@ -584,6 +595,9 @@ class PlayerController extends ChangeNotifier {
       offlineModeEnabled: _offlineModeEnabled,
     );
 
+    if (_current?.id != preparedTrack.id) {
+      _clearABRepeat(notify: false);
+    }
     _current = preparedTrack;
     notifyListeners();
     await _saveQueueSnapshot(touch: true);
@@ -740,6 +754,39 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> seek(Duration position) async {
     await _audio.seek(position);
+  }
+
+  void setABRepeatStart([Duration? position]) {
+    final start = _clampABRepeatPosition(position ?? _audio.position);
+    _aBRepeatStart = start;
+    final end = _aBRepeatEnd;
+    if (end != null && end - start < minABRepeatDuration) {
+      _aBRepeatEnd = null;
+    }
+    _aBRepeatSeeking = false;
+    notifyListeners();
+  }
+
+  bool setABRepeatEnd([Duration? position]) {
+    final start = _aBRepeatStart;
+    if (start == null) {
+      return false;
+    }
+    final end = _clampABRepeatPosition(position ?? _audio.position);
+    if (end - start < minABRepeatDuration) {
+      return false;
+    }
+    _aBRepeatEnd = end;
+    _aBRepeatSeeking = false;
+    notifyListeners();
+    return true;
+  }
+
+  void clearABRepeat() {
+    if (_aBRepeatStart == null && _aBRepeatEnd == null) {
+      return;
+    }
+    _clearABRepeat(notify: true);
   }
 
   Future<void> seekBy(Duration offset) async {
@@ -1330,12 +1377,51 @@ class PlayerController extends ChangeNotifier {
       return;
     }
 
+    _clearABRepeat(notify: false);
     _current = track;
     _playbackStartSerial += 1;
     unawaited(_applyPitchForCurrentTrack());
     unawaited(_applyOutputVolume());
     unawaited(_saveQueueSnapshot(touch: true));
     notifyListeners();
+  }
+
+  Duration _clampABRepeatPosition(Duration position) {
+    if (position.isNegative) {
+      return Duration.zero;
+    }
+    if (_duration > Duration.zero && position > _duration) {
+      return _duration;
+    }
+    return position;
+  }
+
+  void _handleABRepeatPosition(Duration position) {
+    final start = _aBRepeatStart;
+    final end = _aBRepeatEnd;
+    if (start == null || end == null ||
+        !_audio.playing || position < end || _aBRepeatSeeking) {
+      return;
+    }
+    unawaited(_seekABRepeat(start));
+  }
+
+  Future<void> _seekABRepeat(Duration start) async {
+    _aBRepeatSeeking = true;
+    try {
+      await _audio.seek(start);
+    } finally {
+      _aBRepeatSeeking = false;
+    }
+  }
+
+  void _clearABRepeat({required bool notify}) {
+    _aBRepeatStart = null;
+    _aBRepeatEnd = null;
+    _aBRepeatSeeking = false;
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void _startSleepFade(Duration fadeDuration) {
@@ -2133,6 +2219,7 @@ class PlayerController extends ChangeNotifier {
     _cancelSleepTimerState(restoreVolume: false);
     _playerStateSub?.cancel();
     _durationSub?.cancel();
+    _positionSub?.cancel();
     _completedSub?.cancel();
     _currentIndexSub?.cancel();
     _errorSub?.cancel();

@@ -41,6 +41,59 @@ void main() {
     expect(engine.playingValue, isTrue);
   });
 
+  test('loops from B back to A and clears markers on a track change',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final first = _track('first');
+    final second = _track('second');
+
+    await controller.playTrack(first, queue: <Track>[first, second]);
+    engine.emitDuration(const Duration(minutes: 3));
+    controller.setABRepeatStart(const Duration(seconds: 12));
+    expect(controller.hasABRepeatStart, isTrue);
+    expect(
+      controller.setABRepeatEnd(const Duration(seconds: 12, milliseconds: 499)),
+      isFalse,
+    );
+    expect(controller.isABRepeatActive, isFalse);
+    expect(controller.setABRepeatEnd(const Duration(seconds: 22)), isTrue);
+    expect(controller.isABRepeatActive, isTrue);
+
+    engine.emitPosition(const Duration(seconds: 22));
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.seekPositions.last, const Duration(seconds: 12));
+
+    engine.emitAutomaticIndex(1);
+    expect(controller.current?.id, 'second');
+    expect(controller.hasABRepeatStart, isFalse);
+    expect(controller.isABRepeatActive, isFalse);
+
+    controller.setABRepeatStart(const Duration(seconds: 2));
+    expect(controller.setABRepeatEnd(const Duration(seconds: 4)), isTrue);
+    await controller.playTrack(first, queue: <Track>[first, second]);
+    expect(controller.current?.id, 'first');
+    expect(controller.hasABRepeatStart, isFalse);
+  });
+
+  test('clamps A-B markers to a known track duration and clears them',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    await controller.playTrack(_track('one'));
+    engine.emitDuration(const Duration(seconds: 30));
+
+    controller.setABRepeatStart(const Duration(seconds: 45));
+    expect(controller.aBRepeatStart, const Duration(seconds: 30));
+    expect(controller.setABRepeatEnd(const Duration(seconds: 31)), isFalse);
+    controller.clearABRepeat();
+
+    expect(controller.aBRepeatStart, isNull);
+    expect(controller.aBRepeatEnd, isNull);
+  });
+
   test('persists supported playback speed and rejects unsupported values',
       () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -973,6 +1026,7 @@ class _FakePlaybackAudioEngine
   int seekToNextCalls = 0;
   int seekToPreviousCalls = 0;
   int stopCalls = 0;
+  final List<Duration> seekPositions = <Duration>[];
 
   @override
   Stream<Object?> get stateChanges => _stateController.stream;
@@ -1054,6 +1108,11 @@ class _FakePlaybackAudioEngine
     _indexController.add(index);
   }
 
+  void emitPosition(Duration position) {
+    positionValue = position;
+    _positionController.add(positionValue);
+  }
+
   void emitCompleted() {
     _processingController.add(ProcessingState.completed);
   }
@@ -1081,6 +1140,7 @@ class _FakePlaybackAudioEngine
 
   @override
   Future<void> seek(Duration position, {int? index}) async {
+    seekPositions.add(position);
     positionValue = position;
     _positionController.add(positionValue);
     if (index != null) {
