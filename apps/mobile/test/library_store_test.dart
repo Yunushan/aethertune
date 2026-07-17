@@ -44,13 +44,27 @@ void main() {
     await remote.load();
     await local.addTracks(<Track>[_track('local'), _track('shared')]);
     await remote.addTracks(<Track>[_track('remote'), _track('shared')]);
-    await local.addTrackBookmark('shared', const Duration(seconds: 15));
-    await remote.addTrackBookmark('shared', const Duration(seconds: 45));
+    await local.addTrackBookmark(
+      'shared',
+      const Duration(seconds: 15),
+      label: 'Intro',
+    );
+    await remote.addTrackBookmark(
+      'shared',
+      const Duration(seconds: 45),
+      label: 'Chorus',
+    );
     final localSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
     final portableBookmark = (localSnapshot['bookmarks'] as List).single as Map;
     expect(
       portableBookmark.keys,
-      unorderedEquals(<String>['id', 'trackId', 'positionMs', 'createdAt']),
+      unorderedEquals(<String>[
+        'id',
+        'trackId',
+        'positionMs',
+        'createdAt',
+        'label',
+      ]),
     );
     await remote.toggleFavorite('shared');
     final localPlaylist = await local.createPlaylist(
@@ -107,6 +121,10 @@ void main() {
         const Duration(seconds: 15),
         const Duration(seconds: 45),
       ]),
+    );
+    expect(
+      local.bookmarksForTrack('shared').map((bookmark) => bookmark.label),
+      containsAll(<String>['Intro', 'Chorus']),
     );
   });
 
@@ -3059,6 +3077,7 @@ void main() {
     final bookmark = await firstStore.addTrackBookmark(
       'podcast',
       const Duration(minutes: 12, seconds: 34),
+      label: 'Episode topic',
     );
 
     expect(bookmark, isNotNull);
@@ -3077,14 +3096,26 @@ void main() {
       restored.bookmarksForTrack('podcast').single.id,
       bookmark!.id,
     );
+    expect(restored.bookmarksForTrack('podcast').single.label, 'Episode topic');
 
-    final backup = firstStore.exportBackupJson();
+    final renamed = await restored.updateTrackBookmarkLabel(
+      'podcast',
+      bookmark.id,
+      'Key takeaway',
+    );
+    expect(renamed!.label, 'Key takeaway');
+
+    final backup = restored.exportBackupJson();
     final backupRestored = LibraryStore(clock: clock);
     await backupRestored.load();
     await backupRestored.restoreBackupJson(backup);
     expect(
       backupRestored.bookmarksForTrack('podcast').single.position,
       const Duration(minutes: 12, seconds: 34),
+    );
+    expect(
+      backupRestored.bookmarksForTrack('podcast').single.label,
+      'Key takeaway',
     );
 
     expect(await restored.removeTrackBookmark('podcast', bookmark.id), isTrue);

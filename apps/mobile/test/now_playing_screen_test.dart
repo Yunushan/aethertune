@@ -133,14 +133,40 @@ void main() {
     expect(find.text('Clear A-B'), findsOneWidget);
     final bookmarkPosition = player.position;
     await tester.tap(find.byKey(const Key('now-playing-add-bookmark')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('now-playing-bookmark-label')),
+      'Chorus',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
     final bookmark = library.bookmarksForTrack(first.id).single;
     expect(bookmark.position, bookmarkPosition);
+    expect(bookmark.label, 'Chorus');
+    expect(find.text('Chorus'), findsOneWidget);
     await engine.seek(const Duration(seconds: 5));
     await tester.pump();
     await tester.tap(find.byKey(Key('now-playing-bookmark-${bookmark.id}')));
     await tester.pump();
     expect(engine.positionValue, bookmark.position);
+    final manageBookmarks = find.byKey(
+      const Key('now-playing-manage-bookmarks'),
+    );
+    await tester.ensureVisible(manageBookmarks);
+    await tester.tap(manageBookmarks);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Rename bookmark'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('now-playing-bookmark-label')),
+      'Bridge',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(library.bookmarksForTrack(first.id).single.label, 'Bridge');
+    expect(find.text('Bridge'), findsWidgets);
+    await tester.tap(find.byTooltip('Close bookmarks'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-speed')));
     await tester.pumpAndSettle();
     final speedItem = find.widgetWithText(CheckedPopupMenuItem<double>, '1.5x');
@@ -172,9 +198,15 @@ void main() {
     await tester.ensureVisible(trackSpeedItem);
     await tester.tap(trackSpeedItem);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Add to favorites'));
-    await tester.tap(find.widgetWithText(TextButton, 'Lyrics'));
-    await tester.tap(find.widgetWithText(TextButton, 'Queue'));
+    final favoriteButton = find.byTooltip('Add to favorites');
+    final lyricsButton = find.widgetWithText(TextButton, 'Lyrics');
+    final queueButton = find.widgetWithText(TextButton, 'Queue');
+    await tester.ensureVisible(favoriteButton);
+    await tester.tap(favoriteButton);
+    await tester.ensureVisible(lyricsButton);
+    await tester.tap(lyricsButton);
+    await tester.ensureVisible(queueButton);
+    await tester.tap(queueButton);
     await tester.pump();
 
     expect(engine.shuffleValue, isTrue);

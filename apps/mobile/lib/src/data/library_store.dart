@@ -6009,8 +6009,9 @@ class LibraryStore extends ChangeNotifier {
 
   Future<TrackBookmark?> addTrackBookmark(
     String trackId,
-    Duration position,
-  ) async {
+    Duration position, {
+    String label = '',
+  }) async {
     if (!_tracks.any((track) => track.id == trackId) || position.isNegative) {
       return null;
     }
@@ -6025,6 +6026,7 @@ class LibraryStore extends ChangeNotifier {
       trackId: trackId,
       position: position,
       createdAt: now,
+      label: TrackBookmark.normalizeLabel(label),
     );
     bookmarks.add(bookmark);
     if (bookmarks.length > _maxTrackBookmarksPerTrack) {
@@ -6033,6 +6035,31 @@ class LibraryStore extends ChangeNotifier {
     await _save();
     notifyListeners();
     return bookmark;
+  }
+
+  Future<TrackBookmark?> updateTrackBookmarkLabel(
+    String trackId,
+    String bookmarkId,
+    String label,
+  ) async {
+    final bookmarks = _bookmarksByTrackId[trackId];
+    if (bookmarks == null) {
+      return null;
+    }
+    final index = bookmarks.indexWhere((bookmark) => bookmark.id == bookmarkId);
+    if (index == -1) {
+      return null;
+    }
+    final bookmark = bookmarks[index];
+    final normalizedLabel = TrackBookmark.normalizeLabel(label);
+    if (bookmark.label == normalizedLabel) {
+      return bookmark;
+    }
+    final updated = bookmark.copyWith(label: normalizedLabel);
+    bookmarks[index] = updated;
+    await _save();
+    notifyListeners();
+    return updated;
   }
 
   Future<bool> removeTrackBookmark(String trackId, String bookmarkId) async {
@@ -7431,6 +7458,7 @@ class LibraryStore extends ChangeNotifier {
                   trackId: keepTrackId,
                   position: bookmark.position,
                   createdAt: bookmark.createdAt,
+                  label: bookmark.label,
                 ),
         )
         .toList(growable: false)

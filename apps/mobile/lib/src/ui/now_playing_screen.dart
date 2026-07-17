@@ -118,12 +118,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         : () => library.toggleFavorite(current.id),
                     onAddBookmark: savedTrack == null
                         ? null
-                        : () async {
-                            await library.addTrackBookmark(
+                        : () => _addBookmark(library, current, player),
+                    onManageBookmarks: savedTrack == null || bookmarks.isEmpty
+                        ? null
+                        : () => _showBookmarkManager(
+                              library,
                               current.id,
-                              player.position,
-                            );
-                          },
+                              player,
+                            ),
                     onRemoveBookmark: savedTrack == null
                         ? null
                         : (bookmark) => library.removeTrackBookmark(
@@ -209,6 +211,154 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
       );
     }
+  }
+
+  Future<void> _addBookmark(
+    LibraryStore library,
+    Track track,
+    PlayerController player,
+  ) async {
+    final label = await _promptForBookmarkLabel(
+      context,
+      title: 'Add bookmark',
+    );
+    if (!mounted || label == null) {
+      return;
+    }
+    final bookmark = await library.addTrackBookmark(
+      track.id,
+      player.position,
+      label: label,
+    );
+    if (!mounted || bookmark == null) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Bookmark saved at ${_formatPlaybackTime(bookmark.position)}.')),
+    );
+  }
+
+  Future<void> _showBookmarkManager(
+    LibraryStore library,
+    String trackId,
+    PlayerController player,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: library,
+        builder: (context, _) {
+          final bookmarks = library.bookmarksForTrack(trackId);
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 12, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Bookmarks',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close bookmarks',
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (bookmarks.isEmpty)
+                    const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.bookmark_border),
+                      title: Text('No bookmarks for this track'),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: bookmarks.length,
+                        itemBuilder: (context, index) {
+                          final bookmark = bookmarks[index];
+                          final label = _bookmarkLabel(bookmark);
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.bookmark_outline),
+                            title: Text(label),
+                            subtitle: Text(
+                              _formatPlaybackTime(bookmark.position),
+                            ),
+                            onTap: () async {
+                              Navigator.of(sheetContext).pop();
+                              player.clearABRepeat();
+                              await player.seek(bookmark.position);
+                            },
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                IconButton(
+                                  tooltip: 'Rename bookmark',
+                                  onPressed: () => unawaited(
+                                    _renameBookmark(
+                                      library,
+                                      bookmark,
+                                      sheetContext,
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove bookmark',
+                                  onPressed: () => unawaited(
+                                    library.removeTrackBookmark(
+                                      trackId,
+                                      bookmark.id,
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _renameBookmark(
+    LibraryStore library,
+    TrackBookmark bookmark,
+    BuildContext context,
+  ) async {
+    final label = await _promptForBookmarkLabel(
+      context,
+      title: 'Rename bookmark',
+      initialValue: bookmark.label,
+    );
+    if (label == null) {
+      return;
+    }
+    await library.updateTrackBookmarkLabel(
+      bookmark.trackId,
+      bookmark.id,
+      label,
+    );
   }
 
   Future<void> _showTrackShareCard(Track track) async {
@@ -344,6 +494,7 @@ class _NowPlayingContent {
     required List<TrackBookmark> bookmarks,
     required Future<void> Function()? onToggleFavorite,
     required Future<void> Function()? onAddBookmark,
+    required Future<void> Function()? onManageBookmarks,
     required Future<bool> Function(TrackBookmark bookmark)? onRemoveBookmark,
     required VoidCallback onOpenQueue,
     required VoidCallback onOpenLyrics,
@@ -369,6 +520,7 @@ class _NowPlayingContent {
           bookmarks: bookmarks,
           onToggleFavorite: onToggleFavorite,
           onAddBookmark: onAddBookmark,
+          onManageBookmarks: onManageBookmarks,
           onRemoveBookmark: onRemoveBookmark,
           onOpenQueue: onOpenQueue,
           onOpenLyrics: onOpenLyrics,
@@ -376,6 +528,78 @@ class _NowPlayingContent {
 
   final Widget artwork;
   final Widget controls;
+}
+
+Future<String?> _promptForBookmarkLabel(
+  BuildContext context, {
+  required String title,
+  String initialValue = '',
+}) async {
+  return showDialog<String>(
+    context: context,
+    builder: (_) => _BookmarkLabelDialog(
+      title: title,
+      initialValue: initialValue,
+    ),
+  );
+}
+
+class _BookmarkLabelDialog extends StatefulWidget {
+  const _BookmarkLabelDialog({
+    required this.title,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String initialValue;
+
+  @override
+  State<_BookmarkLabelDialog> createState() => _BookmarkLabelDialogState();
+}
+
+class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        key: const Key('now-playing-bookmark-label'),
+        controller: _controller,
+        autofocus: true,
+        maxLength: TrackBookmark.maxLabelLength,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Label (optional)',
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(widget.title == 'Add bookmark' ? 'Add' : 'Save'),
+        ),
+      ],
+    );
+  }
+}
+
+String _bookmarkLabel(TrackBookmark bookmark) {
+  return bookmark.label.isEmpty
+      ? _formatPlaybackTime(bookmark.position)
+      : bookmark.label;
 }
 
 class _NowPlayingArtwork extends StatelessWidget {
@@ -450,6 +674,7 @@ class _NowPlayingControls extends StatelessWidget {
     required this.bookmarks,
     required this.onToggleFavorite,
     required this.onAddBookmark,
+    required this.onManageBookmarks,
     required this.onRemoveBookmark,
     required this.onOpenQueue,
     required this.onOpenLyrics,
@@ -463,6 +688,7 @@ class _NowPlayingControls extends StatelessWidget {
   final List<TrackBookmark> bookmarks;
   final Future<void> Function()? onToggleFavorite;
   final Future<void> Function()? onAddBookmark;
+  final Future<void> Function()? onManageBookmarks;
   final Future<bool> Function(TrackBookmark bookmark)? onRemoveBookmark;
   final VoidCallback onOpenQueue;
   final VoidCallback onOpenLyrics;
@@ -684,6 +910,13 @@ class _NowPlayingControls extends StatelessWidget {
                 icon: const Icon(Icons.bookmark_add_outlined),
                 label: const Text('Bookmark'),
               ),
+              if (onManageBookmarks != null)
+                TextButton.icon(
+                  key: const Key('now-playing-manage-bookmarks'),
+                  onPressed: () => unawaited(onManageBookmarks!()),
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  label: const Text('Bookmarks'),
+                ),
             ],
           ),
         ],
@@ -718,8 +951,9 @@ class _TrackBookmarks extends StatelessWidget {
                 (bookmark) => InputChip(
                   key: Key('now-playing-bookmark-${bookmark.id}'),
                   avatar: const Icon(Icons.bookmark_outline, size: 18),
-                  label: Text(_formatPlaybackTime(bookmark.position)),
-                  tooltip: 'Seek to ${_formatPlaybackTime(bookmark.position)}',
+                  label: Text(_bookmarkLabel(bookmark)),
+                  tooltip:
+                      'Seek to ${_bookmarkLabel(bookmark)} at ${_formatPlaybackTime(bookmark.position)}',
                   onPressed: () {
                     player.clearABRepeat();
                     unawaited(player.seek(bookmark.position));
