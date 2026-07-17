@@ -29,6 +29,7 @@ import '../data/lrclib_lyrics_provider.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/m4a_metadata_writer.dart';
 import '../data/musicbrainz_metadata_provider.dart';
+import '../data/musicbrainz_artist_release_provider.dart';
 import '../data/mp3_id3v1_tag_writer.dart';
 import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/offline_cache_manager.dart';
@@ -94,6 +95,7 @@ import 'youtube_public_playlists_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/musicbrainz_metadata_search_sheet.dart';
+import 'widgets/artist_release_updates_shelf.dart';
 import 'widgets/artwork_crop_editor.dart';
 import 'widgets/audio_effects_settings.dart';
 import 'widgets/collection_share_card.dart';
@@ -3475,6 +3477,8 @@ class _HomeTabState extends State<_HomeTab> {
 
   late final InternetArchiveProvider _archiveProvider;
   late final RadioBrowserProvider _radioProvider;
+  final MusicBrainzArtistReleaseProvider _artistReleaseProvider =
+      MusicBrainzArtistReleaseProvider();
   LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
   FollowingFeedSource _followingFeedSource = FollowingFeedSource.all;
   ProviderHomeFeed? _providerHomeFeed;
@@ -3593,6 +3597,10 @@ class _HomeTabState extends State<_HomeTab> {
         ],
         _PopularInternetArchiveShelf(provider: _archiveProvider),
         const SizedBox(height: 12),
+        if (library.followedArtists.isNotEmpty) ...<Widget>[
+          ArtistReleaseUpdatesShelf(provider: _artistReleaseProvider),
+          const SizedBox(height: 12),
+        ],
         if (sections.isEmpty)
           _EmptyHomeFeed(
             title: 'Your local feed is empty',

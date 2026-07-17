@@ -41,6 +41,9 @@ final class MusicBrainzRequestLimiter {
   }
 }
 
+/// One queue for every MusicBrainz request made by the app.
+final musicBrainzRequestLimiter = MusicBrainzRequestLimiter();
+
 /// Explicit, read-only metadata lookup through the public MusicBrainz API.
 ///
 /// Callers must show the disclosure and obtain a user action before invoking
@@ -50,7 +53,7 @@ final class MusicBrainzMetadataProvider {
     MusicBrainzResponseLoader? loader,
     MusicBrainzRequestLimiter? limiter,
   }) : _loader = loader ?? _loadMusicBrainzResponse,
-       _limiter = limiter ?? _sharedLimiter;
+       _limiter = limiter ?? musicBrainzRequestLimiter;
 
   static final Uri searchEndpoint = Uri.https(
     'musicbrainz.org',
@@ -58,9 +61,6 @@ final class MusicBrainzMetadataProvider {
   );
   static const userAgent =
       'AetherTune/0.1 (https://github.com/Yunushan/aethertune)';
-  static final MusicBrainzRequestLimiter _sharedLimiter =
-      MusicBrainzRequestLimiter();
-
   final MusicBrainzResponseLoader _loader;
   final MusicBrainzRequestLimiter _limiter;
 
