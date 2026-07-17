@@ -19,6 +19,7 @@ void main() {
       provider.capabilities,
       const <MusicSourceCapability>{
         MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.artwork,
       },
     );
@@ -82,6 +83,41 @@ void main() {
       () => parseYouTubeDataSearchPage('[]'),
       throwsA(isA<FormatException>()),
     );
+  });
+
+  test('returns bounded official video metadata suggestions', () async {
+    final requests = <Uri>[];
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async {
+        requests.add(uri);
+        return '''
+          {"items": [
+            {"id":{"videoId":"one"},"snippet":{"title":"Aether Session","channelTitle":"Aether Channel"}},
+            {"id":{"videoId":"two"},"snippet":{"title":"Aether Session","channelTitle":"Other Channel"}},
+            {"id":{"videoId":"three"},"snippet":{"title":"Beyond","channelTitle":"Orbit"}}
+          ]}
+        ''';
+      },
+    );
+
+    final suggestions = await provider.suggest('  aether  ', limit: 99);
+
+    expect(requests.single.queryParameters, <String, String>{
+      'part': 'snippet',
+      'type': 'video',
+      'q': 'aether',
+      'maxResults': '10',
+      'key': 'project-key',
+    });
+    expect(suggestions, hasLength(2));
+    expect(suggestions.first.value, 'Aether Session');
+    expect(suggestions.first.kind, MusicSourceSearchSuggestionKind.track);
+    expect(suggestions.first.subtitle, 'Aether Channel');
+    expect(suggestions.last.value, 'Beyond');
+    expect(await provider.suggest('  '), isEmpty);
+    expect(requests, hasLength(1));
+    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
   });
 }
 

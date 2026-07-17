@@ -12,7 +12,9 @@ typedef YouTubeDataSearchLoader = Future<String> Function(Uri uri);
 /// must not be downloaded, cached for offline playback, or played in the
 /// background through this adapter.
 final class YouTubeDataMetadataProvider
-    implements MusicSourceSearchPagingProvider {
+    implements
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   YouTubeDataMetadataProvider({
     required String apiKey,
     Uri? searchUri,
@@ -43,6 +45,7 @@ final class YouTubeDataMetadataProvider
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
     MusicSourceCapability.artwork,
   };
 
@@ -56,6 +59,42 @@ final class YouTubeDataMetadataProvider
   Future<List<Track>> search(String query) async {
     final page = await searchPage(query);
     return page.tracks;
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const <MusicSourceSearchSuggestion>[];
+    }
+
+    // Type-ahead has a smaller fixed upper bound than a submitted search.
+    final page = await searchPage(normalizedQuery, limit: limit.clamp(1, 10));
+    final seen = <String>{};
+    final suggestions = <MusicSourceSearchSuggestion>[];
+    for (final track in page.tracks) {
+      final value = track.title.trim();
+      if (value.isEmpty || !seen.add(value.toLowerCase())) {
+        continue;
+      }
+      suggestions.add(
+        MusicSourceSearchSuggestion(
+          value: value,
+          kind: MusicSourceSearchSuggestionKind.track,
+          subtitle: track.artist.trim().isEmpty ? null : track.artist,
+        ),
+      );
+      if (suggestions.length == limit) {
+        break;
+      }
+    }
+    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
   }
 
   @override
