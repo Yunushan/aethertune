@@ -168,6 +168,39 @@ final class YouTubeDataMetadataProvider
     );
   }
 
+  /// Loads recent public video metadata for a channel with the documented
+  /// channel-filtered video search. It does not expose a stream URI.
+  Future<YouTubeDataSearchPage> loadChannelVideosPage(
+    String channelId, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedChannelId = channelId.trim();
+    if (normalizedChannelId.isEmpty) {
+      throw ArgumentError.value(channelId, 'channelId', 'Must not be empty.');
+    }
+    final normalizedCursor = cursor?.trim();
+    return parseYouTubeDataSearchPage(
+      await _searchLoader(
+        searchUri.replace(
+          queryParameters: <String, String>{
+            'part': 'snippet',
+            'type': 'video',
+            'channelId': normalizedChannelId,
+            'order': 'date',
+            'maxResults': limit.clamp(1, 50).toString(),
+            'key': _apiKey,
+            if (normalizedCursor != null && normalizedCursor.isNotEmpty)
+              'pageToken': normalizedCursor,
+          },
+        ),
+      ),
+    );
+  }
+
   /// Loads the official YouTube Music-category popular chart as metadata only.
   Future<YouTubeDataPopularPage> loadPopularMusicPage({
     String regionCode = 'US',

@@ -224,6 +224,44 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('loads recent public channel video metadata without a stream', () async {
+    Uri? capturedUri;
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async {
+        capturedUri = uri;
+        return '''
+          {"nextPageToken":"channel-next","pageInfo":{"totalResults":2},"items":[
+            {"id":{"videoId":"channel-video"},"snippet":{"title":"Channel Signal","channelTitle":"Aether Radio"}}
+          ]}
+        ''';
+      },
+    );
+
+    final page = await provider.loadChannelVideosPage(
+      ' channel-1 ',
+      cursor: 'cursor',
+      limit: 100,
+    );
+
+    expect(capturedUri!.queryParameters, <String, String>{
+      'part': 'snippet',
+      'type': 'video',
+      'channelId': 'channel-1',
+      'order': 'date',
+      'maxResults': '50',
+      'key': 'project-key',
+      'pageToken': 'cursor',
+    });
+    expect(page.nextPageToken, 'channel-next');
+    expect(page.totalResults, 2);
+    expect(page.tracks.single.title, 'Channel Signal');
+    expect(page.tracks.single.artist, 'Aether Radio');
+    expect(page.tracks.single.isPlayable, isFalse);
+    expect(await provider.resolveStream(page.tracks.single), isNull);
+    await expectLater(provider.loadChannelVideosPage(' '), throwsArgumentError);
+  });
 }
 
 const _searchJson = '''

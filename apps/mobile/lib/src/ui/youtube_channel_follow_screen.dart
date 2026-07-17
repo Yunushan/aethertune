@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../data/library_store.dart';
 import '../data/youtube_channel_follow_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
+import 'youtube_channel_videos_screen.dart';
 import 'widgets/track_artwork.dart';
 
 /// Public YouTube channel discovery with device-local follows.
@@ -105,6 +106,7 @@ final class _YouTubeChannelFollowScreenState
               _ChannelTile(
                 channel: channel,
                 followed: true,
+                onOpen: () => _openChannelVideos(context, _asChannel(channel)),
                 onFollowChanged: (followed) =>
                     unawaited(
                       follows.setFollowed(_asChannel(channel), followed),
@@ -144,6 +146,7 @@ final class _YouTubeChannelFollowScreenState
               _ChannelTile(
                 channel: channel,
                 followed: follows.isFollowed(channel.id),
+                onOpen: () => _openChannelVideos(context, channel),
                 onFollowChanged: (followed) =>
                     unawaited(follows.setFollowed(channel, followed)),
               ),
@@ -259,22 +262,36 @@ final class _YouTubeChannelFollowScreenState
         ? 'Load more channels ($remaining remaining)'
         : 'Load more channels';
   }
+
+  void _openChannelVideos(BuildContext context, YouTubeDataChannel channel) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeChannelVideosScreen(
+          provider: widget.provider,
+          channel: channel,
+        ),
+      ),
+    );
+  }
 }
 
 class _ChannelTile extends StatelessWidget {
   const _ChannelTile({
     required this.channel,
     required this.followed,
+    required this.onOpen,
     required this.onFollowChanged,
   });
 
   final YouTubeDataChannel channel;
   final bool followed;
+  final VoidCallback onOpen;
   final ValueChanged<bool> onFollowChanged;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      onTap: onOpen,
       leading: TrackArtwork(
         artworkUri: channel.thumbnailUri,
         fallbackIcon: Icons.account_circle_outlined,

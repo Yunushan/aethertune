@@ -65,6 +65,49 @@ void main() {
       expect(cursors, <String?>[null, 'next']);
     },
   );
+
+  testWidgets('opens a public channel video shelf from a channel row', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final library = LibraryStore();
+    final follows = YouTubeChannelFollowStore();
+    await Future.wait<void>(<Future<void>>[library.load(), follows.load()]);
+    addTearDown(library.dispose);
+    addTearDown(follows.dispose);
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (uri) async => uri.queryParameters['channelId'] == null
+          ? _channelPage('Aether Radio', 'channel-1', null)
+          : '''
+              {"items":[{"id":{"videoId":"video-1"},"snippet":{"title":"Channel signal","channelTitle":"Aether Radio"}}]}
+            ''',
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
+            value: follows,
+          ),
+        ],
+        child: MaterialApp(home: YouTubeChannelFollowScreen(provider: provider)),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('youtube-channel-search')),
+      'aether',
+    );
+    await tester.tap(find.byTooltip('Search YouTube channels'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Aether Radio'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recent public video metadata'), findsOneWidget);
+    expect(find.text('Channel signal'), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow), findsNothing);
+  });
 }
 
 String _channelPage(String title, String id, String? nextPageToken) => '''
