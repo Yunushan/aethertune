@@ -240,6 +240,85 @@ Timed sidecar
     expect(result.tracks.single.genre, 'Dream Pop');
   });
 
+  test('reads album artist year and track number across local tag formats',
+      () async {
+    await File(p.join(root.path, 'mp3.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'MP3 Song',
+        albumArtist: 'MP3 Album Artist',
+        releaseDate: '2024-04-05',
+        trackNumber: '2/10',
+      ),
+      1,
+    ]);
+    await File(p.join(root.path, 'flac.flac')).writeAsBytes(
+      _flacWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['FLAC Song'],
+        'ALBUMARTIST': <String>['FLAC Album Artist'],
+        'DATE': <String>['2023-11-01'],
+        'TRACKNUMBER': <String>['3'],
+      }),
+    );
+    await File(p.join(root.path, 'ogg.ogg')).writeAsBytes(
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Ogg Song'],
+        'ALBUMARTIST': <String>['Ogg Album Artist'],
+        'YEAR': <String>['2022'],
+        'TRACKNUMBER': <String>['4/9'],
+      }),
+    );
+    await File(p.join(root.path, 'opus.opus')).writeAsBytes(
+      _oggWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Opus Song'],
+          'ALBUMARTIST': <String>['Opus Album Artist'],
+          'DATE': <String>['2021'],
+          'TRACKNUMBER': <String>['5'],
+        },
+        opus: true,
+      ),
+    );
+    await File(p.join(root.path, 'm4a.m4a')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'M4A Song',
+        albumArtist: 'M4A Album Artist',
+        releaseDate: '2020-06-12',
+        trackNumber: 6,
+      ),
+    );
+    await File(p.join(root.path, 'wav.wav')).writeAsBytes(
+      _wavWithInfoTags(<String, String>{
+        'INAM': 'WAV Song',
+        'ICRD': '2019',
+        'ITRK': '7',
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final tracksByTitle = <String, Track>{
+      for (final track in result.tracks) track.title: track,
+    };
+
+    expect(tracksByTitle['MP3 Song']!.albumArtist, 'MP3 Album Artist');
+    expect(tracksByTitle['MP3 Song']!.year, 2024);
+    expect(tracksByTitle['MP3 Song']!.trackNumber, 2);
+    expect(tracksByTitle['FLAC Song']!.albumArtist, 'FLAC Album Artist');
+    expect(tracksByTitle['FLAC Song']!.year, 2023);
+    expect(tracksByTitle['FLAC Song']!.trackNumber, 3);
+    expect(tracksByTitle['Ogg Song']!.albumArtist, 'Ogg Album Artist');
+    expect(tracksByTitle['Ogg Song']!.year, 2022);
+    expect(tracksByTitle['Ogg Song']!.trackNumber, 4);
+    expect(tracksByTitle['Opus Song']!.albumArtist, 'Opus Album Artist');
+    expect(tracksByTitle['Opus Song']!.year, 2021);
+    expect(tracksByTitle['Opus Song']!.trackNumber, 5);
+    expect(tracksByTitle['M4A Song']!.albumArtist, 'M4A Album Artist');
+    expect(tracksByTitle['M4A Song']!.year, 2020);
+    expect(tracksByTitle['M4A Song']!.trackNumber, 6);
+    expect(tracksByTitle['WAV Song']!.albumArtist, isNull);
+    expect(tracksByTitle['WAV Song']!.year, 2019);
+    expect(tracksByTitle['WAV Song']!.trackNumber, 7);
+  });
+
   test('extracts ID3v2 embedded artwork for MP3 files', () async {
     await File(p.join(root.path, 'cover-track.mp3')).writeAsBytes(
       <int>[
@@ -734,6 +813,9 @@ List<int> _id3v23Tag({
   String title = '',
   String artist = '',
   String album = '',
+  String albumArtist = '',
+  String releaseDate = '',
+  String trackNumber = '',
   String genre = '',
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
@@ -745,6 +827,12 @@ List<int> _id3v23Tag({
     if (title.isNotEmpty) ..._id3v23TextFrame('TIT2', title, encoding),
     if (artist.isNotEmpty) ..._id3v23TextFrame('TPE1', artist, encoding),
     if (album.isNotEmpty) ..._id3v23TextFrame('TALB', album, encoding),
+    if (albumArtist.isNotEmpty)
+      ..._id3v23TextFrame('TPE2', albumArtist, encoding),
+    if (releaseDate.isNotEmpty)
+      ..._id3v23TextFrame('TDRC', releaseDate, encoding),
+    if (trackNumber.isNotEmpty)
+      ..._id3v23TextFrame('TRCK', trackNumber, encoding),
     if (genre.isNotEmpty) ..._id3v23TextFrame('TCON', genre, encoding),
     if (artworkBytes != null) ..._id3v23PictureFrame(artworkBytes),
     if (replayGainTrackGain.isNotEmpty)
@@ -1075,6 +1163,9 @@ List<int> _m4aWithMetadata({
   String title = '',
   String artist = '',
   String album = '',
+  String albumArtist = '',
+  String releaseDate = '',
+  int? trackNumber,
   String genre = '',
   String lyrics = '',
   List<int>? artworkBytes,
@@ -1085,6 +1176,11 @@ List<int> _m4aWithMetadata({
     if (title.isNotEmpty) ..._m4aTextItem(_m4aTitleAtomType, title),
     if (artist.isNotEmpty) ..._m4aTextItem(_m4aArtistAtomType, artist),
     if (album.isNotEmpty) ..._m4aTextItem(_m4aAlbumAtomType, album),
+    if (albumArtist.isNotEmpty)
+      ..._m4aTextItem(_m4aAlbumArtistAtomType, albumArtist),
+    if (releaseDate.isNotEmpty)
+      ..._m4aTextItem(_m4aDateAtomType, releaseDate),
+    if (trackNumber != null) ..._m4aTrackNumberItem(trackNumber),
     if (genre.isNotEmpty) ..._m4aTextItem(_m4aGenreAtomType, genre),
     if (lyrics.isNotEmpty) ..._m4aTextItem(_m4aLyricsAtomType, lyrics),
     if (artworkBytes != null) ..._m4aArtworkItem(artworkBytes),
@@ -1143,6 +1239,30 @@ List<int> _m4aArtworkItem(List<int> artworkBytes) {
   );
 }
 
+List<int> _m4aTrackNumberItem(int trackNumber) {
+  return _mp4Atom(
+    'trkn',
+    _mp4Atom(
+      'data',
+      <int>[
+        ..._uint32Size(0),
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        (trackNumber >> 8) & 0xff,
+        trackNumber & 0xff,
+        0,
+        0,
+        0,
+        0,
+      ],
+    ),
+  );
+}
+
 List<int> _m4aReplayGainFreeformItem(
   String value, {
   String name = 'REPLAYGAIN_TRACK_GAIN',
@@ -1188,6 +1308,8 @@ List<int> _mp4AtomBytes(List<int> type, List<int> payload) {
 const _m4aTitleAtomType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _m4aArtistAtomType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _m4aAlbumAtomType = <int>[0xa9, 0x61, 0x6c, 0x62];
+const _m4aAlbumArtistAtomType = <int>[0x61, 0x41, 0x52, 0x54];
+const _m4aDateAtomType = <int>[0xa9, 0x64, 0x61, 0x79];
 const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
 const _m4aLyricsAtomType = <int>[0xa9, 0x6c, 0x79, 0x72];
 

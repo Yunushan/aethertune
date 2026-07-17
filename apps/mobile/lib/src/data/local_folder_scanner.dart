@@ -45,6 +45,9 @@ final class _LocalFileMetadata {
     required this.title,
     required this.artist,
     this.album,
+    this.albumArtist,
+    this.year,
+    this.trackNumber,
     this.genre,
     this.artworkUri,
     this.replayGainTrackDb,
@@ -55,6 +58,9 @@ final class _LocalFileMetadata {
   final String title;
   final String artist;
   final String? album;
+  final String? albumArtist;
+  final int? year;
+  final int? trackNumber;
   final String? genre;
   final Uri? artworkUri;
   final double? replayGainTrackDb;
@@ -213,6 +219,9 @@ final class _LocalFolderScanState {
         title: metadata.title,
         artist: metadata.artist,
         album: metadata.album ?? _albumLabelFor(path),
+        albumArtist: metadata.albumArtist,
+        year: metadata.year,
+        trackNumber: metadata.trackNumber,
         genre: metadata.genre ?? 'Unknown Genre',
         artworkUri: metadata.artworkUri,
         localPath: path,
@@ -312,6 +321,9 @@ final class _LocalFolderScanState {
           ? fallbackMetadata.artist
           : embeddedMetadata.artist,
       album: embeddedMetadata.album ?? fallbackMetadata.album,
+      albumArtist: embeddedMetadata.albumArtist,
+      year: embeddedMetadata.year,
+      trackNumber: embeddedMetadata.trackNumber,
       genre: embeddedMetadata.genre ?? fallbackMetadata.genre,
       artworkUri: embeddedMetadata.artworkUri ?? fallbackMetadata.artworkUri,
       replayGainTrackDb: embeddedMetadata.replayGainTrackDb,
@@ -464,6 +476,9 @@ final class _LocalFolderScanState {
           title: metadata?.title ?? '',
           artist: metadata?.artist ?? '',
           album: metadata?.album,
+          albumArtist: metadata?.albumArtist,
+          year: metadata?.year,
+          trackNumber: metadata?.trackNumber,
           genre: metadata?.genre,
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
@@ -540,6 +555,9 @@ final class _LocalFolderScanState {
           title: metadata?.title ?? '',
           artist: metadata?.artist ?? '',
           album: metadata?.album,
+          albumArtist: metadata?.albumArtist,
+          year: metadata?.year,
+          trackNumber: metadata?.trackNumber,
           genre: metadata?.genre,
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
@@ -729,10 +747,16 @@ final class _LocalFolderScanState {
     final title = tagData.textFrames['title'] ?? '';
     final artist = tagData.textFrames['artist'] ?? '';
     final album = tagData.textFrames['album'];
+    final albumArtist = tagData.textFrames['albumArtist'];
+    final year = _releaseYearFromText(tagData.textFrames['year']);
+    final trackNumber = _trackNumberFromText(tagData.textFrames['trackNumber']);
     final genre = tagData.textFrames['genre'];
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
+        (albumArtist == null || albumArtist.isEmpty) &&
+        year == null &&
+        trackNumber == null &&
         (genre == null || genre.isEmpty) &&
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
@@ -745,6 +769,11 @@ final class _LocalFolderScanState {
       title: title,
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
+      albumArtist: albumArtist == null || albumArtist.isEmpty
+          ? null
+          : albumArtist,
+      year: year,
+      trackNumber: trackNumber,
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: tagData.artworkUri,
       replayGainTrackDb: tagData.replayGainTrackDb,
@@ -920,6 +949,9 @@ final class _LocalFolderScanState {
       title: metadata?.title ?? '',
       artist: metadata?.artist ?? '',
       album: metadata?.album,
+      albumArtist: metadata?.albumArtist,
+      year: metadata?.year,
+      trackNumber: metadata?.trackNumber,
       genre: metadata?.genre,
       replayGainTrackDb: metadata?.replayGainTrackDb,
       replayGainAlbumDb: metadata?.replayGainAlbumDb,
@@ -991,6 +1023,15 @@ final class _LocalFolderScanState {
     final title = _firstVorbisComment(comments, 'TITLE') ?? '';
     final artist = _joinedVorbisComment(comments, 'ARTIST') ?? '';
     final album = _firstVorbisComment(comments, 'ALBUM');
+    final albumArtist = _joinedVorbisComment(comments, 'ALBUMARTIST') ??
+        _joinedVorbisComment(comments, 'ALBUM ARTIST');
+    final year = _releaseYearFromText(
+      _firstVorbisComment(comments, 'DATE') ??
+          _firstVorbisComment(comments, 'YEAR'),
+    );
+    final trackNumber = _trackNumberFromText(
+      _firstVorbisComment(comments, 'TRACKNUMBER'),
+    );
     final genre = _joinedVorbisComment(comments, 'GENRE');
     final replayGainTrackDb = parseReplayGainDb(
       _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN'),
@@ -1001,6 +1042,9 @@ final class _LocalFolderScanState {
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
+        (albumArtist == null || albumArtist.isEmpty) &&
+        year == null &&
+        trackNumber == null &&
         (genre == null || genre.isEmpty) &&
         replayGainTrackDb == null &&
         replayGainAlbumDb == null) {
@@ -1011,6 +1055,11 @@ final class _LocalFolderScanState {
       title: title,
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
+      albumArtist: albumArtist == null || albumArtist.isEmpty
+          ? null
+          : albumArtist,
+      year: year,
+      trackNumber: trackNumber,
       genre: genre == null || genre.isEmpty ? null : genre,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
@@ -1134,6 +1183,7 @@ final class _LocalFolderScanState {
     Uri? artworkUri;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
+    int? trackNumber;
     for (final atom in _mp4Atoms(ilst)) {
       if (_matchesAscii(atom.typeBytes, 'covr') && artworkUri == null) {
         artworkUri = _m4aDataAtomArtworkUri(
@@ -1170,6 +1220,15 @@ final class _LocalFolderScanState {
         continue;
       }
 
+      if (_matchesAscii(atom.typeBytes, 'trkn') && trackNumber == null) {
+        trackNumber = _m4aDataAtomTrackNumber(
+          ilst,
+          atom.payloadOffset,
+          atom.payloadEnd,
+        );
+        continue;
+      }
+
       final key = _m4aFieldKey(atom.typeBytes);
       if (key == null) {
         continue;
@@ -1196,6 +1255,8 @@ final class _LocalFolderScanState {
     final title = _firstVorbisComment(fields, 'title') ?? '';
     final artist = _joinedVorbisComment(fields, 'artist') ?? '';
     final album = _firstVorbisComment(fields, 'album');
+    final albumArtist = _joinedVorbisComment(fields, 'albumArtist');
+    final year = _releaseYearFromText(_firstVorbisComment(fields, 'date'));
     final genre = _joinedVorbisComment(fields, 'genre');
     final embeddedLyrics = _normalizeEmbeddedLyrics(
       _firstVorbisComment(fields, 'lyrics') ?? '',
@@ -1203,6 +1264,9 @@ final class _LocalFolderScanState {
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
+        (albumArtist == null || albumArtist.isEmpty) &&
+        year == null &&
+        trackNumber == null &&
         (genre == null || genre.isEmpty) &&
         artworkUri == null &&
         replayGainTrackDb == null &&
@@ -1215,6 +1279,11 @@ final class _LocalFolderScanState {
       title: title,
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
+      albumArtist: albumArtist == null || albumArtist.isEmpty
+          ? null
+          : albumArtist,
+      year: year,
+      trackNumber: trackNumber,
       genre: genre == null || genre.isEmpty ? null : genre,
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
@@ -1227,10 +1296,14 @@ final class _LocalFolderScanState {
     final title = infoTags['title'] ?? '';
     final artist = infoTags['artist'] ?? '';
     final album = infoTags['album'];
+    final year = _releaseYearFromText(infoTags['date']);
+    final trackNumber = _trackNumberFromText(infoTags['trackNumber']);
     final genre = infoTags['genre'];
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
+        year == null &&
+        trackNumber == null &&
         (genre == null || genre.isEmpty)) {
       return null;
     }
@@ -1239,6 +1312,8 @@ final class _LocalFolderScanState {
       title: title,
       artist: artist,
       album: album == null || album.isEmpty ? null : album,
+      year: year,
+      trackNumber: trackNumber,
       genre: genre == null || genre.isEmpty ? null : genre,
     );
   }
@@ -1288,6 +1363,8 @@ final class _LocalFolderScanState {
       'INAM' => 'title',
       'IART' => 'artist',
       'IPRD' => 'album',
+      'ICRD' => 'date',
+      'ITRK' => 'trackNumber',
       'IGNR' => 'genre',
       _ => null,
     };
@@ -1681,6 +1758,23 @@ final class _LocalFolderScanState {
     return parts.join(' / ');
   }
 
+  int? _releaseYearFromText(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final match = RegExp(r'(?:^|\D)([1-9]\d{3})(?:\D|$)').firstMatch(value);
+    return match == null ? null : int.tryParse(match.group(1)!);
+  }
+
+  int? _trackNumberFromText(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final match = RegExp(r'^\s*(\d+)').firstMatch(value);
+    final trackNumber = match == null ? null : int.tryParse(match.group(1)!);
+    return trackNumber == null || trackNumber <= 0 ? null : trackNumber;
+  }
+
   String? _normalizeEmbeddedLyrics(String value) {
     if (value.length > _maxEmbeddedLyricsBytes) {
       return null;
@@ -1714,6 +1808,16 @@ final class _LocalFolderScanState {
       case 'TALB':
       case 'TAL':
         return 'album';
+      case 'TPE2':
+      case 'TP2':
+        return 'albumArtist';
+      case 'TDRC':
+      case 'TYER':
+      case 'TYE':
+        return 'year';
+      case 'TRCK':
+      case 'TRK':
+        return 'trackNumber';
       case 'TCON':
       case 'TCO':
         return 'genre';
@@ -1884,19 +1988,49 @@ final class _LocalFolderScanState {
     return null;
   }
 
+  int? _m4aDataAtomTrackNumber(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+  ) {
+    for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
+      if (!_matchesAscii(atom.typeBytes, 'data')) {
+        continue;
+      }
+
+      final payload = bytes.sublist(
+        startOffset + atom.payloadOffset,
+        startOffset + atom.payloadEnd,
+      );
+      if (payload.length < 12) {
+        return null;
+      }
+
+      final trackNumber = (payload[10] << 8) | payload[11];
+      return trackNumber > 0 ? trackNumber : null;
+    }
+
+    return null;
+  }
+
   String? _m4aFieldKey(List<int> typeBytes) {
     if (_matchesBytes(typeBytes, const <int>[0xa9, 0x6e, 0x61, 0x6d])) {
       return 'title';
     }
-    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x41, 0x52, 0x54]) ||
-        _matchesAscii(typeBytes, 'aART')) {
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x41, 0x52, 0x54])) {
       return 'artist';
+    }
+    if (_matchesAscii(typeBytes, 'aART')) {
+      return 'albumArtist';
     }
     if (_matchesBytes(typeBytes, const <int>[0xa9, 0x61, 0x6c, 0x62])) {
       return 'album';
     }
     if (_matchesBytes(typeBytes, const <int>[0xa9, 0x67, 0x65, 0x6e])) {
       return 'genre';
+    }
+    if (_matchesBytes(typeBytes, const <int>[0xa9, 0x64, 0x61, 0x79])) {
+      return 'date';
     }
     if (_matchesBytes(typeBytes, const <int>[0xa9, 0x6c, 0x79, 0x72])) {
       return 'lyrics';

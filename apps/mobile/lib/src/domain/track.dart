@@ -13,6 +13,9 @@ class Track {
     required this.title,
     this.artist = 'Unknown Artist',
     this.album = 'Unknown Album',
+    this.albumArtist,
+    this.year,
+    this.trackNumber,
     this.genre = 'Unknown Genre',
     this.duration = Duration.zero,
     this.artworkUri,
@@ -42,6 +45,9 @@ class Track {
   final String title;
   final String artist;
   final String album;
+  final String? albumArtist;
+  final int? year;
+  final int? trackNumber;
   final String genre;
   final Duration duration;
   final Uri? artworkUri;
@@ -71,6 +77,9 @@ class Track {
     String? title,
     String? artist,
     String? album,
+    String? albumArtist,
+    int? year,
+    int? trackNumber,
     String? genre,
     Duration? duration,
     Uri? artworkUri,
@@ -98,6 +107,9 @@ class Track {
       title: title ?? this.title,
       artist: artist ?? this.artist,
       album: album ?? this.album,
+      albumArtist: albumArtist ?? this.albumArtist,
+      year: year ?? this.year,
+      trackNumber: trackNumber ?? this.trackNumber,
       genre: genre ?? this.genre,
       duration: duration ?? this.duration,
       artworkUri: clearArtworkUri ? null : artworkUri ?? this.artworkUri,
@@ -134,6 +146,9 @@ class Track {
       title: title,
       artist: artist,
       album: album,
+      albumArtist: albumArtist,
+      year: year,
+      trackNumber: trackNumber,
       genre: genre,
       duration: duration,
       artworkUri: artworkUriIsEphemeral ? null : artworkUri,
@@ -160,6 +175,9 @@ class Track {
       'title': title,
       'artist': artist,
       'album': album,
+      if (albumArtist != null) 'albumArtist': albumArtist,
+      if (year != null) 'year': year,
+      if (trackNumber != null) 'trackNumber': trackNumber,
       'genre': genre,
       'durationMs': duration.inMilliseconds,
       'artworkUri': artworkUriIsEphemeral ? null : artworkUri?.toString(),
@@ -187,6 +205,9 @@ class Track {
       title: json['title'] as String? ?? 'Untitled',
       artist: json['artist'] as String? ?? 'Unknown Artist',
       album: json['album'] as String? ?? 'Unknown Album',
+      albumArtist: json['albumArtist'] as String?,
+      year: _positiveJsonInt(json['year']),
+      trackNumber: _positiveJsonInt(json['trackNumber']),
       genre: json['genre'] as String? ?? 'Unknown Genre',
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
       artworkUri: _parseUri(json['artworkUri'] as String?),
@@ -228,6 +249,11 @@ class Track {
         .map(TrackChapter.tryFromJson)
         .whereType<TrackChapter>()
         .toList(growable: false);
+  }
+
+  static int? _positiveJsonInt(Object? value) {
+    final number = value is num ? value.toInt() : null;
+    return number == null || number <= 0 ? null : number;
   }
 
   static String stableLocalId(String path) {

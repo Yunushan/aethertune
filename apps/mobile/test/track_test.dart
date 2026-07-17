@@ -9,6 +9,9 @@ void main() {
       title: 'Song',
       artist: 'Artist',
       album: 'Album',
+      albumArtist: 'Album Artist',
+      year: 2024,
+      trackNumber: 7,
       genre: 'Jazz',
       duration: const Duration(seconds: 42),
       localPath: '/music/song.mp3',
@@ -26,6 +29,9 @@ void main() {
     expect(decoded.title, track.title);
     expect(decoded.artist, track.artist);
     expect(decoded.album, track.album);
+    expect(decoded.albumArtist, 'Album Artist');
+    expect(decoded.year, 2024);
+    expect(decoded.trackNumber, 7);
     expect(decoded.genre, track.genre);
     expect(decoded.duration, track.duration);
     expect(decoded.localPath, track.localPath);

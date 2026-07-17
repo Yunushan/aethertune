@@ -5371,7 +5371,7 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
     final kind = type == LibraryBrowseType.artist ? 'Artist' : 'Album';
     final metadata = type == LibraryBrowseType.artist
         ? (genreNames.isEmpty ? 'Local artist' : genreNames.take(3).join(' · '))
-        : _albumArtistLabel(artistNames);
+        : _albumMetadataLabel(tracks);
     final totalDuration = tracks.fold<Duration>(
       Duration.zero,
       (total, track) => total + track.duration,
@@ -6268,6 +6268,18 @@ String _albumArtistLabel(List<String> artistNames) {
     return artistNames.single;
   }
   return '${artistNames.length} artists';
+}
+
+String _albumMetadataLabel(List<Track> tracks) {
+  final artistLabel = _albumArtistLabel(
+    _collectionMetadataValues(
+      tracks.map((track) => track.albumArtist ?? track.artist),
+    ),
+  );
+  final years = _collectionMetadataValues(
+    tracks.map((track) => track.year?.toString() ?? ''),
+  );
+  return years.isEmpty ? artistLabel : '$artistLabel · ${years.join(' / ')}';
 }
 
 String _collectionStatsLabel({
@@ -10983,9 +10995,7 @@ Future<void> _showBrowseGroupShareCard(
       ? _collectionMetadataValues(
           tracks.map((track) => track.genre),
         ).take(3).join(' · ')
-      : _albumArtistLabel(
-          _collectionMetadataValues(tracks.map((track) => track.artist)),
-        );
+      : _albumMetadataLabel(tracks);
   final totalDuration = tracks.fold<Duration>(
     Duration.zero,
     (total, track) => total + track.duration,

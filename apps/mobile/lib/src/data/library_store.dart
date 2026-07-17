@@ -7286,7 +7286,18 @@ class LibraryStore extends ChangeNotifier {
           return byArtist == 0 ? _compareText(a.title, b.title) : byArtist;
         case LibrarySortMode.album:
           final byAlbum = _compareText(a.album, b.album);
-          return byAlbum == 0 ? _compareText(a.title, b.title) : byAlbum;
+          if (byAlbum != 0) {
+            return byAlbum;
+          }
+          final byAlbumArtist = _compareText(
+            a.albumArtist ?? a.artist,
+            b.albumArtist ?? b.artist,
+          );
+          if (byAlbumArtist != 0) {
+            return byAlbumArtist;
+          }
+          final byTrackNumber = _compareTrackNumber(a.trackNumber, b.trackNumber);
+          return byTrackNumber == 0 ? _compareText(a.title, b.title) : byTrackNumber;
       }
     });
 
@@ -7302,12 +7313,27 @@ class LibraryStore extends ChangeNotifier {
     return a.toLowerCase().compareTo(b.toLowerCase());
   }
 
+  int _compareTrackNumber(int? a, int? b) {
+    if (a != null && b != null) {
+      return a.compareTo(b);
+    }
+    if (a != null) {
+      return -1;
+    }
+    if (b != null) {
+      return 1;
+    }
+    return 0;
+  }
+
   bool _trackMatchesQuery(Track track, SearchQuery query) {
     final metadataMatches = searchFieldsMatch(
       <String>[
         track.title,
         track.artist,
         track.album,
+        track.albumArtist ?? '',
+        track.year?.toString() ?? '',
         track.genre,
         _browseLabelForTrack(track, LibraryBrowseType.source),
         _browseLabelForTrack(track, LibraryBrowseType.folder),

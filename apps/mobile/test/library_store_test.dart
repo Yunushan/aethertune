@@ -3149,6 +3149,45 @@ void main() {
     expect(store.search('ambient').single.id, 'new');
   });
 
+  test('sorts album tracks by album artist and numeric track number', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'late',
+        title: 'Alpha',
+        album: 'Aether Album',
+        albumArtist: 'Aether Ensemble',
+        trackNumber: 10,
+      ),
+      _track(
+        'early',
+        title: 'Zulu',
+        album: 'Aether Album',
+        albumArtist: 'Aether Ensemble',
+        trackNumber: 2,
+      ),
+      _track(
+        'untracked',
+        title: 'Middle',
+        album: 'Aether Album',
+        albumArtist: 'Aether Ensemble',
+      ),
+      _track(
+        'other-artist',
+        title: 'First',
+        album: 'Aether Album',
+        albumArtist: 'Other Ensemble',
+        trackNumber: 1,
+      ),
+    ]);
+
+    expect(
+      store.search('', sortMode: LibrarySortMode.album).map((track) => track.id),
+      <String>['early', 'late', 'untracked', 'other-artist'],
+    );
+  });
+
   test(
     'searches saved plain and synced lyrics without timestamp matches',
     () async {
@@ -5052,6 +5091,9 @@ Track _track(
   String? title,
   String artist = 'Artist',
   String album = 'Album',
+  String? albumArtist,
+  int? year,
+  int? trackNumber,
   String genre = 'Unknown Genre',
   String sourceId = 'local',
   String? externalId,
@@ -5067,6 +5109,9 @@ Track _track(
     title: title ?? 'Track $id',
     artist: artist,
     album: album,
+    albumArtist: albumArtist,
+    year: year,
+    trackNumber: trackNumber,
     genre: genre,
     duration: duration,
     artworkUri: artworkUri,
