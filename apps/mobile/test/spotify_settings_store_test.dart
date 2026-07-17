@@ -35,16 +35,32 @@ void main() {
           ),
         ).toJson(),
       );
-    final client = _RefreshingOAuthClient();
+    var refreshCalls = 0;
     final store = SpotifySettingsStore(
       credentialVault: vault,
-      oauthClient: client,
+      oauthClient: SpotifyOAuthClient(
+        clock: () => DateTime.utc(2026, 7, 17, 12),
+        request: (uri, {
+          required method,
+          required headers,
+          String? body,
+        }) async {
+          refreshCalls += 1;
+          expect(uri, SpotifyOAuthClient.tokenUri);
+          expect(method, 'POST');
+          expect(Uri.splitQueryString(body!)['grant_type'], 'refresh_token');
+          return const SpotifyHttpResponse(
+            statusCode: 200,
+            body: '{"access_token":"next-access","expires_in":86400}',
+          );
+        },
+      ),
       clock: () => DateTime.utc(2026, 7, 17, 12),
     );
     await store.load();
 
     expect(await store.readAccessToken(), 'next-access');
-    expect(client.refreshCalls, 1);
+    expect(refreshCalls, 1);
     final saved = jsonDecode(vault.values['spotify-oauth-session']!) as Map;
     expect(saved['accessToken'], 'next-access');
     expect(saved['refreshToken'], 'old-refresh');
@@ -88,24 +104,5 @@ final class _MemoryVault implements ProviderCredentialVault {
   @override
   Future<void> write(String accountId, String secret) async {
     values[accountId] = secret;
-  }
-}
-
-final class _RefreshingOAuthClient extends SpotifyOAuthClient {
-  _RefreshingOAuthClient() : super();
-
-  int refreshCalls = 0;
-
-  @override
-  Future<SpotifyOAuthToken> refresh({
-    required String clientId,
-    required SpotifyOAuthToken current,
-  }) async {
-    refreshCalls += 1;
-    return SpotifyOAuthToken(
-      accessToken: 'next-access',
-      refreshToken: current.refreshToken,
-      expiresAt: DateTime.utc(2026, 7, 18),
-    );
   }
 }

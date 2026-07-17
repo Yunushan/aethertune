@@ -30,15 +30,19 @@ void main() {
   });
 
   test('exchanges a code without a client secret', () async {
-    String? body;
+    String? requestBody;
     Map<String, String>? capturedHeaders;
     final client = SpotifyOAuthClient(
       clock: () => DateTime.utc(2026, 7, 17, 12),
-      request: (uri, {required method, required headers, body: requestBody}) async {
+      request: (uri, {
+        required method,
+        required headers,
+        String? body,
+      }) async {
         expect(uri, SpotifyOAuthClient.tokenUri);
         expect(method, 'POST');
         capturedHeaders = headers;
-        body = requestBody;
+        requestBody = body;
         return const SpotifyHttpResponse(
           statusCode: 200,
           body: '{"access_token":"access","refresh_token":"refresh","expires_in":3600}',
@@ -55,7 +59,7 @@ void main() {
       code: 'returned-code',
     );
 
-    final values = Uri.splitQueryString(body!);
+    final values = Uri.splitQueryString(requestBody!);
     expect(
       capturedHeaders!['content-type'],
       'application/x-www-form-urlencoded',
