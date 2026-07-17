@@ -63,6 +63,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       'aethertune:android-auto:library:artists';
   static const _androidAutoAlbumsId =
       'aethertune:android-auto:library:albums';
+  static const _androidAutoGenresId =
+      'aethertune:android-auto:library:genres';
   static const _androidAutoPlaylistIdPrefix =
       'aethertune:android-auto:library:playlist:';
   static const _androidAutoPlaylistTrackIdPrefix =
@@ -426,6 +428,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
             _androidAutoArtistsFolder(),
           if (_hasBrowseCategory(MediaLibraryBrowseCategory.album))
             _androidAutoAlbumsFolder(),
+          if (_hasBrowseCategory(MediaLibraryBrowseCategory.genre))
+            _androidAutoGenresFolder(),
         ];
       case _androidAutoAllTracksId:
         return _libraryBrowseMediaItems();
@@ -435,6 +439,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.artist);
       case _androidAutoAlbumsId:
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.album);
+      case _androidAutoGenresId:
+        return _playlistBrowseFolders(MediaLibraryBrowseCategory.genre);
       default:
         final playlist = _playlistForMediaId(parentMediaId);
         if (playlist != null) {
@@ -463,6 +469,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     }
     if (mediaId == _androidAutoAlbumsId) {
       return _androidAutoAlbumsFolder();
+    }
+    if (mediaId == _androidAutoGenresId) {
+      return _androidAutoGenresFolder();
     }
     for (var index = 0; index < _tracks.length; index += 1) {
       if (_tracks[index].id == mediaId) {
@@ -692,6 +701,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     return const MediaItem(
       id: _androidAutoAlbumsId,
       title: 'Albums',
+      displaySubtitle: 'AetherTune library',
+      playable: false,
+    );
+  }
+
+  MediaItem _androidAutoGenresFolder() {
+    return const MediaItem(
+      id: _androidAutoGenresId,
+      title: 'Genres',
       displaySubtitle: 'AetherTune library',
       playable: false,
     );

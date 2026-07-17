@@ -62,12 +62,17 @@ void main() {
     final albumCollection = audio.browsePlaylists.singleWhere(
       (playlist) => playlist.id == 'album:smoke session',
     );
+    final genreCollection = audio.browsePlaylists.singleWhere(
+      (playlist) => playlist.id == 'genre:unknown genre',
+    );
     expect(favoritesPlaylist.tracks.map((item) => item.id), <String>[track.id]);
     expect(customPlaylist.tracks.map((item) => item.id), <String>[track.id]);
     expect(artistCollection.category, MediaLibraryBrowseCategory.artist);
     expect(albumCollection.category, MediaLibraryBrowseCategory.album);
+    expect(genreCollection.category, MediaLibraryBrowseCategory.genre);
     expect(artistCollection.tracks.map((item) => item.id), <String>[track.id]);
     expect(albumCollection.tracks.map((item) => item.id), <String>[track.id]);
+    expect(genreCollection.tracks.map((item) => item.id), <String>[track.id]);
 
     final playCallsBefore = audio.playCalls;
     await player.playTrack(track);

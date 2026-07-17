@@ -389,6 +389,12 @@ void main() {
           category: MediaLibraryBrowseCategory.album,
           tracks: <Track>[tracks.last, tracks.first],
         ),
+        MediaLibraryBrowsePlaylist(
+          id: 'genre:electronic',
+          title: 'Electronic',
+          category: MediaLibraryBrowseCategory.genre,
+          tracks: <Track>[tracks.first, tracks.last],
+        ),
       ],
       onPlaylistTrackSelected: (track, queue, queueIndex) async {
         selectedTrack = track;
@@ -438,6 +444,17 @@ void main() {
       <String>['Track two', 'Track one'],
     );
 
+    final genresFolder = libraryChildren.singleWhere(
+      (item) => item.title == 'Genres',
+    );
+    final genreFolder = (await engine.getChildren(genresFolder.id)).single;
+    expect(genreFolder.title, 'Electronic');
+    final genreTracks = await engine.getChildren(genreFolder.id);
+    expect(
+      genreTracks.map((item) => item.title),
+      <String>['Track one', 'Track two'],
+    );
+
     await engine.playFromMediaId(playlistTracks.last.id);
     expect(selectedTrack, same(tracks.last));
     expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
@@ -448,6 +465,11 @@ void main() {
     expect(selectedTrack, same(tracks.last));
     expect(selectedQueue, <Track>[tracks.last, tracks.first]);
     expect(selectedQueueIndex, 0);
+
+    await engine.playFromMediaId(genreTracks.last.id);
+    expect(selectedTrack, same(tracks.last));
+    expect(selectedQueue, <Track>[tracks.first, tracks.last]);
+    expect(selectedQueueIndex, 1);
   });
 
   test('forwards an opt-in visualizer through the system media wrapper',

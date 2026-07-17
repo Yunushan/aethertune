@@ -15,7 +15,7 @@ typedef MediaLibraryPlaylistTrackSelectionHandler =
     Future<void> Function(Track track, List<Track> queue, int queueIndex);
 
 /// The top-level category where a collection appears in a system-media browser.
-enum MediaLibraryBrowseCategory { playlist, artist, album }
+enum MediaLibraryBrowseCategory { playlist, artist, album, genre }
 
 /// A track collection that can be exposed to a system-media library browser.
 class MediaLibraryBrowsePlaylist {
