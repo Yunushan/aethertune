@@ -2812,6 +2812,90 @@ void main() {
     expect(restoredStore.savedHistoryViews, isEmpty);
   });
 
+  test('creates updates persists backs up and deletes saved library views',
+      () async {
+    var now = DateTime.utc(2026, 1, 10, 13);
+    final firstStore = LibraryStore(clock: () => now);
+    await firstStore.load();
+
+    final created = await firstStore.createSavedLibraryView(
+      name: '  Offline Mira  ',
+      query: '  mira  ',
+      favoritesOnly: true,
+      offlineOnly: true,
+      sortMode: LibrarySortMode.artist,
+    );
+
+    expect(created.name, 'Offline Mira');
+    expect(created.query, 'mira');
+    expect(created.favoritesOnly, isTrue);
+    expect(created.offlineOnly, isTrue);
+    expect(created.sortMode, LibrarySortMode.artist);
+    await expectLater(
+      firstStore.createSavedLibraryView(name: '   '),
+      throwsArgumentError,
+    );
+
+    now = DateTime.utc(2026, 1, 10, 14);
+    final updated = await firstStore.updateSavedLibraryView(
+      created.id,
+      name: 'Mira albums',
+      query: '  ambient  ',
+      favoritesOnly: false,
+      offlineOnly: false,
+      sortMode: LibrarySortMode.album,
+    );
+
+    expect(updated, isNotNull);
+    final updatedView = updated!;
+    expect(updatedView.name, 'Mira albums');
+    expect(updatedView.query, 'ambient');
+    expect(updatedView.favoritesOnly, isFalse);
+    expect(updatedView.offlineOnly, isFalse);
+    expect(updatedView.sortMode, LibrarySortMode.album);
+    expect(updatedView.updatedAt, now);
+    expect(
+      await firstStore.updateSavedLibraryView(
+        'missing',
+        name: 'Missing',
+        query: '',
+        favoritesOnly: false,
+        offlineOnly: false,
+        sortMode: LibrarySortMode.recentlyAdded,
+      ),
+      isNull,
+    );
+
+    final secondStore = LibraryStore(clock: () => now);
+    await secondStore.load();
+    expect(
+      secondStore.savedLibraryViews.single.toJson(),
+      updatedView.toJson(),
+    );
+
+    final backup = jsonDecode(secondStore.exportBackupJson())
+        as Map<String, dynamic>;
+    expect(backup['savedLibraryViews'], hasLength(1));
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final restoredStore = LibraryStore(clock: () => now);
+    await restoredStore.load();
+    await restoredStore.restoreBackupJson(jsonEncode(backup));
+    expect(
+      restoredStore.savedLibraryViews.single.toJson(),
+      updatedView.toJson(),
+    );
+
+    await restoredStore.deleteSavedLibraryView(created.id);
+    expect(restoredStore.savedLibraryViews, isEmpty);
+    await restoredStore.deleteSavedLibraryView(created.id);
+    expect(restoredStore.savedLibraryViews, isEmpty);
+
+    backup.remove('savedLibraryViews');
+    await restoredStore.restoreBackupJson(jsonEncode(backup));
+    expect(restoredStore.savedLibraryViews, isEmpty);
+  });
+
   test('pauses playback history and resume progress recording', () async {
     var now = DateTime.utc(2026, 1, 10, 12);
     final store = LibraryStore(clock: () => now);

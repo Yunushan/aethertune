@@ -4348,6 +4348,11 @@ class _LibraryTab extends StatelessWidget {
             hintText: 'Search title, artist, album, or genre',
             leading: const Icon(Icons.search),
             trailing: <Widget>[
+              IconButton(
+                tooltip: 'Saved library views',
+                onPressed: () => _showSavedLibraryViews(context),
+                icon: const Icon(Icons.bookmark_outline),
+              ),
               PopupMenuButton<LibrarySortMode>(
                 tooltip: 'Sort library',
                 icon: const Icon(Icons.sort),
@@ -4500,6 +4505,238 @@ class _LibraryTab extends StatelessWidget {
       ],
     );
   }
+
+  Future<void> _showSavedLibraryViews(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Consumer<LibraryStore>(
+          builder: (context, library, _) {
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.sizeOf(sheetContext).height * 0.68,
+                child: Column(
+                  children: <Widget>[
+                    ListTile(
+                      leading: const Icon(Icons.add_bookmark_outlined),
+                      title: const Text('Save current library view'),
+                      subtitle: Text(
+                        _savedLibraryViewDescription(
+                          query: query,
+                          favoritesOnly: favoritesOnly,
+                          offlineOnly: offlineOnly,
+                          sortMode: sortMode,
+                        ),
+                      ),
+                      onTap: () => unawaited(
+                        _createSavedLibraryView(context),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    if (library.savedLibraryViews.isEmpty)
+                      const Expanded(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text(
+                              'Save a search, favorites, local-files filter, and sort order to return to it quickly.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView.separated(
+                          itemCount: library.savedLibraryViews.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final view = library.savedLibraryViews[index];
+                            return ListTile(
+                              leading: const Icon(Icons.bookmark),
+                              title: Text(view.name),
+                              subtitle: Text(
+                                _savedLibraryViewDescription(
+                                  query: view.query,
+                                  favoritesOnly: view.favoritesOnly,
+                                  offlineOnly: view.offlineOnly,
+                                  sortMode: view.sortMode,
+                                ),
+                              ),
+                              trailing: PopupMenuButton<
+                                  _SavedLibraryViewAction>(
+                                tooltip: 'Edit saved library view',
+                                onSelected: (action) async {
+                                  switch (action) {
+                                    case _SavedLibraryViewAction.update:
+                                      await library.updateSavedLibraryView(
+                                        view.id,
+                                        name: view.name,
+                                        query: query,
+                                        favoritesOnly: favoritesOnly,
+                                        offlineOnly: offlineOnly,
+                                        sortMode: sortMode,
+                                      );
+                                      break;
+                                    case _SavedLibraryViewAction.rename:
+                                      Navigator.of(sheetContext).pop();
+                                      await _renameSavedLibraryView(
+                                        context,
+                                        view,
+                                      );
+                                      break;
+                                    case _SavedLibraryViewAction.delete:
+                                      await library.deleteSavedLibraryView(
+                                        view.id,
+                                      );
+                                      break;
+                                  }
+                                },
+                                itemBuilder: (context) =>
+                                    const <PopupMenuEntry<
+                                        _SavedLibraryViewAction>>[
+                                      PopupMenuItem<
+                                          _SavedLibraryViewAction>(
+                                        value: _SavedLibraryViewAction.update,
+                                        child: Text('Update from current'),
+                                      ),
+                                      PopupMenuItem<
+                                          _SavedLibraryViewAction>(
+                                        value: _SavedLibraryViewAction.rename,
+                                        child: Text('Rename'),
+                                      ),
+                                      PopupMenuItem<
+                                          _SavedLibraryViewAction>(
+                                        value: _SavedLibraryViewAction.delete,
+                                        child: Text('Delete'),
+                                      ),
+                                    ],
+                              ),
+                              onTap: () {
+                                searchController
+                                  ..text = view.query
+                                  ..selection = TextSelection.collapsed(
+                                    offset: view.query.length,
+                                  );
+                                onQueryChanged(view.query);
+                                onFavoritesOnlyChanged(view.favoritesOnly);
+                                onOfflineOnlyChanged(view.offlineOnly);
+                                onSortModeChanged(view.sortMode);
+                                Navigator.of(sheetContext).pop();
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _createSavedLibraryView(BuildContext context) async {
+    final name = await _showSavedLibraryViewNameDialog(
+      context,
+      title: 'Save library view',
+    );
+    if (name == null || !context.mounted) {
+      return;
+    }
+    await context.read<LibraryStore>().createSavedLibraryView(
+          name: name,
+          query: query,
+          favoritesOnly: favoritesOnly,
+          offlineOnly: offlineOnly,
+          sortMode: sortMode,
+        );
+  }
+
+  Future<void> _renameSavedLibraryView(
+    BuildContext context,
+    SavedLibraryView view,
+  ) async {
+    final name = await _showSavedLibraryViewNameDialog(
+      context,
+      title: 'Rename library view',
+      initialName: view.name,
+    );
+    if (name == null || !context.mounted) {
+      return;
+    }
+    await context.read<LibraryStore>().updateSavedLibraryView(
+          view.id,
+          name: name,
+          query: view.query,
+          favoritesOnly: view.favoritesOnly,
+          offlineOnly: view.offlineOnly,
+          sortMode: view.sortMode,
+        );
+  }
+}
+
+Future<String?> _showSavedLibraryViewNameDialog(
+  BuildContext context, {
+  required String title,
+  String initialName = '',
+}) async {
+  final controller = TextEditingController(text: initialName);
+  final name = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(labelText: 'Name'),
+        onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () =>
+              Navigator.of(dialogContext).pop(controller.text.trim()),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (name == null || name.isEmpty) {
+    return null;
+  }
+  return name;
+}
+
+enum _SavedLibraryViewAction { update, rename, delete }
+
+String _savedLibraryViewDescription({
+  required String query,
+  required bool favoritesOnly,
+  required bool offlineOnly,
+  required LibrarySortMode sortMode,
+}) {
+  final labels = <String>[_librarySortLabel(sortMode)];
+  if (query.trim().isNotEmpty) {
+    labels.add('"${query.trim()}"');
+  }
+  if (favoritesOnly) {
+    labels.add('Favorites');
+  }
+  if (offlineOnly) {
+    labels.add('Local files');
+  }
+  return labels.join(' · ');
 }
 
 Future<void> _showLibraryBrowseGroups(

@@ -106,6 +106,76 @@ void main() {
     expect(find.text('Saved 2 tracks as Focus mix.'), findsOneWidget);
   });
 
+  testWidgets('saves and applies a library view from the Library tab', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[
+      Track(
+        id: 'library-view-track',
+        title: 'Mira',
+        artist: 'Aether',
+        localPath: '/music/mira.mp3',
+      ),
+    ]);
+    addTearDown(library.dispose);
+
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Saved library views'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save current library view'), findsOneWidget);
+
+    await tester.tap(find.text('Save current library view'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'My recent music');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(library.savedLibraryViews.single.name, 'My recent music');
+    expect(find.text('My recent music'), findsOneWidget);
+
+    await tester.tap(find.text('My recent music'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Saved library views'), findsOneWidget);
+  });
+
   testWidgets('changes recommendation taste signals from Options', (
     tester,
   ) async {
