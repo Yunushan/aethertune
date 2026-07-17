@@ -52,6 +52,59 @@ void main() {
     expect(registry.authenticate(issued.token), 'primary');
   });
 
+  test('records managed device activity at a bounded durable cadence',
+      () async {
+    var current = DateTime.utc(2026, 7, 16, 8);
+    final root = await Directory.systemTemp.createTemp(
+      'aethertune-managed-activity-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final registry = await ManagedSyncAccountRegistry.open(
+      root,
+      clock: () => current,
+      tokenGenerator: () => 'at_activity_secret',
+    );
+    final issued = await registry.issueToken(
+      accountId: 'primary',
+      deviceName: 'Phone',
+    );
+
+    expect(
+      await registry.recordAuthenticatedUse(
+        accountId: 'primary',
+        tokenId: issued.device.id,
+      ),
+      isTrue,
+    );
+    expect(
+      registry.account('primary')!.tokens.single.lastAuthenticatedAt,
+      current,
+    );
+
+    current = current.add(const Duration(hours: 23));
+    expect(
+      await registry.recordAuthenticatedUse(
+        accountId: 'primary',
+        tokenId: issued.device.id,
+      ),
+      isFalse,
+    );
+    current = current.add(const Duration(hours: 1));
+    expect(
+      await registry.recordAuthenticatedUse(
+        accountId: 'primary',
+        tokenId: issued.device.id,
+      ),
+      isTrue,
+    );
+
+    final restarted = await ManagedSyncAccountRegistry.open(root);
+    expect(
+      restarted.account('primary')!.tokens.single.lastAuthenticatedAt,
+      current,
+    );
+  });
+
   test('managed profile updates persist without changing token identity',
       () async {
     final root = await Directory.systemTemp.createTemp(
@@ -360,6 +413,10 @@ void main() {
     expect(
       (profileBody['device'] as Map<String, dynamic>)['deviceName'],
       'Desktop',
+    );
+    expect(
+      (profileBody['device'] as Map<String, dynamic>)['lastAuthenticatedAt'],
+      '2026-07-15T12:00:00.000Z',
     );
 
     final profileUpdate = await handler(

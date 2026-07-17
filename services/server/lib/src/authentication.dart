@@ -124,16 +124,20 @@ class ManagedSyncTokenMetadata {
     required this.id,
     required this.deviceName,
     required this.createdAt,
+    required this.lastAuthenticatedAt,
   });
 
   final String id;
   final String deviceName;
   final DateTime createdAt;
+  final DateTime? lastAuthenticatedAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'id': id,
         'deviceName': deviceName,
         'createdAt': createdAt.toUtc().toIso8601String(),
+        if (lastAuthenticatedAt != null)
+          'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
       };
 }
 
@@ -225,6 +229,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
 
   static const maxAccounts = 1000;
   static const maxTokensPerAccount = 32;
+  static const activityUpdateInterval = Duration(hours: 24);
 
   final Directory? _directory;
   final DateTime Function() _clock;
@@ -265,6 +270,51 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
       }
     }
     return null;
+  }
+
+  /// Records the most recent successful use of a managed device token.
+  ///
+  /// Activity writes are rate-limited per token to keep normal sync traffic
+  /// from turning into a registry write on every request.
+  Future<bool> recordAuthenticatedUse({
+    required String accountId,
+    required String tokenId,
+  }) {
+    final normalizedAccountId = _validatedAccountId(accountId);
+    final normalizedTokenId = tokenId.trim();
+    if (!RegExp(r'^[0-9a-f]{24}$').hasMatch(normalizedTokenId)) {
+      throw const FormatException('tokenId is invalid.');
+    }
+
+    return _serialized(() async {
+      final candidate = _copyAccounts();
+      final account = candidate[normalizedAccountId];
+      if (account == null) {
+        return false;
+      }
+      final tokenIndex = account.tokens.indexWhere(
+        (token) => token.id == normalizedTokenId,
+      );
+      if (tokenIndex < 0) {
+        return false;
+      }
+      final current = account.tokens[tokenIndex];
+      final now = _clock().toUtc();
+      final previous = current.lastAuthenticatedAt;
+      if (previous != null &&
+          (!now.isAfter(previous) ||
+              now.difference(previous) < activityUpdateInterval)) {
+        return false;
+      }
+
+      account.tokens[tokenIndex] = current.copyWith(
+        lastAuthenticatedAt: now,
+      );
+      final nextRevision = await _persist(candidate);
+      _accounts = candidate;
+      _revision = nextRevision;
+      return true;
+    });
   }
 
   Future<IssuedManagedSyncToken> issueToken({
@@ -343,6 +393,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         id: tokenId,
         deviceName: normalizedDeviceName,
         createdAt: now,
+        lastAuthenticatedAt: null,
         tokenHash: tokenHash,
       );
       account.tokens.add(storedToken);
@@ -452,6 +503,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
           id: currentToken.id,
           deviceName: normalizedDeviceName,
           createdAt: currentToken.createdAt,
+          lastAuthenticatedAt: currentToken.lastAuthenticatedAt,
           tokenHash: currentToken.tokenHash,
         );
       }
@@ -843,6 +895,7 @@ class _ManagedTokenRecord {
     required this.id,
     required this.deviceName,
     required this.createdAt,
+    required this.lastAuthenticatedAt,
     required this.tokenHash,
   });
 
@@ -850,11 +903,16 @@ class _ManagedTokenRecord {
     final id = json['id'];
     final deviceName = json['deviceName'];
     final createdAt = DateTime.tryParse(json['createdAt'] as String? ?? '');
+    final rawLastAuthenticatedAt = json['lastAuthenticatedAt'];
+    final lastAuthenticatedAt = rawLastAuthenticatedAt == null
+        ? null
+        : DateTime.tryParse(rawLastAuthenticatedAt as String? ?? '');
     final digest = json['sha256'];
     if (id is! String ||
         !RegExp(r'^[0-9a-f]{24}$').hasMatch(id) ||
         deviceName is! String ||
         createdAt == null ||
+        (rawLastAuthenticatedAt != null && lastAuthenticatedAt == null) ||
         digest is! String ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(digest)) {
       throw const FormatException('Stored authentication token is invalid.');
@@ -872,6 +930,7 @@ class _ManagedTokenRecord {
         maxLength: 80,
       ),
       createdAt: createdAt.toUtc(),
+      lastAuthenticatedAt: lastAuthenticatedAt?.toUtc(),
       tokenHash: _bytesFromHex(digest),
     );
   }
@@ -879,18 +938,30 @@ class _ManagedTokenRecord {
   final String id;
   final String deviceName;
   final DateTime createdAt;
+  final DateTime? lastAuthenticatedAt;
   final List<int> tokenHash;
 
   ManagedSyncTokenMetadata get metadata => ManagedSyncTokenMetadata(
         id: id,
         deviceName: deviceName,
         createdAt: createdAt,
+        lastAuthenticatedAt: lastAuthenticatedAt,
+      );
+
+  _ManagedTokenRecord copyWith({DateTime? lastAuthenticatedAt}) =>
+      _ManagedTokenRecord(
+        id: id,
+        deviceName: deviceName,
+        createdAt: createdAt,
+        lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+        tokenHash: List<int>.from(tokenHash),
       );
 
   _ManagedTokenRecord copy() => _ManagedTokenRecord(
         id: id,
         deviceName: deviceName,
         createdAt: createdAt,
+        lastAuthenticatedAt: lastAuthenticatedAt,
         tokenHash: List<int>.from(tokenHash),
       );
 
@@ -898,6 +969,8 @@ class _ManagedTokenRecord {
         'id': id,
         'deviceName': deviceName,
         'createdAt': createdAt.toUtc().toIso8601String(),
+        if (lastAuthenticatedAt != null)
+          'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
         'sha256': _hex(tokenHash),
       };
 }

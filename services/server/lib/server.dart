@@ -286,6 +286,11 @@ Handler createServerHandler({
     requestsTotal += 1;
     final requestStartedAt = now().toUtc();
     try {
+      await _recordManagedDeviceActivity(
+        request,
+        authenticator: authenticator,
+        managedAccounts: managedSyncAccounts,
+      );
       final response = await route(request);
       _writeRequestLog(
         requestLogger,
@@ -306,6 +311,49 @@ Handler createServerHandler({
       rethrow;
     }
   };
+}
+
+Future<void> _recordManagedDeviceActivity(
+  Request request, {
+  required SyncAuthenticator authenticator,
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  if (managedAccounts == null || !_isManagedActivityRoute(request.url.path)) {
+    return;
+  }
+  final token = _bearerToken(request.headers['authorization'] ?? '');
+  if (token == null) {
+    return;
+  }
+  final authenticatedAccountId = authenticator.authenticate(token);
+  final principal = managedAccounts.authenticatePrincipal(token);
+  if (authenticatedAccountId == null ||
+      principal == null ||
+      principal.accountId != authenticatedAccountId) {
+    return;
+  }
+
+  try {
+    await managedAccounts.recordAuthenticatedUse(
+      accountId: principal.accountId,
+      tokenId: principal.token.id,
+    );
+  } on Object {
+    // Device activity is operational metadata and must not deny playback or
+    // sync if its durable write is temporarily unavailable.
+  }
+}
+
+bool _isManagedActivityRoute(String path) {
+  return path == 'api/v1/auth/profile' ||
+      path == 'api/v1/sync/library' ||
+      path == 'api/v1/sync/library/metadata' ||
+      path == 'api/v1/listen-together/session' ||
+      path == 'api/v1/listen-together/session/invite' ||
+      path.startsWith('api/v1/listen-together/invites/') ||
+      path == 'api/v1/shared-playlists' ||
+      path.startsWith('api/v1/shared-playlists/') ||
+      path.startsWith('api/v1/shared-playlist-invites/');
 }
 
 void _writeRequestLog(

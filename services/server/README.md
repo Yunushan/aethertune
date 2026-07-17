@@ -153,6 +153,11 @@ List account and non-secret device metadata with
 `GET /api/v1/admin/sync-accounts`. Rotate a device token by repeating the
 `POST` with `replaceTokenId` set to its listed token ID. The replacement is
 committed atomically, and the old token stops authenticating immediately.
+Each managed token also reports its last successful authentication time. The
+server updates that operational field at most once per 24 hours per device, so
+normal sync traffic does not create a registry write for every request. It
+stores no bearer value, request path, address, or payload with the activity
+timestamp.
 Revoke without replacement using:
 
 ```bash
