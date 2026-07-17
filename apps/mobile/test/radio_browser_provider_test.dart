@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/radio_browser_provider.dart';
@@ -185,6 +187,79 @@ void main() {
 
     expect(tracks, hasLength(1));
     expect(capturedSearchUri!.host, 'de1.api.radio-browser.info');
+  });
+
+  test('retries transient station search failures with bounded backoff', () async {
+    var attempts = 0;
+    final delays = <Duration>[];
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      retryDelay: (duration) async => delays.add(duration),
+      searchLoader: (_) async {
+        attempts += 1;
+        if (attempts < 3) {
+          throw const HttpException('temporarily unavailable');
+        }
+        return _sampleStationsJson;
+      },
+    );
+
+    final tracks = await provider.search('aether');
+
+    expect(tracks, hasLength(1));
+    expect(attempts, 3);
+    expect(
+      delays,
+      const <Duration>[
+        Duration(milliseconds: 250),
+        Duration(milliseconds: 750),
+      ],
+    );
+  });
+
+  test('does not retry malformed station payload failures', () async {
+    var attempts = 0;
+    final delays = <Duration>[];
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      retryDelay: (duration) async => delays.add(duration),
+      searchLoader: (_) async {
+        attempts += 1;
+        throw const FormatException('invalid station payload');
+      },
+    );
+
+    await expectLater(provider.search('aether'), throwsFormatException);
+
+    expect(attempts, 1);
+    expect(delays, isEmpty);
+  });
+
+  test('retries transient mirror discovery before selecting a mirror', () async {
+    var mirrorAttempts = 0;
+    final delays = <Duration>[];
+    Uri? searchUri;
+    final provider = RadioBrowserProvider(
+      mirrorDirectoryUri: Uri.parse('https://mirrors.example.test/json/servers'),
+      retryDelay: (duration) async => delays.add(duration),
+      mirrorLoader: (_) async {
+        mirrorAttempts += 1;
+        if (mirrorAttempts < 3) {
+          throw const HttpException('directory unavailable');
+        }
+        return '[{"name":"nl1.api.radio-browser.info"}]';
+      },
+      searchLoader: (uri) async {
+        searchUri = uri;
+        return _sampleStationsJson;
+      },
+    );
+
+    await provider.search('aether');
+
+    expect(mirrorAttempts, 3);
+    expect(searchUri!.host, 'nl1.api.radio-browser.info');
+    expect(delays, hasLength(2));
   });
 
   test('searchStations applies advanced filters to URI and results', () async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,6 +10,12 @@ typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
 typedef RadioBrowserMirrorLoader = Future<String> Function(Uri mirrorsUri);
 typedef RadioBrowserStreamValidator = Future<RadioBrowserStreamValidation>
     Function(Uri streamUri);
+typedef RadioBrowserRetryDelay = Future<void> Function(Duration duration);
+
+const _radioBrowserRetryDelays = <Duration>[
+  Duration(milliseconds: 250),
+  Duration(milliseconds: 750),
+];
 
 final Uri defaultRadioBrowserBaseUri = Uri(
   scheme: 'https',
@@ -84,6 +91,7 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
     RadioBrowserSearchLoader? searchLoader,
     RadioBrowserClickLoader? clickLoader,
     RadioBrowserStreamValidator? streamValidator,
+    RadioBrowserRetryDelay? retryDelay,
     this.limit = 20,
   })  : _baseUri = baseUri ?? defaultRadioBrowserBaseUri,
         _mirrorDirectoryUri =
@@ -92,6 +100,8 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
         _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
         _clickLoader = clickLoader ?? _loadRadioBrowserClick,
         _streamValidator = streamValidator ?? _validateRadioBrowserStream,
+        _retryDelay =
+            retryDelay ?? ((duration) => Future<void>.delayed(duration)),
         _discoversMirrors = baseUri == null;
 
   Uri _baseUri;
@@ -101,6 +111,7 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
   final RadioBrowserSearchLoader _searchLoader;
   final RadioBrowserClickLoader _clickLoader;
   final RadioBrowserStreamValidator _streamValidator;
+  final RadioBrowserRetryDelay _retryDelay;
   final bool _discoversMirrors;
   Future<Uri>? _mirrorDiscovery;
 
@@ -193,14 +204,17 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
 
     final normalized = query.trim();
     final baseUri = await _resolvedBaseUri();
-    final response = await _searchLoader(
-      _searchUri(
-        baseUri,
-        normalized,
-        filters,
-        offset,
-        effectiveLimit,
+    final response = await _runRadioBrowserDirectoryRequest(
+      () => _searchLoader(
+        _searchUri(
+          baseUri,
+          normalized,
+          filters,
+          offset,
+          effectiveLimit,
+        ),
       ),
+      delay: _retryDelay,
     );
     final returnedStationCount = _radioBrowserResponseCount(response);
     final stations = parseRadioBrowserStations(response);
@@ -271,7 +285,10 @@ class RadioBrowserProvider implements MusicSourceSearchPagingProvider {
   Future<Uri> _discoverBaseUri() async {
     try {
       final mirrors = parseRadioBrowserMirrors(
-        await _mirrorLoader(_mirrorDirectoryUri),
+        await _runRadioBrowserDirectoryRequest(
+          () => _mirrorLoader(_mirrorDirectoryUri),
+          delay: _retryDelay,
+        ),
       );
       _baseUri = selectRadioBrowserMirror(mirrors, fallback: _baseUri);
     } catch (_) {
@@ -526,6 +543,30 @@ Future<String> _loadRadioBrowserSearch(Uri searchUri) async {
     client.close(force: true);
   }
 }
+
+Future<T> _runRadioBrowserDirectoryRequest<T>(
+  Future<T> Function() operation, {
+  required RadioBrowserRetryDelay delay,
+}) async {
+  for (var attempt = 0; attempt <= _radioBrowserRetryDelays.length; attempt++) {
+    try {
+      return await operation();
+    } on Object catch (error, stackTrace) {
+      if (!_isTransientRadioBrowserError(error) ||
+          attempt == _radioBrowserRetryDelays.length) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      await delay(_radioBrowserRetryDelays[attempt]);
+    }
+  }
+  throw StateError('Radio Browser retry attempts were exhausted.');
+}
+
+bool _isTransientRadioBrowserError(Object error) =>
+    error is SocketException ||
+    error is HttpException ||
+    error is TimeoutException ||
+    error is HandshakeException;
 
 Future<String> _loadRadioBrowserClick(Uri clickUri) async {
   final client = HttpClient();
