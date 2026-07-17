@@ -887,12 +887,18 @@ Future<Response> _handleSharedPlaylistItem(
       if (role == null) {
         throw const FormatException('Invite role must be viewer or editor.');
       }
-      final code = await invites.issue(playlistId: playlistId, role: role);
+      final expiresAt = now().toUtc().add(sharedPlaylistInviteLifetime);
+      final code = await invites.issue(
+        playlistId: playlistId,
+        role: role,
+        expiresAt: expiresAt,
+      );
       return _jsonResponse(
         201,
         <String, Object?>{
           'inviteCode': code,
           'role': sharedPlaylistRoleToWire(role),
+          'expiresAt': expiresAt.toIso8601String(),
         },
       );
     } on _PayloadTooLarge catch (error) {
@@ -1060,8 +1066,11 @@ Future<Response> _handleSharedPlaylistInviteJoin(
   }
   final code = request.url.pathSegments.last;
   final invite = await invites.consume(code);
-  final record = invite == null ? null : await playlists.read(invite.playlistId);
-  if (record == null || invite == null) {
+  if (invite == null || !invite.expiresAt.isAfter(now().toUtc())) {
+    return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_invite_not_found'});
+  }
+  final record = await playlists.read(invite.playlistId);
+  if (record == null) {
     return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_invite_not_found'});
   }
   final existingRole = record.roleFor(accountId);

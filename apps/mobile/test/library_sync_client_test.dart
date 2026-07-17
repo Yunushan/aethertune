@@ -678,7 +678,7 @@ void main() {
           expect(jsonDecode(body!), <String, Object?>{'role': 'editor'});
           return const LibrarySyncHttpResponse(
             statusCode: 201,
-            body: '{"inviteCode":"BBBBBBBBBBBBBBBBBBBBBBBB"}',
+            body: '{"inviteCode":"BBBBBBBBBBBBBBBBBBBBBBBB","role":"editor","expiresAt":"2026-07-24T10:00:00.000Z"}',
           );
         }
         expect(method, 'PUT');
@@ -689,13 +689,13 @@ void main() {
       },
     );
 
-    expect(
-      await client.issueSharedPlaylistInvite(
-        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
-        role: SharedPlaylistAccessRole.editor,
-      ),
-      'BBBBBBBBBBBBBBBBBBBBBBBB',
+    final invitation = await client.issueSharedPlaylistInvite(
+      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+      role: SharedPlaylistAccessRole.editor,
     );
+    expect(invitation.code, 'BBBBBBBBBBBBBBBBBBBBBBBB');
+    expect(invitation.role, SharedPlaylistAccessRole.editor);
+    expect(invitation.expiresAt, DateTime.utc(2026, 7, 24, 10));
     await expectLater(
       client.updateSharedPlaylist(
         playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',

@@ -253,7 +253,7 @@ class SharedPlaylistStore extends ChangeNotifier {
     });
   }
 
-  Future<String> createInvite(
+  Future<SharedPlaylistInvitation> createInvite(
     SharedPlaylistBinding binding,
     SharedPlaylistAccessRole role,
   ) {

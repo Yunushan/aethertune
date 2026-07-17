@@ -653,7 +653,7 @@ class LibrarySyncPanel extends StatelessWidget {
       return;
     }
     try {
-      final code = await context.read<SharedPlaylistStore>().createInvite(
+      final invitation = await context.read<SharedPlaylistStore>().createInvite(
         binding,
         role,
       );
@@ -662,16 +662,29 @@ class LibrarySyncPanel extends StatelessWidget {
       }
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text('${role.name} invite code'),
-          content: SelectableText(code),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
+        builder: (dialogContext) {
+          final localizations = MaterialLocalizations.of(dialogContext);
+          return AlertDialog(
+            title: Text('${invitation.role.name} invite code'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SelectableText(invitation.code),
+                const SizedBox(height: 12),
+                Text(
+                  'Expires ${localizations.formatMediumDate(invitation.expiresAt.toLocal())}',
+                ),
+              ],
             ),
-          ],
-        ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
       );
     } on Object catch (error) {
       if (context.mounted) {

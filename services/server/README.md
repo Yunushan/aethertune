@@ -115,10 +115,11 @@ track IDs; stream URLs, local paths, credentials, artwork, and playback state
 are rejected. Owners create opaque 144-bit viewer/editor invite codes, revoke
 existing collaborators, and can delete the server playlist. Editors can update
 against its current revision; viewers can only fetch it. Each invitation is
-atomically consumed on a join, so it cannot be reused. Shared playlists and
-invite records are stored under `AETHERTUNE_DATA_DIR`, using SHA-256-derived
-filenames for IDs/codes. Clients must refresh explicitly after a revision
-conflict; there is no automatic merge or revision history yet.
+atomically consumed on a join, so it cannot be reused, and expires after seven
+days if unused. Shared playlists and invite records are stored under
+`AETHERTUNE_DATA_DIR`, using SHA-256-derived filenames for IDs/codes. Clients
+must refresh explicitly after a revision conflict; there is no automatic merge
+or revision history yet.
 
 ## Managed accounts and device tokens
 

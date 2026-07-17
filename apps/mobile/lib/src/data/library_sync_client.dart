@@ -121,6 +121,18 @@ class SharedPlaylistRemote {
   bool get isOwner => role == SharedPlaylistAccessRole.owner;
 }
 
+class SharedPlaylistInvitation {
+  const SharedPlaylistInvitation({
+    required this.code,
+    required this.role,
+    required this.expiresAt,
+  });
+
+  final String code;
+  final SharedPlaylistAccessRole role;
+  final DateTime expiresAt;
+}
+
 class SharedPlaylistConflictException implements Exception {
   const SharedPlaylistConflictException({
     required this.currentRevision,
@@ -189,7 +201,7 @@ abstract interface class SharedPlaylistGateway {
     required int baseRevision,
   });
 
-  Future<String> issueSharedPlaylistInvite({
+  Future<SharedPlaylistInvitation> issueSharedPlaylistInvite({
     required String playlistId,
     required SharedPlaylistAccessRole role,
   });
@@ -479,7 +491,7 @@ class LibrarySyncClient
   }
 
   @override
-  Future<String> issueSharedPlaylistInvite({
+  Future<SharedPlaylistInvitation> issueSharedPlaylistInvite({
     required String playlistId,
     required SharedPlaylistAccessRole role,
   }) async {
@@ -495,11 +507,22 @@ class LibrarySyncClient
     if (response.statusCode != 201) {
       throw _requestFailure(response);
     }
-    final code = _jsonObject(response.body)['inviteCode'];
-    if (code is! String || !_isSharedPlaylistInviteCode(code)) {
+    final invitation = _jsonObject(response.body);
+    final code = invitation['inviteCode'];
+    final returnedRole = _sharedPlaylistRoleFromWire(invitation['role']);
+    final expiresAt = _optionalDate(invitation['expiresAt']);
+    if (code is! String ||
+        !_isSharedPlaylistInviteCode(code) ||
+        returnedRole == null ||
+        returnedRole != role ||
+        expiresAt == null) {
       throw const FormatException('Shared playlist invite code is invalid.');
     }
-    return code;
+    return SharedPlaylistInvitation(
+      code: code,
+      role: returnedRole,
+      expiresAt: expiresAt,
+    );
   }
 
   @override

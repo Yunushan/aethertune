@@ -736,6 +736,7 @@ void main() {
     final code = await firstStore.issue(
       playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
       role: SharedPlaylistRole.editor,
+      expiresAt: DateTime.utc(2026, 7, 24),
     );
     final restartedStore = FileSharedPlaylistInviteStore(root);
 
@@ -757,7 +758,8 @@ void main() {
     const viewerToken = 'shared-viewer-token';
     const editorToken = 'shared-editor-token';
 
-    Handler handler() => createServerHandler(
+    Handler handler({DateTime Function()? clock}) => createServerHandler(
+      clock: clock,
       syncAuthenticator: StaticSyncAuthenticator(
         const <String, String>{
           'owner-account': ownerToken,
@@ -951,6 +953,53 @@ void main() {
         ),
       );
       expect(editorReadAfterRevocation.statusCode, 404);
+    });
+
+    test('expires unused invitations after the configured lifetime', () async {
+      var now = DateTime.utc(2026, 7, 17, 12);
+      final server = handler(clock: () => now);
+      final created = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Expiring invite',
+              'trackIds': <String>['track-1'],
+            },
+          },
+        ),
+      );
+      final playlistId = (await _json(created))['id'] as String;
+      final issued = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/invites',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{'role': 'viewer'},
+        ),
+      );
+      expect(issued.statusCode, 201);
+      final issuedBody = await _json(issued);
+      final inviteCode = issuedBody['inviteCode'] as String;
+      expect(
+        DateTime.parse(issuedBody['expiresAt'] as String).toUtc(),
+        now.add(sharedPlaylistInviteLifetime),
+      );
+
+      now = now.add(sharedPlaylistInviteLifetime).add(const Duration(seconds: 1));
+      final expired = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlist-invites/$inviteCode',
+          token: viewerToken,
+        ),
+      );
+      expect(expired.statusCode, 404);
     });
 
     test('rejects stream URLs and unauthenticated invitation joins', () async {

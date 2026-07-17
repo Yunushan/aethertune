@@ -11,6 +11,8 @@ enum SharedPlaylistRole {
   editor,
 }
 
+const sharedPlaylistInviteLifetime = Duration(days: 7);
+
 SharedPlaylistRole? sharedPlaylistRoleFromWire(Object? value) {
   return switch (value) {
     'viewer' => SharedPlaylistRole.viewer,
@@ -321,16 +323,22 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
 }
 
 class SharedPlaylistInvite {
-  const SharedPlaylistInvite({required this.playlistId, required this.role});
+  const SharedPlaylistInvite({
+    required this.playlistId,
+    required this.role,
+    required this.expiresAt,
+  });
 
   final String playlistId;
   final SharedPlaylistRole role;
+  final DateTime expiresAt;
 }
 
 abstract interface class SharedPlaylistInviteStore {
   Future<String> issue({
     required String playlistId,
     required SharedPlaylistRole role,
+    required DateTime expiresAt,
   });
 
   Future<SharedPlaylistInvite?> lookup(String inviteCode);
@@ -350,9 +358,14 @@ class MemorySharedPlaylistInviteStore implements SharedPlaylistInviteStore {
   Future<String> issue({
     required String playlistId,
     required SharedPlaylistRole role,
+    required DateTime expiresAt,
   }) async {
     final code = newSharedPlaylistInviteCode();
-    _invites[code] = SharedPlaylistInvite(playlistId: playlistId, role: role);
+    _invites[code] = SharedPlaylistInvite(
+      playlistId: playlistId,
+      role: role,
+      expiresAt: expiresAt.toUtc(),
+    );
     return code;
   }
 
@@ -378,6 +391,7 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
   Future<String> issue({
     required String playlistId,
     required SharedPlaylistRole role,
+    required DateTime expiresAt,
   }) async {
     await rootDirectory.create(recursive: true);
     for (var attempt = 0; attempt < 4; attempt += 1) {
@@ -390,6 +404,7 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
         jsonEncode(<String, Object?>{
           'playlistId': playlistId,
           'role': sharedPlaylistRoleToWire(role),
+          'expiresAt': expiresAt.toUtc().toIso8601String(),
         }),
         flush: true,
       );
@@ -452,12 +467,22 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
       }
       final playlistId = decoded['playlistId'];
       final role = sharedPlaylistRoleFromWire(decoded['role']);
+      final expiresAt = decoded['expiresAt'];
       if (playlistId is! String ||
           !_isSharedPlaylistId(playlistId) ||
-          role == null) {
+          role == null ||
+          expiresAt is! String) {
         return null;
       }
-      return SharedPlaylistInvite(playlistId: playlistId, role: role);
+      final parsedExpiresAt = DateTime.tryParse(expiresAt)?.toUtc();
+      if (parsedExpiresAt == null) {
+        return null;
+      }
+      return SharedPlaylistInvite(
+        playlistId: playlistId,
+        role: role,
+        expiresAt: parsedExpiresAt,
+      );
     } on Object {
       return null;
     }

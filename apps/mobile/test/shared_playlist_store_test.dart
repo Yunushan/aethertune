@@ -140,10 +140,14 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
       remote;
 
   @override
-  Future<String> issueSharedPlaylistInvite({
+  Future<SharedPlaylistInvitation> issueSharedPlaylistInvite({
     required String playlistId,
     required SharedPlaylistAccessRole role,
-  }) async => 'BBBBBBBBBBBBBBBBBBBBBBBB';
+  }) async => SharedPlaylistInvitation(
+    code: 'BBBBBBBBBBBBBBBBBBBBBBBB',
+    role: role,
+    expiresAt: DateTime.utc(2026, 7, 24),
+  );
 
   @override
   Future<SharedPlaylistRemote> revokeSharedPlaylistCollaborator({
