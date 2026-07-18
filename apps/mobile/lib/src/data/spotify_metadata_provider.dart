@@ -36,6 +36,8 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? topTracksLoader,
     Uri? topArtistsUri,
     SpotifySearchLoader? topArtistsLoader,
+    Uri? followedArtistsUri,
+    SpotifySearchLoader? followedArtistsLoader,
     Uri? newReleasesUri,
     SpotifySearchLoader? newReleasesLoader,
     Uri? albumsUri,
@@ -57,6 +59,8 @@ final class SpotifyMetadataProvider
        _topTracksLoader = topTracksLoader ?? _loadSpotifyJson,
        topArtistsUri = topArtistsUri ?? _defaultTopArtistsUri,
        _topArtistsLoader = topArtistsLoader ?? _loadSpotifyJson,
+       followedArtistsUri = followedArtistsUri ?? _defaultFollowedArtistsUri,
+       _followedArtistsLoader = followedArtistsLoader ?? _loadSpotifyJson,
        newReleasesUri = newReleasesUri ?? _defaultNewReleasesUri,
        _newReleasesLoader = newReleasesLoader ?? _loadSpotifyJson,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
@@ -78,6 +82,8 @@ final class SpotifyMetadataProvider
       Uri.parse('https://api.spotify.com/v1/me/top/tracks');
   static final Uri _defaultTopArtistsUri =
       Uri.parse('https://api.spotify.com/v1/me/top/artists');
+  static final Uri _defaultFollowedArtistsUri =
+      Uri.parse('https://api.spotify.com/v1/me/following');
   static final Uri _defaultNewReleasesUri =
       Uri.parse('https://api.spotify.com/v1/browse/new-releases');
   static final Uri _defaultAlbumsUri =
@@ -100,6 +106,8 @@ final class SpotifyMetadataProvider
   final SpotifySearchLoader _topTracksLoader;
   final Uri topArtistsUri;
   final SpotifySearchLoader _topArtistsLoader;
+  final Uri followedArtistsUri;
+  final SpotifySearchLoader _followedArtistsLoader;
   final Uri newReleasesUri;
   final SpotifySearchLoader _newReleasesLoader;
   final Uri albumsUri;
@@ -344,6 +352,33 @@ final class SpotifyMetadataProvider
     );
   }
 
+  /// Reads followed Spotify artist metadata without changing remote follows.
+  Future<SpotifyFollowedArtistsPage> loadFollowedArtistsPage({
+    String? after,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedAfter = after == null ? null : _nonEmpty(after);
+    if (after != null && normalizedAfter == null) {
+      throw ArgumentError.value(after, 'after', 'Must not be empty.');
+    }
+    final token = await _accessTokenReader();
+    return parseSpotifyFollowedArtistsPage(
+      await _followedArtistsLoader(
+        followedArtistsUri.replace(
+          queryParameters: <String, String>{
+            'type': 'artist',
+            'limit': limit.clamp(1, 50).toString(),
+            if (normalizedAfter != null) 'after': normalizedAfter,
+          },
+        ),
+        token,
+      ),
+    );
+  }
+
   /// Reads official Spotify new-release album metadata without playback.
   Future<SpotifySavedAlbumsPage> loadNewReleasesPage({
     int offset = 0,
@@ -532,6 +567,20 @@ final class SpotifyTopArtist {
   final String id;
   final String name;
   final Uri? artworkUri;
+}
+
+final class SpotifyFollowedArtistsPage {
+  const SpotifyFollowedArtistsPage({
+    required this.artists,
+    required this.total,
+    required this.hasMore,
+    this.nextAfter,
+  });
+
+  final List<SpotifyTopArtist> artists;
+  final int total;
+  final bool hasMore;
+  final String? nextAfter;
 }
 
 final class SpotifyRecentlyPlayedItem {
@@ -740,7 +789,36 @@ List<SpotifyTopArtist> parseSpotifyTopArtists(String jsonText) {
   if (decoded is! Map) {
     throw const FormatException('Spotify top artists response must be a map.');
   }
-  final items = Map<String, Object?>.from(decoded)['items'];
+  return _spotifyArtistsFromJsonItems(Map<String, Object?>.from(decoded)['items']);
+}
+
+SpotifyFollowedArtistsPage parseSpotifyFollowedArtistsPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify followed artists response must be a map.');
+  }
+  final artistsValue = Map<String, Object?>.from(decoded)['artists'];
+  if (artistsValue is! Map) {
+    throw const FormatException(
+      'Spotify followed artists response is missing artists.',
+    );
+  }
+  final artistsJson = Map<String, Object?>.from(artistsValue);
+  final cursorsValue = artistsJson['cursors'];
+  final cursors = cursorsValue is Map
+      ? Map<String, Object?>.from(cursorsValue)
+      : const <String, Object?>{};
+  final nextAfter = _nonEmpty(cursors['after']);
+  final artists = _spotifyArtistsFromJsonItems(artistsJson['items']);
+  return SpotifyFollowedArtistsPage(
+    artists: artists,
+    total: _nonNegativeInt(artistsJson['total']) ?? 0,
+    hasMore: _nonEmpty(artistsJson['next']) != null && nextAfter != null,
+    nextAfter: nextAfter,
+  );
+}
+
+List<SpotifyTopArtist> _spotifyArtistsFromJsonItems(Object? items) {
   if (items is! List) {
     return const <SpotifyTopArtist>[];
   }

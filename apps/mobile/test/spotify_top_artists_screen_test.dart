@@ -46,4 +46,56 @@ void main() {
     expect(library.isArtistFollowed('Aether'), isTrue);
     expect(find.byTooltip('Unfollow local artist'), findsOneWidget);
   });
+
+  testWidgets('loads and paginates followed artists without remote writes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final cursors = <String?>[];
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      followedArtistsLoader: (uri, token) async {
+        final after = uri.queryParameters['after'];
+        cursors.add(after);
+        return after == null
+            ? '''
+                {"artists": {"total": 2, "next": "next",
+                "cursors": {"after": "second"},
+                "items": [{"id": "first", "name": "First"}]}}
+              '''
+            : '''
+                {"artists": {"total": 2, "next": null,
+                "cursors": {"after": null},
+                "items": [{"id": "second", "name": "Second"}]}}
+              ''';
+      },
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<LibraryStore>.value(
+        value: library,
+        child: MaterialApp(
+          home: SpotifyTopArtistsScreen(
+            provider: provider,
+            followedArtists: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spotify followed artists'), findsOneWidget);
+    expect(find.text('First'), findsOneWidget);
+    expect(cursors, <String?>[null]);
+
+    await tester.tap(find.text('Load more followed artists (1 remaining)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Second'), findsOneWidget);
+    expect(cursors, <String?>[null, 'second']);
+    expect(find.text('All 2 followed artists loaded.'), findsOneWidget);
+  });
 }

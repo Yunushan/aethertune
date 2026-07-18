@@ -104,7 +104,9 @@ The documented `user-top-read` scope additionally powers explicitly opened
 top-track and top-artist metadata views for Spotify's short-, medium-, and
 long-term affinity windows. Top tracks can be saved as local metadata; top
 artists can only update AetherTune's existing local artist-follow list and are
-never treated as Spotify remote subscriptions.
+never treated as Spotify remote subscriptions. The documented
+`user-follow-read` scope can also list followed artist metadata with bounded
+cursor pagination; it never follows or unfollows artists on Spotify.
 Every page is user-triggered, disabled in offline mode, and can only save the
 returned metadata into the local library. The provider declares metadata search,
 artwork, and authentication only. It does not resolve a stream, play Spotify
@@ -112,7 +114,7 @@ audio, cache/download media, write Spotify data, or use undocumented endpoints.
 The user must configure the loopback redirect allowed by Spotify for their
 developer app before connecting.
 
-Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played), [Get User's Top Items](https://developer.spotify.com/documentation/web-api/reference/get-users-top-artists-and-tracks), and [Get New Releases](https://developer.spotify.com/documentation/web-api/reference/get-new-releases).
+Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played), [Get User's Top Items](https://developer.spotify.com/documentation/web-api/reference/get-users-top-artists-and-tracks), [Get Followed Artists](https://developer.spotify.com/documentation/web-api/reference/get-followed), and [Get New Releases](https://developer.spotify.com/documentation/web-api/reference/get-new-releases).
 
 ## LRCLIB lyrics foundation
 

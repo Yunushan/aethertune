@@ -13072,6 +13072,7 @@ enum _SpotifyAction {
   recentlyPlayed,
   topTracks,
   topArtists,
+  followedArtists,
   newReleases,
   configure,
   remove,
@@ -13469,6 +13470,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifyTopArtists(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.followedArtists:
+                  if (spotifyProvider != null) {
+                    _openSpotifyFollowedArtists(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.newReleases:
                   if (spotifyProvider != null) {
                     _openSpotifyNewReleases(context, spotifyProvider);
@@ -13535,6 +13541,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.people_alt_outlined),
                   title: Text('Top artists'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.followedArtists,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.person_search_outlined),
+                  title: Text('Followed artists'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -14970,6 +14985,20 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SpotifyTopArtistsScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openSpotifyFollowedArtists(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifyTopArtistsScreen(
+          provider: provider,
+          followedArtists: true,
+        ),
       ),
     );
   }

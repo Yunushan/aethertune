@@ -8,9 +8,14 @@ import '../data/spotify_metadata_provider.dart';
 import 'widgets/track_artwork.dart';
 
 final class SpotifyTopArtistsScreen extends StatefulWidget {
-  const SpotifyTopArtistsScreen({super.key, required this.provider});
+  const SpotifyTopArtistsScreen({
+    super.key,
+    required this.provider,
+    this.followedArtists = false,
+  });
 
   final SpotifyMetadataProvider provider;
+  final bool followedArtists;
 
   @override
   State<SpotifyTopArtistsScreen> createState() => _SpotifyTopArtistsScreenState();
@@ -22,11 +27,15 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
   bool _loading = false;
   String? _error;
   int _requestSerial = 0;
+  String? _nextAfter;
+  int? _total;
+  bool _hasMore = false;
+  bool _loaded = false;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    unawaited(_load(reset: true));
   }
 
   @override
@@ -34,28 +43,30 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
     final library = context.watch<LibraryStore>();
     final offline = library.offlineModeEnabled;
     return Scaffold(
-      appBar: AppBar(title: const Text('Spotify top artists')),
+      appBar: AppBar(title: Text(_title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final range in SpotifyTopTracksTimeRange.values)
-                ChoiceChip(
-                  label: Text(_rangeLabel(range)),
-                  selected: _range == range,
-                  onSelected: offline ? null : (_) => _selectRange(range),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          if (!widget.followedArtists) ...<Widget>[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final range in SpotifyTopTracksTimeRange.values)
+                  ChoiceChip(
+                    label: Text(_rangeLabel(range)),
+                    selected: _range == range,
+                    onSelected: offline ? null : (_) => _selectRange(range),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           if (offline && _artists.isEmpty)
-            const ListTile(
-              leading: Icon(Icons.cloud_off_outlined),
-              title: Text('Offline mode is on'),
-              subtitle: Text('Turn it off to load your top Spotify artists.'),
+            ListTile(
+              leading: const Icon(Icons.cloud_off_outlined),
+              title: const Text('Offline mode is on'),
+              subtitle: Text('Turn it off to load $_description.'),
             ),
           if (_loading && _artists.isEmpty)
             const Padding(
@@ -65,18 +76,18 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
           if (_error != null && _artists.isEmpty)
             ListTile(
               leading: const Icon(Icons.error_outline),
-              title: const Text('Could not load top artists'),
+              title: Text('Could not load $_description'),
               subtitle: Text(_error!),
               trailing: IconButton(
-                tooltip: 'Retry top artists',
-                onPressed: offline ? null : () => unawaited(_load()),
+                tooltip: 'Retry $_description',
+                onPressed: offline ? null : () => unawaited(_load(reset: true)),
                 icon: const Icon(Icons.refresh),
               ),
             ),
           if (!_loading && _error == null && _artists.isEmpty && !offline)
-            const ListTile(
-              leading: Icon(Icons.person_search_outlined),
-              title: Text('No top artists found'),
+            ListTile(
+              leading: const Icon(Icons.person_search_outlined),
+              title: Text('No $_description found'),
             ),
           for (final artist in _artists)
             ListTile(
@@ -94,21 +105,68 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
                 ),
               ),
             ),
+          if (_loading && _artists.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+          ],
+          if (widget.followedArtists && _artists.isNotEmpty && _hasMore)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _loading || offline
+                    ? null
+                    : () => unawaited(_load()),
+                icon: const Icon(Icons.expand_more),
+                label: Text(_loadMoreLabel),
+              ),
+            )
+          else if (widget.followedArtists && _artists.isNotEmpty && _total != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'All $_total $_description loaded.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Future<void> _load() async {
-    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+  Future<void> _load({bool reset = false}) async {
+    if (_loading ||
+        context.read<LibraryStore>().offlineModeEnabled ||
+        (widget.followedArtists && _loaded && !reset && !_hasMore)) {
       return;
     }
     final request = ++_requestSerial;
     setState(() {
       _loading = true;
       _error = null;
+      if (reset && widget.followedArtists) {
+        _artists = const <SpotifyTopArtist>[];
+        _nextAfter = null;
+        _total = null;
+        _hasMore = false;
+        _loaded = false;
+      }
     });
     try {
+      if (widget.followedArtists) {
+        final page = await widget.provider.loadFollowedArtistsPage(
+          after: reset ? null : _nextAfter,
+        );
+        if (!mounted || request != _requestSerial) return;
+        setState(() {
+          _artists = reset ? page.artists : _mergeArtists(_artists, page.artists);
+          _nextAfter = page.nextAfter;
+          _total = page.total;
+          _hasMore = page.hasMore && page.artists.isNotEmpty;
+          _loaded = true;
+          _loading = false;
+        });
+        return;
+      }
       final artists = await widget.provider.loadTopArtists(timeRange: _range);
       if (!mounted || request != _requestSerial) return;
       setState(() {
@@ -132,7 +190,32 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
       _loading = false;
       _error = null;
     });
-    unawaited(_load());
+    unawaited(_load(reset: true));
+  }
+
+  List<SpotifyTopArtist> _mergeArtists(
+    List<SpotifyTopArtist> current,
+    List<SpotifyTopArtist> incoming,
+  ) {
+    final ids = current.map((artist) => artist.id).toSet();
+    return <SpotifyTopArtist>[
+      ...current,
+      for (final artist in incoming)
+        if (ids.add(artist.id)) artist,
+    ];
+  }
+
+  String get _description =>
+      widget.followedArtists ? 'followed artists' : 'top artists';
+  String get _title =>
+      widget.followedArtists ? 'Spotify followed artists' : 'Spotify top artists';
+  String get _loadMoreLabel {
+    final total = _total;
+    if (total == null) return 'Load more $_description';
+    final remaining = total - _artists.length;
+    return remaining > 0
+        ? 'Load more $_description ($remaining remaining)'
+        : 'Load more $_description';
   }
 
   String _rangeLabel(SpotifyTopTracksTimeRange range) => switch (range) {

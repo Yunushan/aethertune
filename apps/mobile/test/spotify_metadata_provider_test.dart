@@ -211,6 +211,37 @@ void main() {
     expect(artists.single.artworkUri, Uri.parse('https://i.scdn.co/image/artist'));
   });
 
+  test('loads bounded official Spotify followed-artist metadata', () async {
+    Uri? requestUri;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      followedArtistsLoader: (uri, token) async {
+        requestUri = uri;
+        expect(token, 'access-token');
+        return '''
+          {"artists": {"total": 2,
+          "next": "https://api.spotify.com/v1/me/following?after=next",
+          "cursors": {"after": "next"},
+          "items": [{"id": "followed-artist", "name": "Signal",
+          "images": [{"url": "https://i.scdn.co/image/followed"}]}]}}
+        ''';
+      },
+    );
+
+    final page = await provider.loadFollowedArtistsPage(
+      after: 'previous',
+      limit: 100,
+    );
+
+    expect(requestUri!.path, '/v1/me/following');
+    expect(requestUri!.queryParameters['type'], 'artist');
+    expect(requestUri!.queryParameters['after'], 'previous');
+    expect(requestUri!.queryParameters['limit'], '50');
+    expect(page.artists.single.name, 'Signal');
+    expect(page.nextAfter, 'next');
+    expect(page.hasMore, isTrue);
+  });
+
   test('ignores malformed recently played entries', () {
     final page = parseSpotifyRecentlyPlayedPage('''
       {

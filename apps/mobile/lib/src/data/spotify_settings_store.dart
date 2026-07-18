@@ -155,6 +155,7 @@ final class SpotifySettingsStore extends ChangeNotifier {
     'playlist-read-private',
     'user-read-recently-played',
     'user-top-read',
+    'user-follow-read',
   };
 
   Future<String> _refreshAccessToken(SpotifyOAuthSession session) async {
