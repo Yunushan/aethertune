@@ -165,6 +165,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(library.bookmarksForTrack(first.id).single.label, 'Bridge');
     expect(find.text('Bridge'), findsWidgets);
+    final secondBookmark = await library.addTrackBookmark(
+      first.id,
+      const Duration(minutes: 2),
+      label: 'Verse',
+    );
+    expect(secondBookmark, isNotNull);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('bookmark-manager-select-${bookmark.id}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('bookmark-manager-select-${secondBookmark!.id}')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2 selected'), findsOneWidget);
+    await tester.tap(find.byTooltip('Move selected bookmarks'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('now-playing-bookmark-folder')),
+      'Song sections',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pumpAndSettle();
+    expect(
+      library.bookmarksForTrack(first.id).map((entry) => entry.folder),
+      everyElement('Song sections'),
+    );
+    expect(find.text('Song sections'), findsOneWidget);
+    await tester.tap(
+      find.byKey(Key('bookmark-manager-select-${bookmark.id}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('bookmark-manager-select-${secondBookmark.id}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Remove selected bookmarks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(library.bookmarksForTrack(first.id), isEmpty);
     await tester.tap(find.byTooltip('Close bookmarks'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-speed')));

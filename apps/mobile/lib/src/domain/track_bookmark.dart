@@ -1,5 +1,6 @@
 final class TrackBookmark {
   static const maxLabelLength = 80;
+  static const maxFolderLength = 40;
 
   const TrackBookmark({
     required this.id,
@@ -7,6 +8,7 @@ final class TrackBookmark {
     required this.position,
     required this.createdAt,
     this.label = '',
+    this.folder = '',
   });
 
   final String id;
@@ -14,14 +16,16 @@ final class TrackBookmark {
   final Duration position;
   final DateTime createdAt;
   final String label;
+  final String folder;
 
-  TrackBookmark copyWith({String? trackId, String? label}) {
+  TrackBookmark copyWith({String? trackId, String? label, String? folder}) {
     return TrackBookmark(
       id: id,
       trackId: trackId ?? this.trackId,
       position: position,
       createdAt: createdAt,
       label: label ?? this.label,
+      folder: folder ?? this.folder,
     );
   }
 
@@ -31,6 +35,7 @@ final class TrackBookmark {
     'positionMs': position.inMilliseconds,
     'createdAt': createdAt.toIso8601String(),
     'label': label,
+    'folder': folder,
   };
 
   static TrackBookmark? tryFromJson(Map<String, Object?> json) {
@@ -53,6 +58,7 @@ final class TrackBookmark {
           DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       label: normalizeLabel(json['label'] is String ? json['label'] as String : ''),
+      folder: normalizeFolder(json['folder'] is String ? json['folder'] as String : ''),
     );
   }
 
@@ -61,5 +67,12 @@ final class TrackBookmark {
     return normalized.length <= maxLabelLength
         ? normalized
         : normalized.substring(0, maxLabelLength);
+  }
+
+  static String normalizeFolder(String value) {
+    final normalized = value.trim();
+    return normalized.length <= maxFolderLength
+        ? normalized
+        : normalized.substring(0, maxFolderLength);
   }
 }

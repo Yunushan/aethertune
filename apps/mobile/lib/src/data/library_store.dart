@@ -6011,6 +6011,7 @@ class LibraryStore extends ChangeNotifier {
     String trackId,
     Duration position, {
     String label = '',
+    String folder = '',
   }) async {
     if (!_tracks.any((track) => track.id == trackId) || position.isNegative) {
       return null;
@@ -6027,6 +6028,7 @@ class LibraryStore extends ChangeNotifier {
       position: position,
       createdAt: now,
       label: TrackBookmark.normalizeLabel(label),
+      folder: TrackBookmark.normalizeFolder(folder),
     );
     bookmarks.add(bookmark);
     if (bookmarks.length > _maxTrackBookmarksPerTrack) {
@@ -6062,6 +6064,73 @@ class LibraryStore extends ChangeNotifier {
     return updated;
   }
 
+  List<String> bookmarkFoldersForTrack(String trackId) {
+    final folders = _bookmarksByTrackId[trackId]
+            ?.map((bookmark) => bookmark.folder)
+            .where((folder) => folder.isNotEmpty)
+            .toSet()
+            .toList() ??
+        <String>[];
+    folders.sort((left, right) => left.toLowerCase().compareTo(right.toLowerCase()));
+    return List.unmodifiable(folders);
+  }
+
+  Future<TrackBookmark?> updateTrackBookmarkFolder(
+    String trackId,
+    String bookmarkId,
+    String folder,
+  ) async {
+    final bookmarks = _bookmarksByTrackId[trackId];
+    if (bookmarks == null) {
+      return null;
+    }
+    final index = bookmarks.indexWhere((bookmark) => bookmark.id == bookmarkId);
+    if (index == -1) {
+      return null;
+    }
+    final bookmark = bookmarks[index];
+    final normalizedFolder = TrackBookmark.normalizeFolder(folder);
+    if (bookmark.folder == normalizedFolder) {
+      return bookmark;
+    }
+    final updated = bookmark.copyWith(folder: normalizedFolder);
+    bookmarks[index] = updated;
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<int> updateTrackBookmarksFolder(
+    String trackId,
+    Iterable<String> bookmarkIds,
+    String folder,
+  ) async {
+    final bookmarks = _bookmarksByTrackId[trackId];
+    if (bookmarks == null) {
+      return 0;
+    }
+    final ids = bookmarkIds.toSet();
+    if (ids.isEmpty) {
+      return 0;
+    }
+    final normalizedFolder = TrackBookmark.normalizeFolder(folder);
+    var changed = 0;
+    for (var index = 0; index < bookmarks.length; index += 1) {
+      final bookmark = bookmarks[index];
+      if (!ids.contains(bookmark.id) || bookmark.folder == normalizedFolder) {
+        continue;
+      }
+      bookmarks[index] = bookmark.copyWith(folder: normalizedFolder);
+      changed += 1;
+    }
+    if (changed == 0) {
+      return 0;
+    }
+    await _save();
+    notifyListeners();
+    return changed;
+  }
+
   Future<bool> removeTrackBookmark(String trackId, String bookmarkId) async {
     final bookmarks = _bookmarksByTrackId[trackId];
     if (bookmarks == null) {
@@ -6080,6 +6149,32 @@ class LibraryStore extends ChangeNotifier {
     await _save();
     notifyListeners();
     return true;
+  }
+
+  Future<int> removeTrackBookmarks(
+    String trackId,
+    Iterable<String> bookmarkIds,
+  ) async {
+    final bookmarks = _bookmarksByTrackId[trackId];
+    if (bookmarks == null) {
+      return 0;
+    }
+    final ids = bookmarkIds.toSet();
+    if (ids.isEmpty) {
+      return 0;
+    }
+    final bookmarkCount = bookmarks.length;
+    bookmarks.removeWhere((bookmark) => ids.contains(bookmark.id));
+    final removed = bookmarkCount - bookmarks.length;
+    if (removed == 0) {
+      return 0;
+    }
+    if (bookmarks.isEmpty) {
+      _bookmarksByTrackId.remove(trackId);
+    }
+    await _save();
+    notifyListeners();
+    return removed;
   }
 
   PodcastSubscription? podcastSubscriptionById(String id) {
@@ -7459,6 +7554,7 @@ class LibraryStore extends ChangeNotifier {
                   position: bookmark.position,
                   createdAt: bookmark.createdAt,
                   label: bookmark.label,
+                  folder: bookmark.folder,
                 ),
         )
         .toList(growable: false)

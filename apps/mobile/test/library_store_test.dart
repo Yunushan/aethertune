@@ -48,11 +48,13 @@ void main() {
       'shared',
       const Duration(seconds: 15),
       label: 'Intro',
+      folder: 'Song structure',
     );
     await remote.addTrackBookmark(
       'shared',
       const Duration(seconds: 45),
       label: 'Chorus',
+      folder: 'Highlights',
     );
     final localSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
     final portableBookmark = (localSnapshot['bookmarks'] as List).single as Map;
@@ -64,6 +66,7 @@ void main() {
         'positionMs',
         'createdAt',
         'label',
+        'folder',
       ]),
     );
     await remote.toggleFavorite('shared');
@@ -125,6 +128,10 @@ void main() {
     expect(
       local.bookmarksForTrack('shared').map((bookmark) => bookmark.label),
       containsAll(<String>['Intro', 'Chorus']),
+    );
+    expect(
+      local.bookmarksForTrack('shared').map((bookmark) => bookmark.folder),
+      containsAll(<String>['Song structure', 'Highlights']),
     );
   });
 
@@ -976,7 +983,11 @@ void main() {
       const Duration(minutes: 10),
       const Duration(minutes: 30),
     );
-    await store.addTrackBookmark('duplicate', const Duration(seconds: 42));
+    await store.addTrackBookmark(
+      'duplicate',
+      const Duration(seconds: 42),
+      folder: 'Review',
+    );
     await store.toggleFavorite('duplicate');
 
     final removed = await store.resolveDuplicateTracks(
@@ -1012,6 +1023,7 @@ void main() {
       store.bookmarksForTrack('keep').single.position,
       const Duration(seconds: 42),
     );
+    expect(store.bookmarksForTrack('keep').single.folder, 'Review');
     expect(store.bookmarksForTrack('duplicate'), isEmpty);
     expect(store.duplicateTrackGroups(), isEmpty);
 
@@ -1033,6 +1045,7 @@ void main() {
       secondStore.bookmarksForTrack('keep').single.position,
       const Duration(seconds: 42),
     );
+    expect(secondStore.bookmarksForTrack('keep').single.folder, 'Review');
   });
 
   test('undoes the last duplicate merge with all rewritten state restored',
@@ -3078,6 +3091,7 @@ void main() {
       'podcast',
       const Duration(minutes: 12, seconds: 34),
       label: 'Episode topic',
+      folder: 'Research',
     );
 
     expect(bookmark, isNotNull);
@@ -3097,6 +3111,7 @@ void main() {
       bookmark!.id,
     );
     expect(restored.bookmarksForTrack('podcast').single.label, 'Episode topic');
+    expect(restored.bookmarksForTrack('podcast').single.folder, 'Research');
 
     final renamed = await restored.updateTrackBookmarkLabel(
       'podcast',
@@ -3104,6 +3119,14 @@ void main() {
       'Key takeaway',
     );
     expect(renamed!.label, 'Key takeaway');
+
+    final moved = await restored.updateTrackBookmarkFolder(
+      'podcast',
+      bookmark.id,
+      'Highlights',
+    );
+    expect(moved!.folder, 'Highlights');
+    expect(restored.bookmarkFoldersForTrack('podcast'), <String>['Highlights']);
 
     final backup = restored.exportBackupJson();
     final backupRestored = LibraryStore(clock: clock);
@@ -3117,8 +3140,33 @@ void main() {
       backupRestored.bookmarksForTrack('podcast').single.label,
       'Key takeaway',
     );
+    expect(
+      backupRestored.bookmarksForTrack('podcast').single.folder,
+      'Highlights',
+    );
 
-    expect(await restored.removeTrackBookmark('podcast', bookmark.id), isTrue);
+    final secondBookmark = await restored.addTrackBookmark(
+      'podcast',
+      const Duration(minutes: 18),
+      folder: 'Research',
+    );
+    expect(secondBookmark, isNotNull);
+    expect(
+      await restored.updateTrackBookmarksFolder(
+        'podcast',
+        <String>[bookmark.id, secondBookmark!.id],
+        'Review',
+      ),
+      2,
+    );
+    expect(restored.bookmarkFoldersForTrack('podcast'), <String>['Review']);
+    expect(
+      await restored.removeTrackBookmarks(
+        'podcast',
+        <String>[bookmark.id, secondBookmark.id],
+      ),
+      2,
+    );
     expect(restored.bookmarksForTrack('podcast'), isEmpty);
 
     await restored.addTrackBookmark('podcast', const Duration(seconds: 45));

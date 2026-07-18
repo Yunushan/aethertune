@@ -246,97 +246,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => AnimatedBuilder(
-        animation: library,
-        builder: (context, _) {
-          final bookmarks = library.bookmarksForTrack(trackId);
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 12, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          'Bookmarks',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Close bookmarks',
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (bookmarks.isEmpty)
-                    const ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.bookmark_border),
-                      title: Text('No bookmarks for this track'),
-                    )
-                  else
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.sizeOf(context).height * 0.55,
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: bookmarks.length,
-                        itemBuilder: (context, index) {
-                          final bookmark = bookmarks[index];
-                          final label = _bookmarkLabel(bookmark);
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.bookmark_outline),
-                            title: Text(label),
-                            subtitle: Text(
-                              _formatPlaybackTime(bookmark.position),
-                            ),
-                            onTap: () async {
-                              Navigator.of(sheetContext).pop();
-                              player.clearABRepeat();
-                              await player.seek(bookmark.position);
-                            },
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                IconButton(
-                                  tooltip: 'Rename bookmark',
-                                  onPressed: () => unawaited(
-                                    _renameBookmark(
-                                      library,
-                                      bookmark,
-                                      sheetContext,
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.edit_outlined),
-                                ),
-                                IconButton(
-                                  tooltip: 'Remove bookmark',
-                                  onPressed: () => unawaited(
-                                    library.removeTrackBookmark(
-                                      trackId,
-                                      bookmark.id,
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
+      builder: (_) => _BookmarkManagerSheet(
+        library: library,
+        trackId: trackId,
+        player: player,
+        onRename: (bookmark, dialogContext) =>
+            _renameBookmark(library, bookmark, dialogContext),
       ),
     );
   }
@@ -592,6 +507,364 @@ class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
           child: Text(widget.title == 'Add bookmark' ? 'Add' : 'Save'),
         ),
       ],
+    );
+  }
+}
+
+Future<String?> _promptForBookmarkFolder(
+  BuildContext context, {
+  required String title,
+  required List<String> folders,
+  String initialValue = '',
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (_) => _BookmarkFolderDialog(
+      title: title,
+      folders: folders,
+      initialValue: initialValue,
+    ),
+  );
+}
+
+class _BookmarkFolderDialog extends StatefulWidget {
+  const _BookmarkFolderDialog({
+    required this.title,
+    required this.folders,
+    required this.initialValue,
+  });
+
+  final String title;
+  final List<String> folders;
+  final String initialValue;
+
+  @override
+  State<_BookmarkFolderDialog> createState() => _BookmarkFolderDialogState();
+}
+
+class _BookmarkFolderDialogState extends State<_BookmarkFolderDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _setFolder(String folder) {
+    _controller.value = TextEditingValue(
+      text: folder,
+      selection: TextSelection.collapsed(offset: folder.length),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          TextField(
+            key: const Key('now-playing-bookmark-folder'),
+            controller: _controller,
+            autofocus: true,
+            maxLength: TrackBookmark.maxFolderLength,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Folder (optional)'),
+          ),
+          if (widget.folders.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            Text('Existing folders', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: <Widget>[
+                ActionChip(
+                  avatar: const Icon(Icons.folder_off_outlined, size: 18),
+                  label: const Text('No folder'),
+                  onPressed: () => _setFolder(''),
+                ),
+                for (final folder in widget.folders)
+                  ActionChip(
+                    avatar: const Icon(Icons.folder_outlined, size: 18),
+                    label: Text(folder),
+                    onPressed: () => _setFolder(folder),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Move'),
+        ),
+      ],
+    );
+  }
+}
+
+class _BookmarkManagerSheet extends StatefulWidget {
+  const _BookmarkManagerSheet({
+    required this.library,
+    required this.trackId,
+    required this.player,
+    required this.onRename,
+  });
+
+  final LibraryStore library;
+  final String trackId;
+  final PlayerController player;
+  final Future<void> Function(TrackBookmark bookmark, BuildContext dialogContext)
+  onRename;
+
+  @override
+  State<_BookmarkManagerSheet> createState() => _BookmarkManagerSheetState();
+}
+
+class _BookmarkManagerSheetState extends State<_BookmarkManagerSheet> {
+  final Set<String> _selectedIds = <String>{};
+
+  void _toggleSelection(String bookmarkId, {bool? selected}) {
+    setState(() {
+      if (selected ?? !_selectedIds.contains(bookmarkId)) {
+        _selectedIds.add(bookmarkId);
+      } else {
+        _selectedIds.remove(bookmarkId);
+      }
+    });
+  }
+
+  Future<void> _moveBookmarks(
+    Iterable<String> bookmarkIds, {
+    String initialFolder = '',
+  }) async {
+    final ids = bookmarkIds.toSet();
+    if (ids.isEmpty) {
+      return;
+    }
+    final folder = await _promptForBookmarkFolder(
+      context,
+      title: ids.length == 1 ? 'Move bookmark' : 'Move bookmarks',
+      folders: widget.library.bookmarkFoldersForTrack(widget.trackId),
+      initialValue: initialFolder,
+    );
+    if (!mounted || folder == null) {
+      return;
+    }
+    await widget.library.updateTrackBookmarksFolder(widget.trackId, ids, folder);
+    if (mounted) {
+      setState(() => _selectedIds.removeAll(ids));
+    }
+  }
+
+  Future<void> _removeSelected() async {
+    if (_selectedIds.isEmpty) {
+      return;
+    }
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove $count bookmarks?'),
+        content: const Text('This removes the selected timestamps from this track.'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+    final ids = Set<String>.from(_selectedIds);
+    await widget.library.removeTrackBookmarks(widget.trackId, ids);
+    if (mounted) {
+      setState(() => _selectedIds.removeAll(ids));
+    }
+  }
+
+  Future<void> _seekToBookmark(TrackBookmark bookmark) async {
+    Navigator.of(context).pop();
+    widget.player.clearABRepeat();
+    await widget.player.seek(bookmark.position);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.library,
+      builder: (context, _) {
+        final bookmarks = widget.library.bookmarksForTrack(widget.trackId);
+        final bookmarkIds = bookmarks.map((bookmark) => bookmark.id).toSet();
+        final selectedIds = _selectedIds.intersection(bookmarkIds);
+        final folders = widget.library.bookmarkFoldersForTrack(widget.trackId);
+        final groups = <String>[
+          if (bookmarks.any((bookmark) => bookmark.folder.isEmpty)) '',
+          ...folders,
+        ];
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 12, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        'Bookmarks',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    if (bookmarks.isNotEmpty)
+                      IconButton(
+                        tooltip: selectedIds.length == bookmarks.length
+                            ? 'Clear bookmark selection'
+                            : 'Select all bookmarks',
+                        onPressed: () => setState(() {
+                          if (selectedIds.length == bookmarks.length) {
+                            _selectedIds.clear();
+                          } else {
+                            _selectedIds
+                              ..clear()
+                              ..addAll(bookmarkIds);
+                          }
+                        }),
+                        icon: Icon(
+                          selectedIds.length == bookmarks.length
+                              ? Icons.deselect_outlined
+                              : Icons.select_all,
+                        ),
+                      ),
+                    IconButton(
+                      tooltip: 'Close bookmarks',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                if (selectedIds.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: <Widget>[
+                      Text('${selectedIds.length} selected'),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Move selected bookmarks',
+                        onPressed: () => unawaited(_moveBookmarks(selectedIds)),
+                        icon: const Icon(Icons.drive_file_move_outline),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove selected bookmarks',
+                        onPressed: () => unawaited(_removeSelected()),
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 8),
+                if (bookmarks.isEmpty)
+                  const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.bookmark_border),
+                    title: Text('No bookmarks for this track'),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+                    ),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: <Widget>[
+                        for (final folder in groups) ...<Widget>[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 2),
+                            child: Text(
+                              folder.isEmpty ? 'Unfiled' : folder,
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                          for (final bookmark in bookmarks.where(
+                            (bookmark) => bookmark.folder == folder,
+                          ))
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Checkbox(
+                                key: Key('bookmark-manager-select-${bookmark.id}'),
+                                value: selectedIds.contains(bookmark.id),
+                                onChanged: (selected) => _toggleSelection(
+                                  bookmark.id,
+                                  selected: selected,
+                                ),
+                              ),
+                              title: Text(_bookmarkLabel(bookmark)),
+                              subtitle: Text(
+                                _formatPlaybackTime(bookmark.position),
+                              ),
+                              onTap: selectedIds.isEmpty
+                                  ? () => unawaited(_seekToBookmark(bookmark))
+                                  : () => _toggleSelection(bookmark.id),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  IconButton(
+                                    tooltip: 'Move bookmark',
+                                    onPressed: () => unawaited(
+                                      _moveBookmarks(
+                                        <String>[bookmark.id],
+                                        initialFolder: bookmark.folder,
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.folder_outlined),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Rename bookmark',
+                                    onPressed: () => unawaited(
+                                      widget.onRename(bookmark, context),
+                                    ),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Remove bookmark',
+                                    onPressed: () => unawaited(
+                                      widget.library.removeTrackBookmark(
+                                        widget.trackId,
+                                        bookmark.id,
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
