@@ -198,30 +198,60 @@ class ManagedSyncProfileUpdate {
 
 typedef ManagedSyncTokenGenerator = String Function();
 
+/// Parses the optional managed-token lifetime configured by server operators.
+///
+/// Omission intentionally retains the historic non-expiring behavior.
+Duration? managedTokenLifetimeFromEnvironment(Map<String, String> environment) {
+  final rawDays = environment['AETHERTUNE_MANAGED_TOKEN_TTL_DAYS'];
+  if (rawDays == null || rawDays.trim().isEmpty) {
+    return null;
+  }
+  final days = int.tryParse(rawDays.trim());
+  if (days == null || days < 1 || days > 3650) {
+    throw const FormatException(
+      'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS must be between 1 and 3650.',
+    );
+  }
+  return Duration(days: days);
+}
+
+Duration? _validatedTokenLifetime(Duration? value) {
+  if (value != null && value <= Duration.zero) {
+    throw ArgumentError.value(value, 'tokenLifetime', 'must be positive.');
+  }
+  return value;
+}
+
 class ManagedSyncAccountRegistry implements SyncAuthenticator {
   ManagedSyncAccountRegistry.memory({
     DateTime Function()? clock,
     ManagedSyncTokenGenerator? tokenGenerator,
+    Duration? tokenLifetime,
   })  : _directory = null,
         _clock = clock ?? DateTime.now,
-        _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken;
+        _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
+        _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
 
   ManagedSyncAccountRegistry._(
     this._directory, {
     DateTime Function()? clock,
     ManagedSyncTokenGenerator? tokenGenerator,
+    Duration? tokenLifetime,
   })  : _clock = clock ?? DateTime.now,
-        _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken;
+        _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
+        _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
 
   static Future<ManagedSyncAccountRegistry> open(
     Directory directory, {
     DateTime Function()? clock,
     ManagedSyncTokenGenerator? tokenGenerator,
+    Duration? tokenLifetime,
   }) async {
     final registry = ManagedSyncAccountRegistry._(
       directory,
       clock: clock,
       tokenGenerator: tokenGenerator,
+      tokenLifetime: tokenLifetime,
     );
     await registry._load();
     return registry;
@@ -234,6 +264,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
   final Directory? _directory;
   final DateTime Function() _clock;
   final ManagedSyncTokenGenerator _tokenGenerator;
+  final Duration? _tokenLifetime;
   Map<String, _ManagedAccountRecord> _accounts =
       <String, _ManagedAccountRecord>{};
   Future<void> _writeTail = Future<void>.value();
@@ -259,9 +290,11 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
 
   ManagedSyncPrincipal? authenticatePrincipal(String token) {
     final candidate = sha256.convert(utf8.encode(token)).bytes;
+    final now = _clock().toUtc();
     for (final account in _accounts.values) {
       for (final storedToken in account.tokens) {
-        if (_constantTimeEquals(candidate, storedToken.tokenHash)) {
+        if (_constantTimeEquals(candidate, storedToken.tokenHash) &&
+            !_isTokenExpired(storedToken, now)) {
           return ManagedSyncPrincipal(
             accountId: account.id,
             token: storedToken.metadata,
@@ -270,6 +303,11 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
       }
     }
     return null;
+  }
+
+  bool _isTokenExpired(_ManagedTokenRecord token, DateTime now) {
+    final lifetime = _tokenLifetime;
+    return lifetime != null && !now.isBefore(token.createdAt.add(lifetime));
   }
 
   /// Records the most recent successful use of a managed device token.

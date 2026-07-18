@@ -20,6 +20,7 @@ Future<void> main() async {
     Directory(
       '${dataDirectory.path}${Platform.pathSeparator}authentication',
     ),
+    tokenLifetime: managedTokenLifetimeFromEnvironment(Platform.environment),
   );
   final combinedSyncAuthenticator = CompositeSyncAuthenticator(
     <SyncAuthenticator>[syncAuthenticator, managedSyncAccounts],

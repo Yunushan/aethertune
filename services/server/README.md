@@ -57,6 +57,11 @@ bearer-token digest and one anonymous bucket. Set
 invalid values stop startup. Keep an additional rate limit at the reverse
 proxy for IP-based protection.
 
+Managed device tokens do not expire by default for compatibility. Set
+`AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` to an integer from 1 through 3650 to reject
+managed tokens at that age; issue a replacement token before the deadline.
+Static `AETHERTUNE_SYNC_USERS` credentials are unaffected.
+
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
 public internet, and do not commit populated `.env` files. The named

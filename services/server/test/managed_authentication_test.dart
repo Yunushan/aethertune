@@ -52,6 +52,42 @@ void main() {
     expect(registry.authenticate(issued.token), 'primary');
   });
 
+  test('managed token expiry is opt-in and enforced at its boundary',
+      () async {
+    var current = DateTime.utc(2026, 7, 18, 12);
+    final registry = ManagedSyncAccountRegistry.memory(
+      clock: () => current,
+      tokenGenerator: () => 'at_expiry_secret',
+      tokenLifetime: const Duration(hours: 1),
+    );
+    final issued = await registry.issueToken(
+      accountId: 'primary',
+      deviceName: 'Phone',
+    );
+
+    expect(registry.authenticate(issued.token), 'primary');
+    current = current.add(const Duration(minutes: 59, seconds: 59));
+    expect(registry.authenticate(issued.token), 'primary');
+    current = current.add(const Duration(seconds: 1));
+    expect(registry.authenticate(issued.token), isNull);
+  });
+
+  test('validates the managed token lifetime environment setting', () {
+    expect(managedTokenLifetimeFromEnvironment(const <String, String>{}), isNull);
+    expect(
+      managedTokenLifetimeFromEnvironment(
+        const <String, String>{'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS': '30'},
+      ),
+      const Duration(days: 30),
+    );
+    expect(
+      () => managedTokenLifetimeFromEnvironment(
+        const <String, String>{'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS': '0'},
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('records managed device activity at a bounded durable cadence',
       () async {
     var current = DateTime.utc(2026, 7, 16, 8);
