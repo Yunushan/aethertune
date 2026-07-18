@@ -72,6 +72,41 @@ void main() {
     expect(registry.authenticate(issued.token), isNull);
   });
 
+  test('recovery code is single-use and replaces every device token', () async {
+    final generatedTokens = Queue<String>.of(<String>[
+      'at_original_secret',
+      'at_recovered_secret',
+    ]);
+    final registry = ManagedSyncAccountRegistry.memory(
+      tokenGenerator: generatedTokens.removeFirst,
+      recoveryCodeGenerator: () => 'ar_recovery_secret',
+    );
+    final original = await registry.issueToken(
+      accountId: 'primary',
+      deviceName: 'Lost phone',
+    );
+    final recovery = await registry.issueRecoveryCode(accountId: 'primary');
+
+    final recovered = await registry.redeemRecoveryCode(
+      code: recovery.code,
+      deviceName: 'Replacement phone',
+    );
+
+    expect(recovered, isNotNull);
+    expect(recovered!.token, 'at_recovered_secret');
+    expect(registry.authenticate(original.token), isNull);
+    expect(registry.authenticate(recovered.token), 'primary');
+    expect(registry.account('primary')!.tokens, hasLength(1));
+    expect(registry.account('primary')!.tokens.single.deviceName, 'Replacement phone');
+    expect(
+      await registry.redeemRecoveryCode(
+        code: recovery.code,
+        deviceName: 'Another phone',
+      ),
+      isNull,
+    );
+  });
+
   test('validates the managed token lifetime environment setting', () {
     expect(managedTokenLifetimeFromEnvironment(const <String, String>{}), isNull);
     expect(

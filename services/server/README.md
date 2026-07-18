@@ -62,6 +62,12 @@ Managed device tokens do not expire by default for compatibility. Set
 managed tokens at that age; issue a replacement token before the deadline.
 Static `AETHERTUNE_SYNC_USERS` credentials are unaffected.
 
+For managed accounts, operations can issue a single-use recovery code through
+`POST /api/v1/admin/sync-recovery-codes` with `accountId`. The code is shown
+once, stored only as a digest, and expires after 24 hours. Redeem it with
+`POST /api/v1/sync/recovery` using `recoveryCode` and `deviceName`; redemption
+revokes every prior device token before returning one replacement bearer token.
+
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
 public internet, and do not commit populated `.env` files. The named

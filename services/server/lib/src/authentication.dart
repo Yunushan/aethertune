@@ -186,6 +186,16 @@ class IssuedManagedSyncToken {
   final String? replacedTokenId;
 }
 
+class IssuedManagedRecoveryCode {
+  const IssuedManagedRecoveryCode({
+    required this.code,
+    required this.expiresAt,
+  });
+
+  final String code;
+  final DateTime expiresAt;
+}
+
 class ManagedSyncProfileUpdate {
   const ManagedSyncProfileUpdate({
     required this.account,
@@ -197,6 +207,7 @@ class ManagedSyncProfileUpdate {
 }
 
 typedef ManagedSyncTokenGenerator = String Function();
+typedef ManagedRecoveryCodeGenerator = String Function();
 
 /// Parses the optional managed-token lifetime configured by server operators.
 ///
@@ -226,31 +237,39 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
   ManagedSyncAccountRegistry.memory({
     DateTime Function()? clock,
     ManagedSyncTokenGenerator? tokenGenerator,
+    ManagedRecoveryCodeGenerator? recoveryCodeGenerator,
     Duration? tokenLifetime,
   })  : _directory = null,
         _clock = clock ?? DateTime.now,
         _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
+        _recoveryCodeGenerator =
+            recoveryCodeGenerator ?? _generateManagedRecoveryCode,
         _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
 
   ManagedSyncAccountRegistry._(
     this._directory, {
     DateTime Function()? clock,
     ManagedSyncTokenGenerator? tokenGenerator,
+    ManagedRecoveryCodeGenerator? recoveryCodeGenerator,
     Duration? tokenLifetime,
   })  : _clock = clock ?? DateTime.now,
         _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
+        _recoveryCodeGenerator =
+            recoveryCodeGenerator ?? _generateManagedRecoveryCode,
         _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
 
   static Future<ManagedSyncAccountRegistry> open(
     Directory directory, {
     DateTime Function()? clock,
     ManagedSyncTokenGenerator? tokenGenerator,
+    ManagedRecoveryCodeGenerator? recoveryCodeGenerator,
     Duration? tokenLifetime,
   }) async {
     final registry = ManagedSyncAccountRegistry._(
       directory,
       clock: clock,
       tokenGenerator: tokenGenerator,
+      recoveryCodeGenerator: recoveryCodeGenerator,
       tokenLifetime: tokenLifetime,
     );
     await registry._load();
@@ -260,10 +279,12 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
   static const maxAccounts = 1000;
   static const maxTokensPerAccount = 32;
   static const activityUpdateInterval = Duration(hours: 24);
+  static const recoveryCodeLifetime = Duration(hours: 24);
 
   final Directory? _directory;
   final DateTime Function() _clock;
   final ManagedSyncTokenGenerator _tokenGenerator;
+  final ManagedRecoveryCodeGenerator _recoveryCodeGenerator;
   final Duration? _tokenLifetime;
   Map<String, _ManagedAccountRecord> _accounts =
       <String, _ManagedAccountRecord>{};
@@ -444,6 +465,94 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         account: _profileForRecord(account),
         device: storedToken.metadata,
         replacedTokenId: normalizedReplacement,
+      );
+    });
+  }
+
+  Future<IssuedManagedRecoveryCode> issueRecoveryCode({
+    required String accountId,
+  }) {
+    final normalizedAccountId = _validatedAccountId(accountId);
+    return _serialized(() async {
+      final candidate = _copyAccounts();
+      final account = candidate[normalizedAccountId];
+      if (account == null) {
+        throw const FormatException('Managed account does not exist.');
+      }
+      final rawCode = _recoveryCodeGenerator();
+      if (rawCode.isEmpty || RegExp(r'\s').hasMatch(rawCode)) {
+        throw StateError('Recovery code generation returned an invalid code.');
+      }
+      final now = _clock().toUtc();
+      final expiresAt = now.add(recoveryCodeLifetime);
+      account.recovery = _ManagedRecoveryRecord(
+        codeHash: sha256.convert(utf8.encode(rawCode)).bytes,
+        expiresAt: expiresAt,
+      );
+      final nextRevision = await _persist(candidate);
+      _accounts = candidate;
+      _revision = nextRevision;
+      return IssuedManagedRecoveryCode(code: rawCode, expiresAt: expiresAt);
+    });
+  }
+
+  Future<IssuedManagedSyncToken?> redeemRecoveryCode({
+    required String code,
+    required String deviceName,
+  }) {
+    final normalizedCode = code.trim();
+    final normalizedDeviceName = _validatedLabel(
+      deviceName,
+      fieldName: 'deviceName',
+      maxLength: 80,
+    );
+    if (normalizedCode.isEmpty || RegExp(r'\s').hasMatch(normalizedCode)) {
+      throw const FormatException('Recovery code is invalid.');
+    }
+    final codeHash = sha256.convert(utf8.encode(normalizedCode)).bytes;
+    return _serialized(() async {
+      final candidate = _copyAccounts();
+      final now = _clock().toUtc();
+      _ManagedAccountRecord? recoveredAccount;
+      for (final account in candidate.values) {
+        final recovery = account.recovery;
+        if (recovery != null &&
+            now.isBefore(recovery.expiresAt) &&
+            _constantTimeEquals(codeHash, recovery.codeHash)) {
+          recoveredAccount = account;
+          break;
+        }
+      }
+      if (recoveredAccount == null) {
+        return null;
+      }
+
+      recoveredAccount.recovery = null;
+      recoveredAccount.tokens.clear();
+      final rawToken = _tokenGenerator();
+      if (rawToken.isEmpty || RegExp(r'\s').hasMatch(rawToken)) {
+        throw StateError('Managed token generation returned an invalid token.');
+      }
+      final tokenHash = sha256.convert(utf8.encode(rawToken)).bytes;
+      final tokenId = _hex(tokenHash).substring(0, 24);
+      if (_containsTokenId(candidate, tokenId)) {
+        throw StateError('Managed token generation produced a collision.');
+      }
+      final token = _ManagedTokenRecord(
+        id: tokenId,
+        deviceName: normalizedDeviceName,
+        createdAt: now,
+        lastAuthenticatedAt: null,
+        tokenHash: tokenHash,
+      );
+      recoveredAccount.tokens.add(token);
+      final nextRevision = await _persist(candidate);
+      _accounts = candidate;
+      _revision = nextRevision;
+      return IssuedManagedSyncToken(
+        token: rawToken,
+        account: _profileForRecord(recoveredAccount),
+        device: token.metadata,
       );
     });
   }
@@ -803,6 +912,12 @@ String _generateManagedBearerToken() {
   return 'at_${base64Url.encode(bytes).replaceAll('=', '')}';
 }
 
+String _generateManagedRecoveryCode() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+  return 'ar_${base64Url.encode(bytes).replaceAll('=', '')}';
+}
+
 bool _constantTimeEquals(List<int> left, List<int> right) {
   var difference = left.length ^ right.length;
   final length = left.length > right.length ? left.length : right.length;
@@ -858,6 +973,7 @@ class _ManagedAccountRecord {
     required this.displayName,
     required this.createdAt,
     required this.tokens,
+    this.recovery,
   });
 
   factory _ManagedAccountRecord.fromStorageJson(Map<String, Object?> json) {
@@ -865,6 +981,7 @@ class _ManagedAccountRecord {
     final displayName = json['displayName'];
     final createdAt = DateTime.tryParse(json['createdAt'] as String? ?? '');
     final rawTokens = json['tokens'];
+    final rawRecovery = json['recovery'];
     if (id is! String ||
         displayName is! String ||
         createdAt == null ||
@@ -898,11 +1015,17 @@ class _ManagedAccountRecord {
         'Stored authentication token limit exceeded.',
       );
     }
+    final recovery = rawRecovery == null
+        ? null
+        : _ManagedRecoveryRecord.fromStorageJson(
+            Map<String, Object?>.from(rawRecovery as Map),
+          );
     return _ManagedAccountRecord(
       id: normalizedId,
       displayName: normalizedName,
       createdAt: createdAt.toUtc(),
       tokens: tokens,
+      recovery: recovery,
     );
   }
 
@@ -910,12 +1033,14 @@ class _ManagedAccountRecord {
   String displayName;
   final DateTime createdAt;
   final List<_ManagedTokenRecord> tokens;
+  _ManagedRecoveryRecord? recovery;
 
   _ManagedAccountRecord copy() => _ManagedAccountRecord(
         id: id,
         displayName: displayName,
         createdAt: createdAt,
         tokens: tokens.map((token) => token.copy()).toList(),
+        recovery: recovery?.copy(),
       );
 
   Map<String, Object?> toStorageJson() => <String, Object?>{
@@ -925,6 +1050,41 @@ class _ManagedAccountRecord {
         'tokens': tokens
             .map((token) => token.toStorageJson())
             .toList(growable: false),
+        if (recovery != null) 'recovery': recovery!.toStorageJson(),
+      };
+}
+
+class _ManagedRecoveryRecord {
+  const _ManagedRecoveryRecord({
+    required this.codeHash,
+    required this.expiresAt,
+  });
+
+  factory _ManagedRecoveryRecord.fromStorageJson(Map<String, Object?> json) {
+    final hash = json['sha256'];
+    final expiresAt = DateTime.tryParse(json['expiresAt'] as String? ?? '');
+    if (hash is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(hash) ||
+        expiresAt == null) {
+      throw const FormatException('Stored recovery credential is invalid.');
+    }
+    return _ManagedRecoveryRecord(
+      codeHash: _bytesFromHex(hash),
+      expiresAt: expiresAt.toUtc(),
+    );
+  }
+
+  final List<int> codeHash;
+  final DateTime expiresAt;
+
+  _ManagedRecoveryRecord copy() => _ManagedRecoveryRecord(
+        codeHash: List<int>.from(codeHash),
+        expiresAt: expiresAt,
+      );
+
+  Map<String, Object?> toStorageJson() => <String, Object?>{
+        'sha256': _hex(codeHash),
+        'expiresAt': expiresAt.toUtc().toIso8601String(),
       };
 }
 

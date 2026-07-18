@@ -309,6 +309,17 @@ Handler createServerHandler({
           operations: operations,
           managedAccounts: managedSyncAccounts,
         );
+      case 'api/v1/admin/sync-recovery-codes':
+        return _handleManagedRecoveryCodeIssue(
+          request,
+          operations: operations,
+          managedAccounts: managedSyncAccounts,
+        );
+      case 'api/v1/sync/recovery':
+        return _handleManagedRecoveryRedemption(
+          request,
+          managedAccounts: managedSyncAccounts,
+        );
       case 'api/v1/sync/library':
         return _handleLibrarySync(
           request,
@@ -717,6 +728,83 @@ Future<Response> _handleManagedSyncTokens(
         'message': error.message,
       },
     );
+  }
+}
+
+Future<Response> _handleManagedRecoveryCodeIssue(
+  Request request, {
+  required OperationsAuthenticator operations,
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  final rejection = _managedAuthAdminRejection(request, operations);
+  if (rejection != null) {
+    return rejection;
+  }
+  if (managedAccounts == null) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'managed_auth_not_configured'},
+    );
+  }
+  if (request.method != 'POST') {
+    return _methodNotAllowed(request);
+  }
+  try {
+    final body = await _readBoundedJson(
+      request,
+      maxBytes: maxManagedAuthRequestBytes,
+    );
+    final issued = await managedAccounts.issueRecoveryCode(
+      accountId: _requiredString(body, 'accountId'),
+    );
+    return _jsonResponse(201, <String, Object?>{
+      'recoveryCode': issued.code,
+      'expiresAt': issued.expiresAt.toIso8601String(),
+    });
+  } on FormatException catch (error) {
+    return _jsonResponse(400, <String, Object?>{
+      'error': 'invalid_auth_request',
+      'message': error.message,
+    });
+  }
+}
+
+Future<Response> _handleManagedRecoveryRedemption(
+  Request request, {
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  if (managedAccounts == null) {
+    return _jsonResponse(
+      503,
+      <String, Object?>{'error': 'managed_auth_not_configured'},
+    );
+  }
+  if (request.method != 'POST') {
+    return _methodNotAllowed(request);
+  }
+  try {
+    final body = await _readBoundedJson(
+      request,
+      maxBytes: maxManagedAuthRequestBytes,
+    );
+    final issued = await managedAccounts.redeemRecoveryCode(
+      code: _requiredString(body, 'recoveryCode'),
+      deviceName: _requiredString(body, 'deviceName'),
+    );
+    if (issued == null) {
+      return _jsonResponse(401, <String, Object?>{'error': 'invalid_recovery_code'});
+    }
+    return _jsonResponse(201, <String, Object?>{
+      'tokenType': 'Bearer',
+      'token': issued.token,
+      'account': issued.account.toJson(),
+      'device': issued.device.toJson(),
+    });
+  } on FormatException catch (error) {
+    return _jsonResponse(400, <String, Object?>{
+      'error': 'invalid_recovery_request',
+      'message': error.message,
+    });
   }
 }
 
