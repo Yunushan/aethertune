@@ -1355,6 +1355,7 @@ final class _LocalFolderScanState {
         }
 
         final fields = <String, String>{};
+        Uri? artworkUri;
         var offset = 0;
         var parsedObjects = 0;
         while (offset + _asfObjectPrefixBytes <= header.length &&
@@ -1375,14 +1376,17 @@ final class _LocalFolderScanState {
             objectGuid,
             _asfExtendedContentDescriptionObjectGuid,
           )) {
-            fields.addAll(_asfExtendedContentDescriptionFields(payload));
+            final extendedDescription =
+                _asfExtendedContentDescriptionMetadata(payload);
+            fields.addAll(extendedDescription.fields);
+            artworkUri ??= extendedDescription.artworkUri;
           }
 
           offset = payloadEnd;
           parsedObjects += 1;
         }
 
-        return _asfMetadataFromFields(fields);
+        return _asfMetadataFromFields(fields, artworkUri: artworkUri);
       } finally {
         await access.close();
       }
@@ -1423,26 +1427,29 @@ final class _LocalFolderScanState {
     return fields;
   }
 
-  Map<String, String> _asfExtendedContentDescriptionFields(List<int> payload) {
+  _AsfExtendedContentDescription _asfExtendedContentDescriptionMetadata(
+    List<int> payload,
+  ) {
     if (payload.length < 2) {
-      return const <String, String>{};
+      return const _AsfExtendedContentDescription();
     }
 
     final count = _uint16LittleEndian(payload, 0);
     if (count > _maxAsfExtendedProperties) {
-      return const <String, String>{};
+      return const _AsfExtendedContentDescription();
     }
 
     var offset = 2;
     final fields = <String, String>{};
+    Uri? artworkUri;
     for (var index = 0; index < count; index += 1) {
       if (offset + 6 > payload.length) {
-        return const <String, String>{};
+        return const _AsfExtendedContentDescription();
       }
       final nameLength = _uint16LittleEndian(payload, offset);
       offset += 2;
       if (offset + nameLength + 4 > payload.length) {
-        return const <String, String>{};
+        return const _AsfExtendedContentDescription();
       }
       final name = _normalizeEmbeddedText(
         _decodeUtf16(payload.sublist(offset, offset + nameLength)),
@@ -1452,21 +1459,25 @@ final class _LocalFolderScanState {
       final valueLength = _uint16LittleEndian(payload, offset + 2);
       offset += 4;
       if (offset + valueLength > payload.length) {
-        return const <String, String>{};
+        return const _AsfExtendedContentDescription();
       }
+      final valueBytes = payload.sublist(offset, offset + valueLength);
       final key = _asfFieldKey(name);
       final value = key == null
           ? null
-          : _asfPropertyValue(
-              payload.sublist(offset, offset + valueLength),
-              valueType,
-            );
+          : _asfPropertyValue(valueBytes, valueType);
       if (value != null && value.isNotEmpty) {
         fields[key!] = value;
       }
+      if (name == 'WM/PICTURE' && artworkUri == null) {
+        artworkUri = _asfPictureArtworkUri(valueBytes, valueType);
+      }
       offset += valueLength;
     }
-    return fields;
+    return _AsfExtendedContentDescription(
+      fields: fields,
+      artworkUri: artworkUri,
+    );
   }
 
   String? _asfFieldKey(String name) {
@@ -1496,7 +1507,55 @@ final class _LocalFolderScanState {
     };
   }
 
-  _LocalFileMetadata? _asfMetadataFromFields(Map<String, String> fields) {
+  Uri? _asfPictureArtworkUri(List<int> bytes, int valueType) {
+    if (valueType != _asfByteArrayValueType || bytes.length < 9) {
+      return null;
+    }
+
+    final dataLength = _uint32LittleEndian(bytes, 1);
+    if (dataLength <= 0 || dataLength > _maxEmbeddedArtworkBytes) {
+      return null;
+    }
+
+    var offset = 5; // Picture type byte and a little-endian image length.
+    final mimeEnd = _utf16NullTerminatorOffset(bytes, offset);
+    if (mimeEnd == null) {
+      return null;
+    }
+    final mimeType = _normalizeArtworkMimeType(
+      _decodeUtf16(bytes.sublist(offset, mimeEnd)),
+    );
+
+    offset = mimeEnd + 2;
+    final descriptionEnd = _utf16NullTerminatorOffset(bytes, offset);
+    if (descriptionEnd == null) {
+      return null;
+    }
+    offset = descriptionEnd + 2;
+    if (offset + dataLength > bytes.length) {
+      return null;
+    }
+
+    final imageBytes = bytes.sublist(offset, offset + dataLength);
+    return _artworkDataUri(
+      imageBytes,
+      mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
+    );
+  }
+
+  int? _utf16NullTerminatorOffset(List<int> bytes, int offset) {
+    for (var index = offset; index + 1 < bytes.length; index += 2) {
+      if (bytes[index] == 0 && bytes[index + 1] == 0) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  _LocalFileMetadata? _asfMetadataFromFields(
+    Map<String, String> fields, {
+    Uri? artworkUri,
+  }) {
     final title = fields['title'] ?? '';
     final artist = fields['artist'] ?? '';
     final album = fields['album'];
@@ -1512,7 +1571,8 @@ final class _LocalFolderScanState {
         year == null &&
         trackNumber == null &&
         (genre == null || genre.isEmpty) &&
-        rating == null) {
+        rating == null &&
+        artworkUri == null) {
       return null;
     }
 
@@ -1527,6 +1587,7 @@ final class _LocalFolderScanState {
       trackNumber: trackNumber,
       genre: genre == null || genre.isEmpty ? null : genre,
       rating: rating,
+      artworkUri: artworkUri,
     );
   }
 
@@ -2913,6 +2974,16 @@ final class _Mp4Atom {
   final int payloadEnd;
 }
 
+final class _AsfExtendedContentDescription {
+  const _AsfExtendedContentDescription({
+    this.fields = const <String, String>{},
+    this.artworkUri,
+  });
+
+  final Map<String, String> fields;
+  final Uri? artworkUri;
+}
+
 final class _Id3v2TagData {
   const _Id3v2TagData({
     required this.textFrames,
@@ -2964,6 +3035,7 @@ const _flacPictureBlockType = 6;
 const _asfHeaderPrefixBytes = 30;
 const _asfObjectPrefixBytes = 24;
 const _asfUnicodeValueType = 0;
+const _asfByteArrayValueType = 1;
 const _asfDwordValueType = 3;
 const _asfQwordValueType = 4;
 const _asfWordValueType = 5;

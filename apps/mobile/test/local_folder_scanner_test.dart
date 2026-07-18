@@ -827,6 +827,57 @@ FILE "../private.mp3" MP3
     expect(track.rating, 4);
   });
 
+  test('extracts WMA WM/Picture embedded artwork', () async {
+    await File(p.join(root.path, 'cover.wma')).writeAsBytes(
+      _wmaWithMetadata(
+        title: 'WMA Cover',
+        artist: 'WMA Artist',
+        album: 'WMA Album',
+        albumArtist: 'WMA Album Artist',
+        year: '2022',
+        trackNumber: '4/12',
+        genre: 'Jazz',
+        rating: 80,
+        picturePayload: _asfPicturePayload(_tinyPngBytes),
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'WMA Cover');
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+  });
+
+  test('ignores malformed WMA WM/Picture payloads', () async {
+    await File(p.join(root.path, 'broken-cover.wma')).writeAsBytes(
+      _wmaWithMetadata(
+        title: 'WMA Cover',
+        artist: 'WMA Artist',
+        album: 'WMA Album',
+        albumArtist: 'WMA Album Artist',
+        year: '2022',
+        trackNumber: '4/12',
+        genre: 'Jazz',
+        rating: 80,
+        picturePayload: <int>[
+          3,
+          ..._uint32LittleEndianSize(1024 * 1024),
+          ..._utf16Le('image/png\u0000'),
+          ..._utf16Le('\u0000'),
+          ..._tinyPngBytes,
+        ],
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'WMA Cover');
+    expect(result.tracks.single.artworkUri, isNull);
+  });
+
   test('falls back safely from malformed WMA ASF object sizes', () async {
     await File(p.join(root.path, 'broken.wma')).writeAsBytes(<int>[
       ..._asfHeaderObjectGuid,
@@ -1591,6 +1642,7 @@ List<int> _wmaWithMetadata({
   required String trackNumber,
   required String genre,
   required int rating,
+  List<int>? picturePayload,
 }) {
   final contentDescription = _asfObject(
     _asfContentDescriptionObjectGuid,
@@ -1605,6 +1657,7 @@ List<int> _wmaWithMetadata({
       'WM/TrackNumber': trackNumber,
       'WM/Genre': genre,
       'WM/SharedUserRating': rating,
+      if (picturePayload != null) 'WM/Picture': picturePayload,
     }),
   );
   final objects = <int>[...contentDescription, ...extendedDescription];
@@ -1651,15 +1704,26 @@ List<int> _asfExtendedField(String name, Object value) {
   final valueBytes = switch (value) {
     String text => _utf16Le('$text\u0000'),
     int number => _uint32LittleEndianSize(number),
+    List<int> bytes => bytes,
     _ => throw ArgumentError.value(value, 'value', 'Unsupported ASF test value.'),
   };
-  final valueType = value is int ? 3 : 0;
+  final valueType = value is int ? 3 : value is List<int> ? 1 : 0;
   return <int>[
     ..._uint16LittleEndianSize(nameBytes.length),
     ...nameBytes,
     ..._uint16LittleEndianSize(valueType),
     ..._uint16LittleEndianSize(valueBytes.length),
     ...valueBytes,
+  ];
+}
+
+List<int> _asfPicturePayload(List<int> imageBytes) {
+  return <int>[
+    3,
+    ..._uint32LittleEndianSize(imageBytes.length),
+    ..._utf16Le('image/png\u0000'),
+    ..._utf16Le('\u0000'),
+    ...imageBytes,
   ];
 }
 
