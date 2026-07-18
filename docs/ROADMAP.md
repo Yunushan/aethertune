@@ -73,6 +73,7 @@
 - [x] Filename metadata scanner
 - [x] Basic ID3v1 MP3 metadata scanner
 - [x] Basic ID3v2 MP3 text metadata scanner
+- [x] Bounded APEv2 MP3 text metadata scanner
 - [x] Basic FLAC Vorbis comment metadata scanner
 - [x] Basic M4A metadata atom scanner
 - [x] Basic WAV RIFF INFO metadata scanner

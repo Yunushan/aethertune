@@ -803,6 +803,51 @@ Timed sidecar
     expect(result.tracks.single.album, 'Tagged Album Only');
   });
 
+  test('imports bounded APEv2 text metadata before trailing ID3v1', () async {
+    final audioPath = p.join(root.path, '99 Filename Artist - Filename Title.mp3');
+    await File(audioPath).writeAsBytes(<int>[
+      1,
+      2,
+      3,
+      ..._apev2Tag(<String, String>{
+        'TITLE': 'APE Title',
+        'ARTIST': 'APE Artist',
+        'ALBUM': 'APE Album',
+        'ALBUM ARTIST': 'APE Album Artist',
+        'DATE': '2024-09-01',
+        'TRACK': '07/12',
+        'GENRE': 'Ambient',
+        'REPLAYGAIN_TRACK_GAIN': '-5.40 dB',
+        'REPLAYGAIN_ALBUM_GAIN': '-3.25 dB',
+        'RATING': '4',
+        'LYRICS': 'First line\r\nSecond line',
+      }),
+      ..._id3v1Tag(
+        title: 'ID3v1 Title',
+        artist: 'ID3v1 Artist',
+        album: 'ID3v1 Album',
+      ),
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final track = result.tracks.single;
+
+    expect(track.title, 'APE Title');
+    expect(track.artist, 'APE Artist');
+    expect(track.album, 'APE Album');
+    expect(track.albumArtist, 'APE Album Artist');
+    expect(track.year, 2024);
+    expect(track.trackNumber, 7);
+    expect(track.genre, 'Ambient');
+    expect(track.replayGainTrackDb, -5.4);
+    expect(track.replayGainAlbumDb, -3.25);
+    expect(track.rating, 4);
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(audioPath)],
+      'First line\nSecond line',
+    );
+  });
+
   test('rejects a missing folder path', () async {
     const scanner = LocalFolderScanner();
 
@@ -826,6 +871,28 @@ List<int> _id3v1Tag({
   _writeFixedAscii(bytes, 33, 30, artist);
   _writeFixedAscii(bytes, 63, 30, album);
   return bytes;
+}
+
+List<int> _apev2Tag(Map<String, String> fields) {
+  final body = <int>[];
+  for (final field in fields.entries) {
+    final value = field.value.codeUnits;
+    body
+      ..addAll(_uint32LittleEndianSize(value.length))
+      ..addAll(<int>[0, 0, 0, 0])
+      ..addAll(field.key.codeUnits)
+      ..add(0)
+      ..addAll(value);
+  }
+  final tagSize = body.length + 32;
+  return <int>[
+    ...body,
+    ...'APETAGEX'.codeUnits,
+    ..._uint32LittleEndianSize(2000),
+    ..._uint32LittleEndianSize(tagSize),
+    ..._uint32LittleEndianSize(fields.length),
+    ...List<int>.filled(12, 0),
+  ];
 }
 
 void _writeFixedAscii(List<int> target, int offset, int length, String value) {

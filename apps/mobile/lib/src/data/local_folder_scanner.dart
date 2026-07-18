@@ -403,6 +403,11 @@ final class _LocalFolderScanState {
           return id3v2;
         }
 
+        final apev2 = await _apev2Metadata(access, length);
+        if (apev2 != null) {
+          return apev2;
+        }
+
         if (length < 128) {
           return null;
         }
@@ -416,6 +421,125 @@ final class _LocalFolderScanState {
     } on FileSystemException {
       return null;
     }
+  }
+
+  Future<_LocalFileMetadata?> _apev2Metadata(
+    RandomAccessFile access,
+    int length,
+  ) async {
+    if (length < _apev2FooterBytes) {
+      return null;
+    }
+
+    final footerOffsets = <int>[length - _apev2FooterBytes];
+    if (length >= _apev2FooterBytes + 128) {
+      await access.setPosition(length - 128);
+      final id3v1 = await access.read(3);
+      if (_matchesAscii(id3v1, 'TAG')) {
+        footerOffsets.add(length - 128 - _apev2FooterBytes);
+      }
+    }
+
+    for (final footerOffset in footerOffsets) {
+      if (footerOffset < 0) {
+        continue;
+      }
+      await access.setPosition(footerOffset);
+      final footer = await access.read(_apev2FooterBytes);
+      if (footer.length != _apev2FooterBytes ||
+          !_matchesAscii(footer.sublist(0, 8), 'APETAGEX') ||
+          _uint32LittleEndian(footer, 8) != 2000) {
+        continue;
+      }
+
+      final tagSize = _uint32LittleEndian(footer, 12);
+      final itemCount = _uint32LittleEndian(footer, 16);
+      final bodyLength = tagSize - _apev2FooterBytes;
+      final bodyOffset = footerOffset - bodyLength;
+      if (tagSize < _apev2FooterBytes ||
+          tagSize > _maxApev2TagBytes ||
+          itemCount < 0 ||
+          itemCount > _maxApev2Items ||
+          bodyOffset < 0 ||
+          bodyLength < 0) {
+        continue;
+      }
+
+      await access.setPosition(bodyOffset);
+      final body = await access.read(bodyLength);
+      if (body.length != bodyLength) {
+        continue;
+      }
+      final comments = _apev2TextComments(body, itemCount);
+      if (comments == null) {
+        continue;
+      }
+      final metadata = _vorbisCommentMetadataFromComments(comments);
+      final lyrics = _vorbisCommentLyrics(comments);
+      if (metadata == null && lyrics == null) {
+        continue;
+      }
+      return _LocalFileMetadata(
+        title: metadata?.title ?? '',
+        artist: metadata?.artist ?? '',
+        album: metadata?.album,
+        albumArtist: metadata?.albumArtist,
+        year: metadata?.year,
+        trackNumber: metadata?.trackNumber,
+        genre: metadata?.genre,
+        replayGainTrackDb: metadata?.replayGainTrackDb,
+        replayGainAlbumDb: metadata?.replayGainAlbumDb,
+        embeddedLyrics: lyrics,
+        rating: metadata?.rating,
+      );
+    }
+
+    return null;
+  }
+
+  Map<String, List<String>>? _apev2TextComments(
+    List<int> bytes,
+    int itemCount,
+  ) {
+    var offset = 0;
+    final comments = <String, List<String>>{};
+    for (var itemIndex = 0; itemIndex < itemCount; itemIndex += 1) {
+      if (offset + 8 > bytes.length) {
+        return null;
+      }
+      final valueLength = _uint32LittleEndian(bytes, offset);
+      final flags = _uint32LittleEndian(bytes, offset + 4);
+      offset += 8;
+      final keyEnd = bytes.indexOf(0, offset);
+      if (keyEnd == -1 || keyEnd == offset || keyEnd - offset > _maxApev2KeyBytes) {
+        return null;
+      }
+      final key = String.fromCharCodes(bytes.sublist(offset, keyEnd)).toUpperCase();
+      offset = keyEnd + 1;
+      if (valueLength < 0 || valueLength > bytes.length - offset) {
+        return null;
+      }
+      final valueBytes = bytes.sublist(offset, offset + valueLength);
+      offset += valueLength;
+      if ((flags & 0x6) != 0) {
+        continue;
+      }
+
+      final normalizedKey = switch (key) {
+        'TRACK' => 'TRACKNUMBER',
+        'ALBUM ARTIST' => 'ALBUMARTIST',
+        _ => key,
+      };
+      final rawValue = utf8.decode(valueBytes, allowMalformed: true);
+      final value = _isVorbisLyricsKey(normalizedKey)
+          ? _normalizeEmbeddedLyrics(rawValue)
+          : _normalizeEmbeddedText(rawValue);
+      if (value == null || value.isEmpty) {
+        continue;
+      }
+      comments.putIfAbsent(normalizedKey, () => <String>[]).add(value);
+    }
+    return comments;
   }
 
   Future<_LocalFileMetadata?> _flacMetadataForFile(String path) async {
@@ -2226,6 +2350,7 @@ final class _Id3v2TagData {
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;
+const _maxApev2TagBytes = 1024 * 1024;
 const _maxFlacMetadataBytes = 1024 * 1024;
 const _maxOggMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
@@ -2239,6 +2364,9 @@ const _maxOggPages = 128;
 const _maxOggPackets = 8;
 const _maxOggPacketBytes = 512 * 1024;
 const _maxVorbisComments = 2048;
+const _maxApev2Items = 2048;
+const _maxApev2KeyBytes = 255;
+const _apev2FooterBytes = 32;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
 const _sidecarLyricsExtensionsByPreference = <String>[
