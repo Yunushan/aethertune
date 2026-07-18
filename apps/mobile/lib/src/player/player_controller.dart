@@ -111,6 +111,7 @@ class PlayerController extends ChangeNotifier {
   Timer? _sleepFadeStepTimer;
   Duration _duration = Duration.zero;
   Track? _current;
+  int? _currentQueueIndex;
   String? _loadedTrackId;
   bool _stopAtEndOfTrack = false;
   bool _sleepTimerFadesOut = false;
@@ -152,6 +153,7 @@ class PlayerController extends ChangeNotifier {
   bool _skipSegmentSeeking = false;
 
   Track? get current => _current;
+  int? get currentQueueIndex => _currentQueueIndex;
   List<Track> get queue => List.unmodifiable(_queue);
   List<SavedTrackQueue> get savedQueues =>
       List<SavedTrackQueue>.unmodifiable(_savedQueues);
@@ -635,6 +637,8 @@ class PlayerController extends ChangeNotifier {
       _clearABRepeat(notify: false);
     }
     _current = preparedTrack;
+    _currentQueueIndex = queueIndex ??
+        _queue.indexWhere((candidate) => candidate.id == preparedTrack.id);
     notifyListeners();
     await _saveQueueSnapshot(touch: true);
 
@@ -699,6 +703,7 @@ class PlayerController extends ChangeNotifier {
     if (removesCurrent) {
       await _audio.stop();
       _current = null;
+      _currentQueueIndex = null;
       _loadedTrackId = null;
       _loadedPlaybackQueue.clear();
     } else if (_current != null) {
@@ -962,6 +967,7 @@ class PlayerController extends ChangeNotifier {
     await _audio.stop();
     _queue.clear();
     _current = null;
+    _currentQueueIndex = null;
     _loadedTrackId = null;
     _loadedPlaybackQueue.clear();
     await _saveQueueSnapshot(touch: true);
@@ -1478,18 +1484,47 @@ class PlayerController extends ChangeNotifier {
     }
 
     final track = _loadedPlaybackQueue[index];
+    final queueIndex = _queueIndexForPlaybackIndex(index);
     _loadedTrackId = track.id;
-    if (_current?.id == track.id) {
+    if (_current?.id == track.id && _currentQueueIndex == queueIndex) {
       return;
     }
 
     _clearABRepeat(notify: false);
     _current = track;
+    _currentQueueIndex = queueIndex;
     _playbackStartSerial += 1;
     unawaited(_applyPitchForCurrentTrack());
     unawaited(_applyOutputVolume());
     unawaited(_saveQueueSnapshot(touch: true));
     notifyListeners();
+  }
+
+  int? _queueIndexForPlaybackIndex(int playbackIndex) {
+    if (playbackIndex < 0 || playbackIndex >= _loadedPlaybackQueue.length) {
+      return null;
+    }
+    if (_sameQueueOrder(_queue, _loadedPlaybackQueue)) {
+      return playbackIndex;
+    }
+    final track = _loadedPlaybackQueue[playbackIndex];
+    var occurrence = 0;
+    for (var index = 0; index <= playbackIndex; index += 1) {
+      if (_loadedPlaybackQueue[index].id == track.id) {
+        occurrence += 1;
+      }
+    }
+    var matched = 0;
+    for (var index = 0; index < _queue.length; index += 1) {
+      if (_queue[index].id != track.id) {
+        continue;
+      }
+      matched += 1;
+      if (matched == occurrence) {
+        return index;
+      }
+    }
+    return null;
   }
 
   Duration _clampABRepeatPosition(Duration position) {

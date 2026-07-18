@@ -4,26 +4,31 @@ class ListenTogetherSession {
     required this.position,
     required this.playing,
     this.currentTrackId,
+    this.currentIndex,
   });
 
-  static const version = 1;
+  static const legacyVersion = 1;
+  static const version = 2;
   static const maxTrackIds = 500;
 
   final List<String> trackIds;
   final String? currentTrackId;
+  final int? currentIndex;
   final Duration position;
   final bool playing;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'version': version,
+        'version': currentIndex == null ? legacyVersion : version,
         'trackIds': trackIds,
         'currentTrackId': currentTrackId,
+        if (currentIndex != null) 'currentIndex': currentIndex,
         'positionMilliseconds': position.inMilliseconds,
         'playing': playing,
       };
 
   factory ListenTogetherSession.fromJson(Map<String, Object?> json) {
-    if (json['version'] != version) {
+    final sessionVersion = json['version'];
+    if (sessionVersion != legacyVersion && sessionVersion != version) {
       throw const FormatException('Unsupported listen-together session version.');
     }
     final rawTrackIds = json['trackIds'];
@@ -40,7 +45,8 @@ class ListenTogetherSession {
       }
       trackIds.add(value.trim());
     }
-    if (trackIds.toSet().length != trackIds.length) {
+    if (sessionVersion == legacyVersion &&
+        trackIds.toSet().length != trackIds.length) {
       throw const FormatException('Listen-together track IDs must not repeat.');
     }
     final currentTrackId = json['currentTrackId'];
@@ -50,6 +56,16 @@ class ListenTogetherSession {
             !trackIds.contains(currentTrackId))) {
       throw const FormatException(
         'Listen-together current track must belong to the queue.',
+      );
+    }
+    final currentIndex = json['currentIndex'];
+    if (sessionVersion == version &&
+        (currentIndex is! int ||
+            currentIndex < 0 ||
+            currentIndex >= trackIds.length ||
+            currentTrackId != trackIds[currentIndex])) {
+      throw const FormatException(
+        'Listen-together current index must select the current queue item.',
       );
     }
     final positionMilliseconds = json['positionMilliseconds'];
@@ -64,6 +80,7 @@ class ListenTogetherSession {
     return ListenTogetherSession(
       trackIds: List<String>.unmodifiable(trackIds),
       currentTrackId: currentTrackId as String?,
+      currentIndex: sessionVersion == version ? currentIndex as int : null,
       position: Duration(milliseconds: positionMilliseconds),
       playing: json['playing'] as bool,
     );

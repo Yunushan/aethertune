@@ -54,6 +54,41 @@ void main() {
     expect(guestPlayer.isPlaying, isTrue);
   });
 
+  test('hosts and restores repeated queue entries at the selected occurrence',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final first = _track('first');
+    final second = _track('second');
+    await library.addTracks(<Track>[first, second]);
+
+    final gateway = _MemoryListenTogetherGateway();
+    final hostPlayer = PlayerController(audioEngine: _TestAudioEngine());
+    addTearDown(hostPlayer.dispose);
+    await hostPlayer.playTrack(
+      first,
+      queue: <Track>[first, second, first],
+      queueIndex: 2,
+    );
+
+    final host = ListenTogetherStore(gatewayFactory: () => gateway);
+    await host.host(library, hostPlayer);
+
+    expect(gateway.session?.trackIds, <String>['first', 'second', 'first']);
+    expect(gateway.session?.currentIndex, 2);
+
+    final guestPlayer = PlayerController(audioEngine: _TestAudioEngine());
+    addTearDown(guestPlayer.dispose);
+    final guest = ListenTogetherStore(gatewayFactory: () => gateway);
+    expect(await guest.join(library, guestPlayer), 3);
+    expect(guestPlayer.queue.map((track) => track.id), <String>[
+      'first',
+      'second',
+      'first',
+    ]);
+    expect(guestPlayer.currentQueueIndex, 2);
+  });
+
   test('keeps a joined session paused when the host is paused', () async {
     final library = LibraryStore();
     await library.load();

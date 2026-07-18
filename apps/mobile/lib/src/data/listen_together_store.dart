@@ -213,34 +213,61 @@ class ListenTogetherStore extends ChangeNotifier {
     PlayerController player,
   ) {
     final libraryIds = library.tracks.map((track) => track.id).toSet();
+    final playerQueue = player.queue;
     final trackIds = <String>[];
-    for (final track in player.queue) {
-      if (libraryIds.contains(track.id) && !trackIds.contains(track.id)) {
+    for (final track in playerQueue) {
+      if (libraryIds.contains(track.id)) {
         trackIds.add(track.id);
       }
       if (trackIds.length == ListenTogetherSession.maxTrackIds) {
         break;
       }
     }
-    final currentTrackId = player.current?.id;
-    if (currentTrackId != null &&
-        libraryIds.contains(currentTrackId) &&
-        !trackIds.contains(currentTrackId) &&
-        trackIds.length < ListenTogetherSession.maxTrackIds) {
-      trackIds.add(currentTrackId);
-    }
+    final playerCurrentIndex = player.currentQueueIndex;
+    final fallbackCurrentIndex = playerQueue.indexWhere(
+      (track) => track.id == player.current?.id,
+    );
+    final sourceCurrentIndex = playerCurrentIndex ?? fallbackCurrentIndex;
     if (trackIds.isEmpty) {
       throw StateError('Queue a library track before starting a shared session.');
     }
-    final current = currentTrackId != null && trackIds.contains(currentTrackId)
-        ? currentTrackId
-        : trackIds.first;
+    final hasLocalCurrent = sourceCurrentIndex >= 0 &&
+        sourceCurrentIndex < playerQueue.length &&
+        libraryIds.contains(playerQueue[sourceCurrentIndex].id);
+    var currentIndex = hasLocalCurrent
+        ? _portableQueueIndexForPlayerIndex(
+            playerQueue,
+            libraryIds,
+            sourceCurrentIndex,
+          )
+        : 0;
+    if (currentIndex >= trackIds.length) {
+      trackIds
+        ..removeLast()
+        ..add(playerQueue[sourceCurrentIndex].id);
+      currentIndex = trackIds.length - 1;
+    }
     return ListenTogetherSession(
       trackIds: List<String>.unmodifiable(trackIds),
-      currentTrackId: current,
+      currentTrackId: trackIds[currentIndex],
+      currentIndex: currentIndex,
       position: player.position,
       playing: player.isPlaying,
     );
+  }
+
+  int _portableQueueIndexForPlayerIndex(
+    List<Track> queue,
+    Set<String> libraryIds,
+    int playerIndex,
+  ) {
+    var portableIndex = 0;
+    for (var index = 0; index < playerIndex; index += 1) {
+      if (libraryIds.contains(queue[index].id)) {
+        portableIndex += 1;
+      }
+    }
+    return portableIndex;
   }
 
   Future<int> _applySession(
@@ -260,15 +287,25 @@ class ListenTogetherStore extends ChangeNotifier {
     if (queue.isEmpty) {
       throw StateError('None of the shared tracks are available in this library.');
     }
-    final requestedCurrentId = session.currentTrackId;
+    final requestedCurrentIndex = _currentIndexForSession(session);
+    final requestedCurrentId = requestedCurrentIndex == null
+        ? null
+        : session.trackIds[requestedCurrentIndex];
     final resolvedCurrent = requestedCurrentId == null
-        ? queue.first
+        ? null
         : tracksById[requestedCurrentId];
     final current = resolvedCurrent ?? queue.first;
+    final currentQueueIndex = resolvedCurrent == null
+        ? 0
+        : _resolvedQueueIndexForSessionIndex(
+            session,
+            tracksById,
+            requestedCurrentIndex!,
+          );
     final targetPosition = resolvedCurrent == null && requestedCurrentId != null
         ? Duration.zero
         : _positionAtReceipt(session, updatedAt);
-    if (_matchesActiveQueue(player, queue, current)) {
+    if (_matchesActiveQueue(player, queue, current, currentQueueIndex)) {
       final drift = targetPosition - player.position;
       if (drift.inMilliseconds.abs() >
           _positionDriftTolerance.inMilliseconds) {
@@ -282,12 +319,36 @@ class ListenTogetherStore extends ChangeNotifier {
     await player.playTrack(
       current,
       queue: queue,
+      queueIndex: currentQueueIndex,
       initialPosition: targetPosition,
     );
     if (!session.playing) {
       await player.togglePlayPause();
     }
     return queue.length;
+  }
+
+  int? _currentIndexForSession(ListenTogetherSession session) {
+    final currentIndex = session.currentIndex;
+    if (currentIndex != null) {
+      return currentIndex;
+    }
+    final currentTrackId = session.currentTrackId;
+    return currentTrackId == null ? null : session.trackIds.indexOf(currentTrackId);
+  }
+
+  int _resolvedQueueIndexForSessionIndex(
+    ListenTogetherSession session,
+    Map<String, Track> tracksById,
+    int sessionIndex,
+  ) {
+    var resolvedIndex = -1;
+    for (var index = 0; index <= sessionIndex; index += 1) {
+      if (tracksById.containsKey(session.trackIds[index])) {
+        resolvedIndex += 1;
+      }
+    }
+    return resolvedIndex < 0 ? 0 : resolvedIndex;
   }
 
   Duration _positionAtReceipt(
@@ -305,8 +366,11 @@ class ListenTogetherStore extends ChangeNotifier {
     PlayerController player,
     List<Track> queue,
     Track current,
+    int currentQueueIndex,
   ) {
     if (player.current?.id != current.id ||
+        (player.currentQueueIndex != null &&
+            player.currentQueueIndex != currentQueueIndex) ||
         player.queue.length != queue.length) {
       return false;
     }

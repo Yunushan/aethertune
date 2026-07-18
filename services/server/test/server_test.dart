@@ -616,6 +616,48 @@ void main() {
       expect((await _json(stale))['error'], 'listen_together_conflict');
     });
 
+    test('accepts a repeated v2 shared queue with its exact current index',
+        () async {
+      final handler = createServerHandler(
+        syncAuthenticator: StaticSyncAuthenticator(
+          const <String, String>{'friends': token},
+        ),
+        listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
+      );
+      final response = await handler(
+        _request(
+          'PUT',
+          '/api/v1/listen-together/session',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'host-phone',
+            'session': <String, Object?>{
+              'version': 2,
+              'trackIds': <String>['track-1', 'track-2', 'track-1'],
+              'currentTrackId': 'track-1',
+              'currentIndex': 2,
+              'positionMilliseconds': 12345,
+              'playing': true,
+            },
+          },
+        ),
+      );
+
+      expect(response.statusCode, 200);
+      final fetched = await handler(
+        _request('GET', '/api/v1/listen-together/session', token: token),
+      );
+      final body = await _json(fetched);
+      expect(fetched.statusCode, 200);
+      expect((body['session'] as Map<String, dynamic>)['trackIds'], <String>[
+        'track-1',
+        'track-2',
+        'track-1',
+      ]);
+      expect((body['session'] as Map<String, dynamic>)['currentIndex'], 2);
+    });
+
     test('rejects non-portable listen-together payloads', () async {
       final handler = createServerHandler(
         syncAuthenticator: StaticSyncAuthenticator(

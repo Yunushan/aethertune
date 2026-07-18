@@ -1517,20 +1517,23 @@ Map<String, Object?> _listenTogetherSessionResponse(
 }
 
 void _validateListenTogetherSession(Map<String, Object?> session) {
-  const allowedFields = <String>{
+  const legacyFields = <String>{
     'version',
     'trackIds',
     'currentTrackId',
     'positionMilliseconds',
     'playing',
   };
+  const currentFields = <String>{...legacyFields, 'currentIndex'};
+  final version = session['version'];
+  if (version != 1 && version != 2) {
+    throw const FormatException('Unsupported listen-together session version.');
+  }
+  final allowedFields = version == 1 ? legacyFields : currentFields;
   if (session.keys.any((key) => !allowedFields.contains(key))) {
     throw const FormatException(
       'Listen-together sessions contain unsupported fields.',
     );
-  }
-  if (session['version'] != 1) {
-    throw const FormatException('Unsupported listen-together session version.');
   }
   final trackIds = session['trackIds'];
   if (trackIds is! List || trackIds.length > 500) {
@@ -1546,7 +1549,7 @@ void _validateListenTogetherSession(Map<String, Object?> session) {
     }
     normalizedIds.add(value);
   }
-  if (normalizedIds.toSet().length != normalizedIds.length) {
+  if (version == 1 && normalizedIds.toSet().length != normalizedIds.length) {
     throw const FormatException('session trackIds must not repeat.');
   }
   final currentTrackId = session['currentTrackId'];
@@ -1555,6 +1558,16 @@ void _validateListenTogetherSession(Map<String, Object?> session) {
           currentTrackId != currentTrackId.trim() ||
           !normalizedIds.contains(currentTrackId))) {
     throw const FormatException('session currentTrackId must belong to trackIds.');
+  }
+  final currentIndex = session['currentIndex'];
+  if (version == 2 &&
+      (currentIndex is! int ||
+          currentIndex < 0 ||
+          currentIndex >= normalizedIds.length ||
+          currentTrackId != normalizedIds[currentIndex])) {
+    throw const FormatException(
+      'session currentIndex must select the current queue item.',
+    );
   }
   final positionMilliseconds = session['positionMilliseconds'];
   if (positionMilliseconds is! int ||
