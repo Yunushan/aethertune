@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/local_folder_scanner.dart';
 import 'package:aethertune/src/data/m4a_metadata_writer.dart';
+import 'package:aethertune/src/domain/track_chapter.dart';
 
 void main() {
   late Directory temporaryDirectory;
@@ -73,6 +74,39 @@ void main() {
     expect(result.tracks.single.artist, 'Narrator');
     expect(result.tracks.single.album, 'Audiobook');
     expect(result.tracks.single.genre, 'Audiobook');
+    expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
+  });
+
+  test('writes embedded M4A chapter markers that the scanner reads', () async {
+    final file = File('${temporaryDirectory.path}/chapters.m4a');
+    await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+
+    await const M4aMetadataWriter().write(
+      path: file.path,
+      title: 'Chaptered audio',
+      artist: 'Narrator',
+      album: 'Audiobook',
+      genre: 'Spoken Word',
+      chapters: <TrackChapter>[
+        TrackChapter(start: Duration.zero, title: 'Opening'),
+        TrackChapter(
+          start: const Duration(minutes: 1, seconds: 2, milliseconds: 500),
+          title: 'Second part',
+        ),
+      ],
+    );
+
+    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
+        .tracks
+        .single;
+    expect(track.chapters.map((chapter) => chapter.title), <String>[
+      'Opening',
+      'Second part',
+    ]);
+    expect(
+      track.chapters[1].start,
+      const Duration(minutes: 1, seconds: 2, milliseconds: 500),
+    );
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 

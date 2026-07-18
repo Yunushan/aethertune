@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../domain/track_chapter.dart';
+
 class M4aMetadataWriter {
   const M4aMetadataWriter();
 
@@ -14,6 +16,7 @@ class M4aMetadataWriter {
     String? albumArtist,
     int? year,
     int? trackNumber,
+    List<TrackChapter>? chapters,
   }) async {
     if (!_isSupportedM4aContainerPath(path)) {
       throw const FormatException(
@@ -37,6 +40,7 @@ class M4aMetadataWriter {
       albumArtist: albumArtist,
       year: year,
       trackNumber: trackNumber,
+      chapters: _normalizedChapters(chapters),
     );
     await _replaceWithTaggedCopy(file, plan);
   }
@@ -115,6 +119,7 @@ Future<_M4aWritePlan> _buildWritePlan(
   int? year,
   int? trackNumber,
   Uint8List? artwork,
+  List<TrackChapter>? chapters,
 }) async {
   final access = await file.open(mode: FileMode.read);
   try {
@@ -150,6 +155,7 @@ Future<_M4aWritePlan> _buildWritePlan(
       year: year,
       trackNumber: trackNumber,
       artwork: artwork,
+      chapters: chapters,
     );
     final movedMediaAtoms = mediaAtoms
         .where((atom) => atom.start > moov.start)
@@ -219,6 +225,7 @@ Uint8List _updatedMoov(
   int? year,
   int? trackNumber,
   Uint8List? artwork,
+  List<TrackChapter>? chapters,
 }) {
   final moovChildren = _childAtoms(payload);
   final udtaAtoms = moovChildren.where((atom) => _hasAsciiType(atom, 'udta')).toList();
@@ -238,6 +245,7 @@ Uint8List _updatedMoov(
     year: year,
     trackNumber: trackNumber,
     artwork: artwork,
+    chapters: chapters,
   );
 
   final output = BytesBuilder(copy: false);
@@ -260,6 +268,7 @@ Uint8List _updatedUdta(
   int? year,
   int? trackNumber,
   Uint8List? artwork,
+  List<TrackChapter>? chapters,
 }) {
   final children = _childAtoms(payload);
   final metaAtoms = children.where((atom) => _hasAsciiType(atom, 'meta')).toList();
@@ -283,11 +292,15 @@ Uint8List _updatedUdta(
 
   final output = BytesBuilder(copy: false);
   for (final child in children) {
-    if (!_hasAsciiType(child, 'meta')) {
+    if (!_hasAsciiType(child, 'meta') &&
+        !(chapters != null && _hasAsciiType(child, 'chpl'))) {
       output.add(payload.sublist(child.start, child.end));
     }
   }
   output.add(updatedMeta);
+  if (chapters != null && chapters.isNotEmpty) {
+    output.add(_chapterListAtom(chapters));
+  }
   return _atom('udta', output.takeBytes());
 }
 
@@ -448,6 +461,53 @@ Uint8List _trackNumberItem(int trackNumber) {
     ..add(<int>[(trackNumber >> 8) & 0xff, trackNumber & 0xff])
     ..add(const <int>[0, 0, 0, 0]);
   return _atom('trkn', _atom('data', data.takeBytes()));
+}
+
+List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
+  if (chapters == null) {
+    return null;
+  }
+  final normalized = TrackChapter.normalize(chapters);
+  if (normalized.length > _maxM4aChapters) {
+    throw const FormatException('M4A chapter markers exceed the 255-item limit.');
+  }
+  for (final chapter in normalized) {
+    if (utf8.encode(chapter.title).length > 0xff) {
+      throw const FormatException('M4A chapter titles must be at most 255 bytes.');
+    }
+  }
+  return normalized;
+}
+
+Uint8List _chapterListAtom(List<TrackChapter> chapters) {
+  final payload = BytesBuilder(copy: false)
+    ..add(const <int>[0, 0, 0, 0])
+    ..addByte(chapters.length);
+  for (final chapter in chapters) {
+    final timestamp = chapter.start.inMicroseconds * _chapterTicksPerMicrosecond;
+    if (timestamp < 0 || timestamp > _maxM4aChunkOffset) {
+      throw const FormatException('M4A chapter timestamp is out of range.');
+    }
+    final title = utf8.encode(chapter.title);
+    payload
+      ..add(_uint64Bytes(timestamp))
+      ..addByte(title.length)
+      ..add(title);
+  }
+  return _atom('chpl', payload.takeBytes());
+}
+
+Uint8List _uint64Bytes(int value) {
+  return Uint8List.fromList(<int>[
+    (value >> 56) & 0xff,
+    (value >> 48) & 0xff,
+    (value >> 40) & 0xff,
+    (value >> 32) & 0xff,
+    (value >> 24) & 0xff,
+    (value >> 16) & 0xff,
+    (value >> 8) & 0xff,
+    value & 0xff,
+  ]);
 }
 
 Uint8List _atom(String type, List<int> payload) {
@@ -820,6 +880,8 @@ const _maxChildAtoms = 1024;
 const _maxContainerDepth = 32;
 const _copyChunkBytes = 64 * 1024;
 const _maxM4aChunkOffset = 0x7fffffffffffffff;
+const _maxM4aChapters = 255;
+const _chapterTicksPerMicrosecond = 10;
 const _titleType = <int>[0xa9, 0x6e, 0x61, 0x6d];
 const _artistType = <int>[0xa9, 0x41, 0x52, 0x54];
 const _albumType = <int>[0xa9, 0x61, 0x6c, 0x62];

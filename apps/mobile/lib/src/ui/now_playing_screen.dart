@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/library_store.dart';
+import '../data/m4a_metadata_writer.dart';
 import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/podcast_transcript_loader.dart';
 import '../data/sponsorblock_segment_provider.dart';
@@ -36,6 +37,10 @@ bool _canWriteChapterMarkers(Track track) {
   final path = track.localPath?.toLowerCase();
   return path != null &&
       (path.endsWith('.flac') ||
+          path.endsWith('.m4a') ||
+          path.endsWith('.m4b') ||
+          path.endsWith('.m4r') ||
+          path.endsWith('.alac') ||
           path.endsWith('.ogg') ||
           path.endsWith('.oga') ||
           path.endsWith('.opus'));
@@ -48,6 +53,24 @@ Future<void> _writeChapterMarkers(Track track) async {
   }
   if (path.toLowerCase().endsWith('.flac')) {
     await const FlacVorbisCommentWriter().write(
+      path: path,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      genre: track.genre,
+      albumArtist: track.albumArtist,
+      year: track.year,
+      trackNumber: track.trackNumber,
+      chapters: track.chapters,
+    );
+    return;
+  }
+  final normalized = path.toLowerCase();
+  if (normalized.endsWith('.m4a') ||
+      normalized.endsWith('.m4b') ||
+      normalized.endsWith('.m4r') ||
+      normalized.endsWith('.alac')) {
+    await const M4aMetadataWriter().write(
       path: path,
       title: track.title,
       artist: track.artist,
