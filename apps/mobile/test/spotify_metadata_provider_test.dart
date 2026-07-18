@@ -298,6 +298,29 @@ void main() {
     expect(await provider.resolveStream(tracks.tracks.single), isNull);
   });
 
+  test('loads bounded official Spotify new-release album metadata', () async {
+    Uri? requestUri;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      newReleasesLoader: (uri, token) async {
+        requestUri = uri;
+        return '''
+          {"albums": {"offset": 0, "total": 1, "next": null,
+          "items": [{"id": "release", "name": "New Signal",
+          "total_tracks": 2, "artists": [{"name": "Aether"}],
+          "images": [{"url": "https://i.scdn.co/image/release"}]}]}}
+        ''';
+      },
+    );
+
+    final page = await provider.loadNewReleasesPage(limit: 100);
+
+    expect(requestUri!.path, '/v1/browse/new-releases');
+    expect(requestUri!.queryParameters['limit'], '50');
+    expect(page.albums.single.title, 'New Signal');
+    expect(page.albums.single.artworkUri, Uri.parse('https://i.scdn.co/image/release'));
+  });
+
   test('loads read-only playlists and playlist-item metadata', () async {
     Uri? playlistsRequest;
     Uri? itemsRequest;

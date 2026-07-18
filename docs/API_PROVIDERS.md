@@ -96,7 +96,8 @@ before a search when needed, and Disconnect deletes the whole record.
 The provider sends search queries and OAuth bearer tokens only to
 `api.spotify.com`, lists `accounts.spotify.com` and `api.spotify.com` in its
 disclosure, and returns neutral metadata-only tracks. It uses bounded
-`offset`/`limit` pagination for saved tracks, albums, and playlists; users can
+`offset`/`limit` pagination for saved tracks, albums, playlists, and the
+documented new-release album catalog; users can
 also browse their Spotify-reported recently played track metadata through the
 documented `user-read-recently-played` scope and its bounded history cursor.
 The documented `user-top-read` scope additionally powers explicitly opened
@@ -111,7 +112,7 @@ audio, cache/download media, write Spotify data, or use undocumented endpoints.
 The user must configure the loopback redirect allowed by Spotify for their
 developer app before connecting.
 
-Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played), and [Get User's Top Items](https://developer.spotify.com/documentation/web-api/reference/get-users-top-artists-and-tracks).
+Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played), [Get User's Top Items](https://developer.spotify.com/documentation/web-api/reference/get-users-top-artists-and-tracks), and [Get New Releases](https://developer.spotify.com/documentation/web-api/reference/get-new-releases).
 
 ## LRCLIB lyrics foundation
 

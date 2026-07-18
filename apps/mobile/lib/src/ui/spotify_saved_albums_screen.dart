@@ -10,9 +10,14 @@ import 'widgets/track_artwork.dart';
 
 /// Browses saved Spotify album metadata without exposing Spotify playback.
 final class SpotifySavedAlbumsScreen extends StatefulWidget {
-  const SpotifySavedAlbumsScreen({super.key, required this.provider});
+  const SpotifySavedAlbumsScreen({
+    super.key,
+    required this.provider,
+    this.newReleases = false,
+  });
 
   final SpotifyMetadataProvider provider;
+  final bool newReleases;
 
   @override
   State<SpotifySavedAlbumsScreen> createState() =>
@@ -38,15 +43,15 @@ final class _SpotifySavedAlbumsScreenState
   Widget build(BuildContext context) {
     final offlineModeEnabled = context.watch<LibraryStore>().offlineModeEnabled;
     return Scaffold(
-      appBar: AppBar(title: const Text('Spotify saved albums')),
+      appBar: AppBar(title: Text(_title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
           if (offlineModeEnabled && _albums.isEmpty)
-            const ListTile(
-              leading: Icon(Icons.cloud_off_outlined),
-              title: Text('Offline mode is on'),
-              subtitle: Text('Turn it off to load saved Spotify albums.'),
+            ListTile(
+              leading: const Icon(Icons.cloud_off_outlined),
+              title: const Text('Offline mode is on'),
+              subtitle: Text('Turn it off to load $_collection.'),
             ),
           if (_loading && _albums.isEmpty)
             const Padding(
@@ -55,16 +60,16 @@ final class _SpotifySavedAlbumsScreenState
             ),
           if (_error != null && _albums.isEmpty)
             _ErrorTile(
-              title: 'Could not load saved albums',
+              title: 'Could not load $_collection',
               error: _error!,
-              tooltip: 'Retry saved albums',
+              tooltip: 'Retry $_collection',
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
           if (!_loading && _error == null && _albums.isEmpty && !offlineModeEnabled)
-            const ListTile(
-              leading: Icon(Icons.album_outlined),
-              title: Text('No saved albums found'),
+            ListTile(
+              leading: const Icon(Icons.album_outlined),
+              title: Text('No $_collection found'),
             ),
           for (final album in _albums)
             ListTile(
@@ -80,9 +85,9 @@ final class _SpotifySavedAlbumsScreenState
           ],
           if (_error != null && _albums.isNotEmpty)
             _ErrorTile(
-              title: 'Could not load more saved albums',
+              title: 'Could not load more $_collection',
               error: _error!,
-              tooltip: 'Retry saved album page',
+              tooltip: 'Retry $_collection page',
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: false)),
             ),
@@ -101,7 +106,7 @@ final class _SpotifySavedAlbumsScreenState
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'All $_total saved albums loaded.',
+                'All $_total $_collection loaded.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
@@ -133,7 +138,9 @@ final class _SpotifySavedAlbumsScreenState
       }
     });
     try {
-      final page = await widget.provider.loadSavedAlbumsPage(offset: offset);
+      final page = widget.newReleases
+          ? await widget.provider.loadNewReleasesPage(offset: offset)
+          : await widget.provider.loadSavedAlbumsPage(offset: offset);
       if (!mounted) {
         return;
       }
@@ -182,13 +189,16 @@ final class _SpotifySavedAlbumsScreenState
   String get _loadMoreLabel {
     final total = _total;
     if (total == null) {
-      return 'Load more saved albums';
+      return 'Load more $_collection';
     }
     final remaining = total - _albums.length;
     return remaining > 0
-        ? 'Load more saved albums ($remaining remaining)'
-        : 'Load more saved albums';
+        ? 'Load more $_collection ($remaining remaining)'
+        : 'Load more $_collection';
   }
+
+  String get _collection => widget.newReleases ? 'new releases' : 'saved albums';
+  String get _title => widget.newReleases ? 'Spotify new releases' : 'Spotify saved albums';
 
   String _albumSubtitle(SpotifySavedAlbum album) {
     final count = album.totalTracks;
