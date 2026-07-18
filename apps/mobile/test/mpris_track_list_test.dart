@@ -88,6 +88,24 @@ void main() {
     expect(player.getRate().value, 1.5);
   });
 
+  test('Player Volume validates and retains MPRIS volume requests', () async {
+    final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+    expectLater(player.volumeStream, emits(0.4));
+
+    expect(await player.setVolume(0.4), isNotNull);
+    expect(player.getVolume().value, 0.4);
+    expect(await player.setVolume(-0.1), isNotNull);
+    expect(await player.setVolume(1.1), isNotNull);
+    expect(player.getVolume().value, 0.4);
+  });
+
+  test('Player Stop publishes a control request', () async {
+    final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+    expectLater(player.controlStream, emits('stop'));
+
+    expect(await player.doStop(), isNotNull);
+  });
+
   test(
     'Playlists exposes alphabetical entries and activates the chosen list',
     () async {

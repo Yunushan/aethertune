@@ -337,6 +337,22 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   Future<void> setVolume(double volume) => _engine.setVolume(volume);
 
   @override
+  Future<dynamic> customAction(String name,
+      [Map<String, dynamic>? extras]) async {
+    if (name == 'dbusVolume') {
+      final value = extras?['value'];
+      if (value is num) {
+        final volume = value.toDouble();
+        if (volume.isFinite && volume >= 0 && volume <= 1) {
+          await setVolume(volume);
+        }
+      }
+      return;
+    }
+    return super.customAction(name, extras);
+  }
+
+  @override
   void setCrossfadeTrackVolumeResolver(
     CrossfadeTrackVolumeResolver? resolver,
   ) {

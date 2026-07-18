@@ -210,7 +210,12 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   /// Sets property org.mpris.MediaPlayer2.Player.Rate
   Future<DBusMethodResponse> setRate(double value) async {
     if (value <= 0 || value > 3) return DBusMethodErrorResponse.invalidArgs();
+    if (value == _rate) return DBusMethodSuccessResponse([]);
     _rate = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'Rate': DBusDouble(value)},
+    );
     _rateStreamController.add(value);
     return DBusMethodSuccessResponse([]);
   }
@@ -244,14 +249,20 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.Volume
-  DBusDouble getVolume() {
-    log('Get org.mpris.MediaPlayer2.Player.Volume not implemented',
-        name: 'audio_service_mpris');
-    return const DBusDouble(1.0);
-  }
+  double _volume = 1.0;
+  DBusDouble getVolume() => DBusDouble(_volume);
 
   /// Sets property org.mpris.MediaPlayer2.Player.Volume
   Future<DBusMethodResponse> setVolume(double value) async {
+    if (!value.isFinite || value < 0 || value > 1) {
+      return DBusMethodErrorResponse.invalidArgs();
+    }
+    if (value == _volume) return DBusMethodSuccessResponse([]);
+    _volume = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'Volume': DBusDouble(value)},
+    );
     _volumeStreamController.add(value);
     return DBusMethodSuccessResponse([]);
   }

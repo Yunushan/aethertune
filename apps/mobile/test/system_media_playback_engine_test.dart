@@ -222,6 +222,19 @@ void main() {
     );
   });
 
+  test('routes validated MPRIS volume custom actions to the audio engine',
+      () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+
+    await engine.customAction('dbusVolume', <String, dynamic>{'value': 0.35});
+    expect(delegate.volumeValue, 0.35);
+
+    await engine.customAction('dbusVolume', <String, dynamic>{'value': 1.1});
+    expect(delegate.volumeValue, 0.35);
+  });
+
   test('forwards native audio effects through the system media wrapper',
       () async {
     final delegate = _FakeAudioEffectsPlaybackEngine();
