@@ -851,6 +851,31 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('imports WMA WM/Lyrics embedded lyrics', () async {
+    final audioPath = p.join(root.path, 'lyrics.wma');
+    await File(audioPath).writeAsBytes(
+      _wmaWithMetadata(
+        title: 'WMA Lyrics',
+        artist: 'WMA Artist',
+        album: 'WMA Album',
+        albumArtist: 'WMA Album Artist',
+        year: '2022',
+        trackNumber: '4/12',
+        genre: 'Jazz',
+        rating: 80,
+        lyrics: 'First line\r\nSecond line',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'WMA Lyrics');
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(audioPath)],
+      'First line\nSecond line',
+    );
+  });
+
   test('ignores malformed WMA WM/Picture payloads', () async {
     await File(p.join(root.path, 'broken-cover.wma')).writeAsBytes(
       _wmaWithMetadata(
@@ -1700,6 +1725,7 @@ List<int> _wmaWithMetadata({
   required String genre,
   required int rating,
   List<int>? picturePayload,
+  String? lyrics,
 }) {
   final contentDescription = _asfObject(
     _asfContentDescriptionObjectGuid,
@@ -1715,6 +1741,7 @@ List<int> _wmaWithMetadata({
       'WM/Genre': genre,
       'WM/SharedUserRating': rating,
       if (picturePayload != null) 'WM/Picture': picturePayload,
+      if (lyrics != null) 'WM/Lyrics': lyrics,
     }),
   );
   final objects = <int>[...contentDescription, ...extendedDescription];

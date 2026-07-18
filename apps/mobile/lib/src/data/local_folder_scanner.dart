@@ -1374,6 +1374,7 @@ final class _LocalFolderScanState {
 
         final fields = <String, String>{};
         Uri? artworkUri;
+        String? embeddedLyrics;
         var offset = 0;
         var parsedObjects = 0;
         while (offset + _asfObjectPrefixBytes <= header.length &&
@@ -1398,13 +1399,18 @@ final class _LocalFolderScanState {
                 _asfExtendedContentDescriptionMetadata(payload);
             fields.addAll(extendedDescription.fields);
             artworkUri ??= extendedDescription.artworkUri;
+            embeddedLyrics ??= extendedDescription.embeddedLyrics;
           }
 
           offset = payloadEnd;
           parsedObjects += 1;
         }
 
-        return _asfMetadataFromFields(fields, artworkUri: artworkUri);
+        return _asfMetadataFromFields(
+          fields,
+          artworkUri: artworkUri,
+          embeddedLyrics: embeddedLyrics,
+        );
       } finally {
         await access.close();
       }
@@ -1460,6 +1466,7 @@ final class _LocalFolderScanState {
     var offset = 2;
     final fields = <String, String>{};
     Uri? artworkUri;
+    String? embeddedLyrics;
     for (var index = 0; index < count; index += 1) {
       if (offset + 6 > payload.length) {
         return const _AsfExtendedContentDescription();
@@ -1490,11 +1497,17 @@ final class _LocalFolderScanState {
       if (name == 'WM/PICTURE' && artworkUri == null) {
         artworkUri = _asfPictureArtworkUri(valueBytes, valueType);
       }
+      if (name == 'WM/LYRICS' &&
+          valueType == _asfUnicodeValueType &&
+          embeddedLyrics == null) {
+        embeddedLyrics = _normalizeEmbeddedLyrics(_decodeUtf16(valueBytes));
+      }
       offset += valueLength;
     }
     return _AsfExtendedContentDescription(
       fields: fields,
       artworkUri: artworkUri,
+      embeddedLyrics: embeddedLyrics,
     );
   }
 
@@ -1573,6 +1586,7 @@ final class _LocalFolderScanState {
   _LocalFileMetadata? _asfMetadataFromFields(
     Map<String, String> fields, {
     Uri? artworkUri,
+    String? embeddedLyrics,
   }) {
     final title = fields['title'] ?? '';
     final artist = fields['artist'] ?? '';
@@ -1590,7 +1604,8 @@ final class _LocalFolderScanState {
         trackNumber == null &&
         (genre == null || genre.isEmpty) &&
         rating == null &&
-        artworkUri == null) {
+        artworkUri == null &&
+        embeddedLyrics == null) {
       return null;
     }
 
@@ -1606,6 +1621,7 @@ final class _LocalFolderScanState {
       genre: genre == null || genre.isEmpty ? null : genre,
       rating: rating,
       artworkUri: artworkUri,
+      embeddedLyrics: embeddedLyrics,
     );
   }
 
@@ -2996,10 +3012,12 @@ final class _AsfExtendedContentDescription {
   const _AsfExtendedContentDescription({
     this.fields = const <String, String>{},
     this.artworkUri,
+    this.embeddedLyrics,
   });
 
   final Map<String, String> fields;
   final Uri? artworkUri;
+  final String? embeddedLyrics;
 }
 
 final class _Apev2Comments {
