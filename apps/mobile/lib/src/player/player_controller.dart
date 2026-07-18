@@ -284,18 +284,37 @@ class PlayerController extends ChangeNotifier {
     Iterable<Track> libraryTracks,
   ) {
     final libraryTrackIds = libraryTracks.map((track) => track.id).toSet();
-    final trackIds = _queue
-        .map((track) => track.id)
-        .where(libraryTrackIds.contains)
-        .take(TrackQueueReferenceSnapshot.maxTrackIds)
-        .toList(growable: false);
-    final currentTrackId = _current?.id;
+    final sourceCurrentIndex = _currentQueueIndex ??
+        _queue.indexWhere((track) => track.id == _current?.id);
+    final trackIds = <String>[];
+    var portableCurrentIndex = -1;
+    for (var index = 0; index < _queue.length; index += 1) {
+      final track = _queue[index];
+      if (!libraryTrackIds.contains(track.id)) {
+        continue;
+      }
+      if (index == sourceCurrentIndex) {
+        portableCurrentIndex = trackIds.length;
+      }
+      if (trackIds.length < TrackQueueReferenceSnapshot.maxTrackIds) {
+        trackIds.add(track.id);
+      }
+    }
+    if (portableCurrentIndex >= trackIds.length &&
+        sourceCurrentIndex >= 0 &&
+        sourceCurrentIndex < _queue.length) {
+      trackIds
+        ..removeLast()
+        ..add(_queue[sourceCurrentIndex].id);
+      portableCurrentIndex = trackIds.length - 1;
+    }
     return TrackQueueReferenceSnapshot(
       trackIds: trackIds,
-      currentTrackId:
-          currentTrackId != null && trackIds.contains(currentTrackId)
-          ? currentTrackId
+      currentTrackId: portableCurrentIndex >= 0
+          ? trackIds[portableCurrentIndex]
           : null,
+      currentIndex:
+          portableCurrentIndex >= 0 ? portableCurrentIndex : null,
       updatedAt: _queueUpdatedAt?.toUtc() ?? _clock().toUtc(),
     );
   }
@@ -315,9 +334,21 @@ class PlayerController extends ChangeNotifier {
         .map((id) => tracksById[id])
         .whereType<Track>()
         .toList(growable: false);
-    final restoredCurrent = snapshot.currentTrackId == null
+    final requestedCurrentIndex = snapshot.currentIndex ??
+        (snapshot.currentTrackId == null
+            ? null
+            : snapshot.trackIds.indexOf(snapshot.currentTrackId!));
+    final restoredCurrent = requestedCurrentIndex == null
         ? null
-        : tracksById[snapshot.currentTrackId];
+        : tracksById[snapshot.trackIds[requestedCurrentIndex]];
+    var restoredCurrentIndex = -1;
+    if (restoredCurrent != null) {
+      for (var index = 0; index <= requestedCurrentIndex!; index += 1) {
+        if (tracksById.containsKey(snapshot.trackIds[index])) {
+          restoredCurrentIndex += 1;
+        }
+      }
+    }
 
     if (_loadedPlaybackQueue.isNotEmpty || _current != null) {
       await _audio.stop();
@@ -327,6 +358,11 @@ class PlayerController extends ChangeNotifier {
       ..addAll(restoredQueue);
     _current = restoredCurrent ??
         (restoredQueue.isEmpty ? null : restoredQueue.first);
+    _currentQueueIndex = restoredQueue.isEmpty
+        ? null
+        : restoredCurrentIndex < 0
+        ? 0
+        : restoredCurrentIndex;
     _queueUpdatedAt = snapshot.updatedAt.toUtc();
     _loadedTrackId = null;
     _loadedPlaybackQueue.clear();

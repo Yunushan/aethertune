@@ -386,6 +386,7 @@ void main() {
     );
     expect(pushedQueue['trackIds'], <String>['local-first', 'local-second']);
     expect(pushedQueue['currentTrackId'], 'local-second');
+    expect(pushedQueue['currentIndex'], 1);
     final pushedJson = jsonEncode(gateway.pushedSnapshots.single);
     expect(pushedJson, isNot(contains('/phone/local-first.mp3')));
     expect(pushedJson, isNot(contains('private.example.test')));
@@ -399,8 +400,13 @@ void main() {
     final remoteSnapshot = Map<String, Object?>.from(
       jsonDecode(remoteLibrary.exportSyncSnapshotJson()) as Map,
     )..['queueSync'] = TrackQueueReferenceSnapshot(
-        trackIds: const <String>['remote-second', 'remote-first'],
-        currentTrackId: 'remote-first',
+        trackIds: const <String>[
+          'remote-second',
+          'remote-first',
+          'remote-second',
+        ],
+        currentTrackId: 'remote-second',
+        currentIndex: 2,
         updatedAt: DateTime.utc(2026, 7, 16, 11),
       ).toJson();
     gateway.remote = LibrarySyncRemoteSnapshot(
@@ -416,8 +422,10 @@ void main() {
     expect(player.queue.map((track) => track.id), <String>[
       'remote-second',
       'remote-first',
+      'remote-second',
     ]);
-    expect(player.current?.id, 'remote-first');
+    expect(player.current?.id, 'remote-second');
+    expect(player.currentQueueIndex, 2);
     expect(engine.playingValue, isFalse);
     expect(engine.stopCalls, 1);
   });

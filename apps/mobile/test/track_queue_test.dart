@@ -58,7 +58,7 @@ void main() {
 
   test('bounds and validates privacy-safe queue sync references', () {
     final snapshot = TrackQueueReferenceSnapshot.fromJson(<String, Object?>{
-      'version': TrackQueueReferenceSnapshot.syncVersion,
+      'version': TrackQueueReferenceSnapshot.legacySyncVersion,
       'trackIds': <Object?>[' first ', 4, '', 'second'],
       'currentTrackId': ' second ',
       'updatedAt': '2026-07-16T12:00:00Z',
@@ -66,16 +66,31 @@ void main() {
 
     expect(snapshot.trackIds, <String>['first', 'second']);
     expect(snapshot.currentTrackId, 'second');
+    expect(snapshot.currentIndex, isNull);
     expect(snapshot.updatedAt, DateTime.utc(2026, 7, 16, 12));
     expect(snapshot.toJson()['trackIds'], <String>['first', 'second']);
     expect(
       () => TrackQueueReferenceSnapshot.fromJson(<String, Object?>{
-        'version': 2,
+        'version': 3,
         'trackIds': <Object?>[],
         'updatedAt': '2026-07-16T12:00:00Z',
       }),
       throwsFormatException,
     );
+  });
+
+  test('preserves repeated queue entries through the selected v2 index', () {
+    final snapshot = TrackQueueReferenceSnapshot.fromJson(<String, Object?>{
+      'version': TrackQueueReferenceSnapshot.syncVersion,
+      'trackIds': <String>['first', 'second', 'first'],
+      'currentTrackId': 'first',
+      'currentIndex': 2,
+      'updatedAt': '2026-07-16T12:00:00Z',
+    });
+
+    expect(snapshot.currentIndex, 2);
+    expect(snapshot.toJson()['version'], TrackQueueReferenceSnapshot.syncVersion);
+    expect(snapshot.toJson()['currentIndex'], 2);
   });
 
   test('moves queue items without mutating the original queue', () {

@@ -165,27 +165,31 @@ class TrackQueueReferenceSnapshot {
     required this.trackIds,
     required this.updatedAt,
     this.currentTrackId,
+    this.currentIndex,
   });
 
-  static const syncVersion = 1;
+  static const legacySyncVersion = 1;
+  static const syncVersion = 2;
   static const maxTrackIds = 500;
 
   final List<String> trackIds;
   final String? currentTrackId;
+  final int? currentIndex;
   final DateTime updatedAt;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'version': syncVersion,
+      'version': currentIndex == null ? legacySyncVersion : syncVersion,
       'trackIds': trackIds,
       'currentTrackId': currentTrackId,
+      if (currentIndex != null) 'currentIndex': currentIndex,
       'updatedAt': updatedAt.toUtc().toIso8601String(),
     };
   }
 
   factory TrackQueueReferenceSnapshot.fromJson(Map<String, Object?> json) {
-    final version = json['version'] as int? ?? syncVersion;
-    if (version != syncVersion) {
+    final version = json['version'] as int? ?? legacySyncVersion;
+    if (version != legacySyncVersion && version != syncVersion) {
       throw FormatException('Unsupported queue sync version: $version.');
     }
     final rawTrackIds = json['trackIds'];
@@ -195,11 +199,18 @@ class TrackQueueReferenceSnapshot {
 
     final trackIds = <String>[];
     for (final value in rawTrackIds) {
-      if (value is! String) {
+      if (value is! String ||
+          (version == syncVersion && value != value.trim())) {
+        if (version == syncVersion) {
+          throw const FormatException('Queue sync track IDs are invalid.');
+        }
         continue;
       }
       final id = value.trim();
       if (id.isEmpty || id.length > 1024) {
+        if (version == syncVersion) {
+          throw const FormatException('Queue sync track IDs are invalid.');
+        }
         continue;
       }
       trackIds.add(id);
@@ -209,6 +220,16 @@ class TrackQueueReferenceSnapshot {
     }
     final currentTrackId = json['currentTrackId'] as String?;
     final normalizedCurrentTrackId = currentTrackId?.trim();
+    final currentIndex = json['currentIndex'];
+    if (version == syncVersion &&
+        (currentIndex is! int ||
+            currentIndex < 0 ||
+            currentIndex >= trackIds.length ||
+            normalizedCurrentTrackId != trackIds[currentIndex])) {
+      throw const FormatException(
+        'Queue sync current index must select the current queue item.',
+      );
+    }
     final updatedAt = DateTime.tryParse(json['updatedAt'] as String? ?? '');
     if (updatedAt == null) {
       throw const FormatException('Queue sync update time is missing.');
@@ -221,6 +242,7 @@ class TrackQueueReferenceSnapshot {
               !trackIds.contains(normalizedCurrentTrackId)
           ? null
           : normalizedCurrentTrackId,
+      currentIndex: version == syncVersion ? currentIndex as int : null,
       updatedAt: updatedAt.toUtc(),
     );
   }
