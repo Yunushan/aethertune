@@ -508,9 +508,9 @@ final class _LocalFolderScanState {
       if (comments == null) {
         continue;
       }
-      final metadata = _vorbisCommentMetadataFromComments(comments);
-      final lyrics = _vorbisCommentLyrics(comments);
-      if (metadata == null && lyrics == null) {
+      final metadata = _vorbisCommentMetadataFromComments(comments.fields);
+      final lyrics = _vorbisCommentLyrics(comments.fields);
+      if (metadata == null && lyrics == null && comments.artworkUri == null) {
         continue;
       }
       return _LocalFileMetadata(
@@ -525,6 +525,7 @@ final class _LocalFolderScanState {
         replayGainAlbumDb: metadata?.replayGainAlbumDb,
         embeddedLyrics: lyrics,
         rating: metadata?.rating,
+        artworkUri: comments.artworkUri,
       );
     }
 
@@ -583,12 +584,13 @@ final class _LocalFolderScanState {
     }
   }
 
-  Map<String, List<String>>? _apev2TextComments(
+  _Apev2Comments? _apev2TextComments(
     List<int> bytes,
     int itemCount,
   ) {
     var offset = 0;
     final comments = <String, List<String>>{};
+    Uri? artworkUri;
     for (var itemIndex = 0; itemIndex < itemCount; itemIndex += 1) {
       if (offset + 8 > bytes.length) {
         return null;
@@ -607,7 +609,13 @@ final class _LocalFolderScanState {
       }
       final valueBytes = bytes.sublist(offset, offset + valueLength);
       offset += valueLength;
-      if ((flags & 0x6) != 0) {
+      final itemType = flags & _apev2ItemTypeMask;
+      if (itemType != _apev2TextItemType) {
+        if (key == 'COVER ART (FRONT)' &&
+            itemType == _apev2BinaryItemType &&
+            artworkUri == null) {
+          artworkUri = _apev2PictureArtworkUri(valueBytes);
+        }
         continue;
       }
 
@@ -625,7 +633,17 @@ final class _LocalFolderScanState {
       }
       comments.putIfAbsent(normalizedKey, () => <String>[]).add(value);
     }
-    return comments;
+    return _Apev2Comments(fields: comments, artworkUri: artworkUri);
+  }
+
+  Uri? _apev2PictureArtworkUri(List<int> bytes) {
+    final filenameEnd = bytes.indexOf(0);
+    if (filenameEnd < 0 || filenameEnd + 1 >= bytes.length) {
+      return null;
+    }
+
+    final imageBytes = bytes.sublist(filenameEnd + 1);
+    return _artworkDataUri(imageBytes);
   }
 
   Future<_LocalFileMetadata?> _flacMetadataForFile(String path) async {
@@ -2984,6 +3002,13 @@ final class _AsfExtendedContentDescription {
   final Uri? artworkUri;
 }
 
+final class _Apev2Comments {
+  const _Apev2Comments({required this.fields, this.artworkUri});
+
+  final Map<String, List<String>> fields;
+  final Uri? artworkUri;
+}
+
 final class _Id3v2TagData {
   const _Id3v2TagData({
     required this.textFrames,
@@ -3030,6 +3055,9 @@ const _maxVorbisComments = 2048;
 const _maxApev2Items = 2048;
 const _maxApev2KeyBytes = 255;
 const _apev2FooterBytes = 32;
+const _apev2ItemTypeMask = 0x6;
+const _apev2TextItemType = 0;
+const _apev2BinaryItemType = 0x2;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
 const _asfHeaderPrefixBytes = 30;

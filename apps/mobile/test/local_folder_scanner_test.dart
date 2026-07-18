@@ -1164,6 +1164,44 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('extracts APEv2 Cover Art (Front) artwork', () async {
+    await File(p.join(root.path, 'ape-cover.mp3')).writeAsBytes(<int>[
+      1,
+      2,
+      3,
+      ..._apev2Tag(
+        <String, String>{'TITLE': 'APE Cover'},
+        coverArtworkBytes: _tinyPngBytes,
+      ),
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'APE Cover');
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+  });
+
+  test('ignores malformed APEv2 cover-art values', () async {
+    await File(p.join(root.path, 'broken-ape-cover.mp3')).writeAsBytes(<int>[
+      1,
+      2,
+      3,
+      ..._apev2Tag(
+        <String, String>{'TITLE': 'APE Cover'},
+        coverArtworkBytes: _tinyPngBytes,
+        includeCoverFilenameTerminator: false,
+      ),
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'APE Cover');
+    expect(result.tracks.single.artworkUri, isNull);
+  });
+
   test('rejects a missing folder path', () async {
     const scanner = LocalFolderScanner();
 
@@ -1189,7 +1227,11 @@ List<int> _id3v1Tag({
   return bytes;
 }
 
-List<int> _apev2Tag(Map<String, String> fields) {
+List<int> _apev2Tag(
+  Map<String, String> fields, {
+  List<int>? coverArtworkBytes,
+  bool includeCoverFilenameTerminator = true,
+}) {
   final body = <int>[];
   for (final field in fields.entries) {
     final value = field.value.codeUnits;
@@ -1200,13 +1242,28 @@ List<int> _apev2Tag(Map<String, String> fields) {
       ..add(0)
       ..addAll(value);
   }
+  if (coverArtworkBytes != null) {
+    final coverValue = <int>[
+      ...'cover.png'.codeUnits,
+      if (includeCoverFilenameTerminator) 0,
+      ...coverArtworkBytes,
+    ];
+    body
+      ..addAll(_uint32LittleEndianSize(coverValue.length))
+      ..addAll(<int>[2, 0, 0, 0])
+      ..addAll('Cover Art (Front)'.codeUnits)
+      ..add(0)
+      ..addAll(coverValue);
+  }
   final tagSize = body.length + 32;
   return <int>[
     ...body,
     ...'APETAGEX'.codeUnits,
     ..._uint32LittleEndianSize(2000),
     ..._uint32LittleEndianSize(tagSize),
-    ..._uint32LittleEndianSize(fields.length),
+    ..._uint32LittleEndianSize(
+      fields.length + (coverArtworkBytes == null ? 0 : 1),
+    ),
     ...List<int>.filled(12, 0),
   ];
 }
