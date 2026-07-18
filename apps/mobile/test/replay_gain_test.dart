@@ -9,6 +9,13 @@ void main() {
     expect(parseReplayGainDb('-25 dB'), isNull);
   });
 
+  test('parses bounded EBU R128 gains in hundredths of a dB', () {
+    expect(parseEbuR128GainDb('-720'), -7.2);
+    expect(parseEbuR128GainDb('+325'), 3.25);
+    expect(parseEbuR128GainDb('2500'), isNull);
+    expect(parseEbuR128GainDb('-3.25'), isNull);
+  });
+
   test('applies normalization without exceeding the player range', () {
     expect(
       replayGainAdjustedVolume(

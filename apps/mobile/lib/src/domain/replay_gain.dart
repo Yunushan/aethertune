@@ -25,6 +25,21 @@ double? parseReplayGainDb(String? value) {
   return sanitizeReplayGainDb(double.tryParse(match?.group(1) ?? ''));
 }
 
+/// Parses an EBU R128 gain tag such as `-720` (representing -7.20 dB).
+///
+/// Opus and Vorbis store R128 values as signed integer hundredths of a dB.
+double? parseEbuR128GainDb(String? value) {
+  final match = RegExp(r'^[+-]?\d+$').firstMatch(value?.trim() ?? '');
+  if (match == null) {
+    return null;
+  }
+  final hundredths = int.tryParse(match.group(0) ?? '');
+  if (hundredths == null) {
+    return null;
+  }
+  return sanitizeReplayGainDb(hundredths / 100);
+}
+
 double replayGainMultiplier(double? gainDb) {
   final normalizedGain = sanitizeReplayGainDb(gainDb);
   if (normalizedGain == null) {

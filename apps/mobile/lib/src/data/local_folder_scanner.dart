@@ -1125,19 +1125,23 @@ final class _LocalFolderScanState {
           artworkUri = picture.artworkUri;
           hasFrontCover = picture.isFrontCover;
         }
-      } else if (frameId == 'TXXX' && replayGainTrackDb == null) {
-        replayGainTrackDb = _id3v2ReplayGainUserText(
-          bytes.sublist(offset, offset + frameSize),
+      } else if (frameId == 'TXXX') {
+        final userText = bytes.sublist(offset, offset + frameSize);
+        replayGainTrackDb ??= _id3v2ReplayGainUserText(
+          userText,
           'REPLAYGAIN_TRACK_GAIN',
         );
         replayGainAlbumDb ??= _id3v2ReplayGainUserText(
-          bytes.sublist(offset, offset + frameSize),
+          userText,
           'REPLAYGAIN_ALBUM_GAIN',
         );
-      } else if (frameId == 'TXXX' && replayGainAlbumDb == null) {
-        replayGainAlbumDb = _id3v2ReplayGainUserText(
-          bytes.sublist(offset, offset + frameSize),
-          'REPLAYGAIN_ALBUM_GAIN',
+        replayGainTrackDb ??= _id3v2EbuR128UserText(
+          userText,
+          'R128_TRACK_GAIN',
+        );
+        replayGainAlbumDb ??= _id3v2EbuR128UserText(
+          userText,
+          'R128_ALBUM_GAIN',
         );
       } else if (frameId == 'USLT' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
@@ -1219,19 +1223,23 @@ final class _LocalFolderScanState {
           artworkUri = picture.artworkUri;
           hasFrontCover = picture.isFrontCover;
         }
-      } else if (frameId == 'TXX' && replayGainTrackDb == null) {
-        replayGainTrackDb = _id3v2ReplayGainUserText(
-          bytes.sublist(offset, offset + frameSize),
+      } else if (frameId == 'TXX') {
+        final userText = bytes.sublist(offset, offset + frameSize);
+        replayGainTrackDb ??= _id3v2ReplayGainUserText(
+          userText,
           'REPLAYGAIN_TRACK_GAIN',
         );
         replayGainAlbumDb ??= _id3v2ReplayGainUserText(
-          bytes.sublist(offset, offset + frameSize),
+          userText,
           'REPLAYGAIN_ALBUM_GAIN',
         );
-      } else if (frameId == 'TXX' && replayGainAlbumDb == null) {
-        replayGainAlbumDb = _id3v2ReplayGainUserText(
-          bytes.sublist(offset, offset + frameSize),
-          'REPLAYGAIN_ALBUM_GAIN',
+        replayGainTrackDb ??= _id3v2EbuR128UserText(
+          userText,
+          'R128_TRACK_GAIN',
+        );
+        replayGainAlbumDb ??= _id3v2EbuR128UserText(
+          userText,
+          'R128_ALBUM_GAIN',
         );
       } else if (frameId == 'ULT' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
@@ -1434,12 +1442,12 @@ final class _LocalFolderScanState {
       _firstVorbisComment(comments, 'TRACKNUMBER'),
     );
     final genre = _joinedVorbisComment(comments, 'GENRE');
-    final replayGainTrackDb = parseReplayGainDb(
-      _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN'),
-    );
-    final replayGainAlbumDb = parseReplayGainDb(
-      _firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN'),
-    );
+    final replayGainTrackDb =
+        parseReplayGainDb(_firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN')) ??
+        parseEbuR128GainDb(_firstVorbisComment(comments, 'R128_TRACK_GAIN'));
+    final replayGainAlbumDb =
+        parseReplayGainDb(_firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN')) ??
+        parseEbuR128GainDb(_firstVorbisComment(comments, 'R128_ALBUM_GAIN'));
     final rating = _vorbisRating(_firstVorbisComment(comments, 'RATING'));
     final chapters = _vorbisCommentChapters(comments);
     if (title.isEmpty &&
@@ -2086,8 +2094,8 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      if (_matchesAscii(atom.typeBytes, '----') && replayGainTrackDb == null) {
-        replayGainTrackDb = _m4aFreeformReplayGain(
+      if (_matchesAscii(atom.typeBytes, '----')) {
+        replayGainTrackDb ??= _m4aFreeformReplayGain(
           metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
@@ -2099,15 +2107,17 @@ final class _LocalFolderScanState {
           atom.payloadEnd,
           'REPLAYGAIN_ALBUM_GAIN',
         );
-        continue;
-      }
-
-      if (_matchesAscii(atom.typeBytes, '----') && replayGainAlbumDb == null) {
-        replayGainAlbumDb = _m4aFreeformReplayGain(
+        replayGainTrackDb ??= _m4aFreeformEbuR128Gain(
           metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
-          'REPLAYGAIN_ALBUM_GAIN',
+          'R128_TRACK_GAIN',
+        );
+        replayGainAlbumDb ??= _m4aFreeformEbuR128Gain(
+          metadataItems,
+          atom.payloadOffset,
+          atom.payloadEnd,
+          'R128_ALBUM_GAIN',
         );
         continue;
       }
@@ -2373,6 +2383,18 @@ final class _LocalFolderScanState {
   }
 
   double? _id3v2ReplayGainUserText(List<int> bytes, String expectedKey) {
+    return _id3v2UserTextGain(bytes, expectedKey, parseReplayGainDb);
+  }
+
+  double? _id3v2EbuR128UserText(List<int> bytes, String expectedKey) {
+    return _id3v2UserTextGain(bytes, expectedKey, parseEbuR128GainDb);
+  }
+
+  double? _id3v2UserTextGain(
+    List<int> bytes,
+    String expectedKey,
+    double? Function(String?) parseGain,
+  ) {
     if (bytes.length < 3) {
       return null;
     }
@@ -2398,7 +2420,7 @@ final class _LocalFolderScanState {
       return null;
     }
 
-    return parseReplayGainDb(
+    return parseGain(
       _id3v2DecodedText(
         bytes.sublist(descriptionEnd + terminatorLength),
         encoding,
@@ -2570,6 +2592,37 @@ final class _LocalFolderScanState {
     int endOffset,
     String expectedKey,
   ) {
+    return _m4aFreeformGain(
+      bytes,
+      startOffset,
+      endOffset,
+      expectedKey,
+      parseReplayGainDb,
+    );
+  }
+
+  double? _m4aFreeformEbuR128Gain(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+    String expectedKey,
+  ) {
+    return _m4aFreeformGain(
+      bytes,
+      startOffset,
+      endOffset,
+      expectedKey,
+      parseEbuR128GainDb,
+    );
+  }
+
+  double? _m4aFreeformGain(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+    String expectedKey,
+    double? Function(String?) parseGain,
+  ) {
     String? name;
     for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
       final atomStart = startOffset + atom.payloadOffset;
@@ -2582,7 +2635,7 @@ final class _LocalFolderScanState {
     if (name?.toUpperCase() != expectedKey) {
       return null;
     }
-    return parseReplayGainDb(
+    return parseGain(
       _m4aDataAtomText(bytes, startOffset, endOffset),
     );
   }

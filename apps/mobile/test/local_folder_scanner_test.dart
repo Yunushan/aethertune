@@ -629,6 +629,54 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.replayGainAlbumDb, -3.1);
   });
 
+  test('reads EBU R128 gain tags from supported metadata containers',
+      () async {
+    await File(p.join(root.path, 'r128.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'ID3 R128',
+        additionalFrames: <List<int>>[
+          _id3v23UserTextFrame(
+            'R128_TRACK_GAIN',
+            '-720',
+            _id3v2EncodingUtf8,
+          ),
+          _id3v23UserTextFrame(
+            'R128_ALBUM_GAIN',
+            '-315',
+            _id3v2EncodingUtf8,
+          ),
+        ],
+      ),
+      1,
+    ]);
+    await File(p.join(root.path, 'r128.opus')).writeAsBytes(
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Opus R128'],
+        'R128_TRACK_GAIN': <String>['-640'],
+        'R128_ALBUM_GAIN': <String>['-280'],
+      }, opus: true),
+    );
+    await File(p.join(root.path, 'r128.m4a')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'M4A R128',
+        r128TrackGain: '-510',
+        r128AlbumGain: '-220',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final tracks = <String, Track>{
+      for (final track in result.tracks) track.title: track,
+    };
+
+    expect(tracks['ID3 R128']!.replayGainTrackDb, -7.2);
+    expect(tracks['ID3 R128']!.replayGainAlbumDb, -3.15);
+    expect(tracks['Opus R128']!.replayGainTrackDb, -6.4);
+    expect(tracks['Opus R128']!.replayGainAlbumDb, -2.8);
+    expect(tracks['M4A R128']!.replayGainTrackDb, -5.1);
+    expect(tracks['M4A R128']!.replayGainAlbumDb, -2.2);
+  });
+
   test('merges partial UTF-16 ID3v2 tags with filename metadata', () async {
     await File(
       p.join(root.path, '06 Filename Artist - Filename Title.mp3'),
@@ -2261,6 +2309,8 @@ List<int> _m4aWithMetadata({
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
+  String r128TrackGain = '',
+  String r128AlbumGain = '',
   List<_M4aChapter> chapters = const <_M4aChapter>[],
 }) {
   final items = <int>[
@@ -2281,6 +2331,16 @@ List<int> _m4aWithMetadata({
       ..._m4aReplayGainFreeformItem(
         replayGainAlbumGain,
         name: 'REPLAYGAIN_ALBUM_GAIN',
+      ),
+    if (r128TrackGain.isNotEmpty)
+      ..._m4aReplayGainFreeformItem(
+        r128TrackGain,
+        name: 'R128_TRACK_GAIN',
+      ),
+    if (r128AlbumGain.isNotEmpty)
+      ..._m4aReplayGainFreeformItem(
+        r128AlbumGain,
+        name: 'R128_ALBUM_GAIN',
       ),
   ];
   final ilst = _mp4Atom('ilst', items);
