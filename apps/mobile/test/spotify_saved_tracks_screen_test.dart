@@ -89,6 +89,55 @@ void main() {
     expect(library.tracks.single.title, 'Top Signal');
     expect(library.tracks.single.isPlayable, isFalse);
   });
+
+  testWidgets('pages and saves Spotify episode metadata without playback', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final requestedOffsets = <String?>[];
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      savedEpisodesLoader: (uri, token) async {
+        requestedOffsets.add(uri.queryParameters['offset']);
+        return uri.queryParameters['offset'] == '0'
+            ? _savedEpisodesPage('first', 0, true)
+            : _savedEpisodesPage('second', 1, false);
+      },
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<LibraryStore>.value(
+        value: library,
+        child: MaterialApp(
+          home: SpotifySavedTracksScreen(
+            provider: provider,
+            savedEpisodes: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spotify saved episodes'), findsOneWidget);
+    expect(find.text('Episode first'), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow), findsNothing);
+    expect(find.text('Load more saved episodes (1 remaining)'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Save metadata to library'));
+    await tester.pumpAndSettle();
+    expect(library.tracks.single.title, 'Episode first');
+    expect(library.tracks.single.externalId, 'episode:episode-first');
+    expect(library.tracks.single.isPlayable, isFalse);
+
+    await tester.tap(find.text('Load more saved episodes (1 remaining)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Episode second'), findsOneWidget);
+    expect(find.text('All 2 saved episodes loaded.'), findsOneWidget);
+    expect(requestedOffsets, <String?>['0', '1']);
+  });
 }
 
 const _topTracksPage = '''
@@ -118,6 +167,26 @@ String _savedTracksPage(String suffix, int offset, bool hasMore) {
       "name": "Saved $suffix",
       "artists": [{"name": "Aether"}],
       "album": {"name": "Signals"}
+    }
+  }]
+}
+''';
+}
+
+String _savedEpisodesPage(String suffix, int offset, bool hasMore) {
+  return '''
+{
+  "offset": $offset,
+  "total": 2,
+  "next": ${hasMore ? '"https://api.spotify.com/v1/me/episodes?offset=1"' : 'null'},
+  "items": [{
+    "added_at": "2026-07-17T12:00:00Z",
+    "episode": {
+      "id": "episode-$suffix",
+      "name": "Episode $suffix",
+      "duration_ms": 62000,
+      "images": [{"url": "https://i.scdn.co/image/$suffix"}],
+      "show": {"name": "Signal Show", "publisher": "Aether Radio"}
     }
   }]
 }

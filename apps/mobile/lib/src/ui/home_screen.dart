@@ -13067,6 +13067,7 @@ enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
 enum _SpotifyAction {
   savedTracks,
+  savedEpisodes,
   savedAlbums,
   playlists,
   recentlyPlayed,
@@ -13445,6 +13446,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifySavedTracks(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.savedEpisodes:
+                  if (spotifyProvider != null) {
+                    _openSpotifySavedEpisodes(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.savedAlbums:
                   if (spotifyProvider != null) {
                     _openSpotifySavedAlbums(context, spotifyProvider);
@@ -13541,6 +13547,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.people_alt_outlined),
                   title: Text('Top artists'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.savedEpisodes,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.podcasts_outlined),
+                  title: Text('Saved episodes'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -14938,6 +14953,20 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SpotifySavedTracksScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openSpotifySavedEpisodes(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifySavedTracksScreen(
+          provider: provider,
+          savedEpisodes: true,
+        ),
       ),
     );
   }

@@ -211,6 +211,59 @@ void main() {
     expect(artists.single.artworkUri, Uri.parse('https://i.scdn.co/image/artist'));
   });
 
+  test('loads bounded saved-episode metadata without a playable URI', () async {
+    Uri? requestUri;
+    String? requestToken;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      savedEpisodesLoader: (uri, token) async {
+        requestUri = uri;
+        requestToken = token;
+        return '''
+          {
+            "offset": 3,
+            "total": 5,
+            "next": "https://api.spotify.com/v1/me/episodes?offset=4",
+            "items": [{
+              "added_at": "2026-07-17T12:00:00Z",
+              "episode": {
+                "id": "episode-id",
+                "name": "Signal Episode",
+                "duration_ms": 62000,
+                "images": [{"url": "https://i.scdn.co/image/episode"}],
+                "show": {
+                  "name": "Signal Show",
+                  "publisher": "Aether Radio"
+                }
+              }
+            }]
+          }
+        ''';
+      },
+    );
+
+    final page = await provider.loadSavedEpisodesPage(offset: 3, limit: 100);
+
+    expect(requestUri!.path, '/v1/me/episodes');
+    expect(requestUri!.queryParameters, <String, String>{
+      'limit': '50',
+      'offset': '3',
+    });
+    expect(requestToken, 'access-token');
+    expect(page.offset, 3);
+    expect(page.total, 5);
+    expect(page.hasMore, isTrue);
+    final episode = page.tracks.single;
+    expect(episode.title, 'Signal Episode');
+    expect(episode.artist, 'Aether Radio');
+    expect(episode.album, 'Signal Show');
+    expect(episode.duration, const Duration(minutes: 1, seconds: 2));
+    expect(episode.artworkUri, Uri.parse('https://i.scdn.co/image/episode'));
+    expect(episode.externalId, 'episode:episode-id');
+    expect(episode.isPlayable, isFalse);
+    expect(await provider.resolveStream(episode), isNull);
+  });
+
   test('loads bounded official Spotify followed-artist metadata', () async {
     Uri? requestUri;
     final provider = SpotifyMetadataProvider(

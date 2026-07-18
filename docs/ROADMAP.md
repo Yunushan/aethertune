@@ -169,6 +169,7 @@
 - [x] Internet Archive facet suggestion UI and collection filter chips
 - [x] Internet Archive dedicated collection detail pages
 - [x] Spotify official saved-track metadata browse and local-library save
+- [x] Spotify official saved-episode metadata browse and local-library save
 - [x] Spotify official saved-album and album-track metadata browse
 - [x] Spotify official read-only playlist metadata browse
 - [x] Spotify official recently played metadata browse and local-library save
