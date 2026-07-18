@@ -1840,6 +1840,48 @@ void main() {
     );
   });
 
+  test('exports and imports XSPF playlists with portable identifiers',
+      () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 2, 45),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'Path One', artist: 'Ari'),
+      _track('2', title: 'Path Two', artist: 'Mia'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road XSPF',
+      trackIds: <String>['2', '1'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.xspf,
+    );
+
+    expect(document, contains('xmlns="http://xspf.org/ns/0/"'));
+    expect(document, contains('<title>Road XSPF</title>'));
+    expect(document, contains('urn:aethertune:track:2'));
+    expect(document, contains('file:///music/2.mp3'));
+
+    await store.deletePlaylist(playlist.id);
+    final imported = await store.importPlaylistDocument(
+      document,
+      format: PlaylistDocumentFormat.xspf,
+    );
+
+    expect(imported.name, 'Road XSPF');
+    expect(imported.trackIds, <String>['2', '1']);
+    await expectLater(
+      store.importPlaylistDocument(
+        '<playlist version="2"><trackList /></playlist>',
+        format: PlaylistDocumentFormat.xspf,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('exports and imports CSV playlists with quoted fields', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 3),

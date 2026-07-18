@@ -7595,6 +7595,8 @@ String _playlistDocumentFormatLabel(PlaylistDocumentFormat format) {
       return 'M3U';
     case PlaylistDocumentFormat.pls:
       return 'PLS';
+    case PlaylistDocumentFormat.xspf:
+      return 'XSPF';
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
@@ -7608,6 +7610,8 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
       return 'M3U';
     case PlaylistDocumentFormat.pls:
       return 'PLS';
+    case PlaylistDocumentFormat.xspf:
+      return 'XSPF';
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
@@ -7688,6 +7692,8 @@ String _playlistDocumentFormatFileExtension(PlaylistDocumentFormat format) {
       return 'm3u';
     case PlaylistDocumentFormat.pls:
       return 'pls';
+    case PlaylistDocumentFormat.xspf:
+      return 'xspf';
     case PlaylistDocumentFormat.csv:
       return 'csv';
   }
@@ -7701,6 +7707,8 @@ IconData _playlistDocumentFormatIcon(PlaylistDocumentFormat format) {
       return Icons.queue_music;
     case PlaylistDocumentFormat.pls:
       return Icons.format_list_numbered;
+    case PlaylistDocumentFormat.xspf:
+      return Icons.code_outlined;
     case PlaylistDocumentFormat.csv:
       return Icons.table_chart_outlined;
   }

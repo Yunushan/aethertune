@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xml/xml.dart';
 
 import '../domain/artwork_crop.dart';
 import '../domain/lyrics_document.dart';
@@ -32,12 +33,14 @@ LibrarySortMode _librarySortModeFromName(String? value) {
   );
 }
 
-enum PlaylistDocumentFormat { json, m3u, pls, csv }
+enum PlaylistDocumentFormat { json, m3u, pls, xspf, csv }
 
 const _playlistImportLinkScheme = 'aethertune';
 const _playlistImportLinkHost = 'playlist';
 const _customSmartPlaylistImportLinkHost = 'smart-playlist';
 const _maxPlaylistImportLinkBytes = 48 * 1024;
+const _maxXspfPlaylistBytes = 2 * 1024 * 1024;
+const _maxXspfTracks = 500;
 
 enum LibraryStatsExportFormat { json, csv }
 
@@ -4389,6 +4392,8 @@ class LibraryStore extends ChangeNotifier {
         return exportPlaylistM3u(playlistId);
       case PlaylistDocumentFormat.pls:
         return exportPlaylistPls(playlistId);
+      case PlaylistDocumentFormat.xspf:
+        return exportPlaylistXspf(playlistId);
       case PlaylistDocumentFormat.csv:
         return exportPlaylistCsv(playlistId);
     }
@@ -4449,6 +4454,48 @@ class LibraryStore extends ChangeNotifier {
       ..writeln('NumberOfEntries=${tracks.length}')
       ..writeln('Version=2');
     return buffer.toString();
+  }
+
+  String exportPlaylistXspf(String playlistId) {
+    final playlist = _requirePlaylist(playlistId);
+    final builder = XmlBuilder();
+    builder.element(
+      'playlist',
+      attributes: <String, String>{'version': '1'},
+      namespaces: <String, String>{'': 'http://xspf.org/ns/0/'},
+      nest: () {
+        builder.element('title', nest: playlist.name);
+        builder.element(
+          'trackList',
+          nest: () {
+            for (final track in tracksForPlaylist(playlistId)) {
+              builder.element(
+                'track',
+                nest: () {
+                  builder.element('location', nest: _xspfTrackLocation(track));
+                  builder.element(
+                    'identifier',
+                    nest: _xspfTrackIdentifier(track.id),
+                  );
+                  builder.element('title', nest: track.title);
+                  builder.element('creator', nest: track.artist);
+                  if (track.album.isNotEmpty) {
+                    builder.element('album', nest: track.album);
+                  }
+                  if (track.duration != Duration.zero) {
+                    builder.element(
+                      'duration',
+                      nest: track.duration.inMilliseconds.toString(),
+                    );
+                  }
+                },
+              );
+            }
+          },
+        );
+      },
+    );
+    return builder.buildDocument().toXmlString(pretty: true);
   }
 
   String exportPlaylistCsv(String playlistId) {
@@ -4811,6 +4858,8 @@ class LibraryStore extends ChangeNotifier {
         return importPlaylistM3u(document, fallbackName: fallbackName);
       case PlaylistDocumentFormat.pls:
         return importPlaylistPls(document, fallbackName: fallbackName);
+      case PlaylistDocumentFormat.xspf:
+        return importPlaylistXspf(document, fallbackName: fallbackName);
       case PlaylistDocumentFormat.csv:
         return importPlaylistCsv(document, fallbackName: fallbackName);
     }
@@ -5005,6 +5054,66 @@ class LibraryStore extends ChangeNotifier {
     }
     final playlistName = name == null || name.isEmpty ? fallbackName : name;
     return createPlaylist(playlistName, trackIds: importedTrackIds);
+  }
+
+  Future<Playlist> importPlaylistXspf(
+    String document, {
+    String fallbackName = 'Imported playlist',
+  }) async {
+    if (utf8.encode(document).length > _maxXspfPlaylistBytes) {
+      throw const FormatException('XSPF playlist exceeds the 2 MiB limit.');
+    }
+
+    late XmlDocument parsed;
+    try {
+      parsed = XmlDocument.parse(document);
+    } on XmlParserException catch (error) {
+      throw FormatException('Invalid XSPF playlist: $error');
+    }
+    final root = parsed.rootElement;
+    if (root.name.local.toLowerCase() != 'playlist' ||
+        root.getAttribute('version') != '1') {
+      throw const FormatException('XSPF must contain a version 1 playlist root.');
+    }
+
+    final trackList = _firstXmlChild(root, 'trackList');
+    if (trackList == null) {
+      throw const FormatException('XSPF playlist is missing a trackList.');
+    }
+    final tracks = trackList.children
+        .whereType<XmlElement>()
+        .where((element) => element.name.local.toLowerCase() == 'track')
+        .toList(growable: false);
+    if (tracks.length > _maxXspfTracks) {
+      throw const FormatException('XSPF playlists support at most 500 tracks.');
+    }
+
+    final trackIds = <String?>[];
+    for (final track in tracks) {
+      final location = _xmlChildText(track, 'location');
+      final identifier = _xmlChildText(track, 'identifier');
+      trackIds.add(
+        _matchXspfEntry(
+          location: location,
+          identifier: identifier,
+          title: _xmlChildText(track, 'title'),
+          artist: _xmlChildText(track, 'creator'),
+          album: _xmlChildText(track, 'album'),
+        ),
+      );
+    }
+
+    final importedTrackIds = _dedupeTrackIds(trackIds);
+    if (importedTrackIds.isEmpty) {
+      throw const FormatException(
+        'Imported playlist did not match any library tracks.',
+      );
+    }
+    final name = _xmlChildText(root, 'title');
+    return createPlaylist(
+      name == null || name.isEmpty ? fallbackName : name,
+      trackIds: importedTrackIds,
+    );
   }
 
   Future<Playlist> importPlaylistCsv(
@@ -7308,6 +7417,22 @@ class LibraryStore extends ChangeNotifier {
     return track.localPath ?? track.streamUrl ?? track.id;
   }
 
+  String _xspfTrackLocation(Track track) {
+    final localPath = track.localPath?.trim();
+    if (localPath != null && localPath.isNotEmpty) {
+      return Uri.file(localPath).toString();
+    }
+    final streamUrl = track.streamUrl?.trim();
+    if (streamUrl != null && streamUrl.isNotEmpty) {
+      return streamUrl;
+    }
+    return _xspfTrackIdentifier(track.id);
+  }
+
+  String _xspfTrackIdentifier(String id) {
+    return 'urn:aethertune:track:${Uri.encodeComponent(id)}';
+  }
+
   String _shareTrackText(Track track) {
     final buffer = StringBuffer()
       ..writeln('AetherTune track')
@@ -7728,6 +7853,89 @@ class LibraryStore extends ChangeNotifier {
       'artist': label.substring(0, separatorIndex),
       'title': label.substring(separatorIndex + 3),
     });
+  }
+
+  String? _matchXspfEntry({
+    required String? location,
+    required String? identifier,
+    required String? title,
+    required String? artist,
+    required String? album,
+  }) {
+    for (final locator in _xspfLocationCandidates(location)) {
+      final match = _matchImportedTrack(<String, Object?>{
+        'localPath': locator,
+        'streamUrl': locator,
+      });
+      if (match != null) {
+        return match;
+      }
+    }
+
+    final id = _xspfIdentifierTrackId(identifier);
+    if (id != null && _tracks.any((track) => track.id == id)) {
+      return id;
+    }
+    if (title == null || artist == null) {
+      return null;
+    }
+    return _matchImportedTrack(<String, Object?>{
+      'title': title,
+      'artist': artist,
+      'album': album,
+    });
+  }
+
+  Iterable<String> _xspfLocationCandidates(String? source) sync* {
+    final location = source?.trim();
+    if (location == null || location.isEmpty) {
+      return;
+    }
+    yield location;
+    final uri = Uri.tryParse(location);
+    if (uri == null || uri.scheme.toLowerCase() != 'file') {
+      return;
+    }
+    try {
+      yield uri.toFilePath();
+    } on UnsupportedError {
+      // Keep the original URI candidate when the host cannot map its path.
+    }
+    final uriPath = Uri.decodeComponent(uri.path);
+    if (uriPath.isNotEmpty) {
+      yield uriPath;
+      if (RegExp(r'^/[A-Za-z]:/').hasMatch(uriPath)) {
+        yield uriPath.substring(1).replaceAll('/', '\\');
+      }
+    }
+  }
+
+  String? _xspfIdentifierTrackId(String? identifier) {
+    const prefix = 'urn:aethertune:track:';
+    final value = identifier?.trim();
+    if (value == null || !value.startsWith(prefix)) {
+      return null;
+    }
+    try {
+      final id = Uri.decodeComponent(value.substring(prefix.length)).trim();
+      return id.isEmpty ? null : id;
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  XmlElement? _firstXmlChild(XmlElement parent, String localName) {
+    for (final child in parent.children.whereType<XmlElement>()) {
+      if (child.name.local.toLowerCase() == localName.toLowerCase()) {
+        return child;
+      }
+    }
+    return null;
+  }
+
+  String? _xmlChildText(XmlElement parent, String localName) {
+    final text = _firstXmlChild(parent, localName)?.innerText.trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   int? _plsEntryIndex(String key, String prefix) {
