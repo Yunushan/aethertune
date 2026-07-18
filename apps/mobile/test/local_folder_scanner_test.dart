@@ -851,6 +851,36 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('prefers a WMA front cover over earlier artwork items', () async {
+    await File(p.join(root.path, 'front-cover.wma')).writeAsBytes(
+      _wmaWithMetadata(
+        title: 'WMA Covers',
+        artist: 'WMA Artist',
+        album: 'WMA Album',
+        albumArtist: 'WMA Album Artist',
+        year: '2022',
+        trackNumber: '4/12',
+        genre: 'Jazz',
+        rating: 80,
+        picturePayload: _asfPicturePayload(
+          _tinyJpegBytes,
+          pictureType: 4,
+          mimeType: 'image/jpeg',
+        ),
+        additionalPicturePayloads: <List<int>>[
+          _asfPicturePayload(_tinyPngBytes),
+        ],
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+  });
+
   test('imports WMA WM/Lyrics embedded lyrics', () async {
     final audioPath = p.join(root.path, 'lyrics.wma');
     await File(audioPath).writeAsBytes(
@@ -1725,24 +1755,29 @@ List<int> _wmaWithMetadata({
   required String genre,
   required int rating,
   List<int>? picturePayload,
+  List<List<int>> additionalPicturePayloads = const <List<int>>[],
   String? lyrics,
 }) {
   final contentDescription = _asfObject(
     _asfContentDescriptionObjectGuid,
     _asfContentDescription(title: title, artist: artist),
   );
+  final extendedFields = <MapEntry<String, Object>>[
+    MapEntry<String, Object>('WM/AlbumTitle', album),
+    MapEntry<String, Object>('WM/AlbumArtist', albumArtist),
+    MapEntry<String, Object>('WM/Year', year),
+    MapEntry<String, Object>('WM/TrackNumber', trackNumber),
+    MapEntry<String, Object>('WM/Genre', genre),
+    MapEntry<String, Object>('WM/SharedUserRating', rating),
+    if (picturePayload != null)
+      MapEntry<String, Object>('WM/Picture', picturePayload),
+    for (final payload in additionalPicturePayloads)
+      MapEntry<String, Object>('WM/Picture', payload),
+    if (lyrics != null) MapEntry<String, Object>('WM/Lyrics', lyrics),
+  ];
   final extendedDescription = _asfObject(
     _asfExtendedContentDescriptionObjectGuid,
-    _asfExtendedContentDescription(<String, Object>{
-      'WM/AlbumTitle': album,
-      'WM/AlbumArtist': albumArtist,
-      'WM/Year': year,
-      'WM/TrackNumber': trackNumber,
-      'WM/Genre': genre,
-      'WM/SharedUserRating': rating,
-      if (picturePayload != null) 'WM/Picture': picturePayload,
-      if (lyrics != null) 'WM/Lyrics': lyrics,
-    }),
+    _asfExtendedContentDescriptionEntries(extendedFields),
   );
   final objects = <int>[...contentDescription, ...extendedDescription];
   return <int>[
@@ -1776,10 +1811,13 @@ List<int> _asfContentDescription({
   ];
 }
 
-List<int> _asfExtendedContentDescription(Map<String, Object> fields) {
+List<int> _asfExtendedContentDescriptionEntries(
+  Iterable<MapEntry<String, Object>> fields,
+) {
+  final entries = fields.toList(growable: false);
   return <int>[
-    ..._uint16LittleEndianSize(fields.length),
-    for (final field in fields.entries) ..._asfExtendedField(field.key, field.value),
+    ..._uint16LittleEndianSize(entries.length),
+    for (final field in entries) ..._asfExtendedField(field.key, field.value),
   ];
 }
 
@@ -1801,11 +1839,15 @@ List<int> _asfExtendedField(String name, Object value) {
   ];
 }
 
-List<int> _asfPicturePayload(List<int> imageBytes) {
+List<int> _asfPicturePayload(
+  List<int> imageBytes, {
+  int pictureType = 3,
+  String mimeType = 'image/png',
+}) {
   return <int>[
-    3,
+    pictureType,
     ..._uint32LittleEndianSize(imageBytes.length),
-    ..._utf16Le('image/png\u0000'),
+    ..._utf16Le('$mimeType\u0000'),
     ..._utf16Le('\u0000'),
     ...imageBytes,
   ];
@@ -2177,3 +2219,5 @@ const _tinyPngBytes = <int>[
   0x60,
   0x82,
 ];
+
+const _tinyJpegBytes = <int>[0xff, 0xd8, 0xff];

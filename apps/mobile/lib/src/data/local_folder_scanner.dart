@@ -1374,6 +1374,7 @@ final class _LocalFolderScanState {
 
         final fields = <String, String>{};
         Uri? artworkUri;
+        var hasFrontCover = false;
         String? embeddedLyrics;
         var offset = 0;
         var parsedObjects = 0;
@@ -1398,7 +1399,12 @@ final class _LocalFolderScanState {
             final extendedDescription =
                 _asfExtendedContentDescriptionMetadata(payload);
             fields.addAll(extendedDescription.fields);
-            artworkUri ??= extendedDescription.artworkUri;
+            if (extendedDescription.artworkUri != null &&
+                (artworkUri == null ||
+                    (!hasFrontCover && extendedDescription.hasFrontCover))) {
+              artworkUri = extendedDescription.artworkUri;
+              hasFrontCover = extendedDescription.hasFrontCover;
+            }
             embeddedLyrics ??= extendedDescription.embeddedLyrics;
           }
 
@@ -1466,6 +1472,7 @@ final class _LocalFolderScanState {
     var offset = 2;
     final fields = <String, String>{};
     Uri? artworkUri;
+    var hasFrontCover = false;
     String? embeddedLyrics;
     for (var index = 0; index < count; index += 1) {
       if (offset + 6 > payload.length) {
@@ -1494,8 +1501,14 @@ final class _LocalFolderScanState {
       if (value != null && value.isNotEmpty) {
         fields[key!] = value;
       }
-      if (name == 'WM/PICTURE' && artworkUri == null) {
-        artworkUri = _asfPictureArtworkUri(valueBytes, valueType);
+      if (name == 'WM/PICTURE') {
+        final picture = _asfPictureArtwork(valueBytes, valueType);
+        if (picture != null &&
+            (artworkUri == null ||
+                (!hasFrontCover && picture.isFrontCover))) {
+          artworkUri = picture.artworkUri;
+          hasFrontCover = picture.isFrontCover;
+        }
       }
       if (name == 'WM/LYRICS' &&
           valueType == _asfUnicodeValueType &&
@@ -1507,6 +1520,7 @@ final class _LocalFolderScanState {
     return _AsfExtendedContentDescription(
       fields: fields,
       artworkUri: artworkUri,
+      hasFrontCover: hasFrontCover,
       embeddedLyrics: embeddedLyrics,
     );
   }
@@ -1538,11 +1552,12 @@ final class _LocalFolderScanState {
     };
   }
 
-  Uri? _asfPictureArtworkUri(List<int> bytes, int valueType) {
+  _AsfPictureArtwork? _asfPictureArtwork(List<int> bytes, int valueType) {
     if (valueType != _asfByteArrayValueType || bytes.length < 9) {
       return null;
     }
 
+    final pictureType = bytes[0];
     final dataLength = _uint32LittleEndian(bytes, 1);
     if (dataLength <= 0 || dataLength > _maxEmbeddedArtworkBytes) {
       return null;
@@ -1568,10 +1583,16 @@ final class _LocalFolderScanState {
     }
 
     final imageBytes = bytes.sublist(offset, offset + dataLength);
-    return _artworkDataUri(
+    final artworkUri = _artworkDataUri(
       imageBytes,
       mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
     );
+    return artworkUri == null
+        ? null
+        : _AsfPictureArtwork(
+            artworkUri: artworkUri,
+            isFrontCover: pictureType == _frontCoverPictureType,
+          );
   }
 
   int? _utf16NullTerminatorOffset(List<int> bytes, int offset) {
@@ -3012,12 +3033,24 @@ final class _AsfExtendedContentDescription {
   const _AsfExtendedContentDescription({
     this.fields = const <String, String>{},
     this.artworkUri,
+    this.hasFrontCover = false,
     this.embeddedLyrics,
   });
 
   final Map<String, String> fields;
   final Uri? artworkUri;
+  final bool hasFrontCover;
   final String? embeddedLyrics;
+}
+
+final class _AsfPictureArtwork {
+  const _AsfPictureArtwork({
+    required this.artworkUri,
+    required this.isFrontCover,
+  });
+
+  final Uri artworkUri;
+  final bool isFrontCover;
 }
 
 final class _Apev2Comments {
@@ -3085,6 +3118,7 @@ const _asfByteArrayValueType = 1;
 const _asfDwordValueType = 3;
 const _asfQwordValueType = 4;
 const _asfWordValueType = 5;
+const _frontCoverPictureType = 3;
 const _asfHeaderObjectGuid = <int>[
   0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
   0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
