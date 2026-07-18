@@ -102,6 +102,12 @@ class AudioServiceMpris extends AudioServicePlatform {
     });
   }
 
+  void _listenToRateStream() {
+    _mpris.rateStream.listen((value) {
+      _handlerCallbacks?.setSpeed(SetSpeedRequest(speed: value));
+    });
+  }
+
   final List<MediaItemMessage> _queue = <MediaItemMessage>[];
 
   static void registerWith() {
@@ -128,6 +134,7 @@ class AudioServiceMpris extends AudioServicePlatform {
     _listenToTrackStream();
     _listenToPlaylistStream();
     _listenToLoopStream();
+    _listenToRateStream();
 
     await _dBusClient.registerObject(_mpris);
     await _dBusClient.requestName(
@@ -140,6 +147,7 @@ class AudioServiceMpris extends AudioServicePlatform {
   Future<void> setState(SetStateRequest request) async {
     _mpris.position = request.state.updatePosition;
     _isPlaying = request.state.playing;
+    _mpris.updateRate(request.state.speed);
     _mpris.updateLoopStatus(switch (request.state.repeatMode) {
       AudioServiceRepeatModeMessage.one => 'Track',
       AudioServiceRepeatModeMessage.all => 'Playlist',

@@ -79,6 +79,15 @@ void main() {
     expect(player.getLoopStatus().value, 'Playlist');
   });
 
+  test('Player Rate validates and publishes supported speeds', () async {
+    final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+    expectLater(player.rateStream, emits(1.5));
+    await player.setRate(1.5);
+    expect(player.getRate().value, 1.5);
+    await player.setRate(0);
+    expect(player.getRate().value, 1.5);
+  });
+
   test(
     'Playlists exposes alphabetical entries and activates the chosen list',
     () async {

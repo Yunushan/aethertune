@@ -72,6 +72,9 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   final _loopStreamController = StreamController<String>();
   Stream<String> get loopStream => _loopStreamController.stream;
 
+  final _rateStreamController = StreamController<double>();
+  Stream<double> get rateStream => _rateStreamController.stream;
+
   final _playlistStreamController = StreamController<String>();
   Stream<String> get playlistStream => _playlistStreamController.stream;
 
@@ -201,15 +204,24 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.Rate
-  DBusDouble getRate() {
-    return const DBusDouble(1.0);
-  }
+  double _rate = 1.0;
+  DBusDouble getRate() => DBusDouble(_rate);
 
   /// Sets property org.mpris.MediaPlayer2.Player.Rate
   Future<DBusMethodResponse> setRate(double value) async {
-    log('Set org.mpris.MediaPlayer2.Player.Rate not implemented',
-        name: 'audio_service_mpris');
+    if (value <= 0 || value > 3) return DBusMethodErrorResponse.invalidArgs();
+    _rate = value;
+    _rateStreamController.add(value);
     return DBusMethodSuccessResponse([]);
+  }
+
+  void updateRate(double value) {
+    if (value <= 0 || value == _rate) return;
+    _rate = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'Rate': DBusDouble(value)},
+    );
   }
 
   Metadata _metadata = Metadata(
