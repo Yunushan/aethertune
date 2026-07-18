@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/library_store.dart';
 import '../domain/track.dart';
@@ -61,6 +62,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             onPressed: current == null ? null : widget.onOpenLyrics,
             icon: const Icon(Icons.subtitles_outlined),
           ),
+          if (current?.hasTranscript ?? false)
+            IconButton(
+              key: const Key('now-playing-podcast-transcript'),
+              tooltip: 'Open podcast transcript',
+              onPressed: () => _openPodcastTranscript(current!.transcriptUri!),
+              icon: const Icon(Icons.article_outlined),
+            ),
           IconButton(
             tooltip: 'Queue',
             onPressed: player.queue.isEmpty ? null : widget.onOpenQueue,
@@ -223,6 +231,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         SnackBar(content: Text(offlinePlaybackBlockedMessage(error.track))),
       );
     }
+  }
+
+  Future<void> _openPodcastTranscript(Uri transcriptUri) async {
+    final opened = await launchUrl(
+      transcriptUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted || opened) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open the podcast transcript.')),
+    );
   }
 
   Future<void> _addBookmark(

@@ -277,6 +277,9 @@ final class PodcastEpisode {
     required this.duration,
     this.chapters = const <TrackChapter>[],
     this.chapterUri,
+    this.transcriptUri,
+    this.transcriptType,
+    this.transcriptLanguage,
     this.artworkUri,
     this.publishedAt,
   });
@@ -289,6 +292,9 @@ final class PodcastEpisode {
   final Duration duration;
   final List<TrackChapter> chapters;
   final Uri? chapterUri;
+  final Uri? transcriptUri;
+  final String? transcriptType;
+  final String? transcriptLanguage;
   final Uri? artworkUri;
   final DateTime? publishedAt;
 
@@ -304,6 +310,9 @@ final class PodcastEpisode {
       genre: 'Podcast',
       duration: duration,
       chapters: chapters,
+      transcriptUri: transcriptUri,
+      transcriptType: transcriptType,
+      transcriptLanguage: transcriptLanguage,
       artworkUri: artworkUri ?? feed.artworkUri,
       streamUrl: streamUri.toString(),
       sourceId: sourceId,
@@ -321,6 +330,9 @@ final class PodcastEpisode {
       duration: duration,
       chapters: updatedChapters,
       chapterUri: chapterUri,
+      transcriptUri: transcriptUri,
+      transcriptType: transcriptType,
+      transcriptLanguage: transcriptLanguage,
       artworkUri: artworkUri,
       publishedAt: publishedAt,
     );
@@ -414,6 +426,7 @@ PodcastEpisode? _episodeFromItem(
   final guid = _childText(item, 'guid', fallback: enclosureUrl);
 
   final duration = parsePodcastDuration(_childText(item, 'duration'));
+  final transcript = _transcriptFromItem(item);
   return PodcastEpisode(
     id: guid,
     title: title,
@@ -427,9 +440,43 @@ PodcastEpisode? _episodeFromItem(
     duration: duration,
     chapters: _inlineChapters(item, maximum: duration),
     chapterUri: _chapterDocumentUri(item),
+    transcriptUri: transcript?.uri,
+    transcriptType: transcript?.type,
+    transcriptLanguage: transcript?.language,
     artworkUri: _imageUri(item),
     publishedAt: _parseRssDate(_childText(item, 'pubDate')),
   );
+}
+
+_PodcastTranscript? _transcriptFromItem(XmlElement item) {
+  final transcript = _firstChild(item, 'transcript');
+  final rawUri = transcript?.getAttribute('url')?.trim();
+  final uri = rawUri == null || rawUri.isEmpty ? null : Uri.tryParse(rawUri);
+  if (uri == null ||
+      uri.host.isEmpty ||
+      (uri.scheme.toLowerCase() != 'http' &&
+          uri.scheme.toLowerCase() != 'https')) {
+    return null;
+  }
+  final type = transcript?.getAttribute('type')?.trim();
+  final language = transcript?.getAttribute('language')?.trim();
+  return _PodcastTranscript(
+    uri: uri,
+    type: type == null || type.isEmpty ? null : type,
+    language: language == null || language.isEmpty ? null : language,
+  );
+}
+
+final class _PodcastTranscript {
+  const _PodcastTranscript({
+    required this.uri,
+    this.type,
+    this.language,
+  });
+
+  final Uri uri;
+  final String? type;
+  final String? language;
 }
 
 Uri? _chapterDocumentUri(XmlElement item) {

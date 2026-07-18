@@ -48,6 +48,9 @@ void main() {
               label: 'Intro',
             ),
           ],
+          transcriptUri: Uri.parse('https://example.test/episode.vtt'),
+          transcriptType: 'text/vtt',
+          transcriptLanguage: 'en',
         );
     final second = _track('second', title: 'Second Song', durationSeconds: 180);
     await library.addTracks(<Track>[first, second]);
@@ -88,6 +91,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('now-playing-skip-segments')), findsOneWidget);
+    expect(
+      find.byKey(const Key('now-playing-podcast-transcript')),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     final semantics = tester.ensureSemantics();

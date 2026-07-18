@@ -38,6 +38,9 @@ class Track {
     this.isFavorite = false,
     List<TrackChapter>? chapters,
     List<TrackSkipSegment>? skipSegments,
+    this.transcriptUri,
+    this.transcriptType,
+    this.transcriptLanguage,
     DateTime? addedAt,
   }) : chapters = TrackChapter.normalize(
          chapters ?? const <TrackChapter>[],
@@ -76,11 +79,19 @@ class Track {
   final bool isFavorite;
   final List<TrackChapter> chapters;
   final List<TrackSkipSegment> skipSegments;
+  final Uri? transcriptUri;
+  final String? transcriptType;
+  final String? transcriptLanguage;
   final DateTime addedAt;
 
   bool get hasLocalSource => localPath?.trim().isNotEmpty == true;
   bool get hasStreamSource => streamUrl?.trim().isNotEmpty == true;
   bool get isPlayable => hasLocalSource || hasStreamSource;
+  bool get hasTranscript =>
+      transcriptUri != null &&
+      transcriptUri!.host.isNotEmpty &&
+      (transcriptUri!.scheme.toLowerCase() == 'http' ||
+          transcriptUri!.scheme.toLowerCase() == 'https');
 
   Track copyWith({
     String? id,
@@ -115,6 +126,10 @@ class Track {
     bool? isFavorite,
     List<TrackChapter>? chapters,
     List<TrackSkipSegment>? skipSegments,
+    Uri? transcriptUri,
+    bool clearTranscriptUri = false,
+    String? transcriptType,
+    String? transcriptLanguage,
     DateTime? addedAt,
   }) {
     return Track(
@@ -149,6 +164,10 @@ class Track {
       isFavorite: isFavorite ?? this.isFavorite,
       chapters: chapters ?? this.chapters,
       skipSegments: skipSegments ?? this.skipSegments,
+      transcriptUri:
+          clearTranscriptUri ? null : transcriptUri ?? this.transcriptUri,
+      transcriptType: transcriptType ?? this.transcriptType,
+      transcriptLanguage: transcriptLanguage ?? this.transcriptLanguage,
       addedAt: addedAt ?? this.addedAt,
     );
   }
@@ -183,6 +202,9 @@ class Track {
       isFavorite: isFavorite,
       chapters: chapters,
       skipSegments: skipSegments,
+      transcriptUri: transcriptUri,
+      transcriptType: transcriptType,
+      transcriptLanguage: transcriptLanguage,
       addedAt: addedAt,
     );
   }
@@ -218,6 +240,11 @@ class Track {
         'skipSegments': skipSegments
             .map((segment) => segment.toJson())
             .toList(),
+      if (hasTranscript) 'transcriptUri': transcriptUri.toString(),
+      if (hasTranscript && transcriptType != null)
+        'transcriptType': transcriptType,
+      if (hasTranscript && transcriptLanguage != null)
+        'transcriptLanguage': transcriptLanguage,
       'addedAt': addedAt.toIso8601String(),
     };
   }
@@ -253,6 +280,9 @@ class Track {
       isFavorite: json['isFavorite'] as bool? ?? false,
       chapters: _parseChapters(json['chapters']),
       skipSegments: _parseSkipSegments(json['skipSegments']),
+      transcriptUri: _parseHttpUri(json['transcriptUri'] as String?),
+      transcriptType: json['transcriptType'] as String?,
+      transcriptLanguage: json['transcriptLanguage'] as String?,
       addedAt:
           DateTime.tryParse(json['addedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
@@ -264,6 +294,17 @@ class Track {
       return null;
     }
     return Uri.tryParse(value);
+  }
+
+  static Uri? _parseHttpUri(String? value) {
+    final uri = _parseUri(value);
+    if (uri == null ||
+        uri.host.isEmpty ||
+        (uri.scheme.toLowerCase() != 'http' &&
+            uri.scheme.toLowerCase() != 'https')) {
+      return null;
+    }
+    return uri;
   }
 
   static List<TrackChapter> _parseChapters(Object? value) {

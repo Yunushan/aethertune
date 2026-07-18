@@ -26,6 +26,9 @@ void main() {
       ),
       sourceId: 'local',
       isFavorite: true,
+      transcriptUri: Uri.parse('https://example.test/transcript.vtt'),
+      transcriptType: 'text/vtt',
+      transcriptLanguage: 'en',
       addedAt: DateTime.utc(2026),
     );
 
@@ -48,6 +51,10 @@ void main() {
     expect(decoded.artworkCrop.alignmentY, -0.25);
     expect(decoded.artworkCrop.zoom, 1.8);
     expect(decoded.isFavorite, isTrue);
+    expect(decoded.hasTranscript, isTrue);
+    expect(decoded.transcriptUri, Uri.parse('https://example.test/transcript.vtt'));
+    expect(decoded.transcriptType, 'text/vtt');
+    expect(decoded.transcriptLanguage, 'en');
   });
 
   test('Track JSON falls back to unknown genre for older saved tracks', () {
@@ -57,6 +64,17 @@ void main() {
     });
 
     expect(decoded.genre, 'Unknown Genre');
+  });
+
+  test('Track JSON rejects non-web transcript links', () {
+    final decoded = Track.fromJson(<String, Object?>{
+      'id': 'unsafe-transcript',
+      'title': 'Unsafe transcript',
+      'transcriptUri': 'file:///private/transcript.vtt',
+    });
+
+    expect(decoded.transcriptUri, isNull);
+    expect(decoded.hasTranscript, isFalse);
   });
 
   test('Track JSON round trip keeps provider stream fields', () {

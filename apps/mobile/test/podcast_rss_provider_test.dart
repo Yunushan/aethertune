@@ -27,6 +27,12 @@ void main() {
       episode.chapters[1].start,
       const Duration(minutes: 10, seconds: 30, milliseconds: 500),
     );
+    expect(
+      episode.transcriptUri,
+      Uri.parse('https://media.example.test/episode-1.vtt'),
+    );
+    expect(episode.transcriptType, 'text/vtt');
+    expect(episode.transcriptLanguage, 'en');
     expect(episode.publishedAt, DateTime.utc(2026, 7, 6, 10));
 
     final track = episode.toTrack(sourceId: 'podcast-test', feed: feed);
@@ -37,6 +43,8 @@ void main() {
     expect(track.isPlayable, isTrue);
     expect(track.streamUrl, 'https://media.example.test/episode-1.mp3');
     expect(track.chapters, episode.chapters);
+    expect(track.hasTranscript, isTrue);
+    expect(track.transcriptUri, episode.transcriptUri);
   });
 
   test('search loads the feed locally and resolves episode streams', () async {
@@ -233,6 +241,7 @@ const _samplePodcastFeed = '''
         <psc:chapter start="01:02:03.000" title="After the end" />
         <psc:chapter start="bad" title="Malformed" />
       </psc:chapters>
+      <podcast:transcript url="https://media.example.test/episode-1.vtt" type="text/vtt" language="en" />
       <pubDate>Mon, 06 Jul 2026 10:00:00 GMT</pubDate>
       <enclosure
         url="https://media.example.test/episode-1.mp3"
