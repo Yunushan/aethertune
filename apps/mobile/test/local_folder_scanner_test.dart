@@ -711,6 +711,26 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.genre, 'Electropop');
   });
 
+  test('imports DRM-free M4B files using their MP4 metadata atoms', () async {
+    await File(p.join(root.path, '01 audiobook.m4b')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'M4B Chapter One',
+        artist: 'Narrator',
+        album: 'An Audiobook',
+        genre: 'Audiobook',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.ignoredFileCount, 0);
+    expect(result.tracks, hasLength(1));
+    expect(result.tracks.single.title, 'M4B Chapter One');
+    expect(result.tracks.single.artist, 'Narrator');
+    expect(result.tracks.single.album, 'An Audiobook');
+    expect(result.tracks.single.genre, 'Audiobook');
+  });
+
   test('extracts M4A cover artwork atoms', () async {
     await File(p.join(root.path, 'cover.m4a')).writeAsBytes(
       _m4aWithMetadata(
