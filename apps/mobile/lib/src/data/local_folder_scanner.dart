@@ -2040,6 +2040,8 @@ final class _LocalFolderScanState {
           artworkUri: id3Metadata?.artworkUri,
           replayGainTrackDb: id3Metadata?.replayGainTrackDb,
           replayGainAlbumDb: id3Metadata?.replayGainAlbumDb,
+          replayGainTrackPeak: id3Metadata?.replayGainTrackPeak,
+          replayGainAlbumPeak: id3Metadata?.replayGainAlbumPeak,
           embeddedLyrics: id3Metadata?.embeddedLyrics,
           rating: id3Metadata?.rating,
           chapters: id3Metadata?.chapters ?? const <TrackChapter>[],
@@ -2461,6 +2463,8 @@ final class _LocalFolderScanState {
       artworkUri: id3Metadata.artworkUri ?? infoMetadata.artworkUri,
       replayGainTrackDb: id3Metadata.replayGainTrackDb,
       replayGainAlbumDb: id3Metadata.replayGainAlbumDb,
+      replayGainTrackPeak: id3Metadata.replayGainTrackPeak,
+      replayGainAlbumPeak: id3Metadata.replayGainAlbumPeak,
       embeddedLyrics: id3Metadata.embeddedLyrics,
       rating: id3Metadata.rating,
       chapters: id3Metadata.chapters.isEmpty

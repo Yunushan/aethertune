@@ -1314,6 +1314,18 @@ FILE "../private.mp3" MP3
         id3Tag: _id3v23Tag(
           title: 'ID3 WAV Title',
           artworkBytes: _tinyPngBytes,
+          additionalFrames: <List<int>>[
+            _id3v23UserTextFrame(
+              'REPLAYGAIN_TRACK_PEAK',
+              '0.95',
+              _id3v2EncodingUtf8,
+            ),
+            _id3v23UserTextFrame(
+              'REPLAYGAIN_ALBUM_PEAK',
+              '1.1',
+              _id3v2EncodingUtf8,
+            ),
+          ],
           unsynchronizedLyrics: 'First line\r\nSecond line',
         ),
       ),
@@ -1325,6 +1337,8 @@ FILE "../private.mp3" MP3
     expect(track.title, 'ID3 WAV Title');
     expect(track.artist, 'INFO Artist');
     expect(track.album, 'INFO Album');
+    expect(track.replayGainTrackPeak, 0.95);
+    expect(track.replayGainAlbumPeak, 1.1);
     expect(
       track.artworkUri.toString(),
       'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
@@ -1409,6 +1423,18 @@ FILE "../private.mp3" MP3
           artist: 'ID3 AIFF Artist',
           album: 'ID3 AIFF Album',
           genre: 'Ambient',
+          additionalFrames: <List<int>>[
+            _id3v23UserTextFrame(
+              'REPLAYGAIN_TRACK_PEAK',
+              '0.95',
+              _id3v2EncodingUtf8,
+            ),
+            _id3v23UserTextFrame(
+              'REPLAYGAIN_ALBUM_PEAK',
+              '1.1',
+              _id3v2EncodingUtf8,
+            ),
+          ],
         ),
       ),
     );
@@ -1419,6 +1445,8 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.artist, 'ID3 AIFF Artist');
     expect(result.tracks.single.album, 'ID3 AIFF Album');
     expect(result.tracks.single.genre, 'Ambient');
+    expect(result.tracks.single.replayGainTrackPeak, 0.95);
+    expect(result.tracks.single.replayGainAlbumPeak, 1.1);
   });
 
   test('imports AIFF and WAVE extension aliases', () async {
