@@ -397,6 +397,7 @@ final class _LocalFolderScanState {
   Future<_LocalFileMetadata?> _embeddedMetadataForFile(String path) async {
     switch (p.extension(path).toLowerCase()) {
       case '.mp3':
+      case '.aac':
         return _mp3MetadataForFile(path);
       case '.flac':
         return _flacMetadataForFile(path);
@@ -406,6 +407,7 @@ final class _LocalFolderScanState {
         return _oggMetadataForFile(path);
       case '.m4a':
       case '.m4b':
+      case '.alac':
         return _m4aMetadataForFile(path);
       case '.wav':
         return _wavMetadataForFile(path);

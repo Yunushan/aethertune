@@ -16,11 +16,16 @@ class M4aMetadataWriter {
     int? trackNumber,
   }) async {
     if (!_isSupportedM4aContainerPath(path)) {
-      throw const FormatException('Only local M4A or M4B files can be updated.');
+      throw const FormatException(
+        'Only local M4A, M4B, or ALAC files can be updated.',
+      );
     }
     final file = File(path);
     if (!await file.exists()) {
-      throw FileSystemException('The M4A or M4B file no longer exists.', path);
+      throw FileSystemException(
+        'The M4A, M4B, or ALAC file no longer exists.',
+        path,
+      );
     }
 
     final plan = await _buildWritePlan(
@@ -41,20 +46,27 @@ class M4aMetadataWriter {
     required Uint8List artwork,
   }) async {
     if (!_isSupportedM4aContainerPath(path)) {
-      throw const FormatException('Only local M4A or M4B files can be updated.');
+      throw const FormatException(
+        'Only local M4A, M4B, or ALAC files can be updated.',
+      );
     }
     if (artwork.isEmpty || artwork.lengthInBytes > maxM4aEmbeddedArtworkBytes) {
       throw const FormatException(
-        'M4A or M4B artwork must be a PNG or JPEG smaller than 512 KiB.',
+        'M4A, M4B, or ALAC artwork must be a PNG or JPEG smaller than 512 KiB.',
       );
     }
     if (_m4aArtworkDataType(artwork) == null) {
-      throw const FormatException('M4A or M4B artwork must be a PNG or JPEG image.');
+      throw const FormatException(
+        'M4A, M4B, or ALAC artwork must be a PNG or JPEG image.',
+      );
     }
 
     final file = File(path);
     if (!await file.exists()) {
-      throw FileSystemException('The M4A or M4B file no longer exists.', path);
+      throw FileSystemException(
+        'The M4A, M4B, or ALAC file no longer exists.',
+        path,
+      );
     }
 
     final plan = await _buildWritePlan(file, artwork: artwork);
@@ -64,7 +76,9 @@ class M4aMetadataWriter {
 
 bool _isSupportedM4aContainerPath(String path) {
   final normalized = path.trim().toLowerCase();
-  return normalized.endsWith('.m4a') || normalized.endsWith('.m4b');
+  return normalized.endsWith('.m4a') ||
+      normalized.endsWith('.m4b') ||
+      normalized.endsWith('.alac');
 }
 
 class _M4aWritePlan {

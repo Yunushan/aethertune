@@ -731,6 +731,32 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.genre, 'Audiobook');
   });
 
+  test('reads AAC ID3 and ALAC MP4 metadata', () async {
+    await File(p.join(root.path, 'aac.aac')).writeAsBytes(<int>[
+      ..._id3v23Tag(title: 'AAC Title', artist: 'AAC Artist'),
+      0xff,
+      0xf1,
+      0x50,
+      0x80,
+    ]);
+    await File(p.join(root.path, 'alac.alac')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'ALAC Title',
+        artist: 'ALAC Artist',
+        album: 'ALAC Album',
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final tracksByTitle = <String, Track>{
+      for (final track in result.tracks) track.title: track,
+    };
+
+    expect(tracksByTitle['AAC Title']!.artist, 'AAC Artist');
+    expect(tracksByTitle['ALAC Title']!.artist, 'ALAC Artist');
+    expect(tracksByTitle['ALAC Title']!.album, 'ALAC Album');
+  });
+
   test('reads bounded embedded M4B chapter lists', () async {
     await File(p.join(root.path, 'chapters.m4b')).writeAsBytes(
       _m4aWithMetadata(
