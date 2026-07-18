@@ -95,7 +95,7 @@ class _ArtworkPaletteBackdropState extends State<ArtworkPaletteBackdrop> {
     ).resolve(createLocalImageConfiguration(context));
     final listener = ImageStreamListener(
       (image, _) => unawaited(_extractPalette(image.image, requestKey)),
-      onError: (_, __) {},
+      onError: (_, _) {},
     );
     _imageStream = imageStream;
     _imageListener = listener;

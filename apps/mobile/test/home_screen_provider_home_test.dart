@@ -785,8 +785,8 @@ final class _HomeFixture {
     );
     final selfHosted = SelfHostedProviderStore(
       credentialVault: _MemoryCredentialVault(),
-      connectionTester: (_, __) async {},
-      providerFactory: (_, __) => provider,
+      connectionTester: (_, _) async {},
+      providerFactory: (_, _) => provider,
     );
     await selfHosted.load();
     await selfHosted.testAndSave(account, 'secret');

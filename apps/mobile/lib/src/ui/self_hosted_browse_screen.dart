@@ -691,7 +691,7 @@ class _SelfHostedCollectionScreenState
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: visible.isEmpty ? 2 : visible.length + 1,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         if (index == 0) {
           return Column(
@@ -781,7 +781,7 @@ class _SelfHostedCollectionScreenState
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: visible.isEmpty ? 2 : visible.length + 1,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         if (index == 0) {
           return Column(
@@ -1082,7 +1082,7 @@ class _SelfHostedCollectionScreenState
         return;
       }
       final queue = _deduplicateRadioTracks(<Track>[
-        if (seedTrack != null) seedTrack,
+        ?seedTrack,
         ...recommendations,
       ]);
       if (recommendations.isEmpty ||

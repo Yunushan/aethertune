@@ -362,10 +362,10 @@ class RadioBrowserProvider
       path: _joinUriPath(baseUri.path, '/json/stations/search'),
       queryParameters: <String, String>{
         if (query.isNotEmpty) 'name': query,
-        if (countryCode != null) 'countrycode': countryCode,
-        if (language != null) 'language': language,
-        if (tag != null) 'tag': tag,
-        if (codec != null) 'codec': codec,
+        'countrycode': ?countryCode,
+        'language': ?language,
+        'tag': ?tag,
+        'codec': ?codec,
         if (minBitrateKbps != null && minBitrateKbps > 0)
           'bitrateMin': minBitrateKbps.toString(),
         if (maxBitrateKbps != null && maxBitrateKbps > 0)

@@ -55,7 +55,7 @@ void main() {
 
     final translator = LibreTranslateLyricsTranslator(
       baseUri: Uri.parse('https://translate.example.test'),
-      responseLoader: (_, __, ___) async => const LyricsTranslationResponse(
+      responseLoader: (_, _, _) async => const LyricsTranslationResponse(
         statusCode: 200,
         body: '{}',
       ),

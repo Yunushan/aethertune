@@ -320,7 +320,7 @@ final class SpotifyMetadataProvider
         recentlyPlayedUri.replace(
           queryParameters: <String, String>{
             'limit': limit.clamp(1, 50).toString(),
-            if (normalizedBefore != null) 'before': normalizedBefore,
+            'before': ?normalizedBefore,
           },
         ),
         token,
@@ -395,7 +395,7 @@ final class SpotifyMetadataProvider
           queryParameters: <String, String>{
             'type': 'artist',
             'limit': limit.clamp(1, 50).toString(),
-            if (normalizedAfter != null) 'after': normalizedAfter,
+            'after': ?normalizedAfter,
           },
         ),
         token,

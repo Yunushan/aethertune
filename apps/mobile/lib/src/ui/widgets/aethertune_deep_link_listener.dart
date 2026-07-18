@@ -64,7 +64,7 @@ class _AetherTuneDeepLinkListenerState
   void _listen(Stream<Uri>? stream) {
     _subscription = stream?.listen(
       _enqueue,
-      onError: (_, __) {},
+      onError: (_, _) {},
     );
   }
 

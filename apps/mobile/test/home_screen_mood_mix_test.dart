@@ -366,7 +366,7 @@ void main() {
     final translator = _FakeLyricsTranslator();
     final translations = LyricsTranslationSettingsStore(
       credentialVault: _MemoryCredentialVault(),
-      translatorFactory: (_, __) => translator,
+      translatorFactory: (_, _) => translator,
     );
     await translations.load();
     await translations.save(

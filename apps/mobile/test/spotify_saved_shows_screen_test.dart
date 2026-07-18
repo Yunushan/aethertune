@@ -17,8 +17,8 @@ void main() {
     addTearDown(library.dispose);
     final provider = SpotifyMetadataProvider(
       accessTokenReader: () async => 'access-token',
-      savedShowsLoader: (_, __) async => _savedShowsPage,
-      showEpisodesLoader: (_, __) async => _showEpisodesPage,
+      savedShowsLoader: (_, _) async => _savedShowsPage,
+      showEpisodesLoader: (_, _) async => _showEpisodesPage,
     );
 
     await tester.pumpWidget(

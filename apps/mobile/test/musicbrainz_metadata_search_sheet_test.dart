@@ -11,7 +11,7 @@ void main() {
     var requests = 0;
     final provider = MusicBrainzMetadataProvider(
       limiter: MusicBrainzRequestLimiter(),
-      loader: (_, __) async {
+      loader: (_, _) async {
         requests += 1;
         return _response;
       },
@@ -44,7 +44,7 @@ void main() {
     var requests = 0;
     final provider = MusicBrainzMetadataProvider(
       limiter: MusicBrainzRequestLimiter(),
-      loader: (_, __) async {
+      loader: (_, _) async {
         requests += 1;
         return _response;
       },

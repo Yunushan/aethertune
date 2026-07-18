@@ -5868,7 +5868,7 @@ class LibraryStore extends ChangeNotifier {
     );
     final byId = <String, Map<String, Object?>>{
       for (final item in remote.whereType<Map>())
-        if (_syncString(item['id']) case final id?) id: Map<String, Object?>.from(item),
+        ?_syncString(item['id']): Map<String, Object?>.from(item),
     };
     if (localValue is List) {
       for (final item in localValue) {
@@ -5901,8 +5901,7 @@ class LibraryStore extends ChangeNotifier {
     );
     final byId = <String, Map<String, Object?>>{
       for (final item in remote.whereType<Map>())
-        if (_syncString(item['id']) case final id?)
-          id: Map<String, Object?>.from(item),
+        ?_syncString(item['id']): Map<String, Object?>.from(item),
     };
     if (localValue is List) {
       for (final item in localValue) {
@@ -5939,8 +5938,7 @@ class LibraryStore extends ChangeNotifier {
     );
     final byId = <String, Map<String, Object?>>{
       for (final item in remote.whereType<Map>())
-        if (_syncString(item['id']) case final id?)
-          id: Map<String, Object?>.from(item),
+        ?_syncString(item['id']): Map<String, Object?>.from(item),
     };
     if (localValue is List) {
       for (final item in localValue) {

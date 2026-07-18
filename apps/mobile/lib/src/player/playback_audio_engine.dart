@@ -424,12 +424,8 @@ class JustAudioPlaybackEngine
     _queue
       ..clear()
       ..addAll(tracks);
-    final playlist = ConcatenatingAudioSource(
-      useLazyPreparation: true,
-      children: tracks.map(_audioSourceForTrack).toList(growable: false),
-    );
-    await _player.setAudioSource(
-      playlist,
+    await _player.setAudioSources(
+      tracks.map(_audioSourceForTrack).toList(growable: false),
       initialIndex: initialIndex,
       initialPosition: initialPosition,
     );

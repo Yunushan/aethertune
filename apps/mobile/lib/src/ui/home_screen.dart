@@ -2635,7 +2635,7 @@ class _SyncedLyricsPreview extends StatelessWidget {
         child: ListView.separated(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: lines.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final line = lines[index];
             return Padding(
@@ -2877,7 +2877,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
               return ListView.separated(
                 controller: controller,
                 itemCount: widget.lines.length + 1,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return _NowPlayingLyricsHeader(
@@ -5152,7 +5152,7 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: section.collections.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final collection = section.collections[index];
               return _ProviderHomeCollectionTile(
@@ -5760,7 +5760,7 @@ class _LibraryTab extends StatelessWidget {
           Expanded(
             child: ListView.separated(
               itemCount: tracks.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final track = tracks[index];
                 return TrackTile(
@@ -5849,7 +5849,7 @@ class _LibraryTab extends StatelessWidget {
                       Expanded(
                         child: ListView.separated(
                           itemCount: library.savedLibraryViews.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (_, _) =>
                               const Divider(height: 1),
                           itemBuilder: (context, index) {
                             final view = library.savedLibraryViews[index];
@@ -6185,7 +6185,7 @@ class _MoodMixSheet extends StatelessWidget {
           return ListView.separated(
             controller: controller,
             itemCount: tracks.isEmpty ? 2 : tracks.length + 1,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return ListTile(
@@ -6464,7 +6464,7 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
           return ListView.separated(
             controller: controller,
             itemCount: tracks.length + 1,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
                 final canFollowArtist =
@@ -6742,7 +6742,7 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: artistAlbums.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final album = artistAlbums[index];
                   final albumTracks = library.tracksForBrowseGroup(
@@ -7149,7 +7149,7 @@ class _LibraryFolderNodeTracksSheet extends StatelessWidget {
           return ListView.separated(
             controller: controller,
             itemCount: tracks.length + 1,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return ListTile(
@@ -7243,7 +7243,7 @@ class _SimilarTracksSheet extends StatelessWidget {
           return ListView.separated(
             controller: controller,
             itemCount: itemCount,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (seedTrack == null) {
                 return const ListTile(
@@ -9967,7 +9967,7 @@ class _SmartPlaylistSheet extends StatelessWidget {
           return ListView.separated(
             controller: controller,
             itemCount: tracks.isEmpty ? 2 : tracks.length + 1,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return ListTile(
@@ -10077,7 +10077,7 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
           return ListView.separated(
             controller: controller,
             itemCount: tracks.isEmpty ? 2 : tracks.length + 1,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return ListTile(

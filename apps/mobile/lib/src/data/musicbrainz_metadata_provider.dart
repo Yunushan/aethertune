@@ -36,7 +36,7 @@ final class MusicBrainzRequestLimiter {
       _lastRequestAt = _clock().toUtc();
       return operation();
     });
-    _tail = scheduled.then<void>((_) {}, onError: (_, __) {});
+    _tail = scheduled.then<void>((_) {}, onError: (_, _) {});
     return scheduled;
   }
 }

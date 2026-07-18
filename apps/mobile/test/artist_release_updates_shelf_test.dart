@@ -80,7 +80,7 @@ void main() {
     var calls = 0;
     final provider = MusicBrainzArtistReleaseProvider(
       limiter: _instantLimiter(),
-      loader: (_, __) async {
+      loader: (_, _) async {
         calls += 1;
         return '{}';
       },

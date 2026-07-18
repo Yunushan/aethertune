@@ -87,7 +87,7 @@ void main() {
     );
     final provider = MusicBrainzMetadataProvider(
       limiter: limiter,
-      loader: (_, __) async => _recordingResponse,
+      loader: (_, _) async => _recordingResponse,
     );
 
     await provider.search(title: 'First', artist: '', album: '');

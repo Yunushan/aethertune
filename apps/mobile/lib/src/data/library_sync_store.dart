@@ -184,7 +184,7 @@ class LibrarySyncStore extends ChangeNotifier {
           safeProviderErrorMessage(
             error,
             providerName: 'Library sync',
-            secrets: <String>[normalizedToken, if (oldToken != null) oldToken],
+            secrets: <String>[normalizedToken, ?oldToken],
           ),
         );
       }

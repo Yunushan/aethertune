@@ -91,7 +91,7 @@ void main() {
   test('returns no feed when no exact MusicBrainz artist matches', () async {
     final provider = MusicBrainzArtistReleaseProvider(
       limiter: _instantLimiter(),
-      loader: (_, __) async =>
+      loader: (_, _) async =>
           '{"artists":[{"id":"11111111-1111-1111-1111-111111111111","name":"Different"}]}',
     );
 
