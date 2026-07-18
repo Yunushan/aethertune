@@ -774,6 +774,51 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.chapters, isEmpty);
   });
 
+  test('reads WMA ASF content and extended metadata fields', () async {
+    await File(p.join(root.path, 'wma.wma')).writeAsBytes(
+      _wmaWithMetadata(
+        title: 'WMA Title',
+        artist: 'WMA Artist',
+        album: 'WMA Album',
+        albumArtist: 'WMA Album Artist',
+        year: '2022',
+        trackNumber: '4/12',
+        genre: 'Jazz',
+        rating: 80,
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final track = result.tracks.single;
+
+    expect(track.title, 'WMA Title');
+    expect(track.artist, 'WMA Artist');
+    expect(track.album, 'WMA Album');
+    expect(track.albumArtist, 'WMA Album Artist');
+    expect(track.year, 2022);
+    expect(track.trackNumber, 4);
+    expect(track.genre, 'Jazz');
+    expect(track.rating, 4);
+  });
+
+  test('falls back safely from malformed WMA ASF object sizes', () async {
+    await File(p.join(root.path, 'broken.wma')).writeAsBytes(<int>[
+      ..._asfHeaderObjectGuid,
+      ..._uint64LittleEndianSize(54),
+      ..._uint32LittleEndianSize(1),
+      1,
+      2,
+      ..._asfContentDescriptionObjectGuid,
+      ..._uint64LittleEndianSize(1024),
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks, hasLength(1));
+    expect(result.tracks.single.title, 'broken');
+    expect(result.tracks.single.artist, 'Local Folder');
+  });
+
   test('extracts M4A cover artwork atoms', () async {
     await File(p.join(root.path, 'cover.m4a')).writeAsBytes(
       _m4aWithMetadata(
@@ -1494,6 +1539,114 @@ List<int> _uint32LittleEndianSize(int size) {
   ];
 }
 
+List<int> _uint16LittleEndianSize(int value) {
+  return <int>[value & 0xff, (value >> 8) & 0xff];
+}
+
+List<int> _uint64LittleEndianSize(int value) {
+  return <int>[
+    value & 0xff,
+    (value >> 8) & 0xff,
+    (value >> 16) & 0xff,
+    (value >> 24) & 0xff,
+    (value >> 32) & 0xff,
+    (value >> 40) & 0xff,
+    (value >> 48) & 0xff,
+    (value >> 56) & 0xff,
+  ];
+}
+
+List<int> _wmaWithMetadata({
+  required String title,
+  required String artist,
+  required String album,
+  required String albumArtist,
+  required String year,
+  required String trackNumber,
+  required String genre,
+  required int rating,
+}) {
+  final contentDescription = _asfObject(
+    _asfContentDescriptionObjectGuid,
+    _asfContentDescription(title: title, artist: artist),
+  );
+  final extendedDescription = _asfObject(
+    _asfExtendedContentDescriptionObjectGuid,
+    _asfExtendedContentDescription(<String, Object>{
+      'WM/AlbumTitle': album,
+      'WM/AlbumArtist': albumArtist,
+      'WM/Year': year,
+      'WM/TrackNumber': trackNumber,
+      'WM/Genre': genre,
+      'WM/SharedUserRating': rating,
+    }),
+  );
+  final objects = <int>[...contentDescription, ...extendedDescription];
+  return <int>[
+    ..._asfHeaderObjectGuid,
+    ..._uint64LittleEndianSize(30 + objects.length),
+    ..._uint32LittleEndianSize(2),
+    1,
+    2,
+    ...objects,
+  ];
+}
+
+List<int> _asfObject(List<int> guid, List<int> payload) {
+  return <int>[...guid, ..._uint64LittleEndianSize(24 + payload.length), ...payload];
+}
+
+List<int> _asfContentDescription({
+  required String title,
+  required String artist,
+}) {
+  final values = <List<int>>[
+    _utf16Le('$title\u0000'),
+    _utf16Le('$artist\u0000'),
+    const <int>[],
+    const <int>[],
+    const <int>[],
+  ];
+  return <int>[
+    for (final value in values) ..._uint16LittleEndianSize(value.length),
+    for (final value in values) ...value,
+  ];
+}
+
+List<int> _asfExtendedContentDescription(Map<String, Object> fields) {
+  return <int>[
+    ..._uint16LittleEndianSize(fields.length),
+    for (final field in fields.entries) ..._asfExtendedField(field.key, field.value),
+  ];
+}
+
+List<int> _asfExtendedField(String name, Object value) {
+  final nameBytes = _utf16Le('$name\u0000');
+  final valueBytes = switch (value) {
+    String text => _utf16Le('$text\u0000'),
+    int number => _uint32LittleEndianSize(number),
+    _ => throw ArgumentError.value(value, 'value', 'Unsupported ASF test value.'),
+  };
+  final valueType = value is int ? 3 : 0;
+  return <int>[
+    ..._uint16LittleEndianSize(nameBytes.length),
+    ...nameBytes,
+    ..._uint16LittleEndianSize(valueType),
+    ..._uint16LittleEndianSize(valueBytes.length),
+    ...valueBytes,
+  ];
+}
+
+List<int> _utf16Le(String value) {
+  final bytes = <int>[];
+  for (final codeUnit in value.codeUnits) {
+    bytes
+      ..add(codeUnit & 0xff)
+      ..add((codeUnit >> 8) & 0xff);
+  }
+  return bytes;
+}
+
 List<int> _uint32BigEndianSize(int size) {
   return <int>[
     (size >> 24) & 0xff,
@@ -1761,6 +1914,18 @@ const _m4aAlbumArtistAtomType = <int>[0x61, 0x41, 0x52, 0x54];
 const _m4aDateAtomType = <int>[0xa9, 0x64, 0x61, 0x79];
 const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
 const _m4aLyricsAtomType = <int>[0xa9, 0x6c, 0x79, 0x72];
+const _asfHeaderObjectGuid = <int>[
+  0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
+  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+];
+const _asfContentDescriptionObjectGuid = <int>[
+  0x33, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
+  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+];
+const _asfExtendedContentDescriptionObjectGuid = <int>[
+  0x40, 0xa4, 0xd0, 0xd2, 0x07, 0xe3, 0xd2, 0x11,
+  0x97, 0xf0, 0x00, 0xa0, 0xc9, 0x5e, 0xa8, 0x50,
+];
 
 final class _M4aChapter {
   const _M4aChapter(this.start, this.title);

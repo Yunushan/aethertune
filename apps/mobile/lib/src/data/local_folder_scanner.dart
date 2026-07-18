@@ -411,6 +411,8 @@ final class _LocalFolderScanState {
         return _wavMetadataForFile(path);
       case '.aiff':
         return _aiffMetadataForFile(path);
+      case '.wma':
+        return _wmaMetadataForFile(path);
     }
 
     return null;
@@ -1317,6 +1319,213 @@ final class _LocalFolderScanState {
   String? _vorbisCommentLyrics(Map<String, List<String>> comments) {
     return _firstVorbisComment(comments, 'LYRICS') ??
         _firstVorbisComment(comments, 'UNSYNCEDLYRICS');
+  }
+
+  Future<_LocalFileMetadata?> _wmaMetadataForFile(String path) async {
+    try {
+      final file = File(path);
+      final fileLength = await file.length();
+      if (fileLength < _asfHeaderPrefixBytes) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        final prefix = await access.read(_asfHeaderPrefixBytes);
+        if (prefix.length != _asfHeaderPrefixBytes ||
+            !_matchesBytes(prefix.sublist(0, 16), _asfHeaderObjectGuid)) {
+          return null;
+        }
+
+        final headerSize = _uint64LittleEndian(prefix, 16);
+        final objectCount = _uint32LittleEndian(prefix, 24);
+        if (headerSize < _asfHeaderPrefixBytes ||
+            headerSize > fileLength ||
+            headerSize > _maxAsfHeaderBytes ||
+            objectCount > _maxAsfHeaderObjects) {
+          return null;
+        }
+
+        final payloadLength = headerSize - _asfHeaderPrefixBytes;
+        final header = await access.read(payloadLength);
+        if (header.length != payloadLength) {
+          return null;
+        }
+
+        final fields = <String, String>{};
+        var offset = 0;
+        var parsedObjects = 0;
+        while (offset + _asfObjectPrefixBytes <= header.length &&
+            parsedObjects < objectCount) {
+          final objectSize = _uint64LittleEndian(header, offset + 16);
+          if (objectSize < _asfObjectPrefixBytes ||
+              objectSize > header.length - offset) {
+            return null;
+          }
+
+          final payloadStart = offset + _asfObjectPrefixBytes;
+          final payloadEnd = offset + objectSize;
+          final objectGuid = header.sublist(offset, offset + 16);
+          final payload = header.sublist(payloadStart, payloadEnd);
+          if (_matchesBytes(objectGuid, _asfContentDescriptionObjectGuid)) {
+            fields.addAll(_asfContentDescriptionFields(payload));
+          } else if (_matchesBytes(
+            objectGuid,
+            _asfExtendedContentDescriptionObjectGuid,
+          )) {
+            fields.addAll(_asfExtendedContentDescriptionFields(payload));
+          }
+
+          offset = payloadEnd;
+          parsedObjects += 1;
+        }
+
+        return _asfMetadataFromFields(fields);
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Map<String, String> _asfContentDescriptionFields(List<int> payload) {
+    if (payload.length < 10) {
+      return const <String, String>{};
+    }
+
+    final lengths = <int>[
+      _uint16LittleEndian(payload, 0),
+      _uint16LittleEndian(payload, 2),
+      _uint16LittleEndian(payload, 4),
+      _uint16LittleEndian(payload, 6),
+      _uint16LittleEndian(payload, 8),
+    ];
+    var offset = 10;
+    final fields = <String, String>{};
+    for (var index = 0; index < lengths.length; index += 1) {
+      final length = lengths[index];
+      if (offset + length > payload.length) {
+        return const <String, String>{};
+      }
+      if (index == 0 || index == 1) {
+        final value = _normalizeEmbeddedText(
+          _decodeUtf16(payload.sublist(offset, offset + length)),
+        );
+        if (value.isNotEmpty) {
+          fields[index == 0 ? 'title' : 'artist'] = value;
+        }
+      }
+      offset += length;
+    }
+    return fields;
+  }
+
+  Map<String, String> _asfExtendedContentDescriptionFields(List<int> payload) {
+    if (payload.length < 2) {
+      return const <String, String>{};
+    }
+
+    final count = _uint16LittleEndian(payload, 0);
+    if (count > _maxAsfExtendedProperties) {
+      return const <String, String>{};
+    }
+
+    var offset = 2;
+    final fields = <String, String>{};
+    for (var index = 0; index < count; index += 1) {
+      if (offset + 6 > payload.length) {
+        return const <String, String>{};
+      }
+      final nameLength = _uint16LittleEndian(payload, offset);
+      offset += 2;
+      if (offset + nameLength + 4 > payload.length) {
+        return const <String, String>{};
+      }
+      final name = _normalizeEmbeddedText(
+        _decodeUtf16(payload.sublist(offset, offset + nameLength)),
+      ).toUpperCase();
+      offset += nameLength;
+      final valueType = _uint16LittleEndian(payload, offset);
+      final valueLength = _uint16LittleEndian(payload, offset + 2);
+      offset += 4;
+      if (offset + valueLength > payload.length) {
+        return const <String, String>{};
+      }
+      final key = _asfFieldKey(name);
+      final value = key == null
+          ? null
+          : _asfPropertyValue(
+              payload.sublist(offset, offset + valueLength),
+              valueType,
+            );
+      if (value != null && value.isNotEmpty) {
+        fields[key!] = value;
+      }
+      offset += valueLength;
+    }
+    return fields;
+  }
+
+  String? _asfFieldKey(String name) {
+    return switch (name) {
+      'TITLE' || 'WM/TITLE' => 'title',
+      'AUTHOR' || 'WM/AUTHOR' => 'artist',
+      'WM/ALBUMTITLE' => 'album',
+      'WM/ALBUMARTIST' => 'albumArtist',
+      'WM/YEAR' => 'year',
+      'WM/TRACKNUMBER' => 'trackNumber',
+      'WM/GENRE' => 'genre',
+      'WM/SHAREDUSERRATING' => 'rating',
+      _ => null,
+    };
+  }
+
+  String? _asfPropertyValue(List<int> bytes, int valueType) {
+    return switch (valueType) {
+      _asfUnicodeValueType => _normalizeEmbeddedText(_decodeUtf16(bytes)),
+      _asfDwordValueType when bytes.length == 4 =>
+        _uint32LittleEndian(bytes, 0).toString(),
+      _asfQwordValueType when bytes.length == 8 =>
+        _uint64LittleEndian(bytes, 0).toString(),
+      _asfWordValueType when bytes.length == 2 =>
+        _uint16LittleEndian(bytes, 0).toString(),
+      _ => null,
+    };
+  }
+
+  _LocalFileMetadata? _asfMetadataFromFields(Map<String, String> fields) {
+    final title = fields['title'] ?? '';
+    final artist = fields['artist'] ?? '';
+    final album = fields['album'];
+    final albumArtist = fields['albumArtist'];
+    final year = _releaseYearFromText(fields['year']);
+    final trackNumber = _trackNumberFromText(fields['trackNumber']);
+    final genre = fields['genre'];
+    final rating = _vorbisRating(fields['rating']);
+    if (title.isEmpty &&
+        artist.isEmpty &&
+        (album == null || album.isEmpty) &&
+        (albumArtist == null || albumArtist.isEmpty) &&
+        year == null &&
+        trackNumber == null &&
+        (genre == null || genre.isEmpty) &&
+        rating == null) {
+      return null;
+    }
+
+    return _LocalFileMetadata(
+      title: title,
+      artist: artist,
+      album: album == null || album.isEmpty ? null : album,
+      albumArtist: albumArtist == null || albumArtist.isEmpty
+          ? null
+          : albumArtist,
+      year: year,
+      trackNumber: trackNumber,
+      genre: genre == null || genre.isEmpty ? null : genre,
+      rating: rating,
+    );
   }
 
   Future<_LocalFileMetadata?> _aiffMetadataForFile(String path) async {
@@ -2618,6 +2827,29 @@ final class _LocalFolderScanState {
         (bytes[offset + 3] << 24);
   }
 
+  int _uint16LittleEndian(List<int> bytes, int offset) {
+    if (offset + 2 > bytes.length) {
+      return -1;
+    }
+
+    return bytes[offset] | (bytes[offset + 1] << 8);
+  }
+
+  int _uint64LittleEndian(List<int> bytes, int offset) {
+    if (offset + 8 > bytes.length) {
+      return -1;
+    }
+
+    return bytes[offset] |
+        (bytes[offset + 1] << 8) |
+        (bytes[offset + 2] << 16) |
+        (bytes[offset + 3] << 24) |
+        (bytes[offset + 4] << 32) |
+        (bytes[offset + 5] << 40) |
+        (bytes[offset + 6] << 48) |
+        (bytes[offset + 7] << 56);
+  }
+
   int _uint24(List<int> bytes, int offset) {
     if (offset + 3 > bytes.length) {
       return 0;
@@ -2702,6 +2934,7 @@ const _maxApev2TagBytes = 1024 * 1024;
 const _maxFlacMetadataBytes = 1024 * 1024;
 const _maxOggMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
+const _maxAsfHeaderBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
 const _maxAiffTextBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
@@ -2713,6 +2946,8 @@ const _mp4ChapterTicksPerMicrosecond = 10;
 const _maxId3v2SyncedLyricEvents = 4096;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
+const _maxAsfHeaderObjects = 512;
+const _maxAsfExtendedProperties = 2048;
 const _maxWavChunks = 2048;
 const _maxAiffChunks = 2048;
 const _maxOggPages = 128;
@@ -2724,6 +2959,24 @@ const _maxApev2KeyBytes = 255;
 const _apev2FooterBytes = 32;
 const _flacVorbisCommentBlockType = 4;
 const _flacPictureBlockType = 6;
+const _asfHeaderPrefixBytes = 30;
+const _asfObjectPrefixBytes = 24;
+const _asfUnicodeValueType = 0;
+const _asfDwordValueType = 3;
+const _asfQwordValueType = 4;
+const _asfWordValueType = 5;
+const _asfHeaderObjectGuid = <int>[
+  0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
+  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+];
+const _asfContentDescriptionObjectGuid = <int>[
+  0x33, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
+  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+];
+const _asfExtendedContentDescriptionObjectGuid = <int>[
+  0x40, 0xa4, 0xd0, 0xd2, 0x07, 0xe3, 0xd2, 0x11,
+  0x97, 0xf0, 0x00, 0xa0, 0xc9, 0x5e, 0xa8, 0x50,
+];
 const _sidecarLyricsExtensionsByPreference = <String>[
   '.ttml',
   '.srt',
