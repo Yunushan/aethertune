@@ -1729,6 +1729,7 @@ class _LibrarySyncConfigurationDialogState
   late final TextEditingController _urlController;
   late final TextEditingController _deviceController;
   final TextEditingController _tokenController = TextEditingController();
+  final TextEditingController _recoveryCodeController = TextEditingController();
   late bool _allowInsecureHttp;
   bool _obscureToken = true;
   bool _saving = false;
@@ -1751,6 +1752,7 @@ class _LibrarySyncConfigurationDialogState
     _urlController.dispose();
     _deviceController.dispose();
     _tokenController.dispose();
+    _recoveryCodeController.dispose();
     super.dispose();
   }
 
@@ -1802,6 +1804,20 @@ class _LibrarySyncConfigurationDialogState
                       _obscureToken ? Icons.visibility : Icons.visibility_off,
                     ),
                   ),
+                ),
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => setState(() => _error = null),
+                onSubmitted: (_) => _save(),
+              ),
+              TextField(
+                key: const Key('library-sync-recovery-code'),
+                controller: _recoveryCodeController,
+                enabled: !_saving,
+                obscureText: true,
+                enableSuggestions: false,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Recovery code (optional)',
                 ),
                 textInputAction: TextInputAction.done,
                 onChanged: (_) => setState(() => _error = null),
@@ -1861,6 +1877,7 @@ class _LibrarySyncConfigurationDialogState
 
   Future<void> _save() async {
     final token = _tokenController.text.trim();
+    final recoveryCode = _recoveryCodeController.text.trim();
     setState(() {
       _saving = true;
       _error = null;
@@ -1871,11 +1888,20 @@ class _LibrarySyncConfigurationDialogState
         deviceId: _deviceController.text,
         allowInsecureHttp: _allowInsecureHttp,
       );
-      await context.read<LibrarySyncStore>().testAndSave(
-        context.read<LibraryStore>(),
-        account,
-        token,
-      );
+      final store = context.read<LibrarySyncStore>();
+      if (recoveryCode.isNotEmpty) {
+        await store.redeemRecoveryCodeAndSave(
+          context.read<LibraryStore>(),
+          account,
+          recoveryCode,
+        );
+      } else {
+        await store.testAndSave(
+          context.read<LibraryStore>(),
+          account,
+          token,
+        );
+      }
       if (mounted) {
         Navigator.of(context).pop(true);
       }
@@ -1883,11 +1909,17 @@ class _LibrarySyncConfigurationDialogState
       if (!mounted) {
         return;
       }
+      var message = error.toString();
+      for (final secret in <String>[token, recoveryCode]) {
+        if (secret.isNotEmpty) {
+          message = message.replaceAll(secret, '[redacted]');
+        }
+      }
       setState(() {
         _saving = false;
-        _error = token.isEmpty
+        _error = token.isEmpty && recoveryCode.isEmpty
             ? error.toString()
-            : error.toString().replaceAll(token, '[redacted]');
+            : message;
       });
     }
   }
