@@ -803,6 +803,38 @@ Timed sidecar
     expect(result.tracks.single.album, 'Tagged Album Only');
   });
 
+  test('extracts ID3v2 lyric-labelled comment frames only', () async {
+    final lyricPath = p.join(root.path, 'comment-lyrics.mp3');
+    final notePath = p.join(root.path, 'ordinary-comment.mp3');
+    await File(lyricPath).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Comment Lyrics',
+        commentLyrics: 'Comment-frame lyrics',
+      ),
+      1,
+    ]);
+    await File(notePath).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Ordinary Comment',
+        commentLyrics: 'Do not import this note',
+        commentDescription: 'note',
+      ),
+      2,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.embeddedLyricsCount, 1);
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(lyricPath)],
+      'Comment-frame lyrics',
+    );
+    expect(
+      result.embeddedLyricsByTrackId.containsKey(Track.stableLocalId(notePath)),
+      isFalse,
+    );
+  });
+
   test('imports bounded APEv2 text metadata before trailing ID3v1', () async {
     final audioPath = p.join(root.path, '99 Filename Artist - Filename Title.mp3');
     await File(audioPath).writeAsBytes(<int>[
@@ -914,6 +946,8 @@ List<int> _id3v23Tag({
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
   String unsynchronizedLyrics = '',
+  String commentLyrics = '',
+  String commentDescription = 'lyrics',
   int? popularimeterRating,
   int encoding = _id3v2EncodingUtf8,
 }) {
@@ -943,6 +977,12 @@ List<int> _id3v23Tag({
       ),
     if (unsynchronizedLyrics.isNotEmpty)
       ..._id3v23UnsynchronizedLyricsFrame(unsynchronizedLyrics, encoding),
+    if (commentLyrics.isNotEmpty)
+      ..._id3v23CommentFrame(
+        commentLyrics,
+        commentDescription,
+        encoding,
+      ),
     if (popularimeterRating != null)
       ..._id3v23PopularimeterFrame(popularimeterRating),
   ];
@@ -990,6 +1030,30 @@ List<int> _id3v23UnsynchronizedLyricsFrame(String lyrics, int encoding) {
   ];
   return <int>[
     ...'USLT'.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
+  ];
+}
+
+List<int> _id3v23CommentFrame(
+  String comment,
+  String description,
+  int encoding,
+) {
+  final terminator = encoding == _id3v2EncodingUtf16
+      ? const <int>[0, 0]
+      : const <int>[0];
+  final payload = <int>[
+    encoding,
+    ...'eng'.codeUnits,
+    ..._id3v2EncodedText(description, encoding),
+    ...terminator,
+    ..._id3v2EncodedText(comment, encoding),
+  ];
+  return <int>[
+    ...'COMM'.codeUnits,
     ..._uint32Size(payload.length),
     0x00,
     0x00,

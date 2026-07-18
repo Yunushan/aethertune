@@ -969,6 +969,10 @@ final class _LocalFolderScanState {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'COMM' && embeddedLyrics == null) {
+        embeddedLyrics = _id3v2CommentLyrics(
+          bytes.sublist(offset, offset + frameSize),
+        );
       } else if (frameId == 'POPM' && rating == null) {
         rating = _id3v2PopularimeterRating(
           bytes.sublist(offset, offset + frameSize),
@@ -1036,6 +1040,10 @@ final class _LocalFolderScanState {
         );
       } else if (frameId == 'ULT' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
+          bytes.sublist(offset, offset + frameSize),
+        );
+      } else if (frameId == 'COM' && embeddedLyrics == null) {
+        embeddedLyrics = _id3v2CommentLyrics(
           bytes.sublist(offset, offset + frameSize),
         );
       } else if (frameId == 'POP' && rating == null) {
@@ -1601,6 +1609,39 @@ final class _LocalFolderScanState {
       return null;
     }
 
+    return _normalizeEmbeddedLyrics(
+      _id3v2DecodedRawText(
+        bytes.sublist(descriptionEnd + terminatorLength),
+        encoding,
+      ),
+    );
+  }
+
+  String? _id3v2CommentLyrics(List<int> bytes) {
+    if (bytes.length < 5 || bytes.length > _maxEmbeddedLyricsBytes) {
+      return null;
+    }
+
+    final encoding = bytes.first;
+    final terminatorLength = _id3v2TerminatorLength(encoding);
+    var descriptionEnd = 4; // Encoding plus the three-byte language code.
+    while (descriptionEnd < bytes.length) {
+      if (_hasZeroTerminator(bytes, descriptionEnd, terminatorLength)) {
+        break;
+      }
+      descriptionEnd += terminatorLength;
+    }
+    if (descriptionEnd + terminatorLength > bytes.length) {
+      return null;
+    }
+
+    final description = _id3v2DecodedText(
+      bytes.sublist(4, descriptionEnd),
+      encoding,
+    ).toLowerCase();
+    if (description != 'lyrics' && description != 'lyric') {
+      return null;
+    }
     return _normalizeEmbeddedLyrics(
       _id3v2DecodedRawText(
         bytes.sublist(descriptionEnd + terminatorLength),
