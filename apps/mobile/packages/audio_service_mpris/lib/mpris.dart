@@ -6,6 +6,7 @@ import 'package:dbus/dbus.dart';
 import 'metadata.dart';
 
 const _trackListPathPrefix = '/org/mpris/MediaPlayer2/TrackList/';
+const _playlistsPathPrefix = '/org/mpris/MediaPlayer2/Playlists/';
 const _noTrackPath = DBusObjectPath.unchecked(
   '/org/mpris/MediaPlayer2/TrackList/NoTrack',
 );
@@ -18,6 +19,13 @@ DBusObjectPath mprisTrackPathForId(String mediaId) {
   return DBusObjectPath.unchecked('$_trackListPathPrefix$encoded');
 }
 
+DBusObjectPath mprisPlaylistPathForId(String mediaId) {
+  final encoded = mediaId.codeUnits
+      .map((codeUnit) => codeUnit.toRadixString(16).padLeft(4, '0'))
+      .join();
+  return DBusObjectPath.unchecked('$_playlistsPathPrefix$encoded');
+}
+
 class MprisTrack {
   const MprisTrack({required this.mediaId, required this.metadata});
 
@@ -25,6 +33,23 @@ class MprisTrack {
   final Metadata metadata;
 
   DBusObjectPath get path => mprisTrackPathForId(mediaId);
+}
+
+class MprisPlaylist {
+  const MprisPlaylist({
+    required this.mediaId,
+    required this.name,
+    this.iconUri = '',
+  });
+
+  final String mediaId;
+  final String name;
+  final String iconUri;
+
+  DBusObjectPath get path => mprisPlaylistPathForId(mediaId);
+
+  DBusStruct toValue() =>
+      DBusStruct(<DBusValue>[path, DBusString(name), DBusString(iconUri)]);
 }
 
 class OrgMprisMediaPlayer2 extends DBusObject {
@@ -44,8 +69,14 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   final _trackStreamController = StreamController<String>();
   Stream<String> get trackStream => _trackStreamController.stream;
 
+  final _playlistStreamController = StreamController<String>();
+  Stream<String> get playlistStream => _playlistStreamController.stream;
+
   final List<MprisTrack> _tracks = <MprisTrack>[];
   List<MprisTrack> get tracks => List<MprisTrack>.unmodifiable(_tracks);
+
+  final List<MprisPlaylist> _playlists = <MprisPlaylist>[];
+  String? _activePlaylistId;
 
   var position = const Duration(seconds: 0);
 
@@ -343,6 +374,98 @@ class OrgMprisMediaPlayer2 extends DBusObject {
     return DBusMethodErrorResponse.invalidArgs();
   }
 
+  void setPlaylists(Iterable<MprisPlaylist> playlists) {
+    _playlists
+      ..clear()
+      ..addAll(playlists);
+    if (!_playlists.any((playlist) => playlist.mediaId == _activePlaylistId)) {
+      _activePlaylistId = null;
+    }
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Playlists',
+      changedProperties: <String, DBusValue>{
+        'PlaylistCount': getPlaylistCount(),
+        'ActivePlaylist': getActivePlaylist(),
+      },
+    );
+  }
+
+  DBusUint32 getPlaylistCount() => DBusUint32(_playlists.length);
+
+  DBusArray getOrderings() => DBusArray.string(const <String>['Alphabetical']);
+
+  DBusStruct getActivePlaylist() {
+    MprisPlaylist? active;
+    for (final playlist in _playlists) {
+      if (playlist.mediaId == _activePlaylistId) {
+        active = playlist;
+        break;
+      }
+    }
+    return DBusStruct(<DBusValue>[
+      DBusBoolean(active != null),
+      active?.toValue() ??
+          DBusStruct(<DBusValue>[
+            const DBusObjectPath.unchecked('/'),
+            const DBusString(''),
+            const DBusString(''),
+          ]),
+    ]);
+  }
+
+  Future<DBusMethodResponse> doActivatePlaylist(DBusObjectPath path) async {
+    for (final playlist in _playlists) {
+      if (playlist.path == path) {
+        _activePlaylistId = playlist.mediaId;
+        emitPropertiesChanged(
+          'org.mpris.MediaPlayer2.Playlists',
+          changedProperties: <String, DBusValue>{
+            'ActivePlaylist': getActivePlaylist(),
+          },
+        );
+        unawaited(
+          emitSignal(
+            'org.mpris.MediaPlayer2.Playlists',
+            'PlaylistChanged',
+            <DBusValue>[playlist.toValue()],
+          ),
+        );
+        _playlistStreamController.add(playlist.mediaId);
+        return DBusMethodSuccessResponse([]);
+      }
+    }
+    return DBusMethodErrorResponse.invalidArgs();
+  }
+
+  Future<DBusMethodResponse> doGetPlaylists(
+    int index,
+    int maxCount,
+    String order,
+    bool reverseOrder,
+  ) async {
+    if (order != 'Alphabetical') {
+      return DBusMethodErrorResponse.invalidArgs();
+    }
+    final playlists = List<MprisPlaylist>.from(_playlists)
+      ..sort((left, right) => left.name.compareTo(right.name));
+    if (reverseOrder) {
+      final reversed = playlists.reversed.toList(growable: false);
+      playlists
+        ..clear()
+        ..addAll(reversed);
+    }
+    if (index < 0 || index > playlists.length) {
+      return DBusMethodErrorResponse.invalidArgs();
+    }
+    final end = (index + maxCount).clamp(index, playlists.length).toInt();
+    return DBusMethodSuccessResponse(<DBusValue>[
+      DBusArray(
+        DBusSignature('(oss)'),
+        playlists.sublist(index, end).map((playlist) => playlist.toValue()),
+      ),
+    ]);
+  }
+
   @override
   List<DBusIntrospectInterface> introspect() {
     return [
@@ -449,6 +572,38 @@ class OrgMprisMediaPlayer2 extends DBusObject {
             access: DBusPropertyAccess.read),
         DBusIntrospectProperty('CanEditTracks', DBusSignature('b'),
             access: DBusPropertyAccess.read),
+      ]),
+      DBusIntrospectInterface('org.mpris.MediaPlayer2.Playlists', methods: [
+        DBusIntrospectMethod('ActivatePlaylist', args: [
+          DBusIntrospectArgument(DBusSignature('o'), DBusArgumentDirection.in_,
+              name: 'PlaylistId'),
+        ]),
+        DBusIntrospectMethod('GetPlaylists', args: [
+          DBusIntrospectArgument(DBusSignature('u'), DBusArgumentDirection.in_,
+              name: 'Index'),
+          DBusIntrospectArgument(DBusSignature('u'), DBusArgumentDirection.in_,
+              name: 'MaxCount'),
+          DBusIntrospectArgument(DBusSignature('s'), DBusArgumentDirection.in_,
+              name: 'Order'),
+          DBusIntrospectArgument(DBusSignature('b'), DBusArgumentDirection.in_,
+              name: 'ReverseOrder'),
+          DBusIntrospectArgument(
+              DBusSignature('a(oss)'), DBusArgumentDirection.out,
+              name: 'Playlists'),
+        ]),
+      ], signals: [
+        DBusIntrospectSignal('PlaylistChanged', args: [
+          DBusIntrospectArgument(
+              DBusSignature('(oss)'), DBusArgumentDirection.out,
+              name: 'Playlist'),
+        ]),
+      ], properties: [
+        DBusIntrospectProperty('PlaylistCount', DBusSignature('u'),
+            access: DBusPropertyAccess.read),
+        DBusIntrospectProperty('Orderings', DBusSignature('as'),
+            access: DBusPropertyAccess.read),
+        DBusIntrospectProperty('ActivePlaylist', DBusSignature('(b(oss))'),
+            access: DBusPropertyAccess.read),
       ])
     ];
   }
@@ -534,6 +689,25 @@ class OrgMprisMediaPlayer2 extends DBusObject {
         return doGoTo(methodCall.values[0].asObjectPath());
       }
       return DBusMethodErrorResponse.unknownMethod();
+    } else if (methodCall.interface == 'org.mpris.MediaPlayer2.Playlists') {
+      if (methodCall.name == 'ActivatePlaylist') {
+        if (methodCall.signature != DBusSignature('o')) {
+          return DBusMethodErrorResponse.invalidArgs();
+        }
+        return doActivatePlaylist(methodCall.values[0].asObjectPath());
+      }
+      if (methodCall.name == 'GetPlaylists') {
+        if (methodCall.signature != DBusSignature('uusb')) {
+          return DBusMethodErrorResponse.invalidArgs();
+        }
+        return doGetPlaylists(
+          methodCall.values[0].asUint32(),
+          methodCall.values[1].asUint32(),
+          methodCall.values[2].asString(),
+          methodCall.values[3].asBoolean(),
+        );
+      }
+      return DBusMethodErrorResponse.unknownMethod();
     } else {
       return DBusMethodErrorResponse.unknownInterface();
     }
@@ -615,6 +789,17 @@ class OrgMprisMediaPlayer2 extends DBusObject {
             [const DBusVariant(DBusBoolean(false))]);
       }
       return DBusMethodErrorResponse.unknownProperty();
+    } else if (interface == 'org.mpris.MediaPlayer2.Playlists') {
+      if (name == 'PlaylistCount') {
+        return DBusMethodSuccessResponse([DBusVariant(getPlaylistCount())]);
+      }
+      if (name == 'Orderings') {
+        return DBusMethodSuccessResponse([DBusVariant(getOrderings())]);
+      }
+      if (name == 'ActivePlaylist') {
+        return DBusMethodSuccessResponse([DBusVariant(getActivePlaylist())]);
+      }
+      return DBusMethodErrorResponse.unknownProperty();
     } else {
       return DBusMethodErrorResponse.unknownProperty();
     }
@@ -691,6 +876,8 @@ class OrgMprisMediaPlayer2 extends DBusObject {
       }
     } else if (interface == 'org.mpris.MediaPlayer2.TrackList') {
       return DBusMethodErrorResponse.propertyReadOnly();
+    } else if (interface == 'org.mpris.MediaPlayer2.Playlists') {
+      return DBusMethodErrorResponse.propertyReadOnly();
     } else {
       return DBusMethodErrorResponse.unknownProperty();
     }
@@ -732,6 +919,12 @@ class OrgMprisMediaPlayer2 extends DBusObject {
       properties = {
         'Tracks': getTracks(),
         'CanEditTracks': const DBusBoolean(false),
+      };
+    } else if (interface == 'org.mpris.MediaPlayer2.Playlists') {
+      properties = {
+        'PlaylistCount': getPlaylistCount(),
+        'Orderings': getOrderings(),
+        'ActivePlaylist': getActivePlaylist(),
       };
     }
     return DBusMethodSuccessResponse([DBusDict.stringVariant(properties)]);

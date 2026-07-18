@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../domain/track.dart';
@@ -253,6 +254,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       ..addAll(folders);
     _onLibraryTrackSelected = onTrackSelected;
     _onPlaylistTrackSelected = onPlaylistTrackSelected;
+    _publishMprisPlaylists();
   }
 
   @override
@@ -565,8 +567,15 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         }
         return;
       }
-      final folderSelection = _folderTrackSelectionForMediaId(mediaId);
+      final playlist = _playlistForMediaId(mediaId);
       final onPlaylistTrackSelected = _onPlaylistTrackSelected;
+      if (playlist != null &&
+          playlist.tracks.isNotEmpty &&
+          onPlaylistTrackSelected != null) {
+        await onPlaylistTrackSelected(playlist.tracks.first, playlist.tracks, 0);
+        return;
+      }
+      final folderSelection = _folderTrackSelectionForMediaId(mediaId);
       if (folderSelection != null && onPlaylistTrackSelected != null) {
         await onPlaylistTrackSelected(
           folderSelection.track,
@@ -948,6 +957,23 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   String _playlistMediaId(MediaLibraryBrowsePlaylist playlist) =>
       '$_androidAutoPlaylistIdPrefix${playlist.category.name}:'
       '${Uri.encodeComponent(playlist.id)}';
+
+  void _publishMprisPlaylists() {
+    setMprisPlaylists(
+      _libraryBrowsePlaylists
+          .where(
+            (playlist) =>
+                playlist.category == MediaLibraryBrowseCategory.playlist,
+          )
+          .map(
+            (playlist) => MprisPlaylist(
+              mediaId: _playlistMediaId(playlist),
+              name: playlist.title,
+              iconUri: playlist.artworkUri?.toString() ?? '',
+            ),
+          ),
+    );
+  }
 
   void _publishState() {
     playbackState.add(

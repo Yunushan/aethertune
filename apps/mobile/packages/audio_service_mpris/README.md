@@ -2,7 +2,8 @@
 
 This is AetherTune's local fork of `audio_service_mpris` 0.2.1. It retains the
 upstream MIT license in [LICENSE](LICENSE) and adds MPRIS TrackList support for
-the active `audio_service` queue.
+the active `audio_service` queue plus standard MPRIS Playlists publication and
+activation for the app-owned playlist catalog.
 
 This platform interface allows you to use [audio_service](https://pub.dev/packages/audio_service) on Linux with Desktop Environment supporting Media Player Remote Interfacing Specification.
 

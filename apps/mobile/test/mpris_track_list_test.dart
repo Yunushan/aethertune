@@ -53,4 +53,31 @@ void main() {
     final response = await player.doGoTo(path);
     expect(response, isNotNull);
   });
+
+  test(
+    'Playlists exposes alphabetical entries and activates the chosen list',
+    () async {
+      final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+      const favorites = MprisPlaylist(
+        mediaId: 'aethertune:playlist:favorites',
+        name: 'Favorites',
+      );
+      const archive = MprisPlaylist(
+        mediaId: 'aethertune:playlist:archive',
+        name: 'Archive',
+      );
+      player.setPlaylists(<MprisPlaylist>[favorites, archive]);
+
+      expect(player.getPlaylistCount().value, 2);
+      expect(player.getOrderings().asArray().single.asString(), 'Alphabetical');
+      expect(
+        await player.doGetPlaylists(0, 1, 'Alphabetical', false),
+        isNotNull,
+      );
+
+      expectLater(player.playlistStream, emits(favorites.mediaId));
+      final response = await player.doActivatePlaylist(favorites.path);
+      expect(response, isNotNull);
+    },
+  );
 }

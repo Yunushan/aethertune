@@ -421,6 +421,11 @@ void main() {
     expect(playlistFolder.displaySubtitle, '3 tracks');
     expect(playlistFolder.artUri, Uri.parse('https://example.test/favorites.jpg'));
 
+    await engine.playFromMediaId(playlistFolder.id);
+    expect(selectedTrack, same(tracks.last));
+    expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
+    expect(selectedQueueIndex, 0);
+
     final playlistTracks = await engine.getChildren(playlistFolder.id);
     expect(
       playlistTracks.map((item) => item.title),

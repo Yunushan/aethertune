@@ -7,7 +7,15 @@ import 'package:dbus/dbus.dart';
 import 'metadata.dart';
 import 'mpris.dart';
 
+export 'mpris.dart' show MprisPlaylist;
+
+/// Publishes the app-owned playlist catalog when the Linux MPRIS adapter runs.
+void setMprisPlaylists(Iterable<MprisPlaylist> playlists) {
+  AudioServiceMpris._activeInstance?.setPlaylists(playlists);
+}
+
 class AudioServiceMpris extends AudioServicePlatform {
+  static AudioServiceMpris? _activeInstance;
   late final DBusClient _dBusClient;
   late final OrgMprisMediaPlayer2 _mpris;
   AudioHandlerCallbacks? _handlerCallbacks;
@@ -72,6 +80,15 @@ class AudioServiceMpris extends AudioServicePlatform {
     });
   }
 
+  void _listenToPlaylistStream() {
+    _mpris.playlistStream.listen((mediaId) {
+      final callbacks = _handlerCallbacks;
+      if (callbacks != null) {
+        callbacks.playFromMediaId(PlayFromMediaIdRequest(mediaId: mediaId));
+      }
+    });
+  }
+
   final List<MediaItemMessage> _queue = <MediaItemMessage>[];
 
   static void registerWith() {
@@ -96,11 +113,13 @@ class AudioServiceMpris extends AudioServicePlatform {
     _listenToOpenUriStream();
     _listenToVolumeStream();
     _listenToTrackStream();
+    _listenToPlaylistStream();
 
     await _dBusClient.registerObject(_mpris);
     await _dBusClient.requestName(
         'org.mpris.MediaPlayer2.${request.config.androidNotificationChannelId}.instance$pid',
         flags: {DBusRequestNameFlag.doNotQueue});
+    _activeInstance = this;
   }
 
   @override
@@ -131,6 +150,10 @@ class AudioServiceMpris extends AudioServicePlatform {
         ),
       ),
     );
+  }
+
+  void setPlaylists(Iterable<MprisPlaylist> playlists) {
+    _mpris.setPlaylists(playlists);
   }
 
   @override
