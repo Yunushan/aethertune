@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/domain/track.dart';
@@ -34,6 +36,37 @@ void main() {
       () => parseTrackSkipSegments(
         '2:50-3:10 Ending',
         maximum: const Duration(minutes: 3),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('accepts bounded UTF-8 text skip-segment documents only', () {
+    expect(
+      decodeTrackSkipSegmentDocumentBytes(
+        utf8.encode('0:30-0:45 Intro'),
+        fileName: 'segments.TXT',
+      ),
+      '0:30-0:45 Intro',
+    );
+    expect(
+      () => decodeTrackSkipSegmentDocumentBytes(
+        utf8.encode('0:30-0:45 Intro'),
+        fileName: 'segments.json',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => decodeTrackSkipSegmentDocumentBytes(
+        List<int>.filled(trackSkipSegmentDocumentMaxBytes + 1, 0),
+        fileName: 'segments.txt',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => decodeTrackSkipSegmentDocumentBytes(
+        <int>[0xff],
+        fileName: 'segments.txt',
       ),
       throwsA(isA<FormatException>()),
     );

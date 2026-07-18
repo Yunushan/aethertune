@@ -123,6 +123,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('now-playing-skip-segments-editor')));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('now-playing-skip-segments-import')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('now-playing-skip-segments-export')),
+      findsOneWidget,
+    );
     await tester.enterText(
       find.byKey(const Key('now-playing-skip-segments-input')),
       '0:30-0:45 Intro\n2:30-2:45 Credits',

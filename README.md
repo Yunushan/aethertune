@@ -54,7 +54,7 @@ The app is intentionally **provider-based**: the player, library, queue, cache, 
 
 Playback failures are handled locally: AetherTune skips to the next playable queue item by default, stops after every playable item in a looped queue has failed, and lets the listener disable that recovery in Options.
 
-Saved tracks can also contain listener-managed timestamp ranges that the player skips during normal playback. These ranges are edited in Now Playing, persist through backup and sync, and never require an external segment feed or telemetry; active A-B repeat takes precedence.
+Saved tracks can also contain listener-managed timestamp ranges that the player skips during normal playback. These ranges are edited in Now Playing, can be imported from or exported to bounded UTF-8 `.txt` files, persist through backup and sync, and never require an external segment feed or telemetry; active A-B repeat takes precedence.
 
 > Important: this repository does **not** include DRM bypass, paid-service cloning, credential stealing, private API scraping, or any code intended to violate a platform's terms. You can build legal source adapters through the provider interface.
 

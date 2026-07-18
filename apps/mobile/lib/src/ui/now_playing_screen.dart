@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -1923,6 +1925,85 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
     }
   }
 
+  Future<void> _importFile() async {
+    final file = await FilePicker.pickFile(
+      allowedExtensions: supportedTrackSkipSegmentDocumentExtensions,
+      dialogTitle: 'Import skip segments',
+      type: FileType.custom,
+    );
+    if (!mounted || file == null) {
+      return;
+    }
+
+    try {
+      final source = decodeTrackSkipSegmentDocumentBytes(
+        await file.readAsBytes(),
+        fileName: file.name,
+      );
+      final segments = parseTrackSkipSegments(
+        source,
+        maximum: widget.track.duration,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _controller.text = formatTrackSkipSegments(segments);
+        _errorText = null;
+      });
+    } on FormatException catch (error) {
+      if (mounted) {
+        setState(() => _errorText = error.message);
+      }
+    } on Exception catch (error) {
+      if (mounted) {
+        setState(() => _errorText = 'Could not import skip segments: $error');
+      }
+    }
+  }
+
+  Future<void> _exportFile() async {
+    try {
+      final segments = parseTrackSkipSegments(
+        _controller.text,
+        maximum: widget.track.duration,
+      );
+      final contents = formatTrackSkipSegments(segments);
+      final bytes = Uint8List.fromList(utf8.encode(contents));
+      final outputPath = await FilePicker.saveFile(
+        allowedExtensions: supportedTrackSkipSegmentDocumentExtensions,
+        bytes: bytes,
+        dialogTitle: 'Export skip segments',
+        fileName: 'aethertune-skip-segments.txt',
+        type: FileType.custom,
+      );
+      if (!mounted || outputPath == null || outputPath.isEmpty) {
+        return;
+      }
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Exported skip segments.')),
+      );
+    } on FormatException catch (error) {
+      if (mounted) {
+        setState(() => _errorText = error.message);
+      }
+    } on FileSystemException catch (error) {
+      if (mounted) {
+        setState(() => _errorText = 'Could not export skip segments: $error');
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _errorText = 'Could not export skip segments: $error');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1951,9 +2032,23 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
+        TextButton.icon(
+          key: const Key('now-playing-skip-segments-import'),
+          onPressed: _importFile,
+          icon: const Icon(Icons.file_open_outlined),
+          label: const Text('Import'),
+        ),
+        TextButton.icon(
+          key: const Key('now-playing-skip-segments-export'),
+          onPressed: _exportFile,
+          icon: const Icon(Icons.save_alt_outlined),
+          label: const Text('Export'),
+        ),
+        TextButton.icon(
+          key: const Key('now-playing-skip-segments-clear'),
           onPressed: _controller.clear,
-          child: const Text('Clear'),
+          icon: const Icon(Icons.clear),
+          label: const Text('Clear'),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

@@ -1,4 +1,34 @@
+import 'dart:convert';
+
 import 'track_chapter.dart';
+
+const trackSkipSegmentDocumentExtension = 'txt';
+const supportedTrackSkipSegmentDocumentExtensions = <String>[
+  trackSkipSegmentDocumentExtension,
+];
+const trackSkipSegmentDocumentMaxBytes = 64 * 1024;
+
+bool isSupportedTrackSkipSegmentDocumentName(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  return normalized.endsWith('.$trackSkipSegmentDocumentExtension');
+}
+
+String decodeTrackSkipSegmentDocumentBytes(
+  List<int> bytes, {
+  required String fileName,
+}) {
+  if (!isSupportedTrackSkipSegmentDocumentName(fileName)) {
+    throw const FormatException('Choose a .txt skip-segment file.');
+  }
+  if (bytes.length > trackSkipSegmentDocumentMaxBytes) {
+    throw const FormatException('Skip-segment files must be 64 KiB or smaller.');
+  }
+  try {
+    return utf8.decode(bytes, allowMalformed: false);
+  } on FormatException {
+    throw const FormatException('Skip-segment files must be valid UTF-8 text.');
+  }
+}
 
 final class TrackSkipSegment {
   static const minDuration = Duration(milliseconds: 500);
