@@ -1488,6 +1488,8 @@ FILE "../private.mp3" MP3
         'GENRE': 'Ambient',
         'REPLAYGAIN_TRACK_GAIN': '-5.40 dB',
         'REPLAYGAIN_ALBUM_GAIN': '-3.25 dB',
+        'REPLAYGAIN_TRACK_PEAK': '0.950000',
+        'REPLAYGAIN_ALBUM_PEAK': '1.100000',
         'RATING': '4',
         'LYRICS': 'First line\r\nSecond line',
       }),
@@ -1510,6 +1512,8 @@ FILE "../private.mp3" MP3
     expect(track.genre, 'Ambient');
     expect(track.replayGainTrackDb, -5.4);
     expect(track.replayGainAlbumDb, -3.25);
+    expect(track.replayGainTrackPeak, 0.95);
+    expect(track.replayGainAlbumPeak, 1.1);
     expect(track.rating, 4);
     expect(
       result.embeddedLyricsByTrackId[Track.stableLocalId(audioPath)],
