@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/library_store.dart';
 import '../data/podcast_transcript_loader.dart';
+import '../domain/track_lyrics.dart';
 import '../domain/track.dart';
 import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
@@ -237,12 +238,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Future<void> _openPodcastTranscript(Uri transcriptUri) async {
+    final player = context.read<PlayerController>();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => _PodcastTranscriptSheet(
         transcriptUri: transcriptUri,
         loader: widget.podcastTranscriptLoader,
+        player: player,
       ),
     );
   }
@@ -460,10 +463,12 @@ class _PodcastTranscriptSheet extends StatefulWidget {
   const _PodcastTranscriptSheet({
     required this.transcriptUri,
     required this.loader,
+    required this.player,
   });
 
   final Uri transcriptUri;
   final PodcastTranscriptLoader loader;
+  final PlayerController player;
 
   @override
   State<_PodcastTranscriptSheet> createState() =>
@@ -556,6 +561,38 @@ class _PodcastTranscriptSheetState extends State<_PodcastTranscriptSheet> {
                     );
                   }
                   final transcript = snapshot.requireData;
+                  final timedLines = transcript.timedLines;
+                  if (timedLines.isNotEmpty) {
+                    return StreamBuilder<Duration>(
+                      stream: widget.player.positionStream,
+                      initialData: widget.player.position,
+                      builder: (context, positionSnapshot) {
+                        final activeIndex = syncedLyricLineIndexAt(
+                          timedLines,
+                          positionSnapshot.data ?? Duration.zero,
+                        );
+                        return ListView.builder(
+                          key: const Key('podcast-transcript-reader'),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: timedLines.length,
+                          itemBuilder: (context, index) {
+                            final line = timedLines[index];
+                            return ListTile(
+                              key: Key(
+                                'podcast-transcript-cue-${line.timestamp.inMilliseconds}',
+                              ),
+                              selected: index == activeIndex,
+                              leading: Text(
+                                formatSyncedLyricTimestamp(line.timestamp),
+                              ),
+                              title: Text(line.text),
+                              onTap: () => widget.player.seek(line.timestamp),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  }
                   return SingleChildScrollView(
                     key: const Key('podcast-transcript-reader'),
                     padding: const EdgeInsets.all(20),

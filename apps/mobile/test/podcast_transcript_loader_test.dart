@@ -21,6 +21,8 @@ Closing words
 
     expect(transcript.contentType, 'text/vtt');
     expect(transcript.displayText, 'Opening words\n\nClosing words');
+    expect(transcript.timedLines, hasLength(2));
+    expect(transcript.timedLines.first.timestamp, const Duration(seconds: 1));
   });
 
   test('renders SRT and TTML transcript cues as readable text', () {

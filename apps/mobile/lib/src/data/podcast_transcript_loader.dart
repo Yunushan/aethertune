@@ -19,10 +19,12 @@ final class PodcastTranscriptDocument {
   final String text;
   final String? contentType;
 
+  List<SyncedLyricLine> get timedLines => parseSyncedLyricLines(text);
+
   String get displayText {
-    final timedLines = parseSyncedLyricLines(text);
-    if (timedLines.isNotEmpty) {
-      return timedLines.map((line) => line.text).join('\n\n');
+    final lines = timedLines;
+    if (lines.isNotEmpty) {
+      return lines.map((line) => line.text).join('\n\n');
     }
     return text;
   }

@@ -370,7 +370,12 @@ void main() {
                 throw const FormatException('Malformed transcript');
               }
               return const PodcastTranscriptDocument(
-                text: 'Recovered transcript',
+                text: '''
+WEBVTT
+
+00:00:03.000 --> 00:00:05.000
+Recovered transcript
+''',
               );
             },
           ),
@@ -388,6 +393,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(requests, 2);
     expect(find.text('Recovered transcript'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('podcast-transcript-cue-3000')),
+    );
+    await tester.pump();
+    expect(engine.positionValue, const Duration(seconds: 3));
   });
 
   testWidgets('compact player fits a phone and opens the full player', (
