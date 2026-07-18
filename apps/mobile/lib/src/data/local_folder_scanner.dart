@@ -403,6 +403,8 @@ final class _LocalFolderScanState {
         return _m4aMetadataForFile(path);
       case '.wav':
         return _wavMetadataForFile(path);
+      case '.aiff':
+        return _aiffMetadataForFile(path);
     }
 
     return null;
@@ -1309,6 +1311,79 @@ final class _LocalFolderScanState {
         _firstVorbisComment(comments, 'UNSYNCEDLYRICS');
   }
 
+  Future<_LocalFileMetadata?> _aiffMetadataForFile(String path) async {
+    try {
+      final file = File(path);
+      final length = await file.length();
+      if (length < 12) {
+        return null;
+      }
+
+      final access = await file.open();
+      try {
+        final header = await access.read(12);
+        if (header.length != 12 ||
+            !_matchesAscii(header.sublist(0, 4), 'FORM') ||
+            (!_matchesAscii(header.sublist(8, 12), 'AIFF') &&
+                !_matchesAscii(header.sublist(8, 12), 'AIFC'))) {
+          return null;
+        }
+
+        final tags = <String, String>{};
+        var chunkCount = 0;
+        while (chunkCount < _maxAiffChunks) {
+          final chunkStart = await access.position();
+          if (chunkStart + 8 > length) {
+            break;
+          }
+
+          chunkCount += 1;
+          final chunkHeader = await access.read(8);
+          if (chunkHeader.length != 8) {
+            break;
+          }
+          final chunkId = String.fromCharCodes(chunkHeader.sublist(0, 4));
+          final chunkLength = _uint32(chunkHeader, 4);
+          final payloadStart = await access.position();
+          final payloadEnd = payloadStart + chunkLength;
+          if (payloadEnd > length) {
+            break;
+          }
+
+          final fieldKey = _aiffTextFieldKey(chunkId);
+          if (fieldKey != null && chunkLength <= _maxAiffTextBytes) {
+            final payload = await access.read(chunkLength);
+            if (payload.length != chunkLength) {
+              break;
+            }
+            final value = _normalizeEmbeddedText(
+              latin1.decode(payload, allowInvalid: true),
+            );
+            if (value.isNotEmpty) {
+              tags.putIfAbsent(fieldKey, () => value);
+            }
+          } else {
+            await access.setPosition(payloadEnd);
+          }
+
+          final nextOffset = payloadEnd + (chunkLength.isOdd ? 1 : 0);
+          await access.setPosition(nextOffset > length ? length : nextOffset);
+        }
+
+        final title = tags['title'] ?? '';
+        final artist = tags['artist'] ?? '';
+        if (title.isEmpty && artist.isEmpty) {
+          return null;
+        }
+        return _LocalFileMetadata(title: title, artist: artist);
+      } finally {
+        await access.close();
+      }
+    } on FileSystemException {
+      return null;
+    }
+  }
+
   int? _vorbisRating(String? value) {
     final parsed = double.tryParse(value?.trim() ?? '');
     if (parsed == null || !parsed.isFinite || parsed < 0 || parsed > 100) {
@@ -1614,6 +1689,14 @@ final class _LocalFolderScanState {
       'ICRD' => 'date',
       'ITRK' => 'trackNumber',
       'IGNR' => 'genre',
+      _ => null,
+    };
+  }
+
+  String? _aiffTextFieldKey(String chunkId) {
+    return switch (chunkId) {
+      'NAME' => 'title',
+      'AUTH' => 'artist',
       _ => null,
     };
   }
@@ -2532,6 +2615,7 @@ const _maxFlacMetadataBytes = 1024 * 1024;
 const _maxOggMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
+const _maxAiffTextBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxEmbeddedLyricsBytes = 256 * 1024;
 const _maxCueSheetBytes = 256 * 1024;
@@ -2540,6 +2624,7 @@ const _maxId3v2SyncedLyricEvents = 4096;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
 const _maxWavChunks = 2048;
+const _maxAiffChunks = 2048;
 const _maxOggPages = 128;
 const _maxOggPackets = 8;
 const _maxOggPacketBytes = 512 * 1024;

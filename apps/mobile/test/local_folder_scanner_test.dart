@@ -844,6 +844,21 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.album, 'Tagged Album Only');
   });
 
+  test('prefers standard AIFF NAME and AUTH metadata', () async {
+    await File(p.join(root.path, '13 Filename Artist - Filename Title.aiff'))
+        .writeAsBytes(
+      _aiffWithTextTags(<String, String>{
+        'NAME': 'AIFF Title',
+        'AUTH': 'AIFF Artist',
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'AIFF Title');
+    expect(result.tracks.single.artist, 'AIFF Artist');
+  });
+
   test('extracts ID3v2 lyric-labelled comment frames only', () async {
     final lyricPath = p.join(root.path, 'comment-lyrics.mp3');
     final notePath = p.join(root.path, 'ordinary-comment.mp3');
@@ -1376,6 +1391,36 @@ List<int> _uint32LittleEndianSize(int size) {
     (size >> 8) & 0xff,
     (size >> 16) & 0xff,
     (size >> 24) & 0xff,
+  ];
+}
+
+List<int> _uint32BigEndianSize(int size) {
+  return <int>[
+    (size >> 24) & 0xff,
+    (size >> 16) & 0xff,
+    (size >> 8) & 0xff,
+    size & 0xff,
+  ];
+}
+
+List<int> _aiffWithTextTags(Map<String, String> tags) {
+  final chunks = <int>[];
+  for (final entry in tags.entries) {
+    final value = latin1.encode(entry.value);
+    chunks
+      ..addAll(entry.key.codeUnits)
+      ..addAll(_uint32BigEndianSize(value.length))
+      ..addAll(value);
+    if (value.length.isOdd) {
+      chunks.add(0);
+    }
+  }
+
+  final formPayload = <int>[...'AIFF'.codeUnits, ...chunks];
+  return <int>[
+    ...'FORM'.codeUnits,
+    ..._uint32BigEndianSize(formPayload.length),
+    ...formPayload,
   ];
 }
 
