@@ -551,6 +551,20 @@ void main() {
     expect(engine.crossfadeVolumeFor(tracks.last), closeTo(0.99763, 0.0001));
   });
 
+  test('limits ReplayGain normalization with the selected track peak', () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+
+    await controller.setVolume(0.8);
+    await controller.setLoudnessNormalizationEnabled(true);
+    await controller.playTrack(
+      _track('peaked', replayGainTrackDb: 6, replayGainTrackPeak: 2),
+    );
+
+    expect(engine.volumeValue, 0.5);
+  });
+
   test('persists skip intervals and clamps skip seeks to track bounds',
       () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -1263,6 +1277,8 @@ Track _track(
   String? streamUrl,
   double? replayGainTrackDb,
   double? replayGainAlbumDb,
+  double? replayGainTrackPeak,
+  double? replayGainAlbumPeak,
 }) {
   return Track(
     id: id,
@@ -1271,6 +1287,8 @@ Track _track(
     streamUrl: streamUrl,
     replayGainTrackDb: replayGainTrackDb,
     replayGainAlbumDb: replayGainAlbumDb,
+    replayGainTrackPeak: replayGainTrackPeak,
+    replayGainAlbumPeak: replayGainAlbumPeak,
   );
 }
 
