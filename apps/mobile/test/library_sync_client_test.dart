@@ -99,6 +99,35 @@ void main() {
     expect(result.updatedByDevice, 'Android phone');
   });
 
+  test('redeems a recovery code without bearer authentication', () async {
+    Uri? uri;
+    Map<String, String>? capturedHeaders;
+    String? requestBody;
+
+    final token = await redeemLibrarySyncRecoveryCode(
+      _account(),
+      'ar_recovery_secret',
+      httpExecutor: (method, capturedUri, {required headers, String? body}) async {
+        expect(method, 'POST');
+        uri = capturedUri;
+        capturedHeaders = headers;
+        requestBody = body;
+        return const LibrarySyncHttpResponse(
+          statusCode: 201,
+          body: '{"token":"at_recovered_secret"}',
+        );
+      },
+    );
+
+    expect(uri, _account().recoveryEndpointUri);
+    expect(capturedHeaders?['authorization'], isNull);
+    expect(jsonDecode(requestBody!) as Map<String, dynamic>, <String, dynamic>{
+      'recoveryCode': 'ar_recovery_secret',
+      'deviceName': _account().deviceId,
+    });
+    expect(token, 'at_recovered_secret');
+  });
+
   test('fetches sync metadata without requesting a snapshot document', () async {
     Uri? uri;
     final client = LibrarySyncClient(
