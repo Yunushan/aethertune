@@ -26,6 +26,22 @@ void main() {
     expect(snapshot.currentTrack?.id, '1');
   });
 
+  test('restores the selected occurrence in a repeated local queue', () {
+    final snapshot = TrackQueueSnapshot.fromJson(<String, Object?>{
+      'currentTrackId': 'first',
+      'currentIndex': 2,
+      'tracks': <Map<String, Object?>>[
+        _track('first').toJson(),
+        _track('second').toJson(),
+        _track('first').toJson(),
+      ],
+    });
+
+    expect(snapshot.currentIndex, 2);
+    expect(snapshot.currentTrack, same(snapshot.tracks[2]));
+    expect(snapshot.toJson()['currentIndex'], 2);
+  });
+
   test('serializes bounded named queue collections with an active slot', () {
     final collection = SavedTrackQueueCollection(
       activeQueueId: 'focus',

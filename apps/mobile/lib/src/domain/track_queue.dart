@@ -4,14 +4,24 @@ class TrackQueueSnapshot {
   const TrackQueueSnapshot({
     required this.tracks,
     this.currentTrackId,
+    this.currentIndex,
     this.updatedAt,
   });
 
   final List<Track> tracks;
   final String? currentTrackId;
+  final int? currentIndex;
   final DateTime? updatedAt;
 
   Track? get currentTrack {
+    final currentIndex = this.currentIndex;
+    if (currentIndex != null &&
+        currentIndex >= 0 &&
+        currentIndex < tracks.length &&
+        (currentTrackId == null ||
+            tracks[currentIndex].id == currentTrackId)) {
+      return tracks[currentIndex];
+    }
     for (final track in tracks) {
       if (track.id == currentTrackId) {
         return track;
@@ -24,6 +34,7 @@ class TrackQueueSnapshot {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'currentTrackId': currentTrackId,
+      if (currentIndex != null) 'currentIndex': currentIndex,
       'updatedAt': updatedAt?.toIso8601String(),
       'tracks': tracks.map((track) => track.toJson()).toList(),
     };
@@ -31,14 +42,24 @@ class TrackQueueSnapshot {
 
   factory TrackQueueSnapshot.fromJson(Map<String, Object?> json) {
     final decodedTracks = json['tracks'] as List<dynamic>? ?? const <dynamic>[];
+    final tracks = decodedTracks
+        .whereType<Map>()
+        .map((item) => Track.fromJson(Map<String, Object?>.from(item)))
+        .toList(growable: false);
+    final currentTrackId = json['currentTrackId'] as String?;
+    final currentIndex = json['currentIndex'];
 
     return TrackQueueSnapshot(
-      currentTrackId: json['currentTrackId'] as String?,
+      currentTrackId: currentTrackId,
+      currentIndex: currentIndex is int &&
+              currentIndex >= 0 &&
+              currentIndex < tracks.length &&
+              (currentTrackId == null ||
+                  tracks[currentIndex].id == currentTrackId)
+          ? currentIndex
+          : null,
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
-      tracks: decodedTracks
-          .whereType<Map>()
-          .map((item) => Track.fromJson(Map<String, Object?>.from(item)))
-          .toList(growable: false),
+      tracks: tracks,
     );
   }
 }

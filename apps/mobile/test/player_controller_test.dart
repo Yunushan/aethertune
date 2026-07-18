@@ -951,6 +951,31 @@ void main() {
     expect(restored.current?.id, '3');
   });
 
+  test('persists the selected repeated occurrence in a saved queue', () async {
+    final controller = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(controller.dispose);
+    final first = _track('first');
+    final second = _track('second');
+    await controller.playTrack(
+      first,
+      queue: <Track>[first, second, first],
+      queueIndex: 2,
+    );
+    expect(await controller.createSavedQueue('Later'), isNotNull);
+
+    final restored = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(restored.dispose);
+    await restored.loadPersistedQueue();
+
+    expect(restored.queue.map((track) => track.id), <String>[
+      'first',
+      'second',
+      'first',
+    ]);
+    expect(restored.current?.id, 'first');
+    expect(restored.currentQueueIndex, 2);
+  });
+
   test(
     'resolves credentialed queues after restart without persisting secrets',
     () async {

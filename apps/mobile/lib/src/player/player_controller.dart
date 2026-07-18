@@ -1908,6 +1908,7 @@ class PlayerController extends ChangeNotifier {
     final snapshot = TrackQueueSnapshot(
       tracks: _queue,
       currentTrackId: _current?.id,
+      currentIndex: _currentQueueIndex,
       updatedAt: _queueUpdatedAt,
     );
     await prefs.setString(_queueSnapshotKey, jsonEncode(snapshot.toJson()));
@@ -2077,6 +2078,7 @@ class PlayerController extends ChangeNotifier {
     return TrackQueueSnapshot(
       tracks: List<Track>.from(_queue),
       currentTrackId: _current?.id,
+      currentIndex: _currentQueueIndex,
       updatedAt: _queueUpdatedAt,
     );
   }
@@ -2087,6 +2089,10 @@ class PlayerController extends ChangeNotifier {
       ..clear()
       ..addAll(snapshot.tracks);
     _current = snapshot.currentTrack;
+    _currentQueueIndex = snapshot.currentIndex ??
+        (_current == null
+            ? null
+            : _queue.indexWhere((track) => track.id == _current!.id));
     _queueUpdatedAt = snapshot.updatedAt;
     _loadedTrackId = null;
     _loadedPlaybackQueue.clear();
