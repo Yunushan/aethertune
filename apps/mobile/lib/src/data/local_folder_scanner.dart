@@ -53,6 +53,7 @@ final class _LocalFileMetadata {
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
     this.embeddedLyrics,
+    this.rating,
   });
 
   final String title;
@@ -66,6 +67,7 @@ final class _LocalFileMetadata {
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
   final String? embeddedLyrics;
+  final int? rating;
 }
 
 final class _ScannedLocalTrack {
@@ -228,6 +230,7 @@ final class _LocalFolderScanState {
         contentHash: contentHash,
         replayGainTrackDb: metadata.replayGainTrackDb,
         replayGainAlbumDb: metadata.replayGainAlbumDb,
+        rating: metadata.rating ?? 0,
         sourceId: 'local',
         addedAt: importedAt,
       ),
@@ -329,6 +332,7 @@ final class _LocalFolderScanState {
       replayGainTrackDb: embeddedMetadata.replayGainTrackDb,
       replayGainAlbumDb: embeddedMetadata.replayGainAlbumDb,
       embeddedLyrics: embeddedMetadata.embeddedLyrics,
+      rating: embeddedMetadata.rating,
     );
   }
 
@@ -563,6 +567,7 @@ final class _LocalFolderScanState {
           replayGainTrackDb: metadata?.replayGainTrackDb,
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
           embeddedLyrics: embeddedLyrics,
+          rating: metadata?.rating,
         );
       } finally {
         await access.close();
@@ -740,7 +745,8 @@ final class _LocalFolderScanState {
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
         tagData.replayGainAlbumDb == null &&
-        tagData.embeddedLyrics == null) {
+        tagData.embeddedLyrics == null &&
+        tagData.rating == null) {
       return null;
     }
 
@@ -761,7 +767,8 @@ final class _LocalFolderScanState {
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
         tagData.replayGainAlbumDb == null &&
-        tagData.embeddedLyrics == null) {
+        tagData.embeddedLyrics == null &&
+        tagData.rating == null) {
       return null;
     }
 
@@ -779,6 +786,7 @@ final class _LocalFolderScanState {
       replayGainTrackDb: tagData.replayGainTrackDb,
       replayGainAlbumDb: tagData.replayGainAlbumDb,
       embeddedLyrics: tagData.embeddedLyrics,
+      rating: tagData.rating,
     );
   }
 
@@ -791,6 +799,7 @@ final class _LocalFolderScanState {
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
     String? embeddedLyrics;
+    int? rating;
     var offset = 0;
     while (offset + 10 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
@@ -836,6 +845,10 @@ final class _LocalFolderScanState {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'POPM' && rating == null) {
+        rating = _id3v2PopularimeterRating(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
@@ -847,6 +860,7 @@ final class _LocalFolderScanState {
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
       embeddedLyrics: embeddedLyrics,
+      rating: rating,
     );
   }
 
@@ -856,6 +870,7 @@ final class _LocalFolderScanState {
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
     String? embeddedLyrics;
+    int? rating;
     var offset = 0;
     while (offset + 6 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(3));
@@ -899,6 +914,10 @@ final class _LocalFolderScanState {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'POP' && rating == null) {
+        rating = _id3v2PopularimeterRating(
+          bytes.sublist(offset, offset + frameSize),
+        );
       }
 
       offset += frameSize;
@@ -910,6 +929,7 @@ final class _LocalFolderScanState {
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
       embeddedLyrics: embeddedLyrics,
+      rating: rating,
     );
   }
 
@@ -956,6 +976,7 @@ final class _LocalFolderScanState {
       replayGainTrackDb: metadata?.replayGainTrackDb,
       replayGainAlbumDb: metadata?.replayGainAlbumDb,
       embeddedLyrics: embeddedLyrics,
+      rating: metadata?.rating,
     );
   }
 
@@ -1039,6 +1060,7 @@ final class _LocalFolderScanState {
     final replayGainAlbumDb = parseReplayGainDb(
       _firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN'),
     );
+    final rating = _vorbisRating(_firstVorbisComment(comments, 'RATING'));
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
@@ -1047,7 +1069,8 @@ final class _LocalFolderScanState {
         trackNumber == null &&
         (genre == null || genre.isEmpty) &&
         replayGainTrackDb == null &&
-        replayGainAlbumDb == null) {
+        replayGainAlbumDb == null &&
+        rating == null) {
       return null;
     }
 
@@ -1063,12 +1086,23 @@ final class _LocalFolderScanState {
       genre: genre == null || genre.isEmpty ? null : genre,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      rating: rating,
     );
   }
 
   String? _vorbisCommentLyrics(Map<String, List<String>> comments) {
     return _firstVorbisComment(comments, 'LYRICS') ??
         _firstVorbisComment(comments, 'UNSYNCEDLYRICS');
+  }
+
+  int? _vorbisRating(String? value) {
+    final parsed = double.tryParse(value?.trim() ?? '');
+    if (parsed == null || !parsed.isFinite || parsed < 0 || parsed > 100) {
+      return null;
+    }
+
+    final normalized = parsed <= 5 ? parsed : parsed / 20;
+    return normalized.round().clamp(0, 5).toInt();
   }
 
   bool _isVorbisLyricsKey(String key) =>
@@ -1449,6 +1483,31 @@ final class _LocalFolderScanState {
         encoding,
       ),
     );
+  }
+
+  int? _id3v2PopularimeterRating(List<int> bytes) {
+    final emailEnd = bytes.indexOf(0);
+    if (emailEnd < 0 || emailEnd + 1 >= bytes.length) {
+      return null;
+    }
+
+    final value = bytes[emailEnd + 1];
+    if (value == 0) {
+      return 0;
+    }
+    if (value <= 31) {
+      return 1;
+    }
+    if (value <= 95) {
+      return 2;
+    }
+    if (value <= 159) {
+      return 3;
+    }
+    if (value <= 223) {
+      return 4;
+    }
+    return 5;
   }
 
   String _id3v2DecodedText(List<int> payload, int encoding) {
@@ -2155,6 +2214,7 @@ final class _Id3v2TagData {
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
     this.embeddedLyrics,
+    this.rating,
   });
 
   final Map<String, String> textFrames;
@@ -2162,6 +2222,7 @@ final class _Id3v2TagData {
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
   final String? embeddedLyrics;
+  final int? rating;
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;

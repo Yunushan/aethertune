@@ -240,6 +240,32 @@ Timed sidecar
     expect(result.tracks.single.genre, 'Dream Pop');
   });
 
+  test('imports ID3 POPM and Vorbis embedded ratings', () async {
+    await File(p.join(root.path, 'popm.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(popularimeterRating: 196),
+      1,
+    ]);
+    await File(p.join(root.path, 'five-stars.flac')).writeAsBytes(
+      _flacWithVorbisComments(<String, List<String>>{
+        'RATING': <String>['100'],
+      }),
+    );
+    await File(p.join(root.path, 'four-stars.ogg')).writeAsBytes(
+      _oggWithVorbisComments(<String, List<String>>{
+        'RATING': <String>['4'],
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final ratingsByTitle = <String, int>{
+      for (final track in result.tracks) track.title: track.rating,
+    };
+
+    expect(ratingsByTitle['popm'], 4);
+    expect(ratingsByTitle['five-stars'], 5);
+    expect(ratingsByTitle['four-stars'], 4);
+  });
+
   test('reads album artist year and track number across local tag formats',
       () async {
     await File(p.join(root.path, 'mp3.mp3')).writeAsBytes(<int>[
@@ -821,6 +847,7 @@ List<int> _id3v23Tag({
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
   String unsynchronizedLyrics = '',
+  int? popularimeterRating,
   int encoding = _id3v2EncodingUtf8,
 }) {
   final frames = <int>[
@@ -849,6 +876,8 @@ List<int> _id3v23Tag({
       ),
     if (unsynchronizedLyrics.isNotEmpty)
       ..._id3v23UnsynchronizedLyricsFrame(unsynchronizedLyrics, encoding),
+    if (popularimeterRating != null)
+      ..._id3v23PopularimeterFrame(popularimeterRating),
   ];
 
   return <int>[
@@ -860,6 +889,25 @@ List<int> _id3v23Tag({
     0x00,
     ..._id3v2SynchsafeSize(frames.length),
     ...frames,
+  ];
+}
+
+List<int> _id3v23PopularimeterFrame(int rating) {
+  final payload = <int>[
+    ...'aethertune@example.test'.codeUnits,
+    0,
+    rating,
+    0,
+    0,
+    0,
+    0,
+  ];
+  return <int>[
+    ...'POPM'.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
   ];
 }
 
