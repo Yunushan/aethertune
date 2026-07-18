@@ -78,6 +78,7 @@ bool _isSupportedM4aContainerPath(String path) {
   final normalized = path.trim().toLowerCase();
   return normalized.endsWith('.m4a') ||
       normalized.endsWith('.m4b') ||
+      normalized.endsWith('.m4r') ||
       normalized.endsWith('.alac');
 }
 

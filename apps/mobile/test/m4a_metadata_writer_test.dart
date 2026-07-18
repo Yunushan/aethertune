@@ -76,6 +76,31 @@ void main() {
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
+  test('writes M4R metadata that the scanner reads', () async {
+    final file = File('${temporaryDirectory.path}/ringtone.m4r');
+    await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+
+    await const M4aMetadataWriter().write(
+      path: file.path,
+      title: 'Ringtone Title',
+      artist: 'Ringtone Artist',
+      album: 'Ringtones',
+      genre: 'Electronic',
+    );
+
+    final result = await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+      importedAt: DateTime.utc(2026, 1, 1),
+    );
+    final track = result.tracks.single;
+
+    expect(track.title, 'Ringtone Title');
+    expect(track.artist, 'Ringtone Artist');
+    expect(track.album, 'Ringtones');
+    expect(track.genre, 'Electronic');
+    expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
+  });
+
   test('writes ALAC-container metadata that the scanner reads', () async {
     final file = File('${temporaryDirectory.path}/lossless.alac');
     await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));

@@ -18,6 +18,7 @@ const supportedLocalAudioExtensions = <String>{
   '.flac',
   '.m4a',
   '.m4b',
+  '.m4r',
   '.mp3',
   '.oga',
   '.ogg',
@@ -410,6 +411,7 @@ final class _LocalFolderScanState {
         return _oggMetadataForFile(path);
       case '.m4a':
       case '.m4b':
+      case '.m4r':
       case '.alac':
         return _m4aMetadataForFile(path);
       case '.wav':
