@@ -731,6 +731,49 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.genre, 'Audiobook');
   });
 
+  test('reads bounded embedded M4B chapter lists', () async {
+    await File(p.join(root.path, 'chapters.m4b')).writeAsBytes(
+      _m4aWithMetadata(
+        title: 'Audiobook',
+        chapters: const <_M4aChapter>[
+          _M4aChapter(Duration.zero, 'Opening'),
+          _M4aChapter(Duration(minutes: 12, seconds: 30), 'Part One'),
+        ],
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.chapters, hasLength(2));
+    expect(result.tracks.single.chapters[0].start, Duration.zero);
+    expect(result.tracks.single.chapters[0].title, 'Opening');
+    expect(
+      result.tracks.single.chapters[1].start,
+      const Duration(minutes: 12, seconds: 30),
+    );
+    expect(result.tracks.single.chapters[1].title, 'Part One');
+  });
+
+  test('ignores malformed embedded M4B chapter lists', () async {
+    await File(p.join(root.path, 'broken-chapters.m4b')).writeAsBytes(<int>[
+      ..._mp4Atom('ftyp', 'M4A '.codeUnits),
+      ..._mp4Atom(
+        'moov',
+        _mp4Atom(
+          'udta',
+          _mp4Atom('chpl', <int>[0, 0, 0, 0, 1, 0, 0, 0]),
+        ),
+      ),
+      ..._mp4Atom('mdat', <int>[0, 1, 2]),
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks, hasLength(1));
+    expect(result.tracks.single.title, 'broken-chapters');
+    expect(result.tracks.single.chapters, isEmpty);
+  });
+
   test('extracts M4A cover artwork atoms', () async {
     await File(p.join(root.path, 'cover.m4a')).writeAsBytes(
       _m4aWithMetadata(
@@ -1302,6 +1345,19 @@ List<int> _uint32Size(int size) {
   ];
 }
 
+List<int> _uint64Size(int value) {
+  return <int>[
+    (value >> 56) & 0xff,
+    (value >> 48) & 0xff,
+    (value >> 40) & 0xff,
+    (value >> 32) & 0xff,
+    (value >> 24) & 0xff,
+    (value >> 16) & 0xff,
+    (value >> 8) & 0xff,
+    value & 0xff,
+  ];
+}
+
 const _id3v2EncodingUtf8 = 3;
 const _id3v2EncodingUtf16 = 1;
 
@@ -1542,6 +1598,7 @@ List<int> _m4aWithMetadata({
   List<int>? artworkBytes,
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
+  List<_M4aChapter> chapters = const <_M4aChapter>[],
 }) {
   final items = <int>[
     if (title.isNotEmpty) ..._m4aTextItem(_m4aTitleAtomType, title),
@@ -1565,7 +1622,13 @@ List<int> _m4aWithMetadata({
   ];
   final ilst = _mp4Atom('ilst', items);
   final meta = _mp4Atom('meta', <int>[0, 0, 0, 0, ...ilst]);
-  final udta = _mp4Atom('udta', meta);
+  final udta = _mp4Atom(
+    'udta',
+    <int>[
+      ...meta,
+      if (chapters.isNotEmpty) ..._m4aChapterList(chapters),
+    ],
+  );
   final moov = _mp4Atom('moov', udta);
   final ftyp = _mp4Atom('ftyp', 'M4A '.codeUnits);
 
@@ -1574,6 +1637,21 @@ List<int> _m4aWithMetadata({
     ...moov,
     ..._mp4Atom('mdat', <int>[0, 1, 2]),
   ];
+}
+
+List<int> _m4aChapterList(List<_M4aChapter> chapters) {
+  final payload = <int>[0, 0, 0, 0, chapters.length];
+  for (final chapter in chapters) {
+    final title = utf8.encode(chapter.title);
+    if (title.length > 255) {
+      throw ArgumentError.value(chapter, 'chapters', 'Chapter title is too long.');
+    }
+    payload
+      ..addAll(_uint64Size(chapter.start.inMicroseconds * 10))
+      ..add(title.length)
+      ..addAll(title);
+  }
+  return _mp4Atom('chpl', payload);
 }
 
 List<int> _m4aTextItem(List<int> atomType, String value) {
@@ -1683,6 +1761,13 @@ const _m4aAlbumArtistAtomType = <int>[0x61, 0x41, 0x52, 0x54];
 const _m4aDateAtomType = <int>[0xa9, 0x64, 0x61, 0x79];
 const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
 const _m4aLyricsAtomType = <int>[0xa9, 0x6c, 0x79, 0x72];
+
+final class _M4aChapter {
+  const _M4aChapter(this.start, this.title);
+
+  final Duration start;
+  final String title;
+}
 
 const _tinyPngBytes = <int>[
   0x89,

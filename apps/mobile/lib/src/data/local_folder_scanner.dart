@@ -60,6 +60,7 @@ final class _LocalFileMetadata {
     this.replayGainAlbumDb,
     this.embeddedLyrics,
     this.rating,
+    this.chapters,
   });
 
   final String title;
@@ -74,6 +75,7 @@ final class _LocalFileMetadata {
   final double? replayGainAlbumDb;
   final String? embeddedLyrics;
   final int? rating;
+  final List<TrackChapter>? chapters;
 }
 
 final class _ScannedLocalTrack {
@@ -254,6 +256,7 @@ final class _LocalFolderScanState {
         replayGainTrackDb: metadata.replayGainTrackDb,
         replayGainAlbumDb: metadata.replayGainAlbumDb,
         rating: metadata.rating ?? 0,
+        chapters: metadata.chapters,
         sourceId: 'local',
         addedAt: importedAt,
       ),
@@ -356,6 +359,7 @@ final class _LocalFolderScanState {
       replayGainAlbumDb: embeddedMetadata.replayGainAlbumDb,
       embeddedLyrics: embeddedMetadata.embeddedLyrics,
       rating: embeddedMetadata.rating,
+      chapters: embeddedMetadata.chapters,
     );
   }
 
@@ -1524,25 +1528,21 @@ final class _LocalFolderScanState {
       return null;
     }
 
+    final chapters = _m4aChapters(udta);
     final meta = _mp4ChildPayload(udta, 'meta');
-    if (meta == null || meta.length <= 4) {
-      return null;
-    }
-
-    final ilst = _mp4ChildPayload(meta, 'ilst', startOffset: 4);
-    if (ilst == null) {
-      return null;
-    }
-
     final fields = <String, List<String>>{};
     Uri? artworkUri;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
     int? trackNumber;
-    for (final atom in _mp4Atoms(ilst)) {
+    final ilst = meta == null || meta.length <= 4
+        ? null
+        : _mp4ChildPayload(meta, 'ilst', startOffset: 4);
+    final metadataItems = ilst ?? const <int>[];
+    for (final atom in _mp4Atoms(metadataItems)) {
       if (_matchesAscii(atom.typeBytes, 'covr') && artworkUri == null) {
         artworkUri = _m4aDataAtomArtworkUri(
-          ilst,
+          metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
         );
@@ -1551,13 +1551,13 @@ final class _LocalFolderScanState {
 
       if (_matchesAscii(atom.typeBytes, '----') && replayGainTrackDb == null) {
         replayGainTrackDb = _m4aFreeformReplayGain(
-          ilst,
+          metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
           'REPLAYGAIN_TRACK_GAIN',
         );
         replayGainAlbumDb ??= _m4aFreeformReplayGain(
-          ilst,
+          metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
           'REPLAYGAIN_ALBUM_GAIN',
@@ -1567,7 +1567,7 @@ final class _LocalFolderScanState {
 
       if (_matchesAscii(atom.typeBytes, '----') && replayGainAlbumDb == null) {
         replayGainAlbumDb = _m4aFreeformReplayGain(
-          ilst,
+          metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
           'REPLAYGAIN_ALBUM_GAIN',
@@ -1577,7 +1577,7 @@ final class _LocalFolderScanState {
 
       if (_matchesAscii(atom.typeBytes, 'trkn') && trackNumber == null) {
         trackNumber = _m4aDataAtomTrackNumber(
-          ilst,
+          metadataItems,
           atom.payloadOffset,
           atom.payloadEnd,
         );
@@ -1591,12 +1591,12 @@ final class _LocalFolderScanState {
 
       final value = key == 'lyrics'
           ? _m4aDataAtomRawText(
-              ilst,
+              metadataItems,
               atom.payloadOffset,
               atom.payloadEnd,
             )
           : _m4aDataAtomText(
-              ilst,
+              metadataItems,
               atom.payloadOffset,
               atom.payloadEnd,
             );
@@ -1626,7 +1626,8 @@ final class _LocalFolderScanState {
         artworkUri == null &&
         replayGainTrackDb == null &&
         replayGainAlbumDb == null &&
-        embeddedLyrics == null) {
+        embeddedLyrics == null &&
+        chapters.isEmpty) {
       return null;
     }
 
@@ -1644,7 +1645,62 @@ final class _LocalFolderScanState {
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
       embeddedLyrics: embeddedLyrics,
+      chapters: chapters,
     );
+  }
+
+  List<TrackChapter> _m4aChapters(List<int> udta) {
+    final payload = _mp4ChildPayload(udta, 'chpl');
+    if (payload == null || payload.length < 5) {
+      return const <TrackChapter>[];
+    }
+
+    var offset = 4;
+    final version = payload[0];
+    if (version != 0) {
+      if (offset + 4 >= payload.length) {
+        return const <TrackChapter>[];
+      }
+      offset += 4;
+    }
+    if (offset >= payload.length) {
+      return const <TrackChapter>[];
+    }
+
+    final chapterCount = payload[offset];
+    offset += 1;
+    final chapters = <TrackChapter>[];
+    for (var index = 0;
+        index < chapterCount && index < _maxMp4Chapters;
+        index += 1) {
+      if (offset + 9 > payload.length) {
+        return const <TrackChapter>[];
+      }
+
+      final timestamp = _uint64(payload, offset);
+      offset += 8;
+      final titleLength = payload[offset];
+      offset += 1;
+      if (offset + titleLength > payload.length) {
+        return const <TrackChapter>[];
+      }
+
+      final title = _normalizeEmbeddedText(
+        utf8.decode(
+          payload.sublist(offset, offset + titleLength),
+          allowMalformed: true,
+        ),
+      );
+      offset += titleLength;
+      chapters.add(
+        TrackChapter(
+          start: Duration(microseconds: timestamp ~/ _mp4ChapterTicksPerMicrosecond),
+          title: title.isEmpty ? 'Chapter ${index + 1}' : title,
+        ),
+      );
+    }
+
+    return TrackChapter.normalize(chapters);
   }
 
   _LocalFileMetadata? _wavMetadataFromInfoTags(Map<String, String> infoTags) {
@@ -2652,6 +2708,8 @@ const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxEmbeddedLyricsBytes = 256 * 1024;
 const _maxCueSheetBytes = 256 * 1024;
 const _maxCueSheetChapters = 500;
+const _maxMp4Chapters = 255;
+const _mp4ChapterTicksPerMicrosecond = 10;
 const _maxId3v2SyncedLyricEvents = 4096;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
