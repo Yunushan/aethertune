@@ -23,6 +23,7 @@ final class YouTubeDataMetadataProvider
     YouTubeDataSearchLoader? videosLoader,
     Uri? playlistItemsUri,
     YouTubeDataSearchLoader? playlistItemsLoader,
+    this.enrichSearchDurations = false,
   }) : _apiKey = _requireApiKey(apiKey),
        searchUri = searchUri ?? _defaultSearchUri,
        _searchLoader = searchLoader ?? _loadYouTubeDataJson,
@@ -48,6 +49,7 @@ final class YouTubeDataMetadataProvider
   final YouTubeDataSearchLoader _videosLoader;
   final Uri playlistItemsUri;
   final YouTubeDataSearchLoader _playlistItemsLoader;
+  final bool enrichSearchDurations;
 
   @override
   String get id => 'youtube-data-metadata';
@@ -72,7 +74,7 @@ final class YouTubeDataMetadataProvider
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
     networkDomains: <String>['www.googleapis.com', 'i.ytimg.com'],
     dataSent: <String>[
-      'search query or selected content region',
+      'search query, selected content region, or selected video IDs',
       'configured Google Cloud API key',
     ],
   );
@@ -97,7 +99,11 @@ final class YouTubeDataMetadataProvider
     }
 
     // Type-ahead has a smaller fixed upper bound than a submitted search.
-    final page = await searchPage(normalizedQuery, limit: limit.clamp(1, 10));
+    final page = await _searchPage(
+      normalizedQuery,
+      limit: limit.clamp(1, 10),
+      enrichDurations: false,
+    );
     final seen = <String>{};
     final suggestions = <MusicSourceSearchSuggestion>[];
     for (final track in page.tracks) {
@@ -125,6 +131,20 @@ final class YouTubeDataMetadataProvider
     String? cursor,
     int limit = 20,
   }) async {
+    return _searchPage(
+      query,
+      cursor: cursor,
+      limit: limit,
+      enrichDurations: enrichSearchDurations,
+    );
+  }
+
+  Future<MusicSourceSearchPage> _searchPage(
+    String query, {
+    String? cursor,
+    required int limit,
+    required bool enrichDurations,
+  }) async {
     if (limit <= 0) {
       throw ArgumentError.value(limit, 'limit', 'Must be positive.');
     }
@@ -142,8 +162,11 @@ final class YouTubeDataMetadataProvider
         ),
       ),
     );
+    final tracks = enrichDurations
+        ? await _enrichTracksWithVideoDurations(response.tracks)
+        : response.tracks;
     return MusicSourceSearchPage(
-      tracks: response.tracks,
+      tracks: tracks,
       nextCursor: response.nextPageToken,
       totalCount: response.totalResults,
     );
@@ -288,7 +311,7 @@ final class YouTubeDataMetadataProvider
       await _videosLoader(
         videosUri.replace(
           queryParameters: <String, String>{
-            'part': 'snippet',
+            'part': 'snippet,contentDetails',
             'chart': 'mostPopular',
             'videoCategoryId': '10',
             'regionCode': normalizedRegion,
@@ -321,6 +344,43 @@ final class YouTubeDataMetadataProvider
         if (cursor != null && cursor.isNotEmpty) 'pageToken': cursor,
       },
     );
+  }
+
+  Future<List<Track>> _enrichTracksWithVideoDurations(
+    List<Track> tracks,
+  ) async {
+    final ids = <String>{
+      for (final track in tracks)
+        if (track.externalId?.trim().isNotEmpty == true) track.externalId!.trim(),
+    };
+    if (ids.isEmpty) {
+      return tracks;
+    }
+    try {
+      final durations = parseYouTubeDataVideoDurations(
+        await _videosLoader(
+          videosUri.replace(
+            queryParameters: <String, String>{
+              'part': 'contentDetails',
+              'id': ids.join(','),
+              'key': _apiKey,
+            },
+          ),
+        ),
+      );
+      final enrichedTracks = <Track>[];
+      for (final track in tracks) {
+        final externalId = track.externalId;
+        final duration = externalId == null ? null : durations[externalId];
+        enrichedTracks.add(
+          duration == null ? track : track.copyWith(duration: duration),
+        );
+      }
+      return List<Track>.unmodifiable(enrichedTracks);
+    } on Object {
+      // Detail metadata is optional; keep the successful search page intact.
+      return tracks;
+    }
   }
 }
 
@@ -485,6 +545,27 @@ YouTubeDataPopularPage parseYouTubeDataPopularPage(String jsonText) {
   );
 }
 
+Map<String, Duration> parseYouTubeDataVideoDurations(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('YouTube video details response must be a map.');
+  }
+  final items = decoded['items'];
+  if (items is! List<dynamic>) {
+    return const <String, Duration>{};
+  }
+  final durations = <String, Duration>{};
+  for (final item in items.whereType<Map<dynamic, dynamic>>()) {
+    final id = _nonEmptyString(item['id']);
+    final contentDetails = item['contentDetails'] as Map<dynamic, dynamic>?;
+    final duration = parseYouTubeDataDuration(contentDetails?['duration']);
+    if (id != null && duration != null) {
+      durations[id] = duration;
+    }
+  }
+  return Map<String, Duration>.unmodifiable(durations);
+}
+
 YouTubeDataChannelPage parseYouTubeDataChannelPage(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
@@ -601,7 +682,12 @@ Track? _trackFromVideoItem(Map<String, Object?> json) {
   if (videoId == null || snippet == null) {
     return null;
   }
-  return _trackFromVideoMetadata(videoId, snippet);
+  final contentDetails = json['contentDetails'] as Map<dynamic, dynamic>?;
+  return _trackFromVideoMetadata(
+    videoId,
+    snippet,
+    duration: parseYouTubeDataDuration(contentDetails?['duration']),
+  );
 }
 
 YouTubeDataChannelVideo? _channelVideoFromSearchItem(
@@ -675,8 +761,9 @@ Track? _trackFromPlaylistItem(Map<String, Object?> json) {
 
 Track _trackFromVideoMetadata(
   String videoId,
-  Map<dynamic, dynamic> snippet,
-) {
+  Map<dynamic, dynamic> snippet, {
+  Duration? duration,
+}) {
   final title = _nonEmptyString(snippet['title']) ?? 'Untitled YouTube video';
   return Track(
     id: Track.stableLocalId('youtube-data-metadata|$videoId'),
@@ -684,10 +771,44 @@ Track _trackFromVideoMetadata(
     artist: _nonEmptyString(snippet['channelTitle']) ?? 'YouTube',
     album: 'YouTube',
     genre: 'YouTube metadata',
+    duration: duration ?? Duration.zero,
     artworkUri: _thumbnailUri(snippet['thumbnails']),
     sourceId: 'youtube-data-metadata',
     externalId: videoId,
   );
+}
+
+Duration? parseYouTubeDataDuration(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  final match = RegExp(
+    r'^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$',
+  ).firstMatch(normalized);
+  if (match == null ||
+      (match.group(1) == null &&
+          match.group(2) == null &&
+          match.group(3) == null &&
+          match.group(4) == null)) {
+    return null;
+  }
+  final days = int.tryParse(match.group(1) ?? '0');
+  final hours = int.tryParse(match.group(2) ?? '0');
+  final minutes = int.tryParse(match.group(3) ?? '0');
+  final seconds = double.tryParse(match.group(4) ?? '0');
+  if (days == null ||
+      hours == null ||
+      minutes == null ||
+      seconds == null ||
+      !seconds.isFinite) {
+    return null;
+  }
+  final microseconds = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) *
+      Duration.microsecondsPerSecond;
+  if (!microseconds.isFinite ||
+      microseconds < 0 ||
+      microseconds > const Duration(days: 366).inMicroseconds) {
+    return null;
+  }
+  return Duration(microseconds: microseconds.round());
 }
 
 String _normalizeRegionCode(String value) {

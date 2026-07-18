@@ -109,7 +109,10 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
 }
 
 YouTubeDataMetadataProvider _createProvider(String apiKey) {
-  return YouTubeDataMetadataProvider(apiKey: apiKey);
+  return YouTubeDataMetadataProvider(
+    apiKey: apiKey,
+    enrichSearchDurations: true,
+  );
 }
 
 String? _normalize(String? value) {

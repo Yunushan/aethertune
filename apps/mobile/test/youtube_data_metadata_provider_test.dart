@@ -50,6 +50,75 @@ void main() {
     expect(await provider.resolveStream(track), isNull);
   });
 
+  test('enriches submitted search metadata with official video durations',
+      () async {
+    Uri? detailsUri;
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      enrichSearchDurations: true,
+      searchLoader: (_) async => _searchJson,
+      videosLoader: (uri) async {
+        detailsUri = uri;
+        return '''
+          {"items":[
+            {"id":"video-1","contentDetails":{"duration":"PT1H2M3.5S"}},
+            {"id":"skip","contentDetails":{"duration":"P1M"}}
+          ]}
+        ''';
+      },
+    );
+
+    final page = await provider.searchPage('aether');
+
+    expect(detailsUri!.path, '/youtube/v3/videos');
+    expect(detailsUri!.queryParameters, <String, String>{
+      'part': 'contentDetails',
+      'id': 'video-1',
+      'key': 'project-key',
+    });
+    expect(
+      page.tracks.single.duration,
+      const Duration(hours: 1, minutes: 2, seconds: 3, milliseconds: 500),
+    );
+    expect(page.tracks.single.isPlayable, isFalse);
+  });
+
+  test('keeps search rows when optional duration metadata fails', () async {
+    var detailRequests = 0;
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      enrichSearchDurations: true,
+      searchLoader: (_) async => _searchJson,
+      videosLoader: (_) async {
+        detailRequests += 1;
+        throw StateError('temporary YouTube details failure');
+      },
+    );
+
+    final suggestions = await provider.suggest('aether');
+    final page = await provider.searchPage('aether');
+
+    expect(suggestions, hasLength(1));
+    expect(detailRequests, 1);
+    expect(page.tracks.single.duration, Duration.zero);
+  });
+
+  test('parses bounded YouTube ISO 8601 durations', () {
+    expect(
+      parseYouTubeDataDuration('P1DT2H3M4.25S'),
+      const Duration(
+        days: 1,
+        hours: 2,
+        minutes: 3,
+        seconds: 4,
+        milliseconds: 250,
+      ),
+    );
+    expect(parseYouTubeDataDuration('P1M'), isNull);
+    expect(parseYouTubeDataDuration('PT'), isNull);
+    expect(parseYouTubeDataDuration('P367D'), isNull);
+  });
+
   test('passes page tokens, skips malformed entries, and avoids empty queries',
       () async {
     final requests = <Uri>[];
@@ -90,6 +159,7 @@ void main() {
             "pageInfo": {"totalResults": 2},
             "items": [{
               "id": "chart-video",
+              "contentDetails": {"duration": "PT3M4S"},
               "snippet": {
                 "title": "Chart Signal",
                 "channelTitle": "Aether Channel",
@@ -109,7 +179,7 @@ void main() {
 
     expect(capturedUri!.path, '/youtube/v3/videos');
     expect(capturedUri!.queryParameters, <String, String>{
-      'part': 'snippet',
+      'part': 'snippet,contentDetails',
       'chart': 'mostPopular',
       'videoCategoryId': '10',
       'regionCode': 'TR',
@@ -121,6 +191,7 @@ void main() {
     expect(page.totalResults, 2);
     expect(page.tracks.single.title, 'Chart Signal');
     expect(page.tracks.single.externalId, 'chart-video');
+    expect(page.tracks.single.duration, const Duration(minutes: 3, seconds: 4));
     expect(page.tracks.single.isPlayable, isFalse);
     expect(await provider.resolveStream(page.tracks.single), isNull);
     await expectLater(
