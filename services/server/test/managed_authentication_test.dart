@@ -107,6 +107,49 @@ void main() {
     );
   });
 
+  test('recovery code remains digest-only and redeemable after restart',
+      () async {
+    final root = await Directory.systemTemp.createTemp('aethertune-recovery-');
+    addTearDown(() => root.delete(recursive: true));
+    final registry = await ManagedSyncAccountRegistry.open(
+      root,
+      tokenGenerator: () => 'at_recovered_after_restart',
+      recoveryCodeGenerator: () => 'ar_restart_secret',
+    );
+    await registry.issueToken(accountId: 'primary', deviceName: 'Lost phone');
+    final recovery = await registry.issueRecoveryCode(accountId: 'primary');
+    final registryFile = await root
+        .list()
+        .where(
+          (entity) => entity is File &&
+              RegExp(r'^registry-\d+\.json$')
+                  .hasMatch(entity.uri.pathSegments.last),
+        )
+        .cast<File>()
+        .single;
+    final stored = await registryFile.readAsString();
+
+    expect(stored, isNot(contains(recovery.code)));
+
+    final restarted = await ManagedSyncAccountRegistry.open(
+      root,
+      tokenGenerator: () => 'at_recovered_after_restart',
+    );
+    final redeemed = await restarted.redeemRecoveryCode(
+      code: recovery.code,
+      deviceName: 'Replacement phone',
+    );
+
+    expect(redeemed?.token, 'at_recovered_after_restart');
+    expect(
+      await restarted.redeemRecoveryCode(
+        code: recovery.code,
+        deviceName: 'Another phone',
+      ),
+      isNull,
+    );
+  });
+
   test('validates the managed token lifetime environment setting', () {
     expect(managedTokenLifetimeFromEnvironment(const <String, String>{}), isNull);
     expect(
