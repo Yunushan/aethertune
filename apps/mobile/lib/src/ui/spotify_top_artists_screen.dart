@@ -31,7 +31,8 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final offline = context.watch<LibraryStore>().offlineModeEnabled;
+    final library = context.watch<LibraryStore>();
+    final offline = library.offlineModeEnabled;
     return Scaffold(
       appBar: AppBar(title: const Text('Spotify top artists')),
       body: ListView(
@@ -81,6 +82,17 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
             ListTile(
               leading: TrackArtwork(artworkUri: artist.artworkUri),
               title: Text(artist.name),
+              trailing: IconButton(
+                tooltip: library.isArtistFollowed(artist.name)
+                    ? 'Unfollow local artist'
+                    : 'Follow local artist',
+                onPressed: () => unawaited(_setFollowed(artist, library)),
+                icon: Icon(
+                  library.isArtistFollowed(artist.name)
+                      ? Icons.person_remove_outlined
+                      : Icons.person_add_alt_1_outlined,
+                ),
+              ),
             ),
         ],
       ),
@@ -128,4 +140,22 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
     SpotifyTopTracksTimeRange.mediumTerm => '6 months',
     SpotifyTopTracksTimeRange.longTerm => '1 year',
   };
+
+  Future<void> _setFollowed(
+    SpotifyTopArtist artist,
+    LibraryStore library,
+  ) async {
+    final followed = !library.isArtistFollowed(artist.name);
+    await library.setArtistFollowed(artist.name, followed);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          followed
+              ? '${artist.name} followed in your local library.'
+              : '${artist.name} removed from local follows.',
+        ),
+      ),
+    );
+  }
 }
