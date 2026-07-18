@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
+import 'package:aethertune/src/domain/track_skip_segment.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/now_playing_screen.dart';
@@ -38,6 +39,13 @@ void main() {
             TrackChapter(
               start: const Duration(minutes: 1),
               title: 'Main section',
+            ),
+          ],
+          skipSegments: <TrackSkipSegment>[
+            TrackSkipSegment(
+              start: const Duration(seconds: 30),
+              end: const Duration(seconds: 45),
+              label: 'Intro',
             ),
           ],
         );
@@ -79,6 +87,7 @@ void main() {
       find.byKey(const Key('now-playing-chapter-marker-60000')),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('now-playing-skip-segments')), findsOneWidget);
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     final semantics = tester.ensureSemantics();
@@ -110,6 +119,19 @@ void main() {
     expect(
       library.tracks.first.chapters.map((chapter) => chapter.title),
       <String>['Opening', 'Deep dive'],
+    );
+
+    await tester.tap(find.byKey(const Key('now-playing-skip-segments-editor')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('now-playing-skip-segments-input')),
+      '0:30-0:45 Intro\n2:30-2:45 Credits',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(
+      library.tracks.first.skipSegments.map((segment) => segment.label),
+      <String>['Intro', 'Credits'],
     );
 
     final volumeSlider = tester.widget<Slider>(

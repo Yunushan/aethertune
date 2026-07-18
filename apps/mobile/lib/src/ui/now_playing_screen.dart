@@ -10,6 +10,7 @@ import '../data/library_store.dart';
 import '../domain/track.dart';
 import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
+import '../domain/track_skip_segment.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'platform_image_share.dart';
@@ -70,6 +71,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               onPressed: () => _showTrackChaptersEditor(savedCurrent),
               icon: const Icon(Icons.format_list_numbered),
             ),
+          if (savedCurrent != null)
+            IconButton(
+              key: const Key('now-playing-skip-segments-editor'),
+              tooltip: 'Edit skip segments',
+              onPressed: () => _showTrackSkipSegmentsEditor(savedCurrent),
+              icon: const Icon(Icons.fast_forward_outlined),
+            ),
           if (current != null)
             _TrackPlaybackSpeedMenu(
               player: player,
@@ -112,6 +120,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     canFavorite: savedTrack != null,
                     player: player,
                     chapters: savedTrack?.chapters ?? current.chapters,
+                    skipSegments:
+                        savedTrack?.skipSegments ?? current.skipSegments,
                     bookmarks: bookmarks,
                     onToggleFavorite: savedTrack == null
                         ? null
@@ -397,6 +407,29 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       ),
     );
   }
+
+  Future<void> _showTrackSkipSegmentsEditor(Track track) async {
+    final segments = await _promptForTrackSkipSegments(context, track);
+    if (!mounted || segments == null) {
+      return;
+    }
+    final updated = await context.read<LibraryStore>().updateTrackSkipSegments(
+      track.id,
+      segments,
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          updated == null
+              ? 'Track is no longer in the library.'
+              : 'Saved ${updated.skipSegments.length} skip segment(s).',
+        ),
+      ),
+    );
+  }
 }
 
 class _NowPlayingContent {
@@ -406,6 +439,7 @@ class _NowPlayingContent {
     required bool canFavorite,
     required PlayerController player,
     required List<TrackChapter> chapters,
+    required List<TrackSkipSegment> skipSegments,
     required List<TrackBookmark> bookmarks,
     required Future<void> Function()? onToggleFavorite,
     required Future<void> Function()? onAddBookmark,
@@ -432,6 +466,7 @@ class _NowPlayingContent {
           canFavorite: canFavorite,
           player: player,
           chapters: chapters,
+          skipSegments: skipSegments,
           bookmarks: bookmarks,
           onToggleFavorite: onToggleFavorite,
           onAddBookmark: onAddBookmark,
@@ -944,6 +979,7 @@ class _NowPlayingControls extends StatelessWidget {
     required this.canFavorite,
     required this.player,
     required this.chapters,
+    required this.skipSegments,
     required this.bookmarks,
     required this.onToggleFavorite,
     required this.onAddBookmark,
@@ -958,6 +994,7 @@ class _NowPlayingControls extends StatelessWidget {
   final bool canFavorite;
   final PlayerController player;
   final List<TrackChapter> chapters;
+  final List<TrackSkipSegment> skipSegments;
   final List<TrackBookmark> bookmarks;
   final Future<void> Function()? onToggleFavorite;
   final Future<void> Function()? onAddBookmark;
@@ -1053,6 +1090,24 @@ class _NowPlayingControls extends StatelessWidget {
           if (chapters.isNotEmpty) ...<Widget>[
             const SizedBox(height: 4),
             _ChapterMarkers(player: player, chapters: chapters),
+          ],
+          if (skipSegments.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            Semantics(
+              key: const Key('now-playing-skip-segments'),
+              label: '${skipSegments.length} automatic skip segments',
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Icon(Icons.fast_forward_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Auto-skip ${skipSegments.length} section(s)',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
+              ),
+            ),
           ],
           if (bookmarks.isNotEmpty) ...<Widget>[
             const SizedBox(height: 12),
@@ -1816,6 +1871,98 @@ Future<List<TrackChapter>?> _promptForTrackChapters(
     context: context,
     builder: (_) => _TrackChaptersDialog(track: track),
   );
+}
+
+Future<List<TrackSkipSegment>?> _promptForTrackSkipSegments(
+  BuildContext context,
+  Track track,
+) {
+  return showDialog<List<TrackSkipSegment>>(
+    context: context,
+    builder: (_) => _TrackSkipSegmentsDialog(track: track),
+  );
+}
+
+class _TrackSkipSegmentsDialog extends StatefulWidget {
+  const _TrackSkipSegmentsDialog({required this.track});
+
+  final Track track;
+
+  @override
+  State<_TrackSkipSegmentsDialog> createState() =>
+      _TrackSkipSegmentsDialogState();
+}
+
+class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: formatTrackSkipSegments(widget.track.skipSegments),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    try {
+      final segments = parseTrackSkipSegments(
+        _controller.text,
+        maximum: widget.track.duration,
+      );
+      Navigator.of(context).pop(segments);
+    } on FormatException catch (error) {
+      setState(() => _errorText = error.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Skip segments for ${widget.track.title}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          key: const Key('now-playing-skip-segments-input'),
+          controller: _controller,
+          autofocus: true,
+          minLines: 6,
+          maxLines: 12,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          decoration: InputDecoration(
+            labelText: 'Skip segments',
+            hintText: '0:30-0:45 Intro',
+            helperText: 'Start-end timestamps and optional label per line',
+            errorText: _errorText,
+          ),
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() => _errorText = null);
+            }
+          },
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _controller.clear,
+          child: const Text('Clear'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
+    );
+  }
 }
 
 class _TrackChaptersDialog extends StatefulWidget {

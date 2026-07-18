@@ -12,6 +12,7 @@ import 'package:aethertune/src/domain/offline_cache_entry.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
+import 'package:aethertune/src/domain/track_skip_segment.dart';
 
 void main() {
   setUp(() {
@@ -4445,6 +4446,50 @@ void main() {
       'First',
       'Second',
     ]);
+  });
+
+  test('persists validated local skip segments across library reloads', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track(
+        'skippable',
+        title: 'Skippable',
+        duration: const Duration(minutes: 3),
+      ),
+    ]);
+
+    final updated = await store.updateTrackSkipSegments(
+      'skippable',
+      <TrackSkipSegment>[
+        TrackSkipSegment(
+          start: const Duration(minutes: 2),
+          end: const Duration(minutes: 2, seconds: 15),
+          label: 'Credits',
+        ),
+        TrackSkipSegment(
+          start: const Duration(seconds: 15),
+          end: const Duration(seconds: 30),
+          label: 'Intro',
+        ),
+      ],
+    );
+
+    expect(updated!.skipSegments.map((segment) => segment.label), <String>[
+      'Intro',
+      'Credits',
+    ]);
+    expect(
+      await store.updateTrackSkipSegments('missing', <TrackSkipSegment>[]),
+      isNull,
+    );
+
+    final reloaded = LibraryStore();
+    await reloaded.load();
+    expect(
+      reloaded.tracks.single.skipSegments.map((segment) => segment.label),
+      <String>['Intro', 'Credits'],
+    );
   });
 
   test('builds smart playlists from library and playback state', () async {

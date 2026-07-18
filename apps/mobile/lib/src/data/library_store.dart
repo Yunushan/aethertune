@@ -20,6 +20,7 @@ import '../domain/track.dart';
 import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
+import '../domain/track_skip_segment.dart';
 
 enum LibrarySortMode { recentlyAdded, title, artist, album }
 
@@ -2561,6 +2562,32 @@ class LibraryStore extends ChangeNotifier {
       ),
     );
     if (_sameChapters(current.chapters, updated.chapters)) {
+      return updated;
+    }
+
+    _tracks[index] = updated;
+    await _save();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<Track?> updateTrackSkipSegments(
+    String id,
+    Iterable<TrackSkipSegment> segments,
+  ) async {
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final current = _tracks[index];
+    final updated = current.copyWith(
+      skipSegments: TrackSkipSegment.normalize(
+        segments,
+        maximum: current.duration,
+      ),
+    );
+    if (_sameSkipSegments(current.skipSegments, updated.skipSegments)) {
       return updated;
     }
 
@@ -9338,6 +9365,7 @@ class LibraryStore extends ChangeNotifier {
       externalId: scanned.externalId,
       isFavorite: current.isFavorite,
       chapters: current.chapters,
+      skipSegments: current.skipSegments,
       addedAt: current.addedAt,
     );
   }
@@ -9352,6 +9380,23 @@ class LibraryStore extends ChangeNotifier {
     for (var index = 0; index < left.length; index += 1) {
       if (left[index].start != right[index].start ||
           left[index].title != right[index].title) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _sameSkipSegments(
+    List<TrackSkipSegment> left,
+    List<TrackSkipSegment> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index].start != right[index].start ||
+          left[index].end != right[index].end ||
+          left[index].label != right[index].label) {
         return false;
       }
     }

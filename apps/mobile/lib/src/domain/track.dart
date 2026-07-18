@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'artwork_crop.dart';
 import 'replay_gain.dart';
 import 'track_chapter.dart';
+import 'track_skip_segment.dart';
 
 /// A provider-independent music item.
 ///
@@ -36,9 +37,14 @@ class Track {
     this.externalId,
     this.isFavorite = false,
     List<TrackChapter>? chapters,
+    List<TrackSkipSegment>? skipSegments,
     DateTime? addedAt,
   }) : chapters = TrackChapter.normalize(
          chapters ?? const <TrackChapter>[],
+         maximum: duration,
+       ),
+       skipSegments = TrackSkipSegment.normalize(
+         skipSegments ?? const <TrackSkipSegment>[],
          maximum: duration,
        ),
        addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -69,6 +75,7 @@ class Track {
   final String? externalId;
   final bool isFavorite;
   final List<TrackChapter> chapters;
+  final List<TrackSkipSegment> skipSegments;
   final DateTime addedAt;
 
   bool get hasLocalSource => localPath?.trim().isNotEmpty == true;
@@ -107,6 +114,7 @@ class Track {
     String? externalId,
     bool? isFavorite,
     List<TrackChapter>? chapters,
+    List<TrackSkipSegment>? skipSegments,
     DateTime? addedAt,
   }) {
     return Track(
@@ -124,8 +132,7 @@ class Track {
           ? null
           : artworkSourceUri ?? this.artworkSourceUri,
       artworkCrop: artworkCrop ?? this.artworkCrop,
-      artworkIsUserManaged:
-          artworkIsUserManaged ?? this.artworkIsUserManaged,
+      artworkIsUserManaged: artworkIsUserManaged ?? this.artworkIsUserManaged,
       artworkUriIsEphemeral:
           artworkUriIsEphemeral ?? this.artworkUriIsEphemeral,
       providerArtworkId: providerArtworkId ?? this.providerArtworkId,
@@ -141,6 +148,7 @@ class Track {
       externalId: externalId ?? this.externalId,
       isFavorite: isFavorite ?? this.isFavorite,
       chapters: chapters ?? this.chapters,
+      skipSegments: skipSegments ?? this.skipSegments,
       addedAt: addedAt ?? this.addedAt,
     );
   }
@@ -174,6 +182,7 @@ class Track {
       externalId: externalId,
       isFavorite: isFavorite,
       chapters: chapters,
+      skipSegments: skipSegments,
       addedAt: addedAt,
     );
   }
@@ -205,6 +214,10 @@ class Track {
       'isFavorite': isFavorite,
       if (chapters.isNotEmpty)
         'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
+      if (skipSegments.isNotEmpty)
+        'skipSegments': skipSegments
+            .map((segment) => segment.toJson())
+            .toList(),
       'addedAt': addedAt.toIso8601String(),
     };
   }
@@ -239,6 +252,7 @@ class Track {
       externalId: json['externalId'] as String?,
       isFavorite: json['isFavorite'] as bool? ?? false,
       chapters: _parseChapters(json['chapters']),
+      skipSegments: _parseSkipSegments(json['skipSegments']),
       addedAt:
           DateTime.tryParse(json['addedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
@@ -259,6 +273,16 @@ class Track {
     return value
         .map(TrackChapter.tryFromJson)
         .whereType<TrackChapter>()
+        .toList(growable: false);
+  }
+
+  static List<TrackSkipSegment> _parseSkipSegments(Object? value) {
+    if (value is! List) {
+      return const <TrackSkipSegment>[];
+    }
+    return value
+        .map(TrackSkipSegment.tryFromJson)
+        .whereType<TrackSkipSegment>()
         .toList(growable: false);
   }
 

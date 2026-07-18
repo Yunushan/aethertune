@@ -67,7 +67,7 @@ class PlayerController extends ChangeNotifier {
       _duration = duration ?? Duration.zero;
       notifyListeners();
     });
-    _positionSub = _audio.positionStream.listen(_handleABRepeatPosition);
+    _positionSub = _audio.positionStream.listen(_handlePlaybackPosition);
     _completedSub = _audio.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
         unawaited(_handleTrackCompleted());
@@ -149,6 +149,7 @@ class PlayerController extends ChangeNotifier {
   Duration? _aBRepeatStart;
   Duration? _aBRepeatEnd;
   bool _aBRepeatSeeking = false;
+  bool _skipSegmentSeeking = false;
 
   Track? get current => _current;
   List<Track> get queue => List.unmodifiable(_queue);
@@ -1509,6 +1510,36 @@ class PlayerController extends ChangeNotifier {
       return;
     }
     unawaited(_seekABRepeat(start));
+  }
+
+  void _handlePlaybackPosition(Duration position) {
+    _handleABRepeatPosition(position);
+    _handleSkipSegmentPosition(position);
+  }
+
+  void _handleSkipSegmentPosition(Duration position) {
+    final current = _current;
+    if (current == null ||
+        !_audio.playing ||
+        _skipSegmentSeeking ||
+        isABRepeatActive) {
+      return;
+    }
+    for (final segment in current.skipSegments) {
+      if (position >= segment.start && position < segment.end) {
+        unawaited(_seekPastSegment(segment.end));
+        return;
+      }
+    }
+  }
+
+  Future<void> _seekPastSegment(Duration end) async {
+    _skipSegmentSeeking = true;
+    try {
+      await _audio.seek(end);
+    } finally {
+      _skipSegmentSeeking = false;
+    }
   }
 
   Future<void> _seekABRepeat(Duration start) async {

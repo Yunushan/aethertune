@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:aethertune/src/domain/replay_gain.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/domain/track_skip_segment.dart';
 import 'package:aethertune/src/player/playback_audio_effects.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/offline_playback_policy.dart';
@@ -123,6 +124,51 @@ void main() {
 
     expect(controller.aBRepeatStart, isNull);
     expect(controller.aBRepeatEnd, isNull);
+  });
+
+  test('automatically seeks past local skip segments during playback',
+      () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final track = _track('skippable').copyWith(
+      skipSegments: <TrackSkipSegment>[
+        TrackSkipSegment(
+          start: const Duration(seconds: 10),
+          end: const Duration(seconds: 20),
+          label: 'Intro',
+        ),
+      ],
+    );
+
+    await controller.playTrack(track);
+    engine.emitPosition(const Duration(seconds: 12));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(engine.seekPositions.last, const Duration(seconds: 20));
+  });
+
+  test('gives active A-B repeat priority over local skip segments', () async {
+    final engine = _FakePlaybackAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final track = _track('ab-priority').copyWith(
+      skipSegments: <TrackSkipSegment>[
+        TrackSkipSegment(
+          start: const Duration(seconds: 10),
+          end: const Duration(seconds: 20),
+        ),
+      ],
+    );
+
+    await controller.playTrack(track);
+    controller.setABRepeatStart(const Duration(seconds: 5));
+    expect(controller.setABRepeatEnd(const Duration(seconds: 25)), isTrue);
+    engine.emitPosition(const Duration(seconds: 12));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(engine.seekPositions, isEmpty);
   });
 
   test('persists supported playback speed and rejects unsupported values',
