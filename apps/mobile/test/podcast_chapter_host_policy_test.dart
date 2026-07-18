@@ -49,4 +49,78 @@ void main() {
     }
     expect(policy.approvedHosts, isEmpty);
   });
+
+  test('records bounded approval history for each podcast subscription',
+      () async {
+    var now = DateTime.utc(2026, 7, 18, 12);
+    final policy = PodcastChapterHostPolicy(clock: () => now);
+    await policy.load();
+
+    await policy.approveHostForSubscription(
+      'feed-a',
+      'chapters.example.test',
+    );
+    now = now.add(const Duration(minutes: 1));
+    await policy.approveHostForSubscription('feed-b', 'other.example.test');
+    await policy.approveHostForSubscription(
+      'feed-a',
+      'chapters.example.test',
+    );
+
+    expect(
+      policy.approvalHistoryForSubscription('feed-a').single,
+      isA<PodcastChapterHostApproval>()
+          .having(
+            (entry) => entry.host,
+            'host',
+            'chapters.example.test',
+          )
+          .having(
+            (entry) => entry.approvedAt,
+            'approvedAt',
+            now,
+          ),
+    );
+    expect(
+      policy.approvalHistoryForSubscription('feed-b').single.host,
+      'other.example.test',
+    );
+
+    final restored = PodcastChapterHostPolicy(clock: () => now);
+    await restored.load();
+    expect(
+      restored.approvalHistoryForSubscription('feed-a').single.host,
+      'chapters.example.test',
+    );
+
+    await restored.revokeHost('chapters.example.test');
+    expect(restored.approvedHosts, <String>['other.example.test']);
+    expect(
+      restored.approvalHistoryForSubscription('feed-a').single.host,
+      'chapters.example.test',
+    );
+  });
+
+  test('migrates host-only preferences and bounds subscription history',
+      () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.podcast_chapter_hosts.v1': <String>[
+        'legacy.example.test',
+      ],
+    });
+    final policy = PodcastChapterHostPolicy();
+    await policy.load();
+
+    expect(policy.approvedHosts, <String>['legacy.example.test']);
+    for (var index = 0; index < 10; index += 1) {
+      await policy.approveHostForSubscription(
+        'feed-a',
+        'chapters-$index.example.test',
+      );
+    }
+
+    expect(policy.approvalHistoryForSubscription('feed-a'), hasLength(8));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('aethertune.podcast_chapter_hosts.v2'), isNotNull);
+  });
 }

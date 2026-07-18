@@ -9,6 +9,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/itunes_podcast_directory.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
+import 'package:aethertune/src/data/podcast_chapter_host_policy.dart';
 import 'package:aethertune/src/data/podcast_rss_provider.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
@@ -283,6 +284,8 @@ void main() {
     addTearDown(folderWatch.dispose);
     final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
     addTearDown(player.dispose);
+    final chapterHosts = PodcastChapterHostPolicy();
+    await chapterHosts.load();
     var directoryRequests = 0;
     final directory = ItunesPodcastDirectory(
       loader: (_) async {
@@ -303,6 +306,9 @@ void main() {
             value: folderWatch,
           ),
           ChangeNotifierProvider<PlayerController>.value(value: player),
+          ChangeNotifierProvider<PodcastChapterHostPolicy>.value(
+            value: chapterHosts,
+          ),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -312,7 +318,7 @@ void main() {
             podcastDirectory: directory,
             podcastProviderFactory: (feedUri) => PodcastRssProvider(
               feedUri: feedUri,
-              feedLoader: (_) async => _podcastFeedXml,
+              feedLoader: (_) async => _podcastFeedWithExternalChaptersXml,
             ),
           ),
         ),
@@ -340,7 +346,29 @@ void main() {
 
     expect(library.podcastSubscriptions, hasLength(1));
     expect(library.podcastSubscriptions.single.title, 'Aether Podcast');
-    expect(find.text('Aether Episode'), findsOneWidget);
+    expect(library.podcastSubscriptions.single.episodes.single.title, 'Aether Episode');
+
+    await tester.tap(find.widgetWithText(SnackBarAction, 'Review'));
+    await tester.pumpAndSettle();
+    expect(find.text('Approval history for this feed'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
+    await tester.pumpAndSettle();
+    final subscriptionId = library.podcastSubscriptions.single.id;
+    expect(
+      chapterHosts.approvalHistoryForSubscription(subscriptionId).single.host,
+      'cdn.example.test',
+    );
+    expect(
+      find.byKey(
+        const Key('podcast-chapter-host-history-cdn.example.test'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Revoke cdn.example.test'));
+    await tester.pumpAndSettle();
+    expect(find.text('Previously approved; currently revoked'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.pumpAndSettle();
 
     await library.setOfflineModeEnabled(true);
     await tester.pumpAndSettle();
@@ -369,8 +397,8 @@ const _podcastDirectoryResponse = '''
 }
 ''';
 
-const _podcastFeedXml = '''
-<rss version="2.0">
+const _podcastFeedWithExternalChaptersXml = '''
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
   <channel>
     <title>Aether Podcast</title>
     <description>Open audio research.</description>
@@ -379,6 +407,7 @@ const _podcastFeedXml = '''
       <guid>aether-episode-1</guid>
       <title>Aether Episode</title>
       <description>Episode one.</description>
+      <podcast:chapters url="https://cdn.example.test/chapters.json" type="application/json" />
       <enclosure url="https://cdn.example.test/aether.mp3" type="audio/mpeg" />
     </item>
   </channel>

@@ -16145,6 +16145,7 @@ class _SourcesTabState extends State<_SourcesTab> {
                       _showPodcastChapterHostManager(
                         context,
                         initialHost: unapprovedChapterHosts.first,
+                        subscriptionId: refreshed.id,
                       ),
                     );
                   },
@@ -16218,6 +16219,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   Future<void> _showPodcastChapterHostManager(
     BuildContext context, {
     String? initialHost,
+    String? subscriptionId,
   }) async {
     final policy = context.read<PodcastChapterHostPolicy?>();
     if (policy == null) {
@@ -16231,6 +16233,9 @@ class _SourcesTabState extends State<_SourcesTab> {
         builder: (dialogContext) {
           return StatefulBuilder(
             builder: (dialogContext, setDialogState) {
+              final approvalHistory = subscriptionId == null
+                  ? const <PodcastChapterHostApproval>[]
+                  : policy.approvalHistoryForSubscription(subscriptionId);
               return AlertDialog(
                 title: const Text('External chapter hosts'),
                 content: SizedBox(
@@ -16261,12 +16266,36 @@ class _SourcesTabState extends State<_SourcesTab> {
                           ),
                         ),
                       ],
+                      if (approvalHistory.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Approval history for this feed',
+                            style: Theme.of(dialogContext).textTheme.labelLarge,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxHeight: 240),
                         child: ListView(
                           shrinkWrap: true,
                           children: <Widget>[
+                            for (final entry in approvalHistory)
+                              ListTile(
+                                key: Key(
+                                  'podcast-chapter-host-history-${entry.host}',
+                                ),
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(Icons.history_outlined),
+                                title: Text(entry.host),
+                                subtitle: Text(
+                                  policy.approvedHosts.contains(entry.host)
+                                      ? 'Approved for this feed'
+                                      : 'Previously approved; currently revoked',
+                                ),
+                              ),
                             for (final host in policy.approvedHosts)
                               ListTile(
                                 contentPadding: EdgeInsets.zero,
@@ -16295,7 +16324,14 @@ class _SourcesTabState extends State<_SourcesTab> {
                   FilledButton.icon(
                     onPressed: () async {
                       try {
-                        await policy.approveHost(controller.text);
+                        if (subscriptionId == null) {
+                          await policy.approveHost(controller.text);
+                        } else {
+                          await policy.approveHostForSubscription(
+                            subscriptionId,
+                            controller.text,
+                          );
+                        }
                         controller.clear();
                         setDialogState(() => errorMessage = null);
                       } on FormatException catch (error) {
