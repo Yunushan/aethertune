@@ -15,12 +15,12 @@ class M4aMetadataWriter {
     int? year,
     int? trackNumber,
   }) async {
-    if (!path.toLowerCase().endsWith('.m4a')) {
-      throw const FormatException('Only local M4A files can be updated.');
+    if (!_isSupportedM4aContainerPath(path)) {
+      throw const FormatException('Only local M4A or M4B files can be updated.');
     }
     final file = File(path);
     if (!await file.exists()) {
-      throw FileSystemException('The M4A file no longer exists.', path);
+      throw FileSystemException('The M4A or M4B file no longer exists.', path);
     }
 
     final plan = await _buildWritePlan(
@@ -40,24 +40,31 @@ class M4aMetadataWriter {
     required String path,
     required Uint8List artwork,
   }) async {
-    if (!path.toLowerCase().endsWith('.m4a')) {
-      throw const FormatException('Only local M4A files can be updated.');
+    if (!_isSupportedM4aContainerPath(path)) {
+      throw const FormatException('Only local M4A or M4B files can be updated.');
     }
     if (artwork.isEmpty || artwork.lengthInBytes > maxM4aEmbeddedArtworkBytes) {
-      throw const FormatException('M4A artwork must be a PNG or JPEG smaller than 512 KiB.');
+      throw const FormatException(
+        'M4A or M4B artwork must be a PNG or JPEG smaller than 512 KiB.',
+      );
     }
     if (_m4aArtworkDataType(artwork) == null) {
-      throw const FormatException('M4A artwork must be a PNG or JPEG image.');
+      throw const FormatException('M4A or M4B artwork must be a PNG or JPEG image.');
     }
 
     final file = File(path);
     if (!await file.exists()) {
-      throw FileSystemException('The M4A file no longer exists.', path);
+      throw FileSystemException('The M4A or M4B file no longer exists.', path);
     }
 
     final plan = await _buildWritePlan(file, artwork: artwork);
     await _replaceWithTaggedCopy(file, plan);
   }
+}
+
+bool _isSupportedM4aContainerPath(String path) {
+  final normalized = path.trim().toLowerCase();
+  return normalized.endsWith('.m4a') || normalized.endsWith('.m4b');
 }
 
 class _M4aWritePlan {

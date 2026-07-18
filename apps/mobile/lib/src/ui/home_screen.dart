@@ -1969,7 +1969,7 @@ Future<void> _showTrackMetadataEditor(
             trackNumber: updated.trackNumber,
             genre: updated.genre,
           );
-        } else if (_isLocalM4a(updated)) {
+        } else if (_isLocalM4aOrM4b(updated)) {
           await const M4aMetadataWriter().write(
             path: updated.localPath!,
             title: updated.title,
@@ -2301,10 +2301,10 @@ Future<void> _editTrackArtwork(BuildContext context, Track track) async {
                   await _editTrackArtworkCrop(context, track);
                 },
               ),
-            if (_isLocalM4a(track))
+            if (_isLocalM4aOrM4b(track))
               ListTile(
                 leading: const Icon(Icons.save_alt_outlined),
-                title: const Text('Write cover to M4A file'),
+                title: const Text('Write cover to M4A/M4B file'),
                 subtitle: const Text(
                   'Replace the embedded cover with a PNG or JPEG under 512 KiB.',
                 ),
@@ -2386,7 +2386,7 @@ Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
   final library = context.read<LibraryStore>();
   final file = await FilePicker.pickFile(
     type: FileType.image,
-    dialogTitle: 'Choose M4A cover artwork',
+    dialogTitle: 'Choose M4A/M4B cover artwork',
   );
   if (!context.mounted || file == null) {
     return;
@@ -2423,7 +2423,9 @@ Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
   } on Object catch (error) {
     if (context.mounted) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not update embedded M4A artwork: $error')),
+        SnackBar(
+          content: Text('Could not update embedded M4A/M4B artwork: $error'),
+        ),
       );
     }
   }
@@ -2433,9 +2435,9 @@ Future<bool?> _confirmM4aArtworkWrite(BuildContext context) {
   return showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Update M4A embedded artwork?'),
+      title: const Text('Update M4A/M4B embedded artwork?'),
       content: const Text(
-        'This replaces the file cover with the selected PNG or JPEG. Other M4A metadata is preserved. Standard front-loaded M4A files repair validated chunk offsets; malformed or fragmented layouts are left unchanged.',
+        'This replaces the file cover with the selected PNG or JPEG. Other M4A/M4B metadata is preserved. Standard front-loaded files repair validated chunk offsets; malformed or fragmented layouts are left unchanged.',
       ),
       actions: <Widget>[
         TextButton(
@@ -2445,7 +2447,7 @@ Future<bool?> _confirmM4aArtworkWrite(BuildContext context) {
         FilledButton.icon(
           onPressed: () => Navigator.of(dialogContext).pop(true),
           icon: const Icon(Icons.save_outlined),
-          label: const Text('Update M4A'),
+          label: const Text('Update M4A/M4B'),
         ),
       ],
     ),
@@ -7624,7 +7626,7 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
 bool _canWriteEmbeddedMetadata(Track track) {
   return _isLocalMp3(track) ||
       _isLocalFlac(track) ||
-      _isLocalM4a(track) ||
+      _isLocalM4aOrM4b(track) ||
       _isLocalOggOrOpus(track) ||
       _isLocalWav(track);
 }
@@ -7637,8 +7639,9 @@ bool _isLocalFlac(Track track) {
   return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.flac');
 }
 
-bool _isLocalM4a(Track track) {
-  return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.m4a');
+bool _isLocalM4aOrM4b(Track track) {
+  final path = (track.localPath?.trim() ?? '').toLowerCase();
+  return path.endsWith('.m4a') || path.endsWith('.m4b');
 }
 
 bool _isLocalOggOrOpus(Track track) {
@@ -7655,8 +7658,8 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
       ? 'MP3'
       : _isLocalFlac(track)
       ? 'FLAC'
-      : _isLocalM4a(track)
-      ? 'M4A'
+      : _isLocalM4aOrM4b(track)
+      ? 'M4A/M4B'
       : _isLocalOggOrOpus(track)
       ? 'Ogg/Opus'
       : 'WAV';
@@ -7669,8 +7672,8 @@ Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {
             ? 'This writes title, artist, album, and genre to standard ID3v2 MP3 text tags, with an ID3v1 compatibility tag. Artwork and other supported ID3v2 frames are preserved. Unsupported tag layouts are left unchanged.'
             : format == 'FLAC'
             ? 'This writes title, artist, album, and genre to standard FLAC Vorbis comments. Artwork and other FLAC metadata blocks are preserved.'
-            : format == 'M4A'
-            ? 'This writes title, artist, album, and genre to standard M4A metadata atoms while preserving artwork and other metadata items. Standard front-loaded M4A files repair validated chunk offsets; malformed or fragmented layouts are left unchanged.'
+            : format == 'M4A/M4B'
+            ? 'This writes title, artist, album, and genre to standard M4A/M4B metadata atoms while preserving artwork and other metadata items. Standard front-loaded files repair validated chunk offsets; malformed or fragmented layouts are left unchanged.'
             : 'This writes title, artist, album, and genre to standard WAV RIFF INFO fields. Other RIFF chunks and audio bytes are preserved. Characters outside legacy Latin-1 are replaced with question marks in the file tag.',
       ),
       actions: <Widget>[

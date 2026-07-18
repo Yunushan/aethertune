@@ -51,6 +51,31 @@ void main() {
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
+  test('writes M4B metadata that the scanner reads', () async {
+    final file = File('${temporaryDirectory.path}/audiobook.m4b');
+    await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+
+    await const M4aMetadataWriter().write(
+      path: file.path,
+      title: 'Chapter One',
+      artist: 'Narrator',
+      album: 'Audiobook',
+      genre: 'Audiobook',
+    );
+
+    final result = await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+      importedAt: DateTime.utc(2026, 1, 1),
+    );
+
+    expect(result.tracks, hasLength(1));
+    expect(result.tracks.single.title, 'Chapter One');
+    expect(result.tracks.single.artist, 'Narrator');
+    expect(result.tracks.single.album, 'Audiobook');
+    expect(result.tracks.single.genre, 'Audiobook');
+    expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
+  });
+
   test('preserves artwork and custom M4A metadata atoms', () async {
     final file = File('${temporaryDirectory.path}/preserved.m4a');
     final artwork = <int>[0x89, 0x50, 0x4e, 0x47];
