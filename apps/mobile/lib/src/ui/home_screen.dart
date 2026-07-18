@@ -5345,6 +5345,12 @@ class _LocalChartsPreview extends StatelessWidget {
           icon: Icons.category_outlined,
           groups: stats.topGenres,
         ),
+        const SizedBox(height: 12),
+        _LibraryStatsGroupSection(
+          title: 'Top sources',
+          icon: Icons.source_outlined,
+          groups: stats.topSources,
+        ),
       ],
     );
   }
@@ -10788,6 +10794,12 @@ class _HistoryTabState extends State<_HistoryTab> {
             title: 'Top genres',
             icon: Icons.category_outlined,
             groups: stats.topGenres,
+          ),
+          const SizedBox(height: 12),
+          _LibraryStatsGroupSection(
+            title: 'Top sources',
+            icon: Icons.source_outlined,
+            groups: stats.topSources,
           ),
           const SizedBox(height: 12),
           _PlaybackHistoryEntrySection(

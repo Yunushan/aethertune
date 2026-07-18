@@ -2126,6 +2126,7 @@ void main() {
     expect(stats.topArtists.first.trackCount, 2);
     expect(stats.topAlbums.first.label, 'Dawn');
     expect(stats.topGenres.first.label, 'Ambient');
+    expect(stats.topSources.first.label, 'local');
     expect(store.libraryStats(limit: 0).topTracks, isEmpty);
   });
 
@@ -2219,6 +2220,7 @@ void main() {
     );
 
     expect(csvDocument, contains('summary,playbackCount,3'));
+    expect(csvDocument, contains('top_source,local'));
     expect(csvDocument, contains('top_track,Aether One'));
     expect(csvDocument, contains(from.toIso8601String()));
     expect(csvDocument, contains(to.toIso8601String()));
