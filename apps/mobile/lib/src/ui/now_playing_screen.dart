@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/library_store.dart';
 import '../data/podcast_transcript_loader.dart';
+import '../data/sponsorblock_segment_provider.dart';
 import '../domain/track_lyrics.dart';
 import '../domain/track.dart';
 import '../domain/track_bookmark.dart';
@@ -23,17 +24,25 @@ import 'widgets/artwork_palette_backdrop.dart';
 import 'widgets/track_artwork.dart';
 import 'widgets/track_share_card.dart';
 
+bool _canImportSponsorBlockSegments(Track? track) =>
+    track?.sourceId == 'youtube-data-metadata' &&
+    track?.externalId != null &&
+    track!.externalId!.trim().isNotEmpty &&
+    track.duration > Duration.zero;
+
 class NowPlayingScreen extends StatefulWidget {
   const NowPlayingScreen({
     required this.onOpenQueue,
     required this.onOpenLyrics,
     this.podcastTranscriptLoader = loadPodcastTranscript,
+    this.sponsorBlockSegmentLoader = loadSponsorBlockSegments,
     super.key,
   });
 
   final VoidCallback onOpenQueue;
   final VoidCallback onOpenLyrics;
   final PodcastTranscriptLoader podcastTranscriptLoader;
+  final SponsorBlockSegmentLoader sponsorBlockSegmentLoader;
 
   @override
   State<NowPlayingScreen> createState() => _NowPlayingScreenState();
@@ -91,6 +100,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               tooltip: 'Edit skip segments',
               onPressed: () => _showTrackSkipSegmentsEditor(savedCurrent),
               icon: const Icon(Icons.fast_forward_outlined),
+            ),
+          if (_canImportSponsorBlockSegments(savedCurrent))
+            IconButton(
+              key: const Key('now-playing-import-sponsorblock-segments'),
+              tooltip: 'Import SponsorBlock segments',
+              onPressed: () => _importSponsorBlockSegments(savedCurrent!),
+              icon: const Icon(Icons.download_for_offline_outlined),
             ),
           if (current != null)
             _TrackPlaybackSpeedMenu(
@@ -248,6 +264,50 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         player: player,
       ),
     );
+  }
+
+  Future<void> _importSponsorBlockSegments(Track track) async {
+    final library = context.read<LibraryStore>();
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import SponsorBlock segments?'),
+        content: const Text(
+          'This sends a four-character hash prefix of this YouTube video ID to SponsorBlock. It never runs in the background or submits data.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || approved != true) return;
+    try {
+      final imported = await widget.sponsorBlockSegmentLoader(
+        track.externalId!,
+        maximum: track.duration,
+      );
+      final updated = await library.updateTrackSkipSegments(
+        track.id,
+        <TrackSkipSegment>[...track.skipSegments, ...imported],
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported ${updated?.skipSegments.length ?? 0} skip segment(s).')),
+      );
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not import SponsorBlock segments.')),
+        );
+      }
+    }
   }
 
   Future<void> _addBookmark(

@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/podcast_transcript_loader.dart';
+import 'package:aethertune/src/data/sponsorblock_segment_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
 import 'package:aethertune/src/domain/track_skip_segment.dart';
@@ -52,6 +53,8 @@ void main() {
           transcriptUri: Uri.parse('https://example.test/episode.vtt'),
           transcriptType: 'text/vtt',
           transcriptLanguage: 'en',
+          sourceId: 'youtube-data-metadata',
+          externalId: 'video-123',
         );
     final second = _track('second', title: 'Second Song', durationSeconds: 180);
     await library.addTracks(<Track>[first, second]);
@@ -73,6 +76,13 @@ void main() {
               text: 'Podcast transcript text',
               contentType: 'text/plain',
             ),
+            sponsorBlockSegmentLoader: (_, {required maximum, categories = sponsorBlockCategories}) async => <TrackSkipSegment>[
+              TrackSkipSegment(
+                start: const Duration(seconds: 90),
+                end: const Duration(seconds: 100),
+                label: 'SponsorBlock: sponsor',
+              ),
+            ],
           ),
         ),
       ),
@@ -100,6 +110,10 @@ void main() {
       find.byKey(const Key('now-playing-podcast-transcript')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const Key('now-playing-import-sponsorblock-segments')),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const Key('now-playing-podcast-transcript')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('podcast-transcript-reader')), findsOneWidget);
@@ -107,6 +121,17 @@ void main() {
     await tester.tap(find.byKey(const Key('podcast-transcript-close')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('podcast-transcript-reader')), findsNothing);
+    await tester.tap(
+      find.byKey(const Key('now-playing-import-sponsorblock-segments')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Import SponsorBlock segments?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Import'));
+    await tester.pumpAndSettle();
+    expect(
+      library.tracks.first.skipSegments.map((segment) => segment.label),
+      contains('SponsorBlock: sponsor'),
+    );
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     final semantics = tester.ensureSemantics();
