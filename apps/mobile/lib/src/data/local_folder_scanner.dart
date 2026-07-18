@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../domain/lyrics_document.dart';
 import '../domain/replay_gain.dart';
 import '../domain/track.dart';
+import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 
 const supportedLocalAudioExtensions = <String>{
@@ -29,6 +30,7 @@ final class LocalFolderScanResult {
     required this.inaccessibleDirectoryCount,
     required this.sidecarLyricsByTrackId,
     this.embeddedLyricsByTrackId = const <String, String>{},
+    this.sidecarChaptersByTrackId = const <String, List<TrackChapter>>{},
   });
 
   final List<Track> tracks;
@@ -36,9 +38,11 @@ final class LocalFolderScanResult {
   final int inaccessibleDirectoryCount;
   final Map<String, String> sidecarLyricsByTrackId;
   final Map<String, String> embeddedLyricsByTrackId;
+  final Map<String, List<TrackChapter>> sidecarChaptersByTrackId;
 
   int get sidecarLyricsCount => sidecarLyricsByTrackId.length;
   int get embeddedLyricsCount => embeddedLyricsByTrackId.length;
+  int get sidecarChaptersCount => sidecarChaptersByTrackId.length;
 }
 
 final class _LocalFileMetadata {
@@ -114,6 +118,9 @@ final class LocalFolderScanner {
       embeddedLyricsByTrackId: Map.unmodifiable(
         scanState.embeddedLyricsByTrackId,
       ),
+      sidecarChaptersByTrackId: Map.unmodifiable(
+        scanState.sidecarChaptersByTrackId,
+      ),
     );
   }
 }
@@ -131,6 +138,8 @@ final class _LocalFolderScanState {
   final List<Track> tracks = <Track>[];
   final Map<String, String> sidecarLyricsByTrackId = <String, String>{};
   final Map<String, String> embeddedLyricsByTrackId = <String, String>{};
+  final Map<String, List<TrackChapter>> sidecarChaptersByTrackId =
+      <String, List<TrackChapter>>{};
   int ignoredFileCount = 0;
   int inaccessibleDirectoryCount = 0;
 
@@ -147,6 +156,7 @@ final class _LocalFolderScanState {
           ),
     );
 
+    final cuePaths = <String>[];
     for (final entry in entries) {
       final entityType = await _entityType(entry);
       if (entityType == null) {
@@ -160,6 +170,10 @@ final class _LocalFolderScanState {
         continue;
       }
       if (!_isSupportedAudioPath(entry.path)) {
+        if (p.extension(entry.path).toLowerCase() == '.cue') {
+          cuePaths.add(entry.path);
+          continue;
+        }
         if (await _isMatchedSidecarLyricsPath(entry.path)) {
           continue;
         }
@@ -175,6 +189,13 @@ final class _LocalFolderScanState {
         sidecarLyricsByTrackId[track.id] = sidecarLyrics;
       } else if (scannedTrack.embeddedLyrics != null) {
         embeddedLyricsByTrackId[track.id] = scannedTrack.embeddedLyrics!;
+      }
+    }
+
+    for (final cuePath in cuePaths) {
+      final chaptersByTrackId = await _sidecarChaptersForCue(cuePath);
+      for (final entry in chaptersByTrackId.entries) {
+        sidecarChaptersByTrackId.putIfAbsent(entry.key, () => entry.value);
       }
     }
   }
@@ -496,6 +517,58 @@ final class _LocalFolderScanState {
     }
 
     return null;
+  }
+
+  Future<Map<String, List<TrackChapter>>> _sidecarChaptersForCue(
+    String path,
+  ) async {
+    try {
+      final cueFile = File(path);
+      if (await cueFile.length() > _maxCueSheetBytes) {
+        return const <String, List<TrackChapter>>{};
+      }
+      final bytes = await cueFile.readAsBytes();
+      if (bytes.length > _maxCueSheetBytes) {
+        return const <String, List<TrackChapter>>{};
+      }
+
+      final chaptersByFile = _parseCueSheet(
+        utf8.decode(bytes, allowMalformed: true),
+      );
+      if (chaptersByFile.isEmpty) {
+        return const <String, List<TrackChapter>>{};
+      }
+
+      final tracksByPath = <String, Track>{
+        for (final track in tracks)
+          if (track.localPath != null)
+            p.normalize(p.absolute(track.localPath!)).toLowerCase(): track,
+      };
+      final root = p.normalize(p.absolute(rootPath));
+      final result = <String, List<TrackChapter>>{};
+      for (final entry in chaptersByFile.entries) {
+        final referencedPath = p.normalize(
+          p.absolute(p.join(p.dirname(path), entry.key)),
+        );
+        if (referencedPath != root && !p.isWithin(root, referencedPath)) {
+          continue;
+        }
+        final track = tracksByPath[referencedPath.toLowerCase()];
+        if (track == null) {
+          continue;
+        }
+        final chapters = TrackChapter.normalize(
+          entry.value,
+          maximum: track.duration,
+        );
+        if (chapters.isNotEmpty) {
+          result[track.id] = chapters;
+        }
+      }
+      return result;
+    } on FileSystemException {
+      return const <String, List<TrackChapter>>{};
+    }
   }
 
   Map<String, List<String>>? _apev2TextComments(
@@ -2461,6 +2534,8 @@ const _maxM4aMetadataBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxEmbeddedLyricsBytes = 256 * 1024;
+const _maxCueSheetBytes = 256 * 1024;
+const _maxCueSheetChapters = 500;
 const _maxId3v2SyncedLyricEvents = 4096;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
@@ -2480,3 +2555,108 @@ const _sidecarLyricsExtensionsByPreference = <String>[
   '.lrc',
   '.txt',
 ];
+
+Map<String, List<TrackChapter>> _parseCueSheet(String document) {
+  final chaptersByFile = <String, List<TrackChapter>>{};
+  String? currentFile;
+  int? currentTrackNumber;
+  String? currentTitle;
+  Duration? currentStart;
+  var chapterCount = 0;
+
+  void commitCurrentTrack() {
+    final file = currentFile;
+    final trackNumber = currentTrackNumber;
+    final start = currentStart;
+    if (file == null || trackNumber == null || start == null) {
+      return;
+    }
+    if (chapterCount >= _maxCueSheetChapters) {
+      return;
+    }
+    final title = currentTitle?.trim();
+    chaptersByFile.putIfAbsent(file, () => <TrackChapter>[]).add(
+          TrackChapter(
+            start: start,
+            title: title == null || title.isEmpty
+                ? 'Track ${trackNumber.toString().padLeft(2, '0')}'
+                : title,
+          ),
+        );
+    chapterCount += 1;
+  }
+
+  void resetCurrentTrack() {
+    currentTrackNumber = null;
+    currentTitle = null;
+    currentStart = null;
+  }
+
+  for (final rawLine in document.split(RegExp(r'\r?\n'))) {
+    final line = rawLine.trim();
+    if (line.isEmpty || chapterCount >= _maxCueSheetChapters) {
+      continue;
+    }
+
+    final fileMatch = RegExp(r'^FILE\s+(.+)$', caseSensitive: false)
+        .firstMatch(line);
+    if (fileMatch != null) {
+      commitCurrentTrack();
+      resetCurrentTrack();
+      currentFile = _cueFileName(fileMatch.group(1)!);
+      continue;
+    }
+
+    final trackMatch = RegExp(
+      r'^TRACK\s+(\d+)\s+\S+\s*$',
+      caseSensitive: false,
+    ).firstMatch(line);
+    if (trackMatch != null) {
+      commitCurrentTrack();
+      resetCurrentTrack();
+      currentTrackNumber = int.tryParse(trackMatch.group(1)!);
+      continue;
+    }
+
+    if (currentTrackNumber == null) {
+      continue;
+    }
+
+    final titleMatch = RegExp(r'^TITLE\s+(.+)$', caseSensitive: false)
+        .firstMatch(line);
+    if (titleMatch != null) {
+      currentTitle = _cueTextValue(titleMatch.group(1)!);
+      continue;
+    }
+
+    final indexMatch = RegExp(
+      r'^INDEX\s+01\s+(\d{1,3}):([0-5]\d):([0-7]\d)\s*$',
+      caseSensitive: false,
+    ).firstMatch(line);
+    if (indexMatch != null) {
+      final minutes = int.parse(indexMatch.group(1)!);
+      final seconds = int.parse(indexMatch.group(2)!);
+      final frames = int.parse(indexMatch.group(3)!);
+      currentStart = Duration(
+        milliseconds: minutes * 60000 + seconds * 1000 + frames * 1000 ~/ 75,
+      );
+    }
+  }
+  commitCurrentTrack();
+  return chaptersByFile;
+}
+
+String? _cueFileName(String source) {
+  final quoted = RegExp(r'^"([^"]+)"(?:\s+.*)?$').firstMatch(source.trim());
+  if (quoted != null) {
+    return quoted.group(1)?.trim();
+  }
+  final parts = source.trim().split(RegExp(r'\s+'));
+  final value = parts.isEmpty ? null : parts.first;
+  return value == null || value.isEmpty ? null : value;
+}
+
+String _cueTextValue(String source) {
+  final quoted = RegExp(r'^"([^"]*)"\s*$').firstMatch(source.trim());
+  return quoted?.group(1)?.trim() ?? source.trim();
+}

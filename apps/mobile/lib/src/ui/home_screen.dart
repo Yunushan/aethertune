@@ -1643,6 +1643,9 @@ class _HomeScreenState extends State<HomeScreen> {
             sourceName: 'Embedded ID3 lyrics',
           );
         }
+        for (final entry in scanResult.sidecarChaptersByTrackId.entries) {
+          await library.setTrackChaptersIfAbsent(entry.key, entry.value);
+        }
       }
       await library.watchLocalFolder(folderPath);
 
@@ -12977,6 +12980,11 @@ String _folderImportSummary(LocalFolderScanResult result) {
       'Imported embedded lyrics for ${result.embeddedLyricsCount} track(s).',
     );
   }
+  if (result.sidecarChaptersCount > 0) {
+    details.add(
+      'Imported CUE chapters for ${result.sidecarChaptersCount} track(s).',
+    );
+  }
   if (result.ignoredFileCount > 0) {
     details.add('Skipped ${result.ignoredFileCount} non-audio file(s).');
   }
@@ -14991,7 +14999,6 @@ class _SourcesTabState extends State<_SourcesTab> {
       ),
     );
   }
-
   void _openSpotifySavedEpisodes(
     BuildContext context,
     SpotifyMetadataProvider provider,

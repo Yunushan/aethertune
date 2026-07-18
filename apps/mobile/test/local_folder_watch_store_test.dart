@@ -87,6 +87,14 @@ void main() {
         added.id: 'Embedded must not overwrite a sidecar',
         embedded.id: 'Imported embedded lyric',
       },
+      sidecarChaptersByTrackId: <String, List<TrackChapter>>{
+        original.id: <TrackChapter>[
+          TrackChapter(start: Duration.zero, title: 'Must not overwrite'),
+        ],
+        added.id: <TrackChapter>[
+          TrackChapter(start: Duration.zero, title: 'Imported CUE chapter'),
+        ],
+      },
       pruneMissing: true,
     );
 
@@ -122,6 +130,10 @@ void main() {
     expect(store.lyricsForTrack(added.id)?.sourceId, 'sidecar');
     expect(store.lyricsForTrack(embedded.id)?.plainText, 'Imported embedded lyric');
     expect(store.lyricsForTrack(embedded.id)?.sourceId, 'embedded');
+    expect(
+      store.tracks.firstWhere((track) => track.id == added.id).chapters.single.title,
+      'Imported CUE chapter',
+    );
 
     await store.reconcileWatchedLocalFolder(
       root,

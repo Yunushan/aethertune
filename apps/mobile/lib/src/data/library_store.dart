@@ -1752,6 +1752,8 @@ class LibraryStore extends ChangeNotifier {
     required Iterable<Track> tracks,
     required Map<String, String> sidecarLyricsByTrackId,
     Map<String, String> embeddedLyricsByTrackId = const <String, String>{},
+    Map<String, List<TrackChapter>> sidecarChaptersByTrackId =
+        const <String, List<TrackChapter>>{},
     required bool pruneMissing,
   }) async {
     final root = _normalizeWatchedLocalFolderPath(rootPath);
@@ -1827,6 +1829,22 @@ class LibraryStore extends ChangeNotifier {
         sourceName: 'Embedded ID3 lyrics',
         updatedAt: _clock(),
       );
+      changed = true;
+    }
+
+    for (final entry in sidecarChaptersByTrackId.entries) {
+      final index = _tracks.indexWhere((track) => track.id == entry.key);
+      if (index == -1 || _tracks[index].chapters.isNotEmpty) {
+        continue;
+      }
+      final chapters = TrackChapter.normalize(
+        entry.value,
+        maximum: _tracks[index].duration,
+      );
+      if (chapters.isEmpty) {
+        continue;
+      }
+      _tracks[index] = _tracks[index].copyWith(chapters: chapters);
       changed = true;
     }
 
@@ -2642,6 +2660,17 @@ class LibraryStore extends ChangeNotifier {
     await _save();
     notifyListeners();
     return updated;
+  }
+
+  Future<Track?> setTrackChaptersIfAbsent(
+    String id,
+    Iterable<TrackChapter> chapters,
+  ) async {
+    final track = _trackById(id);
+    if (track == null || track.chapters.isNotEmpty) {
+      return track;
+    }
+    return updateTrackChapters(id, chapters);
   }
 
   Future<Track?> updateTrackSkipSegments(

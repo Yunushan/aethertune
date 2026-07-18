@@ -42,6 +42,7 @@
 - [x] Plain lyrics editor
 - [x] TXT/LRC lyrics file import
 - [x] Matching TXT/LRC lyrics sidecar import
+- [x] CUE-sheet sidecar chapter import
 - [x] Lyric-labelled ID3 comment-frame lyric import
 - [x] Millisecond ID3 synchronized lyric-frame to LRC import
 - [x] Local lyrics excerpt share text

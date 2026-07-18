@@ -240,6 +240,47 @@ Timed sidecar
     expect(result.tracks.single.genre, 'Dream Pop');
   });
 
+  test('imports bounded CUE chapter markers for a referenced local file',
+      () async {
+    final audioPath = p.join(root.path, 'Long form.mp3');
+    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+    await File(p.join(root.path, 'Long form.cue')).writeAsString('''
+FILE "Long form.mp3" MP3
+  TRACK 01 AUDIO
+    TITLE "Opening"
+    INDEX 01 00:00:00
+  TRACK 02 AUDIO
+    TITLE "Middle"
+    INDEX 01 01:02:37
+  TRACK 03 AUDIO
+    INDEX 00 02:00:00
+''');
+    await File(p.join(root.path, 'outside.cue')).writeAsString('''
+FILE "../private.mp3" MP3
+  TRACK 01 AUDIO
+    TITLE "Ignored"
+    INDEX 01 00:00:00
+''');
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.ignoredFileCount, 0);
+    expect(result.sidecarChaptersCount, 1);
+    final chapters =
+        result.sidecarChaptersByTrackId[Track.stableLocalId(audioPath)]!;
+    expect(chapters.map((chapter) => chapter.title), <String>[
+      'Opening',
+      'Middle',
+    ]);
+    expect(
+      chapters.map((chapter) => chapter.start),
+      <Duration>[
+        Duration.zero,
+        const Duration(minutes: 1, seconds: 2, milliseconds: 493),
+      ],
+    );
+  });
+
   test('imports ID3 POPM and Vorbis embedded ratings', () async {
     await File(p.join(root.path, 'popm.mp3')).writeAsBytes(<int>[
       ..._id3v23Tag(popularimeterRating: 196),
