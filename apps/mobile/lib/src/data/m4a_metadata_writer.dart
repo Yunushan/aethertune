@@ -24,6 +24,7 @@ class M4aMetadataWriter {
       );
     }
     final file = File(path);
+    await _recoverInterruptedReplacement(file);
     if (!await file.exists()) {
       throw FileSystemException(
         'The M4A, M4B, or ALAC file no longer exists.',
@@ -66,6 +67,7 @@ class M4aMetadataWriter {
     }
 
     final file = File(path);
+    await _recoverInterruptedReplacement(file);
     if (!await file.exists()) {
       throw FileSystemException(
         'The M4A, M4B, or ALAC file no longer exists.',
@@ -721,6 +723,49 @@ Future<void> _replaceWithTaggedCopy(File file, _M4aWritePlan plan) async {
     if (await temporary.exists()) {
       await temporary.delete();
     }
+  }
+}
+
+/// Restores the original name after an interrupted replacement transaction.
+///
+/// A single backup is unambiguous. Multiple backups are left untouched rather
+/// than selecting an arbitrary potentially stale version of the file.
+Future<void> _recoverInterruptedReplacement(File file) async {
+  if (await file.exists()) {
+    return;
+  }
+
+  final parent = file.parent;
+  if (!await parent.exists()) {
+    return;
+  }
+  final backupPrefix = '${file.uri.pathSegments.last}.aethertune-';
+  final backups = <File>[];
+  await for (final entity in parent.list(followLinks: false)) {
+    final name = entity.uri.pathSegments.last;
+    if (entity is File &&
+        name.startsWith(backupPrefix) &&
+        name.endsWith('.backup')) {
+      backups.add(entity);
+    }
+  }
+  if (backups.isEmpty) {
+    return;
+  }
+  if (backups.length > 1) {
+    throw FileSystemException(
+      'Multiple interrupted M4A replacement backups require manual recovery.',
+      file.path,
+    );
+  }
+
+  try {
+    await backups.single.rename(file.path);
+  } on Object {
+    throw FileSystemException(
+      'Could not restore the interrupted M4A replacement backup.',
+      file.path,
+    );
   }
 }
 

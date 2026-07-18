@@ -52,6 +52,30 @@ void main() {
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
+  test('recovers a single interrupted replacement backup before writing',
+      () async {
+    final file = File('${temporaryDirectory.path}/recovery.m4a');
+    final backup = File('${file.path}.aethertune-123.backup');
+    await backup.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+
+    await const M4aMetadataWriter().write(
+      path: file.path,
+      title: 'Recovered title',
+      artist: 'Artist',
+      album: 'Album',
+      genre: 'Rock',
+    );
+
+    expect(await file.exists(), isTrue);
+    expect(await backup.exists(), isFalse);
+    final result = await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+      importedAt: DateTime.utc(2026, 1, 1),
+    );
+    expect(result.tracks.single.title, 'Recovered title');
+    expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
+  });
+
   test('writes M4B metadata that the scanner reads', () async {
     final file = File('${temporaryDirectory.path}/audiobook.m4b');
     await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
