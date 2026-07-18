@@ -62,6 +62,9 @@ class LibrarySyncAccount {
   Uri get profileEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'auth', 'profile']);
 
+  Uri get recoveryEndpointUri =>
+      _endpointUri(<String>['api', 'v1', 'sync', 'recovery']);
+
   Uri _endpointUri(List<String> endpointSegments) {
     final baseSegments = baseUri.pathSegments
         .where((segment) => segment.trim().isNotEmpty)

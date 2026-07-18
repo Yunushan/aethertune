@@ -18,6 +18,39 @@ typedef LibrarySyncHttpExecutor =
       String? body,
     });
 
+Future<String> redeemLibrarySyncRecoveryCode(
+  LibrarySyncAccount account,
+  String recoveryCode, {
+  LibrarySyncHttpExecutor? httpExecutor,
+}) async {
+  final normalizedCode = recoveryCode.trim();
+  if (normalizedCode.isEmpty || RegExp(r'\s').hasMatch(normalizedCode)) {
+    throw const FormatException('Recovery code is required.');
+  }
+  final executor = httpExecutor ?? executeLibrarySyncHttpRequest;
+  final response = await executor(
+    'POST',
+    account.recoveryEndpointUri,
+    headers: const <String, String>{
+      'content-type': 'application/json; charset=utf-8',
+      'accept': 'application/json',
+    },
+    body: jsonEncode(<String, Object?>{
+      'recoveryCode': normalizedCode,
+      'deviceName': account.deviceId,
+    }),
+  );
+  if (response.statusCode != 201) {
+    throw const ProviderRequestException('Recovery code was not accepted.');
+  }
+  final body = _jsonObject(response.body);
+  final token = body['token'];
+  if (token is! String || token.trim().isEmpty || RegExp(r'\s').hasMatch(token)) {
+    throw const ProviderRequestException('Recovery response did not include a valid token.');
+  }
+  return token;
+}
+
 class LibrarySyncHttpResponse {
   const LibrarySyncHttpResponse({required this.statusCode, required this.body});
 

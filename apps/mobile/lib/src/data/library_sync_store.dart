@@ -192,6 +192,16 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
+  Future<LibrarySyncRemoteSnapshot> redeemRecoveryCodeAndSave(
+    LibraryStore library,
+    LibrarySyncAccount account,
+    String recoveryCode,
+  ) async {
+    _requireOnline(library);
+    final token = await redeemLibrarySyncRecoveryCode(account, recoveryCode);
+    return testAndSave(library, account, token);
+  }
+
   Future<LibrarySyncRemoteSnapshot> push(
     LibraryStore library, {
     int? baseRevision,
