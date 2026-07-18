@@ -2089,8 +2089,13 @@ List<int> _oggPage(
   required int sequence,
   bool bos = false,
 }) {
-  if (packet.length > 255) {
-    throw ArgumentError.value(packet.length, 'packet', 'Packet is too large.');
+  final lacingValues = <int>[];
+  for (var remaining = packet.length; remaining >= 255; remaining -= 255) {
+    lacingValues.add(255);
+  }
+  lacingValues.add(packet.length % 255);
+  if (lacingValues.length > 255) {
+    throw ArgumentError.value(packet.length, 'packet', 'Packet has too many segments.');
   }
 
   return <int>[
@@ -2101,8 +2106,8 @@ List<int> _oggPage(
     ..._uint32LittleEndianSize(serial),
     ..._uint32LittleEndianSize(sequence),
     ...List<int>.filled(4, 0),
-    1,
-    packet.length,
+    lacingValues.length,
+    ...lacingValues,
     ...packet,
   ];
 }

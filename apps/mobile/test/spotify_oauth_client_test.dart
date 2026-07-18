@@ -45,7 +45,7 @@ void main() {
     expect(request.uri.queryParameters['scope'], 'user-library-read');
   });
 
-  test('requests read-only Spotify library, playlist, and history scopes', () {
+  test('requests read-only Spotify library, playlist, history, and follow scopes', () {
     expect(
       SpotifySettingsStore.authorizationScopes,
       containsAll(<String>[
@@ -53,6 +53,7 @@ void main() {
         'playlist-read-private',
         'user-read-recently-played',
         'user-top-read',
+        'user-follow-read',
       ]),
     );
     final request = SpotifyAuthorizationRequest.create(
@@ -62,7 +63,7 @@ void main() {
     );
     expect(
       request.uri.queryParameters['scope'],
-      'user-library-read playlist-read-private user-read-recently-played user-top-read',
+      'user-library-read playlist-read-private user-read-recently-played user-top-read user-follow-read',
     );
   });
 

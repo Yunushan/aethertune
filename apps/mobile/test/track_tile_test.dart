@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/artwork_crop.dart';
@@ -103,6 +104,7 @@ void main() {
   });
 
   testWidgets('sets a saved track rating from the menu', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     final library = LibraryStore();
     await library.load();
     await library.addTracks(<Track>[Track(id: 'rated', title: 'Rated track')]);

@@ -20,14 +20,18 @@ void main() {
     final second = _track('second');
     await library.addTracks(<Track>[first, second]);
 
-    final gateway = _MemoryListenTogetherGateway();
+    final now = DateTime.utc(2026, 7, 18, 12);
+    final gateway = _MemoryListenTogetherGateway()..updatedAt = now;
     final hostEngine = _TestAudioEngine();
     final hostPlayer = PlayerController(audioEngine: hostEngine);
     addTearDown(hostPlayer.dispose);
     await hostPlayer.playTrack(second, queue: <Track>[first, second]);
     await hostPlayer.seek(const Duration(seconds: 12));
 
-    final host = ListenTogetherStore(gatewayFactory: () => gateway);
+    final host = ListenTogetherStore(
+      gatewayFactory: () => gateway,
+      clock: () => now,
+    );
     await host.host(library, hostPlayer);
 
     expect(host.hosting, isTrue);
@@ -39,7 +43,10 @@ void main() {
     final guestEngine = _TestAudioEngine();
     final guestPlayer = PlayerController(audioEngine: guestEngine);
     addTearDown(guestPlayer.dispose);
-    final guest = ListenTogetherStore(gatewayFactory: () => gateway);
+    final guest = ListenTogetherStore(
+      gatewayFactory: () => gateway,
+      clock: () => now,
+    );
     final restored = await guest.join(library, guestPlayer);
 
     expect(restored, 2);

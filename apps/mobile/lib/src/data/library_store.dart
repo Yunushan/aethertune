@@ -4466,7 +4466,7 @@ class LibraryStore extends ChangeNotifier {
     builder.element(
       'playlist',
       attributes: <String, String>{'version': '1'},
-      namespaces: <String, String>{'': 'http://xspf.org/ns/0/'},
+      namespaces: <String, String>{'http://xspf.org/ns/0/': ''},
       nest: () {
         builder.element('title', nest: playlist.name);
         builder.element(

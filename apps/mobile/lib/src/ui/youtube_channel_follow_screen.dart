@@ -29,6 +29,7 @@ final class YouTubeChannelFollowScreen extends StatefulWidget {
 final class _YouTubeChannelFollowScreenState
     extends State<YouTubeChannelFollowScreen> {
   final _queryController = TextEditingController();
+  final _importController = TextEditingController();
   List<YouTubeDataChannel> _channels = const <YouTubeDataChannel>[];
   String? _nextCursor;
   int? _total;
@@ -39,6 +40,7 @@ final class _YouTubeChannelFollowScreenState
   @override
   void dispose() {
     _queryController.dispose();
+    _importController.dispose();
     super.dispose();
   }
 
@@ -335,7 +337,7 @@ final class _YouTubeChannelFollowScreenState
     BuildContext context,
     YouTubeChannelFollowStore follows,
   ) async {
-    final controller = TextEditingController();
+    _importController.clear();
     var replace = false;
     final request = await showDialog<_FollowDocumentImport>(
       context: context,
@@ -349,7 +351,7 @@ final class _YouTubeChannelFollowScreenState
               children: <Widget>[
                 TextField(
                   key: const Key('youtube-channel-follow-import-document'),
-                  controller: controller,
+                  controller: _importController,
                   autofocus: true,
                   minLines: 5,
                   maxLines: 10,
@@ -377,7 +379,7 @@ final class _YouTubeChannelFollowScreenState
             FilledButton.icon(
               onPressed: () => Navigator.of(dialogContext).pop(
                 _FollowDocumentImport(
-                  document: controller.text,
+                  document: _importController.text,
                   replace: replace,
                 ),
               ),
@@ -388,7 +390,6 @@ final class _YouTubeChannelFollowScreenState
         ),
       ),
     );
-    controller.dispose();
     if (request == null || !context.mounted) {
       return;
     }
