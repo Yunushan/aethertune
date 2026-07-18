@@ -40,6 +40,7 @@ import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
+import '../data/sponsorblock_segment_provider.dart';
 import '../data/spotify_metadata_provider.dart';
 import '../data/spotify_settings_store.dart';
 import '../data/subsonic_provider.dart';
@@ -10701,6 +10702,16 @@ class _HistoryTabState extends State<_HistoryTab> {
             unawaited(library.setPauseListeningHistory(value));
           },
         ),
+        ListTile(
+          key: const Key('sponsorblock-categories-setting'),
+          leading: const Icon(Icons.fast_forward_outlined),
+          title: const Text('SponsorBlock categories'),
+          subtitle: Text(library.sponsorBlockCategories.join(', ')),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => unawaited(
+            _showSponsorBlockCategoryDialog(context, library),
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: _historySearchController,
@@ -11309,6 +11320,54 @@ DateTime? _historyStatsRangeStart(ListeningHistoryRange range, DateTime now) {
     case ListeningHistoryRange.year:
       return now.subtract(const Duration(days: 365));
   }
+}
+
+Future<void> _showSponsorBlockCategoryDialog(
+  BuildContext context,
+  LibraryStore library,
+) async {
+  final selected = Set<String>.of(library.sponsorBlockCategories);
+  await showDialog<void>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('SponsorBlock categories'),
+        content: SizedBox(
+          width: 360,
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              for (final category in sponsorBlockCategories.toList()..sort())
+                CheckboxListTile(
+                  value: selected.contains(category),
+                  title: Text(category),
+                  onChanged: (enabled) => setDialogState(() {
+                    if (enabled ?? false) {
+                      selected.add(category);
+                    } else if (selected.length > 1) {
+                      selected.remove(category);
+                    }
+                  }),
+                ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await library.setSponsorBlockCategories(selected);
+              if (context.mounted) Navigator.of(context).pop();
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 String _statsExportFormatLabel(LibraryStatsExportFormat format) {

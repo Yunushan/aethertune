@@ -21,6 +21,7 @@ import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 import '../domain/track_skip_segment.dart';
+import 'sponsorblock_segment_provider.dart' as sponsor_block;
 
 enum LibrarySortMode { recentlyAdded, title, artist, album }
 
@@ -1193,6 +1194,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.screenshot_protection.v1';
   static const _automaticOfflineQueueKey =
       'aethertune.automatic_offline_queue.v1';
+  static const _sponsorBlockCategoriesKey =
+      'aethertune.sponsorblock_categories.v1';
   static const _themePreferenceKey = 'aethertune.theme_preference.v1';
   static const _accentColorKey = 'aethertune.accent_color.v1';
   static const _listeningRecapVisualThemeKey =
@@ -1258,6 +1261,8 @@ class LibraryStore extends ChangeNotifier {
   bool _offlineModeEnabled = false;
   bool _screenshotProtectionEnabled = false;
   bool _automaticOfflineQueueEnabled = false;
+  Set<String> _sponsorBlockCategories =
+      Set<String>.of(sponsor_block.sponsorBlockCategories);
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.system;
   ListeningRecapVisualTheme _listeningRecapVisualTheme =
@@ -1325,6 +1330,9 @@ class LibraryStore extends ChangeNotifier {
   bool get offlineModeEnabled => _offlineModeEnabled;
   bool get screenshotProtectionEnabled => _screenshotProtectionEnabled;
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
+  Set<String> get sponsorBlockCategories => Set<String>.unmodifiable(
+        _sponsorBlockCategories,
+      );
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
   ListeningRecapVisualTheme get listeningRecapVisualTheme =>
@@ -1581,6 +1589,17 @@ class LibraryStore extends ChangeNotifier {
         prefs.getBool(_screenshotProtectionKey) ?? false;
     _automaticOfflineQueueEnabled =
         prefs.getBool(_automaticOfflineQueueKey) ?? false;
+    final storedSponsorBlockCategories = prefs.getStringList(
+      _sponsorBlockCategoriesKey,
+    );
+    if (storedSponsorBlockCategories != null) {
+      final valid = storedSponsorBlockCategories
+          .where(sponsor_block.sponsorBlockCategories.contains)
+          .toSet();
+      if (valid.isNotEmpty) {
+        _sponsorBlockCategories = valid;
+      }
+    }
     _themePreference = _appThemePreferenceFromName(
       prefs.getString(_themePreferenceKey),
     );
@@ -1935,6 +1954,19 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _pauseListeningHistory = paused;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setSponsorBlockCategories(Iterable<String> categories) async {
+    final normalized = categories
+        .where(sponsor_block.sponsorBlockCategories.contains)
+        .toSet();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(categories, 'categories', 'Choose at least one category.');
+    }
+    if (setEquals(_sponsorBlockCategories, normalized)) return;
+    _sponsorBlockCategories = normalized;
     await _save();
     notifyListeners();
   }
@@ -9269,6 +9301,10 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setBool(
       _automaticOfflineQueueKey,
       _automaticOfflineQueueEnabled,
+    );
+    await prefs.setStringList(
+      _sponsorBlockCategoriesKey,
+      _sponsorBlockCategories.toList()..sort(),
     );
     await prefs.setString(_themePreferenceKey, _themePreference.name);
     await prefs.setString(_accentColorKey, _accentColor.name);

@@ -3884,6 +3884,22 @@ void main() {
     expect(restoredStore.accentColor, AppAccentColor.system);
   });
 
+  test('persists a non-empty SponsorBlock category selection locally', () async {
+    final firstStore = LibraryStore();
+    await firstStore.load();
+
+    await firstStore.setSponsorBlockCategories(<String>{'sponsor', 'intro'});
+    expect(firstStore.sponsorBlockCategories, <String>{'sponsor', 'intro'});
+    await expectLater(
+      () => firstStore.setSponsorBlockCategories(const <String>{}),
+      throwsArgumentError,
+    );
+
+    final secondStore = LibraryStore();
+    await secondStore.load();
+    expect(secondStore.sponsorBlockCategories, <String>{'sponsor', 'intro'});
+  });
+
   test('falls back from an unknown persisted recap visual theme', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'aethertune.listening_recap_visual_theme.v1': 'unknown',

@@ -292,6 +292,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       final imported = await widget.sponsorBlockSegmentLoader(
         track.externalId!,
         maximum: track.duration,
+        categories: library.sponsorBlockCategories,
       );
       if (!mounted) return;
       if (imported.isEmpty) {
