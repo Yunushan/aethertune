@@ -293,6 +293,47 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         track.externalId!,
         maximum: track.duration,
       );
+      if (!mounted) return;
+      if (imported.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No matching SponsorBlock segments found.')),
+        );
+        return;
+      }
+      final saveImported = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Review SponsorBlock segments'),
+          content: SizedBox(
+            width: 420,
+            height: 260,
+            child: ListView(
+              children: <Widget>[
+                for (final segment in imported)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.fast_forward_outlined),
+                    title: Text(segment.label.replaceFirst('SponsorBlock: ', '')),
+                    subtitle: Text(
+                      '${formatTrackChapterTimestamp(segment.start)} - ${formatTrackChapterTimestamp(segment.end)}',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Save ${imported.length} segment(s)'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || saveImported != true) return;
       final updated = await library.updateTrackSkipSegments(
         track.id,
         <TrackSkipSegment>[...track.skipSegments, ...imported],

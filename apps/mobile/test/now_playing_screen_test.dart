@@ -128,6 +128,10 @@ void main() {
     expect(find.text('Import SponsorBlock segments?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Import'));
     await tester.pumpAndSettle();
+    expect(find.text('Review SponsorBlock segments'), findsOneWidget);
+    expect(find.text('sponsor'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Save 1 segment(s)'));
+    await tester.pumpAndSettle();
     expect(
       library.tracks.first.skipSegments.map((segment) => segment.label),
       contains('SponsorBlock: sponsor'),
