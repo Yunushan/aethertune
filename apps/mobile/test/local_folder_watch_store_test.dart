@@ -224,11 +224,17 @@ void main() {
     expect(watcher.errorFor(normalizedRoot), isNull);
     expect(watcher.lastRefreshedAt(normalizedRoot), isNotNull);
 
+    changes.add('$root/chapters.cue');
+    await _waitUntil(
+      () => scanCount == 3 && !watcher.isRefreshing(normalizedRoot),
+    );
+    expect(store.tracks.single.title, 'Scan 3');
+
     await store.unwatchLocalFolder(root);
     watcher.updateLibrary(store);
     changes.add('$root/ignored-after-removal.mp3');
     await Future<void>.delayed(const Duration(milliseconds: 5));
-    expect(scanCount, 2);
+    expect(scanCount, 3);
   });
 }
 

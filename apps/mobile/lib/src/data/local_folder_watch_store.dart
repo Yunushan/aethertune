@@ -136,7 +136,8 @@ class LocalFolderWatchStore extends ChangeNotifier {
       return true;
     }
     return supportedLocalAudioExtensions.contains(extension) ||
-        isSupportedLyricsDocumentName(path.basename(changedPath));
+        isSupportedLyricsDocumentName(path.basename(changedPath)) ||
+        extension == '.cue';
   }
 
   void _cancelRoot(String rootPath) {
