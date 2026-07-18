@@ -7,6 +7,7 @@ import 'library_store.dart';
 import 'library_sync_client.dart';
 
 typedef ListenTogetherGatewayFactory = ListenTogetherGateway Function();
+typedef ListenTogetherClock = DateTime Function();
 
 /// Coordinates a portable, account-scoped listening session.
 ///
@@ -14,10 +15,14 @@ typedef ListenTogetherGatewayFactory = ListenTogetherGateway Function();
 /// resolves those IDs against its own library and never receives media URLs,
 /// local paths, or credentials.
 class ListenTogetherStore extends ChangeNotifier {
-  ListenTogetherStore({ListenTogetherGatewayFactory? gatewayFactory})
-      : _gatewayFactory = gatewayFactory;
+  ListenTogetherStore({
+    ListenTogetherGatewayFactory? gatewayFactory,
+    ListenTogetherClock? clock,
+  })  : _gatewayFactory = gatewayFactory,
+        _clock = clock ?? DateTime.now;
 
   ListenTogetherGatewayFactory? _gatewayFactory;
+  final ListenTogetherClock _clock;
   int _revision = 0;
   ListenTogetherSession? _session;
   DateTime? _updatedAt;
@@ -77,7 +82,12 @@ class ListenTogetherStore extends ChangeNotifier {
       if (shared == null) {
         throw StateError('No active listen-together session was found.');
       }
-      final restored = await _applySession(shared, library, player);
+      final restored = await _applySession(
+        shared,
+        library,
+        player,
+        updatedAt: remote.updatedAt,
+      );
       _applyMetadata(remote, session: shared);
       _inviteCode = null;
       _hosting = false;
@@ -107,7 +117,12 @@ class ListenTogetherStore extends ChangeNotifier {
       if (shared == null) {
         throw StateError('That listen-together invite has ended.');
       }
-      final restored = await _applySession(shared, library, player);
+      final restored = await _applySession(
+        shared,
+        library,
+        player,
+        updatedAt: remote.updatedAt,
+      );
       _applyMetadata(remote, session: shared);
       _inviteCode = inviteCode.trim();
       _hosting = false;
@@ -135,7 +150,12 @@ class ListenTogetherStore extends ChangeNotifier {
       if (remote.revision == _revision) {
         return 0;
       }
-      final restored = await _applySession(shared, library, player);
+      final restored = await _applySession(
+        shared,
+        library,
+        player,
+        updatedAt: remote.updatedAt,
+      );
       _applyMetadata(remote, session: shared);
       return restored;
     });
@@ -223,8 +243,9 @@ class ListenTogetherStore extends ChangeNotifier {
   Future<int> _applySession(
     ListenTogetherSession session,
     LibraryStore library,
-    PlayerController player,
-  ) async {
+    PlayerController player, {
+    DateTime? updatedAt,
+  }) async {
     final tracksById = <String, Track>{
       for (final track in library.tracks) track.id: track,
     };
@@ -236,15 +257,55 @@ class ListenTogetherStore extends ChangeNotifier {
       throw StateError('None of the shared tracks are available in this library.');
     }
     final current = tracksById[session.currentTrackId] ?? queue.first;
+    final targetPosition = _positionAtReceipt(session, updatedAt);
+    if (_matchesActiveQueue(player, queue, current)) {
+      final drift = targetPosition - player.position;
+      if (drift.inMilliseconds.abs() >
+          _positionDriftTolerance.inMilliseconds) {
+        await player.seek(targetPosition);
+      }
+      if (player.isPlaying != session.playing) {
+        await player.togglePlayPause();
+      }
+      return queue.length;
+    }
     await player.playTrack(
       current,
       queue: queue,
-      initialPosition: session.position,
+      initialPosition: targetPosition,
     );
     if (!session.playing) {
       await player.togglePlayPause();
     }
     return queue.length;
+  }
+
+  Duration _positionAtReceipt(
+    ListenTogetherSession session,
+    DateTime? updatedAt,
+  ) {
+    if (!session.playing || updatedAt == null) {
+      return session.position;
+    }
+    final elapsed = _clock().toUtc().difference(updatedAt.toUtc());
+    return elapsed.isNegative ? session.position : session.position + elapsed;
+  }
+
+  bool _matchesActiveQueue(
+    PlayerController player,
+    List<Track> queue,
+    Track current,
+  ) {
+    if (player.current?.id != current.id ||
+        player.queue.length != queue.length) {
+      return false;
+    }
+    for (var index = 0; index < queue.length; index += 1) {
+      if (player.queue[index].id != queue[index].id) {
+        return false;
+      }
+    }
+    return true;
   }
 
   ListenTogetherGateway _requireGateway() {
@@ -299,3 +360,5 @@ class ListenTogetherStore extends ChangeNotifier {
     }
   }
 }
+
+const _positionDriftTolerance = Duration(seconds: 2);

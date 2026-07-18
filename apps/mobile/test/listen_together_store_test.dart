@@ -81,6 +81,73 @@ void main() {
     expect(player.isPlaying, isFalse);
   });
 
+  test('corrects shared playback drift without restarting an unchanged queue',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final first = _track('first');
+    final second = _track('second');
+    await library.addTracks(<Track>[first, second]);
+    final now = DateTime.utc(2026, 7, 18, 12);
+    final gateway = _MemoryListenTogetherGateway()
+      ..updatedAt = now
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['first'],
+        currentTrackId: 'first',
+        position: Duration(seconds: 5),
+        playing: true,
+      )
+      ..revision = 1;
+    final engine = _TestAudioEngine();
+    final player = PlayerController(audioEngine: engine);
+    addTearDown(player.dispose);
+    final store = ListenTogetherStore(
+      gatewayFactory: () => gateway,
+      clock: () => now,
+    );
+
+    await store.join(library, player);
+    expect(engine.setQueueCalls, 1);
+
+    gateway
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['first'],
+        currentTrackId: 'first',
+        position: Duration(seconds: 6),
+        playing: true,
+      )
+      ..revision = 2;
+    await store.refreshJoined(library, player);
+    expect(engine.setQueueCalls, 1);
+    expect(engine.seekCalls, 0);
+
+    gateway
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['first'],
+        currentTrackId: 'first',
+        position: Duration(seconds: 10),
+        playing: false,
+      )
+      ..revision = 3;
+    await store.refreshJoined(library, player);
+    expect(engine.setQueueCalls, 1);
+    expect(engine.seekCalls, 1);
+    expect(engine.positionValue, const Duration(seconds: 10));
+    expect(player.isPlaying, isFalse);
+
+    gateway
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['second'],
+        currentTrackId: 'second',
+        position: Duration.zero,
+        playing: true,
+      )
+      ..revision = 4;
+    await store.refreshJoined(library, player);
+    expect(engine.setQueueCalls, 2);
+    expect(player.current?.id, 'second');
+  });
+
   test('refreshes an invite guest through the host invite endpoint', () async {
     final library = LibraryStore();
     await library.load();
@@ -116,6 +183,7 @@ Track _track(String id) => Track(
 class _MemoryListenTogetherGateway implements ListenTogetherGateway {
   int revision = 0;
   int inviteFetchCalls = 0;
+  DateTime updatedAt = DateTime.utc(2026, 7, 16);
   ListenTogetherSession? session;
 
   @override
@@ -162,7 +230,7 @@ class _MemoryListenTogetherGateway implements ListenTogetherGateway {
 
   ListenTogetherRemoteSession _remote() => ListenTogetherRemoteSession(
     revision: revision,
-    updatedAt: DateTime.utc(2026, 7, 16),
+    updatedAt: updatedAt,
     updatedByDevice: 'Test device',
     session: session,
   );
@@ -172,6 +240,8 @@ class _TestAudioEngine implements PlaybackAudioEngine {
   List<Track> queue = <Track>[];
   Duration positionValue = Duration.zero;
   bool playingValue = false;
+  int setQueueCalls = 0;
+  int seekCalls = 0;
 
   @override
   Stream<Object?> get stateChanges => const Stream<Object?>.empty();
@@ -207,6 +277,7 @@ class _TestAudioEngine implements PlaybackAudioEngine {
     required int initialIndex,
     Duration initialPosition = Duration.zero,
   }) async {
+    setQueueCalls += 1;
     queue = List<Track>.from(tracks);
     positionValue = initialPosition;
   }
@@ -217,7 +288,10 @@ class _TestAudioEngine implements PlaybackAudioEngine {
   @override
   Future<void> stop() async => playingValue = false;
   @override
-  Future<void> seek(Duration position, {int? index}) async => positionValue = position;
+  Future<void> seek(Duration position, {int? index}) async {
+    seekCalls += 1;
+    positionValue = position;
+  }
   @override
   Future<void> seekToNext() async {}
   @override
