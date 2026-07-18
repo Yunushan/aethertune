@@ -7590,6 +7590,8 @@ String _playlistDocumentFormatLabel(PlaylistDocumentFormat format) {
       return 'JSON';
     case PlaylistDocumentFormat.m3u:
       return 'M3U';
+    case PlaylistDocumentFormat.pls:
+      return 'PLS';
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
@@ -7601,6 +7603,8 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
       return 'JSON';
     case PlaylistDocumentFormat.m3u:
       return 'M3U';
+    case PlaylistDocumentFormat.pls:
+      return 'PLS';
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
@@ -7679,6 +7683,8 @@ String _playlistDocumentFormatFileExtension(PlaylistDocumentFormat format) {
       return 'json';
     case PlaylistDocumentFormat.m3u:
       return 'm3u';
+    case PlaylistDocumentFormat.pls:
+      return 'pls';
     case PlaylistDocumentFormat.csv:
       return 'csv';
   }
@@ -7690,6 +7696,8 @@ IconData _playlistDocumentFormatIcon(PlaylistDocumentFormat format) {
       return Icons.data_object;
     case PlaylistDocumentFormat.m3u:
       return Icons.queue_music;
+    case PlaylistDocumentFormat.pls:
+      return Icons.format_list_numbered;
     case PlaylistDocumentFormat.csv:
       return Icons.table_chart_outlined;
   }
@@ -10508,6 +10516,9 @@ class _PlaylistCard extends StatelessWidget {
               case _PlaylistAction.exportM3u:
                 onExport(PlaylistDocumentFormat.m3u);
                 break;
+              case _PlaylistAction.exportPls:
+                onExport(PlaylistDocumentFormat.pls);
+                break;
               case _PlaylistAction.exportCsv:
                 onExport(PlaylistDocumentFormat.csv);
                 break;
@@ -10547,6 +10558,13 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.queue_music),
                 title: Text('Export M3U'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.exportPls,
+              child: ListTile(
+                leading: Icon(Icons.format_list_numbered),
+                title: Text('Export PLS'),
               ),
             ),
             PopupMenuItem(
@@ -10654,6 +10672,7 @@ bool _isNetworkImageUri(Uri uri) {
 enum _PlaylistAction {
   exportJson,
   exportM3u,
+  exportPls,
   exportCsv,
   share,
   copyImportLink,

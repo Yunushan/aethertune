@@ -1791,6 +1791,55 @@ void main() {
     expect(imported.trackIds, <String>['2', '1']);
   });
 
+  test('exports and imports bounded PLS playlists by track path', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 2, 30),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'Path One', artist: 'Ari'),
+      _track('2', title: 'Path Two', artist: 'Mia'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road PLS',
+      trackIds: <String>['2', '1'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.pls,
+    );
+
+    expect(document, contains('[playlist]'));
+    expect(document, contains('PlaylistName=Road PLS'));
+    expect(document, contains('File1=/music/2.mp3'));
+    expect(document, contains('NumberOfEntries=2'));
+    expect(document, contains('Version=2'));
+
+    await store.deletePlaylist(playlist.id);
+    final imported = await store.importPlaylistDocument(
+      document,
+      format: PlaylistDocumentFormat.pls,
+    );
+
+    expect(imported.name, 'Road PLS');
+    expect(imported.trackIds, <String>['2', '1']);
+    await expectLater(
+      store.importPlaylistDocument(
+        '[playlist]\nNumberOfEntries=1\nFile2=/music/1.mp3\nVersion=2\n',
+        format: PlaylistDocumentFormat.pls,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    await expectLater(
+      store.importPlaylistDocument(
+        '[playlist]\nFile1=/music/1.mp3\nNumberOfEntries=1\nVersion=1\n',
+        format: PlaylistDocumentFormat.pls,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('exports and imports CSV playlists with quoted fields', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 3),

@@ -32,7 +32,7 @@ LibrarySortMode _librarySortModeFromName(String? value) {
   );
 }
 
-enum PlaylistDocumentFormat { json, m3u, csv }
+enum PlaylistDocumentFormat { json, m3u, pls, csv }
 
 const _playlistImportLinkScheme = 'aethertune';
 const _playlistImportLinkHost = 'playlist';
@@ -4358,6 +4358,8 @@ class LibraryStore extends ChangeNotifier {
         return exportPlaylistJson(playlistId);
       case PlaylistDocumentFormat.m3u:
         return exportPlaylistM3u(playlistId);
+      case PlaylistDocumentFormat.pls:
+        return exportPlaylistPls(playlistId);
       case PlaylistDocumentFormat.csv:
         return exportPlaylistCsv(playlistId);
     }
@@ -4392,6 +4394,31 @@ class LibraryStore extends ChangeNotifier {
         ..writeln(_playlistTrackLocator(track));
     }
 
+    return buffer.toString();
+  }
+
+  String exportPlaylistPls(String playlistId) {
+    final playlist = _requirePlaylist(playlistId);
+    final tracks = tracksForPlaylist(playlistId);
+    final buffer = StringBuffer()
+      ..writeln('[playlist]')
+      ..writeln('PlaylistName=${playlist.name}');
+
+    for (var index = 0; index < tracks.length; index += 1) {
+      final track = tracks[index];
+      final entry = index + 1;
+      final seconds = track.duration == Duration.zero
+          ? -1
+          : track.duration.inSeconds;
+      buffer
+        ..writeln('File$entry=${_playlistTrackLocator(track)}')
+        ..writeln('Title$entry=${track.artist} - ${track.title}')
+        ..writeln('Length$entry=$seconds');
+    }
+
+    buffer
+      ..writeln('NumberOfEntries=${tracks.length}')
+      ..writeln('Version=2');
     return buffer.toString();
   }
 
@@ -4753,6 +4780,8 @@ class LibraryStore extends ChangeNotifier {
         return importPlaylistJson(document, fallbackName: fallbackName);
       case PlaylistDocumentFormat.m3u:
         return importPlaylistM3u(document, fallbackName: fallbackName);
+      case PlaylistDocumentFormat.pls:
+        return importPlaylistPls(document, fallbackName: fallbackName);
       case PlaylistDocumentFormat.csv:
         return importPlaylistCsv(document, fallbackName: fallbackName);
     }
@@ -4859,6 +4888,92 @@ class LibraryStore extends ChangeNotifier {
       );
     }
 
+    final playlistName = name == null || name.isEmpty ? fallbackName : name;
+    return createPlaylist(playlistName, trackIds: importedTrackIds);
+  }
+
+  Future<Playlist> importPlaylistPls(
+    String document, {
+    String fallbackName = 'Imported playlist',
+  }) async {
+    var inPlaylistSection = false;
+    var sawPlaylistSection = false;
+    String? name;
+    int? declaredEntries;
+    int? version;
+    final locators = <int, String>{};
+    final titles = <int, String>{};
+
+    for (final rawLine in const LineSplitter().convert(document)) {
+      final line = rawLine.trim();
+      if (line.isEmpty || line.startsWith(';') || line.startsWith('#')) {
+        continue;
+      }
+      if (line.startsWith('[') && line.endsWith(']')) {
+        inPlaylistSection = line.substring(1, line.length - 1).trim().toLowerCase() ==
+            'playlist';
+        sawPlaylistSection = sawPlaylistSection || inPlaylistSection;
+        continue;
+      }
+      if (!inPlaylistSection) {
+        continue;
+      }
+      final separator = line.indexOf('=');
+      if (separator <= 0) {
+        continue;
+      }
+      final key = line.substring(0, separator).trim().toLowerCase();
+      final value = line.substring(separator + 1).trim();
+      if (key == 'playlistname') {
+        name = value;
+        continue;
+      }
+      if (key == 'numberofentries') {
+        declaredEntries = int.tryParse(value);
+        continue;
+      }
+      if (key == 'version') {
+        version = int.tryParse(value);
+        continue;
+      }
+      final fileIndex = _plsEntryIndex(key, 'file');
+      if (fileIndex != null) {
+        if (fileIndex <= 500 && value.isNotEmpty) {
+          locators[fileIndex] = value;
+        }
+        continue;
+      }
+      final titleIndex = _plsEntryIndex(key, 'title');
+      if (titleIndex != null && titleIndex <= 500 && value.isNotEmpty) {
+        titles[titleIndex] = value;
+      }
+    }
+
+    if (!sawPlaylistSection) {
+      throw const FormatException('PLS must contain a [playlist] section.');
+    }
+    if (version != 2) {
+      throw const FormatException('Only PLS Version=2 is supported.');
+    }
+    if (declaredEntries != null && (declaredEntries < 0 || declaredEntries > 500)) {
+      throw const FormatException('PLS NumberOfEntries must be between 0 and 500.');
+    }
+    final entryIndexes = locators.keys.toList()..sort();
+    if (declaredEntries != null && entryIndexes.any((index) => index > declaredEntries!)) {
+      throw const FormatException('PLS contains entries beyond NumberOfEntries.');
+    }
+    final trackIds = <String?>[
+      for (final index in entryIndexes)
+        _matchM3uEntry(locators[index]!, titles[index] == null
+            ? null
+            : '#EXTINF:-1,${titles[index]}'),
+    ];
+    final importedTrackIds = _dedupeTrackIds(trackIds);
+    if (importedTrackIds.isEmpty) {
+      throw const FormatException(
+        'Imported playlist did not match any library tracks.',
+      );
+    }
     final playlistName = name == null || name.isEmpty ? fallbackName : name;
     return createPlaylist(playlistName, trackIds: importedTrackIds);
   }
@@ -7584,6 +7699,18 @@ class LibraryStore extends ChangeNotifier {
       'artist': label.substring(0, separatorIndex),
       'title': label.substring(separatorIndex + 3),
     });
+  }
+
+  int? _plsEntryIndex(String key, String prefix) {
+    if (!key.startsWith(prefix)) {
+      return null;
+    }
+    final suffix = key.substring(prefix.length);
+    if (!RegExp(r'^\d+$').hasMatch(suffix)) {
+      return null;
+    }
+    final index = int.tryParse(suffix);
+    return index == null || index <= 0 ? null : index;
   }
 
   String? _stringValue(Object? value) {

@@ -59,7 +59,7 @@
 - [x] Manual playlists
 - [x] Playlist reorder
 - [x] Find in playlist
-- [x] Playlist import/export JSON/M3U/CSV
+- [x] Playlist import/export JSON/M3U/PLS/CSV
 - [x] Built-in smart playlists
 - [x] Custom rule smart playlists
 - [x] Nested smart playlist rule builder
