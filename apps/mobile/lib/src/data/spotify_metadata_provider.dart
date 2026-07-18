@@ -34,6 +34,8 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? recentlyPlayedLoader,
     Uri? topTracksUri,
     SpotifySearchLoader? topTracksLoader,
+    Uri? topArtistsUri,
+    SpotifySearchLoader? topArtistsLoader,
     Uri? albumsUri,
     SpotifySearchLoader? albumTracksLoader,
     Uri? playlistsUri,
@@ -51,6 +53,8 @@ final class SpotifyMetadataProvider
        _recentlyPlayedLoader = recentlyPlayedLoader ?? _loadSpotifyJson,
        topTracksUri = topTracksUri ?? _defaultTopTracksUri,
        _topTracksLoader = topTracksLoader ?? _loadSpotifyJson,
+       topArtistsUri = topArtistsUri ?? _defaultTopArtistsUri,
+       _topArtistsLoader = topArtistsLoader ?? _loadSpotifyJson,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
        _albumTracksLoader = albumTracksLoader ?? _loadSpotifyJson,
        playlistsUri = playlistsUri ?? _defaultPlaylistsUri,
@@ -68,6 +72,8 @@ final class SpotifyMetadataProvider
       Uri.parse('https://api.spotify.com/v1/me/player/recently-played');
   static final Uri _defaultTopTracksUri =
       Uri.parse('https://api.spotify.com/v1/me/top/tracks');
+  static final Uri _defaultTopArtistsUri =
+      Uri.parse('https://api.spotify.com/v1/me/top/artists');
   static final Uri _defaultAlbumsUri =
       Uri.parse('https://api.spotify.com/v1/albums');
   static final Uri _defaultPlaylistsUri =
@@ -86,6 +92,8 @@ final class SpotifyMetadataProvider
   final SpotifySearchLoader _recentlyPlayedLoader;
   final Uri topTracksUri;
   final SpotifySearchLoader _topTracksLoader;
+  final Uri topArtistsUri;
+  final SpotifySearchLoader _topArtistsLoader;
   final Uri albumsUri;
   final SpotifySearchLoader _albumTracksLoader;
   final Uri playlistsUri;
@@ -307,6 +315,27 @@ final class SpotifyMetadataProvider
     );
   }
 
+  Future<List<SpotifyTopArtist>> loadTopArtists({
+    SpotifyTopTracksTimeRange timeRange = SpotifyTopTracksTimeRange.mediumTerm,
+    int limit = 50,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final token = await _accessTokenReader();
+    return parseSpotifyTopArtists(
+      await _topArtistsLoader(
+        topArtistsUri.replace(
+          queryParameters: <String, String>{
+            'time_range': timeRange.apiValue,
+            'limit': limit.clamp(1, 50).toString(),
+          },
+        ),
+        token,
+      ),
+    );
+  }
+
   /// Reads the catalog metadata for tracks in a saved Spotify album.
   Future<SpotifyAlbumTracksPage> loadAlbumTracksPage(
     SpotifySavedAlbum album, {
@@ -462,6 +491,14 @@ final class SpotifySavedAlbumsPage {
   final int offset;
   final int total;
   final bool hasMore;
+}
+
+final class SpotifyTopArtist {
+  const SpotifyTopArtist({required this.id, required this.name, this.artworkUri});
+
+  final String id;
+  final String name;
+  final Uri? artworkUri;
 }
 
 final class SpotifyRecentlyPlayedItem {
@@ -632,6 +669,33 @@ SpotifySavedAlbumsPage parseSpotifySavedAlbumsPage(String jsonText) {
     total: total,
     hasMore: _nonEmpty(root['next']) != null || offset + albums.length < total,
   );
+}
+
+List<SpotifyTopArtist> parseSpotifyTopArtists(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify top artists response must be a map.');
+  }
+  final items = Map<String, Object?>.from(decoded)['items'];
+  if (items is! List) {
+    return const <SpotifyTopArtist>[];
+  }
+  return items
+      .whereType<Map>()
+      .map((item) {
+        final artist = Map<String, Object?>.from(item);
+        final id = _nonEmpty(artist['id']);
+        final name = _nonEmpty(artist['name']);
+        return id == null || name == null
+            ? null
+            : SpotifyTopArtist(
+                id: id,
+                name: name,
+                artworkUri: _spotifyArtworkUri(artist['images']),
+              );
+      })
+      .whereType<SpotifyTopArtist>()
+      .toList(growable: false);
 }
 
 SpotifySavedTracksPage parseSpotifyTopTracksPage(String jsonText) {

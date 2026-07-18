@@ -90,6 +90,7 @@ import 'spotify_saved_tracks_screen.dart';
 import 'spotify_saved_albums_screen.dart';
 import 'spotify_saved_playlists_screen.dart';
 import 'spotify_recently_played_screen.dart';
+import 'spotify_top_artists_screen.dart';
 import 'youtube_music_chart_screen.dart';
 import 'youtube_channel_follow_screen.dart';
 import 'youtube_followed_channel_feed_screen.dart';
@@ -13070,6 +13071,7 @@ enum _SpotifyAction {
   playlists,
   recentlyPlayed,
   topTracks,
+  topArtists,
   configure,
   remove,
 }
@@ -13461,6 +13463,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifyTopTracks(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.topArtists:
+                  if (spotifyProvider != null) {
+                    _openSpotifyTopArtists(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.configure:
                   unawaited(_configureSpotify(context));
                   break;
@@ -13513,6 +13520,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.auto_graph_outlined),
                   title: Text('Top tracks'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.topArtists,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.people_alt_outlined),
+                  title: Text('Top artists'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -14928,6 +14944,17 @@ class _SourcesTabState extends State<_SourcesTab> {
           provider: provider,
           topTracks: true,
         ),
+      ),
+    );
+  }
+
+  void _openSpotifyTopArtists(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifyTopArtistsScreen(provider: provider),
       ),
     );
   }

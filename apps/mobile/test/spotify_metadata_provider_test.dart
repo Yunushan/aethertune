@@ -186,6 +186,31 @@ void main() {
     expect(page.tracks.single.isPlayable, isFalse);
   });
 
+  test('loads bounded official Spotify top-artist metadata', () async {
+    Uri? requestUri;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      topArtistsLoader: (uri, token) async {
+        requestUri = uri;
+        return '''
+          {"items": [{"id": "top-artist", "name": "Aether",
+          "images": [{"url": "https://i.scdn.co/image/artist"}]}]}
+        ''';
+      },
+    );
+
+    final artists = await provider.loadTopArtists(
+      timeRange: SpotifyTopTracksTimeRange.longTerm,
+      limit: 100,
+    );
+
+    expect(requestUri!.path, '/v1/me/top/artists');
+    expect(requestUri!.queryParameters['time_range'], 'long_term');
+    expect(requestUri!.queryParameters['limit'], '50');
+    expect(artists.single.name, 'Aether');
+    expect(artists.single.artworkUri, Uri.parse('https://i.scdn.co/image/artist'));
+  });
+
   test('ignores malformed recently played entries', () {
     final page = parseSpotifyRecentlyPlayedPage('''
       {
