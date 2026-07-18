@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../domain/track_lyrics.dart';
+
 const maxPodcastTranscriptBytes = 256 * 1024;
 
 typedef PodcastTranscriptLoader = Future<PodcastTranscriptDocument> Function(
@@ -18,20 +20,11 @@ final class PodcastTranscriptDocument {
   final String? contentType;
 
   String get displayText {
-    if (!text.trimLeft().startsWith('WEBVTT')) {
-      return text;
+    final timedLines = parseSyncedLyricLines(text);
+    if (timedLines.isNotEmpty) {
+      return timedLines.map((line) => line.text).join('\n\n');
     }
-    return text
-        .split(RegExp(r'\r?\n'))
-        .where((line) {
-          final trimmed = line.trim();
-          return trimmed != 'WEBVTT' &&
-              !trimmed.startsWith('NOTE') &&
-              !trimmed.contains('-->');
-        })
-        .join('\n')
-        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-        .trim();
+    return text;
   }
 }
 

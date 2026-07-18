@@ -117,6 +117,10 @@ List<SyncedLyricLine> parseSyncedLyricLines(String input) {
   if (isTtmlLyricsDocument(input)) {
     return _parseTtmlSyncedLyricLines(input);
   }
+  final webVttLines = _parseWebVttSyncedLyricLines(input);
+  if (webVttLines.isNotEmpty) {
+    return webVttLines;
+  }
   final srtLines = _parseSrtSyncedLyricLines(input);
   if (srtLines.isNotEmpty) {
     return srtLines;
@@ -233,6 +237,105 @@ bool isTtmlLyricsDocument(String input) {
 
 bool isSrtLyricsDocument(String input) =>
     _parseSrtSyncedLyricLines(input).isNotEmpty;
+
+bool isWebVttLyricsDocument(String input) =>
+    input.trimLeft().startsWith('WEBVTT');
+
+List<SyncedLyricLine> _parseWebVttSyncedLyricLines(String input) {
+  if (!isWebVttLyricsDocument(input)) {
+    return const <SyncedLyricLine>[];
+  }
+
+  final indexedLines = <_IndexedSyncedLyricLine>[];
+  var order = 0;
+  for (final rawBlock in input.split(RegExp(r'\n\s*\n'))) {
+    final blockLines = rawBlock
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .toList(growable: false);
+    if (blockLines.isEmpty ||
+        blockLines.first.startsWith('WEBVTT') ||
+        blockLines.first.startsWith('NOTE') ||
+        blockLines.first.startsWith('STYLE') ||
+        blockLines.first.startsWith('REGION')) {
+      continue;
+    }
+
+    final timingLineIndex = blockLines.indexWhere(
+      (line) => line.contains('-->'),
+    );
+    if (timingLineIndex < 0) {
+      continue;
+    }
+    final timing = _parseWebVttTiming(blockLines[timingLineIndex]);
+    if (timing == null || timing.end < timing.start) {
+      continue;
+    }
+    final text = blockLines
+        .skip(timingLineIndex + 1)
+        .where((line) => line.isNotEmpty)
+        .map((line) => line.replaceAll(RegExp(r'<[^>]*>'), ''))
+        .join('\n')
+        .trim();
+    if (text.isEmpty) {
+      continue;
+    }
+    indexedLines.add(
+      _IndexedSyncedLyricLine(
+        line: SyncedLyricLine(
+          timestamp: timing.start,
+          endTimestamp: timing.end,
+          text: text,
+        ),
+        order: order,
+      ),
+    );
+    order += 1;
+  }
+  indexedLines.sort((a, b) {
+    final byTimestamp = a.line.timestamp.compareTo(b.line.timestamp);
+    return byTimestamp == 0 ? a.order.compareTo(b.order) : byTimestamp;
+  });
+  return indexedLines.map((entry) => entry.line).toList(growable: false);
+}
+
+_SrtTiming? _parseWebVttTiming(String value) {
+  final match = RegExp(
+    r'^((?:\d+:)?[0-5]\d:[0-5]\d[.,]\d{1,3})\s+-->\s+((?:\d+:)?[0-5]\d:[0-5]\d[.,]\d{1,3})(?:\s+.*)?$',
+  ).firstMatch(value.trim());
+  if (match == null) {
+    return null;
+  }
+  final start = _parseWebVttTimestamp(match.group(1)!);
+  final end = _parseWebVttTimestamp(match.group(2)!);
+  if (start == null || end == null) {
+    return null;
+  }
+  return _SrtTiming(start: start, end: end);
+}
+
+Duration? _parseWebVttTimestamp(String value) {
+  final parts = value.replaceAll(',', '.').split(':');
+  if (parts.length != 2 && parts.length != 3) {
+    return null;
+  }
+  final secondsParts = parts.last.split('.');
+  if (secondsParts.length != 2) {
+    return null;
+  }
+  final hours = parts.length == 3 ? int.tryParse(parts[0]) : 0;
+  final minutes = int.tryParse(parts[parts.length - 2]);
+  final seconds = int.tryParse(secondsParts[0]);
+  if (hours == null || minutes == null || seconds == null) {
+    return null;
+  }
+  return Duration(
+    hours: hours,
+    minutes: minutes,
+    seconds: seconds,
+    milliseconds: _lrcFractionToMilliseconds(secondsParts[1]),
+  );
+}
 
 List<SyncedLyricLine> _parseSrtSyncedLyricLines(String input) {
   final indexedLines = <_IndexedSyncedLyricLine>[];

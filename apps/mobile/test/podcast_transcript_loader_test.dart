@@ -23,6 +23,24 @@ Closing words
     expect(transcript.displayText, 'Opening words\n\nClosing words');
   });
 
+  test('renders SRT and TTML transcript cues as readable text', () {
+    final srt = decodePodcastTranscript(
+      utf8.encode('''
+1
+00:00:01,000 --> 00:00:02,000
+SRT opening
+'''),
+    );
+    final ttml = decodePodcastTranscript(
+      utf8.encode('''
+<tt><body><div><p begin="1s" end="2s">TTML opening</p></div></body></tt>
+'''),
+    );
+
+    expect(srt.displayText, 'SRT opening');
+    expect(ttml.displayText, 'TTML opening');
+  });
+
   test('rejects empty, oversized, and malformed transcript documents', () {
     expect(
       () => decodePodcastTranscript(const <int>[]),

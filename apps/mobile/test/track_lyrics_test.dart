@@ -127,6 +127,28 @@ line
     );
   });
 
+  test('parses WebVTT cues, cue settings, and inline markup', () {
+    const document = '''
+WEBVTT
+
+opening
+00:01.250 --> 00:03.500 align:start
+<i>First</i> line
+
+04:00:00.000 --> 04:00:02.000
+Second line
+''';
+
+    final lines = parseSyncedLyricLines(document);
+
+    expect(isWebVttLyricsDocument(document), isTrue);
+    expect(lines, hasLength(2));
+    expect(lines[0].timestamp, const Duration(milliseconds: 1250));
+    expect(lines[0].endTimestamp, const Duration(milliseconds: 3500));
+    expect(lines[0].text, 'First line');
+    expect(lines[1].timestamp, const Duration(hours: 4));
+  });
+
   test('plain lyrics are not treated as synced lyrics', () {
     final lyrics = TrackLyrics(
       trackId: 'track-1',
