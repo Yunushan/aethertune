@@ -663,6 +663,7 @@ final class _LocalFolderScanState {
 
         _LocalFileMetadata? metadata;
         Uri? artworkUri;
+        var hasFrontCover = false;
         var metadataBytesRead = 0;
         while (metadataBytesRead < _maxFlacMetadataBytes) {
           final header = await access.read(4);
@@ -689,7 +690,13 @@ final class _LocalFolderScanState {
             if (blockType == _flacVorbisCommentBlockType) {
               metadata = _vorbisCommentMetadata(blockBytes) ?? metadata;
             } else {
-              artworkUri = _flacPictureArtworkUri(blockBytes) ?? artworkUri;
+              final picture = _flacPictureArtwork(blockBytes);
+              if (picture != null &&
+                  (artworkUri == null ||
+                      (!hasFrontCover && picture.isFrontCover))) {
+                artworkUri = picture.artworkUri;
+                hasFrontCover = picture.isFrontCover;
+              }
             }
           } else {
             await access.setPosition(await access.position() + blockLength);
@@ -1775,16 +1782,27 @@ final class _LocalFolderScanState {
       key == 'LYRICS' || key == 'UNSYNCEDLYRICS';
 
   Uri? _vorbisCommentArtworkUri(Map<String, List<String>> comments) {
-    final picture = _firstVorbisComment(comments, 'METADATA_BLOCK_PICTURE');
-    if (picture != null && picture.isNotEmpty) {
+    Uri? artworkUri;
+    var hasFrontCover = false;
+    for (final picture in comments['METADATA_BLOCK_PICTURE'] ??
+        const <String>[]) {
+      if (picture.isEmpty) {
+        continue;
+      }
       try {
-        final artworkUri = _flacPictureArtworkUri(base64.decode(picture));
-        if (artworkUri != null) {
-          return artworkUri;
+        final decodedPicture = _flacPictureArtwork(base64.decode(picture));
+        if (decodedPicture != null &&
+            (artworkUri == null ||
+                (!hasFrontCover && decodedPicture.isFrontCover))) {
+          artworkUri = decodedPicture.artworkUri;
+          hasFrontCover = decodedPicture.isFrontCover;
         }
       } on FormatException {
-        // Try the older COVERART form below.
+        // Skip malformed values and retain valid picture blocks.
       }
+    }
+    if (artworkUri != null) {
+      return artworkUri;
     }
 
     final coverArt = _firstVorbisComment(comments, 'COVERART');
@@ -2460,13 +2478,14 @@ final class _LocalFolderScanState {
           );
   }
 
-  Uri? _flacPictureArtworkUri(List<int> bytes) {
+  _FlacPictureArtwork? _flacPictureArtwork(List<int> bytes) {
     var offset = 0;
     if (offset + 8 > bytes.length) {
       return null;
     }
 
-    offset += 4; // Picture type.
+    final pictureType = _uint32(bytes, offset);
+    offset += 4;
     final mimeLength = _uint32(bytes, offset);
     offset += 4;
     if (mimeLength < 0 || offset + mimeLength > bytes.length) {
@@ -2500,10 +2519,16 @@ final class _LocalFolderScanState {
     }
 
     final imageBytes = bytes.sublist(offset, offset + dataLength);
-    return _artworkDataUri(
+    final artworkUri = _artworkDataUri(
       imageBytes,
       mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
     );
+    return artworkUri == null
+        ? null
+        : _FlacPictureArtwork(
+            artworkUri: artworkUri,
+            isFrontCover: pictureType == _frontCoverPictureType,
+          );
   }
 
   Uri? _m4aDataAtomArtworkUri(
@@ -3090,6 +3115,16 @@ final class _Apev2Comments {
 
 final class _Id3v2PictureArtwork {
   const _Id3v2PictureArtwork({
+    required this.artworkUri,
+    required this.isFrontCover,
+  });
+
+  final Uri artworkUri;
+  final bool isFrontCover;
+}
+
+final class _FlacPictureArtwork {
+  const _FlacPictureArtwork({
     required this.artworkUri,
     required this.isFrontCover,
   });

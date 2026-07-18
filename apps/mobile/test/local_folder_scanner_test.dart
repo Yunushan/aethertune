@@ -701,6 +701,45 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('prefers FLAC and Ogg front covers over earlier picture entries',
+      () async {
+    await File(p.join(root.path, 'front-cover.flac')).writeAsBytes(
+      _flacWithVorbisComments(
+        <String, List<String>>{'TITLE': <String>['FLAC Covers']},
+        artworkBytes: _tinyJpegBytes,
+        artworkPictureType: 4,
+        artworkMimeType: 'image/jpeg',
+        additionalPictureBlocks: <List<int>>[
+          _flacPictureBlock(_tinyPngBytes),
+        ],
+      ),
+    );
+    await File(p.join(root.path, 'front-cover.ogg')).writeAsBytes(
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Ogg Covers'],
+        'METADATA_BLOCK_PICTURE': <String>[
+          base64Encode(
+            _flacPictureBlock(
+              _tinyJpegBytes,
+              pictureType: 4,
+              mimeType: 'image/jpeg',
+            ),
+          ),
+          base64Encode(_flacPictureBlock(_tinyPngBytes)),
+        ],
+      }),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final tracks = <String, Track>{
+      for (final track in result.tracks) track.title: track,
+    };
+    final expected = 'data:image/png;base64,${base64Encode(_tinyPngBytes)}';
+
+    expect(tracks['FLAC Covers']!.artworkUri.toString(), expected);
+    expect(tracks['Ogg Covers']!.artworkUri.toString(), expected);
+  });
+
   test('merges partial FLAC Vorbis comments with filename metadata', () async {
     await File(
       p.join(root.path, '08 Filename Artist - Filename Title.flac'),
@@ -1637,10 +1676,20 @@ const _id3v2EncodingUtf16 = 1;
 List<int> _flacWithVorbisComments(
   Map<String, List<String>> comments, {
   List<int>? artworkBytes,
+  int artworkPictureType = 3,
+  String artworkMimeType = 'image/png',
+  List<List<int>> additionalPictureBlocks = const <List<int>>[],
 }) {
   final vorbisComments = _vorbisCommentBlock(comments);
-  final pictureBlock =
-      artworkBytes == null ? null : _flacPictureBlock(artworkBytes);
+  final pictureBlocks = <List<int>>[
+    if (artworkBytes != null)
+      _flacPictureBlock(
+        artworkBytes,
+        pictureType: artworkPictureType,
+        mimeType: artworkMimeType,
+      ),
+    ...additionalPictureBlocks,
+  ];
 
   return <int>[
     ...'fLaC'.codeUnits,
@@ -1653,16 +1702,16 @@ List<int> _flacWithVorbisComments(
     ..._flacMetadataBlockHeader(
       blockType: _flacVorbisCommentBlockType,
       length: vorbisComments.length,
-      isLast: pictureBlock == null,
+      isLast: pictureBlocks.isEmpty,
     ),
     ...vorbisComments,
-    if (pictureBlock != null) ...[
+    for (var index = 0; index < pictureBlocks.length; index += 1) ...[
       ..._flacMetadataBlockHeader(
         blockType: _flacPictureBlockType,
-        length: pictureBlock.length,
-        isLast: true,
+        length: pictureBlocks[index].length,
+        isLast: index == pictureBlocks.length - 1,
       ),
-      ...pictureBlock,
+      ...pictureBlocks[index],
     ],
     0,
     1,
@@ -1670,11 +1719,15 @@ List<int> _flacWithVorbisComments(
   ];
 }
 
-List<int> _flacPictureBlock(List<int> artworkBytes) {
+List<int> _flacPictureBlock(
+  List<int> artworkBytes, {
+  int pictureType = 3,
+  String mimeType = 'image/png',
+}) {
   return <int>[
-    ..._uint32Size(3),
-    ..._uint32Size('image/png'.codeUnits.length),
-    ...'image/png'.codeUnits,
+    ..._uint32Size(pictureType),
+    ..._uint32Size(mimeType.codeUnits.length),
+    ...mimeType.codeUnits,
     ..._uint32Size(0),
     ..._uint32Size(1),
     ..._uint32Size(1),
