@@ -64,7 +64,7 @@ final class _LocalFileMetadata {
     this.replayGainAlbumDb,
     this.embeddedLyrics,
     this.rating,
-    this.chapters,
+    this.chapters = const <TrackChapter>[],
   });
 
   final String title;
@@ -79,7 +79,7 @@ final class _LocalFileMetadata {
   final double? replayGainAlbumDb;
   final String? embeddedLyrics;
   final int? rating;
-  final List<TrackChapter>? chapters;
+  final List<TrackChapter> chapters;
 }
 
 final class _ScannedLocalTrack {
@@ -1029,7 +1029,8 @@ final class _LocalFolderScanState {
         tagData.replayGainTrackDb == null &&
         tagData.replayGainAlbumDb == null &&
         tagData.embeddedLyrics == null &&
-        tagData.rating == null) {
+        tagData.rating == null &&
+        tagData.chapters.isEmpty) {
       return null;
     }
 
@@ -1051,7 +1052,8 @@ final class _LocalFolderScanState {
         tagData.replayGainTrackDb == null &&
         tagData.replayGainAlbumDb == null &&
         tagData.embeddedLyrics == null &&
-        tagData.rating == null) {
+        tagData.rating == null &&
+        tagData.chapters.isEmpty) {
       return null;
     }
 
@@ -1070,6 +1072,7 @@ final class _LocalFolderScanState {
       replayGainAlbumDb: tagData.replayGainAlbumDb,
       embeddedLyrics: tagData.embeddedLyrics,
       rating: tagData.rating,
+      chapters: tagData.chapters,
     );
   }
 
@@ -1084,6 +1087,7 @@ final class _LocalFolderScanState {
     double? replayGainAlbumDb;
     String? embeddedLyrics;
     int? rating;
+    final chapters = <TrackChapter>[];
     var offset = 0;
     while (offset + 10 <= bytes.length) {
       final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
@@ -1147,6 +1151,15 @@ final class _LocalFolderScanState {
         rating = _id3v2PopularimeterRating(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'CHAP' && chapters.length < _maxId3v2Chapters) {
+        final chapter = _id3v2Chapter(
+          bytes.sublist(offset, offset + frameSize),
+          majorVersion,
+          fallbackIndex: chapters.length + 1,
+        );
+        if (chapter != null) {
+          chapters.add(chapter);
+        }
       }
 
       offset += frameSize;
@@ -1159,6 +1172,7 @@ final class _LocalFolderScanState {
       replayGainAlbumDb: replayGainAlbumDb,
       embeddedLyrics: embeddedLyrics,
       rating: rating,
+      chapters: TrackChapter.normalize(chapters),
     );
   }
 
@@ -1244,6 +1258,54 @@ final class _LocalFolderScanState {
       embeddedLyrics: embeddedLyrics,
       rating: rating,
     );
+  }
+
+  TrackChapter? _id3v2Chapter(
+    List<int> bytes,
+    int majorVersion, {
+    required int fallbackIndex,
+  }) {
+    final elementIdEnd = bytes.indexOf(0);
+    if (elementIdEnd <= 0 || elementIdEnd + 17 > bytes.length) {
+      return null;
+    }
+
+    final startMs = _uint32(bytes, elementIdEnd + 1);
+    var offset = elementIdEnd + 17;
+    String? title;
+    while (offset + 10 <= bytes.length) {
+      final frameId = String.fromCharCodes(bytes.skip(offset).take(4));
+      if (!_isId3v2FrameId(frameId)) {
+        break;
+      }
+
+      final frameSize = majorVersion == 4
+          ? _id3v2SynchsafeInt(bytes, offset + 4)
+          : _uint32(bytes, offset + 4);
+      offset += 10;
+      if (frameSize <= 0 || offset + frameSize > bytes.length) {
+        break;
+      }
+      if (frameId == 'TIT2') {
+        final value = _id3v2TextFrame(
+          bytes.sublist(offset, offset + frameSize),
+        );
+        if (value.isNotEmpty) {
+          title = value;
+          break;
+        }
+      }
+      offset += frameSize;
+    }
+
+    try {
+      return TrackChapter(
+        start: Duration(milliseconds: startMs),
+        title: title ?? 'Chapter $fallbackIndex',
+      );
+    } on ArgumentError {
+      return null;
+    }
   }
 
   _LocalFileMetadata? _id3v1Metadata(List<int> bytes) {
@@ -1805,6 +1867,7 @@ final class _LocalFolderScanState {
           replayGainAlbumDb: id3Metadata?.replayGainAlbumDb,
           embeddedLyrics: id3Metadata?.embeddedLyrics,
           rating: id3Metadata?.rating,
+          chapters: id3Metadata?.chapters ?? const <TrackChapter>[],
         );
       } finally {
         await access.close();
@@ -2205,6 +2268,9 @@ final class _LocalFolderScanState {
       replayGainAlbumDb: id3Metadata.replayGainAlbumDb,
       embeddedLyrics: id3Metadata.embeddedLyrics,
       rating: id3Metadata.rating,
+      chapters: id3Metadata.chapters.isEmpty
+          ? infoMetadata.chapters
+          : id3Metadata.chapters,
     );
   }
 
@@ -3209,6 +3275,7 @@ final class _Id3v2TagData {
     this.replayGainAlbumDb,
     this.embeddedLyrics,
     this.rating,
+    this.chapters = const <TrackChapter>[],
   });
 
   final Map<String, String> textFrames;
@@ -3217,6 +3284,7 @@ final class _Id3v2TagData {
   final double? replayGainAlbumDb;
   final String? embeddedLyrics;
   final int? rating;
+  final List<TrackChapter> chapters;
 }
 
 const _maxId3v2TagBytes = 1024 * 1024;
@@ -3233,6 +3301,7 @@ const _maxEmbeddedLyricsBytes = 256 * 1024;
 const _maxCueSheetBytes = 256 * 1024;
 const _maxCueSheetChapters = 500;
 const _maxMp4Chapters = 255;
+const _maxId3v2Chapters = 255;
 const _mp4ChapterTicksPerMicrosecond = 10;
 const _maxId3v2SyncedLyricEvents = 4096;
 const _maxMp4TopLevelAtoms = 512;

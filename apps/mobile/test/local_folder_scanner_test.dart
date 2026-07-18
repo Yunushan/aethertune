@@ -435,6 +435,63 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('imports ID3v2 CHAP chapter frames for MP3 files', () async {
+    await File(p.join(root.path, 'chapters.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Chaptered MP3',
+        additionalFrames: <List<int>>[
+          _id3v23ChapterFrame(
+            elementId: 'chapter-1',
+            startMilliseconds: 0,
+            title: 'Opening',
+          ),
+          _id3v23ChapterFrame(
+            elementId: 'chapter-2',
+            startMilliseconds: 61000,
+            title: 'Second Part',
+          ),
+        ],
+      ),
+      1,
+      2,
+      3,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final chapters = result.tracks.single.chapters;
+
+    expect(chapters, hasLength(2));
+    expect(chapters[0].start, Duration.zero);
+    expect(chapters[0].title, 'Opening');
+    expect(chapters[1].start, const Duration(minutes: 1, seconds: 1));
+    expect(chapters[1].title, 'Second Part');
+  });
+
+  test('imports ID3v2.4 CHAP chapter frames for MP3 files', () async {
+    await File(p.join(root.path, 'chapters-v24.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Chaptered MP3 v2.4',
+        majorVersion: 4,
+        additionalFrames: <List<int>>[
+          _id3v23ChapterFrame(
+            elementId: 'chapter-v24',
+            startMilliseconds: 42000,
+            title: 'Answer',
+          ),
+        ],
+      ),
+      1,
+      2,
+      3,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final chapter = result.tracks.single.chapters.single;
+
+    expect(chapter.start, const Duration(seconds: 42));
+    expect(chapter.title, 'Answer');
+  });
+
   test('extracts bounded ID3v2 embedded lyrics for MP3 files', () async {
     final audioPath = p.join(root.path, 'embedded-lyrics.mp3');
     await File(audioPath).writeAsBytes(<int>[
@@ -1459,6 +1516,7 @@ List<int> _id3v23Tag({
   int artworkPictureType = 3,
   String artworkMimeType = 'image/png',
   List<List<int>> additionalArtworkFrames = const <List<int>>[],
+  List<List<int>> additionalFrames = const <List<int>>[],
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
   String unsynchronizedLyrics = '',
@@ -1467,6 +1525,7 @@ List<int> _id3v23Tag({
   Map<int, String> synchronizedLyrics = const <int, String>{},
   int? popularimeterRating,
   int encoding = _id3v2EncodingUtf8,
+  int majorVersion = 3,
 }) {
   final frames = <int>[
     if (title.isNotEmpty) ..._id3v23TextFrame('TIT2', title, encoding),
@@ -1486,6 +1545,7 @@ List<int> _id3v23Tag({
         mimeType: artworkMimeType,
       ),
     for (final frame in additionalArtworkFrames) ...frame,
+    for (final frame in additionalFrames) ...frame,
     if (replayGainTrackGain.isNotEmpty)
       ..._id3v23UserTextFrame(
         'REPLAYGAIN_TRACK_GAIN',
@@ -1516,7 +1576,7 @@ List<int> _id3v23Tag({
     0x49,
     0x44,
     0x33,
-    0x03,
+    majorVersion,
     0x00,
     0x00,
     ..._id3v2SynchsafeSize(frames.length),
@@ -1706,6 +1766,27 @@ List<int> _uint32Size(int size) {
     (size >> 16) & 0xff,
     (size >> 8) & 0xff,
     size & 0xff,
+  ];
+}
+
+List<int> _id3v23ChapterFrame({
+  required String elementId,
+  required int startMilliseconds,
+  required String title,
+}) {
+  final payload = <int>[
+    ...elementId.codeUnits,
+    0,
+    ..._uint32Size(startMilliseconds),
+    ...List<int>.filled(12, 0xff),
+    ..._id3v23TextFrame('TIT2', title, _id3v2EncodingUtf8),
+  ];
+  return <int>[
+    ...'CHAP'.codeUnits,
+    ..._uint32Size(payload.length),
+    0,
+    0,
+    ...payload,
   ];
 }
 
