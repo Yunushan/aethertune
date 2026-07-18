@@ -174,10 +174,13 @@ void main() {
       },
     );
 
-    final page = await provider.loadTopTracksPage(limit: 100);
+    final page = await provider.loadTopTracksPage(
+      limit: 100,
+      timeRange: SpotifyTopTracksTimeRange.shortTerm,
+    );
 
     expect(requestUri!.path, '/v1/me/top/tracks');
-    expect(requestUri!.queryParameters['time_range'], 'medium_term');
+    expect(requestUri!.queryParameters['time_range'], 'short_term');
     expect(requestUri!.queryParameters['limit'], '50');
     expect(page.tracks.single.title, 'Top Signal');
     expect(page.tracks.single.isPlayable, isFalse);

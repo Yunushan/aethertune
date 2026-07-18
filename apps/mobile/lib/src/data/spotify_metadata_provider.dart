@@ -7,6 +7,16 @@ import '../domain/track.dart';
 typedef SpotifyAccessTokenReader = Future<String> Function();
 typedef SpotifySearchLoader = Future<String> Function(Uri uri, String token);
 
+enum SpotifyTopTracksTimeRange { shortTerm, mediumTerm, longTerm }
+
+extension on SpotifyTopTracksTimeRange {
+  String get apiValue => switch (this) {
+    SpotifyTopTracksTimeRange.shortTerm => 'short_term',
+    SpotifyTopTracksTimeRange.mediumTerm => 'medium_term',
+    SpotifyTopTracksTimeRange.longTerm => 'long_term',
+  };
+}
+
 /// Official Spotify Web API metadata search. It has no playback surface.
 final class SpotifyMetadataProvider
     implements
@@ -274,6 +284,7 @@ final class SpotifyMetadataProvider
   Future<SpotifySavedTracksPage> loadTopTracksPage({
     int offset = 0,
     int limit = 20,
+    SpotifyTopTracksTimeRange timeRange = SpotifyTopTracksTimeRange.mediumTerm,
   }) async {
     if (offset < 0) {
       throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
@@ -286,7 +297,7 @@ final class SpotifyMetadataProvider
       await _topTracksLoader(
         topTracksUri.replace(
           queryParameters: <String, String>{
-            'time_range': 'medium_term',
+            'time_range': timeRange.apiValue,
             'limit': limit.clamp(1, 50).toString(),
             'offset': offset.toString(),
           },

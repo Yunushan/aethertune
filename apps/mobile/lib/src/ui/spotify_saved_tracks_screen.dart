@@ -32,6 +32,9 @@ final class _SpotifySavedTracksScreenState
   bool _hasMore = false;
   bool _loading = false;
   String? _error;
+  int _requestSerial = 0;
+  SpotifyTopTracksTimeRange _topTracksTimeRange =
+      SpotifyTopTracksTimeRange.mediumTerm;
 
   @override
   void initState() {
@@ -50,6 +53,20 @@ final class _SpotifySavedTracksScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
+          if (widget.topTracks)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final range in SpotifyTopTracksTimeRange.values)
+                  ChoiceChip(
+                    label: Text(_topTracksRangeLabel(range)),
+                    selected: _topTracksTimeRange == range,
+                    onSelected: (_) => _selectTopTracksRange(range),
+                  ),
+              ],
+            ),
+          if (widget.topTracks) const SizedBox(height: 12),
           if (offlineModeEnabled && _tracks.isEmpty)
             ListTile(
               leading: const Icon(Icons.cloud_off_outlined),
@@ -164,6 +181,7 @@ final class _SpotifySavedTracksScreenState
       });
       return;
     }
+    final request = ++_requestSerial;
     final requestedOffset = reset ? 0 : _nextOffset;
     setState(() {
       _loading = true;
@@ -177,9 +195,12 @@ final class _SpotifySavedTracksScreenState
     });
     try {
       final page = widget.topTracks
-          ? await widget.provider.loadTopTracksPage(offset: requestedOffset)
+          ? await widget.provider.loadTopTracksPage(
+              offset: requestedOffset,
+              timeRange: _topTracksTimeRange,
+            )
           : await widget.provider.loadSavedTracksPage(offset: requestedOffset);
-      if (!mounted) {
+      if (!mounted || request != _requestSerial) {
         return;
       }
       final tracks = reset ? page.tracks : _mergeTracks(_tracks, page.tracks);
@@ -191,7 +212,7 @@ final class _SpotifySavedTracksScreenState
         _loading = false;
       });
     } on Object catch (error) {
-      if (!mounted) {
+      if (!mounted || request != _requestSerial) {
         return;
       }
       setState(() {
@@ -240,5 +261,26 @@ final class _SpotifySavedTracksScreenState
         .where((part) => part.trim().isNotEmpty)
         .toList(growable: false);
     return parts.join(' - ');
+  }
+
+  void _selectTopTracksRange(SpotifyTopTracksTimeRange range) {
+    if (_topTracksTimeRange == range) {
+      return;
+    }
+    _requestSerial += 1;
+    setState(() {
+      _topTracksTimeRange = range;
+      _loading = false;
+      _error = null;
+    });
+    unawaited(_load(reset: true));
+  }
+
+  String _topTracksRangeLabel(SpotifyTopTracksTimeRange range) {
+    return switch (range) {
+      SpotifyTopTracksTimeRange.shortTerm => '4 weeks',
+      SpotifyTopTracksTimeRange.mediumTerm => '6 months',
+      SpotifyTopTracksTimeRange.longTerm => '1 year',
+    };
   }
 }
