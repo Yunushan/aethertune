@@ -37,6 +37,51 @@ void main() {
     expect(restored.playlists, isEmpty);
   });
 
+  test('persists, merges, sorts, and filters user track ratings', () async {
+    final local = LibraryStore();
+    final remote = LibraryStore();
+    await Future.wait<void>(<Future<void>>[local.load(), remote.load()]);
+    await local.addTracks(<Track>[
+      _track('three', title: 'Three'),
+      _track('five', title: 'Five'),
+      _track('unrated', title: 'Unrated'),
+    ]);
+    await remote.addTracks(<Track>[_track('five', title: 'Five')]);
+    await local.setTrackRating('three', 3);
+    await local.setTrackRating('five', 4);
+    await remote.setTrackRating('five', 5);
+    await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
+
+    expect(local.tracks.singleWhere((track) => track.id == 'five').rating, 5);
+    expect(local.setTrackRating('five', 6), throwsRangeError);
+    expect(
+      local.search('', sortMode: LibrarySortMode.rating).map((track) => track.id),
+      <String>['five', 'three', 'unrated'],
+    );
+
+    final rule = await local.createCustomSmartPlaylist(
+      name: 'Rated tracks',
+      ruleGroups: <CustomSmartPlaylistRuleGroup>[
+        CustomSmartPlaylistRuleGroup(
+          rules: const <CustomSmartPlaylistRule>[
+            CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.minimumRating,
+              value: '4',
+            ),
+          ],
+        ),
+      ],
+    );
+    expect(
+      local.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      <String>['five'],
+    );
+
+    final restored = LibraryStore();
+    await restored.load();
+    expect(restored.tracks.singleWhere((track) => track.id == 'five').rating, 5);
+  });
+
   test('imports only unique, unambiguous external history matches', () async {
     final store = LibraryStore();
     await store.load();

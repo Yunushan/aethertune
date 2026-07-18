@@ -23,7 +23,7 @@ import '../domain/track_lyrics.dart';
 import '../domain/track_skip_segment.dart';
 import 'sponsorblock_segment_provider.dart' as sponsor_block;
 
-enum LibrarySortMode { recentlyAdded, title, artist, album }
+enum LibrarySortMode { recentlyAdded, title, artist, album, rating }
 
 LibrarySortMode _librarySortModeFromName(String? value) {
   return LibrarySortMode.values.firstWhere(
@@ -96,6 +96,7 @@ enum LibraryRecommendationReason {
   recentlyPlayedAlbum,
   recentlyPlayedGenre,
   favoriteTrack,
+  highlyRated,
   unplayed,
   recentlyAdded,
 }
@@ -137,6 +138,7 @@ enum CustomSmartPlaylistRuleField {
   minimumDurationSeconds,
   maximumDurationSeconds,
   favoritesOnly,
+  minimumRating,
   minimumPlayCount,
   minimumDaysSinceLastPlayed,
 }
@@ -481,6 +483,15 @@ class CustomSmartPlaylistRule {
           ? const CustomSmartPlaylistRule(
               field: CustomSmartPlaylistRuleField.favoritesOnly,
               value: 'true',
+            )
+          : null;
+    }
+    if (field == CustomSmartPlaylistRuleField.minimumRating) {
+      final value = int.tryParse(normalizedValue) ?? 0;
+      return value > 0
+          ? CustomSmartPlaylistRule(
+              field: field,
+              value: value.clamp(1, 5).toString(),
             )
           : null;
     }
@@ -2358,6 +2369,19 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setTrackRating(String id, int rating) async {
+    if (rating < 0 || rating > 5) {
+      throw RangeError.range(rating, 0, 5, 'rating');
+    }
+    final index = _tracks.indexWhere((track) => track.id == id);
+    if (index == -1 || _tracks[index].rating == rating) {
+      return;
+    }
+    _tracks[index] = _tracks[index].copyWith(rating: rating);
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> setLanguagePreference(
     AppLanguagePreference preference,
   ) async {
@@ -3501,6 +3525,10 @@ class LibraryStore extends ChangeNotifier {
         score += 8;
         reasons.add(LibraryRecommendationReason.favoriteTrack);
       }
+      if (track.rating >= 4) {
+        score += track.rating * 2;
+        reasons.add(LibraryRecommendationReason.highlyRated);
+      }
 
       final playCount = _recommendationHistorySignalsEnabled
           ? playCountForTrack(track.id)
@@ -3755,6 +3783,8 @@ class LibraryStore extends ChangeNotifier {
       CustomSmartPlaylistRuleField.maximumDurationSeconds =>
         track.duration.inSeconds <= (int.tryParse(value) ?? 0),
       CustomSmartPlaylistRuleField.favoritesOnly => track.isFavorite,
+      CustomSmartPlaylistRuleField.minimumRating =>
+        track.rating >= (int.tryParse(value) ?? 0),
       CustomSmartPlaylistRuleField.minimumPlayCount =>
         playCountForTrack(track.id) >= (int.tryParse(value) ?? 0),
       CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed =>
@@ -5537,6 +5567,9 @@ class LibraryStore extends ChangeNotifier {
         if (remoteTrack != null) {
           local['isFavorite'] =
               local['isFavorite'] == true || remoteTrack['isFavorite'] == true;
+          final localRating = (local['rating'] as num?)?.toInt() ?? 0;
+          final remoteRating = (remoteTrack['rating'] as num?)?.toInt() ?? 0;
+          local['rating'] = localRating >= remoteRating ? localRating : remoteRating;
         }
         byId[id] = local;
       }
@@ -7748,6 +7781,12 @@ class LibraryStore extends ChangeNotifier {
     if (shouldFavorite && !_tracks[keepIndex].isFavorite) {
       _tracks[keepIndex] = _tracks[keepIndex].copyWith(isFavorite: true);
     }
+    final highestRating = _tracks
+        .where((track) => duplicateIds.contains(track.id))
+        .fold(0, (value, track) => value > track.rating ? value : track.rating);
+    if (highestRating != _tracks[keepIndex].rating) {
+      _tracks[keepIndex] = _tracks[keepIndex].copyWith(rating: highestRating);
+    }
 
     _rewritePlaylistDuplicateReferences(keepTrackId, removeIds);
     _rewriteHistoryDuplicateReferences(keepTrackId, removeIds);
@@ -7963,6 +8002,9 @@ class LibraryStore extends ChangeNotifier {
           }
           final byTrackNumber = _compareTrackNumber(a.trackNumber, b.trackNumber);
           return byTrackNumber == 0 ? _compareText(a.title, b.title) : byTrackNumber;
+        case LibrarySortMode.rating:
+          final byRating = b.rating.compareTo(a.rating);
+          return byRating == 0 ? _compareText(a.title, b.title) : byRating;
       }
     });
 
@@ -9490,6 +9532,7 @@ class LibraryStore extends ChangeNotifier {
       sourceId: scanned.sourceId,
       externalId: scanned.externalId,
       isFavorite: current.isFavorite,
+      rating: current.rating,
       chapters: current.chapters,
       skipSegments: current.skipSegments,
       addedAt: current.addedAt,

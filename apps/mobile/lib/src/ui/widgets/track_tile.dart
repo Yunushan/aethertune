@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/library_store.dart';
 import '../../domain/track.dart';
 import '../../player/offline_playback_policy.dart';
 import '../../player/player_controller.dart';
@@ -40,6 +41,8 @@ class TrackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final library = context.read<LibraryStore?>();
+    final canRate = library?.tracks.any((saved) => saved.id == track.id) ?? false;
     final baseSubtitle = '${track.artist} · ${track.album} · ${track.genre}';
     final detail = detailText?.trim();
     final subtitle = detail == null || detail.isEmpty
@@ -55,7 +58,16 @@ class TrackTile extends StatelessWidget {
         artworkCrop: track.artworkCrop,
         borderRadius: 22,
       ),
-      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Row(
+        children: <Widget>[
+          Expanded(child: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          if (track.rating > 0)
+            Semantics(
+              label: 'Rating ${track.rating} of 5',
+              child: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.star, size: 18)),
+            ),
+        ],
+      ),
       subtitle: Text(
         subtitle,
         maxLines: detail == null || detail.isEmpty ? 1 : 2,
@@ -85,6 +97,9 @@ class TrackTile extends StatelessWidget {
               break;
             case _TrackAction.favorite:
               onFavorite();
+              break;
+            case _TrackAction.rate:
+              unawaited(_setRating(context));
               break;
             case _TrackAction.addToPlaylist:
               onAddToPlaylist();
@@ -142,6 +157,14 @@ class TrackTile extends StatelessWidget {
               title: Text('Play next'),
             ),
           ),
+          if (canRate)
+            PopupMenuItem(
+              value: _TrackAction.rate,
+              child: ListTile(
+                leading: Icon(track.rating == 0 ? Icons.star_outline : Icons.star),
+                title: Text(track.rating == 0 ? 'Rate' : 'Rating: ${track.rating} of 5'),
+              ),
+            ),
           const PopupMenuItem(
             value: _TrackAction.addToQueue,
             child: ListTile(
@@ -235,6 +258,34 @@ class TrackTile extends StatelessWidget {
       }
     }
   }
+
+  Future<void> _setRating(BuildContext context) async {
+    final library = context.read<LibraryStore?>();
+    if (library == null || !library.tracks.any((saved) => saved.id == track.id)) return;
+    final rating = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Rate ${track.title}'),
+        content: Wrap(
+          spacing: 4,
+          children: <Widget>[
+            for (var value = 1; value <= 5; value += 1)
+              IconButton(
+                tooltip: '$value of 5',
+                onPressed: () => Navigator.of(dialogContext).pop(value),
+                icon: Icon(value <= track.rating ? Icons.star : Icons.star_outline),
+              ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(0), child: const Text('Clear')),
+        ],
+      ),
+    );
+    if (rating == null || !context.mounted) return;
+    await library.setTrackRating(track.id, rating);
+  }
 }
 
 enum _TrackAction {
@@ -245,6 +296,7 @@ enum _TrackAction {
   playNext,
   addToQueue,
   favorite,
+  rate,
   addToPlaylist,
   lyrics,
   editMetadata,

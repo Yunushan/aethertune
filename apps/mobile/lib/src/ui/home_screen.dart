@@ -7356,6 +7356,8 @@ String _recommendationReasonLabel(LibraryRecommendationReason reason) {
       return 'a genre you played';
     case LibraryRecommendationReason.favoriteTrack:
       return 'this favorite';
+    case LibraryRecommendationReason.highlyRated:
+      return 'a highly rated track';
     case LibraryRecommendationReason.unplayed:
       return 'an unplayed track';
     case LibraryRecommendationReason.recentlyAdded:
@@ -7559,6 +7561,8 @@ String _librarySortLabel(LibrarySortMode sortMode) {
       return 'Artist';
     case LibrarySortMode.album:
       return 'Album';
+    case LibrarySortMode.rating:
+      return 'Rating';
   }
 }
 
@@ -7572,6 +7576,8 @@ IconData _librarySortIcon(LibrarySortMode sortMode) {
       return Icons.person_outline;
     case LibrarySortMode.album:
       return Icons.album_outlined;
+    case LibrarySortMode.rating:
+      return Icons.star_outline;
   }
 }
 
@@ -7739,6 +7745,7 @@ String _customSmartPlaylistRuleFieldLabel(
     CustomSmartPlaylistRuleField.maximumDurationSeconds =>
       'Maximum duration',
     CustomSmartPlaylistRuleField.favoritesOnly => 'Favorites only',
+    CustomSmartPlaylistRuleField.minimumRating => 'Minimum rating',
     CustomSmartPlaylistRuleField.minimumPlayCount => 'Minimum plays',
     CustomSmartPlaylistRuleField.minimumDaysSinceLastPlayed =>
       'Not played in at least (days)',
