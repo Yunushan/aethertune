@@ -708,6 +708,64 @@ FILE "../private.mp3" MP3
     expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');
   });
 
+  test('imports Vorbis chapter comments for FLAC, Ogg, and Opus files',
+      () async {
+    await File(p.join(root.path, 'chapters.flac')).writeAsBytes(
+      _flacWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['FLAC chapters'],
+        'CHAPTER001': <String>['00:00:00.000'],
+        'CHAPTER001NAME': <String>['FLAC opening'],
+        'CHAPTER002': <String>['00:01:02.500'],
+        'CHAPTER002NAME': <String>['FLAC second'],
+      }),
+    );
+    await File(p.join(root.path, 'chapters.ogg')).writeAsBytes(
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Ogg chapters'],
+        'CHAPTER001': <String>['00:00:42'],
+        'CHAPTER001NAME': <String>['Ogg answer'],
+        'CHAPTER002': <String>['not a timestamp'],
+      }),
+    );
+    await File(p.join(root.path, 'chapters.opus')).writeAsBytes(
+      _oggWithVorbisComments(
+        <String, List<String>>{
+          'TITLE': <String>['Opus chapters'],
+          'CHAPTER1': <String>['01:02.250'],
+          'CHAPTER1NAME': <String>['Opus short timestamp'],
+        },
+        opus: true,
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final tracks = <String, Track>{
+      for (final track in result.tracks) track.title: track,
+    };
+
+    expect(
+      tracks['FLAC chapters']!.chapters.map((chapter) => chapter.title),
+      <String>['FLAC opening', 'FLAC second'],
+    );
+    expect(
+      tracks['FLAC chapters']!.chapters[1].start,
+      const Duration(minutes: 1, seconds: 2, milliseconds: 500),
+    );
+    expect(tracks['Ogg chapters']!.chapters, hasLength(1));
+    expect(
+      tracks['Ogg chapters']!.chapters.single.start,
+      const Duration(seconds: 42),
+    );
+    expect(
+      tracks['Opus chapters']!.chapters.single.start,
+      const Duration(minutes: 1, seconds: 2, milliseconds: 250),
+    );
+    expect(
+      tracks['Opus chapters']!.chapters.single.title,
+      'Opus short timestamp',
+    );
+  });
+
   test('extracts embedded Ogg Vorbis comment artwork', () async {
     final artwork = <int>[
       0x89,

@@ -534,6 +534,7 @@ final class _LocalFolderScanState {
         embeddedLyrics: lyrics,
         rating: metadata?.rating,
         artworkUri: comments.artworkUri,
+        chapters: metadata?.chapters ?? const <TrackChapter>[],
       );
     }
 
@@ -731,6 +732,8 @@ final class _LocalFolderScanState {
           replayGainTrackDb: metadata?.replayGainTrackDb,
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
           embeddedLyrics: metadata?.embeddedLyrics,
+          rating: metadata?.rating,
+          chapters: metadata?.chapters ?? const <TrackChapter>[],
         );
       } finally {
         await access.close();
@@ -811,6 +814,7 @@ final class _LocalFolderScanState {
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
           embeddedLyrics: embeddedLyrics,
           rating: metadata?.rating,
+          chapters: metadata?.chapters ?? const <TrackChapter>[],
         );
       } finally {
         await access.close();
@@ -1352,6 +1356,7 @@ final class _LocalFolderScanState {
       replayGainAlbumDb: metadata?.replayGainAlbumDb,
       embeddedLyrics: embeddedLyrics,
       rating: metadata?.rating,
+      chapters: metadata?.chapters ?? const <TrackChapter>[],
     );
   }
 
@@ -1436,6 +1441,7 @@ final class _LocalFolderScanState {
       _firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN'),
     );
     final rating = _vorbisRating(_firstVorbisComment(comments, 'RATING'));
+    final chapters = _vorbisCommentChapters(comments);
     if (title.isEmpty &&
         artist.isEmpty &&
         (album == null || album.isEmpty) &&
@@ -1445,7 +1451,8 @@ final class _LocalFolderScanState {
         (genre == null || genre.isEmpty) &&
         replayGainTrackDb == null &&
         replayGainAlbumDb == null &&
-        rating == null) {
+        rating == null &&
+        chapters.isEmpty) {
       return null;
     }
 
@@ -1462,12 +1469,74 @@ final class _LocalFolderScanState {
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
       rating: rating,
+      chapters: chapters,
     );
   }
 
   String? _vorbisCommentLyrics(Map<String, List<String>> comments) {
     return _firstVorbisComment(comments, 'LYRICS') ??
         _firstVorbisComment(comments, 'UNSYNCEDLYRICS');
+  }
+
+  List<TrackChapter> _vorbisCommentChapters(
+    Map<String, List<String>> comments,
+  ) {
+    final chaptersByIndex = <int, TrackChapter>{};
+    for (final entry in comments.entries) {
+      final match = RegExp(r'^CHAPTER(\d{1,3})$').firstMatch(entry.key);
+      if (match == null) {
+        continue;
+      }
+
+      final index = int.tryParse(match.group(1)!);
+      final start = _vorbisChapterTimestamp(entry.value.first);
+      if (index == null ||
+          index < 1 ||
+          index > _maxVorbisChapters ||
+          start == null ||
+          chaptersByIndex.containsKey(index)) {
+        continue;
+      }
+
+      final title = _firstVorbisComment(comments, '${entry.key}NAME') ??
+          'Chapter $index';
+      try {
+        chaptersByIndex[index] = TrackChapter(start: start, title: title);
+      } on ArgumentError {
+        continue;
+      }
+    }
+
+    final indices = chaptersByIndex.keys.toList()..sort();
+    return TrackChapter.normalize(
+      indices.map((index) => chaptersByIndex[index]!),
+    );
+  }
+
+  Duration? _vorbisChapterTimestamp(String value) {
+    final match = RegExp(
+      r'^(?:(\d{1,3}):)?([0-5]\d):([0-5]\d)(?:[.,](\d{1,3}))?$',
+    ).firstMatch(value);
+    if (match == null) {
+      return null;
+    }
+
+    final hours = int.tryParse(match.group(1) ?? '0');
+    final minutes = int.tryParse(match.group(2)!);
+    final seconds = int.tryParse(match.group(3)!);
+    final fraction = match.group(4);
+    if (hours == null || minutes == null || seconds == null) {
+      return null;
+    }
+    final milliseconds = fraction == null
+        ? 0
+        : int.parse(fraction.padRight(3, '0'));
+    return Duration(
+      hours: hours,
+      minutes: minutes,
+      seconds: seconds,
+      milliseconds: milliseconds,
+    );
   }
 
   Future<_LocalFileMetadata?> _wmaMetadataForFile(String path) async {
@@ -3314,6 +3383,7 @@ const _maxOggPages = 128;
 const _maxOggPackets = 8;
 const _maxOggPacketBytes = 512 * 1024;
 const _maxVorbisComments = 2048;
+const _maxVorbisChapters = 255;
 const _maxApev2Items = 2048;
 const _maxApev2KeyBytes = 255;
 const _apev2FooterBytes = 32;
