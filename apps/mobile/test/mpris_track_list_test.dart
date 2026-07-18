@@ -54,6 +54,21 @@ void main() {
     expect(response, isNotNull);
   });
 
+  test('Player Seek applies a relative offset without seeking before zero',
+      () async {
+    final player = OrgMprisMediaPlayer2(identity: 'AetherTune')
+      ..position = const Duration(seconds: 10);
+
+    expectLater(
+      player.positionStream,
+      emitsInOrder(<Duration>[const Duration(seconds: 15), Duration.zero]),
+    );
+    await player.doSeek(const Duration(seconds: 5).inMicroseconds);
+    await player.doSeek(-const Duration(seconds: 30).inMicroseconds);
+
+    expect(player.position, Duration.zero);
+  });
+
   test(
     'Playlists exposes alphabetical entries and activates the chosen list',
     () async {

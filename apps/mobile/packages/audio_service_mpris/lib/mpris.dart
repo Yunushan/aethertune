@@ -305,12 +305,16 @@ class OrgMprisMediaPlayer2 extends DBusObject {
 
   /// Implementation of org.mpris.MediaPlayer2.Player.Seek()
   Future<DBusMethodResponse> doSeek(int offset) async {
+    final target = position + Duration(microseconds: offset);
+    position = target.isNegative ? Duration.zero : target;
+    _positionStreamController.add(position);
     return DBusMethodSuccessResponse([]);
   }
 
   /// Implementation of org.mpris.MediaPlayer2.Player.SetPosition()
   Future<DBusMethodResponse> doSetPosition(String trackId, int position) async {
-    _positionStreamController.add(Duration(microseconds: position));
+    this.position = Duration(microseconds: position);
+    _positionStreamController.add(this.position);
     return DBusMethodSuccessResponse([]);
   }
 
