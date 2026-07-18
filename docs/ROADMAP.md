@@ -43,6 +43,7 @@
 - [x] TXT/LRC lyrics file import
 - [x] Matching TXT/LRC lyrics sidecar import
 - [x] Lyric-labelled ID3 comment-frame lyric import
+- [x] Millisecond ID3 synchronized lyric-frame to LRC import
 - [x] Local lyrics excerpt share text
 - [x] JSON backup/restore
 - [x] Sleep timer

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../domain/lyrics_document.dart';
 import '../domain/replay_gain.dart';
 import '../domain/track.dart';
+import '../domain/track_lyrics.dart';
 
 const supportedLocalAudioExtensions = <String>{
   '.aac',
@@ -969,6 +970,10 @@ final class _LocalFolderScanState {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
         );
+      } else if (frameId == 'SYLT' && embeddedLyrics == null) {
+        embeddedLyrics = _id3v2SynchronizedLyrics(
+          bytes.sublist(offset, offset + frameSize),
+        );
       } else if (frameId == 'COMM' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2CommentLyrics(
           bytes.sublist(offset, offset + frameSize),
@@ -1040,6 +1045,10 @@ final class _LocalFolderScanState {
         );
       } else if (frameId == 'ULT' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
+          bytes.sublist(offset, offset + frameSize),
+        );
+      } else if (frameId == 'SYL' && embeddedLyrics == null) {
+        embeddedLyrics = _id3v2SynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
         );
       } else if (frameId == 'COM' && embeddedLyrics == null) {
@@ -1648,6 +1657,60 @@ final class _LocalFolderScanState {
         encoding,
       ),
     );
+  }
+
+  String? _id3v2SynchronizedLyrics(List<int> bytes) {
+    if (bytes.length < 8 || bytes.length > _maxEmbeddedLyricsBytes) {
+      return null;
+    }
+
+    final encoding = bytes.first;
+    // Only millisecond lyric timestamps can be represented faithfully as LRC.
+    if (bytes[4] != 2 || bytes[5] != 1) {
+      return null;
+    }
+    final terminatorLength = _id3v2TerminatorLength(encoding);
+    var descriptionEnd = 6;
+    while (descriptionEnd < bytes.length) {
+      if (_hasZeroTerminator(bytes, descriptionEnd, terminatorLength)) {
+        break;
+      }
+      descriptionEnd += terminatorLength;
+    }
+    if (descriptionEnd + terminatorLength >= bytes.length) {
+      return null;
+    }
+
+    var offset = descriptionEnd + terminatorLength;
+    final lines = <String>[];
+    while (offset < bytes.length) {
+      var textEnd = offset;
+      while (textEnd < bytes.length) {
+        if (_hasZeroTerminator(bytes, textEnd, terminatorLength)) {
+          break;
+        }
+        textEnd += terminatorLength;
+      }
+      if (textEnd + terminatorLength + 4 > bytes.length) {
+        break;
+      }
+      final text = _normalizeEmbeddedText(
+        _id3v2DecodedRawText(bytes.sublist(offset, textEnd), encoding),
+      );
+      offset = textEnd + terminatorLength;
+      final timestampMilliseconds = _uint32(bytes, offset);
+      offset += 4;
+      if (text.isEmpty) {
+        continue;
+      }
+      lines.add(
+        '[${formatSyncedLyricTimestamp(Duration(milliseconds: timestampMilliseconds))}]$text',
+      );
+      if (lines.length > _maxId3v2SyncedLyricEvents) {
+        return null;
+      }
+    }
+    return lines.isEmpty ? null : lines.join('\n');
   }
 
   int? _id3v2PopularimeterRating(List<int> bytes) {
@@ -2398,6 +2461,7 @@ const _maxM4aMetadataBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxEmbeddedLyricsBytes = 256 * 1024;
+const _maxId3v2SyncedLyricEvents = 4096;
 const _maxMp4TopLevelAtoms = 512;
 const _maxMp4ChildAtoms = 1024;
 const _maxWavChunks = 2048;

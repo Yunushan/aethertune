@@ -835,6 +835,25 @@ Timed sidecar
     );
   });
 
+  test('converts millisecond ID3v2 synchronized lyrics to LRC', () async {
+    final audioPath = p.join(root.path, 'synced-lyrics.mp3');
+    await File(audioPath).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Synced Lyrics',
+        synchronizedLyrics: <int, String>{1200: 'First line', 61500: 'Second line'},
+      ),
+      1,
+    ]);
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.embeddedLyricsCount, 1);
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(audioPath)],
+      '[0:01]First line\n[1:01]Second line',
+    );
+  });
+
   test('imports bounded APEv2 text metadata before trailing ID3v1', () async {
     final audioPath = p.join(root.path, '99 Filename Artist - Filename Title.mp3');
     await File(audioPath).writeAsBytes(<int>[
@@ -948,6 +967,7 @@ List<int> _id3v23Tag({
   String unsynchronizedLyrics = '',
   String commentLyrics = '',
   String commentDescription = 'lyrics',
+  Map<int, String> synchronizedLyrics = const <int, String>{},
   int? popularimeterRating,
   int encoding = _id3v2EncodingUtf8,
 }) {
@@ -983,6 +1003,8 @@ List<int> _id3v23Tag({
         commentDescription,
         encoding,
       ),
+    if (synchronizedLyrics.isNotEmpty)
+      ..._id3v23SynchronizedLyricsFrame(synchronizedLyrics, encoding),
     if (popularimeterRating != null)
       ..._id3v23PopularimeterFrame(popularimeterRating),
   ];
@@ -1054,6 +1076,34 @@ List<int> _id3v23CommentFrame(
   ];
   return <int>[
     ...'COMM'.codeUnits,
+    ..._uint32Size(payload.length),
+    0x00,
+    0x00,
+    ...payload,
+  ];
+}
+
+List<int> _id3v23SynchronizedLyricsFrame(
+  Map<int, String> entries,
+  int encoding,
+) {
+  final terminator = encoding == _id3v2EncodingUtf16
+      ? const <int>[0, 0]
+      : const <int>[0];
+  final payload = <int>[
+    encoding,
+    ...'eng'.codeUnits,
+    2, // Millisecond timestamps.
+    1, // Lyrics content type.
+    ...terminator,
+    for (final entry in entries.entries) ...<int>[
+      ..._id3v2EncodedText(entry.value, encoding),
+      ...terminator,
+      ..._uint32Size(entry.key),
+    ],
+  ];
+  return <int>[
+    ...'SYLT'.codeUnits,
     ..._uint32Size(payload.length),
     0x00,
     0x00,
