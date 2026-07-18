@@ -409,6 +409,32 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('prefers an ID3v2 front cover over earlier artwork frames', () async {
+    await File(p.join(root.path, 'id3-front-cover.mp3')).writeAsBytes(
+      <int>[
+        ..._id3v23Tag(
+          title: 'ID3 Covers',
+          artworkBytes: _tinyJpegBytes,
+          artworkPictureType: 4,
+          artworkMimeType: 'image/jpeg',
+          additionalArtworkFrames: <List<int>>[
+            _id3v23PictureFrame(_tinyPngBytes),
+          ],
+        ),
+        1,
+        2,
+        3,
+      ],
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(
+      result.tracks.single.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+  });
+
   test('extracts bounded ID3v2 embedded lyrics for MP3 files', () async {
     final audioPath = p.join(root.path, 'embedded-lyrics.mp3');
     await File(audioPath).writeAsBytes(<int>[
@@ -1339,6 +1365,9 @@ List<int> _id3v23Tag({
   String trackNumber = '',
   String genre = '',
   List<int>? artworkBytes,
+  int artworkPictureType = 3,
+  String artworkMimeType = 'image/png',
+  List<List<int>> additionalArtworkFrames = const <List<int>>[],
   String replayGainTrackGain = '',
   String replayGainAlbumGain = '',
   String unsynchronizedLyrics = '',
@@ -1359,7 +1388,13 @@ List<int> _id3v23Tag({
     if (trackNumber.isNotEmpty)
       ..._id3v23TextFrame('TRCK', trackNumber, encoding),
     if (genre.isNotEmpty) ..._id3v23TextFrame('TCON', genre, encoding),
-    if (artworkBytes != null) ..._id3v23PictureFrame(artworkBytes),
+    if (artworkBytes != null)
+      ..._id3v23PictureFrame(
+        artworkBytes,
+        pictureType: artworkPictureType,
+        mimeType: artworkMimeType,
+      ),
+    for (final frame in additionalArtworkFrames) ...frame,
     if (replayGainTrackGain.isNotEmpty)
       ..._id3v23UserTextFrame(
         'REPLAYGAIN_TRACK_GAIN',
@@ -1488,12 +1523,16 @@ List<int> _id3v23SynchronizedLyricsFrame(
   ];
 }
 
-List<int> _id3v23PictureFrame(List<int> artworkBytes) {
+List<int> _id3v23PictureFrame(
+  List<int> artworkBytes, {
+  int pictureType = 3,
+  String mimeType = 'image/png',
+}) {
   final payload = <int>[
     _id3v2EncodingUtf8,
-    ...'image/png'.codeUnits,
+    ...mimeType.codeUnits,
     0,
-    3,
+    pictureType,
     0,
     ...artworkBytes,
   ];

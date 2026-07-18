@@ -1026,6 +1026,7 @@ final class _LocalFolderScanState {
   ) {
     final textFrames = <String, String>{};
     Uri? artworkUri;
+    var hasFrontCover = false;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
     String? embeddedLyrics;
@@ -1053,10 +1054,16 @@ final class _LocalFolderScanState {
         if (value.isNotEmpty) {
           textFrames[key] = value;
         }
-      } else if (frameId == 'APIC' && artworkUri == null) {
-        artworkUri = _id3v23PictureArtworkUri(
+      } else if (frameId == 'APIC') {
+        final picture = _id3v23PictureArtwork(
           bytes.sublist(offset, offset + frameSize),
         );
+        if (picture != null &&
+            (artworkUri == null ||
+                (!hasFrontCover && picture.isFrontCover))) {
+          artworkUri = picture.artworkUri;
+          hasFrontCover = picture.isFrontCover;
+        }
       } else if (frameId == 'TXXX' && replayGainTrackDb == null) {
         replayGainTrackDb = _id3v2ReplayGainUserText(
           bytes.sublist(offset, offset + frameSize),
@@ -1105,6 +1112,7 @@ final class _LocalFolderScanState {
   _Id3v2TagData _id3v22TagData(List<int> bytes) {
     final textFrames = <String, String>{};
     Uri? artworkUri;
+    var hasFrontCover = false;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
     String? embeddedLyrics;
@@ -1130,10 +1138,16 @@ final class _LocalFolderScanState {
         if (value.isNotEmpty) {
           textFrames[key] = value;
         }
-      } else if (frameId == 'PIC' && artworkUri == null) {
-        artworkUri = _id3v22PictureArtworkUri(
+      } else if (frameId == 'PIC') {
+        final picture = _id3v22PictureArtwork(
           bytes.sublist(offset, offset + frameSize),
         );
+        if (picture != null &&
+            (artworkUri == null ||
+                (!hasFrontCover && picture.isFrontCover))) {
+          artworkUri = picture.artworkUri;
+          hasFrontCover = picture.isFrontCover;
+        }
       } else if (frameId == 'TXX' && replayGainTrackDb == null) {
         replayGainTrackDb = _id3v2ReplayGainUserText(
           bytes.sublist(offset, offset + frameSize),
@@ -2361,7 +2375,7 @@ final class _LocalFolderScanState {
     );
   }
 
-  Uri? _id3v23PictureArtworkUri(List<int> bytes) {
+  _Id3v2PictureArtwork? _id3v23PictureArtwork(List<int> bytes) {
     if (bytes.length < 4) {
       return null;
     }
@@ -2375,6 +2389,7 @@ final class _LocalFolderScanState {
     final mimeType = _normalizeArtworkMimeType(
       latin1.decode(bytes.sublist(1, mimeEnd), allowInvalid: true),
     );
+    final pictureType = bytes[mimeEnd + 1];
     var imageStart = mimeEnd + 2;
     final descriptionTerminator = _id3v2TerminatorLength(encoding);
     while (imageStart < bytes.length) {
@@ -2390,13 +2405,19 @@ final class _LocalFolderScanState {
     }
 
     final imageBytes = bytes.sublist(imageStart);
-    return _artworkDataUri(
+    final artworkUri = _artworkDataUri(
       imageBytes,
       mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
     );
+    return artworkUri == null
+        ? null
+        : _Id3v2PictureArtwork(
+            artworkUri: artworkUri,
+            isFrontCover: pictureType == _frontCoverPictureType,
+          );
   }
 
-  Uri? _id3v22PictureArtworkUri(List<int> bytes) {
+  _Id3v2PictureArtwork? _id3v22PictureArtwork(List<int> bytes) {
     if (bytes.length < 6) {
       return null;
     }
@@ -2411,6 +2432,7 @@ final class _LocalFolderScanState {
       'JPG' || 'JPEG' => 'image/jpeg',
       _ => null,
     };
+    final pictureType = bytes[4];
     var imageStart = 5;
     final descriptionTerminator = _id3v2TerminatorLength(encoding);
     while (imageStart < bytes.length) {
@@ -2426,10 +2448,16 @@ final class _LocalFolderScanState {
     }
 
     final imageBytes = bytes.sublist(imageStart);
-    return _artworkDataUri(
+    final artworkUri = _artworkDataUri(
       imageBytes,
       mimeType: mimeType ?? _inferArtworkMimeType(imageBytes),
     );
+    return artworkUri == null
+        ? null
+        : _Id3v2PictureArtwork(
+            artworkUri: artworkUri,
+            isFrontCover: pictureType == _frontCoverPictureType,
+          );
   }
 
   Uri? _flacPictureArtworkUri(List<int> bytes) {
@@ -3058,6 +3086,16 @@ final class _Apev2Comments {
 
   final Map<String, List<String>> fields;
   final Uri? artworkUri;
+}
+
+final class _Id3v2PictureArtwork {
+  const _Id3v2PictureArtwork({
+    required this.artworkUri,
+    required this.isFrontCover,
+  });
+
+  final Uri artworkUri;
+  final bool isFrontCover;
 }
 
 final class _Id3v2TagData {
