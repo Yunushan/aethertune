@@ -11,9 +11,61 @@ typedef PodcastFeedLoader = Future<String> Function(Uri feedUri);
 typedef PodcastChapterLoader = Future<String> Function(Uri chapterUri);
 typedef ExternalPodcastChapterUriApproval = bool Function(Uri chapterUri);
 
+/// Privacy-bounded, process-local cache for explicitly approved third-party
+/// Podcasting 2.0 chapter documents. It never persists document URLs or text.
+final class PodcastExternalChapterDocumentCache {
+  PodcastExternalChapterDocumentCache({DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
+
+  static const maxDocuments = 32;
+  static const maxDocumentCharacters = 64 * 1024;
+  static const maxAge = Duration(hours: 6);
+
+  final DateTime Function() _clock;
+  final Map<Uri, _CachedPodcastChapterDocument> _documents =
+      <Uri, _CachedPodcastChapterDocument>{};
+
+  String? read(Uri uri) {
+    final key = uri.removeFragment();
+    final cached = _documents.remove(key);
+    if (cached == null || _clock().difference(cached.cachedAt) >= maxAge) {
+      return null;
+    }
+    _documents[key] = cached;
+    return cached.document;
+  }
+
+  void write(Uri uri, String document) {
+    if (document.length > maxDocumentCharacters) {
+      return;
+    }
+    final key = uri.removeFragment();
+    _documents.remove(key);
+    while (_documents.length >= maxDocuments) {
+      _documents.remove(_documents.keys.first);
+    }
+    _documents[key] = _CachedPodcastChapterDocument(
+      document: document,
+      cachedAt: _clock(),
+    );
+  }
+}
+
+final class _CachedPodcastChapterDocument {
+  const _CachedPodcastChapterDocument({
+    required this.document,
+    required this.cachedAt,
+  });
+
+  final String document;
+  final DateTime cachedAt;
+}
+
 class PodcastRssProvider implements MusicSourceProvider {
   static const maxExternalChapterDocumentsPerFeed = 20;
   static const maxUnapprovedExternalChapterHostsPerFeed = 8;
+  static final PodcastExternalChapterDocumentCache _defaultChapterCache =
+      PodcastExternalChapterDocumentCache();
 
   PodcastRssProvider({
     required this.feedUri,
@@ -21,16 +73,20 @@ class PodcastRssProvider implements MusicSourceProvider {
     PodcastFeedLoader? feedLoader,
     PodcastChapterLoader? chapterLoader,
     ExternalPodcastChapterUriApproval? isExternalChapterUriApproved,
+    PodcastExternalChapterDocumentCache? externalChapterDocumentCache,
   })  : id = id ?? 'podcast-${Track.stableLocalId(feedUri.toString())}',
         _feedLoader = feedLoader ?? _loadPodcastFeed,
         _chapterLoader = chapterLoader ?? _loadPodcastChapters,
         _isExternalChapterUriApproved =
-            isExternalChapterUriApproved ?? _denyExternalChapterUri;
+            isExternalChapterUriApproved ?? _denyExternalChapterUri,
+        _externalChapterDocumentCache =
+            externalChapterDocumentCache ?? _defaultChapterCache;
 
   final Uri feedUri;
   final PodcastFeedLoader _feedLoader;
   final PodcastChapterLoader _chapterLoader;
   final ExternalPodcastChapterUriApproval _isExternalChapterUriApproved;
+  final PodcastExternalChapterDocumentCache _externalChapterDocumentCache;
 
   @override
   final String id;
@@ -110,11 +166,18 @@ class PodcastRssProvider implements MusicSourceProvider {
 
       remaining -= 1;
       try {
-        final document = await _chapterLoader(chapterUri);
+        final cacheable = _isApprovedExternalChapterUri(chapterUri);
+        final cachedDocument = cacheable
+            ? _externalChapterDocumentCache.read(chapterUri)
+            : null;
+        final document = cachedDocument ?? await _chapterLoader(chapterUri);
         final chapters = parsePodcastingChapterDocument(
           document,
           maximum: episode.duration,
         );
+        if (cacheable && cachedDocument == null) {
+          _externalChapterDocumentCache.write(chapterUri, document);
+        }
         episodes.add(
           episode.withChapters(
             TrackChapter.normalize(
@@ -139,8 +202,13 @@ class PodcastRssProvider implements MusicSourceProvider {
         (scheme == 'http' || scheme == 'https')) {
       return true;
     }
-    return scheme == 'https' && _isExternalChapterUriApproved(uri);
+    return _isApprovedExternalChapterUri(uri);
   }
+
+  bool _isApprovedExternalChapterUri(Uri uri) =>
+      uri.origin != feedUri.origin &&
+      uri.scheme.toLowerCase() == 'https' &&
+      _isExternalChapterUriApproved(uri);
 
   static bool _denyExternalChapterUri(Uri _) => false;
 

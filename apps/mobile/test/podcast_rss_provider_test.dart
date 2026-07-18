@@ -162,6 +162,40 @@ void main() {
     expect(feed.unapprovedExternalChapterHosts, isEmpty);
   });
 
+  test('bounds approved external chapter documents to process-memory cache',
+      () async {
+    var now = DateTime.utc(2026, 7, 18, 12);
+    var chapterRequests = 0;
+    final cache = PodcastExternalChapterDocumentCache(clock: () => now);
+
+    PodcastRssProvider provider() => PodcastRssProvider(
+      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+      feedLoader: (_) async => _crossOriginChapterPodcastFeed,
+      chapterLoader: (_) async {
+        chapterRequests += 1;
+        return '''
+          {"version":"1.2.0","chapters":[
+            {"startTime":0,"title":"Cached opening"}
+          ]}
+        ''';
+      },
+      isExternalChapterUriApproved: (uri) =>
+          uri.host == 'cdn.example.test' && uri.scheme == 'https',
+      externalChapterDocumentCache: cache,
+    );
+
+    expect(
+      (await provider().fetchFeed()).episodes.single.chapters.single.title,
+      'Cached opening',
+    );
+    await provider().fetchFeed();
+    expect(chapterRequests, 1);
+
+    now = now.add(PodcastExternalChapterDocumentCache.maxAge);
+    await provider().fetchFeed();
+    expect(chapterRequests, 2);
+  });
+
   test('rejects malformed external chapter documents', () {
     expect(
       () => parsePodcastingChapterDocument('{"version":"1.2"}'),
