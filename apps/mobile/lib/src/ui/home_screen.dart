@@ -89,6 +89,7 @@ import 'self_hosted_browse_screen.dart';
 import 'spotify_saved_tracks_screen.dart';
 import 'spotify_saved_albums_screen.dart';
 import 'spotify_saved_playlists_screen.dart';
+import 'spotify_saved_shows_screen.dart';
 import 'spotify_recently_played_screen.dart';
 import 'spotify_top_artists_screen.dart';
 import 'youtube_music_chart_screen.dart';
@@ -13068,6 +13069,7 @@ enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 enum _SpotifyAction {
   savedTracks,
   savedEpisodes,
+  savedShows,
   savedAlbums,
   playlists,
   recentlyPlayed,
@@ -13451,6 +13453,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifySavedEpisodes(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.savedShows:
+                  if (spotifyProvider != null) {
+                    _openSpotifySavedShows(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.savedAlbums:
                   if (spotifyProvider != null) {
                     _openSpotifySavedAlbums(context, spotifyProvider);
@@ -13556,6 +13563,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.podcasts_outlined),
                   title: Text('Saved episodes'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.savedShows,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.video_library_outlined),
+                  title: Text('Saved shows'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -14967,6 +14983,17 @@ class _SourcesTabState extends State<_SourcesTab> {
           provider: provider,
           savedEpisodes: true,
         ),
+      ),
+    );
+  }
+
+  void _openSpotifySavedShows(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifySavedShowsScreen(provider: provider),
       ),
     );
   }

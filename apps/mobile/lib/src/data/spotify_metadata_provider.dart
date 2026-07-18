@@ -30,6 +30,8 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? savedTracksLoader,
     Uri? savedEpisodesUri,
     SpotifySearchLoader? savedEpisodesLoader,
+    Uri? savedShowsUri,
+    SpotifySearchLoader? savedShowsLoader,
     Uri? savedAlbumsUri,
     SpotifySearchLoader? savedAlbumsLoader,
     Uri? recentlyPlayedUri,
@@ -44,6 +46,8 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? newReleasesLoader,
     Uri? albumsUri,
     SpotifySearchLoader? albumTracksLoader,
+    Uri? showsUri,
+    SpotifySearchLoader? showEpisodesLoader,
     Uri? playlistsUri,
     SpotifySearchLoader? playlistsLoader,
     Uri? playlistBaseUri,
@@ -55,6 +59,8 @@ final class SpotifyMetadataProvider
        _savedTracksLoader = savedTracksLoader ?? _loadSpotifyJson,
        savedEpisodesUri = savedEpisodesUri ?? _defaultSavedEpisodesUri,
        _savedEpisodesLoader = savedEpisodesLoader ?? _loadSpotifyJson,
+       savedShowsUri = savedShowsUri ?? _defaultSavedShowsUri,
+       _savedShowsLoader = savedShowsLoader ?? _loadSpotifyJson,
        savedAlbumsUri = savedAlbumsUri ?? _defaultSavedAlbumsUri,
        _savedAlbumsLoader = savedAlbumsLoader ?? _loadSpotifyJson,
        recentlyPlayedUri = recentlyPlayedUri ?? _defaultRecentlyPlayedUri,
@@ -69,6 +75,8 @@ final class SpotifyMetadataProvider
        _newReleasesLoader = newReleasesLoader ?? _loadSpotifyJson,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
        _albumTracksLoader = albumTracksLoader ?? _loadSpotifyJson,
+       showsUri = showsUri ?? _defaultShowsUri,
+       _showEpisodesLoader = showEpisodesLoader ?? _loadSpotifyJson,
        playlistsUri = playlistsUri ?? _defaultPlaylistsUri,
        _playlistsLoader = playlistsLoader ?? _loadSpotifyJson,
        playlistBaseUri = playlistBaseUri ?? _defaultPlaylistBaseUri,
@@ -80,6 +88,8 @@ final class SpotifyMetadataProvider
       Uri.parse('https://api.spotify.com/v1/me/tracks');
   static final Uri _defaultSavedEpisodesUri =
       Uri.parse('https://api.spotify.com/v1/me/episodes');
+  static final Uri _defaultSavedShowsUri =
+      Uri.parse('https://api.spotify.com/v1/me/shows');
   static final Uri _defaultSavedAlbumsUri =
       Uri.parse('https://api.spotify.com/v1/me/albums');
   static final Uri _defaultRecentlyPlayedUri =
@@ -94,6 +104,8 @@ final class SpotifyMetadataProvider
       Uri.parse('https://api.spotify.com/v1/browse/new-releases');
   static final Uri _defaultAlbumsUri =
       Uri.parse('https://api.spotify.com/v1/albums');
+  static final Uri _defaultShowsUri =
+      Uri.parse('https://api.spotify.com/v1/shows');
   static final Uri _defaultPlaylistsUri =
       Uri.parse('https://api.spotify.com/v1/me/playlists');
   static final Uri _defaultPlaylistBaseUri =
@@ -106,6 +118,8 @@ final class SpotifyMetadataProvider
   final SpotifySearchLoader _savedTracksLoader;
   final Uri savedEpisodesUri;
   final SpotifySearchLoader _savedEpisodesLoader;
+  final Uri savedShowsUri;
+  final SpotifySearchLoader _savedShowsLoader;
   final Uri savedAlbumsUri;
   final SpotifySearchLoader _savedAlbumsLoader;
   final Uri recentlyPlayedUri;
@@ -120,6 +134,8 @@ final class SpotifyMetadataProvider
   final SpotifySearchLoader _newReleasesLoader;
   final Uri albumsUri;
   final SpotifySearchLoader _albumTracksLoader;
+  final Uri showsUri;
+  final SpotifySearchLoader _showEpisodesLoader;
   final Uri playlistsUri;
   final SpotifySearchLoader _playlistsLoader;
   final Uri playlistBaseUri;
@@ -412,6 +428,31 @@ final class SpotifyMetadataProvider
     );
   }
 
+  /// Reads saved Spotify show metadata without changing the remote library.
+  Future<SpotifySavedShowsPage> loadSavedShowsPage({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final token = await _accessTokenReader();
+    return parseSpotifySavedShowsPage(
+      await _savedShowsLoader(
+        savedShowsUri.replace(
+          queryParameters: <String, String>{
+            'limit': limit.clamp(1, 50).toString(),
+            'offset': offset.toString(),
+          },
+        ),
+        token,
+      ),
+    );
+  }
+
   /// Reads official Spotify new-release album metadata without playback.
   Future<SpotifySavedAlbumsPage> loadNewReleasesPage({
     int offset = 0,
@@ -434,6 +475,38 @@ final class SpotifyMetadataProvider
         ),
         token,
       ),
+    );
+  }
+
+  /// Reads public episode metadata for a saved Spotify show without playback.
+  Future<SpotifySavedTracksPage> loadShowEpisodesPage(
+    SpotifySavedShow show, {
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final showId = _nonEmpty(show.id);
+    if (showId == null) {
+      throw ArgumentError.value(show.id, 'show.id', 'Must not be empty.');
+    }
+    final token = await _accessTokenReader();
+    return parseSpotifyShowEpisodesPage(
+      await _showEpisodesLoader(
+        showsUri.replace(
+          path: '${showsUri.path}/${Uri.encodeComponent(showId)}/episodes',
+          queryParameters: <String, String>{
+            'limit': limit.clamp(1, 50).toString(),
+            'offset': offset.toString(),
+          },
+        ),
+        token,
+      ),
+      show,
     );
   }
 
@@ -557,6 +630,40 @@ final class SpotifySavedTracksPage {
   });
 
   final List<Track> tracks;
+  final int offset;
+  final int total;
+  final bool hasMore;
+}
+
+final class SpotifySavedShow {
+  const SpotifySavedShow({
+    required this.id,
+    required this.title,
+    required this.publisher,
+    required this.totalEpisodes,
+    required this.addedAt,
+    this.description,
+    this.artworkUri,
+  });
+
+  final String id;
+  final String title;
+  final String publisher;
+  final int totalEpisodes;
+  final DateTime addedAt;
+  final String? description;
+  final Uri? artworkUri;
+}
+
+final class SpotifySavedShowsPage {
+  const SpotifySavedShowsPage({
+    required this.shows,
+    required this.offset,
+    required this.total,
+    required this.hasMore,
+  });
+
+  final List<SpotifySavedShow> shows;
   final int offset;
   final int total;
   final bool hasMore;
@@ -848,6 +955,65 @@ SpotifySavedTracksPage parseSpotifySavedEpisodesPage(String jsonText) {
                 )?.toUtc(),
               );
             })
+            .whereType<Track>()
+            .toList(growable: false)
+      : const <Track>[];
+  final offset = _nonNegativeInt(root['offset']) ?? 0;
+  final total = _nonNegativeInt(root['total']) ?? 0;
+  return SpotifySavedTracksPage(
+    tracks: tracks,
+    offset: offset,
+    total: total,
+    hasMore: _nonEmpty(root['next']) != null || offset + tracks.length < total,
+  );
+}
+
+SpotifySavedShowsPage parseSpotifySavedShowsPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify saved shows response must be a map.');
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final items = root['items'];
+  final shows = items is List
+      ? items
+            .whereType<Map>()
+            .map((item) => _savedShowFromSpotifyJson(
+                  Map<String, Object?>.from(item),
+                ))
+            .whereType<SpotifySavedShow>()
+            .toList(growable: false)
+      : const <SpotifySavedShow>[];
+  final offset = _nonNegativeInt(root['offset']) ?? 0;
+  final total = _nonNegativeInt(root['total']) ?? 0;
+  return SpotifySavedShowsPage(
+    shows: shows,
+    offset: offset,
+    total: total,
+    hasMore: _nonEmpty(root['next']) != null || offset + shows.length < total,
+  );
+}
+
+SpotifySavedTracksPage parseSpotifyShowEpisodesPage(
+  String jsonText,
+  SpotifySavedShow show,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify show episodes response must be a map.');
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final items = root['items'];
+  final tracks = items is List
+      ? items
+            .whereType<Map>()
+            .map((item) => _episodeTrackFromSpotifyJson(
+                  Map<String, Object?>.from(item),
+                  addedAt: show.addedAt,
+                  showName: show.title,
+                  publisher: show.publisher,
+                  artworkUri: show.artworkUri,
+                ))
             .whereType<Track>()
             .toList(growable: false)
       : const <Track>[];
@@ -1167,6 +1333,9 @@ Track? _trackFromSpotifyJson(
 Track? _episodeTrackFromSpotifyJson(
   Map<String, Object?> json, {
   DateTime? addedAt,
+  String? showName,
+  String? publisher,
+  Uri? artworkUri,
 }) {
   final id = _nonEmpty(json['id']);
   final title = _nonEmpty(json['name']);
@@ -1176,19 +1345,44 @@ Track? _episodeTrackFromSpotifyJson(
   final show = json['show'] is Map
       ? Map<String, Object?>.from(json['show'] as Map)
       : const <String, Object?>{};
-  final showName = _nonEmpty(show['name']) ?? 'Unknown show';
-  final publisher = _nonEmpty(show['publisher']) ?? 'Unknown publisher';
+  final resolvedShowName = showName ?? _nonEmpty(show['name']) ?? 'Unknown show';
+  final resolvedPublisher =
+      publisher ?? _nonEmpty(show['publisher']) ?? 'Unknown publisher';
   return Track(
     id: Track.stableLocalId('spotify-metadata|episode|$id'),
     title: title,
-    artist: publisher,
-    album: showName,
+    artist: resolvedPublisher,
+    album: resolvedShowName,
     duration: Duration(milliseconds: _nonNegativeInt(json['duration_ms']) ?? 0),
-    artworkUri: _spotifyArtworkUri(json['images']) ??
+    artworkUri: artworkUri ??
+        _spotifyArtworkUri(json['images']) ??
         _spotifyArtworkUri(show['images']),
     sourceId: 'spotify-metadata',
     externalId: 'episode:$id',
     addedAt: addedAt,
+  );
+}
+
+SpotifySavedShow? _savedShowFromSpotifyJson(Map<String, Object?> json) {
+  final showValue = json['show'];
+  if (showValue is! Map) {
+    return null;
+  }
+  final show = Map<String, Object?>.from(showValue);
+  final id = _nonEmpty(show['id']);
+  final title = _nonEmpty(show['name']);
+  if (id == null || title == null) {
+    return null;
+  }
+  return SpotifySavedShow(
+    id: id,
+    title: title,
+    publisher: _nonEmpty(show['publisher']) ?? 'Unknown publisher',
+    totalEpisodes: _nonNegativeInt(show['total_episodes']) ?? 0,
+    addedAt: DateTime.tryParse(json['added_at']?.toString() ?? '')?.toUtc() ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    description: _nonEmpty(show['description']),
+    artworkUri: _spotifyArtworkUri(show['images']),
   );
 }
 

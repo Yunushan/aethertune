@@ -264,6 +264,62 @@ void main() {
     expect(await provider.resolveStream(episode), isNull);
   });
 
+  test('loads saved shows and their episode metadata without playback', () async {
+    Uri? showsRequest;
+    Uri? episodesRequest;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      savedShowsLoader: (uri, token) async {
+        showsRequest = uri;
+        return '''
+          {"offset":0,"total":1,"next":null,"items":[{
+            "added_at":"2026-07-17T12:00:00Z",
+            "show":{
+              "id":"show-id","name":"Signal Show","publisher":"Aether Radio",
+              "total_episodes":2,"description":"Metadata only",
+              "images":[{"url":"https://i.scdn.co/image/show"}]
+            }
+          }]}
+        ''';
+      },
+      showEpisodesLoader: (uri, token) async {
+        episodesRequest = uri;
+        return '''
+          {"offset":1,"total":2,"next":null,"items":[{
+            "id":"show-episode-id","name":"Show Episode","duration_ms":125000,
+            "images":[{"url":"https://i.scdn.co/image/episode"}]
+          }]}
+        ''';
+      },
+    );
+
+    final shows = await provider.loadSavedShowsPage(limit: 99);
+    final show = shows.shows.single;
+    final episodes = await provider.loadShowEpisodesPage(show, offset: 1);
+
+    expect(showsRequest!.path, '/v1/me/shows');
+    expect(showsRequest!.queryParameters, <String, String>{
+      'limit': '50',
+      'offset': '0',
+    });
+    expect(show.title, 'Signal Show');
+    expect(show.publisher, 'Aether Radio');
+    expect(show.totalEpisodes, 2);
+    expect(show.artworkUri, Uri.parse('https://i.scdn.co/image/show'));
+    expect(episodesRequest!.path, '/v1/shows/show-id/episodes');
+    expect(episodesRequest!.queryParameters, <String, String>{
+      'limit': '20',
+      'offset': '1',
+    });
+    final episode = episodes.tracks.single;
+    expect(episode.title, 'Show Episode');
+    expect(episode.artist, 'Aether Radio');
+    expect(episode.album, 'Signal Show');
+    expect(episode.duration, const Duration(minutes: 2, seconds: 5));
+    expect(episode.artworkUri, Uri.parse('https://i.scdn.co/image/show'));
+    expect(episode.isPlayable, isFalse);
+  });
+
   test('loads bounded official Spotify followed-artist metadata', () async {
     Uri? requestUri;
     final provider = SpotifyMetadataProvider(

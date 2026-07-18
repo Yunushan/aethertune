@@ -15,11 +15,15 @@ final class SpotifySavedTracksScreen extends StatefulWidget {
     required this.provider,
     this.topTracks = false,
     this.savedEpisodes = false,
-  }) : assert(!topTracks || !savedEpisodes);
+    this.show,
+  }) : assert(!topTracks || !savedEpisodes),
+       assert(!topTracks || show == null),
+       assert(!savedEpisodes || show == null);
 
   final SpotifyMetadataProvider provider;
   final bool topTracks;
   final bool savedEpisodes;
+  final SpotifySavedShow? show;
 
   @override
   State<SpotifySavedTracksScreen> createState() =>
@@ -78,6 +82,8 @@ final class _SpotifySavedTracksScreenState
                     ? 'Turn it off to load your top Spotify tracks.'
                     : widget.savedEpisodes
                     ? 'Turn it off to load saved Spotify episodes.'
+                    : widget.show != null
+                    ? 'Turn it off to load this show\'s Spotify episodes.'
                     : 'Turn it off to load saved Spotify tracks.',
               ),
             ),
@@ -94,6 +100,8 @@ final class _SpotifySavedTracksScreenState
                     ? 'Could not load top tracks'
                     : widget.savedEpisodes
                     ? 'Could not load saved episodes'
+                    : widget.show != null
+                    ? 'Could not load show episodes'
                     : 'Could not load saved tracks',
               ),
               subtitle: Text(_error!),
@@ -102,6 +110,8 @@ final class _SpotifySavedTracksScreenState
                     ? 'Retry top tracks'
                     : widget.savedEpisodes
                     ? 'Retry saved episodes'
+                    : widget.show != null
+                    ? 'Retry show episodes'
                     : 'Retry saved tracks',
                 onPressed: _loading || offlineModeEnabled
                     ? null
@@ -117,6 +127,8 @@ final class _SpotifySavedTracksScreenState
                     ? 'No top tracks found'
                     : widget.savedEpisodes
                     ? 'No saved episodes found'
+                    : widget.show != null
+                    ? 'No show episodes found'
                     : 'No saved tracks found',
               ),
             ),
@@ -149,6 +161,8 @@ final class _SpotifySavedTracksScreenState
                     ? 'Could not load more top tracks'
                     : widget.savedEpisodes
                     ? 'Could not load more saved episodes'
+                    : widget.show != null
+                    ? 'Could not load more show episodes'
                     : 'Could not load more saved tracks',
               ),
               subtitle: Text(_error!),
@@ -157,6 +171,8 @@ final class _SpotifySavedTracksScreenState
                     ? 'Retry top tracks page'
                     : widget.savedEpisodes
                     ? 'Retry saved episode page'
+                    : widget.show != null
+                    ? 'Retry show episode page'
                     : 'Retry saved track page',
                 onPressed: _loading || offlineModeEnabled
                     ? null
@@ -181,6 +197,8 @@ final class _SpotifySavedTracksScreenState
               child: Text(
                 widget.savedEpisodes
                     ? 'All $_total saved episodes loaded.'
+                    : widget.show != null
+                    ? 'All $_total show episodes loaded.'
                     : 'All $_total saved tracks loaded.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -221,6 +239,9 @@ final class _SpotifySavedTracksScreenState
             )
           : widget.savedEpisodes
           ? await widget.provider.loadSavedEpisodesPage(offset: requestedOffset)
+          : widget.show != null
+          ? await widget.provider
+                .loadShowEpisodesPage(widget.show!, offset: requestedOffset)
           : await widget.provider.loadSavedTracksPage(offset: requestedOffset);
       if (!mounted || request != _requestSerial) {
         return;
@@ -270,6 +291,8 @@ final class _SpotifySavedTracksScreenState
           ? 'Load more top tracks'
           : widget.savedEpisodes
           ? 'Load more saved episodes'
+          : widget.show != null
+          ? 'Load more show episodes'
           : 'Load more saved tracks';
     }
     final remaining = total - _tracks.length;
@@ -278,11 +301,15 @@ final class _SpotifySavedTracksScreenState
             ? 'Load more top tracks ($remaining remaining)'
             : widget.savedEpisodes
             ? 'Load more saved episodes ($remaining remaining)'
+            : widget.show != null
+            ? 'Load more show episodes ($remaining remaining)'
             : 'Load more saved tracks ($remaining remaining)'
         : widget.topTracks
             ? 'Load more top tracks'
             : widget.savedEpisodes
             ? 'Load more saved episodes'
+            : widget.show != null
+            ? 'Load more show episodes'
             : 'Load more saved tracks';
   }
 
@@ -290,7 +317,7 @@ final class _SpotifySavedTracksScreenState
       ? 'Spotify top tracks'
       : widget.savedEpisodes
       ? 'Spotify saved episodes'
-      : 'Spotify saved tracks';
+      : widget.show?.title ?? 'Spotify saved tracks';
 
   String _subtitle(Track track) {
     final parts = <String>[track.artist, track.album]
