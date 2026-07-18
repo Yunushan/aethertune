@@ -13,7 +13,8 @@ class WavRiffInfoWriter {
     int? year,
     int? trackNumber,
   }) async {
-    if (!path.toLowerCase().endsWith('.wav')) {
+    final lowerPath = path.toLowerCase();
+    if (!lowerPath.endsWith('.wav') && !lowerPath.endsWith('.wave')) {
       throw const FormatException('Only local WAV files can be updated.');
     }
     final file = File(path);

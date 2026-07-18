@@ -7652,7 +7652,8 @@ bool _isLocalOggOrOpus(Track track) {
 }
 
 bool _isLocalWav(Track track) {
-  return (track.localPath?.trim() ?? '').toLowerCase().endsWith('.wav');
+  final path = (track.localPath?.trim() ?? '').toLowerCase();
+  return path.endsWith('.wav') || path.endsWith('.wave');
 }
 
 Future<bool?> _confirmEmbeddedTagWrite(BuildContext context, Track track) {

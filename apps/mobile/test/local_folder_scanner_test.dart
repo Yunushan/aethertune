@@ -1220,6 +1220,26 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.genre, 'Ambient');
   });
 
+  test('imports AIFF and WAVE extension aliases', () async {
+    await File(p.join(root.path, 'alias.aif')).writeAsBytes(
+      _aiffWithTextTags(<String, String>{'NAME': 'AIF Title'}),
+    );
+    await File(p.join(root.path, 'compressed.aifc')).writeAsBytes(
+      _aiffWithTextTags(
+        <String, String>{'NAME': 'AIFC Title'},
+        formType: 'AIFC',
+      ),
+    );
+    await File(p.join(root.path, 'alias.wave')).writeAsBytes(
+      _wavWithInfoTags(<String, String>{'INAM': 'WAVE Title'}),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final titles = result.tracks.map((track) => track.title).toSet();
+
+    expect(titles, containsAll(<String>['AIF Title', 'AIFC Title', 'WAVE Title']));
+  });
+
   test('extracts ID3v2 lyric-labelled comment frames only', () async {
     final lyricPath = p.join(root.path, 'comment-lyrics.mp3');
     final notePath = p.join(root.path, 'ordinary-comment.mp3');
@@ -1999,6 +2019,7 @@ List<int> _uint32BigEndianSize(int size) {
 List<int> _aiffWithTextTags(
   Map<String, String> tags, {
   List<int>? id3Tag,
+  String formType = 'AIFF',
 }) {
   final chunks = <int>[];
   for (final entry in tags.entries) {
@@ -2021,7 +2042,7 @@ List<int> _aiffWithTextTags(
     }
   }
 
-  final formPayload = <int>[...'AIFF'.codeUnits, ...chunks];
+  final formPayload = <int>[...formType.codeUnits, ...chunks];
   return <int>[
     ...'FORM'.codeUnits,
     ..._uint32BigEndianSize(formPayload.length),

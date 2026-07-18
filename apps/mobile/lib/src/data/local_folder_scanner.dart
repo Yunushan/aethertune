@@ -11,6 +11,8 @@ import '../domain/track_lyrics.dart';
 
 const supportedLocalAudioExtensions = <String>{
   '.aac',
+  '.aif',
+  '.aifc',
   '.aiff',
   '.alac',
   '.flac',
@@ -21,6 +23,7 @@ const supportedLocalAudioExtensions = <String>{
   '.ogg',
   '.opus',
   '.wav',
+  '.wave',
   '.wma',
 };
 
@@ -410,7 +413,10 @@ final class _LocalFolderScanState {
       case '.alac':
         return _m4aMetadataForFile(path);
       case '.wav':
+      case '.wave':
         return _wavMetadataForFile(path);
+      case '.aif':
+      case '.aifc':
       case '.aiff':
         return _aiffMetadataForFile(path);
       case '.wma':

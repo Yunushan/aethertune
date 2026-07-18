@@ -20,7 +20,7 @@ void main() {
   });
 
   test('writes INFO metadata that the scanner reads', () async {
-    final file = File('${temporaryDirectory.path}/metadata.wav');
+    final file = File('${temporaryDirectory.path}/metadata.wave');
     await file.writeAsBytes(_wavFile(audio: <int>[1, 2, 3]));
 
     await const WavRiffInfoWriter().write(
