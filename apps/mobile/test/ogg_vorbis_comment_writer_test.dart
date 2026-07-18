@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/local_folder_scanner.dart';
 import 'package:aethertune/src/data/ogg_vorbis_comment_writer.dart';
+import 'package:aethertune/src/domain/track_chapter.dart';
 
 void main() {
   late Directory temporaryDirectory;
@@ -35,6 +36,8 @@ void main() {
         serial: 19,
         comments: <String>[
           'TITLE=Old title',
+          'CHAPTER001=00:00:01.000',
+          'CHAPTER001NAME=Existing chapter',
           'MUSICBRAINZ_TRACKID=external-id',
         ],
       ),
@@ -67,6 +70,7 @@ void main() {
 
     final bytes = await file.readAsBytes();
     expect(_containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')), isTrue);
+    expect(_containsBytes(bytes, ascii.encode('CHAPTER001NAME=Existing chapter')), isTrue);
     expect(bytes.sublist(bytes.length - audioPage.length), audioPage);
     expect(_secondPageHasValidChecksum(bytes), isTrue);
   });
@@ -106,6 +110,57 @@ void main() {
     expect(track.year, 2024);
     expect(track.trackNumber, 2);
     expect(track.genre, 'Podcast');
+  });
+
+  test('replaces embedded Ogg chapter markers when requested', () async {
+    final file = File('${temporaryDirectory.path}/chapters.ogg');
+    await file.writeAsBytes(<int>[
+      ..._identificationPage(serial: 29),
+      ..._commentPage(
+        serial: 29,
+        comments: <String>[
+          'TITLE=Old title',
+          'CHAPTER001=00:00:01.000',
+          'CHAPTER001NAME=Old chapter',
+          'MUSICBRAINZ_TRACKID=external-id',
+        ],
+      ),
+      ..._oggPage(<List<int>>[<int>[9, 8, 7]], serial: 29, sequence: 2),
+    ]);
+
+    await const OggVorbisCommentWriter().write(
+      path: file.path,
+      title: 'Updated title',
+      artist: 'Artist',
+      album: 'Album',
+      genre: 'Spoken Word',
+      chapters: <TrackChapter>[
+        TrackChapter(start: Duration.zero, title: 'Opening'),
+        TrackChapter(
+          start: const Duration(seconds: 42, milliseconds: 250),
+          title: 'Answer',
+        ),
+      ],
+    );
+
+    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
+        .tracks
+        .single;
+    final bytes = await file.readAsBytes();
+    expect(track.chapters.map((chapter) => chapter.title), <String>[
+      'Opening',
+      'Answer',
+    ]);
+    expect(
+      track.chapters[1].start,
+      const Duration(seconds: 42, milliseconds: 250),
+    );
+    expect(_containsBytes(bytes, ascii.encode('CHAPTER001NAME=Old chapter')), isFalse);
+    expect(
+      _containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')),
+      isTrue,
+    );
+    expect(_secondPageHasValidChecksum(bytes), isTrue);
   });
 
   test('leaves a shared-packet comment page untouched', () async {

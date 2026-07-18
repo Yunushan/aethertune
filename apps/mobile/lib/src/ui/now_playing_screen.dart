@@ -9,7 +9,9 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/flac_vorbis_comment_writer.dart';
 import '../data/library_store.dart';
+import '../data/ogg_vorbis_comment_writer.dart';
 import '../data/podcast_transcript_loader.dart';
 import '../data/sponsorblock_segment_provider.dart';
 import '../domain/track_lyrics.dart';
@@ -29,6 +31,67 @@ bool _canImportSponsorBlockSegments(Track? track) =>
     track?.externalId != null &&
     track!.externalId!.trim().isNotEmpty &&
     track.duration > Duration.zero;
+
+bool _canWriteChapterMarkers(Track track) {
+  final path = track.localPath?.toLowerCase();
+  return path != null &&
+      (path.endsWith('.flac') ||
+          path.endsWith('.ogg') ||
+          path.endsWith('.oga') ||
+          path.endsWith('.opus'));
+}
+
+Future<void> _writeChapterMarkers(Track track) async {
+  final path = track.localPath;
+  if (path == null || path.trim().isEmpty) {
+    throw const FormatException('The local file path is unavailable.');
+  }
+  if (path.toLowerCase().endsWith('.flac')) {
+    await const FlacVorbisCommentWriter().write(
+      path: path,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      genre: track.genre,
+      albumArtist: track.albumArtist,
+      year: track.year,
+      trackNumber: track.trackNumber,
+      chapters: track.chapters,
+    );
+    return;
+  }
+  await const OggVorbisCommentWriter().write(
+    path: path,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    genre: track.genre,
+    albumArtist: track.albumArtist,
+    year: track.year,
+    trackNumber: track.trackNumber,
+    chapters: track.chapters,
+  );
+}
+
+Future<bool?> _confirmChapterFileWrite(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Update embedded chapters?'),
+      content: const Text('Replace chapter markers in this audio file.'),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Update file'),
+        ),
+      ],
+    ),
+  );
+}
 
 class NowPlayingScreen extends StatefulWidget {
   const NowPlayingScreen({
@@ -526,13 +589,31 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return;
     }
 
+    var message = updated == null
+        ? 'Track is no longer in the library.'
+        : 'Saved ${updated.chapters.length} chapter(s).';
+    if (updated != null && _canWriteChapterMarkers(updated)) {
+      final writeToFile = await _confirmChapterFileWrite(context);
+      if (!mounted) {
+        return;
+      }
+      if (writeToFile == true) {
+        try {
+          await _writeChapterMarkers(updated);
+          message = 'Saved ${updated.chapters.length} chapter(s) and updated the file.';
+        } on Object catch (error) {
+          message = 'Saved chapters locally, but could not update the file: $error';
+        }
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          updated == null
-              ? 'Track is no longer in the library.'
-              : 'Saved ${updated.chapters.length} chapter(s).',
-        ),
+        content: Text(message),
       ),
     );
   }

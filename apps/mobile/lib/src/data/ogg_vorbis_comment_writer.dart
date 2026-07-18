@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../domain/track_chapter.dart';
+
 class OggVorbisCommentWriter {
   const OggVorbisCommentWriter();
 
@@ -14,6 +16,7 @@ class OggVorbisCommentWriter {
     String? albumArtist,
     int? year,
     int? trackNumber,
+    List<TrackChapter>? chapters,
   }) async {
     if (!_isSupportedPath(path)) {
       throw const FormatException(
@@ -25,6 +28,7 @@ class OggVorbisCommentWriter {
       throw FileSystemException('The Ogg file no longer exists.', path);
     }
 
+    final normalizedChapters = _normalizedChapters(chapters);
     final access = await file.open(mode: FileMode.read);
     late _OggWritePlan plan;
     try {
@@ -38,6 +42,7 @@ class OggVorbisCommentWriter {
         albumArtist: albumArtist,
         year: year,
         trackNumber: trackNumber,
+        chapters: normalizedChapters,
       );
     } finally {
       await access.close();
@@ -114,6 +119,7 @@ Future<_OggWritePlan> _buildWritePlan(
   required String? albumArtist,
   required int? year,
   required int? trackNumber,
+  required List<TrackChapter>? chapters,
 }) async {
   final identificationPage = await _readOggPage(access, fileLength, 0);
   if (!identificationPage.isBeginningOfStream ||
@@ -150,7 +156,10 @@ Future<_OggWritePlan> _buildWritePlan(
     throw const FormatException('Ogg/Opus comment packet is missing.');
   }
 
-  final comments = _parseVorbisComments(commentPage.body.sublist(prefix.length));
+  final comments = _parseVorbisComments(
+    commentPage.body.sublist(prefix.length),
+    replaceChapters: chapters != null,
+  );
   final updatedPacket = Uint8List.fromList(<int>[
     ...prefix,
     ..._updatedVorbisComments(
@@ -163,6 +172,7 @@ Future<_OggWritePlan> _buildWritePlan(
       albumArtist: albumArtist,
       year: year,
       trackNumber: trackNumber,
+      chapters: chapters,
     ),
   ]);
   final lacing = _packetLacing(updatedPacket.length);
@@ -229,7 +239,10 @@ _OggCodec? _codecForIdentificationPacket(List<int> packet) {
 
 enum _OggCodec { vorbis, opus }
 
-_VorbisCommentData _parseVorbisComments(List<int> bytes) {
+_VorbisCommentData _parseVorbisComments(
+  List<int> bytes, {
+  required bool replaceChapters,
+}) {
   var offset = 0;
   final vendorLength = _uint32Le(bytes, offset);
   offset += 4;
@@ -250,7 +263,8 @@ _VorbisCommentData _parseVorbisComments(List<int> bytes) {
     }
     final comment = utf8.decode(bytes.sublist(offset, offset + length));
     offset += length;
-    if (!_isEditableComment(comment)) {
+    if (!_isEditableComment(comment) &&
+        (!replaceChapters || !_isChapterComment(comment))) {
       retained.add(comment);
     }
   }
@@ -270,6 +284,7 @@ Uint8List _updatedVorbisComments({
   required String? albumArtist,
   required int? year,
   required int? trackNumber,
+  required List<TrackChapter>? chapters,
 }) {
   final comments = <String>[
     ...retainedComments,
@@ -281,6 +296,7 @@ Uint8List _updatedVorbisComments({
     if (year != null) 'DATE=$year',
     if (trackNumber != null) 'TRACKNUMBER=$trackNumber',
     if (genre.trim().isNotEmpty) 'GENRE=${genre.trim()}',
+    ..._chapterComments(chapters),
   ];
   final vendorBytes = utf8.encode(vendor);
   final output = BytesBuilder(copy: false)
@@ -403,6 +419,50 @@ bool _isEditableComment(String comment) {
   );
 }
 
+bool _isChapterComment(String comment) {
+  final separator = comment.indexOf('=');
+  if (separator <= 0) {
+    return false;
+  }
+  return RegExp(r'^CHAPTER\d{1,3}(?:NAME)?$').hasMatch(
+    comment.substring(0, separator).toUpperCase(),
+  );
+}
+
+List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
+  if (chapters == null) {
+    return null;
+  }
+  final normalized = TrackChapter.normalize(chapters);
+  if (normalized.length > _maxVorbisChapters) {
+    throw const FormatException('Ogg/Opus chapter markers exceed the 255-item limit.');
+  }
+  if (normalized.any((chapter) => chapter.start.inHours > 999)) {
+    throw const FormatException('Ogg/Opus chapter markers exceed the 999-hour limit.');
+  }
+  return normalized;
+}
+
+List<String> _chapterComments(List<TrackChapter>? chapters) {
+  if (chapters == null) {
+    return const <String>[];
+  }
+  return <String>[
+    for (var index = 0; index < chapters.length; index += 1) ...<String>[
+      'CHAPTER${(index + 1).toString().padLeft(3, '0')}=${_chapterTimestamp(chapters[index].start)}',
+      'CHAPTER${(index + 1).toString().padLeft(3, '0')}NAME=${chapters[index].title}',
+    ],
+  ];
+}
+
+String _chapterTimestamp(Duration start) {
+  final hours = start.inHours;
+  final minutes = start.inMinutes.remainder(60);
+  final seconds = start.inSeconds.remainder(60);
+  final milliseconds = start.inMilliseconds.remainder(1000);
+  return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${milliseconds.toString().padLeft(3, '0')}';
+}
+
 bool _startsWithBytes(List<int> bytes, List<int> prefix) {
   if (bytes.length < prefix.length) {
     return false;
@@ -457,3 +517,4 @@ const _editableCommentKeys = <String>{
   'TRACKNUMBER',
   'GENRE',
 };
+const _maxVorbisChapters = 255;

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/flac_vorbis_comment_writer.dart';
 import 'package:aethertune/src/data/local_folder_scanner.dart';
+import 'package:aethertune/src/domain/track_chapter.dart';
 
 void main() {
   late Directory temporaryDirectory;
@@ -57,6 +58,8 @@ void main() {
       _flacFile(
         comments: <String>[
           'TITLE=Old title',
+          'CHAPTER001=00:00:01.000',
+          'CHAPTER001NAME=Existing chapter',
           'MUSICBRAINZ_TRACKID=external-id',
         ],
         picturePayload: pictureMarker,
@@ -78,7 +81,59 @@ void main() {
       _containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')),
       isTrue,
     );
+    expect(
+      _containsBytes(bytes, ascii.encode('CHAPTER001NAME=Existing chapter')),
+      isTrue,
+    );
     expect(_containsBytes(bytes, pictureMarker), isTrue);
+  });
+
+  test('replaces embedded Vorbis chapter markers when requested', () async {
+    final file = File('${temporaryDirectory.path}/chapters.flac');
+    await file.writeAsBytes(
+      _flacFile(
+        comments: <String>[
+          'TITLE=Old title',
+          'CHAPTER001=00:00:01.000',
+          'CHAPTER001NAME=Old chapter',
+          'MUSICBRAINZ_TRACKID=external-id',
+        ],
+        audio: <int>[1, 2, 3],
+      ),
+    );
+
+    await const FlacVorbisCommentWriter().write(
+      path: file.path,
+      title: 'Updated title',
+      artist: 'Artist',
+      album: 'Album',
+      genre: 'Spoken Word',
+      chapters: <TrackChapter>[
+        TrackChapter(start: Duration.zero, title: 'Opening'),
+        TrackChapter(
+          start: const Duration(minutes: 1, seconds: 2, milliseconds: 500),
+          title: 'Second part',
+        ),
+      ],
+    );
+
+    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
+        .tracks
+        .single;
+    final bytes = await file.readAsBytes();
+    expect(track.chapters.map((chapter) => chapter.title), <String>[
+      'Opening',
+      'Second part',
+    ]);
+    expect(
+      track.chapters[1].start,
+      const Duration(minutes: 1, seconds: 2, milliseconds: 500),
+    );
+    expect(_containsBytes(bytes, ascii.encode('CHAPTER001NAME=Old chapter')), isFalse);
+    expect(
+      _containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')),
+      isTrue,
+    );
   });
 
   test('leaves malformed Vorbis comments untouched', () async {
