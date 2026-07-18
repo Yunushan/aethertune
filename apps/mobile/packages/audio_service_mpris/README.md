@@ -36,7 +36,7 @@ flutter pub add audio_service_mpris
 | [Fullscreen](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:Fullscreen)                   | ✅         | false                                                                 |
 | [CanSetFullscreen](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:CanSetFullscreen)       | ✅         | false                                                                 |
 | [CanRaise](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:CanRaise)                       | ✅         | false                                                                 |
-| [HasTrackList](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:HasTrackList)               | ✅         | false                                                                 |
+| [HasTrackList](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:HasTrackList)               | ✅         | true                                                                  |
 | [Identity](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:Identity)                       | ✅         | androidNotificationChannelId taken from audio_service platform config |
 | [DesktopEntry](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:DesktopEntry)               | ✅         | Empty string                                                          |
 | [SupportedUriSchemes](https://specifications.freedesktop.org/mpris-spec/2.2/Media_Player.html#Property:SupportedUriSchemes) | ✅         | `[]`                                                                  |
@@ -70,13 +70,13 @@ flutter pub add audio_service_mpris
 |-----------------------------------------------------------------------------------------------------------------------|-----------|---------------------------------------------------|
 | [PlaybackStatus](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:PlaybackStatus) | ✅         | Being changed on AudioHandler player state change |
 | [LoopStatus](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:LoopStatus)         | ✅         | `'None'`                                          |
-| [Rate](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Rate)                     | ✅         | `1.0`                                             |
-| [Shuffle](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Shuffle)               | ❌         |                                                   |
+| [Rate](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Rate)                     | ✅         | `0.5` to `3.0`                                   |
+| [Shuffle](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Shuffle)               | ✅         | Routes enabled/disabled state through `audio_service` |
 | [Metadata](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Metadata)             | ✅         | Being changed on AudioHandler mediaItem change    |
-| [Volume](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Volume)                 | ❌         | `AudioServicePlatform` doesn't support it         |
+| [Volume](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Volume)                 | ✅         | Routes 0.0-1.0 requests through the app handler   |
 | [Position](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:Position)             | ✅         | Being changed on AudioHandler player state change |
-| [MinimumRate](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:MinimumRate)       | ✅         | `1.0`                                             |
-| [MaximumRate](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:MaximumRate)       | ✅         | `1.0`                                             |
+| [MinimumRate](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:MinimumRate)       | ✅         | `0.5`                                             |
+| [MaximumRate](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:MaximumRate)       | ✅         | `3.0`                                             |
 | [CanGoNext](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:CanGoNext)           | ✅         | `true`                                            |
 | [CanGoPrevious](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:CanGoPrevious)   | ✅         | `true`                                            |
 | [CanPlay](https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#Property:CanPlay)               | ✅         | `true`                                            |
@@ -86,8 +86,10 @@ flutter pub add audio_service_mpris
 
 ### org.mpris.MediaPlayer2.TrackList
 
-Not supported
+Supported for the active `audio_service` queue, including stable MPRIS track
+paths, metadata lookup, and track activation.
 
 ### org.mpris.MediaPlayer2.Playlists
 
-Not supported
+Supported for the app-owned playlist catalog, including alphabetical listing
+and playlist activation.

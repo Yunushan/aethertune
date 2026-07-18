@@ -104,6 +104,18 @@ class AudioServiceMpris extends AudioServicePlatform {
     });
   }
 
+  void _listenToShuffleStream() {
+    _mpris.shuffleStream.listen((enabled) {
+      _handlerCallbacks?.setShuffleMode(
+        SetShuffleModeRequest(
+          shuffleMode: enabled
+              ? AudioServiceShuffleModeMessage.all
+              : AudioServiceShuffleModeMessage.none,
+        ),
+      );
+    });
+  }
+
   void _listenToRateStream() {
     _mpris.rateStream.listen((value) {
       _handlerCallbacks?.setSpeed(SetSpeedRequest(speed: value));
@@ -136,6 +148,7 @@ class AudioServiceMpris extends AudioServicePlatform {
     _listenToTrackStream();
     _listenToPlaylistStream();
     _listenToLoopStream();
+    _listenToShuffleStream();
     _listenToRateStream();
 
     await _dBusClient.registerObject(_mpris);
@@ -155,6 +168,9 @@ class AudioServiceMpris extends AudioServicePlatform {
       AudioServiceRepeatModeMessage.all => 'Playlist',
       _ => 'None',
     });
+    _mpris.updateShuffle(
+      request.state.shuffleMode != AudioServiceShuffleModeMessage.none,
+    );
     _mpris.playbackState = _isPlaying ? 'Playing' : 'Paused';
   }
 

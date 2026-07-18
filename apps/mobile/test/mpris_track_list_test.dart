@@ -79,6 +79,14 @@ void main() {
     expect(player.getLoopStatus().value, 'Playlist');
   });
 
+  test('Player Shuffle publishes enabled state changes', () async {
+    final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+    expectLater(player.shuffleStream, emits(true));
+
+    expect(await player.setShuffle(true), isNotNull);
+    expect(player.getShuffle().value, isTrue);
+  });
+
   test('Player Rate validates and publishes supported speeds', () async {
     final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
     expectLater(player.rateStream, emits(1.5));
@@ -86,6 +94,10 @@ void main() {
     expect(player.getRate().value, 1.5);
     await player.setRate(0);
     expect(player.getRate().value, 1.5);
+    await player.setRate(0.25);
+    expect(player.getRate().value, 1.5);
+    expect(player.getMinimumRate().value, 0.5);
+    expect(player.getMaximumRate().value, 3.0);
   });
 
   test('Player Volume validates and retains MPRIS volume requests', () async {

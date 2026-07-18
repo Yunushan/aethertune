@@ -72,6 +72,9 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   final _loopStreamController = StreamController<String>();
   Stream<String> get loopStream => _loopStreamController.stream;
 
+  final _shuffleStreamController = StreamController<bool>();
+  Stream<bool> get shuffleStream => _shuffleStreamController.stream;
+
   final _rateStreamController = StreamController<double>();
   Stream<double> get rateStream => _rateStreamController.stream;
 
@@ -203,13 +206,40 @@ class OrgMprisMediaPlayer2 extends DBusObject {
     );
   }
 
+  /// Gets value of property org.mpris.MediaPlayer2.Player.Shuffle
+  bool _shuffle = false;
+  DBusBoolean getShuffle() => DBusBoolean(_shuffle);
+
+  /// Sets property org.mpris.MediaPlayer2.Player.Shuffle
+  Future<DBusMethodResponse> setShuffle(bool value) async {
+    if (value == _shuffle) return DBusMethodSuccessResponse([]);
+    _shuffle = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'Shuffle': DBusBoolean(value)},
+    );
+    _shuffleStreamController.add(value);
+    return DBusMethodSuccessResponse([]);
+  }
+
+  void updateShuffle(bool value) {
+    if (value == _shuffle) return;
+    _shuffle = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'Shuffle': DBusBoolean(value)},
+    );
+  }
+
   /// Gets value of property org.mpris.MediaPlayer2.Player.Rate
   double _rate = 1.0;
   DBusDouble getRate() => DBusDouble(_rate);
 
   /// Sets property org.mpris.MediaPlayer2.Player.Rate
   Future<DBusMethodResponse> setRate(double value) async {
-    if (value <= 0 || value > 3) return DBusMethodErrorResponse.invalidArgs();
+    if (value < 0.5 || value > 3) {
+      return DBusMethodErrorResponse.invalidArgs();
+    }
     if (value == _rate) return DBusMethodSuccessResponse([]);
     _rate = value;
     emitPropertiesChanged(
@@ -221,7 +251,7 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   }
 
   void updateRate(double value) {
-    if (value <= 0 || value == _rate) return;
+    if (value < 0.5 || value > 3 || value == _rate) return;
     _rate = value;
     emitPropertiesChanged(
       'org.mpris.MediaPlayer2.Player',
@@ -275,12 +305,12 @@ class OrgMprisMediaPlayer2 extends DBusObject {
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.MinimumRate
   DBusDouble getMinimumRate() {
-    return const DBusDouble(1.0);
+    return const DBusDouble(0.5);
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.MaximumRate
   DBusDouble getMaximumRate() {
-    return const DBusDouble(1.0);
+    return const DBusDouble(3.0);
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.CanGoNext
@@ -573,6 +603,8 @@ class OrgMprisMediaPlayer2 extends DBusObject {
             access: DBusPropertyAccess.read),
         DBusIntrospectProperty('LoopStatus', DBusSignature('s'),
             access: DBusPropertyAccess.readwrite),
+        DBusIntrospectProperty('Shuffle', DBusSignature('b'),
+            access: DBusPropertyAccess.readwrite),
         DBusIntrospectProperty('Rate', DBusSignature('d'),
             access: DBusPropertyAccess.readwrite),
         DBusIntrospectProperty('Metadata', DBusSignature('a{sv}'),
@@ -801,6 +833,8 @@ class OrgMprisMediaPlayer2 extends DBusObject {
         value = _getPlaybackStatus();
       } else if (name == 'LoopStatus') {
         value = getLoopStatus();
+      } else if (name == 'Shuffle') {
+        value = getShuffle();
       } else if (name == 'Rate') {
         value = getRate();
       } else if (name == 'Metadata') {
@@ -891,6 +925,11 @@ class OrgMprisMediaPlayer2 extends DBusObject {
           return DBusMethodErrorResponse.invalidArgs();
         }
         return setLoopStatus(value.asString());
+      } else if (name == 'Shuffle') {
+        if (value.signature != DBusSignature('b')) {
+          return DBusMethodErrorResponse.invalidArgs();
+        }
+        return setShuffle(value.asBoolean());
       } else if (name == 'Rate') {
         if (value.signature != DBusSignature('d')) {
           return DBusMethodErrorResponse.invalidArgs();
@@ -952,6 +991,7 @@ class OrgMprisMediaPlayer2 extends DBusObject {
       properties = {
         'PlaybackStatus': _getPlaybackStatus(),
         'LoopStatus': getLoopStatus(),
+        'Shuffle': getShuffle(),
         'Rate': getRate(),
         'Metadata': getMetadata(),
         'Volume': getVolume(),
