@@ -171,6 +171,7 @@
 - [x] Spotify official saved-album and album-track metadata browse
 - [x] Spotify official read-only playlist metadata browse
 - [x] Spotify official recently played metadata browse and local-library save
+- [x] Spotify official top-track metadata browse and local-library save
 - [x] YouTube Data official Music-category chart metadata browse and local-library save
 - [x] Jellyfin provider foundation
 - [x] Jellyfin settings UI and secure credential storage

@@ -158,6 +158,31 @@ void main() {
     expect(await provider.resolveStream(item.track), isNull);
   });
 
+  test('loads bounded official Spotify top-track metadata', () async {
+    Uri? requestUri;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      topTracksLoader: (uri, token) async {
+        requestUri = uri;
+        expect(token, 'access-token');
+        return '''
+          {"offset": 0, "total": 1, "next": null, "items": [{
+            "id": "top-track", "name": "Top Signal", "artists": [{"name": "Aether"}],
+            "album": {"name": "Signals"}
+          }]}
+        ''';
+      },
+    );
+
+    final page = await provider.loadTopTracksPage(limit: 100);
+
+    expect(requestUri!.path, '/v1/me/top/tracks');
+    expect(requestUri!.queryParameters['time_range'], 'medium_term');
+    expect(requestUri!.queryParameters['limit'], '50');
+    expect(page.tracks.single.title, 'Top Signal');
+    expect(page.tracks.single.isPlayable, isFalse);
+  });
+
   test('ignores malformed recently played entries', () {
     final page = parseSpotifyRecentlyPlayedPage('''
       {

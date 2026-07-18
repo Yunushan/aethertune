@@ -13069,6 +13069,7 @@ enum _SpotifyAction {
   savedAlbums,
   playlists,
   recentlyPlayed,
+  topTracks,
   configure,
   remove,
 }
@@ -13455,6 +13456,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifyRecentlyPlayed(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.topTracks:
+                  if (spotifyProvider != null) {
+                    _openSpotifyTopTracks(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.configure:
                   unawaited(_configureSpotify(context));
                   break;
@@ -13498,6 +13504,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.history_outlined),
                   title: Text('Recently played'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.topTracks,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.auto_graph_outlined),
+                  title: Text('Top tracks'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -14899,6 +14914,20 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SpotifySavedPlaylistsScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openSpotifyTopTracks(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifySavedTracksScreen(
+          provider: provider,
+          topTracks: true,
+        ),
       ),
     );
   }

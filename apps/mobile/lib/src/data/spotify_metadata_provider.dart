@@ -22,6 +22,8 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? savedAlbumsLoader,
     Uri? recentlyPlayedUri,
     SpotifySearchLoader? recentlyPlayedLoader,
+    Uri? topTracksUri,
+    SpotifySearchLoader? topTracksLoader,
     Uri? albumsUri,
     SpotifySearchLoader? albumTracksLoader,
     Uri? playlistsUri,
@@ -37,6 +39,8 @@ final class SpotifyMetadataProvider
        _savedAlbumsLoader = savedAlbumsLoader ?? _loadSpotifyJson,
        recentlyPlayedUri = recentlyPlayedUri ?? _defaultRecentlyPlayedUri,
        _recentlyPlayedLoader = recentlyPlayedLoader ?? _loadSpotifyJson,
+       topTracksUri = topTracksUri ?? _defaultTopTracksUri,
+       _topTracksLoader = topTracksLoader ?? _loadSpotifyJson,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
        _albumTracksLoader = albumTracksLoader ?? _loadSpotifyJson,
        playlistsUri = playlistsUri ?? _defaultPlaylistsUri,
@@ -52,6 +56,8 @@ final class SpotifyMetadataProvider
       Uri.parse('https://api.spotify.com/v1/me/albums');
   static final Uri _defaultRecentlyPlayedUri =
       Uri.parse('https://api.spotify.com/v1/me/player/recently-played');
+  static final Uri _defaultTopTracksUri =
+      Uri.parse('https://api.spotify.com/v1/me/top/tracks');
   static final Uri _defaultAlbumsUri =
       Uri.parse('https://api.spotify.com/v1/albums');
   static final Uri _defaultPlaylistsUri =
@@ -68,6 +74,8 @@ final class SpotifyMetadataProvider
   final SpotifySearchLoader _savedAlbumsLoader;
   final Uri recentlyPlayedUri;
   final SpotifySearchLoader _recentlyPlayedLoader;
+  final Uri topTracksUri;
+  final SpotifySearchLoader _topTracksLoader;
   final Uri albumsUri;
   final SpotifySearchLoader _albumTracksLoader;
   final Uri playlistsUri;
@@ -255,6 +263,32 @@ final class SpotifyMetadataProvider
           queryParameters: <String, String>{
             'limit': limit.clamp(1, 50).toString(),
             if (normalizedBefore != null) 'before': normalizedBefore,
+          },
+        ),
+        token,
+      ),
+    );
+  }
+
+  /// Reads the user's official Spotify top-track metadata without playback.
+  Future<SpotifySavedTracksPage> loadTopTracksPage({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final token = await _accessTokenReader();
+    return parseSpotifyTopTracksPage(
+      await _topTracksLoader(
+        topTracksUri.replace(
+          queryParameters: <String, String>{
+            'time_range': 'medium_term',
+            'limit': limit.clamp(1, 50).toString(),
+            'offset': offset.toString(),
           },
         ),
         token,
@@ -586,6 +620,30 @@ SpotifySavedAlbumsPage parseSpotifySavedAlbumsPage(String jsonText) {
     offset: offset,
     total: total,
     hasMore: _nonEmpty(root['next']) != null || offset + albums.length < total,
+  );
+}
+
+SpotifySavedTracksPage parseSpotifyTopTracksPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify top tracks response must be a map.');
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final items = root['items'];
+  final tracks = items is List
+      ? items
+            .whereType<Map>()
+            .map((item) => _trackFromSpotifyJson(Map<String, Object?>.from(item)))
+            .whereType<Track>()
+            .toList(growable: false)
+      : const <Track>[];
+  final offset = _nonNegativeInt(root['offset']) ?? 0;
+  final total = _nonNegativeInt(root['total']) ?? 0;
+  return SpotifySavedTracksPage(
+    tracks: tracks,
+    offset: offset,
+    total: total,
+    hasMore: _nonEmpty(root['next']) != null || offset + tracks.length < total,
   );
 }
 

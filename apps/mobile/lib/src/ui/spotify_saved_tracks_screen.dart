@@ -10,9 +10,14 @@ import 'widgets/track_artwork.dart';
 
 /// Browses an authorized Spotify library without exposing Spotify playback.
 final class SpotifySavedTracksScreen extends StatefulWidget {
-  const SpotifySavedTracksScreen({super.key, required this.provider});
+  const SpotifySavedTracksScreen({
+    super.key,
+    required this.provider,
+    this.topTracks = false,
+  });
 
   final SpotifyMetadataProvider provider;
+  final bool topTracks;
 
   @override
   State<SpotifySavedTracksScreen> createState() =>
@@ -39,15 +44,21 @@ final class _SpotifySavedTracksScreenState
     final library = context.watch<LibraryStore>();
     final offlineModeEnabled = library.offlineModeEnabled;
     return Scaffold(
-      appBar: AppBar(title: const Text('Spotify saved tracks')),
+      appBar: AppBar(
+        title: Text(widget.topTracks ? 'Spotify top tracks' : 'Spotify saved tracks'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
           if (offlineModeEnabled && _tracks.isEmpty)
-            const ListTile(
-              leading: Icon(Icons.cloud_off_outlined),
-              title: Text('Offline mode is on'),
-              subtitle: Text('Turn it off to load saved Spotify tracks.'),
+            ListTile(
+              leading: const Icon(Icons.cloud_off_outlined),
+              title: const Text('Offline mode is on'),
+              subtitle: Text(
+                widget.topTracks
+                    ? 'Turn it off to load your top Spotify tracks.'
+                    : 'Turn it off to load saved Spotify tracks.',
+              ),
             ),
           if (_loading && _tracks.isEmpty)
             const Padding(
@@ -57,10 +68,14 @@ final class _SpotifySavedTracksScreenState
           if (_error != null && _tracks.isEmpty)
             ListTile(
               leading: const Icon(Icons.error_outline),
-              title: const Text('Could not load saved tracks'),
+              title: Text(
+                widget.topTracks
+                    ? 'Could not load top tracks'
+                    : 'Could not load saved tracks',
+              ),
               subtitle: Text(_error!),
               trailing: IconButton(
-                tooltip: 'Retry saved tracks',
+                tooltip: widget.topTracks ? 'Retry top tracks' : 'Retry saved tracks',
                 onPressed: _loading || offlineModeEnabled
                     ? null
                     : () => unawaited(_load(reset: true)),
@@ -68,9 +83,11 @@ final class _SpotifySavedTracksScreenState
               ),
             ),
           if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
-            const ListTile(
-              leading: Icon(Icons.library_music_outlined),
-              title: Text('No saved tracks found'),
+            ListTile(
+              leading: const Icon(Icons.library_music_outlined),
+              title: Text(
+                widget.topTracks ? 'No top tracks found' : 'No saved tracks found',
+              ),
             ),
           for (final track in _tracks)
             ListTile(
@@ -96,10 +113,16 @@ final class _SpotifySavedTracksScreenState
           if (_error != null && _tracks.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.error_outline),
-              title: const Text('Could not load more saved tracks'),
+              title: Text(
+                widget.topTracks
+                    ? 'Could not load more top tracks'
+                    : 'Could not load more saved tracks',
+              ),
               subtitle: Text(_error!),
               trailing: IconButton(
-                tooltip: 'Retry saved track page',
+                tooltip: widget.topTracks
+                    ? 'Retry top tracks page'
+                    : 'Retry saved track page',
                 onPressed: _loading || offlineModeEnabled
                     ? null
                     : () => unawaited(_load(reset: false)),
@@ -153,9 +176,9 @@ final class _SpotifySavedTracksScreenState
       }
     });
     try {
-      final page = await widget.provider.loadSavedTracksPage(
-        offset: requestedOffset,
-      );
+      final page = widget.topTracks
+          ? await widget.provider.loadTopTracksPage(offset: requestedOffset)
+          : await widget.provider.loadSavedTracksPage(offset: requestedOffset);
       if (!mounted) {
         return;
       }
@@ -200,12 +223,16 @@ final class _SpotifySavedTracksScreenState
   String get _loadMoreLabel {
     final total = _total;
     if (total == null) {
-      return 'Load more saved tracks';
+      return widget.topTracks ? 'Load more top tracks' : 'Load more saved tracks';
     }
     final remaining = total - _tracks.length;
     return remaining > 0
-        ? 'Load more saved tracks ($remaining remaining)'
-        : 'Load more saved tracks';
+        ? widget.topTracks
+            ? 'Load more top tracks ($remaining remaining)'
+            : 'Load more saved tracks ($remaining remaining)'
+        : widget.topTracks
+            ? 'Load more top tracks'
+            : 'Load more saved tracks';
   }
 
   String _subtitle(Track track) {

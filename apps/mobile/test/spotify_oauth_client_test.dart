@@ -52,6 +52,7 @@ void main() {
         'user-library-read',
         'playlist-read-private',
         'user-read-recently-played',
+        'user-top-read',
       ]),
     );
     final request = SpotifyAuthorizationRequest.create(
@@ -61,7 +62,7 @@ void main() {
     );
     expect(
       request.uri.queryParameters['scope'],
-      'user-library-read playlist-read-private user-read-recently-played',
+      'user-library-read playlist-read-private user-read-recently-played user-top-read',
     );
   });
 
