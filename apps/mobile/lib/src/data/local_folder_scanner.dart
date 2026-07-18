@@ -915,8 +915,9 @@ final class _LocalFolderScanState {
 
   Future<_LocalFileMetadata?> _id3v2Metadata(
     RandomAccessFile access,
-    List<int> header,
-  ) async {
+    List<int> header, {
+    int? maximumTagBytes,
+  }) async {
     if (header.length != 10 ||
         header[0] != 0x49 ||
         header[1] != 0x44 ||
@@ -930,7 +931,8 @@ final class _LocalFolderScanState {
     }
 
     final tagSize = _id3v2SynchsafeInt(header, 6);
-    if (tagSize <= 0) {
+    if (tagSize <= 0 ||
+        (maximumTagBytes != null && tagSize > maximumTagBytes)) {
       return null;
     }
 
@@ -1330,6 +1332,7 @@ final class _LocalFolderScanState {
         }
 
         final tags = <String, String>{};
+        _LocalFileMetadata? id3Metadata;
         var chunkCount = 0;
         while (chunkCount < _maxAiffChunks) {
           final chunkStart = await access.position();
@@ -1351,7 +1354,17 @@ final class _LocalFolderScanState {
           }
 
           final fieldKey = _aiffTextFieldKey(chunkId);
-          if (fieldKey != null && chunkLength <= _maxAiffTextBytes) {
+          if (chunkId == 'ID3 ' &&
+              chunkLength >= 10 &&
+              chunkLength - 10 <= _maxId3v2TagBytes) {
+            final id3Header = await access.read(10);
+            id3Metadata ??= await _id3v2Metadata(
+              access,
+              id3Header,
+              maximumTagBytes: chunkLength - 10,
+            );
+            await access.setPosition(payloadEnd);
+          } else if (fieldKey != null && chunkLength <= _maxAiffTextBytes) {
             final payload = await access.read(chunkLength);
             if (payload.length != chunkLength) {
               break;
@@ -1370,12 +1383,29 @@ final class _LocalFolderScanState {
           await access.setPosition(nextOffset > length ? length : nextOffset);
         }
 
-        final title = tags['title'] ?? '';
-        final artist = tags['artist'] ?? '';
-        if (title.isEmpty && artist.isEmpty) {
+        final title = id3Metadata?.title.isNotEmpty == true
+            ? id3Metadata!.title
+            : tags['title'] ?? '';
+        final artist = id3Metadata?.artist.isNotEmpty == true
+            ? id3Metadata!.artist
+            : tags['artist'] ?? '';
+        if (id3Metadata == null && title.isEmpty && artist.isEmpty) {
           return null;
         }
-        return _LocalFileMetadata(title: title, artist: artist);
+        return _LocalFileMetadata(
+          title: title,
+          artist: artist,
+          album: id3Metadata?.album,
+          albumArtist: id3Metadata?.albumArtist,
+          year: id3Metadata?.year,
+          trackNumber: id3Metadata?.trackNumber,
+          genre: id3Metadata?.genre,
+          artworkUri: id3Metadata?.artworkUri,
+          replayGainTrackDb: id3Metadata?.replayGainTrackDb,
+          replayGainAlbumDb: id3Metadata?.replayGainAlbumDb,
+          embeddedLyrics: id3Metadata?.embeddedLyrics,
+          rating: id3Metadata?.rating,
+        );
       } finally {
         await access.close();
       }

@@ -859,6 +859,30 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.artist, 'AIFF Artist');
   });
 
+  test('prefers bounded ID3 metadata embedded in AIFF files', () async {
+    await File(p.join(root.path, '14 legacy-name.aiff')).writeAsBytes(
+      _aiffWithTextTags(
+        <String, String>{
+          'NAME': 'Legacy AIFF Title',
+          'AUTH': 'Legacy AIFF Artist',
+        },
+        id3Tag: _id3v23Tag(
+          title: 'ID3 AIFF Title',
+          artist: 'ID3 AIFF Artist',
+          album: 'ID3 AIFF Album',
+          genre: 'Ambient',
+        ),
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+
+    expect(result.tracks.single.title, 'ID3 AIFF Title');
+    expect(result.tracks.single.artist, 'ID3 AIFF Artist');
+    expect(result.tracks.single.album, 'ID3 AIFF Album');
+    expect(result.tracks.single.genre, 'Ambient');
+  });
+
   test('extracts ID3v2 lyric-labelled comment frames only', () async {
     final lyricPath = p.join(root.path, 'comment-lyrics.mp3');
     final notePath = p.join(root.path, 'ordinary-comment.mp3');
@@ -1403,7 +1427,10 @@ List<int> _uint32BigEndianSize(int size) {
   ];
 }
 
-List<int> _aiffWithTextTags(Map<String, String> tags) {
+List<int> _aiffWithTextTags(
+  Map<String, String> tags, {
+  List<int>? id3Tag,
+}) {
   final chunks = <int>[];
   for (final entry in tags.entries) {
     final value = latin1.encode(entry.value);
@@ -1412,6 +1439,15 @@ List<int> _aiffWithTextTags(Map<String, String> tags) {
       ..addAll(_uint32BigEndianSize(value.length))
       ..addAll(value);
     if (value.length.isOdd) {
+      chunks.add(0);
+    }
+  }
+  if (id3Tag != null) {
+    chunks
+      ..addAll('ID3 '.codeUnits)
+      ..addAll(_uint32BigEndianSize(id3Tag.length))
+      ..addAll(id3Tag);
+    if (id3Tag.length.isOdd) {
       chunks.add(0);
     }
   }

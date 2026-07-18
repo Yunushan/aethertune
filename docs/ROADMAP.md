@@ -80,7 +80,7 @@
 - [x] Basic FLAC Vorbis comment metadata scanner
 - [x] Basic M4A metadata atom scanner
 - [x] Basic WAV RIFF INFO metadata scanner
-- [x] Basic AIFF NAME/AUTH metadata scanner
+- [x] Basic AIFF NAME/AUTH and ID3 metadata scanner
 - [ ] Rich embedded audio tag scanner
 - [x] Stored metadata editor
 - [x] Duplicate resolver scaffold
