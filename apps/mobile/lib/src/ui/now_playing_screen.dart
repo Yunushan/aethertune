@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/library_store.dart';
+import '../data/podcast_transcript_loader.dart';
 import '../domain/track.dart';
 import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
@@ -25,11 +26,13 @@ class NowPlayingScreen extends StatefulWidget {
   const NowPlayingScreen({
     required this.onOpenQueue,
     required this.onOpenLyrics,
+    this.podcastTranscriptLoader = loadPodcastTranscript,
     super.key,
   });
 
   final VoidCallback onOpenQueue;
   final VoidCallback onOpenLyrics;
+  final PodcastTranscriptLoader podcastTranscriptLoader;
 
   @override
   State<NowPlayingScreen> createState() => _NowPlayingScreenState();
@@ -234,15 +237,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Future<void> _openPodcastTranscript(Uri transcriptUri) async {
-    final opened = await launchUrl(
-      transcriptUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted || opened) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open the podcast transcript.')),
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _PodcastTranscriptSheet(
+        transcriptUri: transcriptUri,
+        loader: widget.podcastTranscriptLoader,
+      ),
     );
   }
 
@@ -449,6 +450,124 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           updated == null
               ? 'Track is no longer in the library.'
               : 'Saved ${updated.skipSegments.length} skip segment(s).',
+        ),
+      ),
+    );
+  }
+}
+
+class _PodcastTranscriptSheet extends StatefulWidget {
+  const _PodcastTranscriptSheet({
+    required this.transcriptUri,
+    required this.loader,
+  });
+
+  final Uri transcriptUri;
+  final PodcastTranscriptLoader loader;
+
+  @override
+  State<_PodcastTranscriptSheet> createState() =>
+      _PodcastTranscriptSheetState();
+}
+
+class _PodcastTranscriptSheetState extends State<_PodcastTranscriptSheet> {
+  late Future<PodcastTranscriptDocument> _transcript =
+      widget.loader(widget.transcriptUri);
+
+  void _retry() {
+    setState(() {
+      _transcript = widget.loader(widget.transcriptUri);
+    });
+  }
+
+  Future<void> _openInBrowser() async {
+    final opened = await launchUrl(
+      widget.transcriptUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted || opened) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open the podcast transcript.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.82,
+        child: Column(
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.article_outlined),
+              title: const Text('Podcast transcript'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Open in browser',
+                    onPressed: _openInBrowser,
+                    icon: const Icon(Icons.open_in_new),
+                  ),
+                  IconButton(
+                    key: const Key('podcast-transcript-close'),
+                    tooltip: 'Close transcript',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: FutureBuilder<PodcastTranscriptDocument>(
+                future: _transcript,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Text('Could not load the podcast transcript.'),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              children: <Widget>[
+                                FilledButton(
+                                  onPressed: _retry,
+                                  child: const Text('Retry'),
+                                ),
+                                OutlinedButton(
+                                  onPressed: _openInBrowser,
+                                  child: const Text('Open in browser'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  final transcript = snapshot.requireData;
+                  return SingleChildScrollView(
+                    key: const Key('podcast-transcript-reader'),
+                    padding: const EdgeInsets.all(20),
+                    child: SelectableText(
+                      transcript.displayText,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/data/podcast_transcript_loader.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
 import 'package:aethertune/src/domain/track_skip_segment.dart';
@@ -68,6 +69,10 @@ void main() {
           home: NowPlayingScreen(
             onOpenQueue: () => queueOpens += 1,
             onOpenLyrics: () => lyricsOpens += 1,
+            podcastTranscriptLoader: (_) async => const PodcastTranscriptDocument(
+              text: 'Podcast transcript text',
+              contentType: 'text/plain',
+            ),
           ),
         ),
       ),
@@ -95,6 +100,13 @@ void main() {
       find.byKey(const Key('now-playing-podcast-transcript')),
       findsOneWidget,
     );
+    await tester.tap(find.byKey(const Key('now-playing-podcast-transcript')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('podcast-transcript-reader')), findsOneWidget);
+    expect(find.text('Podcast transcript text'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('podcast-transcript-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('podcast-transcript-reader')), findsNothing);
     expect(find.byTooltip('Add to favorites'), findsOneWidget);
 
     final semantics = tester.ensureSemantics();
@@ -325,6 +337,57 @@ void main() {
       isTrue,
     );
     semantics.dispose();
+  });
+
+  testWidgets('podcast transcript reader retries a failed user request', (
+    tester,
+  ) async {
+    final engine = _FakePlaybackAudioEngine();
+    final player = PlayerController(audioEngine: engine);
+    final library = LibraryStore();
+    final track = _track(
+      'transcript',
+      title: 'Transcript episode',
+      durationSeconds: 300,
+    ).copyWith(transcriptUri: Uri.parse('https://example.test/episode.vtt'));
+    await library.addTracks(<Track>[track]);
+    await player.playTrack(track, queue: <Track>[track]);
+    var requests = 0;
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          home: NowPlayingScreen(
+            onOpenQueue: () {},
+            onOpenLyrics: () {},
+            podcastTranscriptLoader: (_) async {
+              requests += 1;
+              if (requests == 1) {
+                throw const FormatException('Malformed transcript');
+              }
+              return const PodcastTranscriptDocument(
+                text: 'Recovered transcript',
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('now-playing-podcast-transcript')));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load the podcast transcript.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
+    await tester.pumpAndSettle();
+    expect(requests, 2);
+    expect(find.text('Recovered transcript'), findsOneWidget);
   });
 
   testWidgets('compact player fits a phone and opens the full player', (
