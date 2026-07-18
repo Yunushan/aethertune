@@ -109,6 +109,9 @@ void main() {
     expect(await player.setVolume(-0.1), isNotNull);
     expect(await player.setVolume(1.1), isNotNull);
     expect(player.getVolume().value, 0.4);
+
+    player.updateVolume(0.7);
+    expect(player.getVolume().value, 0.7);
   });
 
   test('Player Stop publishes a control request', () async {

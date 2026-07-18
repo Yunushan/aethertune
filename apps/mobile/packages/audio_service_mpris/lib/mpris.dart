@@ -297,6 +297,17 @@ class OrgMprisMediaPlayer2 extends DBusObject {
     return DBusMethodSuccessResponse([]);
   }
 
+  void updateVolume(double value) {
+    if (!value.isFinite || value < 0 || value > 1 || value == _volume) {
+      return;
+    }
+    _volume = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'Volume': DBusDouble(value)},
+    );
+  }
+
   /// Gets value of property org.mpris.MediaPlayer2.Player.Position
   DBusInt64 getPosition() {
     log('GetPosition(): $position', name: 'audio_service_mpris');

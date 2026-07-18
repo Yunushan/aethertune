@@ -334,7 +334,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       setLoopMode(_loopModeForRepeatMode(repeatMode));
 
   @override
-  Future<void> setVolume(double volume) => _engine.setVolume(volume);
+  Future<void> setVolume(double volume) async {
+    await _engine.setVolume(volume);
+    setMprisVolume(volume);
+  }
 
   @override
   Future<dynamic> customAction(String name,

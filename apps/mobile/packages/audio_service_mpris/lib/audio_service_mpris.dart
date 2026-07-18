@@ -14,6 +14,11 @@ void setMprisPlaylists(Iterable<MprisPlaylist> playlists) {
   AudioServiceMpris._activeInstance?.setPlaylists(playlists);
 }
 
+/// Publishes an app-originated volume update to the Linux MPRIS adapter.
+void setMprisVolume(double volume) {
+  AudioServiceMpris._activeInstance?.setVolume(volume);
+}
+
 class AudioServiceMpris extends AudioServicePlatform {
   static AudioServiceMpris? _activeInstance;
   late final DBusClient _dBusClient;
@@ -199,6 +204,10 @@ class AudioServiceMpris extends AudioServicePlatform {
 
   void setPlaylists(Iterable<MprisPlaylist> playlists) {
     _mpris.setPlaylists(playlists);
+  }
+
+  void setVolume(double volume) {
+    _mpris.updateVolume(volume);
   }
 
   @override
