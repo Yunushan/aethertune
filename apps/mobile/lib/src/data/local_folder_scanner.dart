@@ -830,6 +830,7 @@ final class _LocalFolderScanState {
         }
 
         final infoTags = <String, String>{};
+        _LocalFileMetadata? id3Metadata;
         var chunkCount = 0;
         while (chunkCount < _maxWavChunks) {
           final chunkStart = await access.position();
@@ -861,10 +862,19 @@ final class _LocalFolderScanState {
 
             if (_matchesAscii(payload.sublist(0, 4), 'INFO')) {
               _readWavInfoList(payload, 4, payload.length, infoTags);
-              if (_wavInfoComplete(infoTags)) {
-                break;
-              }
             }
+          } else if (chunkId == 'id3 ' &&
+              chunkLength >= 10 &&
+              chunkLength <= _maxWavId3ChunkBytes) {
+            final payload = await access.read(chunkLength);
+            if (payload.length != chunkLength) {
+              break;
+            }
+            id3Metadata ??= _id3v2MetadataFromTagBytes(
+              payload.sublist(0, 10),
+              payload.sublist(10),
+              maximumTagBytes: chunkLength - 10,
+            );
           } else {
             await access.setPosition(payloadEnd);
           }
@@ -873,7 +883,10 @@ final class _LocalFolderScanState {
           await access.setPosition(nextOffset > length ? length : nextOffset);
         }
 
-        return _wavMetadataFromInfoTags(infoTags);
+        return _mergeWavMetadata(
+          id3Metadata,
+          _wavMetadataFromInfoTags(infoTags),
+        );
       } finally {
         await access.close();
       }
@@ -960,6 +973,30 @@ final class _LocalFolderScanState {
       return null;
     }
 
+    final tagBytes = await access.read(
+      _id3v2SynchsafeInt(header, 6) > _maxId3v2TagBytes
+          ? _maxId3v2TagBytes
+          : _id3v2SynchsafeInt(header, 6),
+    );
+    return _id3v2MetadataFromTagBytes(
+      header,
+      tagBytes,
+      maximumTagBytes: maximumTagBytes,
+    );
+  }
+
+  _LocalFileMetadata? _id3v2MetadataFromTagBytes(
+    List<int> header,
+    List<int> tagBytes, {
+    int? maximumTagBytes,
+  }) {
+    if (header.length != 10 ||
+        header[0] != 0x49 ||
+        header[1] != 0x44 ||
+        header[2] != 0x33) {
+      return null;
+    }
+
     final majorVersion = header[3];
     if (majorVersion < 2 || majorVersion > 4) {
       return null;
@@ -971,10 +1008,11 @@ final class _LocalFolderScanState {
       return null;
     }
 
-    final bytesToRead = tagSize > _maxId3v2TagBytes
+    if (tagBytes.length < (tagSize > _maxId3v2TagBytes
         ? _maxId3v2TagBytes
-        : tagSize;
-    final tagBytes = await access.read(bytesToRead);
+        : tagSize)) {
+      return null;
+    }
     final tagData = majorVersion == 2
         ? _id3v22TagData(tagBytes)
         : _id3v23Or24TagData(tagBytes, majorVersion);
@@ -2088,13 +2126,6 @@ final class _LocalFolderScanState {
     );
   }
 
-  bool _wavInfoComplete(Map<String, String> tags) {
-    return tags.containsKey('title') &&
-        tags.containsKey('artist') &&
-        tags.containsKey('album') &&
-        tags.containsKey('genre');
-  }
-
   void _readWavInfoList(
     List<int> bytes,
     int start,
@@ -2138,6 +2169,35 @@ final class _LocalFolderScanState {
       'IGNR' => 'genre',
       _ => null,
     };
+  }
+
+  _LocalFileMetadata? _mergeWavMetadata(
+    _LocalFileMetadata? id3Metadata,
+    _LocalFileMetadata? infoMetadata,
+  ) {
+    if (id3Metadata == null) {
+      return infoMetadata;
+    }
+    if (infoMetadata == null) {
+      return id3Metadata;
+    }
+
+    return _LocalFileMetadata(
+      title: id3Metadata.title.isEmpty ? infoMetadata.title : id3Metadata.title,
+      artist: id3Metadata.artist.isEmpty
+          ? infoMetadata.artist
+          : id3Metadata.artist,
+      album: id3Metadata.album ?? infoMetadata.album,
+      albumArtist: id3Metadata.albumArtist ?? infoMetadata.albumArtist,
+      year: id3Metadata.year ?? infoMetadata.year,
+      trackNumber: id3Metadata.trackNumber ?? infoMetadata.trackNumber,
+      genre: id3Metadata.genre ?? infoMetadata.genre,
+      artworkUri: id3Metadata.artworkUri ?? infoMetadata.artworkUri,
+      replayGainTrackDb: id3Metadata.replayGainTrackDb,
+      replayGainAlbumDb: id3Metadata.replayGainAlbumDb,
+      embeddedLyrics: id3Metadata.embeddedLyrics,
+      rating: id3Metadata.rating,
+    );
   }
 
   String? _aiffTextFieldKey(String chunkId) {
@@ -3158,6 +3218,7 @@ const _maxOggMetadataBytes = 1024 * 1024;
 const _maxM4aMetadataBytes = 1024 * 1024;
 const _maxAsfHeaderBytes = 1024 * 1024;
 const _maxWavInfoBytes = 1024 * 1024;
+const _maxWavId3ChunkBytes = _maxId3v2TagBytes + 10;
 const _maxAiffTextBytes = 1024 * 1024;
 const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxEmbeddedLyricsBytes = 256 * 1024;

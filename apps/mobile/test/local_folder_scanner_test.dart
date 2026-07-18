@@ -1102,6 +1102,38 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.artist, 'Late WAV Artist');
   });
 
+  test('reads ID3v2 metadata embedded in a WAV id3 chunk', () async {
+    final audioPath = p.join(root.path, 'id3-in-wav.wav');
+    await File(audioPath).writeAsBytes(
+      _wavWithInfoTags(
+        <String, String>{
+          'IART': 'INFO Artist',
+          'IPRD': 'INFO Album',
+        },
+        id3Tag: _id3v23Tag(
+          title: 'ID3 WAV Title',
+          artworkBytes: _tinyPngBytes,
+          unsynchronizedLyrics: 'First line\r\nSecond line',
+        ),
+      ),
+    );
+
+    final result = await const LocalFolderScanner().scan(root.path);
+    final track = result.tracks.single;
+
+    expect(track.title, 'ID3 WAV Title');
+    expect(track.artist, 'INFO Artist');
+    expect(track.album, 'INFO Album');
+    expect(
+      track.artworkUri.toString(),
+      'data:image/png;base64,${base64Encode(_tinyPngBytes)}',
+    );
+    expect(
+      result.embeddedLyricsByTrackId[Track.stableLocalId(audioPath)],
+      'First line\nSecond line',
+    );
+  });
+
   test('merges partial WAV RIFF INFO metadata with filename metadata', () async {
     await File(
       p.join(root.path, '12 Filename Artist - Filename Title.wav'),
@@ -2000,6 +2032,7 @@ List<int> _aiffWithTextTags(
 List<int> _wavWithInfoTags(
   Map<String, String> tags, {
   int leadingDataBytes = 0,
+  List<int>? id3Tag,
 }) {
   final infoPayload = <int>[...'INFO'.codeUnits];
   for (final entry in tags.entries) {
@@ -2035,6 +2068,15 @@ List<int> _wavWithInfoTags(
   }
 
   chunks.addAll(listChunk);
+  if (id3Tag != null) {
+    chunks
+      ..addAll('id3 '.codeUnits)
+      ..addAll(_uint32LittleEndianSize(id3Tag.length))
+      ..addAll(id3Tag);
+    if (id3Tag.length.isOdd) {
+      chunks.add(0);
+    }
+  }
   final riffPayload = <int>[...'WAVE'.codeUnits, ...chunks];
   return <int>[
     ...'RIFF'.codeUnits,
