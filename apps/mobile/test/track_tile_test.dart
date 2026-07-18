@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
+import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/ui/widgets/track_artwork.dart';
@@ -98,5 +100,39 @@ void main() {
     expect(artwork.artworkCrop.alignmentX, 0.4);
     expect(artwork.artworkCrop.alignmentY, -0.2);
     expect(artwork.artworkCrop.zoom, 1.6);
+  });
+
+  testWidgets('sets a saved track rating from the menu', (tester) async {
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[Track(id: 'rated', title: 'Rated track')]);
+    addTearDown(library.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<LibraryStore>.value(
+        value: library,
+        child: MaterialApp(
+          home: Scaffold(
+            body: TrackTile(
+              track: library.tracks.single,
+              onPlay: () {},
+              onFavorite: () {},
+              onAddToPlaylist: () {},
+              onLyrics: () {},
+              onEditMetadata: () {},
+              onRemove: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rate'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('4 of 5'));
+    await tester.pumpAndSettle();
+    expect(library.tracks.single.rating, 4);
   });
 }
