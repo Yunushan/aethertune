@@ -1882,6 +1882,46 @@ void main() {
     );
   });
 
+  test('exports and imports Windows Media Player WPL playlists', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 2, 50),
+    );
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('1', title: 'Path One', artist: 'Ari'),
+      _track('2', title: 'Path Two', artist: 'Mia'),
+    ]);
+    final playlist = await store.createPlaylist(
+      'Road WPL',
+      trackIds: <String>['2', '1'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.wpl,
+    );
+
+    expect(document, contains('<smil>'));
+    expect(document, contains('<title>Road WPL</title>'));
+    expect(document, contains('src="file:///music/2.mp3"'));
+
+    await store.deletePlaylist(playlist.id);
+    final imported = await store.importPlaylistDocument(
+      document,
+      format: PlaylistDocumentFormat.wpl,
+    );
+
+    expect(imported.name, 'Road WPL');
+    expect(imported.trackIds, <String>['2', '1']);
+    await expectLater(
+      store.importPlaylistDocument(
+        '<playlist><trackList /></playlist>',
+        format: PlaylistDocumentFormat.wpl,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('exports and imports CSV playlists with quoted fields', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 3),

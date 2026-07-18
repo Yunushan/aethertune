@@ -7597,6 +7597,8 @@ String _playlistDocumentFormatLabel(PlaylistDocumentFormat format) {
       return 'PLS';
     case PlaylistDocumentFormat.xspf:
       return 'XSPF';
+    case PlaylistDocumentFormat.wpl:
+      return 'WPL';
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
@@ -7612,6 +7614,8 @@ String _playlistDocumentFormatExtension(PlaylistDocumentFormat format) {
       return 'PLS';
     case PlaylistDocumentFormat.xspf:
       return 'XSPF';
+    case PlaylistDocumentFormat.wpl:
+      return 'WPL';
     case PlaylistDocumentFormat.csv:
       return 'CSV';
   }
@@ -7694,6 +7698,8 @@ String _playlistDocumentFormatFileExtension(PlaylistDocumentFormat format) {
       return 'pls';
     case PlaylistDocumentFormat.xspf:
       return 'xspf';
+    case PlaylistDocumentFormat.wpl:
+      return 'wpl';
     case PlaylistDocumentFormat.csv:
       return 'csv';
   }
@@ -7709,6 +7715,8 @@ IconData _playlistDocumentFormatIcon(PlaylistDocumentFormat format) {
       return Icons.format_list_numbered;
     case PlaylistDocumentFormat.xspf:
       return Icons.code_outlined;
+    case PlaylistDocumentFormat.wpl:
+      return Icons.library_music_outlined;
     case PlaylistDocumentFormat.csv:
       return Icons.table_chart_outlined;
   }
@@ -10530,6 +10538,12 @@ class _PlaylistCard extends StatelessWidget {
               case _PlaylistAction.exportPls:
                 onExport(PlaylistDocumentFormat.pls);
                 break;
+              case _PlaylistAction.exportXspf:
+                onExport(PlaylistDocumentFormat.xspf);
+                break;
+              case _PlaylistAction.exportWpl:
+                onExport(PlaylistDocumentFormat.wpl);
+                break;
               case _PlaylistAction.exportCsv:
                 onExport(PlaylistDocumentFormat.csv);
                 break;
@@ -10576,6 +10590,20 @@ class _PlaylistCard extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.format_list_numbered),
                 title: Text('Export PLS'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.exportXspf,
+              child: ListTile(
+                leading: Icon(Icons.code_outlined),
+                title: Text('Export XSPF'),
+              ),
+            ),
+            PopupMenuItem(
+              value: _PlaylistAction.exportWpl,
+              child: ListTile(
+                leading: Icon(Icons.library_music_outlined),
+                title: Text('Export WPL'),
               ),
             ),
             PopupMenuItem(
@@ -10684,6 +10712,8 @@ enum _PlaylistAction {
   exportJson,
   exportM3u,
   exportPls,
+  exportXspf,
+  exportWpl,
   exportCsv,
   share,
   copyImportLink,

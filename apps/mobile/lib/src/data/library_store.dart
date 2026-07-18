@@ -33,7 +33,7 @@ LibrarySortMode _librarySortModeFromName(String? value) {
   );
 }
 
-enum PlaylistDocumentFormat { json, m3u, pls, xspf, csv }
+enum PlaylistDocumentFormat { json, m3u, pls, xspf, wpl, csv }
 
 const _playlistImportLinkScheme = 'aethertune';
 const _playlistImportLinkHost = 'playlist';
@@ -41,6 +41,8 @@ const _customSmartPlaylistImportLinkHost = 'smart-playlist';
 const _maxPlaylistImportLinkBytes = 48 * 1024;
 const _maxXspfPlaylistBytes = 2 * 1024 * 1024;
 const _maxXspfTracks = 500;
+const _maxWplPlaylistBytes = 2 * 1024 * 1024;
+const _maxWplTracks = 500;
 
 enum LibraryStatsExportFormat { json, csv }
 
@@ -4394,6 +4396,8 @@ class LibraryStore extends ChangeNotifier {
         return exportPlaylistPls(playlistId);
       case PlaylistDocumentFormat.xspf:
         return exportPlaylistXspf(playlistId);
+      case PlaylistDocumentFormat.wpl:
+        return exportPlaylistWpl(playlistId);
       case PlaylistDocumentFormat.csv:
         return exportPlaylistCsv(playlistId);
     }
@@ -4491,6 +4495,48 @@ class LibraryStore extends ChangeNotifier {
                 },
               );
             }
+          },
+        );
+      },
+    );
+    return builder.buildDocument().toXmlString(pretty: true);
+  }
+
+  String exportPlaylistWpl(String playlistId) {
+    final playlist = _requirePlaylist(playlistId);
+    final builder = XmlBuilder();
+    builder.element(
+      'smil',
+      nest: () {
+        builder.element(
+          'head',
+          nest: () {
+            builder.element(
+              'meta',
+              attributes: <String, String>{
+                'name': 'Generator',
+                'content': 'AetherTune',
+              },
+            );
+            builder.element('title', nest: playlist.name);
+          },
+        );
+        builder.element(
+          'body',
+          nest: () {
+            builder.element(
+              'seq',
+              nest: () {
+                for (final track in tracksForPlaylist(playlistId)) {
+                  builder.element(
+                    'media',
+                    attributes: <String, String>{
+                      'src': _xspfTrackLocation(track),
+                    },
+                  );
+                }
+              },
+            );
           },
         );
       },
@@ -4860,6 +4906,8 @@ class LibraryStore extends ChangeNotifier {
         return importPlaylistPls(document, fallbackName: fallbackName);
       case PlaylistDocumentFormat.xspf:
         return importPlaylistXspf(document, fallbackName: fallbackName);
+      case PlaylistDocumentFormat.wpl:
+        return importPlaylistWpl(document, fallbackName: fallbackName);
       case PlaylistDocumentFormat.csv:
         return importPlaylistCsv(document, fallbackName: fallbackName);
     }
@@ -5110,6 +5158,56 @@ class LibraryStore extends ChangeNotifier {
       );
     }
     final name = _xmlChildText(root, 'title');
+    return createPlaylist(
+      name == null || name.isEmpty ? fallbackName : name,
+      trackIds: importedTrackIds,
+    );
+  }
+
+  Future<Playlist> importPlaylistWpl(
+    String document, {
+    String fallbackName = 'Imported playlist',
+  }) async {
+    if (utf8.encode(document).length > _maxWplPlaylistBytes) {
+      throw const FormatException('WPL playlist exceeds the 2 MiB limit.');
+    }
+
+    late XmlDocument parsed;
+    try {
+      parsed = XmlDocument.parse(document);
+    } on XmlParserException catch (error) {
+      throw FormatException('Invalid WPL playlist: $error');
+    }
+    final root = parsed.rootElement;
+    if (root.name.local.toLowerCase() != 'smil') {
+      throw const FormatException('WPL must contain a SMIL root.');
+    }
+    final media = root.descendants
+        .whereType<XmlElement>()
+        .where((element) => element.name.local.toLowerCase() == 'media')
+        .toList(growable: false);
+    if (media.length > _maxWplTracks) {
+      throw const FormatException('WPL playlists support at most 500 tracks.');
+    }
+
+    final trackIds = <String?>[
+      for (final entry in media)
+        _matchXspfEntry(
+          location: entry.getAttribute('src'),
+          identifier: entry.getAttribute('src'),
+          title: null,
+          artist: null,
+          album: null,
+        ),
+    ];
+    final importedTrackIds = _dedupeTrackIds(trackIds);
+    if (importedTrackIds.isEmpty) {
+      throw const FormatException(
+        'Imported playlist did not match any library tracks.',
+      );
+    }
+    final head = _firstXmlChild(root, 'head');
+    final name = head == null ? null : _xmlChildText(head, 'title');
     return createPlaylist(
       name == null || name.isEmpty ? fallbackName : name,
       trackIds: importedTrackIds,
