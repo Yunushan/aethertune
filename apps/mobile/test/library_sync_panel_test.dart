@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,9 +10,13 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/library_sync_credential_vault.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
+import 'package:aethertune/src/data/listen_together_store.dart';
+import 'package:aethertune/src/domain/listen_together_session.dart';
 import 'package:aethertune/src/domain/library_sync_account.dart';
 import 'package:aethertune/src/domain/library_sync_profile.dart';
 import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/player/playback_audio_engine.dart';
+import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/widgets/library_sync_panel.dart';
 
 void main() {
@@ -388,16 +393,75 @@ void main() {
     expect(find.text('Library sync paused by offline mode'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('shows and manually refreshes a joined listen-together session',
+      (tester) async {
+    _setPhoneSize(tester);
+    final library = LibraryStore();
+    await library.load();
+    final track = Track(
+      id: 'shared',
+      title: 'Shared track',
+      localPath: '/music/shared.mp3',
+    );
+    await library.addTracks(<Track>[track]);
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      ),
+    );
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+    final gateway = _ListenTogetherTestGateway()
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['shared'],
+        currentTrackId: 'shared',
+        position: Duration.zero,
+        playing: true,
+      );
+    final player = PlayerController(audioEngine: _ListenTogetherTestEngine());
+    addTearDown(player.dispose);
+    final listenTogether = ListenTogetherStore(
+      gatewayFactory: () => gateway,
+      clock: () => DateTime.utc(2026, 7, 18, 12),
+    );
+    await listenTogether.join(library, player);
+    await tester.pumpWidget(
+      _harness(
+        library: library,
+        sync: sync,
+        listenTogether: listenTogether,
+        player: player,
+      ),
+    );
+
+    expect(find.byKey(const Key('listen-together-refresh')), findsOneWidget);
+    expect(find.textContaining('updated by Test device'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('listen-together-refresh')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.fetchCalls, 2);
+    expect(listenTogether.joined, isTrue);
+    expect(find.text('Shared playback is up to date.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _harness({
   required LibraryStore library,
   required LibrarySyncStore sync,
+  ListenTogetherStore? listenTogether,
+  PlayerController? player,
 }) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<LibraryStore>.value(value: library),
       ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+      if (listenTogether != null)
+        ChangeNotifierProvider<ListenTogetherStore>.value(value: listenTogether),
+      if (player != null) ChangeNotifierProvider<PlayerController>.value(value: player),
     ],
     child: const MaterialApp(
       home: Scaffold(
@@ -551,4 +615,116 @@ class _FakeSyncGateway
       updatedByDevice: 'Phone',
     );
   }
+}
+
+class _ListenTogetherTestGateway implements ListenTogetherGateway {
+  int revision = 1;
+  int fetchCalls = 0;
+  ListenTogetherSession? session;
+
+  @override
+  Future<ListenTogetherRemoteSession> fetchListenTogetherSession() async {
+    fetchCalls += 1;
+    return _remote();
+  }
+
+  @override
+  Future<ListenTogetherRemoteSession> publishListenTogetherSession({
+    required int baseRevision,
+    required ListenTogetherSession session,
+  }) async {
+    this.session = session;
+    revision += 1;
+    return _remote();
+  }
+
+  @override
+  Future<ListenTogetherRemoteSession> leaveListenTogetherSession({
+    required int baseRevision,
+  }) async {
+    session = null;
+    revision += 1;
+    return _remote();
+  }
+
+  @override
+  Future<String> issueListenTogetherInvite() async =>
+      'AAAAAAAAAAAAAAAAAAAAAAAA';
+
+  @override
+  Future<ListenTogetherRemoteSession> fetchListenTogetherInvite(
+    String inviteCode,
+  ) => fetchListenTogetherSession();
+
+  ListenTogetherRemoteSession _remote() => ListenTogetherRemoteSession(
+    revision: revision,
+    updatedAt: DateTime.utc(2026, 7, 18, 12),
+    updatedByDevice: 'Test device',
+    session: session,
+  );
+}
+
+class _ListenTogetherTestEngine implements PlaybackAudioEngine {
+  Duration positionValue = Duration.zero;
+  bool playingValue = false;
+
+  @override
+  Stream<Object?> get stateChanges => const Stream<Object?>.empty();
+  @override
+  Stream<Duration?> get durationStream => const Stream<Duration?>.empty();
+  @override
+  Stream<Duration> get positionStream => const Stream<Duration>.empty();
+  @override
+  Stream<ProcessingState> get processingStateStream =>
+      const Stream<ProcessingState>.empty();
+  @override
+  Stream<int?> get currentIndexStream => const Stream<int?>.empty();
+  @override
+  bool get playing => playingValue;
+  @override
+  bool get shuffleModeEnabled => false;
+  @override
+  LoopMode get loopMode => LoopMode.off;
+  @override
+  Duration get position => positionValue;
+  @override
+  Duration get bufferedPosition => positionValue;
+  @override
+  double get speed => 1;
+  @override
+  double get volume => 1;
+  @override
+  bool get hasNext => false;
+  @override
+  bool get hasPrevious => false;
+  @override
+  Future<void> setQueue(List<Track> tracks, {
+    required int initialIndex,
+    Duration initialPosition = Duration.zero,
+  }) async {
+    positionValue = initialPosition;
+  }
+  @override
+  Future<void> play() async => playingValue = true;
+  @override
+  Future<void> pause() async => playingValue = false;
+  @override
+  Future<void> stop() async => playingValue = false;
+  @override
+  Future<void> seek(Duration position, {int? index}) async =>
+      positionValue = position;
+  @override
+  Future<void> seekToNext() async {}
+  @override
+  Future<void> seekToPrevious() async {}
+  @override
+  Future<void> setShuffleModeEnabled(bool enabled) async {}
+  @override
+  Future<void> setLoopMode(LoopMode mode) async {}
+  @override
+  Future<void> setSpeed(double speed) async {}
+  @override
+  Future<void> setVolume(double volume) async {}
+  @override
+  Future<void> dispose() async {}
 }

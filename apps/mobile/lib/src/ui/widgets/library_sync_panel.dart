@@ -113,9 +113,9 @@ class LibrarySyncPanel extends StatelessWidget {
                   : 'Listen together',
             ),
             subtitle: Text(
-              listenTogether.hosting || listenTogether.joined
-                  ? '${listenTogether.session?.trackIds.length ?? 0} shared library tracks'
-                  : 'Share the current library-backed queue',
+              _listenTogetherStatusText(context, listenTogether),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -164,6 +164,15 @@ class LibrarySyncPanel extends StatelessWidget {
                         ? () => _endListenTogether(context)
                         : null,
                     icon: const Icon(Icons.stop_circle_outlined),
+                  ),
+                if (listenTogether.joined && !listenTogether.hosting)
+                  IconButton(
+                    key: const Key('listen-together-refresh'),
+                    tooltip: 'Refresh listen together',
+                    onPressed: actionsEnabled && player != null && !listenTogether.busy
+                        ? () => _refreshListenTogether(context)
+                        : null,
+                    icon: const Icon(Icons.refresh_outlined),
                   ),
                 if (listenTogether.joined && !listenTogether.hosting)
                   IconButton(
@@ -347,6 +356,28 @@ class LibrarySyncPanel extends StatelessWidget {
     return 'Static account ${profile.id}';
   }
 
+  static String _listenTogetherStatusText(
+    BuildContext context,
+    ListenTogetherStore listenTogether,
+  ) {
+    if (!listenTogether.hosting && !listenTogether.joined) {
+      return 'Share the current library-backed queue';
+    }
+
+    final count = listenTogether.session?.trackIds.length ?? 0;
+    final updatedAt = listenTogether.updatedAt;
+    if (updatedAt == null) {
+      return '$count shared library tracks - waiting for an update';
+    }
+    final time = MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(updatedAt.toLocal()),
+    );
+    final device = listenTogether.updatedByDevice;
+    return device == null || device.isEmpty
+        ? '$count shared library tracks - updated at $time'
+        : '$count shared library tracks - updated by $device at $time';
+  }
+
   static Future<void> _refreshProfile(BuildContext context) async {
     try {
       final profile = await context.read<LibrarySyncStore>().refreshProfile(
@@ -408,6 +439,30 @@ class LibrarySyncPanel extends StatelessWidget {
     } on Object catch (error) {
       if (context.mounted) {
         _showError(context, 'Could not end listen together: $error');
+      }
+    }
+  }
+
+  static Future<void> _refreshListenTogether(BuildContext context) async {
+    try {
+      final listenTogether = context.read<ListenTogetherStore>();
+      final restored = await listenTogether.refreshJoined(
+        context.read<LibraryStore>(),
+        context.read<PlayerController>(),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (!listenTogether.joined) {
+        _showSuccess(context, 'Listen-together session ended.');
+      } else if (restored == 0) {
+        _showSuccess(context, 'Shared playback is up to date.');
+      } else {
+        _showSuccess(context, 'Refreshed shared playback with $restored tracks.');
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not refresh listen together: $error');
       }
     }
   }
