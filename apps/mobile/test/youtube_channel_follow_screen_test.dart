@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -58,6 +60,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(follows.isFollowed('channel-1'), isTrue);
       expect(find.text('Followed on this device'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const Key('youtube-channel-follow-import')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('youtube-channel-follow-import-document')),
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'follows': <Object?>[
+            <String, Object?>{'id': 'channel-3', 'title': 'Imported channel'},
+          ],
+        }),
+      );
+      await tester.tap(find.text('Import'));
+      await tester.pumpAndSettle();
+      expect(follows.isFollowed('channel-1'), isTrue);
+      expect(follows.isFollowed('channel-3'), isTrue);
+      expect(find.text('Imported 1 followed channel(s).'), findsOneWidget);
 
       await tester.tap(find.text('Load more channels (1 remaining)'));
       await tester.pumpAndSettle();

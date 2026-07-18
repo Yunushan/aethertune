@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
@@ -58,6 +59,22 @@ final class _YouTubeChannelFollowScreenState
                 ? null
                 : () => _openFollowedChannelFeed(context),
             icon: const Icon(Icons.dynamic_feed_outlined),
+          ),
+          IconButton(
+            key: const Key('youtube-channel-follow-export'),
+            tooltip: 'Export followed channels',
+            onPressed: follows.loaded
+                ? () => _exportFollows(context, follows)
+                : null,
+            icon: const Icon(Icons.upload_file_outlined),
+          ),
+          IconButton(
+            key: const Key('youtube-channel-follow-import'),
+            tooltip: 'Import followed channels',
+            onPressed: follows.loaded
+                ? () => _importFollows(context, follows)
+                : null,
+            icon: const Icon(Icons.download_outlined),
           ),
         ],
       ),
@@ -276,6 +293,131 @@ final class _YouTubeChannelFollowScreenState
         : 'Load more channels';
   }
 
+  Future<void> _exportFollows(
+    BuildContext context,
+    YouTubeChannelFollowStore follows,
+  ) async {
+    final document = follows.exportFollowDocument();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Export followed channels'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(child: SelectableText(document)),
+        ),
+        actions: <Widget>[
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: document));
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Follow document copied.')),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy_outlined),
+            label: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _importFollows(
+    BuildContext context,
+    YouTubeChannelFollowStore follows,
+  ) async {
+    final controller = TextEditingController();
+    var replace = false;
+    final request = await showDialog<_FollowDocumentImport>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Import followed channels'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextField(
+                  key: const Key('youtube-channel-follow-import-document'),
+                  controller: controller,
+                  autofocus: true,
+                  minLines: 5,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Follow document',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Replace existing follows'),
+                  value: replace,
+                  onChanged: (value) {
+                    setDialogState(() => replace = value ?? false);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _FollowDocumentImport(
+                  document: controller.text,
+                  replace: replace,
+                ),
+              ),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Import'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (request == null || !context.mounted) {
+      return;
+    }
+
+    try {
+      final changed = await follows.importFollowDocument(
+        request.document,
+        replace: request.replace,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              changed == 0
+                  ? 'Follow list is already up to date.'
+                  : 'Imported $changed followed channel(s).',
+            ),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not import followed channels: $error')),
+        );
+      }
+    }
+  }
+
   void _openChannelVideos(BuildContext context, YouTubeDataChannel channel) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -343,3 +485,13 @@ YouTubeDataChannel _asChannel(YouTubeChannelFollow follow) =>
       description: follow.description,
       thumbnailUri: follow.thumbnailUri,
     );
+
+final class _FollowDocumentImport {
+  const _FollowDocumentImport({
+    required this.document,
+    required this.replace,
+  });
+
+  final String document;
+  final bool replace;
+}

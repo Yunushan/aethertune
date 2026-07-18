@@ -12,6 +12,9 @@ import 'youtube_data_metadata_provider.dart';
 /// Google credential, remote feed, or playback state.
 final class YouTubeChannelFollowStore extends ChangeNotifier {
   static const _preferencesKey = 'aethertune.youtube_channel_follows.v1';
+  static const _documentVersion = 1;
+  static const _maxFollows = 500;
+  static const _maxDocumentBytes = 512 * 1024;
 
   final List<YouTubeChannelFollow> _follows = <YouTubeChannelFollow>[];
   bool _loaded = false;
@@ -95,6 +98,91 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
     return true;
   }
 
+  /// Exports only device-local public channel metadata for explicit transfer.
+  ///
+  /// The document intentionally omits Google credentials, YouTube account
+  /// subscriptions, remote-feed results, and playback state.
+  String exportFollowDocument() => jsonEncode(<String, Object?>{
+        'version': _documentVersion,
+        'follows': _follows.map((follow) => follow.toJson()).toList(),
+      });
+
+  /// Imports a bounded public-channel follow document.
+  ///
+  /// Imports merge by channel ID by default, refreshing public display data.
+  /// [replace] is reserved for an explicit user choice in the caller.
+  Future<int> importFollowDocument(
+    String document, {
+    bool replace = false,
+  }) async {
+    if (!_loaded) {
+      await load();
+    }
+    if (utf8.encode(document).length > _maxDocumentBytes) {
+      throw const FormatException('Follow document is too large.');
+    }
+
+    Object? decoded;
+    try {
+      decoded = jsonDecode(document);
+    } on FormatException {
+      throw const FormatException('Follow document is not valid JSON.');
+    }
+    if (decoded is! Map) {
+      throw const FormatException('Follow document must be an object.');
+    }
+    final root = Map<String, Object?>.from(decoded);
+    if (root['version'] != _documentVersion) {
+      throw const FormatException('Unsupported follow document version.');
+    }
+    final rawFollows = root['follows'];
+    if (rawFollows is! List || rawFollows.length > _maxFollows) {
+      throw const FormatException('Follow document contains too many channels.');
+    }
+
+    final incoming = <YouTubeChannelFollow>[];
+    final incomingIds = <String>{};
+    for (final rawFollow in rawFollows) {
+      if (rawFollow is! Map) {
+        throw const FormatException('Follow document contains an invalid channel.');
+      }
+      final follow = YouTubeChannelFollow.tryFromJson(
+        Map<String, Object?>.from(rawFollow),
+      );
+      if (follow == null) {
+        throw const FormatException('Follow document contains an invalid channel.');
+      }
+      if (incomingIds.add(follow.id)) {
+        incoming.add(follow);
+      }
+    }
+
+    final previous = <String, YouTubeChannelFollow>{
+      for (final follow in _follows) follow.id: follow,
+    };
+    final merged = replace
+        ? <String, YouTubeChannelFollow>{
+            for (final follow in incoming) follow.id: follow,
+          }
+        : <String, YouTubeChannelFollow>{
+            ...previous,
+            for (final follow in incoming) follow.id: follow,
+          };
+    final next = merged.values.toList()
+      ..sort((a, b) => _compareText(a.title, b.title));
+    final changed = _followDifferenceCount(previous, next);
+    if (changed == 0) {
+      return 0;
+    }
+
+    _follows
+      ..clear()
+      ..addAll(next);
+    await _persist();
+    notifyListeners();
+    return changed;
+  }
+
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -174,3 +262,24 @@ Uri? _httpsUri(Uri? value) =>
 
 int _compareText(String first, String second) =>
     first.toLowerCase().compareTo(second.toLowerCase());
+
+int _followDifferenceCount(
+  Map<String, YouTubeChannelFollow> previous,
+  List<YouTubeChannelFollow> next,
+) {
+  final nextById = <String, YouTubeChannelFollow>{
+    for (final follow in next) follow.id: follow,
+  };
+  var changed = 0;
+  for (final follow in next) {
+    if (previous[follow.id] != follow) {
+      changed += 1;
+    }
+  }
+  for (final id in previous.keys) {
+    if (!nextById.containsKey(id)) {
+      changed += 1;
+    }
+  }
+  return changed;
+}
