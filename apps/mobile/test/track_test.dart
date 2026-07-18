@@ -19,6 +19,8 @@ void main() {
       contentHash: 'fnv64-0011223344556677',
       replayGainTrackDb: -6.2,
       replayGainAlbumDb: -4.7,
+      replayGainTrackPeak: 0.95,
+      replayGainAlbumPeak: 1.1,
       artworkCrop: ArtworkCrop.normalized(
         alignmentX: 0.5,
         alignmentY: -0.25,
@@ -47,6 +49,8 @@ void main() {
     expect(decoded.contentHash, track.contentHash);
     expect(decoded.replayGainTrackDb, -6.2);
     expect(decoded.replayGainAlbumDb, -4.7);
+    expect(decoded.replayGainTrackPeak, 0.95);
+    expect(decoded.replayGainAlbumPeak, 1.1);
     expect(decoded.artworkCrop.alignmentX, 0.5);
     expect(decoded.artworkCrop.alignmentY, -0.25);
     expect(decoded.artworkCrop.zoom, 1.8);

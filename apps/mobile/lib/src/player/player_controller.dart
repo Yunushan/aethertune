@@ -2256,6 +2256,13 @@ class PlayerController extends ChangeNotifier {
         trackGainDb: track?.replayGainTrackDb,
         albumGainDb: track?.replayGainAlbumDb,
       ),
+      peak: replayGainPeakForMode(
+        mode: _replayGainMode,
+        trackGainDb: track?.replayGainTrackDb,
+        albumGainDb: track?.replayGainAlbumDb,
+        trackPeak: track?.replayGainTrackPeak,
+        albumPeak: track?.replayGainAlbumPeak,
+      ),
     );
   }
 

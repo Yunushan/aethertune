@@ -62,6 +62,8 @@ final class _LocalFileMetadata {
     this.artworkUri,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
+    this.replayGainTrackPeak,
+    this.replayGainAlbumPeak,
     this.embeddedLyrics,
     this.rating,
     this.chapters = const <TrackChapter>[],
@@ -77,6 +79,8 @@ final class _LocalFileMetadata {
   final Uri? artworkUri;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
+  final double? replayGainTrackPeak;
+  final double? replayGainAlbumPeak;
   final String? embeddedLyrics;
   final int? rating;
   final List<TrackChapter> chapters;
@@ -259,6 +263,8 @@ final class _LocalFolderScanState {
         contentHash: contentHash,
         replayGainTrackDb: metadata.replayGainTrackDb,
         replayGainAlbumDb: metadata.replayGainAlbumDb,
+        replayGainTrackPeak: metadata.replayGainTrackPeak,
+        replayGainAlbumPeak: metadata.replayGainAlbumPeak,
         rating: metadata.rating ?? 0,
         chapters: metadata.chapters,
         sourceId: 'local',
@@ -361,6 +367,8 @@ final class _LocalFolderScanState {
       artworkUri: embeddedMetadata.artworkUri ?? fallbackMetadata.artworkUri,
       replayGainTrackDb: embeddedMetadata.replayGainTrackDb,
       replayGainAlbumDb: embeddedMetadata.replayGainAlbumDb,
+      replayGainTrackPeak: embeddedMetadata.replayGainTrackPeak,
+      replayGainAlbumPeak: embeddedMetadata.replayGainAlbumPeak,
       embeddedLyrics: embeddedMetadata.embeddedLyrics,
       rating: embeddedMetadata.rating,
       chapters: embeddedMetadata.chapters,
@@ -531,6 +539,8 @@ final class _LocalFolderScanState {
         genre: metadata?.genre,
         replayGainTrackDb: metadata?.replayGainTrackDb,
         replayGainAlbumDb: metadata?.replayGainAlbumDb,
+        replayGainTrackPeak: metadata?.replayGainTrackPeak,
+        replayGainAlbumPeak: metadata?.replayGainAlbumPeak,
         embeddedLyrics: lyrics,
         rating: metadata?.rating,
         artworkUri: comments.artworkUri,
@@ -731,6 +741,8 @@ final class _LocalFolderScanState {
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
+          replayGainTrackPeak: metadata?.replayGainTrackPeak,
+          replayGainAlbumPeak: metadata?.replayGainAlbumPeak,
           embeddedLyrics: metadata?.embeddedLyrics,
           rating: metadata?.rating,
           chapters: metadata?.chapters ?? const <TrackChapter>[],
@@ -812,6 +824,8 @@ final class _LocalFolderScanState {
           artworkUri: artworkUri,
           replayGainTrackDb: metadata?.replayGainTrackDb,
           replayGainAlbumDb: metadata?.replayGainAlbumDb,
+          replayGainTrackPeak: metadata?.replayGainTrackPeak,
+          replayGainAlbumPeak: metadata?.replayGainAlbumPeak,
           embeddedLyrics: embeddedLyrics,
           rating: metadata?.rating,
           chapters: metadata?.chapters ?? const <TrackChapter>[],
@@ -1362,6 +1376,8 @@ final class _LocalFolderScanState {
       genre: metadata?.genre,
       replayGainTrackDb: metadata?.replayGainTrackDb,
       replayGainAlbumDb: metadata?.replayGainAlbumDb,
+      replayGainTrackPeak: metadata?.replayGainTrackPeak,
+      replayGainAlbumPeak: metadata?.replayGainAlbumPeak,
       embeddedLyrics: embeddedLyrics,
       rating: metadata?.rating,
       chapters: metadata?.chapters ?? const <TrackChapter>[],
@@ -1448,6 +1464,12 @@ final class _LocalFolderScanState {
     final replayGainAlbumDb =
         parseReplayGainDb(_firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN')) ??
         parseEbuR128GainDb(_firstVorbisComment(comments, 'R128_ALBUM_GAIN'));
+    final replayGainTrackPeak = parseReplayGainPeak(
+      _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_PEAK'),
+    );
+    final replayGainAlbumPeak = parseReplayGainPeak(
+      _firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_PEAK'),
+    );
     final rating = _vorbisRating(_firstVorbisComment(comments, 'RATING'));
     final chapters = _vorbisCommentChapters(comments);
     if (title.isEmpty &&
@@ -1459,6 +1481,8 @@ final class _LocalFolderScanState {
         (genre == null || genre.isEmpty) &&
         replayGainTrackDb == null &&
         replayGainAlbumDb == null &&
+        replayGainTrackPeak == null &&
+        replayGainAlbumPeak == null &&
         rating == null &&
         chapters.isEmpty) {
       return null;
@@ -1476,6 +1500,8 @@ final class _LocalFolderScanState {
       genre: genre == null || genre.isEmpty ? null : genre,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak,
       rating: rating,
       chapters: chapters,
     );

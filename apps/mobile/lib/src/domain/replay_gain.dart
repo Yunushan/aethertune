@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 const minReplayGainDb = -24.0;
 const maxReplayGainDb = 24.0;
+const maxReplayGainPeak = 8.0;
 
 enum ReplayGainMode { track, album }
 
@@ -40,6 +41,21 @@ double? parseEbuR128GainDb(String? value) {
   return sanitizeReplayGainDb(hundredths / 100);
 }
 
+/// Returns a valid linear ReplayGain peak amplitude.
+double? sanitizeReplayGainPeak(double? value) {
+  if (value == null || !value.isFinite || value <= 0 || value > maxReplayGainPeak) {
+    return null;
+  }
+  return value;
+}
+
+/// Parses a native ReplayGain peak value such as `0.978642`.
+double? parseReplayGainPeak(String? value) {
+  final match = RegExp(r'^[+]?(?:\d+(?:\.\d+)?|\.\d+)$')
+      .firstMatch(value?.trim() ?? '');
+  return sanitizeReplayGainPeak(double.tryParse(match?.group(0) ?? ''));
+}
+
 double replayGainMultiplier(double? gainDb) {
   final normalizedGain = sanitizeReplayGainDb(gainDb);
   if (normalizedGain == null) {
@@ -61,16 +77,39 @@ double? replayGainForMode({
   };
 }
 
+/// Selects a peak value that corresponds to the gain selected for [mode].
+double? replayGainPeakForMode({
+  required ReplayGainMode mode,
+  double? trackGainDb,
+  double? albumGainDb,
+  double? trackPeak,
+  double? albumPeak,
+}) {
+  final hasTrackGain = sanitizeReplayGainDb(trackGainDb) != null;
+  final hasAlbumGain = sanitizeReplayGainDb(albumGainDb) != null;
+  final useTrack = switch (mode) {
+    ReplayGainMode.track => hasTrackGain || !hasAlbumGain,
+    ReplayGainMode.album => !hasAlbumGain && hasTrackGain,
+  };
+  return sanitizeReplayGainPeak(useTrack ? trackPeak : albumPeak);
+}
+
 double replayGainAdjustedVolume({
   required double baseVolume,
   required bool enabled,
   double? gainDb,
+  double? peak,
 }) {
   final clampedBaseVolume = baseVolume.clamp(0, 1).toDouble();
   if (!enabled) {
     return clampedBaseVolume;
   }
-  return (clampedBaseVolume * replayGainMultiplier(gainDb))
+  final normalizedVolume = (clampedBaseVolume * replayGainMultiplier(gainDb))
       .clamp(0, 1)
       .toDouble();
+  final normalizedPeak = sanitizeReplayGainPeak(peak);
+  if (normalizedPeak == null) {
+    return normalizedVolume;
+  }
+  return math.min(normalizedVolume, 1 / normalizedPeak).toDouble();
 }

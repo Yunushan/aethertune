@@ -9989,6 +9989,8 @@ class LibraryStore extends ChangeNotifier {
       contentHash: scanned.contentHash,
       replayGainTrackDb: scanned.replayGainTrackDb,
       replayGainAlbumDb: scanned.replayGainAlbumDb,
+      replayGainTrackPeak: scanned.replayGainTrackPeak,
+      replayGainAlbumPeak: scanned.replayGainAlbumPeak,
       streamUrl: scanned.streamUrl,
       streamUrlIsEphemeral: scanned.streamUrlIsEphemeral,
       sourceId: scanned.sourceId,

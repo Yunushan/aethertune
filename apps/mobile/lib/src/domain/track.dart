@@ -31,6 +31,8 @@ class Track {
     this.contentHash,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
+    this.replayGainTrackPeak,
+    this.replayGainAlbumPeak,
     this.streamUrl,
     this.streamUrlIsEphemeral = false,
     this.sourceId = 'local',
@@ -74,6 +76,8 @@ class Track {
   final String? contentHash;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
+  final double? replayGainTrackPeak;
+  final double? replayGainAlbumPeak;
   final String? streamUrl;
   final bool streamUrlIsEphemeral;
   final String sourceId;
@@ -122,6 +126,8 @@ class Track {
     String? contentHash,
     double? replayGainTrackDb,
     double? replayGainAlbumDb,
+    double? replayGainTrackPeak,
+    double? replayGainAlbumPeak,
     String? streamUrl,
     bool? streamUrlIsEphemeral,
     String? sourceId,
@@ -161,6 +167,8 @@ class Track {
       contentHash: contentHash ?? this.contentHash,
       replayGainTrackDb: replayGainTrackDb ?? this.replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb ?? this.replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak ?? this.replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak ?? this.replayGainAlbumPeak,
       streamUrl: streamUrl ?? this.streamUrl,
       streamUrlIsEphemeral: streamUrlIsEphemeral ?? this.streamUrlIsEphemeral,
       sourceId: sourceId ?? this.sourceId,
@@ -201,6 +209,8 @@ class Track {
       contentHash: contentHash,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak,
       streamUrl: streamUrlIsEphemeral ? null : streamUrl,
       sourceId: sourceId,
       externalId: externalId,
@@ -236,6 +246,10 @@ class Track {
       'contentHash': contentHash,
       if (replayGainTrackDb != null) 'replayGainTrackDb': replayGainTrackDb,
       if (replayGainAlbumDb != null) 'replayGainAlbumDb': replayGainAlbumDb,
+      if (replayGainTrackPeak != null)
+        'replayGainTrackPeak': replayGainTrackPeak,
+      if (replayGainAlbumPeak != null)
+        'replayGainAlbumPeak': replayGainAlbumPeak,
       'streamUrl': streamUrlIsEphemeral ? null : streamUrl,
       'sourceId': sourceId,
       'externalId': externalId,
@@ -280,6 +294,12 @@ class Track {
       ),
       replayGainAlbumDb: sanitizeReplayGainDb(
         (json['replayGainAlbumDb'] as num?)?.toDouble(),
+      ),
+      replayGainTrackPeak: sanitizeReplayGainPeak(
+        (json['replayGainTrackPeak'] as num?)?.toDouble(),
+      ),
+      replayGainAlbumPeak: sanitizeReplayGainPeak(
+        (json['replayGainAlbumPeak'] as num?)?.toDouble(),
       ),
       streamUrl: json['streamUrl'] as String?,
       sourceId: json['sourceId'] as String? ?? 'local',

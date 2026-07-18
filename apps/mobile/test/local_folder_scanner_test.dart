@@ -726,6 +726,8 @@ FILE "../private.mp3" MP3
           'GENRE': <String>['Shoegaze'],
           'REPLAYGAIN_TRACK_GAIN': <String>['-7.20 dB'],
           'REPLAYGAIN_ALBUM_GAIN': <String>['-5.20 dB'],
+          'REPLAYGAIN_TRACK_PEAK': <String>['0.95'],
+          'REPLAYGAIN_ALBUM_PEAK': <String>['1.1'],
         },
       ),
     );
@@ -751,6 +753,8 @@ FILE "../private.mp3" MP3
     expect(tracksByTitle['Ogg Title']!.genre, 'Shoegaze');
     expect(tracksByTitle['Ogg Title']!.replayGainTrackDb, -7.2);
     expect(tracksByTitle['Ogg Title']!.replayGainAlbumDb, -5.2);
+    expect(tracksByTitle['Ogg Title']!.replayGainTrackPeak, 0.95);
+    expect(tracksByTitle['Ogg Title']!.replayGainAlbumPeak, 1.1);
     expect(tracksByTitle['Opus Title']!.artist, 'Opus Artist');
     expect(tracksByTitle['Opus Title']!.album, 'Opus Album');
     expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');

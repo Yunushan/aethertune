@@ -35,6 +35,30 @@ void main() {
     );
   });
 
+  test('limits normalized output to the selected ReplayGain peak headroom', () {
+    expect(
+      replayGainAdjustedVolume(
+        baseVolume: 0.8,
+        enabled: true,
+        gainDb: 6,
+        peak: 2,
+      ),
+      0.5,
+    );
+    expect(
+      replayGainPeakForMode(
+        mode: ReplayGainMode.album,
+        trackGainDb: -6,
+        trackPeak: 1.4,
+        albumPeak: 2,
+      ),
+      1.4,
+    );
+    expect(parseReplayGainPeak('0.978642'), 0.978642);
+    expect(parseReplayGainPeak('-0.5'), isNull);
+    expect(parseReplayGainPeak('9'), isNull);
+  });
+
   test('selects an album gain with a safe track fallback', () {
     expect(
       replayGainForMode(
