@@ -36,7 +36,6 @@ class Track {
     this.sourceId = 'local',
     this.externalId,
     this.isFavorite = false,
-    int rating = 0,
     List<TrackChapter>? chapters,
     List<TrackSkipSegment>? skipSegments,
     this.transcriptUri,
@@ -51,8 +50,7 @@ class Track {
          skipSegments ?? const <TrackSkipSegment>[],
          maximum: duration,
        ),
-       addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-       rating = _normalizeRating(rating);
+       addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String id;
   final String title;
@@ -79,7 +77,6 @@ class Track {
   final String sourceId;
   final String? externalId;
   final bool isFavorite;
-  final int rating;
   final List<TrackChapter> chapters;
   final List<TrackSkipSegment> skipSegments;
   final Uri? transcriptUri;
@@ -127,7 +124,6 @@ class Track {
     String? sourceId,
     String? externalId,
     bool? isFavorite,
-    int? rating,
     List<TrackChapter>? chapters,
     List<TrackSkipSegment>? skipSegments,
     Uri? transcriptUri,
@@ -166,12 +162,10 @@ class Track {
       sourceId: sourceId ?? this.sourceId,
       externalId: externalId ?? this.externalId,
       isFavorite: isFavorite ?? this.isFavorite,
-      rating: rating ?? this.rating,
       chapters: chapters ?? this.chapters,
       skipSegments: skipSegments ?? this.skipSegments,
-      transcriptUri: clearTranscriptUri
-          ? null
-          : transcriptUri ?? this.transcriptUri,
+      transcriptUri:
+          clearTranscriptUri ? null : transcriptUri ?? this.transcriptUri,
       transcriptType: transcriptType ?? this.transcriptType,
       transcriptLanguage: transcriptLanguage ?? this.transcriptLanguage,
       addedAt: addedAt ?? this.addedAt,
@@ -206,7 +200,6 @@ class Track {
       sourceId: sourceId,
       externalId: externalId,
       isFavorite: isFavorite,
-      rating: rating,
       chapters: chapters,
       skipSegments: skipSegments,
       transcriptUri: transcriptUri,
@@ -241,7 +234,6 @@ class Track {
       'sourceId': sourceId,
       'externalId': externalId,
       'isFavorite': isFavorite,
-      if (rating > 0) 'rating': rating,
       if (chapters.isNotEmpty)
         'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
       if (skipSegments.isNotEmpty)
@@ -286,7 +278,6 @@ class Track {
       sourceId: json['sourceId'] as String? ?? 'local',
       externalId: json['externalId'] as String?,
       isFavorite: json['isFavorite'] as bool? ?? false,
-      rating: _jsonRating(json['rating']),
       chapters: _parseChapters(json['chapters']),
       skipSegments: _parseSkipSegments(json['skipSegments']),
       transcriptUri: _parseHttpUri(json['transcriptUri'] as String?),
@@ -303,12 +294,6 @@ class Track {
       return null;
     }
     return Uri.tryParse(value);
-  }
-
-  static int _normalizeRating(int value) => value.clamp(0, 5).toInt();
-
-  static int _jsonRating(Object? value) {
-    return value is num ? _normalizeRating(value.toInt()) : 0;
   }
 
   static Uri? _parseHttpUri(String? value) {
