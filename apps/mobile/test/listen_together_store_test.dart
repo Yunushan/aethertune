@@ -148,6 +148,43 @@ void main() {
     expect(player.current?.id, 'second');
   });
 
+  test('retries partially resolved shared sessions after tracks are imported',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final available = _track('available');
+    final missing = _track('missing');
+    await library.addTracks(<Track>[available]);
+    final gateway = _MemoryListenTogetherGateway()
+      ..session = const ListenTogetherSession(
+        trackIds: <String>['missing', 'available'],
+        currentTrackId: 'missing',
+        position: Duration(seconds: 30),
+        playing: false,
+      )
+      ..revision = 1;
+    final engine = _TestAudioEngine();
+    final player = PlayerController(audioEngine: engine);
+    addTearDown(player.dispose);
+    final store = ListenTogetherStore(gatewayFactory: () => gateway);
+
+    expect(await store.join(library, player), 1);
+    expect(store.unavailableTrackCount, 1);
+    expect(player.current?.id, 'available');
+    expect(engine.positionValue, Duration.zero);
+
+    await library.addTracks(<Track>[missing]);
+
+    expect(await store.refreshJoined(library, player), 2);
+    expect(store.unavailableTrackCount, 0);
+    expect(player.queue.map((track) => track.id), <String>[
+      'missing',
+      'available',
+    ]);
+    expect(player.current?.id, 'missing');
+    expect(engine.positionValue, const Duration(seconds: 30));
+  });
+
   test('refreshes an invite guest through the host invite endpoint', () async {
     final library = LibraryStore();
     await library.load();

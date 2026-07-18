@@ -365,17 +365,21 @@ class LibrarySyncPanel extends StatelessWidget {
     }
 
     final count = listenTogether.session?.trackIds.length ?? 0;
+    final unavailable = listenTogether.unavailableTrackCount;
+    final availability = unavailable == 0
+        ? '$count shared library tracks'
+        : '$count shared library tracks - $unavailable unavailable on this device';
     final updatedAt = listenTogether.updatedAt;
     if (updatedAt == null) {
-      return '$count shared library tracks - waiting for an update';
+      return '$availability - waiting for an update';
     }
     final time = MaterialLocalizations.of(context).formatTimeOfDay(
       TimeOfDay.fromDateTime(updatedAt.toLocal()),
     );
     final device = listenTogether.updatedByDevice;
     return device == null || device.isEmpty
-        ? '$count shared library tracks - updated at $time'
-        : '$count shared library tracks - updated by $device at $time';
+        ? '$availability - updated at $time'
+        : '$availability - updated by $device at $time';
   }
 
   static Future<void> _refreshProfile(BuildContext context) async {

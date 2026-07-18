@@ -32,6 +32,7 @@ class ListenTogetherStore extends ChangeNotifier {
   bool _joined = false;
   bool _busy = false;
   String? _lastError;
+  int _unavailableTrackCount = 0;
 
   int get revision => _revision;
   ListenTogetherSession? get session => _session;
@@ -42,6 +43,7 @@ class ListenTogetherStore extends ChangeNotifier {
   bool get joined => _joined;
   bool get busy => _busy;
   String? get lastError => _lastError;
+  int get unavailableTrackCount => _unavailableTrackCount;
   bool get available => _gatewayFactory != null;
 
   void updateGatewayFactory(ListenTogetherGatewayFactory? gatewayFactory) {
@@ -71,6 +73,7 @@ class ListenTogetherStore extends ChangeNotifier {
       _inviteCode = null;
       _hosting = true;
       _joined = true;
+      _unavailableTrackCount = 0;
     });
   }
 
@@ -147,7 +150,7 @@ class ListenTogetherStore extends ChangeNotifier {
         _reset();
         return 0;
       }
-      if (remote.revision == _revision) {
+      if (remote.revision == _revision && _unavailableTrackCount == 0) {
         return 0;
       }
       final restored = await _applySession(
@@ -253,11 +256,18 @@ class ListenTogetherStore extends ChangeNotifier {
         .map((id) => tracksById[id])
         .whereType<Track>()
         .toList(growable: false);
+    _unavailableTrackCount = session.trackIds.length - queue.length;
     if (queue.isEmpty) {
       throw StateError('None of the shared tracks are available in this library.');
     }
-    final current = tracksById[session.currentTrackId] ?? queue.first;
-    final targetPosition = _positionAtReceipt(session, updatedAt);
+    final requestedCurrentId = session.currentTrackId;
+    final resolvedCurrent = requestedCurrentId == null
+        ? queue.first
+        : tracksById[requestedCurrentId];
+    final current = resolvedCurrent ?? queue.first;
+    final targetPosition = resolvedCurrent == null && requestedCurrentId != null
+        ? Duration.zero
+        : _positionAtReceipt(session, updatedAt);
     if (_matchesActiveQueue(player, queue, current)) {
       final drift = targetPosition - player.position;
       if (drift.inMilliseconds.abs() >
@@ -340,6 +350,7 @@ class ListenTogetherStore extends ChangeNotifier {
     _inviteCode = null;
     _hosting = false;
     _joined = false;
+    _unavailableTrackCount = 0;
   }
 
   Future<T> _runBusy<T>(Future<T> Function() action) async {
