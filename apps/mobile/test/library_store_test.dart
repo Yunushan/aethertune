@@ -135,6 +135,56 @@ void main() {
     );
   });
 
+  test('sync bookmark tombstones prevent deleted markers from returning',
+      () async {
+    var now = DateTime.utc(2026, 7, 18, 9);
+    DateTime clock() => now;
+    final local = LibraryStore(clock: clock);
+    final remote = LibraryStore(clock: clock);
+    await local.load();
+    await remote.load();
+    await local.addTracks(<Track>[_track('shared')]);
+    await remote.addTracks(<Track>[_track('shared')]);
+    final bookmark = await local.addTrackBookmark(
+      'shared',
+      const Duration(seconds: 30),
+      label: 'Remove me',
+    );
+    expect(bookmark, isNotNull);
+
+    await remote.mergeSyncSnapshotJson(local.exportSyncSnapshotJson());
+    expect(remote.bookmarksForTrack('shared'), hasLength(1));
+
+    now = now.add(const Duration(minutes: 1));
+    expect(await local.removeTrackBookmark('shared', bookmark!.id), isTrue);
+    final deletedSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
+    expect(deletedSnapshot['bookmarks'], isEmpty);
+    expect(
+      deletedSnapshot['bookmarkTombstones'],
+      <Map<String, Object?>>[
+        <String, Object?>{
+          'id': bookmark.id,
+          'deletedAt': now.toIso8601String(),
+        },
+      ],
+    );
+
+    await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
+    expect(local.bookmarksForTrack('shared'), isEmpty);
+    await remote.mergeSyncSnapshotJson(local.exportSyncSnapshotJson());
+    expect(remote.bookmarksForTrack('shared'), isEmpty);
+
+    final restored = LibraryStore(clock: clock);
+    await restored.load();
+    await restored.restoreBackupJson(local.exportBackupJson());
+    expect(restored.bookmarksForTrack('shared'), isEmpty);
+    final restoredSnapshot = jsonDecode(restored.exportSyncSnapshotJson()) as Map;
+    expect(restoredSnapshot['bookmarkTombstones'], hasLength(1));
+    now = now.add(const Duration(days: 91));
+    final expiredSnapshot = jsonDecode(restored.exportSyncSnapshotJson()) as Map;
+    expect(expiredSnapshot['bookmarkTombstones'], isEmpty);
+  });
+
   test('persists local artist follows and builds the newest follow feed',
       () async {
     final store = LibraryStore();

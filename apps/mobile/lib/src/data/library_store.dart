@@ -286,6 +286,34 @@ class _DuplicateResolutionSnapshot {
   }
 }
 
+class _BookmarkTombstone {
+  const _BookmarkTombstone({
+    required this.id,
+    required this.deletedAt,
+  });
+
+  final String id;
+  final DateTime deletedAt;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'id': id,
+        'deletedAt': deletedAt.toIso8601String(),
+      };
+
+  static _BookmarkTombstone? tryFromJson(Map<String, Object?> json) {
+    final id = json['id'];
+    final deletedAt = json['deletedAt'];
+    if (id is! String || id.trim().isEmpty || deletedAt is! String) {
+      return null;
+    }
+    final parsedDeletedAt = DateTime.tryParse(deletedAt);
+    if (parsedDeletedAt == null) {
+      return null;
+    }
+    return _BookmarkTombstone(id: id, deletedAt: parsedDeletedAt);
+  }
+}
+
 class LibraryBrowseGroup {
   const LibraryBrowseGroup({
     required this.type,
@@ -1146,6 +1174,10 @@ class LibraryStore extends ChangeNotifier {
   static const _historyKey = 'aethertune.playback_history.v1';
   static const _progressKey = 'aethertune.playback_progress.v1';
   static const _trackBookmarksKey = 'aethertune.track_bookmarks.v1';
+  static const _trackBookmarkTombstonesKey =
+      'aethertune.track_bookmark_tombstones.v1';
+  static const _maxTrackBookmarkTombstones = 1000;
+  static const _trackBookmarkTombstoneRetention = Duration(days: 90);
   static const _searchQueryHistoryKey = 'aethertune.search_query_history.v1';
   static const _pauseListeningHistoryKey =
       'aethertune.pause_listening_history.v1';
@@ -1210,6 +1242,7 @@ class LibraryStore extends ChangeNotifier {
       <String, PlaybackProgressEntry>{};
   final Map<String, List<TrackBookmark>> _bookmarksByTrackId =
       <String, List<TrackBookmark>>{};
+  final Map<String, DateTime> _bookmarkTombstonesById = <String, DateTime>{};
   final Random _bookmarkRandom = Random();
   final Map<String, TrackLyrics> _lyricsByTrackId = <String, TrackLyrics>{};
   final Map<String, double> _trackPlaybackSpeedOverrides = <String, double>{};
@@ -1516,6 +1549,24 @@ class LibraryStore extends ChangeNotifier {
               .entries,
         );
     }
+    final rawBookmarkTombstones = prefs.getString(_trackBookmarkTombstonesKey);
+    if (rawBookmarkTombstones != null && rawBookmarkTombstones.isNotEmpty) {
+      final decoded = jsonDecode(rawBookmarkTombstones) as List<dynamic>;
+      _bookmarkTombstonesById
+        ..clear()
+        ..addAll(
+          _sanitizeBookmarkTombstones(
+            decoded
+                .whereType<Map>()
+                .map(
+                  (item) => _BookmarkTombstone.tryFromJson(
+                    Map<String, Object?>.from(item),
+                  ),
+                )
+                .whereType<_BookmarkTombstone>(),
+          ),
+        );
+    }
     _pauseListeningHistory =
         prefs.getBool(_pauseListeningHistoryKey) ?? false;
     _recommendationFavoriteSignalsEnabled =
@@ -1597,6 +1648,8 @@ class LibraryStore extends ChangeNotifier {
     _removeMissingLyrics();
     _removeMissingHistory();
     _removeMissingProgress();
+    _trimBookmarkTombstones();
+    _removeTombstonedBookmarks();
     _removeMissingBookmarks();
     _sortHistory();
     _trimSearchQueryHistory();
@@ -1690,7 +1743,9 @@ class LibraryStore extends ChangeNotifier {
         _lyricsByTrackId.remove(trackId);
         _history.removeWhere((entry) => entry.trackId == trackId);
         _progressByTrackId.remove(trackId);
-        _bookmarksByTrackId.remove(trackId);
+        _recordBookmarkTombstones(
+          _bookmarksByTrackId.remove(trackId) ?? const <TrackBookmark>[],
+        );
         changed = true;
       }
     }
@@ -1742,7 +1797,9 @@ class LibraryStore extends ChangeNotifier {
     _trackPlaybackSpeedOverrides.remove(id);
     _history.removeWhere((entry) => entry.trackId == id);
     _progressByTrackId.remove(id);
-    _bookmarksByTrackId.remove(id);
+    _recordBookmarkTombstones(
+      _bookmarksByTrackId.remove(id) ?? const <TrackBookmark>[],
+    );
     await _save();
     notifyListeners();
   }
@@ -1851,6 +1908,7 @@ class LibraryStore extends ChangeNotifier {
     _searchQueryHistory.clear();
     _progressByTrackId.clear();
     _bookmarksByTrackId.clear();
+    _bookmarkTombstonesById.clear();
     _lyricsByTrackId.clear();
     _trackPlaybackSpeedOverrides.clear();
     _offlineCacheQueue.clear();
@@ -4149,6 +4207,7 @@ class LibraryStore extends ChangeNotifier {
           .expand((entries) => entries)
           .map((bookmark) => bookmark.toJson())
           .toList(growable: false),
+      'bookmarkTombstones': _bookmarkTombstonesJson(),
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
           .toList(),
@@ -4764,6 +4823,7 @@ class LibraryStore extends ChangeNotifier {
     final restoredSearchQueryHistory = <String>[];
     final restoredProgress = <PlaybackProgressEntry>[];
     final restoredBookmarks = <TrackBookmark>[];
+    final restoredBookmarkTombstones = <_BookmarkTombstone>[];
     final restoredLyrics = <TrackLyrics>[];
     final restoredOfflineCacheQueue = <OfflineCacheEntry>[];
     var restoredPauseListeningHistory = false;
@@ -4898,6 +4958,11 @@ class LibraryStore extends ChangeNotifier {
             .map(TrackBookmark.tryFromJson)
             .whereType<TrackBookmark>(),
       );
+      restoredBookmarkTombstones.addAll(
+        _jsonObjectList(backup, 'bookmarkTombstones', isRequired: false)
+            .map(_BookmarkTombstone.tryFromJson)
+            .whereType<_BookmarkTombstone>(),
+      );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
       );
@@ -4941,6 +5006,13 @@ class LibraryStore extends ChangeNotifier {
     final sanitizedBookmarks = _sanitizeTrackBookmarks(
       restoredBookmarks,
       knownTrackIds: knownTrackIds,
+    );
+    final sanitizedBookmarkTombstones = _sanitizeBookmarkTombstones(
+      restoredBookmarkTombstones,
+    );
+    _removeTombstonedBookmarksFrom(
+      sanitizedBookmarks,
+      sanitizedBookmarkTombstones.keys,
     );
     final sanitizedSearchQueryHistory = _dedupeSearchQueryHistory(
       restoredSearchQueryHistory,
@@ -4995,6 +5067,9 @@ class LibraryStore extends ChangeNotifier {
     _bookmarksByTrackId
       ..clear()
       ..addAll(sanitizedBookmarks);
+    _bookmarkTombstonesById
+      ..clear()
+      ..addAll(sanitizedBookmarkTombstones);
     _lyricsByTrackId
       ..clear()
       ..addAll(sanitizedLyrics);
@@ -5150,11 +5225,23 @@ class LibraryStore extends ChangeNotifier {
         return trackId == null || playedAt == null ? null : '$trackId|$playedAt';
       },
     );
+    merged['bookmarkTombstones'] = _mergeSyncBookmarkTombstones(
+      local['bookmarkTombstones'],
+      remote['bookmarkTombstones'],
+    );
+    final tombstonedBookmarkIds = _syncBookmarkTombstoneIds(
+      merged['bookmarkTombstones'],
+    );
     merged['bookmarks'] = _mergeSyncObjectLists(
       local['bookmarks'],
       remote['bookmarks'],
       identity: (item) => _syncString(item['id']),
-    );
+    ).where((item) {
+      if (item is! Map) {
+        return false;
+      }
+      return !tombstonedBookmarkIds.contains(_syncString(item['id']));
+    }).toList(growable: false);
     merged['playlists'] = _mergeSyncPlaylists(local['playlists'], remote['playlists']);
     for (final key in const <String>['progress', 'lyrics']) {
       merged[key] = _mergeSyncObjectLists(
@@ -5254,6 +5341,61 @@ class LibraryStore extends ChangeNotifier {
     add(remoteValue, local: false);
     add(localValue, local: true);
     return merged.values.toList(growable: false);
+  }
+
+  List<Object?> _mergeSyncBookmarkTombstones(
+    Object? localValue,
+    Object? remoteValue,
+  ) {
+    final merged = <String, _BookmarkTombstone>{};
+    void add(Object? value) {
+      if (value is! List) {
+        return;
+      }
+      for (final item in value) {
+        if (item is! Map) {
+          continue;
+        }
+        final tombstone = _BookmarkTombstone.tryFromJson(
+          Map<String, Object?>.from(item),
+        );
+        if (tombstone == null) {
+          continue;
+        }
+        final existing = merged[tombstone.id];
+        if (existing == null || tombstone.deletedAt.isAfter(existing.deletedAt)) {
+          merged[tombstone.id] = tombstone;
+        }
+      }
+    }
+
+    add(remoteValue);
+    add(localValue);
+    return _sanitizeBookmarkTombstones(merged.values)
+        .entries
+        .map(
+          (entry) => _BookmarkTombstone(
+            id: entry.key,
+            deletedAt: entry.value,
+          ).toJson(),
+        )
+        .toList(growable: false);
+  }
+
+  Set<String> _syncBookmarkTombstoneIds(Object? value) {
+    if (value is! List) {
+      return <String>{};
+    }
+    return _sanitizeBookmarkTombstones(
+      value
+          .whereType<Map>()
+          .map(
+            (item) => _BookmarkTombstone.tryFromJson(
+              Map<String, Object?>.from(item),
+            ),
+          )
+          .whereType<_BookmarkTombstone>(),
+    ).keys.toSet();
   }
 
   List<Object?> _mergeSyncPlaylists(Object? localValue, Object? remoteValue) {
@@ -6030,9 +6172,10 @@ class LibraryStore extends ChangeNotifier {
       label: TrackBookmark.normalizeLabel(label),
       folder: TrackBookmark.normalizeFolder(folder),
     );
+    _bookmarkTombstonesById.remove(bookmark.id);
     bookmarks.add(bookmark);
     if (bookmarks.length > _maxTrackBookmarksPerTrack) {
-      bookmarks.removeAt(0);
+      _recordBookmarkTombstones(<TrackBookmark>[bookmarks.removeAt(0)]);
     }
     await _save();
     notifyListeners();
@@ -6136,13 +6279,12 @@ class LibraryStore extends ChangeNotifier {
     if (bookmarks == null) {
       return false;
     }
-    final bookmarkCount = bookmarks.length;
-    bookmarks.removeWhere(
-      (bookmark) => bookmark.id == bookmarkId,
-    );
-    if (bookmarks.length == bookmarkCount) {
+    final index = bookmarks.indexWhere((bookmark) => bookmark.id == bookmarkId);
+    if (index == -1) {
       return false;
     }
+    final removed = bookmarks.removeAt(index);
+    _recordBookmarkTombstones(<TrackBookmark>[removed]);
     if (bookmarks.isEmpty) {
       _bookmarksByTrackId.remove(trackId);
     }
@@ -6163,18 +6305,20 @@ class LibraryStore extends ChangeNotifier {
     if (ids.isEmpty) {
       return 0;
     }
-    final bookmarkCount = bookmarks.length;
-    bookmarks.removeWhere((bookmark) => ids.contains(bookmark.id));
-    final removed = bookmarkCount - bookmarks.length;
-    if (removed == 0) {
+    final removed = bookmarks
+        .where((bookmark) => ids.contains(bookmark.id))
+        .toList(growable: false);
+    if (removed.isEmpty) {
       return 0;
     }
+    bookmarks.removeWhere((bookmark) => ids.contains(bookmark.id));
+    _recordBookmarkTombstones(removed);
     if (bookmarks.isEmpty) {
       _bookmarksByTrackId.remove(trackId);
     }
     await _save();
     notifyListeners();
-    return removed;
+    return removed.length;
   }
 
   PodcastSubscription? podcastSubscriptionById(String id) {
@@ -8367,6 +8511,87 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  void _recordBookmarkTombstones(Iterable<TrackBookmark> bookmarks) {
+    final deletedAt = _clock();
+    for (final bookmark in bookmarks) {
+      _bookmarkTombstonesById[bookmark.id] = deletedAt;
+    }
+    _trimBookmarkTombstones();
+  }
+
+  List<Map<String, Object?>> _bookmarkTombstonesJson() {
+    final entries = _sanitizeBookmarkTombstones(
+      _bookmarkTombstonesById.entries.map(
+        (entry) => _BookmarkTombstone(id: entry.key, deletedAt: entry.value),
+      ),
+    ).entries.toList(growable: false)
+      ..sort((left, right) => left.value.compareTo(right.value));
+    return entries
+        .map(
+          (entry) => _BookmarkTombstone(
+            id: entry.key,
+            deletedAt: entry.value,
+          ).toJson(),
+        )
+        .toList(growable: false);
+  }
+
+  Map<String, DateTime> _sanitizeBookmarkTombstones(
+    Iterable<_BookmarkTombstone> tombstones,
+  ) {
+    final oldestAllowed = _clock().subtract(_trackBookmarkTombstoneRetention);
+    final byId = <String, DateTime>{};
+    for (final tombstone in tombstones) {
+      if (tombstone.deletedAt.isBefore(oldestAllowed)) {
+        continue;
+      }
+      final existing = byId[tombstone.id];
+      if (existing == null || tombstone.deletedAt.isAfter(existing)) {
+        byId[tombstone.id] = tombstone.deletedAt;
+      }
+    }
+    final entries = byId.entries.toList(growable: false)
+      ..sort((left, right) => right.value.compareTo(left.value));
+    if (entries.length > _maxTrackBookmarkTombstones) {
+      entries.removeRange(_maxTrackBookmarkTombstones, entries.length);
+    }
+    return <String, DateTime>{
+      for (final entry in entries) entry.key: entry.value,
+    };
+  }
+
+  void _trimBookmarkTombstones() {
+    final sanitized = _sanitizeBookmarkTombstones(
+      _bookmarkTombstonesById.entries.map(
+        (entry) => _BookmarkTombstone(id: entry.key, deletedAt: entry.value),
+      ),
+    );
+    _bookmarkTombstonesById
+      ..clear()
+      ..addAll(sanitized);
+  }
+
+  void _removeTombstonedBookmarks() {
+    _removeTombstonedBookmarksFrom(
+      _bookmarksByTrackId,
+      _bookmarkTombstonesById.keys,
+    );
+  }
+
+  void _removeTombstonedBookmarksFrom(
+    Map<String, List<TrackBookmark>> bookmarksByTrackId,
+    Iterable<String> tombstoneIds,
+  ) {
+    final ids = tombstoneIds.toSet();
+    if (ids.isEmpty) {
+      return;
+    }
+    bookmarksByTrackId.removeWhere((_, bookmarks) {
+      bookmarks.removeWhere((bookmark) => ids.contains(bookmark.id));
+      return bookmarks.isEmpty;
+    });
+  }
+
   Map<String, List<TrackBookmark>> _sanitizeTrackBookmarks(
     Iterable<TrackBookmark> bookmarks, {
     required Set<String> knownTrackIds,
@@ -8964,6 +9189,7 @@ class LibraryStore extends ChangeNotifier {
         (bookmark) => bookmark.toJson(),
       ).toList(),
     );
+    final encodedBookmarkTombstones = jsonEncode(_bookmarkTombstonesJson());
     final encodedLyrics = jsonEncode(
       _lyricsByTrackId.values.map((lyrics) => lyrics.toJson()).toList(),
     );
@@ -8987,6 +9213,10 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
     await prefs.setString(_progressKey, encodedProgress);
     await prefs.setString(_trackBookmarksKey, encodedTrackBookmarks);
+    await prefs.setString(
+      _trackBookmarkTombstonesKey,
+      encodedBookmarkTombstones,
+    );
     await prefs.setString(_lyricsKey, encodedLyrics);
     await prefs.setBool(_pauseListeningHistoryKey, _pauseListeningHistory);
     await prefs.setBool(
