@@ -1069,6 +1069,10 @@ FILE "../private.mp3" MP3
         trackNumber: '4/12',
         genre: 'Jazz',
         rating: 80,
+        replayGainTrackDb: '-5.40 dB',
+        r128AlbumGain: '-325',
+        replayGainTrackPeak: '0.950000',
+        replayGainAlbumPeak: '1.100000',
       ),
     );
 
@@ -1082,6 +1086,10 @@ FILE "../private.mp3" MP3
     expect(track.year, 2022);
     expect(track.trackNumber, 4);
     expect(track.genre, 'Jazz');
+    expect(track.replayGainTrackDb, -5.4);
+    expect(track.replayGainAlbumDb, -3.25);
+    expect(track.replayGainTrackPeak, 0.95);
+    expect(track.replayGainAlbumPeak, 1.1);
     expect(track.rating, 4);
   });
 
@@ -2122,6 +2130,10 @@ List<int> _wmaWithMetadata({
   List<int>? picturePayload,
   List<List<int>> additionalPicturePayloads = const <List<int>>[],
   String? lyrics,
+  String? replayGainTrackDb,
+  String? r128AlbumGain,
+  String? replayGainTrackPeak,
+  String? replayGainAlbumPeak,
 }) {
   final contentDescription = _asfObject(
     _asfContentDescriptionObjectGuid,
@@ -2134,6 +2146,14 @@ List<int> _wmaWithMetadata({
     MapEntry<String, Object>('WM/TrackNumber', trackNumber),
     MapEntry<String, Object>('WM/Genre', genre),
     MapEntry<String, Object>('WM/SharedUserRating', rating),
+    if (replayGainTrackDb != null)
+      MapEntry<String, Object>('ReplayGain_Track_Gain', replayGainTrackDb),
+    if (r128AlbumGain != null)
+      MapEntry<String, Object>('R128_Album_Gain', r128AlbumGain),
+    if (replayGainTrackPeak != null)
+      MapEntry<String, Object>('ReplayGain_Track_Peak', replayGainTrackPeak),
+    if (replayGainAlbumPeak != null)
+      MapEntry<String, Object>('ReplayGain_Album_Peak', replayGainAlbumPeak),
     if (picturePayload != null)
       MapEntry<String, Object>('WM/Picture', picturePayload),
     for (final payload in additionalPicturePayloads)

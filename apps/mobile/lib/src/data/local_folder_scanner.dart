@@ -1809,6 +1809,16 @@ final class _LocalFolderScanState {
       'WM/TRACKNUMBER' => 'trackNumber',
       'WM/GENRE' => 'genre',
       'WM/SHAREDUSERRATING' => 'rating',
+      'REPLAYGAIN_TRACK_GAIN' || 'WM/REPLAYGAIN_TRACK_GAIN' =>
+        'replayGainTrackDb',
+      'REPLAYGAIN_ALBUM_GAIN' || 'WM/REPLAYGAIN_ALBUM_GAIN' =>
+        'replayGainAlbumDb',
+      'R128_TRACK_GAIN' || 'WM/R128_TRACK_GAIN' => 'r128TrackGain',
+      'R128_ALBUM_GAIN' || 'WM/R128_ALBUM_GAIN' => 'r128AlbumGain',
+      'REPLAYGAIN_TRACK_PEAK' || 'WM/REPLAYGAIN_TRACK_PEAK' =>
+        'replayGainTrackPeak',
+      'REPLAYGAIN_ALBUM_PEAK' || 'WM/REPLAYGAIN_ALBUM_PEAK' =>
+        'replayGainAlbumPeak',
       _ => null,
     };
   }
@@ -1890,6 +1900,18 @@ final class _LocalFolderScanState {
     final year = _releaseYearFromText(fields['year']);
     final trackNumber = _trackNumberFromText(fields['trackNumber']);
     final genre = fields['genre'];
+    final replayGainTrackDb =
+        parseReplayGainDb(fields['replayGainTrackDb']) ??
+        parseEbuR128GainDb(fields['r128TrackGain']);
+    final replayGainAlbumDb =
+        parseReplayGainDb(fields['replayGainAlbumDb']) ??
+        parseEbuR128GainDb(fields['r128AlbumGain']);
+    final replayGainTrackPeak = parseReplayGainPeak(
+      fields['replayGainTrackPeak'],
+    );
+    final replayGainAlbumPeak = parseReplayGainPeak(
+      fields['replayGainAlbumPeak'],
+    );
     final rating = _vorbisRating(fields['rating']);
     if (title.isEmpty &&
         artist.isEmpty &&
@@ -1898,6 +1920,10 @@ final class _LocalFolderScanState {
         year == null &&
         trackNumber == null &&
         (genre == null || genre.isEmpty) &&
+        replayGainTrackDb == null &&
+        replayGainAlbumDb == null &&
+        replayGainTrackPeak == null &&
+        replayGainAlbumPeak == null &&
         rating == null &&
         artworkUri == null &&
         embeddedLyrics == null) {
@@ -1914,6 +1940,10 @@ final class _LocalFolderScanState {
       year: year,
       trackNumber: trackNumber,
       genre: genre == null || genre.isEmpty ? null : genre,
+      replayGainTrackDb: replayGainTrackDb,
+      replayGainAlbumDb: replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak,
       rating: rating,
       artworkUri: artworkUri,
       embeddedLyrics: embeddedLyrics,
