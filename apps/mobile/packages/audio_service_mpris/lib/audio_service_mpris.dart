@@ -89,6 +89,19 @@ class AudioServiceMpris extends AudioServicePlatform {
     });
   }
 
+  void _listenToLoopStream() {
+    _mpris.loopStream.listen((value) {
+      final callbacks = _handlerCallbacks;
+      if (callbacks == null) return;
+      final repeatMode = switch (value) {
+        'Track' => AudioServiceRepeatModeMessage.one,
+        'Playlist' => AudioServiceRepeatModeMessage.all,
+        _ => AudioServiceRepeatModeMessage.none,
+      };
+      callbacks.setRepeatMode(SetRepeatModeRequest(repeatMode: repeatMode));
+    });
+  }
+
   final List<MediaItemMessage> _queue = <MediaItemMessage>[];
 
   static void registerWith() {
@@ -114,6 +127,7 @@ class AudioServiceMpris extends AudioServicePlatform {
     _listenToVolumeStream();
     _listenToTrackStream();
     _listenToPlaylistStream();
+    _listenToLoopStream();
 
     await _dBusClient.registerObject(_mpris);
     await _dBusClient.requestName(
@@ -126,6 +140,11 @@ class AudioServiceMpris extends AudioServicePlatform {
   Future<void> setState(SetStateRequest request) async {
     _mpris.position = request.state.updatePosition;
     _isPlaying = request.state.playing;
+    _mpris.updateLoopStatus(switch (request.state.repeatMode) {
+      AudioServiceRepeatModeMessage.one => 'Track',
+      AudioServiceRepeatModeMessage.all => 'Playlist',
+      _ => 'None',
+    });
     _mpris.playbackState = _isPlaying ? 'Playing' : 'Paused';
   }
 

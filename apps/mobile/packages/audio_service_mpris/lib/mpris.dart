@@ -69,6 +69,9 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   final _trackStreamController = StreamController<String>();
   Stream<String> get trackStream => _trackStreamController.stream;
 
+  final _loopStreamController = StreamController<String>();
+  Stream<String> get loopStream => _loopStreamController.stream;
+
   final _playlistStreamController = StreamController<String>();
   Stream<String> get playlistStream => _playlistStreamController.stream;
 
@@ -166,15 +169,35 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.LoopStatus
+  String _loopStatus = 'None';
+
   DBusString getLoopStatus() {
-    return const DBusString('None');
+    return DBusString(_loopStatus);
   }
 
   /// Sets property org.mpris.MediaPlayer2.Player.LoopStatus
   Future<DBusMethodResponse> setLoopStatus(String value) async {
-    log('Set org.mpris.MediaPlayer2.Player.LoopStatus not implemented',
-        name: 'audio_service_mpris');
+    if (value != 'None' && value != 'Track' && value != 'Playlist') {
+      return DBusMethodErrorResponse.invalidArgs();
+    }
+    if (value != _loopStatus) {
+      _loopStatus = value;
+      emitPropertiesChanged(
+        'org.mpris.MediaPlayer2.Player',
+        changedProperties: <String, DBusValue>{'LoopStatus': DBusString(value)},
+      );
+      _loopStreamController.add(value);
+    }
     return DBusMethodSuccessResponse([]);
+  }
+
+  void updateLoopStatus(String value) {
+    if (value == _loopStatus) return;
+    _loopStatus = value;
+    emitPropertiesChanged(
+      'org.mpris.MediaPlayer2.Player',
+      changedProperties: <String, DBusValue>{'LoopStatus': DBusString(value)},
+    );
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.Rate

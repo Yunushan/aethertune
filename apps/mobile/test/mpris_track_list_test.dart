@@ -69,6 +69,16 @@ void main() {
     expect(player.position, Duration.zero);
   });
 
+  test('Player LoopStatus validates and dispatches repeat requests', () async {
+    final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+    expectLater(player.loopStream, emits('Playlist'));
+
+    expect(await player.setLoopStatus('Playlist'), isNotNull);
+    expect(player.getLoopStatus().value, 'Playlist');
+    expect(await player.setLoopStatus('Invalid'), isNotNull);
+    expect(player.getLoopStatus().value, 'Playlist');
+  });
+
   test(
     'Playlists exposes alphabetical entries and activates the chosen list',
     () async {
