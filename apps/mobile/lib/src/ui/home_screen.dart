@@ -1621,7 +1621,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final scanResult = await const LocalFolderScanner().scan(
+      final scanResult = await scanLocalFolderInBackground(
         folderPath,
         importedAt: DateTime.now(),
       );

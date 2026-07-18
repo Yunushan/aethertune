@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 
@@ -94,6 +95,17 @@ final class _ScannedLocalTrack {
 
   final Track track;
   final String? embeddedLyrics;
+}
+
+/// Scans folders away from the UI isolate while retaining scanner bounds and
+/// metadata behavior. The returned result contains only transferable Dart data.
+Future<LocalFolderScanResult> scanLocalFolderInBackground(
+  String rootPath, {
+  DateTime? importedAt,
+}) {
+  return Isolate.run(
+    () => const LocalFolderScanner().scan(rootPath, importedAt: importedAt),
+  );
 }
 
 final class LocalFolderScanner {

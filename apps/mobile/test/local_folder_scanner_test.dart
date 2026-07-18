@@ -281,6 +281,18 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('scans folders in a background isolate', () async {
+    await File(p.join(root.path, '01 Background.mp3')).writeAsBytes(<int>[1]);
+
+    final result = await scanLocalFolderInBackground(
+      root.path,
+      importedAt: DateTime.utc(2026, 2, 1),
+    );
+
+    expect(result.tracks.single.title, 'Background');
+    expect(result.tracks.single.addedAt, DateTime.utc(2026, 2, 1));
+  });
+
   test('imports ID3 POPM and Vorbis embedded ratings', () async {
     await File(p.join(root.path, 'popm.mp3')).writeAsBytes(<int>[
       ..._id3v23Tag(popularimeterRating: 196),
