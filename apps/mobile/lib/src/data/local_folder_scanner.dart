@@ -1046,6 +1046,8 @@ final class _LocalFolderScanState {
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
         tagData.replayGainAlbumDb == null &&
+        tagData.replayGainTrackPeak == null &&
+        tagData.replayGainAlbumPeak == null &&
         tagData.embeddedLyrics == null &&
         tagData.rating == null &&
         tagData.chapters.isEmpty) {
@@ -1069,6 +1071,8 @@ final class _LocalFolderScanState {
         tagData.artworkUri == null &&
         tagData.replayGainTrackDb == null &&
         tagData.replayGainAlbumDb == null &&
+        tagData.replayGainTrackPeak == null &&
+        tagData.replayGainAlbumPeak == null &&
         tagData.embeddedLyrics == null &&
         tagData.rating == null &&
         tagData.chapters.isEmpty) {
@@ -1088,6 +1092,8 @@ final class _LocalFolderScanState {
       artworkUri: tagData.artworkUri,
       replayGainTrackDb: tagData.replayGainTrackDb,
       replayGainAlbumDb: tagData.replayGainAlbumDb,
+      replayGainTrackPeak: tagData.replayGainTrackPeak,
+      replayGainAlbumPeak: tagData.replayGainAlbumPeak,
       embeddedLyrics: tagData.embeddedLyrics,
       rating: tagData.rating,
       chapters: tagData.chapters,
@@ -1103,6 +1109,8 @@ final class _LocalFolderScanState {
     var hasFrontCover = false;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
+    double? replayGainTrackPeak;
+    double? replayGainAlbumPeak;
     String? embeddedLyrics;
     int? rating;
     final chapters = <TrackChapter>[];
@@ -1157,6 +1165,14 @@ final class _LocalFolderScanState {
           userText,
           'R128_ALBUM_GAIN',
         );
+        replayGainTrackPeak ??= _id3v2ReplayGainPeakUserText(
+          userText,
+          'REPLAYGAIN_TRACK_PEAK',
+        );
+        replayGainAlbumPeak ??= _id3v2ReplayGainPeakUserText(
+          userText,
+          'REPLAYGAIN_ALBUM_PEAK',
+        );
       } else if (frameId == 'USLT' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
@@ -1192,6 +1208,8 @@ final class _LocalFolderScanState {
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak,
       embeddedLyrics: embeddedLyrics,
       rating: rating,
       chapters: TrackChapter.normalize(chapters),
@@ -1204,6 +1222,8 @@ final class _LocalFolderScanState {
     var hasFrontCover = false;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
+    double? replayGainTrackPeak;
+    double? replayGainAlbumPeak;
     String? embeddedLyrics;
     int? rating;
     var offset = 0;
@@ -1255,6 +1275,14 @@ final class _LocalFolderScanState {
           userText,
           'R128_ALBUM_GAIN',
         );
+        replayGainTrackPeak ??= _id3v2ReplayGainPeakUserText(
+          userText,
+          'REPLAYGAIN_TRACK_PEAK',
+        );
+        replayGainAlbumPeak ??= _id3v2ReplayGainPeakUserText(
+          userText,
+          'REPLAYGAIN_ALBUM_PEAK',
+        );
       } else if (frameId == 'ULT' && embeddedLyrics == null) {
         embeddedLyrics = _id3v2UnsynchronizedLyrics(
           bytes.sublist(offset, offset + frameSize),
@@ -1281,6 +1309,8 @@ final class _LocalFolderScanState {
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak,
       embeddedLyrics: embeddedLyrics,
       rating: rating,
     );
@@ -2105,6 +2135,8 @@ final class _LocalFolderScanState {
     Uri? artworkUri;
     double? replayGainTrackDb;
     double? replayGainAlbumDb;
+    double? replayGainTrackPeak;
+    double? replayGainAlbumPeak;
     int? trackNumber;
     final ilst = meta == null || meta.length <= 4
         ? null
@@ -2144,6 +2176,18 @@ final class _LocalFolderScanState {
           atom.payloadOffset,
           atom.payloadEnd,
           'R128_ALBUM_GAIN',
+        );
+        replayGainTrackPeak ??= _m4aFreeformReplayGainPeak(
+          metadataItems,
+          atom.payloadOffset,
+          atom.payloadEnd,
+          'REPLAYGAIN_TRACK_PEAK',
+        );
+        replayGainAlbumPeak ??= _m4aFreeformReplayGainPeak(
+          metadataItems,
+          atom.payloadOffset,
+          atom.payloadEnd,
+          'REPLAYGAIN_ALBUM_PEAK',
         );
         continue;
       }
@@ -2199,6 +2243,8 @@ final class _LocalFolderScanState {
         artworkUri == null &&
         replayGainTrackDb == null &&
         replayGainAlbumDb == null &&
+        replayGainTrackPeak == null &&
+        replayGainAlbumPeak == null &&
         embeddedLyrics == null &&
         chapters.isEmpty) {
       return null;
@@ -2217,6 +2263,8 @@ final class _LocalFolderScanState {
       artworkUri: artworkUri,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
+      replayGainTrackPeak: replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak,
       embeddedLyrics: embeddedLyrics,
       chapters: chapters,
     );
@@ -2414,6 +2462,10 @@ final class _LocalFolderScanState {
 
   double? _id3v2EbuR128UserText(List<int> bytes, String expectedKey) {
     return _id3v2UserTextGain(bytes, expectedKey, parseEbuR128GainDb);
+  }
+
+  double? _id3v2ReplayGainPeakUserText(List<int> bytes, String expectedKey) {
+    return _id3v2UserTextGain(bytes, expectedKey, parseReplayGainPeak);
   }
 
   double? _id3v2UserTextGain(
@@ -2639,6 +2691,21 @@ final class _LocalFolderScanState {
       endOffset,
       expectedKey,
       parseEbuR128GainDb,
+    );
+  }
+
+  double? _m4aFreeformReplayGainPeak(
+    List<int> bytes,
+    int startOffset,
+    int endOffset,
+    String expectedKey,
+  ) {
+    return _m4aFreeformGain(
+      bytes,
+      startOffset,
+      endOffset,
+      expectedKey,
+      parseReplayGainPeak,
     );
   }
 
@@ -3421,6 +3488,8 @@ final class _Id3v2TagData {
     this.artworkUri,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
+    this.replayGainTrackPeak,
+    this.replayGainAlbumPeak,
     this.embeddedLyrics,
     this.rating,
     this.chapters = const <TrackChapter>[],
@@ -3430,6 +3499,8 @@ final class _Id3v2TagData {
   final Uri? artworkUri;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
+  final double? replayGainTrackPeak;
+  final double? replayGainAlbumPeak;
   final String? embeddedLyrics;
   final int? rating;
   final List<TrackChapter> chapters;

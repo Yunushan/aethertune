@@ -616,6 +616,18 @@ FILE "../private.mp3" MP3
         title: 'ID3 Gain',
         replayGainTrackGain: '-5.10 dB',
         replayGainAlbumGain: '-3.10 dB',
+        additionalFrames: <List<int>>[
+          _id3v23UserTextFrame(
+            'REPLAYGAIN_TRACK_PEAK',
+            '0.95',
+            _id3v2EncodingUtf8,
+          ),
+          _id3v23UserTextFrame(
+            'REPLAYGAIN_ALBUM_PEAK',
+            '1.1',
+            _id3v2EncodingUtf8,
+          ),
+        ],
       ),
       1,
       2,
@@ -627,6 +639,8 @@ FILE "../private.mp3" MP3
     expect(result.tracks.single.title, 'ID3 Gain');
     expect(result.tracks.single.replayGainTrackDb, -5.1);
     expect(result.tracks.single.replayGainAlbumDb, -3.1);
+    expect(result.tracks.single.replayGainTrackPeak, 0.95);
+    expect(result.tracks.single.replayGainAlbumPeak, 1.1);
   });
 
   test('reads EBU R128 gain tags from supported metadata containers',
