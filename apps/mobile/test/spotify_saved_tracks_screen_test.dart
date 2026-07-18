@@ -51,7 +51,59 @@ void main() {
     expect(find.text('All 2 saved tracks loaded.'), findsOneWidget);
     expect(requestedOffsets, <String?>['0', '1']);
   });
+
+  testWidgets('loads a selected top-track range and saves metadata locally', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final ranges = <String>[];
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      topTracksLoader: (uri, token) async {
+        ranges.add(uri.queryParameters['time_range']!);
+        return _topTracksPage;
+      },
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<LibraryStore>.value(
+        value: library,
+        child: MaterialApp(
+          home: SpotifySavedTracksScreen(provider: provider, topTracks: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Top Signal'), findsOneWidget);
+    expect(ranges, <String>['medium_term']);
+    await tester.tap(find.text('1 year'));
+    await tester.pumpAndSettle();
+    expect(ranges, <String>['medium_term', 'long_term']);
+
+    await tester.tap(find.byTooltip('Save metadata to library'));
+    await tester.pumpAndSettle();
+    expect(library.tracks.single.title, 'Top Signal');
+    expect(library.tracks.single.isPlayable, isFalse);
+  });
 }
+
+const _topTracksPage = '''
+{
+  "offset": 0,
+  "total": 1,
+  "next": null,
+  "items": [{
+    "id": "top-signal",
+    "name": "Top Signal",
+    "artists": [{"name": "Aether"}],
+    "album": {"name": "Signals"}
+  }]
+}
+''';
 
 String _savedTracksPage(String suffix, int offset, bool hasMore) {
   return '''
