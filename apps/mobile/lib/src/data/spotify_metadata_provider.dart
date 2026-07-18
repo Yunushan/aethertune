@@ -20,6 +20,8 @@ final class SpotifyMetadataProvider
     SpotifySearchLoader? savedTracksLoader,
     Uri? savedAlbumsUri,
     SpotifySearchLoader? savedAlbumsLoader,
+    Uri? recentlyPlayedUri,
+    SpotifySearchLoader? recentlyPlayedLoader,
     Uri? albumsUri,
     SpotifySearchLoader? albumTracksLoader,
     Uri? playlistsUri,
@@ -33,6 +35,8 @@ final class SpotifyMetadataProvider
        _savedTracksLoader = savedTracksLoader ?? _loadSpotifyJson,
        savedAlbumsUri = savedAlbumsUri ?? _defaultSavedAlbumsUri,
        _savedAlbumsLoader = savedAlbumsLoader ?? _loadSpotifyJson,
+       recentlyPlayedUri = recentlyPlayedUri ?? _defaultRecentlyPlayedUri,
+       _recentlyPlayedLoader = recentlyPlayedLoader ?? _loadSpotifyJson,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
        _albumTracksLoader = albumTracksLoader ?? _loadSpotifyJson,
        playlistsUri = playlistsUri ?? _defaultPlaylistsUri,
@@ -46,6 +50,8 @@ final class SpotifyMetadataProvider
       Uri.parse('https://api.spotify.com/v1/me/tracks');
   static final Uri _defaultSavedAlbumsUri =
       Uri.parse('https://api.spotify.com/v1/me/albums');
+  static final Uri _defaultRecentlyPlayedUri =
+      Uri.parse('https://api.spotify.com/v1/me/player/recently-played');
   static final Uri _defaultAlbumsUri =
       Uri.parse('https://api.spotify.com/v1/albums');
   static final Uri _defaultPlaylistsUri =
@@ -60,6 +66,8 @@ final class SpotifyMetadataProvider
   final SpotifySearchLoader _savedTracksLoader;
   final Uri savedAlbumsUri;
   final SpotifySearchLoader _savedAlbumsLoader;
+  final Uri recentlyPlayedUri;
+  final SpotifySearchLoader _recentlyPlayedLoader;
   final Uri albumsUri;
   final SpotifySearchLoader _albumTracksLoader;
   final Uri playlistsUri;
@@ -230,6 +238,30 @@ final class SpotifyMetadataProvider
     );
   }
 
+  /// Reads the user's official Spotify play history as catalog metadata only.
+  /// Returned tracks intentionally do not contain a stream URL.
+  Future<SpotifyRecentlyPlayedPage> loadRecentlyPlayedPage({
+    String? before,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final normalizedBefore = _nonEmpty(before);
+    final token = await _accessTokenReader();
+    return parseSpotifyRecentlyPlayedPage(
+      await _recentlyPlayedLoader(
+        recentlyPlayedUri.replace(
+          queryParameters: <String, String>{
+            'limit': limit.clamp(1, 50).toString(),
+            if (normalizedBefore != null) 'before': normalizedBefore,
+          },
+        ),
+        token,
+      ),
+    );
+  }
+
   /// Reads the catalog metadata for tracks in a saved Spotify album.
   Future<SpotifyAlbumTracksPage> loadAlbumTracksPage(
     SpotifySavedAlbum album, {
@@ -387,6 +419,28 @@ final class SpotifySavedAlbumsPage {
   final bool hasMore;
 }
 
+final class SpotifyRecentlyPlayedItem {
+  const SpotifyRecentlyPlayedItem({
+    required this.track,
+    required this.playedAt,
+  });
+
+  final Track track;
+  final DateTime playedAt;
+}
+
+final class SpotifyRecentlyPlayedPage {
+  const SpotifyRecentlyPlayedPage({
+    required this.items,
+    this.nextBefore,
+  });
+
+  final List<SpotifyRecentlyPlayedItem> items;
+  final String? nextBefore;
+
+  bool get hasMore => nextBefore != null;
+}
+
 final class SpotifyAlbumTracksPage {
   const SpotifyAlbumTracksPage({
     required this.tracks,
@@ -535,6 +589,33 @@ SpotifySavedAlbumsPage parseSpotifySavedAlbumsPage(String jsonText) {
   );
 }
 
+SpotifyRecentlyPlayedPage parseSpotifyRecentlyPlayedPage(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException(
+      'Spotify recently played response must be a map.',
+    );
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final items = root['items'];
+  final history = items is List
+      ? items
+            .whereType<Map>()
+            .map((item) => _recentlyPlayedItemFromSpotifyJson(
+                  Map<String, Object?>.from(item),
+                ))
+            .whereType<SpotifyRecentlyPlayedItem>()
+            .toList(growable: false)
+      : const <SpotifyRecentlyPlayedItem>[];
+  final cursors = root['cursors'] is Map
+      ? Map<String, Object?>.from(root['cursors'] as Map)
+      : const <String, Object?>{};
+  return SpotifyRecentlyPlayedPage(
+    items: history,
+    nextBefore: _nonEmpty(cursors['before']),
+  );
+}
+
 SpotifyAlbumTracksPage parseSpotifyAlbumTracksPage(
   String jsonText,
   SpotifySavedAlbum album,
@@ -664,6 +745,24 @@ SpotifySavedPlaylist? _savedPlaylistFromSpotifyJson(
     description: _nonEmpty(json['description']),
     artworkUri: _spotifyArtworkUri(json['images']),
   );
+}
+
+SpotifyRecentlyPlayedItem? _recentlyPlayedItemFromSpotifyJson(
+  Map<String, Object?> json,
+) {
+  final trackValue = json['track'];
+  final playedAt = DateTime.tryParse(json['played_at']?.toString() ?? '')
+      ?.toUtc();
+  if (trackValue is! Map || playedAt == null) {
+    return null;
+  }
+  final track = _trackFromSpotifyJson(
+    Map<String, Object?>.from(trackValue),
+    addedAt: playedAt,
+  );
+  return track == null
+      ? null
+      : SpotifyRecentlyPlayedItem(track: track, playedAt: playedAt);
 }
 
 Track? _playlistTrackFromSpotifyJson(Map<String, Object?> json) {

@@ -93,15 +93,20 @@ client secret. The app's client ID, access token, refresh token, and expiry
 record are stored only through `ProviderCredentialVault`; access tokens refresh
 before a search when needed, and Disconnect deletes the whole record.
 
-The provider sends the search query and OAuth bearer token only to
+The provider sends search queries and OAuth bearer tokens only to
 `api.spotify.com`, lists `accounts.spotify.com` and `api.spotify.com` in its
-disclosure, uses bounded `offset`/`limit` pagination, and returns neutral
-metadata-only tracks. It declares metadata search, artwork, and authentication
-only. It does not resolve a stream, play Spotify audio, cache/download media,
-expose playlists, or use undocumented endpoints. The user must configure the
-loopback redirect allowed by Spotify for their developer app before connecting.
+disclosure, and returns neutral metadata-only tracks. It uses bounded
+`offset`/`limit` pagination for saved tracks, albums, and playlists; users can
+also browse their Spotify-reported recently played track metadata through the
+documented `user-read-recently-played` scope and its bounded history cursor.
+Every page is user-triggered, disabled in offline mode, and can only save the
+returned metadata into the local library. The provider declares metadata search,
+artwork, and authentication only. It does not resolve a stream, play Spotify
+audio, cache/download media, write Spotify data, or use undocumented endpoints.
+The user must configure the loopback redirect allowed by Spotify for their
+developer app before connecting.
 
-Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), and [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
+Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), and [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played).
 
 ## LRCLIB lyrics foundation
 

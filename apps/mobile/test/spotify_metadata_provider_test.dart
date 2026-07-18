@@ -112,6 +112,67 @@ void main() {
     expect(await provider.resolveStream(track), isNull);
   });
 
+  test('loads recently played metadata with an official history cursor',
+      () async {
+    Uri? requestUri;
+    String? requestToken;
+    final provider = SpotifyMetadataProvider(
+      accessTokenReader: () async => 'access-token',
+      recentlyPlayedLoader: (uri, token) async {
+        requestUri = uri;
+        requestToken = token;
+        return '''
+          {
+            "cursors": {"before": "1763380800000"},
+            "items": [{
+              "played_at": "2026-07-17T12:00:00Z",
+              "track": {
+                "id": "history-track-id",
+                "name": "History Signal",
+                "duration_ms": 201000,
+                "artists": [{"name": "Aether"}],
+                "album": {"name": "Archive"}
+              }
+            }]
+          }
+        ''';
+      },
+    );
+
+    final page = await provider.loadRecentlyPlayedPage(
+      before: '1763380801000',
+      limit: 100,
+    );
+
+    expect(requestToken, 'access-token');
+    expect(requestUri!.path, '/v1/me/player/recently-played');
+    expect(requestUri!.queryParameters['limit'], '50');
+    expect(requestUri!.queryParameters['before'], '1763380801000');
+    expect(page.nextBefore, '1763380800000');
+    expect(page.hasMore, isTrue);
+    final item = page.items.single;
+    expect(item.playedAt, DateTime.utc(2026, 7, 17, 12));
+    expect(item.track.title, 'History Signal');
+    expect(item.track.addedAt, item.playedAt);
+    expect(item.track.isPlayable, isFalse);
+    expect(await provider.resolveStream(item.track), isNull);
+  });
+
+  test('ignores malformed recently played entries', () {
+    final page = parseSpotifyRecentlyPlayedPage('''
+      {
+        "cursors": {"before": "next"},
+        "items": [
+          {"played_at": "not-a-date", "track": {"id": "bad", "name": "Bad"}},
+          {"played_at": "2026-07-17T12:00:00Z", "track": null}
+        ]
+      }
+    ''');
+
+    expect(page.items, isEmpty);
+    expect(page.nextBefore, 'next');
+  });
+
   test('loads saved albums and album tracks as non-playable metadata',
       () async {
     Uri? albumsRequest;

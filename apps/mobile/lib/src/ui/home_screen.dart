@@ -89,6 +89,7 @@ import 'self_hosted_browse_screen.dart';
 import 'spotify_saved_tracks_screen.dart';
 import 'spotify_saved_albums_screen.dart';
 import 'spotify_saved_playlists_screen.dart';
+import 'spotify_recently_played_screen.dart';
 import 'youtube_music_chart_screen.dart';
 import 'youtube_channel_follow_screen.dart';
 import 'youtube_followed_channel_feed_screen.dart';
@@ -13063,7 +13064,14 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
-enum _SpotifyAction { savedTracks, savedAlbums, playlists, configure, remove }
+enum _SpotifyAction {
+  savedTracks,
+  savedAlbums,
+  playlists,
+  recentlyPlayed,
+  configure,
+  remove,
+}
 
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
@@ -13442,6 +13450,11 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _openSpotifyPlaylists(context, spotifyProvider);
                   }
                   break;
+                case _SpotifyAction.recentlyPlayed:
+                  if (spotifyProvider != null) {
+                    _openSpotifyRecentlyPlayed(context, spotifyProvider);
+                  }
+                  break;
                 case _SpotifyAction.configure:
                   unawaited(_configureSpotify(context));
                   break;
@@ -13476,6 +13489,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.queue_music_outlined),
                   title: Text('Playlists'),
+                ),
+              ),
+              PopupMenuItem<_SpotifyAction>(
+                value: _SpotifyAction.recentlyPlayed,
+                enabled: spotifyProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.history_outlined),
+                  title: Text('Recently played'),
                 ),
               ),
               PopupMenuItem<_SpotifyAction>(
@@ -14877,6 +14899,17 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SpotifySavedPlaylistsScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openSpotifyRecentlyPlayed(
+    BuildContext context,
+    SpotifyMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SpotifyRecentlyPlayedScreen(provider: provider),
       ),
     );
   }
