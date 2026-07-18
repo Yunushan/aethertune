@@ -110,6 +110,36 @@ void main() {
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
+  test('preserves embedded M4A chapters during normal metadata edits', () async {
+    final file = File('${temporaryDirectory.path}/preserved-chapters.m4a');
+    const writer = M4aMetadataWriter();
+    await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+    await writer.write(
+      path: file.path,
+      title: 'Original',
+      artist: 'Narrator',
+      album: 'Audiobook',
+      genre: 'Spoken Word',
+      chapters: <TrackChapter>[
+        TrackChapter(start: Duration.zero, title: 'Opening'),
+      ],
+    );
+    await writer.write(
+      path: file.path,
+      title: 'Retitled',
+      artist: 'Narrator',
+      album: 'Audiobook',
+      genre: 'Spoken Word',
+    );
+
+    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
+        .tracks
+        .single;
+    expect(track.title, 'Retitled');
+    expect(track.chapters, hasLength(1));
+    expect(track.chapters.single.title, 'Opening');
+  });
+
   test('writes M4R metadata that the scanner reads', () async {
     final file = File('${temporaryDirectory.path}/ringtone.m4r');
     await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
