@@ -89,6 +89,26 @@ void main() {
     expect(guestPlayer.currentQueueIndex, 2);
   });
 
+  test('does not create a revision for unchanged paused host playback',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final track = _track('shared');
+    await library.addTracks(<Track>[track]);
+    final gateway = _MemoryListenTogetherGateway();
+    final player = PlayerController(audioEngine: _TestAudioEngine());
+    addTearDown(player.dispose);
+    await player.playTrack(track, queue: <Track>[track]);
+    await player.togglePlayPause();
+    final store = ListenTogetherStore(gatewayFactory: () => gateway);
+
+    await store.host(library, player);
+    expect(gateway.revision, 1);
+    await store.publishHostPlayback(library, player);
+
+    expect(gateway.revision, 1);
+  });
+
   test('keeps a joined session paused when the host is paused', () async {
     final library = LibraryStore();
     await library.load();

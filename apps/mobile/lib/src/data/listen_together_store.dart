@@ -175,6 +175,9 @@ class ListenTogetherStore extends ChangeNotifier {
       }
       _requireOnline(library);
       final local = _sessionFromPlayer(library, player);
+      if (_sameSession(_session, local)) {
+        return;
+      }
       try {
         final published = await _requireGateway().publishListenTogetherSession(
           baseRevision: _revision,
@@ -349,6 +352,26 @@ class ListenTogetherStore extends ChangeNotifier {
       }
     }
     return resolvedIndex < 0 ? 0 : resolvedIndex;
+  }
+
+  bool _sameSession(
+    ListenTogetherSession? previous,
+    ListenTogetherSession next,
+  ) {
+    if (previous == null ||
+        previous.currentTrackId != next.currentTrackId ||
+        previous.currentIndex != next.currentIndex ||
+        previous.position != next.position ||
+        previous.playing != next.playing ||
+        previous.trackIds.length != next.trackIds.length) {
+      return false;
+    }
+    for (var index = 0; index < previous.trackIds.length; index += 1) {
+      if (previous.trackIds[index] != next.trackIds[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Duration _positionAtReceipt(
