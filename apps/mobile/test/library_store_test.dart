@@ -9,6 +9,7 @@ import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/offline_cache_entry.dart';
+import 'package:aethertune/src/domain/playback_history_entry.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
@@ -34,6 +35,56 @@ void main() {
     expect(restored.onboardingCompleted, isTrue);
     expect(restored.tracks, isEmpty);
     expect(restored.playlists, isEmpty);
+  });
+
+  test('imports only unique, unambiguous external history matches', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('satellite', title: 'Satellite', artist: 'Aether', album: 'Signals'),
+      _track('echo-one', title: 'Echo', artist: 'Aether', album: 'One'),
+      _track('echo-two', title: 'Echo', artist: 'Aether', album: 'Two'),
+    ]);
+    final playedAt = DateTime.utc(2026, 7, 18, 12);
+
+    final result = await store.importPlaybackHistory(
+      <PlaybackHistoryImportEntry>[
+        PlaybackHistoryImportEntry(
+          title: ' satellite ',
+          artist: 'AETHER',
+          album: 'signals',
+          playedAt: playedAt,
+        ),
+        PlaybackHistoryImportEntry(
+          title: 'Satellite',
+          artist: 'Aether',
+          album: 'Signals',
+          playedAt: playedAt,
+        ),
+        PlaybackHistoryImportEntry(
+          title: 'Satellite',
+          artist: 'Aether',
+          album: 'Elsewhere',
+          playedAt: playedAt.add(const Duration(minutes: 1)),
+        ),
+        PlaybackHistoryImportEntry(
+          title: 'Echo',
+          artist: 'Aether',
+          playedAt: playedAt.add(const Duration(minutes: 2)),
+        ),
+      ],
+    );
+
+    expect(result.received, 4);
+    expect(result.matched, 2);
+    expect(result.imported, 1);
+    expect(result.duplicates, 1);
+    expect(store.playbackHistory, hasLength(1));
+    expect(store.playbackHistory.single.trackId, 'satellite');
+
+    final restored = LibraryStore();
+    await restored.load();
+    expect(restored.playbackHistory.single.playedAt, playedAt);
   });
 
   test('merges sync snapshots without dropping independent tracks or playlists',

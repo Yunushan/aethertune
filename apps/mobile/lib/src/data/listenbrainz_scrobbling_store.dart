@@ -71,6 +71,26 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<ListenBrainzHistoryEntry>> fetchListenHistory({
+    int count = 100,
+  }) async {
+    final token = _token;
+    if (token == null) {
+      throw StateError('Connect ListenBrainz before importing history.');
+    }
+    final client = _clientFactory(token);
+    var userName = _userName;
+    if (userName == null) {
+      userName = await client.validateToken();
+      if (userName == null) {
+        throw StateError('ListenBrainz did not identify an account.');
+      }
+      _userName = userName;
+      notifyListeners();
+    }
+    return client.fetchListenHistory(userName: userName, count: count);
+  }
+
   Future<void> submitIfEligible({
     required Track track,
     required DateTime startedAt,

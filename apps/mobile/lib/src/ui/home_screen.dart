@@ -286,6 +286,70 @@ Future<void> _removeListenBrainz(BuildContext context) async {
   }
 }
 
+Future<void> _importListenBrainzHistory(BuildContext context) async {
+  final store = context.read<ListenBrainzScrobblingStore?>();
+  final library = context.read<LibraryStore>();
+  if (store == null || !store.isConfigured) {
+    return;
+  }
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Import ListenBrainz history?'),
+      content: const Text(
+        'AetherTune will request your 100 most recent ListenBrainz listens using the token stored in this device\'s credential vault. It reads each title, artist, optional album, and timestamp, then adds only exact, unambiguous matches for tracks already in this library. Unmatched and duplicate listens are skipped.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Import'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted || confirmed != true) {
+    return;
+  }
+
+  try {
+    final remoteEntries = await store.fetchListenHistory();
+    final result = await library.importPlaybackHistory(
+      remoteEntries.map(
+        (entry) => PlaybackHistoryImportEntry(
+          title: entry.title,
+          artist: entry.artist,
+          album: entry.album,
+          playedAt: entry.listenedAt,
+        ),
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.imported == 0
+              ? 'No new matching ListenBrainz listens were imported.'
+              : 'Imported ${result.imported} ListenBrainz listen${result.imported == 1 ? '' : 's'} from ${result.matched} match${result.matched == 1 ? '' : 'es'}.',
+        ),
+      ),
+    );
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not import ListenBrainz history.'),
+        ),
+      );
+    }
+  }
+}
+
 Future<void> _configureLyricsTranslation(BuildContext context) async {
   final store = context.read<LyricsTranslationSettingsStore?>();
   if (store == null) {
@@ -17868,6 +17932,17 @@ class _SettingsTab extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline),
                   )
                 : const Icon(Icons.chevron_right),
+          ),
+        if (listenBrainz?.isConfigured == true)
+          ListTile(
+            key: const Key('listenbrainz-import-history'),
+            leading: const Icon(Icons.history_outlined),
+            title: const Text('Import ListenBrainz history'),
+            subtitle: const Text(
+              'Match your 100 most recent listens to tracks already in this library.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => unawaited(_importListenBrainzHistory(context)),
           ),
         if (listenBrainz?.lastError != null)
           ListTile(

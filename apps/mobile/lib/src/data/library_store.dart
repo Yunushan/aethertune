@@ -243,6 +243,21 @@ class DuplicateTrackResolution {
   final List<String> duplicateTrackIds;
 }
 
+/// Summary of a user-approved external listening-history import.
+final class PlaybackHistoryImportResult {
+  const PlaybackHistoryImportResult({
+    required this.received,
+    required this.matched,
+    required this.imported,
+    required this.duplicates,
+  });
+
+  final int received;
+  final int matched;
+  final int imported;
+  final int duplicates;
+}
+
 class _DuplicateResolutionPlan {
   const _DuplicateResolutionPlan({
     required this.keepTrackId,
@@ -5893,6 +5908,10 @@ class LibraryStore extends ChangeNotifier {
         left.playedAt.isAtSameMomentAs(right.playedAt);
   }
 
+  String _historyEntryKey(PlaybackHistoryEntry entry) {
+    return '${entry.trackId}:${entry.playedAt.toUtc().millisecondsSinceEpoch}';
+  }
+
   DateTime? _libraryChartRangeStart(LibraryChartRange range, DateTime now) {
     switch (range) {
       case LibraryChartRange.allTime:
@@ -6159,6 +6178,70 @@ class LibraryStore extends ChangeNotifier {
     _trimHistory();
     await _save();
     notifyListeners();
+  }
+
+  /// Imports only unambiguous exact metadata matches for existing local tracks.
+  Future<PlaybackHistoryImportResult> importPlaybackHistory(
+    Iterable<PlaybackHistoryImportEntry> entries,
+  ) async {
+    final received = entries.toList(growable: false);
+    final existingKeys = <String>{
+      for (final entry in _history) _historyEntryKey(entry),
+    };
+    final imported = <PlaybackHistoryEntry>[];
+    var matched = 0;
+    var duplicates = 0;
+
+    for (final entry in received) {
+      final title = normalizeSearchText(entry.title);
+      final artist = normalizeSearchText(entry.artist);
+      if (title.isEmpty || artist.isEmpty) {
+        continue;
+      }
+
+      var candidates = _tracks
+          .where(
+            (track) =>
+                normalizeSearchText(track.title) == title &&
+                normalizeSearchText(track.artist) == artist,
+          )
+          .toList(growable: false);
+      final album = entry.album == null ? '' : normalizeSearchText(entry.album!);
+      if (album.isNotEmpty) {
+        candidates = candidates
+            .where((track) => normalizeSearchText(track.album) == album)
+            .toList(growable: false);
+      }
+      if (candidates.length != 1) {
+        continue;
+      }
+
+      matched += 1;
+      final historyEntry = PlaybackHistoryEntry(
+        trackId: candidates.single.id,
+        playedAt: entry.playedAt.toUtc(),
+      );
+      final key = _historyEntryKey(historyEntry);
+      if (!existingKeys.add(key)) {
+        duplicates += 1;
+        continue;
+      }
+      imported.add(historyEntry);
+    }
+
+    if (imported.isNotEmpty) {
+      _history.addAll(imported);
+      _sortHistory();
+      _trimHistory();
+      await _save();
+      notifyListeners();
+    }
+    return PlaybackHistoryImportResult(
+      received: received.length,
+      matched: matched,
+      imported: imported.length,
+      duplicates: duplicates,
+    );
   }
 
   Future<void> clearPlaybackHistory() async {

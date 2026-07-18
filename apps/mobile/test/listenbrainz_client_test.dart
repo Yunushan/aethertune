@@ -79,4 +79,35 @@ void main() {
     expect(requestedUri!.query, isEmpty);
     expect(requestedHeaders!['authorization'], 'Token secret-token');
   });
+
+  test('fetches a bounded page of valid listen history metadata', () async {
+    Uri? requestedUri;
+    final client = ListenBrainzClient(
+      token: 'secret-token',
+      requestSender: (uri, {required method, required headers, body}) async {
+        requestedUri = uri;
+        expect(method, 'GET');
+        expect(headers['authorization'], 'Token secret-token');
+        return const ListenBrainzResponse(
+          statusCode: 200,
+          body: '''{"payload":{"listens":[
+            {"listened_at":1784289600,"track_metadata":{"track_name":"Satellite","artist_name":"Aether","release_name":"Signals"}},
+            {"listened_at":0,"track_metadata":{"track_name":"Skip","artist_name":"Aether"}}
+          ]}}''',
+        );
+      },
+    );
+
+    final entries = await client.fetchListenHistory(
+      userName: 'yunus',
+      count: 25,
+      before: DateTime.utc(2026, 7, 18),
+    );
+
+    expect(requestedUri!.path, '/1/user/yunus/listens');
+    expect(requestedUri!.queryParameters['count'], '25');
+    expect(entries, hasLength(1));
+    expect(entries.single.title, 'Satellite');
+    expect(entries.single.listenedAt, DateTime.utc(2026, 7, 17, 12));
+  });
 }

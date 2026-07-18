@@ -23,3 +23,18 @@ class PlaybackHistoryEntry {
     );
   }
 }
+
+/// A user-approved external listen that may be matched to a local track.
+final class PlaybackHistoryImportEntry {
+  const PlaybackHistoryImportEntry({
+    required this.title,
+    required this.artist,
+    required this.playedAt,
+    this.album,
+  });
+
+  final String title;
+  final String artist;
+  final String? album;
+  final DateTime playedAt;
+}

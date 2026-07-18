@@ -17,6 +17,20 @@ typedef ListenBrainzRequestSender = Future<ListenBrainzResponse> Function(
   String? body,
 });
 
+final class ListenBrainzHistoryEntry {
+  const ListenBrainzHistoryEntry({
+    required this.title,
+    required this.artist,
+    required this.listenedAt,
+    this.album,
+  });
+
+  final String title;
+  final String artist;
+  final String? album;
+  final DateTime listenedAt;
+}
+
 /// Minimal client for the user-authorized ListenBrainz listen-submission API.
 class ListenBrainzClient {
   ListenBrainzClient({
@@ -90,6 +104,63 @@ class ListenBrainzClient {
     }
   }
 
+  Future<List<ListenBrainzHistoryEntry>> fetchListenHistory({
+    required String userName,
+    int count = 100,
+    DateTime? before,
+  }) async {
+    final normalizedUserName = userName.trim();
+    if (normalizedUserName.isEmpty) {
+      throw const FormatException('ListenBrainz user name is required.');
+    }
+    if (count < 1 || count > 1000) {
+      throw RangeError.range(count, 1, 1000, 'count');
+    }
+    final query = <String, String>{'count': '$count'};
+    if (before != null) {
+      query['max_ts'] = '${before.toUtc().millisecondsSinceEpoch ~/ 1000}';
+    }
+    final response = await _requestSender(
+      _baseUri.replace(
+        path: '/1/user/${Uri.encodeComponent(normalizedUserName)}/listens',
+        queryParameters: query,
+      ),
+      method: 'GET',
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Could not fetch ListenBrainz history.');
+    }
+    final decoded = jsonDecode(response.body);
+    final payload = decoded is Map ? decoded['payload'] : null;
+    final listens = payload is Map ? payload['listens'] : null;
+    if (listens is! List) {
+      throw const FormatException('ListenBrainz returned invalid history.');
+    }
+    final entries = <ListenBrainzHistoryEntry>[];
+    for (final value in listens.take(count)) {
+      if (value is! Map) continue;
+      final metadata = value['track_metadata'];
+      final listenedAt = value['listened_at'];
+      if (metadata is! Map || listenedAt is! num || listenedAt <= 0) continue;
+      final title = _nonEmpty(metadata['track_name']);
+      final artist = _nonEmpty(metadata['artist_name']);
+      if (title == null || artist == null) continue;
+      entries.add(
+        ListenBrainzHistoryEntry(
+          title: title,
+          artist: artist,
+          album: _nonEmpty(metadata['release_name']),
+          listenedAt: DateTime.fromMillisecondsSinceEpoch(
+            listenedAt.toInt() * 1000,
+            isUtc: true,
+          ),
+        ),
+      );
+    }
+    return entries;
+  }
+
   Map<String, String> get _headers => <String, String>{
     HttpHeaders.authorizationHeader: 'Token $_token',
     HttpHeaders.contentTypeHeader: ContentType.json.mimeType,
@@ -107,6 +178,11 @@ class ListenBrainzClient {
   static String _metadataText(String value, {required String fallback}) {
     final normalized = value.trim();
     return normalized.isEmpty ? fallback : normalized;
+  }
+
+  static String? _nonEmpty(Object? value) {
+    if (value is! String || value.trim().isEmpty) return null;
+    return value.trim();
   }
 
   static Future<ListenBrainzResponse> _sendRequest(

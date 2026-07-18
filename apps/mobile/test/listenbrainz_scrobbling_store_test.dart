@@ -88,6 +88,31 @@ void main() {
     expect(store.lastError, isNull);
   });
 
+  test('reads history through the configured account without exposing its token',
+      () async {
+    final client = _FakeListenBrainzClient(
+      validUserName: 'yunus',
+      historyEntries: <ListenBrainzHistoryEntry>[
+        ListenBrainzHistoryEntry(
+          title: 'Satellite',
+          artist: 'Aether',
+          listenedAt: DateTime.utc(2026, 7, 18, 12),
+        ),
+      ],
+    );
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: _MemoryVault(),
+      clientFactory: (_) => client,
+    );
+    await store.configure('token');
+
+    final history = await store.fetchListenHistory();
+
+    expect(history.single.title, 'Satellite');
+    expect(client.requestedUserName, 'yunus');
+    expect(client.requestedHistoryCount, 100);
+  });
+
   test('uses the shorter of half the track and four minutes', () {
     expect(
       ListenBrainzScrobblingStore.completionThreshold(
@@ -129,13 +154,20 @@ final class _SubmittedListen {
 }
 
 final class _FakeListenBrainzClient extends ListenBrainzClient {
-  _FakeListenBrainzClient({this.validUserName, this.failNextSubmission = false})
+  _FakeListenBrainzClient({
+    this.validUserName,
+    this.failNextSubmission = false,
+    this.historyEntries = const <ListenBrainzHistoryEntry>[],
+  })
     : super(token: 'test-token');
 
   final String? validUserName;
   bool failNextSubmission;
   int validateCalls = 0;
+  final List<ListenBrainzHistoryEntry> historyEntries;
   final List<_SubmittedListen> submitted = <_SubmittedListen>[];
+  String? requestedUserName;
+  int? requestedHistoryCount;
 
   @override
   Future<String?> validateToken() async {
@@ -153,5 +185,16 @@ final class _FakeListenBrainzClient extends ListenBrainzClient {
       throw StateError('network failed');
     }
     submitted.add(_SubmittedListen(track: track, startedAt: startedAt));
+  }
+
+  @override
+  Future<List<ListenBrainzHistoryEntry>> fetchListenHistory({
+    required String userName,
+    int count = 100,
+    DateTime? before,
+  }) async {
+    requestedUserName = userName;
+    requestedHistoryCount = count;
+    return historyEntries;
   }
 }
