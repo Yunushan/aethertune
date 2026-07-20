@@ -958,6 +958,7 @@ class LibraryStatsSummary {
     required this.topAlbums,
     required this.topGenres,
     this.topSources = const <LibraryStatsGroup>[],
+    this.topFolders = const <LibraryStatsGroup>[],
   });
 
   final DateTime? from;
@@ -973,6 +974,7 @@ class LibraryStatsSummary {
   final List<LibraryStatsGroup> topAlbums;
   final List<LibraryStatsGroup> topGenres;
   final List<LibraryStatsGroup> topSources;
+  final List<LibraryStatsGroup> topFolders;
 }
 
 class LibraryStatsTrack {
@@ -4126,6 +4128,7 @@ class LibraryStore extends ChangeNotifier {
     final albumGroups = <String, _MutableLibraryStatsGroup>{};
     final genreGroups = <String, _MutableLibraryStatsGroup>{};
     final sourceGroups = <String, _MutableLibraryStatsGroup>{};
+    final folderGroups = <String, _MutableLibraryStatsGroup>{};
     var playbackCount = 0;
     var estimatedListeningDuration = Duration.zero;
 
@@ -4170,6 +4173,12 @@ class LibraryStore extends ChangeNotifier {
       addGroupPlay(albumGroups, track.album, track, entry.playedAt);
       addGroupPlay(genreGroups, track.genre, track, entry.playedAt);
       addGroupPlay(sourceGroups, track.sourceId, track, entry.playedAt);
+      addGroupPlay(
+        folderGroups,
+        _folderLabelForTrack(track),
+        track,
+        entry.playedAt,
+      );
     }
 
     final topTracks = trackPlayCounts.entries.map((entry) {
@@ -4202,6 +4211,7 @@ class LibraryStore extends ChangeNotifier {
       topAlbums: _topLibraryStatsGroups(albumGroups, normalizedLimit),
       topGenres: _topLibraryStatsGroups(genreGroups, normalizedLimit),
       topSources: _topLibraryStatsGroups(sourceGroups, normalizedLimit),
+      topFolders: _topLibraryStatsGroups(folderGroups, normalizedLimit),
     );
   }
 
@@ -4239,6 +4249,7 @@ class LibraryStore extends ChangeNotifier {
       'topAlbums': stats.topAlbums.map(_libraryStatsGroupToJson).toList(),
       'topGenres': stats.topGenres.map(_libraryStatsGroupToJson).toList(),
       'topSources': stats.topSources.map(_libraryStatsGroupToJson).toList(),
+      'topFolders': stats.topFolders.map(_libraryStatsGroupToJson).toList(),
     });
   }
 
@@ -4374,6 +4385,7 @@ class LibraryStore extends ChangeNotifier {
     writeGroupRows('top_album', stats.topAlbums);
     writeGroupRows('top_genre', stats.topGenres);
     writeGroupRows('top_source', stats.topSources);
+    writeGroupRows('top_folder', stats.topFolders);
 
     return buffer.toString();
   }

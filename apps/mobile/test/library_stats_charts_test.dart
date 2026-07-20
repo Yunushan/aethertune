@@ -57,6 +57,14 @@ void main() {
           estimatedListeningDuration: Duration(minutes: 20),
         ),
       ],
+      topFolders: const <LibraryStatsGroup>[
+        LibraryStatsGroup(
+          label: '/music/dawn',
+          playCount: 4,
+          trackCount: 2,
+          estimatedListeningDuration: Duration(minutes: 16),
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -77,6 +85,7 @@ void main() {
     expect(find.text('Top albums chart'), findsOneWidget);
     expect(find.text('Top genres chart'), findsOneWidget);
     expect(find.text('Top sources chart'), findsOneWidget);
+    expect(find.text('Top folders chart'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
     expect(find.text('28m'), findsOneWidget);

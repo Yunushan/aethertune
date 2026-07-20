@@ -5802,6 +5802,12 @@ class _LocalChartsPreview extends StatelessWidget {
           icon: Icons.source_outlined,
           groups: stats.topSources,
         ),
+        const SizedBox(height: 12),
+        _LibraryStatsGroupSection(
+          title: 'Top folders',
+          icon: Icons.folder_outlined,
+          groups: stats.topFolders,
+        ),
       ],
     );
   }
@@ -11411,6 +11417,12 @@ class _HistoryTabState extends State<_HistoryTab> {
             groups: stats.topSources,
           ),
           const SizedBox(height: 12),
+          _LibraryStatsGroupSection(
+            title: 'Top folders',
+            icon: Icons.folder_outlined,
+            groups: stats.topFolders,
+          ),
+          const SizedBox(height: 12),
           _PlaybackHistoryEntrySection(
             entries: historyEntries,
             tracksById: historyTracksById,
@@ -12114,11 +12126,27 @@ class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
           ),
         )
         .toList(growable: false);
+    final folderData = stats.topFolders
+        .map(
+          (folderStats) => ListeningStatsBarDatum(
+            label: folderStats.label,
+            value: _valueFor(
+              playCount: folderStats.playCount,
+              listeningDuration: folderStats.estimatedListeningDuration,
+            ),
+            valueLabel: _labelFor(
+              playCount: folderStats.playCount,
+              listeningDuration: folderStats.estimatedListeningDuration,
+            ),
+          ),
+        )
+        .toList(growable: false);
     if (trackData.isEmpty &&
         artistData.isEmpty &&
         albumData.isEmpty &&
         genreData.isEmpty &&
-        sourceData.isEmpty) {
+        sourceData.isEmpty &&
+        folderData.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -12158,6 +12186,13 @@ class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
           icon: Icons.source_outlined,
           color: colorScheme.primaryContainer,
           data: sourceData,
+        ),
+      if (folderData.isNotEmpty)
+        ListeningStatsBarChart(
+          title: 'Top folders chart',
+          icon: Icons.folder_outlined,
+          color: colorScheme.secondaryContainer,
+          data: folderData,
         ),
     ];
 

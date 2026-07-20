@@ -2491,6 +2491,7 @@ void main() {
         album: 'Dawn',
         genre: 'Ambient',
         duration: const Duration(minutes: 3),
+        localPath: '/music/dawn/aether-one.mp3',
       ),
       _track(
         '2',
@@ -2499,14 +2500,16 @@ void main() {
         album: 'Dawn',
         genre: 'Ambient',
         duration: const Duration(minutes: 4),
+        localPath: '/music/dawn/aether-two.mp3',
       ),
-      _track(
-        '3',
+      Track(
+        id: '3',
         title: 'Night Three',
         artist: 'Orion',
         album: 'Night',
         genre: 'Jazz',
         duration: const Duration(minutes: 5),
+        sourceId: 'remote',
       ),
     ]);
     await store.toggleFavorite('2');
@@ -2544,6 +2547,10 @@ void main() {
     expect(stats.topAlbums.first.label, 'Dawn');
     expect(stats.topGenres.first.label, 'Ambient');
     expect(stats.topSources.first.label, 'local');
+    expect(
+      stats.topFolders.map((group) => group.label),
+      <String>['/music/dawn', 'Remote Streams'],
+    );
     expect(store.libraryStats(limit: 0).topTracks, isEmpty);
   });
 
@@ -2624,6 +2631,7 @@ void main() {
     expect(decoded['to'], to.toIso8601String());
     expect((decoded['summary'] as Map<String, dynamic>)['playbackCount'], 3);
     expect((decoded['topTracks'] as List<dynamic>), hasLength(1));
+    expect((decoded['topFolders'] as List<dynamic>), hasLength(1));
     expect(
       ((decoded['topTracks'] as List<dynamic>).single
           as Map<String, dynamic>)['trackId'],
@@ -2638,6 +2646,7 @@ void main() {
 
     expect(csvDocument, contains('summary,playbackCount,3'));
     expect(csvDocument, contains('top_source,local'));
+    expect(csvDocument, contains('top_folder,/music'));
     expect(csvDocument, contains('top_track,Aether One'));
     expect(csvDocument, contains(from.toIso8601String()));
     expect(csvDocument, contains(to.toIso8601String()));
