@@ -8494,7 +8494,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
-    final sharedSmartPlaylists = context.watch<SharedSmartPlaylistStore>();
+    final sharedSmartPlaylists = context.watch<SharedSmartPlaylistStore?>();
 
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
@@ -8547,12 +8547,12 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onPressed: () => _createCustomSmartPlaylist(context),
               icon: const Icon(Icons.filter_alt_outlined),
             ),
-            if (sharedSmartPlaylists.available) ...<Widget>[
+            if (sharedSmartPlaylists?.available ?? false) ...<Widget>[
               const SizedBox(width: 8),
               IconButton.filledTonal(
                 key: const Key('shared-smart-playlist-join'),
                 tooltip: 'Join private smart playlist',
-                onPressed: sharedSmartPlaylists.busy
+                onPressed: (sharedSmartPlaylists?.busy ?? true)
                     ? null
                     : () => _joinSharedSmartPlaylist(context),
                 icon: const Icon(Icons.vpn_key_outlined),
@@ -8600,7 +8600,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onCopyImportLink: () => unawaited(
                 _copyCustomSmartPlaylistImportLink(context, library, rule),
               ),
-              onPrivateShare: sharedSmartPlaylists.available
+              onPrivateShare: sharedSmartPlaylists?.available ?? false
                   ? () => _shareCustomSmartPlaylist(context, rule)
                   : null,
               onDuplicate: () => unawaited(
