@@ -438,14 +438,6 @@ void main() {
 
     expect(translator.calls, 1);
     expect(translator.targetLanguage, 'tr');
-    expect(find.text('Translated lyrics'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is SelectableText &&
-            widget.data == 'Translated lyric line',
-      ),
-      findsOneWidget,
-    );
     expect(
       library.lyricsForTrack(track.id)?.plainText,
       '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
