@@ -1592,6 +1592,7 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
   late final TextEditingController _displayNameController;
   late final TextEditingController _deviceNameController;
   late LibrarySyncProfileAvatarTone? _avatarTone;
+  late bool _publicProfileEnabled;
   bool _saving = false;
   String? _error;
 
@@ -1605,6 +1606,7 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
       text: widget.profile.device?.name ?? '',
     );
     _avatarTone = widget.profile.avatarTone;
+    _publicProfileEnabled = widget.profile.publicProfileEnabled;
   }
 
   @override
@@ -1670,6 +1672,18 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
                           _error = null;
                         }),
                 ),
+              if (widget.profile.publicProfileSupported)
+                SwitchListTile(
+                  key: const Key('library-sync-profile-public'),
+                  value: _publicProfileEnabled,
+                  title: const Text('Public profile'),
+                  onChanged: _saving
+                      ? null
+                      : (value) => setState(() {
+                          _publicProfileEnabled = value;
+                          _error = null;
+                        }),
+                ),
               if (_error != null)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -1720,6 +1734,7 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
         displayName: _displayNameController.text,
         deviceName: _deviceNameController.text,
         avatarTone: _avatarTone,
+        publicProfileEnabled: _publicProfileEnabled,
       );
       if (mounted) {
         Navigator.of(context).pop(true);

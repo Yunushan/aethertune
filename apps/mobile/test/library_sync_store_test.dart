@@ -915,6 +915,8 @@ class _FakeSyncGateway
     required String deviceName,
     LibrarySyncProfileAvatarTone? avatarTone,
     bool includeAvatarTone = false,
+    bool publicProfileEnabled = false,
+    bool includePublicProfileEnabled = false,
   }) async {
     profileUpdateCalls += 1;
     lastDisplayName = displayName;
@@ -933,6 +935,8 @@ class _FakeSyncGateway
           displayName: displayName,
           avatarTone: avatarTone,
           avatarToneSupported: current.avatarToneSupported,
+          publicProfileEnabled: publicProfileEnabled,
+          publicProfileSupported: current.publicProfileSupported,
           managed: true,
           device: LibrarySyncProfileDevice(
             id: current.device!.id,

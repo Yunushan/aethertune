@@ -284,6 +284,8 @@ abstract interface class LibrarySyncProfileEditorGateway {
     required String deviceName,
     LibrarySyncProfileAvatarTone? avatarTone,
     bool includeAvatarTone = false,
+    bool publicProfileEnabled = false,
+    bool includePublicProfileEnabled = false,
   });
 }
 
@@ -326,6 +328,8 @@ class LibrarySyncClient
     required String deviceName,
     LibrarySyncProfileAvatarTone? avatarTone,
     bool includeAvatarTone = false,
+    bool publicProfileEnabled = false,
+    bool includePublicProfileEnabled = false,
   }) async {
     final response = await _execute(
       'PATCH',
@@ -334,6 +338,8 @@ class LibrarySyncClient
         'displayName': normalizeLibrarySyncProfileDisplayName(displayName),
         'deviceName': normalizeLibrarySyncProfileDeviceName(deviceName),
         if (includeAvatarTone) 'avatarTone': avatarTone?.wireValue,
+        if (includePublicProfileEnabled)
+          'publicProfileEnabled': publicProfileEnabled,
       }),
     );
     if (response.statusCode != 200) {

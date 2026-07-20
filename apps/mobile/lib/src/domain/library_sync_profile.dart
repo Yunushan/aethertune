@@ -31,6 +31,8 @@ class LibrarySyncProfile {
     this.displayName,
     this.avatarTone,
     this.avatarToneSupported = false,
+    this.publicProfileEnabled = false,
+    this.publicProfileSupported = false,
     this.device,
     this.editable = false,
   });
@@ -85,6 +87,25 @@ class LibrarySyncProfile {
         'Library sync profile avatar capability is inconsistent.',
       );
     }
+    final rawPublicProfileSupported = json['publicProfileSupported'];
+    final publicProfileSupported = rawPublicProfileSupported ??
+        json.containsKey('publicProfileEnabled');
+    if (publicProfileSupported is! bool) {
+      throw const FormatException(
+        'Library sync public profile capability is invalid.',
+      );
+    }
+    final rawPublicProfileEnabled = json['publicProfileEnabled'] ?? false;
+    if (rawPublicProfileEnabled is! bool) {
+      throw const FormatException(
+        'Library sync public profile visibility is invalid.',
+      );
+    }
+    if (!publicProfileSupported && rawPublicProfileEnabled) {
+      throw const FormatException(
+        'Library sync public profile capability is inconsistent.',
+      );
+    }
     final rawDevice = json['device'];
     final device = rawDevice == null
         ? null
@@ -115,6 +136,8 @@ class LibrarySyncProfile {
       displayName: displayName,
       avatarTone: avatarTone,
       avatarToneSupported: avatarToneSupported,
+      publicProfileEnabled: rawPublicProfileEnabled,
+      publicProfileSupported: publicProfileSupported,
       managed: managed,
       device: device,
       editable: editable,
@@ -125,6 +148,8 @@ class LibrarySyncProfile {
   final String? displayName;
   final LibrarySyncProfileAvatarTone? avatarTone;
   final bool avatarToneSupported;
+  final bool publicProfileEnabled;
+  final bool publicProfileSupported;
   final bool managed;
   final LibrarySyncProfileDevice? device;
   final bool editable;
@@ -136,6 +161,8 @@ class LibrarySyncProfile {
     'displayName': displayName,
     if (avatarToneSupported) 'avatarTone': avatarTone?.wireValue,
     'avatarToneSupported': avatarToneSupported,
+    if (publicProfileSupported) 'publicProfileEnabled': publicProfileEnabled,
+    'publicProfileSupported': publicProfileSupported,
     'managed': managed,
     'device': device?.toJson(),
     'editable': editable,
