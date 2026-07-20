@@ -3552,11 +3552,9 @@ Future<void> _showLyricsTranslation(
     if (!navigator.mounted) {
       return;
     }
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: navigator.context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => _TranslatedLyricsSheet(
+      builder: (_) => _TranslatedLyricsDialog(
         lyrics: translated,
         targetLanguage: targetLanguage,
       ),
@@ -3569,8 +3567,8 @@ Future<void> _showLyricsTranslation(
   }
 }
 
-class _TranslatedLyricsSheet extends StatelessWidget {
-  const _TranslatedLyricsSheet({
+class _TranslatedLyricsDialog extends StatelessWidget {
+  const _TranslatedLyricsDialog({
     required this.lyrics,
     required this.targetLanguage,
   });
@@ -3580,16 +3578,17 @@ class _TranslatedLyricsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height * 0.7;
-    return SafeArea(
-      child: SizedBox(
+    final height = MediaQuery.sizeOf(context).height * 0.6;
+    return AlertDialog(
+      title: const Text('Translated lyrics'),
+      content: SizedBox(
+        width: 560,
         height: height,
         child: ListView(
           children: <Widget>[
             ListTile(
               leading: const Icon(Icons.translate_outlined),
-              title: const Text('Translated lyrics'),
-              subtitle: Text('Target language: $targetLanguage'),
+              title: Text('Target language: $targetLanguage'),
               trailing: IconButton(
                 tooltip: 'Copy translated lyrics',
                 onPressed: () async {
@@ -3611,6 +3610,12 @@ class _TranslatedLyricsSheet extends StatelessWidget {
           ],
         ),
       ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }
