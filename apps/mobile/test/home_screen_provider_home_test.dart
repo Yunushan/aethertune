@@ -18,6 +18,7 @@ import 'package:aethertune/src/data/spotify_metadata_provider.dart';
 import 'package:aethertune/src/data/spotify_oauth_client.dart';
 import 'package:aethertune/src/data/spotify_settings_store.dart';
 import 'package:aethertune/src/data/youtube_channel_follow_store.dart';
+import 'package:aethertune/src/data/youtube_followed_channel_feed_store.dart';
 import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
 import 'package:aethertune/src/data/youtube_data_settings_store.dart';
 import 'package:aethertune/src/domain/music_catalog_discovery_provider.dart';
@@ -428,7 +429,12 @@ void main() {
       ),
     );
     final follows = YouTubeChannelFollowStore();
-    await Future.wait<void>(<Future<void>>[youtube.load(), follows.load()]);
+    final followedFeed = YouTubeFollowedChannelFeedStore();
+    await Future.wait<void>(<Future<void>>[
+      youtube.load(),
+      follows.load(),
+      followedFeed.load(),
+    ]);
     await youtube.saveApiKey('project-key');
     await follows.setFollowed(
       const YouTubeDataChannel(id: 'channel-one', title: 'One'),
@@ -440,12 +446,14 @@ void main() {
     );
     addTearDown(youtube.dispose);
     addTearDown(follows.dispose);
+    addTearDown(followedFeed.dispose);
 
     await _pumpHome(
       tester,
       fixture,
       youtube: youtube,
       youtubeFollows: follows,
+      youtubeFollowedFeed: followedFeed,
     );
 
     expect(find.text('Followed YouTube channels'), findsOneWidget);
@@ -580,6 +588,7 @@ Future<void> _pumpHome(
   _HomeFixture fixture, {
   YouTubeDataSettingsStore? youtube,
   YouTubeChannelFollowStore? youtubeFollows,
+  YouTubeFollowedChannelFeedStore? youtubeFollowedFeed,
   SpotifySettingsStore? spotify,
   InternetArchiveProvider? internetArchiveProvider,
   RadioBrowserProvider? radioBrowserProvider,
@@ -603,6 +612,10 @@ Future<void> _pumpHome(
         if (youtubeFollows != null)
           ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
             value: youtubeFollows,
+          ),
+        if (youtubeFollowedFeed != null)
+          ChangeNotifierProvider<YouTubeFollowedChannelFeedStore>.value(
+            value: youtubeFollowedFeed,
           ),
         if (spotify != null)
           ChangeNotifierProvider<SpotifySettingsStore>.value(value: spotify),

@@ -10,10 +10,15 @@ Uri? parseLegalVideoUrl(String value) {
       uri.userInfo.isNotEmpty) {
     return null;
   }
-  return uri.replace(fragment: '');
+  return uri.removeFragment();
 }
 
 Uri? localVideoUri(String path) {
   final normalized = path.trim();
-  return normalized.isEmpty ? null : Uri.file(normalized);
+  if (normalized.isEmpty) {
+    return null;
+  }
+  final windowsPath = RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(normalized) ||
+      normalized.startsWith(r'\\');
+  return Uri.file(normalized, windows: windowsPath);
 }

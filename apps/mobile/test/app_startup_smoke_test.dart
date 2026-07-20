@@ -22,7 +22,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to AetherTune'), findsOneWidget);
-    await tester.tap(find.text('Open Library'));
+    await tester.tap(find.text('Skip setup'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomeScreen), findsOneWidget);

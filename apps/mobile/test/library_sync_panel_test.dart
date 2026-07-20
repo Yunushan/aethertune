@@ -88,6 +88,7 @@ void main() {
       managed: true,
       device: _managedProfile().device,
       editable: true,
+      avatarToneSupported: true,
     );
     await tester.tap(find.byKey(const Key('library-sync-refresh-profile')));
     await tester.pumpAndSettle();
