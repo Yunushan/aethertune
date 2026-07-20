@@ -2941,14 +2941,18 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
     if (currentTranslator == null || lyricsText.trim().isEmpty) {
       return null;
     }
-    return () => unawaited(
-      _showLyricsTranslation(
+    return () => unawaited(() async {
+      await Future<void>.delayed(kThemeAnimationDuration);
+      if (!context.mounted) {
+        return;
+      }
+      await _showLyricsTranslation(
         context,
         translator: currentTranslator,
         lyrics: lyricsText,
         targetLanguage: translationTargetLanguage,
-      ),
-    );
+      );
+    }());
   }
 }
 
