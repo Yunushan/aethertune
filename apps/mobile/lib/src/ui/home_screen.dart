@@ -3321,97 +3321,117 @@ Future<void> _showLyricsSearch(
     return;
   }
 
-  final controller = TextEditingController();
-  var query = '';
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final matchingIndices = findLyricLineMatchIndices(
-              entries.map((entry) => entry.text).toList(growable: false),
-              query,
-            );
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _LyricsSearchDialog(
+      track: track,
+      entries: entries,
+      player: player,
+    ),
+  );
+}
 
-            return AlertDialog(
-              title: Text('Find in ${track.title}'),
-              content: SizedBox(
-                width: 460,
-                height: 360,
-                child: Column(
-                  children: <Widget>[
-                    TextField(
-                      autofocus: true,
-                      controller: controller,
-                      key: const Key('lyrics-find-input'),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        labelText: 'Find lyrics',
-                      ),
-                      onChanged: (value) {
-                        query = value;
-                        setDialogState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: query.trim().isEmpty
-                          ? const SizedBox.shrink()
-                          : matchingIndices.isEmpty
-                              ? const Center(child: Text('No matching lines'))
-                              : ListView.separated(
-                                  itemCount: matchingIndices.length,
-                                  separatorBuilder: (_, _) =>
-                                      const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final entry = entries[
-                                        matchingIndices[index]];
-                                    return ListTile(
-                                      key: Key(
-                                        'lyric-search-result-${entry.lineNumber}',
-                                      ),
-                                      dense: true,
-                                      title: Text(
-                                        entry.text,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        entry.timestamp == null
-                                            ? 'Line ${entry.lineNumber}'
-                                            : formatSyncedLyricTimestamp(
-                                                entry.timestamp!,
-                                              ),
-                                      ),
-                                      onTap: () async {
-                                        if (entry.timestamp != null) {
-                                          await player.seek(entry.timestamp!);
-                                        }
-                                        if (dialogContext.mounted) {
-                                          Navigator.of(dialogContext).pop();
-                                        }
-                                      },
-                                    );
-                                  },
-                                ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Done'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+class _LyricsSearchDialog extends StatefulWidget {
+  const _LyricsSearchDialog({
+    required this.track,
+    required this.entries,
+    required this.player,
+  });
+
+  final Track track;
+  final List<_LyricsSearchEntry> entries;
+  final PlayerController player;
+
+  @override
+  State<_LyricsSearchDialog> createState() => _LyricsSearchDialogState();
+}
+
+class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
+  final _controller = TextEditingController();
+  var _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matchingIndices = findLyricLineMatchIndices(
+      widget.entries.map((entry) => entry.text).toList(growable: false),
+      _query,
     );
-  } finally {
-    controller.dispose();
+
+    return AlertDialog(
+      title: Text('Find in ${widget.track.title}'),
+      content: SizedBox(
+        width: 460,
+        height: 360,
+        child: Column(
+          children: <Widget>[
+            TextField(
+              autofocus: true,
+              controller: _controller,
+              key: const Key('lyrics-find-input'),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                labelText: 'Find lyrics',
+              ),
+              onChanged: (value) => setState(() => _query = value),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _query.trim().isEmpty
+                  ? const SizedBox.shrink()
+                  : matchingIndices.isEmpty
+                      ? const Center(child: Text('No matching lines'))
+                      : ListView.separated(
+                          itemCount: matchingIndices.length,
+                          separatorBuilder: (_, _) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final entry =
+                                widget.entries[matchingIndices[index]];
+                            return ListTile(
+                              key: Key(
+                                'lyric-search-result-${entry.lineNumber}',
+                              ),
+                              dense: true,
+                              title: Text(
+                                entry.text,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                entry.timestamp == null
+                                    ? 'Line ${entry.lineNumber}'
+                                    : formatSyncedLyricTimestamp(
+                                        entry.timestamp!,
+                                      ),
+                              ),
+                              onTap: () async {
+                                if (entry.timestamp != null) {
+                                  await widget.player.seek(entry.timestamp!);
+                                }
+                                if (mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
   }
 }
 
@@ -5870,13 +5890,14 @@ class _LocalChartsPreview extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         const SizedBox(height: 4),
-        Row(
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            Expanded(
-              child: Text(
-                'Local charts',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+            Text(
+              'Local charts',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             SizedBox(
               width: 180,
