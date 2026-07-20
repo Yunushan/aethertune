@@ -1622,7 +1622,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final result = await FilePicker.pickFiles(type: FileType.audio);
+    final result = await FilePicker.pickFiles(
+      type: FileType.audio,
+      allowMultiple: true,
+    );
 
     if (result == null || result.files.isEmpty) {
       return;
@@ -13711,6 +13714,11 @@ String _selectedFilesImportSummary(LocalFolderScanResult result) {
   if (result.embeddedLyricsCount > 0) {
     details.add(
       'Imported embedded lyrics for ${result.embeddedLyricsCount} track(s).',
+    );
+  }
+  if (result.sidecarChaptersCount > 0) {
+    details.add(
+      'Imported CUE chapters for ${result.sidecarChaptersCount} track(s).',
     );
   }
   if (result.ignoredFileCount > 0) {

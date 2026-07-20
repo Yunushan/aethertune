@@ -167,6 +167,7 @@ final class LocalFolderScanner {
       }
       await scanState.scanFile(normalizedPath);
     }
+    await scanState.scanCueSidecarsForSelectedFiles();
 
     return scanState.toResult();
   }
@@ -273,6 +274,59 @@ final class _LocalFolderScanState {
       }
     } on FileSystemException {
       ignoredFileCount += 1;
+    }
+  }
+
+  Future<void> scanCueSidecarsForSelectedFiles() async {
+    if (tracks.isEmpty) {
+      return;
+    }
+
+    final selectedTrackPaths = <String>{
+      for (final track in tracks)
+        if (track.localPath != null)
+          p.normalize(p.absolute(track.localPath!)).toLowerCase(),
+    };
+    final scannedDirectories = <String>{};
+    var scannedCueCount = 0;
+    for (final track in tracks) {
+      final localPath = track.localPath;
+      if (localPath == null || scannedCueCount >= _maxSelectedCueSidecars) {
+        break;
+      }
+      final directoryPath = p.normalize(p.absolute(p.dirname(localPath)));
+      if (!scannedDirectories.add(directoryPath.toLowerCase())) {
+        continue;
+      }
+
+      final entries = await _listDirectory(Directory(directoryPath));
+      if (entries == null) {
+        inaccessibleDirectoryCount += 1;
+        continue;
+      }
+      entries.sort(
+        (left, right) => left.path.toLowerCase().compareTo(
+              right.path.toLowerCase(),
+            ),
+      );
+      for (final entry in entries) {
+        if (scannedCueCount >= _maxSelectedCueSidecars ||
+            p.extension(entry.path).toLowerCase() != '.cue' ||
+            await _entityType(entry) != FileSystemEntityType.file) {
+          continue;
+        }
+        scannedCueCount += 1;
+        final chaptersByTrackId = await _sidecarChaptersForCue(
+          entry.path,
+          allowedTrackPaths: selectedTrackPaths,
+        );
+        for (final chapterEntry in chaptersByTrackId.entries) {
+          sidecarChaptersByTrackId.putIfAbsent(
+            chapterEntry.key,
+            () => chapterEntry.value,
+          );
+        }
+      }
     }
   }
 
@@ -628,8 +682,9 @@ final class _LocalFolderScanState {
   }
 
   Future<Map<String, List<TrackChapter>>> _sidecarChaptersForCue(
-    String path,
-  ) async {
+    String path, {
+    Set<String>? allowedTrackPaths,
+  }) async {
     try {
       final cueFile = File(path);
       if (await cueFile.length() > _maxCueSheetBytes) {
@@ -658,10 +713,16 @@ final class _LocalFolderScanState {
         final referencedPath = p.normalize(
           p.absolute(p.join(p.dirname(path), entry.key)),
         );
-        if (referencedPath != root && !p.isWithin(root, referencedPath)) {
+        final normalizedReferencedPath = referencedPath.toLowerCase();
+        if (allowedTrackPaths != null) {
+          if (!allowedTrackPaths.contains(normalizedReferencedPath)) {
+            continue;
+          }
+        } else if (referencedPath != root &&
+            !p.isWithin(root, referencedPath)) {
           continue;
         }
-        final track = tracksByPath[referencedPath.toLowerCase()];
+        final track = tracksByPath[normalizedReferencedPath];
         if (track == null) {
           continue;
         }
@@ -3901,6 +3962,7 @@ const _maxEmbeddedArtworkBytes = 512 * 1024;
 const _maxEmbeddedLyricsBytes = 256 * 1024;
 const _maxCueSheetBytes = 256 * 1024;
 const _maxCueSheetChapters = 500;
+const _maxSelectedCueSidecars = 100;
 const _maxMp4Chapters = 255;
 const _maxId3v2Chapters = 255;
 const _mp4ChapterTicksPerMicrosecond = 10;

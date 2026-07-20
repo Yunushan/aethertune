@@ -481,6 +481,39 @@ FILE "../private.mp3" MP3
     );
   });
 
+  test('imports CUE chapters only for explicitly selected local files',
+      () async {
+    final selectedPath = p.join(root.path, 'Selected.mp3');
+    final unselectedPath = p.join(root.path, 'Unselected.mp3');
+    await File(selectedPath).writeAsBytes(<int>[1, 2, 3]);
+    await File(unselectedPath).writeAsBytes(<int>[4, 5, 6]);
+    await File(p.join(root.path, 'Album chapters.cue')).writeAsString('''
+FILE "Selected.mp3" MP3
+  TRACK 01 AUDIO
+    TITLE "Selected opening"
+    INDEX 01 00:00:00
+FILE "Unselected.mp3" MP3
+  TRACK 01 AUDIO
+    TITLE "Must not import"
+    INDEX 01 00:00:00
+''');
+
+    final result = await scanLocalFilesInBackground(<String>[selectedPath]);
+
+    expect(result.tracks, hasLength(1));
+    expect(result.sidecarChaptersCount, 1);
+    expect(
+      result.sidecarChaptersByTrackId.keys,
+      unorderedEquals(<String>[Track.stableLocalId(selectedPath)]),
+    );
+    expect(
+      result.sidecarChaptersByTrackId[Track.stableLocalId(selectedPath)]!
+          .single
+          .title,
+      'Selected opening',
+    );
+  });
+
   test('scans folders in a background isolate', () async {
     await File(p.join(root.path, '01 Background.mp3')).writeAsBytes(<int>[1]);
 
