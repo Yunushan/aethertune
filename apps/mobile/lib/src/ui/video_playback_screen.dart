@@ -7,8 +7,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'android_video_picture_in_picture.dart';
 import '../domain/legal_video_captions.dart';
+import '../domain/video_track_selection.dart';
 
-enum _CaptionAction { choose, automatic, disabled }
+enum _CaptionAction { choose, embedded, automatic, disabled }
 
 /// Full-screen-capable renderer for user-selected local or HTTPS video.
 class VideoPlaybackScreen extends StatefulWidget {
@@ -84,6 +85,13 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
                   : () => unawaited(_enterPictureInPicture()),
               icon: const Icon(Icons.picture_in_picture_alt_outlined),
             ),
+          IconButton(
+            tooltip: 'Audio tracks',
+            onPressed: _opening || error != null
+                ? null
+                : () => unawaited(_selectEmbeddedAudioTrack()),
+            icon: const Icon(Icons.audiotrack_outlined),
+          ),
           PopupMenuButton<_CaptionAction>(
             tooltip: 'Captions',
             enabled: !_opening && error == null,
@@ -93,6 +101,10 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
               PopupMenuItem<_CaptionAction>(
                 value: _CaptionAction.choose,
                 child: Text('Choose captions'),
+              ),
+              PopupMenuItem<_CaptionAction>(
+                value: _CaptionAction.embedded,
+                child: Text('Choose embedded captions'),
               ),
               PopupMenuItem<_CaptionAction>(
                 value: _CaptionAction.automatic,
@@ -146,6 +158,9 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
 
   Future<void> _selectCaptions(_CaptionAction action) async {
     switch (action) {
+      case _CaptionAction.embedded:
+        await _selectEmbeddedSubtitleTrack();
+        return;
       case _CaptionAction.automatic:
         await _player.setSubtitleTrack(SubtitleTrack.auto());
         return;
@@ -191,5 +206,96 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
         SnackBar(content: Text('Could not load captions: $error')),
       );
     }
+  }
+
+  Future<void> _selectEmbeddedAudioTrack() async {
+    final tracks = _player.state.tracks.audio
+        .where(
+          (track) =>
+              isSelectableEmbeddedVideoTrackId(track.id) && !track.uri,
+        )
+        .toList(growable: false);
+    final selected = await _pickTrack<AudioTrack>(
+      tracks: tracks,
+      title: 'Audio tracks',
+      fallback: 'Audio',
+      labelFor: (track, index) => videoTrackSelectionLabel(
+        fallback: 'Audio',
+        index: index,
+        title: track.title,
+        language: track.language,
+      ),
+    );
+    if (selected != null) {
+      await _player.setAudioTrack(selected);
+    }
+  }
+
+  Future<void> _selectEmbeddedSubtitleTrack() async {
+    final tracks = _player.state.tracks.subtitle
+        .where(
+          (track) =>
+              isSelectableEmbeddedVideoTrackId(track.id) &&
+              !track.uri &&
+              !track.data,
+        )
+        .toList(growable: false);
+    final selected = await _pickTrack<SubtitleTrack>(
+      tracks: tracks,
+      title: 'Embedded captions',
+      fallback: 'Caption',
+      labelFor: (track, index) => videoTrackSelectionLabel(
+        fallback: 'Caption',
+        index: index,
+        title: track.title,
+        language: track.language,
+      ),
+    );
+    if (selected != null) {
+      await _player.setSubtitleTrack(selected);
+    }
+  }
+
+  Future<T?> _pickTrack<T>({
+    required List<T> tracks,
+    required String title,
+    required String fallback,
+    required String Function(T track, int index) labelFor,
+  }) async {
+    if (tracks.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No $fallback tracks are available.')),
+        );
+      }
+      return null;
+    }
+
+    return showModalBottomSheet<T>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.6,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(title: Text(title)),
+              for (var index = 0; index < tracks.length; index += 1)
+                ListTile(
+                  leading: Icon(
+                    fallback == 'Audio'
+                        ? Icons.audiotrack_outlined
+                        : Icons.closed_caption_outlined,
+                  ),
+                  title: Text(labelFor(tracks[index], index)),
+                  onTap: () => Navigator.of(sheetContext).pop(tracks[index]),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
