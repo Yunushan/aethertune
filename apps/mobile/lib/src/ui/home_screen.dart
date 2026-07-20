@@ -3580,14 +3580,11 @@ class _TranslatedLyricsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final height = MediaQuery.sizeOf(context).height * 0.7;
     return SafeArea(
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        minChildSize: 0.35,
-        maxChildSize: 0.95,
-        builder: (context, controller) => ListView(
-          controller: controller,
+      child: SizedBox(
+        height: height,
+        child: ListView(
           children: <Widget>[
             ListTile(
               leading: const Icon(Icons.translate_outlined),
