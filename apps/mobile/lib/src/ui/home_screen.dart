@@ -384,6 +384,7 @@ Future<void> _configureLyricsTranslation(BuildContext context) async {
   if (store == null) {
     return;
   }
+  final localizations = AppLocalizations.of(context)!;
   final endpointController = TextEditingController(
     text: store.endpoint?.toString() ?? '',
   );
@@ -424,8 +425,8 @@ Future<void> _configureLyricsTranslation(BuildContext context) async {
                     key: const Key('lyrics-translation-target-language'),
                     controller: targetLanguageController,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Target language',
+                    decoration: InputDecoration(
+                      labelText: localizations.targetLanguage,
                       hintText: 'en, tr, de, ...',
                     ),
                   ),
