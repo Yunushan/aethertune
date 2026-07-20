@@ -3564,12 +3564,11 @@ Future<void> _showLyricsTranslation(
     }
     navigator.pop();
     await progressDialog;
-    if (!context.mounted) {
+    if (!navigator.mounted) {
       return;
     }
     await showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
+      context: navigator.context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (_) => _TranslatedLyricsSheet(
