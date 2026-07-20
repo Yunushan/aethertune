@@ -290,6 +290,27 @@ Future<void> _removeListenBrainz(BuildContext context) async {
   }
 }
 
+Future<void> _retryListenBrainzPending(BuildContext context) async {
+  final store = context.read<ListenBrainzScrobblingStore?>();
+  if (store == null || !store.isConfigured || store.pendingListenCount == 0) {
+    return;
+  }
+  final submitted = await store.retryPendingListens();
+  if (!context.mounted) {
+    return;
+  }
+  final remaining = store.pendingListenCount;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        remaining == 0
+            ? 'Submitted $submitted pending ListenBrainz listen${submitted == 1 ? '' : 's'}.'
+            : 'Submitted $submitted listen${submitted == 1 ? '' : 's'}; $remaining still pending.',
+      ),
+    ),
+  );
+}
+
 Future<void> _importListenBrainzHistory(BuildContext context) async {
   final store = context.read<ListenBrainzScrobblingStore?>();
   final library = context.read<LibraryStore>();
@@ -18217,6 +18238,28 @@ class _SettingsTab extends StatelessWidget {
                   )
                 : const Icon(Icons.chevron_right),
           ),
+        if (listenBrainz?.isConfigured == true)
+          if (listenBrainz!.pendingListenCount > 0)
+            ListTile(
+              key: const Key('listenbrainz-retry-pending'),
+              leading: const Icon(Icons.refresh_outlined),
+              title: Text(
+                'Retry ${listenBrainz.pendingListenCount} pending ListenBrainz listen${listenBrainz.pendingListenCount == 1 ? '' : 's'}',
+              ),
+              subtitle: const Text(
+                'Retries saved completed-listen metadata in the foreground.',
+              ),
+              trailing: listenBrainz.submitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chevron_right),
+              onTap: listenBrainz.submitting
+                  ? null
+                  : () => unawaited(_retryListenBrainzPending(context)),
+            ),
         if (listenBrainz?.isConfigured == true)
           ListTile(
             key: const Key('listenbrainz-import-history'),

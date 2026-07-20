@@ -3,8 +3,13 @@ import 'package:aethertune/src/data/listenbrainz_scrobbling_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   test('configures only a validated token in the credential vault', () async {
     final vault = _MemoryVault();
     final client = _FakeListenBrainzClient(validUserName: 'yunus');
@@ -86,6 +91,70 @@ void main() {
 
     expect(client.submitted, hasLength(1));
     expect(store.lastError, isNull);
+  });
+
+  test('persists a failed listen with only submission metadata and retries it',
+      () async {
+    final vault = _MemoryVault();
+    final failedClient = _FakeListenBrainzClient(failNextSubmission: true);
+    final startedAt = DateTime.utc(2026, 7, 17, 12);
+    final failed = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => failedClient,
+      clock: () => DateTime.utc(2026, 7, 18),
+    );
+    await failed.configure('token');
+    await failed.submitIfEligible(
+      track: Track(
+        id: 'private-track-id',
+        title: 'Signal',
+        artist: 'Aether',
+        album: 'Vault',
+        duration: const Duration(minutes: 2),
+        localPath: '/private/music/signal.mp3',
+        streamUrl: 'https://secret.example.test/stream',
+      ),
+      startedAt: startedAt,
+      position: const Duration(minutes: 1),
+    );
+    expect(failed.pendingListenCount, 1);
+
+    final retryClient = _FakeListenBrainzClient();
+    final restored = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => retryClient,
+      clock: () => DateTime.utc(2026, 7, 18),
+    );
+    await restored.load();
+    expect(restored.pendingListenCount, 1);
+
+    expect(await restored.retryPendingListens(), 1);
+    expect(restored.pendingListenCount, 0);
+    expect(retryClient.submitted.single.track.title, 'Signal');
+    expect(retryClient.submitted.single.track.artist, 'Aether');
+    expect(retryClient.submitted.single.track.album, 'Vault');
+    expect(retryClient.submitted.single.track.localPath, isNull);
+    expect(retryClient.submitted.single.track.streamUrl, isNull);
+  });
+
+  test('drops expired pending listens during load', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.listenbrainz.pending.v1': '''
+{"version":1,"listens":[
+  {"title":"Old","artist":"Aether","durationMs":1000,"startedAt":"2026-06-01T00:00:00.000Z"},
+  {"title":"Fresh","artist":"Aether","durationMs":1000,"startedAt":"2026-07-17T00:00:00.000Z"}
+]}
+''',
+    });
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: _MemoryVault(),
+      clientFactory: (_) => _FakeListenBrainzClient(),
+      clock: () => DateTime.utc(2026, 7, 18),
+    );
+
+    await store.load();
+
+    expect(store.pendingListenCount, 1);
   });
 
   test('reads history through the configured account without exposing its token',
