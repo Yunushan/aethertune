@@ -381,6 +381,20 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} hours'**
   String sleepTimerHours(int count);
+
+  String get targetLanguage;
+
+  String get translatingLyrics;
+
+  String get translatedLyrics;
+
+  String translatedLyricsForLanguage(String language);
+
+  String get copyTranslatedLyrics;
+
+  String get translatedLyricsCopied;
+
+  String couldNotTranslateLyrics(String error);
 }
 
 class _AppLocalizationsDelegate

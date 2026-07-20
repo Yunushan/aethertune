@@ -67,5 +67,26 @@
         "type": "int"
       }
     }
+  },
+  "targetLanguage": "Target language",
+  "translatingLyrics": "Translating lyrics...",
+  "translatedLyrics": "Translated lyrics",
+  "translatedLyricsForLanguage": "Target language: {language}",
+  "@translatedLyricsForLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "copyTranslatedLyrics": "Copy translated lyrics",
+  "translatedLyricsCopied": "Translated lyrics copied.",
+  "couldNotTranslateLyrics": "Could not translate lyrics: {error}",
+  "@couldNotTranslateLyrics": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

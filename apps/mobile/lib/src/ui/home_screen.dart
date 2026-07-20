@@ -3538,12 +3538,13 @@ Future<void> _showLyricsTranslation(
   required String lyrics,
   required String targetLanguage,
 }) async {
+  final localizations = AppLocalizations.of(context)!;
   final navigator = Navigator.of(context, rootNavigator: true);
   final messenger = ScaffoldMessenger.of(context);
   messenger.showSnackBar(
-    const SnackBar(
+    SnackBar(
       duration: Duration(days: 1),
-      content: Text('Translating lyrics...'),
+      content: Text(localizations.translatingLyrics),
     ),
   );
 
@@ -3566,7 +3567,7 @@ Future<void> _showLyricsTranslation(
   } on Object catch (error) {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      SnackBar(content: Text('Could not translate lyrics: $error')),
+      SnackBar(content: Text(localizations.couldNotTranslateLyrics('$error'))),
     );
   }
 }
@@ -3582,9 +3583,10 @@ class _TranslatedLyricsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
     final height = MediaQuery.sizeOf(context).height * 0.6;
     return AlertDialog(
-      title: const Text('Translated lyrics'),
+      title: Text(localizations.translatedLyrics),
       content: SizedBox(
         width: 560,
         height: height,
@@ -3592,14 +3594,18 @@ class _TranslatedLyricsDialog extends StatelessWidget {
           children: <Widget>[
             ListTile(
               leading: const Icon(Icons.translate_outlined),
-              title: Text('Target language: $targetLanguage'),
+              title: Text(
+                localizations.translatedLyricsForLanguage(targetLanguage),
+              ),
               trailing: IconButton(
-                tooltip: 'Copy translated lyrics',
+                tooltip: localizations.copyTranslatedLyrics,
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: lyrics));
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Translated lyrics copied.')),
+                      SnackBar(
+                        content: Text(localizations.translatedLyricsCopied),
+                      ),
                     );
                   }
                 },

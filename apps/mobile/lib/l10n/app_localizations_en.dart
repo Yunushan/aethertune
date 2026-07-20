@@ -172,4 +172,27 @@ class AppLocalizationsEn extends AppLocalizations {
       locale: localeName,
     );
   }
+
+  @override
+  String get targetLanguage => 'Target language';
+
+  @override
+  String get translatingLyrics => 'Translating lyrics...';
+
+  @override
+  String get translatedLyrics => 'Translated lyrics';
+
+  @override
+  String translatedLyricsForLanguage(String language) =>
+      'Target language: $language';
+
+  @override
+  String get copyTranslatedLyrics => 'Copy translated lyrics';
+
+  @override
+  String get translatedLyricsCopied => 'Translated lyrics copied.';
+
+  @override
+  String couldNotTranslateLyrics(String error) =>
+      'Could not translate lyrics: $error';
 }

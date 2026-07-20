@@ -181,4 +181,27 @@ class AppLocalizationsAr extends AppLocalizations {
       locale: localeName,
     );
   }
+
+  @override
+  String get targetLanguage => 'اللغة المستهدفة';
+
+  @override
+  String get translatingLyrics => 'تجري ترجمة كلمات الأغنية...';
+
+  @override
+  String get translatedLyrics => 'كلمات الأغنية المترجمة';
+
+  @override
+  String translatedLyricsForLanguage(String language) =>
+      'اللغة المستهدفة: $language';
+
+  @override
+  String get copyTranslatedLyrics => 'نسخ كلمات الأغنية المترجمة';
+
+  @override
+  String get translatedLyricsCopied => 'تم نسخ كلمات الأغنية المترجمة.';
+
+  @override
+  String couldNotTranslateLyrics(String error) =>
+      'تعذرت ترجمة كلمات الأغنية: $error';
 }

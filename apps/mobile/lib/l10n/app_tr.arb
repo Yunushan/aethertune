@@ -67,5 +67,26 @@
         "type": "int"
       }
     }
+  },
+  "targetLanguage": "Hedef dil",
+  "translatingLyrics": "Şarkı sözleri çevriliyor...",
+  "translatedLyrics": "Çevrilmiş şarkı sözleri",
+  "translatedLyricsForLanguage": "Hedef dil: {language}",
+  "@translatedLyricsForLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "copyTranslatedLyrics": "Çevrilmiş şarkı sözlerini kopyala",
+  "translatedLyricsCopied": "Çevrilmiş şarkı sözleri kopyalandı.",
+  "couldNotTranslateLyrics": "Şarkı sözleri çevrilemedi: {error}",
+  "@couldNotTranslateLyrics": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

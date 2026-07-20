@@ -67,5 +67,26 @@
         "type": "int"
       }
     }
+  },
+  "targetLanguage": "اللغة المستهدفة",
+  "translatingLyrics": "تجري ترجمة كلمات الأغنية...",
+  "translatedLyrics": "كلمات الأغنية المترجمة",
+  "translatedLyricsForLanguage": "اللغة المستهدفة: {language}",
+  "@translatedLyricsForLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "copyTranslatedLyrics": "نسخ كلمات الأغنية المترجمة",
+  "translatedLyricsCopied": "تم نسخ كلمات الأغنية المترجمة.",
+  "couldNotTranslateLyrics": "تعذرت ترجمة كلمات الأغنية: {error}",
+  "@couldNotTranslateLyrics": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

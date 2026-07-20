@@ -157,4 +157,26 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String sleepTimerHours(int count) => '$count saat';
+
+  @override
+  String get targetLanguage => 'Hedef dil';
+
+  @override
+  String get translatingLyrics => 'Şarkı sözleri çevriliyor...';
+
+  @override
+  String get translatedLyrics => 'Çevrilmiş şarkı sözleri';
+
+  @override
+  String translatedLyricsForLanguage(String language) => 'Hedef dil: $language';
+
+  @override
+  String get copyTranslatedLyrics => 'Çevrilmiş şarkı sözlerini kopyala';
+
+  @override
+  String get translatedLyricsCopied => 'Çevrilmiş şarkı sözleri kopyalandı.';
+
+  @override
+  String couldNotTranslateLyrics(String error) =>
+      'Şarkı sözleri çevrilemedi: $error';
 }
