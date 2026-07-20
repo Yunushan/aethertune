@@ -127,6 +127,25 @@ class ListenTogetherConflictException implements Exception {
 
 enum SharedPlaylistAccessRole { owner, editor, viewer }
 
+enum SharedPlaylistKind { manual, smart }
+
+class SharedSmartPlaylistDocument {
+  const SharedSmartPlaylistDocument({
+    required this.name,
+    required this.rule,
+  });
+
+  final String name;
+  final Map<String, Object?> rule;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'version': 2,
+    'kind': 'smart',
+    'name': name,
+    'rule': rule,
+  };
+}
+
 class SharedPlaylistRemote {
   const SharedPlaylistRemote({
     required this.id,
@@ -134,6 +153,8 @@ class SharedPlaylistRemote {
     required this.role,
     required this.name,
     required this.trackIds,
+    this.kind = SharedPlaylistKind.manual,
+    this.smartPlaylist,
     this.updatedAt,
     this.updatedByDevice,
     this.checksum,
@@ -145,6 +166,8 @@ class SharedPlaylistRemote {
   final SharedPlaylistAccessRole role;
   final String name;
   final List<String> trackIds;
+  final SharedPlaylistKind kind;
+  final SharedSmartPlaylistDocument? smartPlaylist;
   final DateTime? updatedAt;
   final String? updatedByDevice;
   final String? checksum;
@@ -171,6 +194,8 @@ class SharedPlaylistRevision {
     required this.revision,
     required this.name,
     required this.trackIds,
+    this.kind = SharedPlaylistKind.manual,
+    this.smartPlaylist,
     required this.updatedAt,
     required this.updatedByDevice,
     required this.checksum,
@@ -179,6 +204,8 @@ class SharedPlaylistRevision {
   final int revision;
   final String name;
   final List<String> trackIds;
+  final SharedPlaylistKind kind;
+  final SharedSmartPlaylistDocument? smartPlaylist;
   final DateTime updatedAt;
   final String updatedByDevice;
   final String checksum;
@@ -274,6 +301,21 @@ abstract interface class SharedPlaylistGateway {
   Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode);
 }
 
+abstract interface class SharedSmartPlaylistGateway
+    extends SharedPlaylistGateway {
+  Future<SharedPlaylistRemote> createSharedSmartPlaylist({
+    required String name,
+    required Map<String, Object?> rule,
+  });
+
+  Future<SharedPlaylistRemote> updateSharedSmartPlaylist({
+    required String playlistId,
+    required int baseRevision,
+    required String name,
+    required Map<String, Object?> rule,
+  });
+}
+
 abstract interface class LibrarySyncProfileGateway {
   Future<LibrarySyncProfile?> fetchProfile();
 }
@@ -299,6 +341,7 @@ class LibrarySyncClient
         LibrarySyncMetadataGateway,
         ListenTogetherGateway,
         SharedPlaylistGateway,
+        SharedSmartPlaylistGateway,
         LibrarySyncProfileGateway,
         LibrarySyncProfileEditorGateway {
   LibrarySyncClient({
@@ -492,7 +535,24 @@ class LibrarySyncClient
     required String name,
     required List<String> trackIds,
   }) async {
-    final document = _sharedPlaylistDocument(name, trackIds);
+    return _createSharedPlaylistDocument(_sharedPlaylistDocument(name, trackIds));
+  }
+
+  /// Creates a private shared rule definition. Each device evaluates the rules
+  /// locally, so no library records or playback history leave the device.
+  @override
+  Future<SharedPlaylistRemote> createSharedSmartPlaylist({
+    required String name,
+    required Map<String, Object?> rule,
+  }) async {
+    return _createSharedPlaylistDocument(
+      _sharedSmartPlaylistDocument(name, rule),
+    );
+  }
+
+  Future<SharedPlaylistRemote> _createSharedPlaylistDocument(
+    Map<String, Object?> document,
+  ) async {
     final response = await _execute(
       'POST',
       endpoint: account.sharedPlaylistCollectionEndpointUri,
@@ -573,6 +633,35 @@ class LibrarySyncClient
         'baseRevision': baseRevision,
         'deviceId': account.deviceId,
         'playlist': _sharedPlaylistDocument(name, trackIds),
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    return _parseSharedPlaylist(response.body);
+  }
+
+  @override
+  Future<SharedPlaylistRemote> updateSharedSmartPlaylist({
+    required String playlistId,
+    required int baseRevision,
+    required String name,
+    required Map<String, Object?> rule,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    if (baseRevision <= 0) {
+      throw const FormatException('Shared playlist revision is invalid.');
+    }
+    final response = await _execute(
+      'PUT',
+      endpoint: account.sharedPlaylistEndpointUri(normalized),
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+        'playlist': _sharedSmartPlaylistDocument(name, rule),
       }),
     );
     if (response.statusCode == 409) {
@@ -952,28 +1041,9 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
       rawPlaylist is! Map) {
     throw const FormatException('Shared playlist response is invalid.');
   }
+
   final document = Map<String, Object?>.from(rawPlaylist);
-  final name = document['name'];
-  final rawTrackIds = document['trackIds'];
-  if (document['version'] != 1 ||
-      name is! String ||
-      name != name.trim() ||
-      name.isEmpty ||
-      name.length > 160 ||
-      rawTrackIds is! List ||
-      rawTrackIds.length > 500) {
-    throw const FormatException('Shared playlist document is invalid.');
-  }
-  final trackIds = <String>[];
-  for (final value in rawTrackIds) {
-    if (value is! String ||
-        value != value.trim() ||
-        value.isEmpty ||
-        value.length > 256) {
-      throw const FormatException('Shared playlist track IDs are invalid.');
-    }
-    trackIds.add(value);
-  }
+  final parsedDocument = _parseSharedPlaylistDocument(document);
   final checksum = _optionalString(body['checksum']);
   final actualChecksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
   if (checksum == null || checksum != actualChecksum) {
@@ -1003,8 +1073,10 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
     id: id,
     revision: revision,
     role: role,
-    name: name,
-    trackIds: List<String>.unmodifiable(trackIds),
+    name: parsedDocument.name,
+    trackIds: parsedDocument.trackIds,
+    kind: parsedDocument.kind,
+    smartPlaylist: parsedDocument.smartPlaylist,
     updatedAt: _optionalDate(body['updatedAt']),
     updatedByDevice: _optionalString(body['updatedByDevice']),
     checksum: checksum,
@@ -1031,27 +1103,7 @@ SharedPlaylistRevision _parseSharedPlaylistRevision(
     throw const FormatException('Shared playlist revision is invalid.');
   }
   final document = Map<String, Object?>.from(rawPlaylist);
-  final name = document['name'];
-  final rawTrackIds = document['trackIds'];
-  if (document['version'] != 1 ||
-      name is! String ||
-      name != name.trim() ||
-      name.isEmpty ||
-      name.length > 160 ||
-      rawTrackIds is! List ||
-      rawTrackIds.length > 500) {
-    throw const FormatException('Shared playlist revision is invalid.');
-  }
-  final trackIds = <String>[];
-  for (final value in rawTrackIds) {
-    if (value is! String ||
-        value != value.trim() ||
-        value.isEmpty ||
-        value.length > 256) {
-      throw const FormatException('Shared playlist revision is invalid.');
-    }
-    trackIds.add(value);
-  }
+  final parsedDocument = _parseSharedPlaylistDocument(document);
   final actualChecksum = sha256
       .convert(utf8.encode(jsonEncode(document)))
       .toString();
@@ -1062,12 +1114,184 @@ SharedPlaylistRevision _parseSharedPlaylistRevision(
   }
   return SharedPlaylistRevision(
     revision: revision,
-    name: name,
-    trackIds: List<String>.unmodifiable(trackIds),
+    name: parsedDocument.name,
+    trackIds: parsedDocument.trackIds,
+    kind: parsedDocument.kind,
+    smartPlaylist: parsedDocument.smartPlaylist,
     updatedAt: updatedAt,
     updatedByDevice: updatedByDevice,
     checksum: checksum,
   );
+}
+
+class _ParsedSharedPlaylistDocument {
+  const _ParsedSharedPlaylistDocument({
+    required this.name,
+    required this.trackIds,
+    required this.kind,
+    this.smartPlaylist,
+  });
+
+  final String name;
+  final List<String> trackIds;
+  final SharedPlaylistKind kind;
+  final SharedSmartPlaylistDocument? smartPlaylist;
+}
+
+_ParsedSharedPlaylistDocument _parseSharedPlaylistDocument(
+  Map<String, Object?> document,
+) {
+  final name = document['name'];
+  if (name is! String ||
+      name != name.trim() ||
+      name.isEmpty ||
+      name.length > 160) {
+    throw const FormatException('Shared playlist document is invalid.');
+  }
+  if (document['version'] == 1) {
+    if (document.keys.any((key) => key != 'version' && key != 'name' && key != 'trackIds')) {
+      throw const FormatException('Shared playlist document is invalid.');
+    }
+    final rawTrackIds = document['trackIds'];
+    if (rawTrackIds is! List || rawTrackIds.length > 500) {
+      throw const FormatException('Shared playlist track IDs are invalid.');
+    }
+    final trackIds = <String>[];
+    for (final value in rawTrackIds) {
+      if (value is! String ||
+          value != value.trim() ||
+          value.isEmpty ||
+          value.length > 256) {
+        throw const FormatException('Shared playlist track IDs are invalid.');
+      }
+      trackIds.add(value);
+    }
+    return _ParsedSharedPlaylistDocument(
+      name: name,
+      trackIds: List<String>.unmodifiable(trackIds),
+      kind: SharedPlaylistKind.manual,
+    );
+  }
+  if (document['version'] != 2 ||
+      document['kind'] != 'smart' ||
+      document.keys.any(
+        (key) => key != 'version' && key != 'kind' && key != 'name' && key != 'rule',
+      ) ||
+      document['rule'] is! Map) {
+    throw const FormatException('Shared smart playlist document is invalid.');
+  }
+  final rule = _parseSharedSmartPlaylistRule(
+    Map<String, Object?>.from(document['rule'] as Map),
+  );
+  return _ParsedSharedPlaylistDocument(
+    name: name,
+    trackIds: const <String>[],
+    kind: SharedPlaylistKind.smart,
+    smartPlaylist: SharedSmartPlaylistDocument(name: name, rule: rule),
+  );
+}
+
+Map<String, Object?> _parseSharedSmartPlaylistRule(
+  Map<String, Object?> rule,
+) {
+  const allowed = <String>{
+    'query', 'sourceId', 'artist', 'album', 'genre',
+    'minimumDurationSeconds', 'maximumDurationSeconds', 'favoritesOnly',
+    'minimumPlayCount', 'minimumDaysSinceLastPlayed', 'matchMode',
+    'ruleGroups', 'sortMode', 'limit',
+  };
+  if (rule.keys.any((key) => !allowed.contains(key))) {
+    throw const FormatException('Shared smart playlist rule is invalid.');
+  }
+  final normalized = <String, Object?>{};
+  for (final key in <String>['query', 'sourceId', 'artist', 'album', 'genre']) {
+    final value = rule[key] ?? '';
+    if (value is! String || value != value.trim() || value.length > 512) {
+      throw const FormatException('Shared smart playlist text rule is invalid.');
+    }
+    normalized[key] = value;
+  }
+  for (final key in <String>[
+    'minimumDurationSeconds', 'maximumDurationSeconds',
+    'minimumPlayCount', 'minimumDaysSinceLastPlayed',
+  ]) {
+    final value = rule[key] ?? 0;
+    if (value is! int || value < 0 || value > 315360000) {
+      throw const FormatException('Shared smart playlist numeric rule is invalid.');
+    }
+    normalized[key] = value;
+  }
+  final favoritesOnly = rule['favoritesOnly'] ?? false;
+  final matchMode = rule['matchMode'] ?? 'all';
+  final sortMode = rule['sortMode'] ?? 'recentlyAdded';
+  final limit = rule['limit'] ?? 50;
+  if (favoritesOnly is! bool ||
+      (matchMode != 'all' && matchMode != 'any') ||
+      !const <String>{'recentlyAdded', 'title', 'artist', 'album', 'recentlyPlayed', 'mostPlayed'}.contains(sortMode) ||
+      limit is! int || limit < 1 || limit > 500) {
+    throw const FormatException('Shared smart playlist options are invalid.');
+  }
+  final rawGroups = rule['ruleGroups'] ?? const <Object?>[];
+  if (rawGroups is! List || rawGroups.length > 25) {
+    throw const FormatException('Shared smart playlist groups are invalid.');
+  }
+  normalized['favoritesOnly'] = favoritesOnly;
+  normalized['matchMode'] = matchMode;
+  normalized['sortMode'] = sortMode;
+  normalized['limit'] = limit;
+  normalized['ruleGroups'] = rawGroups
+      .map((group) => _parseSharedSmartPlaylistGroup(group, depth: 0))
+      .toList(growable: false);
+  return Map<String, Object?>.unmodifiable(normalized);
+}
+
+Map<String, Object?> _parseSharedSmartPlaylistGroup(
+  Object? raw, {
+  required int depth,
+}) {
+  if (raw is! Map || depth >= 8) {
+    throw const FormatException('Shared smart playlist group is invalid.');
+  }
+  final group = Map<String, Object?>.from(raw);
+  if (group.keys.any((key) => key != 'matchMode' && key != 'rules' && key != 'groups') ||
+      (group['matchMode'] != 'all' && group['matchMode'] != 'any')) {
+    throw const FormatException('Shared smart playlist group is invalid.');
+  }
+  final rules = group['rules'];
+  final groups = group['groups'];
+  if (rules is! List || groups is! List || rules.length > 50 || groups.length > 25) {
+    throw const FormatException('Shared smart playlist group is invalid.');
+  }
+  if (rules.isEmpty && groups.isEmpty) {
+    throw const FormatException('Shared smart playlist group is empty.');
+  }
+  const allowedFields = <String>{
+    'searchText', 'sourceId', 'artist', 'album', 'genre',
+    'minimumDurationSeconds', 'maximumDurationSeconds', 'favoritesOnly',
+    'minimumRating', 'minimumPlayCount', 'minimumDaysSinceLastPlayed',
+  };
+  final normalizedRules = <Map<String, Object?>>[];
+  for (final rawRule in rules) {
+    if (rawRule is! Map) {
+      throw const FormatException('Shared smart playlist group rule is invalid.');
+    }
+    final item = Map<String, Object?>.from(rawRule);
+    final field = item['field'];
+    final value = item['value'];
+    if (item.keys.any((key) => key != 'field' && key != 'value') ||
+        field is! String || !allowedFields.contains(field) ||
+        value is! String || value != value.trim() || value.length > 512) {
+      throw const FormatException('Shared smart playlist group rule is invalid.');
+    }
+    normalizedRules.add(<String, Object?>{'field': field, 'value': value});
+  }
+  return <String, Object?>{
+    'matchMode': group['matchMode'],
+    'rules': normalizedRules,
+    'groups': groups
+        .map((child) => _parseSharedSmartPlaylistGroup(child, depth: depth + 1))
+        .toList(growable: false),
+  };
 }
 
 SharedPlaylistConflictException _parseSharedPlaylistConflict(String rawBody) {
@@ -1101,6 +1325,24 @@ Map<String, Object?> _sharedPlaylistDocument(
     'name': normalizedName,
     'trackIds': normalizedTrackIds,
   };
+}
+
+Map<String, Object?> _sharedSmartPlaylistDocument(
+  String name,
+  Map<String, Object?> rule,
+) {
+  final candidate = <String, Object?>{
+    'version': 2,
+    'kind': 'smart',
+    'name': name.trim(),
+    'rule': Map<String, Object?>.from(rule),
+  };
+  final parsed = _parseSharedPlaylistDocument(candidate);
+  final smart = parsed.smartPlaylist;
+  if (parsed.kind != SharedPlaylistKind.smart || smart == null) {
+    throw const FormatException('Shared smart playlist document is invalid.');
+  }
+  return smart.toJson();
 }
 
 SharedPlaylistAccessRole? _sharedPlaylistRoleFromWire(Object? value) => switch (value) {

@@ -766,6 +766,71 @@ void main() {
     expect(shared.collaborators, isEmpty);
   });
 
+  test('creates and parses a private shared smart-playlist definition', () async {
+    final rule = <String, Object?>{
+      'query': '',
+      'sourceId': '',
+      'artist': 'Mira',
+      'album': '',
+      'genre': '',
+      'minimumDurationSeconds': 0,
+      'maximumDurationSeconds': 0,
+      'favoritesOnly': false,
+      'minimumPlayCount': 0,
+      'minimumDaysSinceLastPlayed': 0,
+      'matchMode': 'all',
+      'ruleGroups': <Object?>[
+        <String, Object?>{
+          'matchMode': 'any',
+          'rules': <Object?>[
+            <String, Object?>{'field': 'genre', 'value': 'Jazz'},
+          ],
+          'groups': <Object?>[],
+        },
+      ],
+      'sortMode': 'title',
+      'limit': 25,
+    };
+    final document = <String, Object?>{
+      'version': 2,
+      'kind': 'smart',
+      'name': 'Mira discoveries',
+      'rule': rule,
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'POST');
+        expect(jsonDecode(body!)['playlist'], document);
+        return LibrarySyncHttpResponse(
+          statusCode: 201,
+          body: jsonEncode(<String, Object?>{
+            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+            'revision': 1,
+            'role': 'owner',
+            'updatedAt': '2026-07-20T12:00:00.000Z',
+            'updatedByDevice': 'Test device',
+            'checksum': checksum,
+            'playlist': document,
+            'collaborators': <String, Object?>{},
+          }),
+        );
+      },
+    );
+
+    final shared = await client.createSharedSmartPlaylist(
+      name: 'Mira discoveries',
+      rule: rule,
+    );
+
+    expect(shared.kind, SharedPlaylistKind.smart);
+    expect(shared.trackIds, isEmpty);
+    expect(shared.smartPlaylist?.name, 'Mira discoveries');
+    expect(shared.smartPlaylist?.rule['artist'], 'Mira');
+  });
+
   test('issues private shared playlist invites and reports conflicts', () async {
     var requests = 0;
     final client = LibrarySyncClient(

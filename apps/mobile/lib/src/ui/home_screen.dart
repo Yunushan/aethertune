@@ -21,6 +21,7 @@ import '../data/internet_archive_provider.dart';
 import '../data/itunes_podcast_directory.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
+import '../data/library_sync_client.dart';
 import '../data/listenbrainz_scrobbling_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/local_folder_watch_store.dart';
@@ -41,6 +42,7 @@ import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
+import '../data/shared_smart_playlist_store.dart';
 import '../data/sponsorblock_segment_provider.dart';
 import '../data/spotify_metadata_provider.dart';
 import '../data/spotify_settings_store.dart';
@@ -4798,6 +4800,7 @@ final class _FollowedYouTubeChannelShelfState
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
+    final sharedSmartPlaylists = context.watch<SharedSmartPlaylistStore>();
     final follows = context.watch<YouTubeChannelFollowStore?>();
     final feedStore = context.watch<YouTubeFollowedChannelFeedStore?>();
     final offline = library.offlineModeEnabled;
@@ -8544,6 +8547,17 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onPressed: () => _createCustomSmartPlaylist(context),
               icon: const Icon(Icons.filter_alt_outlined),
             ),
+            if (sharedSmartPlaylists.available) ...<Widget>[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                key: const Key('shared-smart-playlist-join'),
+                tooltip: 'Join private smart playlist',
+                onPressed: sharedSmartPlaylists.busy
+                    ? null
+                    : () => _joinSharedSmartPlaylist(context),
+                icon: const Icon(Icons.vpn_key_outlined),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 8),
@@ -8586,6 +8600,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onCopyImportLink: () => unawaited(
                 _copyCustomSmartPlaylistImportLink(context, library, rule),
               ),
+              onPrivateShare: sharedSmartPlaylists.available
+                  ? () => _shareCustomSmartPlaylist(context, rule)
+                  : null,
               onDuplicate: () => unawaited(
                 _duplicateCustomSmartPlaylist(context, rule),
               ),
@@ -9098,6 +9115,141 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Created ${duplicate.name}.')),
     );
+  }
+
+  Future<void> _joinSharedSmartPlaylist(BuildContext context) async {
+    final controller = TextEditingController();
+    final invite = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Join private smart playlist'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Invite code'),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            icon: const Icon(Icons.login_outlined),
+            label: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!context.mounted || invite == null || invite.trim().isEmpty) {
+      return;
+    }
+    try {
+      final binding = await context.read<SharedSmartPlaylistStore>().joinInvite(
+        invite,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Joined shared smart playlist ${binding.remoteId}.')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not join shared smart playlist: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareCustomSmartPlaylist(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final store = context.read<SharedSmartPlaylistStore>();
+    final library = context.read<LibraryStore>();
+    try {
+      var binding = store.bindingForLocalSmartPlaylist(rule.id);
+      if (binding == null) {
+        binding = await store.host(library, rule);
+      }
+      if (!context.mounted) {
+        return;
+      }
+      if (!binding.isOwner) {
+        if (binding.canEdit) {
+          await store.publish(binding, library);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Published shared smart-playlist rules.')),
+            );
+          }
+          return;
+        }
+        await store.refresh(binding, library);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Refreshed shared smart-playlist rules.')),
+          );
+        }
+        return;
+      }
+      final role = await showDialog<SharedPlaylistAccessRole>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Create private smart-playlist invite'),
+          content: const Text('Choose whether the recipient can publish rule changes.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                SharedPlaylistAccessRole.viewer,
+              ),
+              child: const Text('Viewer'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                SharedPlaylistAccessRole.editor,
+              ),
+              child: const Text('Editor'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || role == null) {
+        return;
+      }
+      final invite = await store.createInvite(binding, role);
+      if (!context.mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Private smart-playlist invite'),
+          content: SelectableText(invite.code),
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share smart playlist: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _renamePlaylist(
@@ -11009,6 +11161,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
     required this.onEdit,
     required this.onArtwork,
     required this.onCopyImportLink,
+    this.onPrivateShare,
     required this.onDuplicate,
     required this.onDelete,
   });
@@ -11019,6 +11172,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onArtwork;
   final VoidCallback onCopyImportLink;
+  final VoidCallback? onPrivateShare;
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
@@ -11043,6 +11197,9 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
               case _CustomSmartPlaylistAction.copyImportLink:
                 onCopyImportLink();
                 break;
+              case _CustomSmartPlaylistAction.privateShare:
+                onPrivateShare?.call();
+                break;
               case _CustomSmartPlaylistAction.duplicate:
                 onDuplicate();
                 break;
@@ -11051,8 +11208,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 break;
             }
           },
-          itemBuilder: (context) =>
-              const <PopupMenuEntry<_CustomSmartPlaylistAction>>[
+          itemBuilder: (context) => <PopupMenuEntry<_CustomSmartPlaylistAction>>[
             PopupMenuItem(
               value: _CustomSmartPlaylistAction.edit,
               child: ListTile(
@@ -11074,6 +11230,14 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 title: Text('Copy import link'),
               ),
             ),
+            if (onPrivateShare != null)
+              const PopupMenuItem(
+                value: _CustomSmartPlaylistAction.privateShare,
+                child: ListTile(
+                  leading: Icon(Icons.group_add_outlined),
+                  title: Text('Private collaboration'),
+                ),
+              ),
             PopupMenuItem(
               value: _CustomSmartPlaylistAction.duplicate,
               child: ListTile(
@@ -11349,6 +11513,7 @@ enum _CustomSmartPlaylistAction {
   edit,
   artwork,
   copyImportLink,
+  privateShare,
   duplicate,
   delete,
 }

@@ -1294,6 +1294,71 @@ void main() {
       );
       expect(unauthenticated.statusCode, 401);
     });
+
+    test('stores bounded smart-playlist rules without library data', () async {
+      final server = handler();
+      final smartDocument = <String, Object?>{
+        'version': 2,
+        'kind': 'smart',
+        'name': 'Mira discoveries',
+        'rule': <String, Object?>{
+          'query': '',
+          'sourceId': '',
+          'artist': 'Mira',
+          'album': '',
+          'genre': '',
+          'minimumDurationSeconds': 0,
+          'maximumDurationSeconds': 0,
+          'favoritesOnly': false,
+          'minimumPlayCount': 0,
+          'minimumDaysSinceLastPlayed': 0,
+          'matchMode': 'all',
+          'ruleGroups': <Object?>[
+            <String, Object?>{
+              'matchMode': 'any',
+              'rules': <Object?>[
+                <String, Object?>{'field': 'genre', 'value': 'Jazz'},
+              ],
+              'groups': <Object?>[],
+            },
+          ],
+          'sortMode': 'title',
+          'limit': 25,
+        },
+      };
+      final created = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': smartDocument,
+          },
+        ),
+      );
+      expect(created.statusCode, 201);
+      expect((await _json(created))['playlist'], smartDocument);
+
+      final rejected = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              ...smartDocument,
+              'libraryTracks': <Object?>['private-track-id'],
+            },
+          },
+        ),
+      );
+      expect(rejected.statusCode, 400);
+      expect((await _json(rejected))['error'], 'invalid_shared_playlist');
+    });
   });
 
   test('file sync store survives restart and retains only the latest revision',

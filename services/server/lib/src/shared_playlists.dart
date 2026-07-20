@@ -629,6 +629,11 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
 }
 
 void validateSharedPlaylistDocument(Map<String, Object?> document) {
+  final version = document['version'];
+  if (version == 2) {
+    _validateSharedSmartPlaylistDocument(document);
+    return;
+  }
   const allowed = <String>{'version', 'name', 'trackIds'};
   if (document.keys.any((key) => !allowed.contains(key))) {
     throw const FormatException('Shared playlists contain unsupported fields.');
@@ -651,6 +656,147 @@ void validateSharedPlaylistDocument(Map<String, Object?> document) {
         trackId.length > 256) {
       throw const FormatException('Shared playlist track IDs are invalid.');
     }
+  }
+}
+
+/// Validates a portable smart-playlist definition. The server stores only
+/// matching rules; each collaborator evaluates them against their own library.
+void _validateSharedSmartPlaylistDocument(Map<String, Object?> document) {
+  const allowed = <String>{'version', 'kind', 'name', 'rule'};
+  if (document.keys.any((key) => !allowed.contains(key)) ||
+      document['kind'] != 'smart') {
+    throw const FormatException('Shared smart playlists contain unsupported fields.');
+  }
+  final name = document['name'];
+  final rawRule = document['rule'];
+  if (name is! String ||
+      name != name.trim() ||
+      name.isEmpty ||
+      name.length > 160 ||
+      rawRule is! Map) {
+    throw const FormatException('Shared smart playlist document is invalid.');
+  }
+  _validateSharedSmartPlaylistRule(Map<String, Object?>.from(rawRule));
+}
+
+void _validateSharedSmartPlaylistRule(Map<String, Object?> rule) {
+  const allowed = <String>{
+    'query',
+    'sourceId',
+    'artist',
+    'album',
+    'genre',
+    'minimumDurationSeconds',
+    'maximumDurationSeconds',
+    'favoritesOnly',
+    'minimumPlayCount',
+    'minimumDaysSinceLastPlayed',
+    'matchMode',
+    'ruleGroups',
+    'sortMode',
+    'limit',
+  };
+  if (rule.keys.any((key) => !allowed.contains(key))) {
+    throw const FormatException('Shared smart playlist rule is invalid.');
+  }
+  for (final key in <String>[
+    'query',
+    'sourceId',
+    'artist',
+    'album',
+    'genre',
+  ]) {
+    final value = rule[key] ?? '';
+    if (value is! String || value != value.trim() || value.length > 512) {
+      throw const FormatException('Shared smart playlist text rule is invalid.');
+    }
+  }
+  for (final key in <String>[
+    'minimumDurationSeconds',
+    'maximumDurationSeconds',
+    'minimumPlayCount',
+    'minimumDaysSinceLastPlayed',
+  ]) {
+    final value = rule[key] ?? 0;
+    if (value is! int || value < 0 || value > 315360000) {
+      throw const FormatException('Shared smart playlist numeric rule is invalid.');
+    }
+  }
+  final favoritesOnly = rule['favoritesOnly'] ?? false;
+  final matchMode = rule['matchMode'] ?? 'all';
+  final sortMode = rule['sortMode'] ?? 'recentlyAdded';
+  final limit = rule['limit'] ?? 50;
+  if (favoritesOnly is! bool ||
+      (matchMode != 'all' && matchMode != 'any') ||
+      !const <String>{
+        'recentlyAdded',
+        'title',
+        'artist',
+        'album',
+        'recentlyPlayed',
+        'mostPlayed',
+      }.contains(sortMode) ||
+      limit is! int ||
+      limit < 1 ||
+      limit > 500) {
+    throw const FormatException('Shared smart playlist options are invalid.');
+  }
+  final groups = rule['ruleGroups'] ?? const <Object?>[];
+  if (groups is! List || groups.length > 25) {
+    throw const FormatException('Shared smart playlist groups are invalid.');
+  }
+  for (final group in groups) {
+    _validateSharedSmartPlaylistGroup(group, depth: 0);
+  }
+}
+
+void _validateSharedSmartPlaylistGroup(Object? raw, {required int depth}) {
+  if (raw is! Map || depth >= 8) {
+    throw const FormatException('Shared smart playlist group is invalid.');
+  }
+  final group = Map<String, Object?>.from(raw);
+  const allowed = <String>{'matchMode', 'rules', 'groups'};
+  if (group.keys.any((key) => !allowed.contains(key)) ||
+      (group['matchMode'] != 'all' && group['matchMode'] != 'any')) {
+    throw const FormatException('Shared smart playlist group is invalid.');
+  }
+  final rules = group['rules'];
+  final groups = group['groups'];
+  if (rules is! List ||
+      groups is! List ||
+      rules.length > 50 ||
+      groups.length > 25 ||
+      (rules.isEmpty && groups.isEmpty)) {
+    throw const FormatException('Shared smart playlist group is invalid.');
+  }
+  for (final rawRule in rules) {
+    if (rawRule is! Map) {
+      throw const FormatException('Shared smart playlist group rule is invalid.');
+    }
+    final rule = Map<String, Object?>.from(rawRule);
+    if (rule.keys.any((key) => key != 'field' && key != 'value') ||
+        rule['field'] is! String ||
+        rule['value'] is! String ||
+        (rule['value'] as String).trim() != rule['value'] ||
+        (rule['value'] as String).length > 512 ||
+        !const <String>{
+          'searchText',
+          'sourceId',
+          'artist',
+          'album',
+          'genre',
+          'minimumDurationSeconds',
+          'maximumDurationSeconds',
+          'favoritesOnly',
+          'minimumRating',
+          'minimumPlayCount',
+          'minimumDaysSinceLastPlayed',
+        }.contains(rule['field'])) {
+      throw const FormatException('Shared smart playlist group rule is invalid.');
+    }
+  }
+  for (final child in groups) {
+    _validateSharedSmartPlaylistGroup(child, depth: depth + 1);
   }
 }
 

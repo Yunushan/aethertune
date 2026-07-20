@@ -13,6 +13,7 @@ import '../data/library_sync_store.dart';
 import '../data/listenbrainz_scrobbling_store.dart';
 import '../data/listen_together_store.dart';
 import '../data/shared_playlist_store.dart';
+import '../data/shared_smart_playlist_store.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/custom_catalog_store.dart';
@@ -114,6 +115,17 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
             final store = sharedPlaylists ?? SharedPlaylistStore()..load();
             store.updateGatewayFactory(
               sync.isConfigured ? sync.createSharedPlaylistGateway : null,
+            );
+            return store;
+          },
+        ),
+        ChangeNotifierProxyProvider<LibrarySyncStore, SharedSmartPlaylistStore>(
+          create: (_) => SharedSmartPlaylistStore()..load(),
+          update: (_, sync, sharedSmartPlaylists) {
+            final store =
+                sharedSmartPlaylists ?? SharedSmartPlaylistStore()..load();
+            store.updateGatewayFactory(
+              sync.isConfigured ? sync.createSharedSmartPlaylistGateway : null,
             );
             return store;
           },
