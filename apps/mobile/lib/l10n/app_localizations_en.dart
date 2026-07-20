@@ -68,6 +68,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openLibrary => 'Open Library';
 
   @override
+  String get importAudio => 'Import audio';
+
+  @override
+  String get scanningSelectedAudio => 'Scanning selected audio...';
+
+  @override
+  String get scanningAudioFolder => 'Scanning audio folder...';
+
+  @override
   String get legalSourcesTitle => 'Explore legal sources';
 
   @override

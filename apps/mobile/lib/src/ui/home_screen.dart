@@ -647,6 +647,7 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.initialTab = 0,
+    this.initialImportAudio = false,
     this.onRestartOnboarding,
     this.internetArchiveProvider,
     this.radioBrowserProvider,
@@ -659,6 +660,7 @@ class HomeScreen extends StatefulWidget {
        );
 
   final int initialTab;
+  final bool initialImportAudio;
   final VoidCallback? onRestartOnboarding;
   final InternetArchiveProvider? internetArchiveProvider;
   final RadioBrowserProvider? radioBrowserProvider;
@@ -699,6 +701,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _radioClickProvider = widget.radioBrowserProvider ??
         RadioBrowserProvider();
     unawaited(_loadLyricsSearchCacheLifetime());
+    if (widget.initialImportAudio) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(_importAudio(context));
+        }
+      });
+    }
   }
 
   @override
@@ -1643,6 +1652,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
+      _showLocalImportProgress(
+        messenger,
+        AppLocalizations.of(context)!.scanningSelectedAudio,
+      );
       final scanResult = await scanLocalFilesInBackground(
         filePaths,
         importedAt: DateTime.now(),
@@ -1677,6 +1690,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
+      _showLocalImportProgress(
+        messenger,
+        AppLocalizations.of(context)!.scanningAudioFolder,
+      );
       final scanResult = await scanLocalFolderInBackground(
         folderPath,
         importedAt: DateTime.now(),
@@ -13698,6 +13715,29 @@ String _folderImportSummary(LocalFolderScanResult result) {
   }
 
   return details.join(' ');
+}
+
+void _showLocalImportProgress(
+  ScaffoldMessengerState messenger,
+  String message,
+) {
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      duration: const Duration(days: 1),
+      content: Row(
+        children: <Widget>[
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(message)),
+        ],
+      ),
+    ),
+  );
 }
 
 String _selectedFilesImportSummary(LocalFolderScanResult result) {

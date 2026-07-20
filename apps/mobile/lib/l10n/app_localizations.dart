@@ -214,6 +214,24 @@ abstract class AppLocalizations {
   /// **'Open Library'**
   String get openLibrary;
 
+  /// No description provided for @importAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Import audio'**
+  String get importAudio;
+
+  /// No description provided for @scanningSelectedAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning selected audio...'**
+  String get scanningSelectedAudio;
+
+  /// No description provided for @scanningAudioFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning audio folder...'**
+  String get scanningAudioFolder;
+
   /// No description provided for @legalSourcesTitle.
   ///
   /// In en, this message translates to:

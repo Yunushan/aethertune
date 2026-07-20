@@ -56,6 +56,7 @@ class AetherTuneApp extends StatefulWidget {
 class _AetherTuneAppState extends State<AetherTuneApp> {
   int _onboardingDestination = 0;
   int _homeGeneration = 0;
+  bool _startLocalImportAfterOnboarding = false;
 
   @override
   Widget build(BuildContext context) {
@@ -337,14 +338,34 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                                         'home-$_homeGeneration',
                                       ),
                                       initialTab: _onboardingDestination,
-                                      onRestartOnboarding: () => unawaited(
-                                        library.setOnboardingCompleted(false),
-                                      ),
+                                      initialImportAudio:
+                                          _startLocalImportAfterOnboarding,
+                                      onRestartOnboarding: () {
+                                        setState(() {
+                                          _startLocalImportAfterOnboarding =
+                                              false;
+                                        });
+                                        unawaited(
+                                          library.setOnboardingCompleted(false),
+                                        );
+                                      },
                                     )
                                   : OnboardingScreen(
                                       onFinished: (destination) async {
                                         setState(() {
                                           _onboardingDestination = destination;
+                                          _startLocalImportAfterOnboarding =
+                                              false;
+                                        });
+                                        await library.setOnboardingCompleted(
+                                          true,
+                                        );
+                                      },
+                                      onImportLocalLibrary: () async {
+                                        setState(() {
+                                          _onboardingDestination = 1;
+                                          _startLocalImportAfterOnboarding =
+                                              true;
                                         });
                                         await library.setOnboardingCompleted(
                                           true,

@@ -68,6 +68,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get openLibrary => 'فتح المكتبة';
 
   @override
+  String get importAudio => 'استيراد الصوت';
+
+  @override
+  String get scanningSelectedAudio => 'جارٍ فحص الصوت المحدد...';
+
+  @override
+  String get scanningAudioFolder => 'جارٍ فحص مجلد الصوت...';
+
+  @override
   String get legalSourcesTitle => 'استكشف المصادر القانونية';
 
   @override

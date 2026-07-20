@@ -68,6 +68,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get openLibrary => 'Kitaplığı aç';
 
   @override
+  String get importAudio => 'Ses içe aktar';
+
+  @override
+  String get scanningSelectedAudio => 'Seçilen ses taranıyor...';
+
+  @override
+  String get scanningAudioFolder => 'Ses klasörü taranıyor...';
+
+  @override
   String get legalSourcesTitle => 'Yasal kaynakları keşfedin';
 
   @override

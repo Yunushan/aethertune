@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _localizedOnboarding({
   required Future<void> Function(int destination) onFinished,
+  Future<void> Function()? onImportLocalLibrary,
   Locale locale = const Locale('en'),
   SelfHostedProviderStore? selfHosted,
 }) {
@@ -16,7 +17,10 @@ Widget _localizedOnboarding({
     locale: locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    home: OnboardingScreen(onFinished: onFinished),
+    home: OnboardingScreen(
+      onFinished: onFinished,
+      onImportLocalLibrary: onImportLocalLibrary,
+    ),
   );
   return selfHosted == null
       ? app
@@ -46,6 +50,30 @@ void main() {
 
     expect(destination, 1);
   });
+
+  testWidgets(
+    'starts the direct local-library import handoff when available',
+    (tester) async {
+      var importStarted = false;
+      int? destination;
+
+      await tester.pumpWidget(
+        _localizedOnboarding(
+          onFinished: (tab) async => destination = tab,
+          onImportLocalLibrary: () async {
+            importStarted = true;
+          },
+        ),
+      );
+
+      expect(find.text('Import audio'), findsOneWidget);
+      await tester.tap(find.text('Import audio'));
+      await tester.pumpAndSettle();
+
+      expect(importStarted, isTrue);
+      expect(destination, isNull);
+    },
+  );
 
   testWidgets('routes source setup to the Sources tab', (tester) async {
     int? destination;

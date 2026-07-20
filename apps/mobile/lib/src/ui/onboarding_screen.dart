@@ -7,9 +7,14 @@ import '../domain/self_hosted_provider_account.dart';
 import 'widgets/self_hosted_account_editor.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, required this.onFinished});
+  const OnboardingScreen({
+    super.key,
+    required this.onFinished,
+    this.onImportLocalLibrary,
+  });
 
   final Future<void> Function(int destination) onFinished;
+  final Future<void> Function()? onImportLocalLibrary;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -26,6 +31,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _submitting = true);
     try {
       await widget.onFinished(destination);
+    } catch (_) {
+      if (mounted) {
+        final localizations = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(localizations.setupSaveError),
+          ),
+        );
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Future<void> _startLocalLibraryImport() async {
+    final onImportLocalLibrary = widget.onImportLocalLibrary;
+    if (onImportLocalLibrary == null) {
+      return _finish(1);
+    }
+    if (_submitting) {
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      await onImportLocalLibrary();
     } catch (_) {
       if (mounted) {
         final localizations = AppLocalizations.of(context)!;
@@ -113,9 +143,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   icon: Icons.folder_open_outlined,
                   title: localizations.localLibraryTitle,
                   description: localizations.localLibraryDescription,
-                  actionLabel: localizations.openLibrary,
+                  actionLabel: widget.onImportLocalLibrary == null
+                      ? localizations.openLibrary
+                      : localizations.importAudio,
                   enabled: !_submitting,
-                  onPressed: () => _finish(1),
+                  onPressed: _startLocalLibraryImport,
                 ),
                 const SizedBox(height: 12),
                 _SetupChoice(
