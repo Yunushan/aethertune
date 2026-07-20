@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
 
 import '../domain/artwork_crop.dart';
+import '../domain/desktop_tray_action.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/offline_cache_cancellation.dart';
@@ -1251,6 +1252,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.desktop_queue_pane_width.v1';
   static const _desktopMinimizeToTrayKey =
       'aethertune.desktop_minimize_to_tray.v1';
+  static const _desktopTrayTransportActionsKey =
+      'aethertune.desktop_tray_transport_actions.v1';
   static const _desktopDensityPreferenceKey =
       'aethertune.desktop_density_preference.v1';
   static const _onboardingCompletedKey =
@@ -1314,6 +1317,8 @@ class LibraryStore extends ChangeNotifier {
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _desktopMinimizeToTray = false;
+  Set<DesktopTrayTransportAction> _desktopTrayTransportActions =
+      Set<DesktopTrayTransportAction>.of(defaultDesktopTrayTransportActions);
   DesktopDensityPreference _desktopDensityPreference =
       DesktopDensityPreference.comfortable;
   bool _onboardingCompleted = false;
@@ -1384,6 +1389,8 @@ class LibraryStore extends ChangeNotifier {
   AppLanguagePreference get languagePreference => _languagePreference;
   double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
   bool get desktopMinimizeToTray => _desktopMinimizeToTray;
+  Set<DesktopTrayTransportAction> get desktopTrayTransportActions =>
+      Set<DesktopTrayTransportAction>.unmodifiable(_desktopTrayTransportActions);
   DesktopDensityPreference get desktopDensityPreference =>
       _desktopDensityPreference;
   bool get onboardingCompleted => _onboardingCompleted;
@@ -1669,6 +1676,9 @@ class LibraryStore extends ChangeNotifier {
     );
     _desktopMinimizeToTray =
         prefs.getBool(_desktopMinimizeToTrayKey) ?? false;
+    _desktopTrayTransportActions = desktopTrayTransportActionsFromStorage(
+      prefs.getStringList(_desktopTrayTransportActionsKey),
+    );
     _desktopDensityPreference = _desktopDensityPreferenceFromName(
       prefs.getString(_desktopDensityPreferenceKey),
     );
@@ -7242,6 +7252,23 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setDesktopTrayTransportActionEnabled(
+    DesktopTrayTransportAction action,
+    bool enabled,
+  ) async {
+    if (_desktopTrayTransportActions.contains(action) == enabled) {
+      return;
+    }
+
+    if (enabled) {
+      _desktopTrayTransportActions.add(action);
+    } else {
+      _desktopTrayTransportActions.remove(action);
+    }
+    await _save();
+    notifyListeners();
+  }
+
   Future<CustomSmartPlaylist?> duplicateCustomSmartPlaylist(String id) async {
     final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
     if (index == -1) {
@@ -10082,6 +10109,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
     await prefs.setBool(_desktopMinimizeToTrayKey, _desktopMinimizeToTray);
+    await prefs.setStringList(
+      _desktopTrayTransportActionsKey,
+      desktopTrayTransportActionsToStorage(_desktopTrayTransportActions),
+    );
     await prefs.setString(
       _desktopDensityPreferenceKey,
       _desktopDensityPreference.name,

@@ -10,6 +10,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
+import 'package:aethertune/src/domain/desktop_tray_action.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
@@ -96,6 +97,15 @@ void main() {
 
     expect(player.defaultPlaybackPitch, 1.25);
     expect(engine.pitchValue, 1.25);
+
+    final nextTrayAction = find.byKey(const Key('desktop-tray-action-next'));
+    expect(nextTrayAction, findsOneWidget);
+    await tester.tap(nextTrayAction);
+    await tester.pumpAndSettle();
+    expect(
+      library.desktopTrayTransportActions,
+      isNot(contains(DesktopTrayTransportAction.next)),
+    );
     debugDefaultTargetPlatformOverride = null;
   });
 }

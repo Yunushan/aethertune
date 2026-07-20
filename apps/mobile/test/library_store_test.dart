@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/domain/desktop_tray_action.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
@@ -4119,6 +4120,10 @@ void main() {
     );
     expect(firstStore.desktopMinimizeToTray, isFalse);
     expect(
+      firstStore.desktopTrayTransportActions,
+      defaultDesktopTrayTransportActions,
+    );
+    expect(
       firstStore.desktopDensityPreference,
       DesktopDensityPreference.comfortable,
     );
@@ -4141,6 +4146,10 @@ void main() {
     await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
     await firstStore.setDesktopQueuePaneWidth(410);
     await firstStore.setDesktopMinimizeToTray(true);
+    await firstStore.setDesktopTrayTransportActionEnabled(
+      DesktopTrayTransportAction.next,
+      false,
+    );
     await firstStore.setDesktopDensityPreference(DesktopDensityPreference.compact);
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
@@ -4162,6 +4171,13 @@ void main() {
     expect(firstStore.languagePreference, AppLanguagePreference.arabic);
     expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.desktopMinimizeToTray, isTrue);
+    expect(
+      firstStore.desktopTrayTransportActions,
+      <DesktopTrayTransportAction>{
+        DesktopTrayTransportAction.previous,
+        DesktopTrayTransportAction.togglePlayPause,
+      },
+    );
     expect(firstStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
@@ -4191,6 +4207,13 @@ void main() {
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.desktopQueuePaneWidth, 410);
     expect(secondStore.desktopMinimizeToTray, isTrue);
+    expect(
+      secondStore.desktopTrayTransportActions,
+      <DesktopTrayTransportAction>{
+        DesktopTrayTransportAction.previous,
+        DesktopTrayTransportAction.togglePlayPause,
+      },
+    );
     expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(

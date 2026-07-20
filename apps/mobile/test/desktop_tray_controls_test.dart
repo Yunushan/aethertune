@@ -1,4 +1,5 @@
 import 'package:aethertune/src/ui/widgets/desktop_tray_controls.dart';
+import 'package:aethertune/src/domain/desktop_tray_action.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,6 +49,26 @@ void main() {
     expect(supportsDesktopTray(TargetPlatform.windows), isTrue);
     expect(supportsDesktopTray(TargetPlatform.android), isFalse);
     expect(supportsDesktopTray(TargetPlatform.iOS), isFalse);
+  });
+
+  test('keeps Show and Quit while filtering configured transport commands', () {
+    expect(
+      desktopTrayCommandsForActions(<DesktopTrayTransportAction>{
+        DesktopTrayTransportAction.next,
+      }),
+      <DesktopTrayCommand>[
+        DesktopTrayCommand.showWindow,
+        DesktopTrayCommand.next,
+        DesktopTrayCommand.quit,
+      ],
+    );
+    expect(
+      desktopTrayCommandsForActions(<DesktopTrayTransportAction>{}),
+      <DesktopTrayCommand>[
+        DesktopTrayCommand.showWindow,
+        DesktopTrayCommand.quit,
+      ],
+    );
   });
 
   test('uses the selected policy for desktop window close events', () {

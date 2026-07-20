@@ -9,6 +9,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../domain/desktop_tray_action.dart';
+
 bool supportsDesktopTray(TargetPlatform platform) {
   return platform == TargetPlatform.linux ||
       platform == TargetPlatform.macOS ||
@@ -16,6 +18,21 @@ bool supportsDesktopTray(TargetPlatform platform) {
 }
 
 enum DesktopTrayCommand { showWindow, togglePlayPause, previous, next, quit }
+
+List<DesktopTrayCommand> desktopTrayCommandsForActions(
+  Set<DesktopTrayTransportAction> actions,
+) {
+  return <DesktopTrayCommand>[
+    DesktopTrayCommand.showWindow,
+    if (actions.contains(DesktopTrayTransportAction.previous))
+      DesktopTrayCommand.previous,
+    if (actions.contains(DesktopTrayTransportAction.togglePlayPause))
+      DesktopTrayCommand.togglePlayPause,
+    if (actions.contains(DesktopTrayTransportAction.next))
+      DesktopTrayCommand.next,
+    DesktopTrayCommand.quit,
+  ];
+}
 
 enum DesktopWindowCloseAction { hide, quit }
 
@@ -76,6 +93,7 @@ class DesktopTrayControls extends StatefulWidget {
     required this.onPrevious,
     required this.onNext,
     required this.minimizeToTray,
+    required this.transportActions,
     required this.child,
     super.key,
   });
@@ -84,6 +102,7 @@ class DesktopTrayControls extends StatefulWidget {
   final Future<void> Function() onPrevious;
   final Future<void> Function() onNext;
   final bool minimizeToTray;
+  final Set<DesktopTrayTransportAction> transportActions;
   final Widget child;
 
   @override
@@ -122,6 +141,11 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
         supportsDesktopTray(defaultTargetPlatform)) {
       unawaited(_configureWindowCloseBehavior());
     }
+    if (!setEquals(oldWidget.transportActions, widget.transportActions) &&
+        !kIsWeb &&
+        supportsDesktopTray(defaultTargetPlatform)) {
+      unawaited(_refreshContextMenu());
+    }
   }
 
   Future<void> _initializeTray() async {
@@ -132,22 +156,46 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
         isTemplate: defaultTargetPlatform == TargetPlatform.macOS,
       );
       await trayManager.setToolTip('AetherTune');
-      await trayManager.setContextMenu(
-        Menu(
-          items: <MenuItem>[
-            MenuItem(key: 'show', label: 'Show AetherTune'),
-            MenuItem.separator(),
-            MenuItem(key: 'previous', label: 'Previous'),
-            MenuItem(key: 'toggle-play-pause', label: 'Play / Pause'),
-            MenuItem(key: 'next', label: 'Next'),
-            MenuItem.separator(),
-            MenuItem(key: 'quit', label: 'Quit AetherTune'),
-          ],
-        ),
-      );
+      await _setContextMenu();
       _initialized = true;
     } on Object {
       // A missing desktop integration must not interfere with playback.
+    }
+  }
+
+  Future<void> _setContextMenu() {
+    final commands = desktopTrayCommandsForActions(widget.transportActions);
+    final transportCommands = commands.sublist(1, commands.length - 1);
+    return trayManager.setContextMenu(
+      Menu(
+        items: <MenuItem>[
+          MenuItem(key: 'show', label: 'Show AetherTune'),
+          MenuItem.separator(),
+          for (final command in transportCommands)
+            switch (command) {
+              DesktopTrayCommand.previous => MenuItem(
+                key: 'previous',
+                label: 'Previous',
+              ),
+              DesktopTrayCommand.togglePlayPause => MenuItem(
+                key: 'toggle-play-pause',
+                label: 'Play / Pause',
+              ),
+              DesktopTrayCommand.next => MenuItem(key: 'next', label: 'Next'),
+              _ => throw StateError('Unexpected tray transport command.'),
+            },
+          if (transportCommands.isNotEmpty) MenuItem.separator(),
+          MenuItem(key: 'quit', label: 'Quit AetherTune'),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshContextMenu() async {
+    try {
+      await _setContextMenu();
+    } on Object {
+      // An unavailable desktop host must not interrupt app state updates.
     }
   }
 

@@ -54,6 +54,7 @@ import '../data/youtube_data_metadata_provider.dart';
 import '../domain/backup_file_document.dart';
 import '../domain/artwork_crop.dart';
 import '../domain/custom_catalog_definition.dart';
+import '../domain/desktop_tray_action.dart';
 import '../domain/lyrics_document.dart';
 import '../domain/lyrics_translator.dart';
 import '../domain/music_catalog_discovery_provider.dart';
@@ -18604,6 +18605,60 @@ class _SettingsTab extends StatelessWidget {
             value: library.desktopMinimizeToTray,
             onChanged: (enabled) =>
                 unawaited(library.setDesktopMinimizeToTray(enabled)),
+          ),
+        if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
+          SwitchListTile(
+            key: const Key('desktop-tray-action-previous'),
+            secondary: const Icon(Icons.skip_previous_outlined),
+            title: const Text('Previous in tray menu'),
+            subtitle: const Text(
+              'Show a Previous command beside the always available Show and Quit actions.',
+            ),
+            value: library.desktopTrayTransportActions.contains(
+              DesktopTrayTransportAction.previous,
+            ),
+            onChanged: (enabled) => unawaited(
+              library.setDesktopTrayTransportActionEnabled(
+                DesktopTrayTransportAction.previous,
+                enabled,
+              ),
+            ),
+          ),
+        if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
+          SwitchListTile(
+            key: const Key('desktop-tray-action-play-pause'),
+            secondary: const Icon(Icons.play_circle_outline),
+            title: const Text('Play / Pause in tray menu'),
+            subtitle: const Text(
+              'Show a playback toggle beside the always available Show and Quit actions.',
+            ),
+            value: library.desktopTrayTransportActions.contains(
+              DesktopTrayTransportAction.togglePlayPause,
+            ),
+            onChanged: (enabled) => unawaited(
+              library.setDesktopTrayTransportActionEnabled(
+                DesktopTrayTransportAction.togglePlayPause,
+                enabled,
+              ),
+            ),
+          ),
+        if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
+          SwitchListTile(
+            key: const Key('desktop-tray-action-next'),
+            secondary: const Icon(Icons.skip_next_outlined),
+            title: const Text('Next in tray menu'),
+            subtitle: const Text(
+              'Show a Next command beside the always available Show and Quit actions.',
+            ),
+            value: library.desktopTrayTransportActions.contains(
+              DesktopTrayTransportAction.next,
+            ),
+            onChanged: (enabled) => unawaited(
+              library.setDesktopTrayTransportActionEnabled(
+                DesktopTrayTransportAction.next,
+                enabled,
+              ),
+            ),
           ),
         if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
           ListTile(
