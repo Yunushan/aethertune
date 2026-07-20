@@ -1263,6 +1263,31 @@ void main() {
     expect(engine.stopCalls, 1);
     expect(controller.stopAtEndOfTrackEnabled, isFalse);
   });
+
+  test('publishes sleep timer state to a system-media capable engine',
+      () async {
+    final now = DateTime.utc(2026, 7, 20, 12);
+    final engine = _FakeSystemMediaPlaybackAudioEngine();
+    final controller = PlayerController(
+      audioEngine: engine,
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+
+    controller.startSleepTimer(const Duration(minutes: 20));
+    expect(engine.sleepTimerEndsAt, now.add(const Duration(minutes: 20)));
+    expect(engine.sleepTimerStopsAtEndOfTrack, isFalse);
+    expect(controller.sleepTimerRemaining, const Duration(minutes: 20));
+
+    controller.stopAtEndOfTrack();
+    expect(engine.sleepTimerEndsAt, isNull);
+    expect(engine.sleepTimerStopsAtEndOfTrack, isTrue);
+    expect(controller.sleepTimerRemaining, isNull);
+
+    controller.cancelSleepTimer();
+    expect(engine.sleepTimerEndsAt, isNull);
+    expect(engine.sleepTimerStopsAtEndOfTrack, isFalse);
+  });
 }
 
 Future<void> _flushAsyncWork() async {
@@ -1515,6 +1540,21 @@ class _FakePlaybackAudioEngine
     await _processingController.close();
     await _indexController.close();
     await _errorController.close();
+  }
+}
+
+class _FakeSystemMediaPlaybackAudioEngine extends _FakePlaybackAudioEngine
+    implements SleepTimerMediaMetadataPlaybackAudioEngine {
+  DateTime? sleepTimerEndsAt;
+  bool sleepTimerStopsAtEndOfTrack = false;
+
+  @override
+  void setSleepTimerMediaMetadata({
+    DateTime? endsAt,
+    bool stopsAtEndOfTrack = false,
+  }) {
+    sleepTimerEndsAt = endsAt;
+    sleepTimerStopsAtEndOfTrack = stopsAtEndOfTrack;
   }
 }
 

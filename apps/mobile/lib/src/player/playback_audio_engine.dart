@@ -94,6 +94,23 @@ abstract interface class PlaybackErrorAudioEngine {
   Stream<Object> get errorStream;
 }
 
+const systemMediaSleepTimerEndsAtEpochMsKey =
+    'aethertune.sleepTimerEndsAtEpochMs';
+const systemMediaSleepTimerStopsAtEndOfTrackKey =
+    'aethertune.sleepTimerStopsAtEndOfTrack';
+
+/// Optional bridge for surfacing the app-owned sleep timer to system media UI.
+///
+/// The state intentionally contains only an expiry time or stop-at-end mode;
+/// it never transfers track locations, stream URLs, or account information.
+abstract interface class SleepTimerMediaMetadataPlaybackAudioEngine
+    implements PlaybackAudioEngine {
+  void setSleepTimerMediaMetadata({
+    DateTime? endsAt,
+    bool stopsAtEndOfTrack = false,
+  });
+}
+
 /// Optional system-media browsing bridge for an app-owned music library.
 ///
 /// The handler supplies the selected track back to the application instead of

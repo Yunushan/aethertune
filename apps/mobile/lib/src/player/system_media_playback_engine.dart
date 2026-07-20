@@ -21,6 +21,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
         SkipSilencePlaybackAudioEngine,
         PitchPlaybackAudioEngine,
         PlaybackErrorAudioEngine,
+        SleepTimerMediaMetadataPlaybackAudioEngine,
         MediaLibraryBrowsePlaybackAudioEngine {
   SystemMediaPlaybackEngine(
     this._engine, {
@@ -100,6 +101,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   int? _currentIndex;
   Duration? _runtimeDuration;
   Duration? _lastWidgetProgressPosition;
+  DateTime? _sleepTimerEndsAt;
+  bool _sleepTimerStopsAtEndOfTrack = false;
   ProcessingState _processingState = ProcessingState.idle;
   bool _desktopMediaSessionStarted = false;
 
@@ -160,6 +163,20 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   bool get hasPrevious => _engine.hasPrevious;
+
+  @override
+  void setSleepTimerMediaMetadata({
+    DateTime? endsAt,
+    bool stopsAtEndOfTrack = false,
+  }) {
+    if (_sleepTimerEndsAt == endsAt &&
+        _sleepTimerStopsAtEndOfTrack == stopsAtEndOfTrack) {
+      return;
+    }
+    _sleepTimerEndsAt = endsAt;
+    _sleepTimerStopsAtEndOfTrack = stopsAtEndOfTrack;
+    _publishQueueAndCurrentItem();
+  }
 
   @override
   bool get supportsCrossfade =>
@@ -530,10 +547,12 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     }
     for (var index = 0; index < _tracks.length; index += 1) {
       if (_tracks[index].id == mediaId) {
-        final runtimeDuration = index == _currentIndex
-            ? _runtimeDuration
-            : null;
-        return _mediaItemForTrack(_tracks[index], runtimeDuration);
+        final isCurrent = index == _currentIndex;
+        return _mediaItemForTrack(
+          _tracks[index],
+          isCurrent ? _runtimeDuration : null,
+          extras: isCurrent ? _sleepTimerMediaMetadata : null,
+        );
       }
     }
     final libraryTrack = _libraryTrackForMediaId(mediaId);
@@ -694,9 +713,26 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   List<MediaItem> _queueMediaItems() {
     return List<MediaItem>.generate(_tracks.length, (index) {
-      final runtimeDuration = index == _currentIndex ? _runtimeDuration : null;
-      return _mediaItemForTrack(_tracks[index], runtimeDuration);
+      final isCurrent = index == _currentIndex;
+      return _mediaItemForTrack(
+        _tracks[index],
+        isCurrent ? _runtimeDuration : null,
+        extras: isCurrent ? _sleepTimerMediaMetadata : null,
+      );
     }, growable: false);
+  }
+
+  Map<String, Object>? get _sleepTimerMediaMetadata {
+    final endsAt = _sleepTimerEndsAt;
+    if (endsAt == null && !_sleepTimerStopsAtEndOfTrack) {
+      return null;
+    }
+    return <String, Object>{
+      if (endsAt != null)
+        systemMediaSleepTimerEndsAtEpochMsKey: endsAt.millisecondsSinceEpoch,
+      if (_sleepTimerStopsAtEndOfTrack)
+        systemMediaSleepTimerStopsAtEndOfTrackKey: true,
+    };
   }
 
   List<MediaItem> _libraryBrowseMediaItems() {
@@ -732,7 +768,11 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     if (index == null || index < 0 || index >= _tracks.length) {
       return null;
     }
-    return _mediaItemForTrack(_tracks[index], _runtimeDuration);
+    return _mediaItemForTrack(
+      _tracks[index],
+      _runtimeDuration,
+      extras: _sleepTimerMediaMetadata,
+    );
   }
 
   MediaItem _androidAutoQueueFolder() {
@@ -1144,6 +1184,7 @@ MediaItem _mediaItemForTrack(
   Track track,
   Duration? runtimeDuration, {
   String? mediaId,
+  Map<String, Object>? extras,
 }) {
   final knownDuration = runtimeDuration ?? track.duration;
   return MediaItem(
@@ -1157,6 +1198,7 @@ MediaItem _mediaItemForTrack(
     extras: <String, Object>{
       'sourceId': track.sourceId,
       if (track.externalId != null) 'externalId': track.externalId!,
+      if (extras != null) ...extras,
     },
   );
 }

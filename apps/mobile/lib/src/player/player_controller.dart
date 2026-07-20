@@ -109,6 +109,7 @@ class PlayerController extends ChangeNotifier {
   Timer? _sleepTimer;
   Timer? _sleepFadeStartTimer;
   Timer? _sleepFadeStepTimer;
+  DateTime? _sleepTimerEndsAt;
   Duration _duration = Duration.zero;
   Track? _current;
   int? _currentQueueIndex;
@@ -220,7 +221,14 @@ class PlayerController extends ChangeNotifier {
   Duration get duration => _duration;
   Duration get position => _audio.position;
   Stream<Duration> get positionStream => _audio.positionStream;
-  Duration? get sleepTimerRemaining => _sleepTimer == null ? null : Duration.zero;
+  Duration? get sleepTimerRemaining {
+    final endsAt = _sleepTimerEndsAt;
+    if (endsAt == null) {
+      return null;
+    }
+    final remaining = endsAt.difference(_clock());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
   bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
   Duration get sleepTimerFadeDuration => _sleepTimerFadeDuration;
@@ -1424,9 +1432,13 @@ class PlayerController extends ChangeNotifier {
     _stopAtEndOfTrack = false;
     _sleepTimerFadesOut = fadeOut;
     _sleepTimerFadeDuration = fadeDuration;
+    final endsAt = _clock().add(duration);
+    _sleepTimerEndsAt = endsAt;
     _sleepTimer = Timer(duration, () async {
       _sleepTimer = null;
+      _sleepTimerEndsAt = null;
       _sleepTimerFadesOut = false;
+      _publishSleepTimerMediaMetadata();
       await _stopForSleepTimer(restoreVolume: fadeOut);
     });
 
@@ -1439,6 +1451,7 @@ class PlayerController extends ChangeNotifier {
     if (restoreGaplessQueue) {
       unawaited(_reloadQueuePreservingPlayback());
     }
+    _publishSleepTimerMediaMetadata(endsAt: endsAt);
     notifyListeners();
   }
 
@@ -1446,6 +1459,7 @@ class PlayerController extends ChangeNotifier {
     _cancelSleepTimerState(restoreVolume: true);
     _stopAtEndOfTrack = true;
     unawaited(_isolateCurrentTrackUntilCompletion());
+    _publishSleepTimerMediaMetadata(stopsAtEndOfTrack: true);
     notifyListeners();
   }
 
@@ -1456,17 +1470,32 @@ class PlayerController extends ChangeNotifier {
     if (restoreGaplessQueue) {
       unawaited(_reloadQueuePreservingPlayback());
     }
+    _publishSleepTimerMediaMetadata();
     notifyListeners();
   }
 
   Future<void> _handleTrackCompleted() async {
     if (_stopAtEndOfTrack) {
       _stopAtEndOfTrack = false;
+      _publishSleepTimerMediaMetadata();
       await stop();
       return;
     }
 
     await next();
+  }
+
+  void _publishSleepTimerMediaMetadata({
+    DateTime? endsAt,
+    bool stopsAtEndOfTrack = false,
+  }) {
+    final audio = _audio;
+    if (audio is SleepTimerMediaMetadataPlaybackAudioEngine) {
+      audio.setSleepTimerMediaMetadata(
+        endsAt: endsAt,
+        stopsAtEndOfTrack: stopsAtEndOfTrack,
+      );
+    }
   }
 
   Future<void> _handlePlaybackError() async {
@@ -1673,6 +1702,7 @@ class PlayerController extends ChangeNotifier {
   void _cancelSleepTimerState({required bool restoreVolume}) {
     _sleepTimer?.cancel();
     _sleepTimer = null;
+    _sleepTimerEndsAt = null;
     _sleepTimerFadesOut = false;
     _sleepFadeStartTimer?.cancel();
     _sleepFadeStartTimer = null;

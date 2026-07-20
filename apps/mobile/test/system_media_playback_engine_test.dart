@@ -38,6 +38,45 @@ void main() {
     expect(engine.mediaItem.value?.duration, const Duration(minutes: 4));
   });
 
+  test('publishes sleep timer state only with the current media item',
+      () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final engine = SystemMediaPlaybackEngine(delegate);
+    addTearDown(engine.dispose);
+    final endsAt = DateTime.utc(2026, 7, 20, 12, 30);
+
+    await engine.setQueue(
+      <Track>[_track('one'), _track('two')],
+      initialIndex: 1,
+    );
+    engine.setSleepTimerMediaMetadata(endsAt: endsAt);
+
+    expect(
+      engine.mediaItem.value?.extras?[systemMediaSleepTimerEndsAtEpochMsKey],
+      endsAt.millisecondsSinceEpoch,
+    );
+    expect(
+      engine.queue.value.first.extras,
+      isNot(contains(systemMediaSleepTimerEndsAtEpochMsKey)),
+    );
+
+    engine.setSleepTimerMediaMetadata(stopsAtEndOfTrack: true);
+    expect(
+      engine.mediaItem.value?.extras,
+      isNot(contains(systemMediaSleepTimerEndsAtEpochMsKey)),
+    );
+    expect(
+      engine.mediaItem.value?.extras?[systemMediaSleepTimerStopsAtEndOfTrackKey],
+      isTrue,
+    );
+
+    engine.setSleepTimerMediaMetadata();
+    expect(
+      engine.mediaItem.value?.extras,
+      isNot(contains(systemMediaSleepTimerStopsAtEndOfTrackKey)),
+    );
+  });
+
   test('does not publish authenticated stream URLs to system media metadata',
       () async {
     const secret = 'private-api-key';

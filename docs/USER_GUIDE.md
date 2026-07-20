@@ -107,7 +107,7 @@ Open the Options tab and choose **Export backup**, then choose **Save backup fil
 
 ## Sleep timer
 
-Tap the moon icon in the top-right corner and choose a preset duration, choose **Custom duration** and enter 1 to 1440 minutes, or choose **Stop at end of current track**. Turn on **Fade out before stopping** and choose a 10-second, 30-second, 1-minute, or 2-minute fade duration for timed sleep timers. Playback stops automatically when the timer or selected track ends.
+Tap the moon icon in the top-right corner and choose a preset duration, choose **Custom duration** and enter 1 to 1440 minutes, or choose **Stop at end of current track**. Turn on **Fade out before stopping** and choose a 10-second, 30-second, 1-minute, or 2-minute fade duration for timed sleep timers. Playback stops automatically when the timer or selected track ends. On supported system-media sessions, the current item includes the timer's expiry time or end-of-track state without exposing media locations, stream URLs, or account data.
 
 ## Cross-device library sync
 
