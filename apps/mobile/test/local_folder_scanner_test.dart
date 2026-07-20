@@ -404,16 +404,19 @@ First caption
     await File(p.join(root.path, 'Retagged first.mp3')).writeAsBytes(mp3First);
     await File(p.join(root.path, 'Retagged second.mp3')).writeAsBytes(mp3Second);
     final scanned = await const LocalFolderScanner().scan(root.path);
-    final tracksByTitle = <String, Track>{
-      for (final track in scanned.tracks) track.title: track,
-    };
-    expect(
-      tracksByTitle['Retagged first']!.contentHash,
-      isNot(tracksByTitle['Retagged second']!.contentHash),
+    final firstTrack = scanned.tracks.singleWhere(
+      (track) => p.basename(track.localPath ?? '') == 'Retagged first.mp3',
+    );
+    final secondTrack = scanned.tracks.singleWhere(
+      (track) => p.basename(track.localPath ?? '') == 'Retagged second.mp3',
     );
     expect(
-      tracksByTitle['Retagged first']!.audioFingerprint,
-      tracksByTitle['Retagged second']!.audioFingerprint,
+      firstTrack.contentHash,
+      isNot(secondTrack.contentHash),
+    );
+    expect(
+      firstTrack.audioFingerprint,
+      secondTrack.audioFingerprint,
     );
   });
 

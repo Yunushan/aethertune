@@ -1,3 +1,5 @@
+import 'dart:ui' show Size;
+
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
