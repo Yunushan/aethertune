@@ -14093,6 +14093,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   String? _archiveError;
   bool _podcastLoading = false;
   bool _podcastDirectoryLoading = false;
+  bool _podcastDirectorySuggestionLoading = false;
   String? _podcastError;
   String? _podcastDirectoryError;
   String? _selectedPodcastSubscriptionId;
@@ -14103,6 +14104,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   int _providerSearchRequestSerial = 0;
   int _providerSearchSuggestionRequestSerial = 0;
   Timer? _providerSearchSuggestionDebounce;
+  int _podcastDirectoryRequestSerial = 0;
+  Timer? _podcastDirectorySuggestionDebounce;
   String _providerSearchQuery = '';
   String? _providerSearchMessage;
   bool _radioLoading = false;
@@ -14125,6 +14128,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   @override
   void dispose() {
     _providerSearchSuggestionDebounce?.cancel();
+    _podcastDirectorySuggestionDebounce?.cancel();
     _providerSearchController.dispose();
     _archiveSearchController.dispose();
     _archiveCollectionController.dispose();
@@ -15064,7 +15068,7 @@ class _SourcesTabState extends State<_SourcesTab> {
         TextField(
           key: const Key('podcast-directory-query'),
           controller: _podcastDirectoryQueryController,
-          enabled: !offlineModeEnabled && !_podcastDirectoryLoading,
+          enabled: !offlineModeEnabled,
           decoration: InputDecoration(
             labelText: 'Find podcasts',
             helperText: 'Searches the public Apple podcast directory.',
@@ -15087,6 +15091,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           onSubmitted: offlineModeEnabled || _podcastDirectoryLoading
               ? null
               : (_) => _searchPodcastDirectory(context),
+          onChanged: _schedulePodcastDirectorySuggestions,
         ),
         if (_podcastDirectoryError != null) ...<Widget>[
           const SizedBox(height: 8),
@@ -17178,6 +17183,8 @@ class _SourcesTabState extends State<_SourcesTab> {
 
   Future<void> _searchPodcastDirectory(BuildContext context) async {
     final library = context.read<LibraryStore>();
+    _podcastDirectorySuggestionDebounce?.cancel();
+    final requestSerial = ++_podcastDirectoryRequestSerial;
     if (_offlineModeBlocksSourceNetwork(context)) {
       setState(() {
         _podcastDirectoryResults = <PodcastDirectoryResult>[];
@@ -17195,11 +17202,12 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
     setState(() {
       _podcastDirectoryLoading = true;
+      _podcastDirectorySuggestionLoading = false;
       _podcastDirectoryError = null;
     });
     try {
       final results = await _podcastDirectory.search(query);
-      if (!mounted) {
+      if (!mounted || requestSerial != _podcastDirectoryRequestSerial) {
         return;
       }
       if (library.offlineModeEnabled) {
@@ -17215,13 +17223,79 @@ class _SourcesTabState extends State<_SourcesTab> {
         _podcastDirectoryLoading = false;
       });
     } on Object {
-      if (!mounted) {
+      if (!mounted || requestSerial != _podcastDirectoryRequestSerial) {
         return;
       }
       setState(() {
         _podcastDirectoryResults = <PodcastDirectoryResult>[];
         _podcastDirectoryLoading = false;
         _podcastDirectoryError = 'Try again after checking your connection.';
+      });
+    }
+  }
+
+  void _schedulePodcastDirectorySuggestions(String rawQuery) {
+    _podcastDirectorySuggestionDebounce?.cancel();
+    if (_podcastDirectoryLoading) {
+      return;
+    }
+    final query = rawQuery.trim();
+    final requestSerial = ++_podcastDirectoryRequestSerial;
+    if (query.length < 2) {
+      if (_podcastDirectorySuggestionLoading ||
+          _podcastDirectoryResults.isNotEmpty ||
+          _podcastDirectoryError != null) {
+        setState(() {
+          _podcastDirectorySuggestionLoading = false;
+          _podcastDirectoryResults = <PodcastDirectoryResult>[];
+          _podcastDirectoryError = null;
+        });
+      }
+      return;
+    }
+    if (_offlineModeBlocksSourceNetwork(context)) {
+      return;
+    }
+    setState(() {
+      _podcastDirectorySuggestionLoading = true;
+      _podcastDirectoryError = null;
+    });
+    _podcastDirectorySuggestionDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => unawaited(
+        _loadPodcastDirectorySuggestions(query, requestSerial),
+      ),
+    );
+  }
+
+  Future<void> _loadPodcastDirectorySuggestions(
+    String query,
+    int requestSerial,
+  ) async {
+    try {
+      final results = await _podcastDirectory.search(query, limit: 6);
+      if (!mounted || requestSerial != _podcastDirectoryRequestSerial) {
+        return;
+      }
+      final library = context.read<LibraryStore>();
+      if (library.offlineModeEnabled) {
+        setState(() {
+          _podcastDirectorySuggestionLoading = false;
+          _podcastDirectoryResults = <PodcastDirectoryResult>[];
+        });
+        return;
+      }
+      setState(() {
+        _podcastDirectorySuggestionLoading = false;
+        _podcastDirectoryResults = results;
+      });
+    } on Object {
+      if (!mounted || requestSerial != _podcastDirectoryRequestSerial) {
+        return;
+      }
+      setState(() {
+        _podcastDirectorySuggestionLoading = false;
+        _podcastDirectoryResults = <PodcastDirectoryResult>[];
       });
     }
   }

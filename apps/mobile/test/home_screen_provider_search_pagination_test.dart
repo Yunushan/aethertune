@@ -286,10 +286,10 @@ void main() {
     addTearDown(player.dispose);
     final chapterHosts = PodcastChapterHostPolicy();
     await chapterHosts.load();
-    var directoryRequests = 0;
+    final directoryRequests = <Uri>[];
     final directory = ItunesPodcastDirectory(
-      loader: (_) async {
-        directoryRequests += 1;
+      loader: (uri) async {
+        directoryRequests.add(uri);
         return _podcastDirectoryResponse;
       },
     );
@@ -329,11 +329,21 @@ void main() {
     final scrollable = find.byType(Scrollable).first;
     final query = find.byKey(const Key('podcast-directory-query'));
     await tester.scrollUntilVisible(query, 300, scrollable: scrollable);
+    await tester.enterText(query, 'ae');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    expect(directoryRequests, hasLength(1));
+    expect(directoryRequests.single.queryParameters['term'], 'ae');
+    expect(directoryRequests.single.queryParameters['limit'], '6');
+    expect(find.text('Aether Podcast'), findsOneWidget);
+
     await tester.enterText(query, 'aether');
     await tester.tap(find.byKey(const Key('podcast-directory-search')));
     await tester.pumpAndSettle();
 
-    expect(directoryRequests, 1);
+    expect(directoryRequests, hasLength(2));
+    expect(directoryRequests.last.queryParameters['term'], 'aether');
+    expect(directoryRequests.last.queryParameters['limit'], '20');
     expect(find.text('Aether Podcast'), findsOneWidget);
     final subscribe = find.byKey(
       const ValueKey<String>(
@@ -379,7 +389,7 @@ void main() {
       ).onPressed,
       isNull,
     );
-    expect(directoryRequests, 1);
+    expect(directoryRequests, hasLength(2));
     expect(tester.takeException(), isNull);
   });
 }
