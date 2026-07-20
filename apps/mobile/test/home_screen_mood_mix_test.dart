@@ -438,8 +438,12 @@ void main() {
 
     expect(translator.calls, 1);
     expect(translator.targetLanguage, 'tr');
+    expect(find.text('Translated lyrics'), findsOneWidget);
     expect(
-      find.text('Translated lyric line', findRichText: true),
+      find.byWidgetPredicate(
+        (widget) => widget is SelectableText &&
+            widget.data == 'Translated lyric line',
+      ),
       findsOneWidget,
     );
     expect(
