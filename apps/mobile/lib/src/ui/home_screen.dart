@@ -1628,27 +1628,38 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final now = DateTime.now();
-    final tracks = result.files
-        .where((file) => file.path != null)
-        .map(
-          (file) => Track(
-            id: Track.stableLocalId(file.path!),
-            title: p.basenameWithoutExtension(file.name),
-            artist: 'Local File',
-            album: p.dirname(file.path!),
-            localPath: file.path,
-            sourceId: 'local',
-            addedAt: now,
-          ),
-        )
+    final filePaths = result.files
+        .map((file) => file.path)
+        .whereType<String>()
         .toList(growable: false);
+    if (filePaths.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No readable audio files selected.')),
+      );
+      return;
+    }
 
-    await library.addTracks(tracks);
+    try {
+      final scanResult = await scanLocalFilesInBackground(
+        filePaths,
+        importedAt: DateTime.now(),
+      );
+      await _addScannedTracksToLibrary(library, scanResult);
 
-    messenger.showSnackBar(
-      SnackBar(content: Text('Imported ${tracks.length} audio file(s).')),
-    );
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(_selectedFilesImportSummary(scanResult))),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(_folderImportErrorMessage(error))),
+      );
+    }
   }
 
   Future<void> _importAudioFolder(BuildContext context) async {
@@ -1667,28 +1678,7 @@ class _HomeScreenState extends State<HomeScreen> {
         folderPath,
         importedAt: DateTime.now(),
       );
-      if (scanResult.tracks.isNotEmpty) {
-        await library.addTracks(scanResult.tracks);
-        for (final entry in scanResult.sidecarLyricsByTrackId.entries) {
-          await library.setLyricsIfAbsent(
-            entry.key,
-            entry.value,
-            sourceId: 'sidecar',
-            sourceName: 'Local lyric sidecar',
-          );
-        }
-        for (final entry in scanResult.embeddedLyricsByTrackId.entries) {
-          await library.setLyricsIfAbsent(
-            entry.key,
-            entry.value,
-            sourceId: 'embedded',
-            sourceName: 'Embedded ID3 lyrics',
-          );
-        }
-        for (final entry in scanResult.sidecarChaptersByTrackId.entries) {
-          await library.setTrackChaptersIfAbsent(entry.key, entry.value);
-        }
-      }
+      await _addScannedTracksToLibrary(library, scanResult);
       await library.watchLocalFolder(folderPath);
 
       if (!context.mounted) {
@@ -13705,6 +13695,61 @@ String _folderImportSummary(LocalFolderScanResult result) {
   }
 
   return details.join(' ');
+}
+
+String _selectedFilesImportSummary(LocalFolderScanResult result) {
+  if (result.tracks.isEmpty) {
+    return 'No supported audio files were imported.';
+  }
+
+  final details = <String>['Imported ${result.tracks.length} audio file(s).'];
+  if (result.sidecarLyricsCount > 0) {
+    details.add(
+      'Imported sidecar lyrics for ${result.sidecarLyricsCount} track(s).',
+    );
+  }
+  if (result.embeddedLyricsCount > 0) {
+    details.add(
+      'Imported embedded lyrics for ${result.embeddedLyricsCount} track(s).',
+    );
+  }
+  if (result.ignoredFileCount > 0) {
+    details.add(
+      'Skipped ${result.ignoredFileCount} unavailable or non-audio file(s).',
+    );
+  }
+
+  return details.join(' ');
+}
+
+Future<void> _addScannedTracksToLibrary(
+  LibraryStore library,
+  LocalFolderScanResult scanResult,
+) async {
+  if (scanResult.tracks.isEmpty) {
+    return;
+  }
+
+  await library.addTracks(scanResult.tracks);
+  for (final entry in scanResult.sidecarLyricsByTrackId.entries) {
+    await library.setLyricsIfAbsent(
+      entry.key,
+      entry.value,
+      sourceId: 'sidecar',
+      sourceName: 'Local lyric sidecar',
+    );
+  }
+  for (final entry in scanResult.embeddedLyricsByTrackId.entries) {
+    await library.setLyricsIfAbsent(
+      entry.key,
+      entry.value,
+      sourceId: 'embedded',
+      sourceName: 'Embedded ID3 lyrics',
+    );
+  }
+  for (final entry in scanResult.sidecarChaptersByTrackId.entries) {
+    await library.setTrackChaptersIfAbsent(entry.key, entry.value);
+  }
 }
 
 String _folderImportErrorMessage(Object error) {

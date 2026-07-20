@@ -108,6 +108,21 @@ Future<LocalFolderScanResult> scanLocalFolderInBackground(
   );
 }
 
+/// Scans explicitly selected audio files away from the UI isolate. Unlike a
+/// folder scan, this does not enumerate any additional directories.
+Future<LocalFolderScanResult> scanLocalFilesInBackground(
+  Iterable<String> filePaths, {
+  DateTime? importedAt,
+}) {
+  final selectedPaths = List<String>.unmodifiable(filePaths);
+  return Isolate.run(
+    () => const LocalFolderScanner().scanFiles(
+      selectedPaths,
+      importedAt: importedAt,
+    ),
+  );
+}
+
 final class LocalFolderScanner {
   const LocalFolderScanner({
     this.supportedExtensions = supportedLocalAudioExtensions,
@@ -131,20 +146,29 @@ final class LocalFolderScanner {
     );
     await scanState.visit(root);
 
-    return LocalFolderScanResult(
-      tracks: List.unmodifiable(scanState.tracks),
-      ignoredFileCount: scanState.ignoredFileCount,
-      inaccessibleDirectoryCount: scanState.inaccessibleDirectoryCount,
-      sidecarLyricsByTrackId: Map.unmodifiable(
-        scanState.sidecarLyricsByTrackId,
-      ),
-      embeddedLyricsByTrackId: Map.unmodifiable(
-        scanState.embeddedLyricsByTrackId,
-      ),
-      sidecarChaptersByTrackId: Map.unmodifiable(
-        scanState.sidecarChaptersByTrackId,
-      ),
+    return scanState.toResult();
+  }
+
+  Future<LocalFolderScanResult> scanFiles(
+    Iterable<String> filePaths, {
+    DateTime? importedAt,
+  }) async {
+    final scanState = _LocalFolderScanState(
+      rootPath: '',
+      importedAt: importedAt ?? DateTime.now(),
+      supportedExtensions: supportedExtensions,
     );
+    final seenPaths = <String>{};
+
+    for (final filePath in filePaths) {
+      final normalizedPath = p.normalize(p.absolute(filePath));
+      if (!seenPaths.add(normalizedPath.toLowerCase())) {
+        continue;
+      }
+      await scanState.scanFile(normalizedPath);
+    }
+
+    return scanState.toResult();
   }
 }
 
@@ -165,6 +189,17 @@ final class _LocalFolderScanState {
       <String, List<TrackChapter>>{};
   int ignoredFileCount = 0;
   int inaccessibleDirectoryCount = 0;
+
+  LocalFolderScanResult toResult() {
+    return LocalFolderScanResult(
+      tracks: List.unmodifiable(tracks),
+      ignoredFileCount: ignoredFileCount,
+      inaccessibleDirectoryCount: inaccessibleDirectoryCount,
+      sidecarLyricsByTrackId: Map.unmodifiable(sidecarLyricsByTrackId),
+      embeddedLyricsByTrackId: Map.unmodifiable(embeddedLyricsByTrackId),
+      sidecarChaptersByTrackId: Map.unmodifiable(sidecarChaptersByTrackId),
+    );
+  }
 
   Future<void> visit(Directory directory) async {
     final entries = await _listDirectory(directory);
@@ -204,15 +239,7 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      final scannedTrack = await _trackForFile(entry.path);
-      final track = scannedTrack.track;
-      tracks.add(track);
-      final sidecarLyrics = await _sidecarLyricsForFile(entry.path);
-      if (sidecarLyrics != null) {
-        sidecarLyricsByTrackId[track.id] = sidecarLyrics;
-      } else if (scannedTrack.embeddedLyrics != null) {
-        embeddedLyricsByTrackId[track.id] = scannedTrack.embeddedLyrics!;
-      }
+      await scanFile(entry.path);
     }
 
     for (final cuePath in cuePaths) {
@@ -220,6 +247,32 @@ final class _LocalFolderScanState {
       for (final entry in chaptersByTrackId.entries) {
         sidecarChaptersByTrackId.putIfAbsent(entry.key, () => entry.value);
       }
+    }
+  }
+
+  Future<void> scanFile(String path) async {
+    if (!_isSupportedAudioPath(path)) {
+      ignoredFileCount += 1;
+      return;
+    }
+
+    try {
+      if (!await File(path).exists()) {
+        ignoredFileCount += 1;
+        return;
+      }
+
+      final scannedTrack = await _trackForFile(path);
+      final track = scannedTrack.track;
+      tracks.add(track);
+      final sidecarLyrics = await _sidecarLyricsForFile(path);
+      if (sidecarLyrics != null) {
+        sidecarLyricsByTrackId[track.id] = sidecarLyrics;
+      } else if (scannedTrack.embeddedLyrics != null) {
+        embeddedLyricsByTrackId[track.id] = scannedTrack.embeddedLyrics!;
+      }
+    } on FileSystemException {
+      ignoredFileCount += 1;
     }
   }
 
@@ -357,6 +410,9 @@ final class _LocalFolderScanState {
 
   String _albumLabelFor(String filePath) {
     final parent = p.dirname(filePath);
+    if (rootPath.isEmpty) {
+      return p.basename(parent);
+    }
     final relativeParent = p.relative(parent, from: rootPath);
     if (relativeParent == '.') {
       return p.basename(rootPath);

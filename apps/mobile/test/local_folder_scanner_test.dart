@@ -78,6 +78,57 @@ void main() {
     );
   });
 
+  test(
+    'scans selected files with metadata, sidecars, and deduplication',
+    () async {
+      final firstPath = p.join(root.path, '01 Selected Artist - First.mp3');
+      final secondDirectory = Directory(p.join(root.path, 'Second Album'));
+      await secondDirectory.create();
+      final secondPath = p.join(secondDirectory.path, '02 Second.mp3');
+      await File(firstPath).writeAsBytes(<int>[1, 2, 3]);
+      await File(secondPath).writeAsBytes(<int>[4, 5, 6]);
+      await File(p.setExtension(firstPath, '.lrc')).writeAsString(
+        '[00:01.00]Selected lyric',
+      );
+
+      final result = await scanLocalFilesInBackground(
+        <String>[
+          firstPath,
+          secondPath,
+          firstPath,
+          p.join(root.path, 'notes.txt'),
+        ],
+        importedAt: DateTime.utc(2026, 2, 1),
+      );
+
+      expect(result.ignoredFileCount, 1);
+      expect(
+        result.tracks.map((track) => track.title),
+        <String>['First', 'Second'],
+      );
+      expect(
+        result.tracks.map((track) => track.artist),
+        <String>['Selected Artist', 'Local Folder'],
+      );
+      expect(
+        result.tracks.map((track) => track.album),
+        <String>[p.basename(root.path), 'Second Album'],
+      );
+      expect(
+        result.tracks.map((track) => track.contentHash),
+        everyElement(isNotEmpty),
+      );
+      expect(
+        result.sidecarLyricsByTrackId[Track.stableLocalId(firstPath)],
+        '[00:01.00]Selected lyric',
+      );
+      expect(
+        result.tracks.map((track) => track.addedAt).toSet(),
+        <DateTime>{DateTime.utc(2026, 2, 1)},
+      );
+    },
+  );
+
   test('associates matching LRC sidecar lyrics during folder scans', () async {
     final audioPath = p.join(root.path, 'Sidecar Artist - Sidecar Title.MP3');
     await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
