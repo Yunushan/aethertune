@@ -56,6 +56,7 @@ class TrackLyrics {
 
   bool get isEmpty => plainText.trim().isEmpty;
   bool get isTtmlDocument => isTtmlLyricsDocument(plainText);
+  bool get isWebVttDocument => isWebVttLyricsDocument(plainText);
   bool get isSrtDocument => isSrtLyricsDocument(plainText);
   List<SyncedLyricLine> get syncedLines => _offsetSyncedLyricLines(
         parseSyncedLyricLines(plainText),

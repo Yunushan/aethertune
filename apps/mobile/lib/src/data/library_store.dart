@@ -4966,6 +4966,8 @@ class LibraryStore extends ChangeNotifier {
       ..writeln(
         'Format: ${lyrics.isTtmlDocument
             ? 'Synced TTML karaoke'
+            : lyrics.isWebVttDocument
+            ? 'Synced WebVTT'
             : lyrics.isSrtDocument
             ? 'Synced SRT'
             : lyrics.hasSyncedLines

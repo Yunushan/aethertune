@@ -225,6 +225,31 @@ Timed sidecar
     expect(localFileContentHash(<int>[1, 2, 3, 4]), hashesByTitle['First']);
   });
 
+  test(
+    'associates matching WebVTT sidecar lyrics during folder scans',
+    () async {
+      final audioPath = p.join(
+        root.path,
+        'Captioned Artist - Captioned Title.MP3',
+      );
+      await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+      await File('${p.withoutExtension(audioPath)}.vtt').writeAsString('''
+WEBVTT
+
+00:00:01.000 --> 00:00:03.000
+First caption
+''');
+
+      final result = await const LocalFolderScanner().scan(root.path);
+
+      expect(result.tracks, hasLength(1));
+      expect(
+        result.sidecarLyricsByTrackId[result.tracks.single.id],
+        contains('WEBVTT'),
+      );
+    },
+  );
+
   test('derives matching audio payload fingerprints despite tag changes',
       () async {
     const audioPayload = <int>[0xff, 0xfb, 0x90, 0x64, 0x11, 0x22, 0x33];

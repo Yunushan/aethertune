@@ -9,6 +9,7 @@ void main() {
     expect(isSupportedLyricsDocumentName('lyrics.txt'), isTrue);
     expect(isSupportedLyricsDocumentName('song.LRC'), isTrue);
     expect(isSupportedLyricsDocumentName('subtitles.srt'), isTrue);
+    expect(isSupportedLyricsDocumentName('captions.VTT'), isTrue);
     expect(isSupportedLyricsDocumentName('karaoke.ttml'), isTrue);
     expect(isSupportedLyricsDocumentName('notes.md'), isFalse);
     expect(isSupportedLyricsDocumentName('lyrics'), isFalse);
@@ -43,6 +44,16 @@ void main() {
     );
   });
 
+  test('rejects malformed WebVTT documents', () {
+    expect(
+      () => decodeLyricsDocumentBytes(
+        utf8.encode('WEBVTT\n\nNo timestamped cue'),
+        fileName: 'broken.vtt',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('rejects non-utf8 lyrics documents', () {
     expect(
       () => decodeLyricsDocumentBytes(<int>[0xff, 0xfe], fileName: 'bad.lrc'),
@@ -50,7 +61,7 @@ void main() {
     );
   });
 
-  test('builds txt, lrc, srt, and ttml lyrics export documents', () {
+  test('builds txt, lrc, srt, WebVTT, and ttml lyrics export documents', () {
     final plainExport = buildLyricsDocumentExport(
       title: 'Plain / Song',
       artist: '',
@@ -71,6 +82,11 @@ void main() {
       artist: 'Mira',
       plainText: '1\n00:00:01,000 --> 00:00:02,000\nFirst line',
     )!;
+    final webVttExport = buildLyricsDocumentExport(
+      title: 'Captions',
+      artist: 'Mira',
+      plainText: 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nFirst cue',
+    )!;
 
     expect(plainExport.fileName, 'Plain Song.txt');
     expect(plainExport.extension, 'txt');
@@ -86,6 +102,8 @@ void main() {
     expect(ttmlExport.extension, 'ttml');
     expect(srtExport.fileName, 'Mira - Subtitled.srt');
     expect(srtExport.extension, 'srt');
+    expect(webVttExport.fileName, 'Mira - Captions.vtt');
+    expect(webVttExport.extension, 'vtt');
   });
 
   test('does not build empty lyrics export documents', () {

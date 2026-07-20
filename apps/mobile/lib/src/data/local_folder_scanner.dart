@@ -4008,6 +4008,7 @@ const _asfExtendedContentDescriptionObjectGuid = <int>[
 ];
 const _sidecarLyricsExtensionsByPreference = <String>[
   '.ttml',
+  '.vtt',
   '.srt',
   '.lrc',
   '.txt',

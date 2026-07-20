@@ -188,6 +188,10 @@ Second line
     final lines = parseSyncedLyricLines(document);
 
     expect(isWebVttLyricsDocument(document), isTrue);
+    expect(
+      TrackLyrics(trackId: 'webvtt', plainText: document).isWebVttDocument,
+      isTrue,
+    );
     expect(lines, hasLength(2));
     expect(lines[0].timestamp, const Duration(milliseconds: 1250));
     expect(lines[0].endTimestamp, const Duration(milliseconds: 3500));
