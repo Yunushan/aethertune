@@ -49,6 +49,14 @@ void main() {
           estimatedListeningDuration: Duration(minutes: 24),
         ),
       ],
+      topSources: const <LibraryStatsGroup>[
+        LibraryStatsGroup(
+          label: 'Jellyfin',
+          playCount: 5,
+          trackCount: 2,
+          estimatedListeningDuration: Duration(minutes: 20),
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -68,9 +76,11 @@ void main() {
     expect(find.text('Top artists chart'), findsOneWidget);
     expect(find.text('Top albums chart'), findsOneWidget);
     expect(find.text('Top genres chart'), findsOneWidget);
+    expect(find.text('Top sources chart'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
     expect(find.text('28m'), findsOneWidget);
+    expect(find.text('20m'), findsOneWidget);
     expect(
       tester.widget<SegmentedButton<LibraryStatsChartMetric>>(
         find.byKey(const Key('listening-stats-chart-metric')),

@@ -12098,10 +12098,26 @@ class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
           ),
         )
         .toList(growable: false);
+    final sourceData = stats.topSources
+        .map(
+          (sourceStats) => ListeningStatsBarDatum(
+            label: sourceStats.label,
+            value: _valueFor(
+              playCount: sourceStats.playCount,
+              listeningDuration: sourceStats.estimatedListeningDuration,
+            ),
+            valueLabel: _labelFor(
+              playCount: sourceStats.playCount,
+              listeningDuration: sourceStats.estimatedListeningDuration,
+            ),
+          ),
+        )
+        .toList(growable: false);
     if (trackData.isEmpty &&
         artistData.isEmpty &&
         albumData.isEmpty &&
-        genreData.isEmpty) {
+        genreData.isEmpty &&
+        sourceData.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -12134,6 +12150,13 @@ class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
           icon: Icons.category_outlined,
           color: colorScheme.error,
           data: genreData,
+        ),
+      if (sourceData.isNotEmpty)
+        ListeningStatsBarChart(
+          title: 'Top sources chart',
+          icon: Icons.source_outlined,
+          color: colorScheme.primaryContainer,
+          data: sourceData,
         ),
     ];
 
