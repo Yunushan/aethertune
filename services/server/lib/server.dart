@@ -566,10 +566,16 @@ Future<Response> _handleAuthProfile(
     final hasDeviceName = body.containsKey('deviceName');
     final hasAvatarTone = body.containsKey('avatarTone');
     final hasPublicProfileEnabled = body.containsKey('publicProfileEnabled');
+    final hasPublicDisplayNameEnabled =
+        body.containsKey('publicDisplayNameEnabled');
+    final hasPublicAvatarToneEnabled =
+        body.containsKey('publicAvatarToneEnabled');
     if (!hasDisplayName &&
         !hasDeviceName &&
         !hasAvatarTone &&
-        !hasPublicProfileEnabled) {
+        !hasPublicProfileEnabled &&
+        !hasPublicDisplayNameEnabled &&
+        !hasPublicAvatarToneEnabled) {
       throw const FormatException(
         'At least one profile field must be provided.',
       );
@@ -585,6 +591,14 @@ Future<Response> _handleAuthProfile(
       publicProfileEnabledProvided: hasPublicProfileEnabled,
       publicProfileEnabled: hasPublicProfileEnabled
           ? _requiredBool(body, 'publicProfileEnabled')
+          : false,
+      publicDisplayNameEnabledProvided: hasPublicDisplayNameEnabled,
+      publicDisplayNameEnabled: hasPublicDisplayNameEnabled
+          ? _requiredBool(body, 'publicDisplayNameEnabled')
+          : false,
+      publicAvatarToneEnabledProvided: hasPublicAvatarToneEnabled,
+      publicAvatarToneEnabled: hasPublicAvatarToneEnabled
+          ? _requiredBool(body, 'publicAvatarToneEnabled')
           : false,
     );
     if (updated == null) {
@@ -628,6 +642,9 @@ Map<String, Object?> _authProfileJson({
       'displayName': account?.displayName,
       'avatarTone': account?.avatarTone,
       'publicProfileEnabled': account?.publicProfileEnabled ?? false,
+      'publicProfileFieldAudienceSupported': account != null,
+      'publicDisplayNameEnabled': account?.publicDisplayNameEnabled ?? false,
+      'publicAvatarToneEnabled': account?.publicAvatarToneEnabled ?? false,
       'managed': account != null,
       'editable': account != null && device != null,
     },
@@ -658,8 +675,9 @@ Future<Response> _handlePublicProfile(
   }
   return _jsonResponse(200, <String, Object?>{
     'id': account.id,
-    'displayName': account.displayName,
-    'avatarTone': account.avatarTone,
+    if (account.publicDisplayNameEnabled) 'displayName': account.displayName,
+    if (account.publicAvatarToneEnabled && account.avatarTone != null)
+      'avatarTone': account.avatarTone,
   });
 }
 

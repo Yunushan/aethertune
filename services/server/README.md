@@ -167,11 +167,13 @@ phone's AetherTune sync settings, then issue another token with the same
 same snapshot owner without sharing a credential. The registry stores only
 SHA-256 token digests under `AETHERTUNE_DATA_DIR/authentication`.
 
-Managed profiles are private by default. An authenticated managed device can
-set `publicProfileEnabled` through `PATCH /api/v1/auth/profile`; only then can
-anyone read `GET /api/v1/public-profiles/{accountId}`. That response includes
-only the account ID, display name, and selected avatar tone. It never exposes
-device names, device activity, token metadata, snapshots, or playlists.
+Managed profiles are private by default. Older clients can set the legacy
+`publicProfileEnabled` flag through `PATCH /api/v1/auth/profile`. Current
+clients can independently set `publicDisplayNameEnabled` and
+`publicAvatarToneEnabled`; only selected fields are returned by
+`GET /api/v1/public-profiles/{accountId}`. The response never exposes device
+names, device activity, token metadata, snapshots, playlists, or listening
+data.
 
 List account and non-secret device metadata with
 `GET /api/v1/admin/sync-accounts`. Rotate a device token by repeating the

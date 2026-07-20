@@ -33,6 +33,9 @@ class LibrarySyncProfile {
     this.avatarToneSupported = false,
     this.publicProfileEnabled = false,
     this.publicProfileSupported = false,
+    this.publicProfileFieldAudienceSupported = false,
+    this.publicDisplayNameEnabled = false,
+    this.publicAvatarToneEnabled = false,
     this.device,
     this.editable = false,
   });
@@ -106,6 +109,34 @@ class LibrarySyncProfile {
         'Library sync public profile capability is inconsistent.',
       );
     }
+    final rawPublicProfileFieldAudienceSupported =
+        json['publicProfileFieldAudienceSupported'];
+    final publicProfileFieldAudienceSupported =
+        rawPublicProfileFieldAudienceSupported ??
+            (json.containsKey('publicDisplayNameEnabled') ||
+                json.containsKey('publicAvatarToneEnabled'));
+    if (publicProfileFieldAudienceSupported is! bool) {
+      throw const FormatException(
+        'Library sync public profile audience capability is invalid.',
+      );
+    }
+    final rawPublicDisplayNameEnabled =
+        json['publicDisplayNameEnabled'] ?? rawPublicProfileEnabled;
+    final rawPublicAvatarToneEnabled =
+        json['publicAvatarToneEnabled'] ?? rawPublicProfileEnabled;
+    if (rawPublicDisplayNameEnabled is! bool ||
+        rawPublicAvatarToneEnabled is! bool) {
+      throw const FormatException(
+        'Library sync public profile field audience is invalid.',
+      );
+    }
+    if (!publicProfileFieldAudienceSupported &&
+        (rawPublicDisplayNameEnabled != rawPublicProfileEnabled ||
+            rawPublicAvatarToneEnabled != rawPublicProfileEnabled)) {
+      throw const FormatException(
+        'Library sync public profile audience capability is inconsistent.',
+      );
+    }
     final rawDevice = json['device'];
     final device = rawDevice == null
         ? null
@@ -138,6 +169,10 @@ class LibrarySyncProfile {
       avatarToneSupported: avatarToneSupported,
       publicProfileEnabled: rawPublicProfileEnabled,
       publicProfileSupported: publicProfileSupported,
+      publicProfileFieldAudienceSupported:
+          publicProfileFieldAudienceSupported,
+      publicDisplayNameEnabled: rawPublicDisplayNameEnabled,
+      publicAvatarToneEnabled: rawPublicAvatarToneEnabled,
       managed: managed,
       device: device,
       editable: editable,
@@ -150,6 +185,9 @@ class LibrarySyncProfile {
   final bool avatarToneSupported;
   final bool publicProfileEnabled;
   final bool publicProfileSupported;
+  final bool publicProfileFieldAudienceSupported;
+  final bool publicDisplayNameEnabled;
+  final bool publicAvatarToneEnabled;
   final bool managed;
   final LibrarySyncProfileDevice? device;
   final bool editable;
@@ -163,6 +201,9 @@ class LibrarySyncProfile {
     'avatarToneSupported': avatarToneSupported,
     if (publicProfileSupported) 'publicProfileEnabled': publicProfileEnabled,
     'publicProfileSupported': publicProfileSupported,
+    'publicProfileFieldAudienceSupported': publicProfileFieldAudienceSupported,
+    'publicDisplayNameEnabled': publicDisplayNameEnabled,
+    'publicAvatarToneEnabled': publicAvatarToneEnabled,
     'managed': managed,
     'device': device?.toJson(),
     'editable': editable,

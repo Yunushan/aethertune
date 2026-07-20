@@ -451,6 +451,10 @@ void main() {
               '"id":"primary",'
               '"displayName":"Shared listeners",'
               '"avatarTone":"violet",'
+              '"publicProfileEnabled":true,'
+              '"publicProfileFieldAudienceSupported":true,'
+              '"publicDisplayNameEnabled":true,'
+              '"publicAvatarToneEnabled":false,'
               '"managed":true,'
               '"editable":true'
               '},'
@@ -469,6 +473,10 @@ void main() {
       deviceName: '  Pocket player  ',
       avatarTone: LibrarySyncProfileAvatarTone.violet,
       includeAvatarTone: true,
+      publicDisplayNameEnabled: true,
+      includePublicDisplayNameEnabled: true,
+      publicAvatarToneEnabled: false,
+      includePublicAvatarToneEnabled: true,
     );
 
     expect(requestedMethod, 'PATCH');
@@ -479,11 +487,16 @@ void main() {
       'displayName': 'Shared listeners',
       'deviceName': 'Pocket player',
       'avatarTone': 'violet',
+      'publicDisplayNameEnabled': true,
+      'publicAvatarToneEnabled': false,
     });
     expect(jsonEncode(requestedBody), isNot(contains(token)));
     expect(updated.effectiveDisplayName, 'Shared listeners');
     expect(updated.avatarTone, LibrarySyncProfileAvatarTone.violet);
     expect(updated.avatarToneSupported, isTrue);
+    expect(updated.publicProfileFieldAudienceSupported, isTrue);
+    expect(updated.publicDisplayNameEnabled, isTrue);
+    expect(updated.publicAvatarToneEnabled, isFalse);
     expect(updated.editable, isTrue);
     expect(updated.device?.name, 'Pocket player');
     await expectLater(

@@ -89,6 +89,8 @@ void main() {
       device: _managedProfile().device,
       editable: true,
       avatarToneSupported: true,
+      publicProfileSupported: true,
+      publicProfileFieldAudienceSupported: true,
     );
     await tester.tap(find.byKey(const Key('library-sync-refresh-profile')));
     await tester.pumpAndSettle();
@@ -111,6 +113,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Emerald').last);
     await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('library-sync-profile-public-display-name')),
+    );
+    await tester.tap(
+      find.byKey(const Key('library-sync-profile-public-avatar')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('library-sync-save-profile')));
     await tester.pumpAndSettle();
     expect(gateway.profileUpdateCalls, 1);
@@ -118,6 +127,8 @@ void main() {
     expect(find.text('Account primary · Device Pocket player'), findsOneWidget);
     expect(sync.profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
     expect(sync.profile?.avatarToneSupported, isTrue);
+    expect(sync.profile?.publicDisplayNameEnabled, isTrue);
+    expect(sync.profile?.publicAvatarToneEnabled, isTrue);
     expect(sync.account?.deviceId, 'Pocket player');
     expect(find.text('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -570,6 +581,10 @@ class _FakeSyncGateway
     bool includeAvatarTone = false,
     bool publicProfileEnabled = false,
     bool includePublicProfileEnabled = false,
+    bool publicDisplayNameEnabled = false,
+    bool includePublicDisplayNameEnabled = false,
+    bool publicAvatarToneEnabled = false,
+    bool includePublicAvatarToneEnabled = false,
   }) async {
     profileUpdateCalls += 1;
     final current = profile;
@@ -581,8 +596,14 @@ class _FakeSyncGateway
       displayName: displayName,
       avatarTone: avatarTone,
       avatarToneSupported: current.avatarToneSupported,
-      publicProfileEnabled: publicProfileEnabled,
+      publicProfileEnabled: current.publicProfileFieldAudienceSupported
+          ? publicDisplayNameEnabled || publicAvatarToneEnabled
+          : publicProfileEnabled,
       publicProfileSupported: current.publicProfileSupported,
+      publicProfileFieldAudienceSupported:
+          current.publicProfileFieldAudienceSupported,
+      publicDisplayNameEnabled: publicDisplayNameEnabled,
+      publicAvatarToneEnabled: publicAvatarToneEnabled,
       managed: true,
       device: LibrarySyncProfileDevice(
         id: current.device!.id,

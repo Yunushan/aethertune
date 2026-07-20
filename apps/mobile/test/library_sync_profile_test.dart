@@ -23,6 +23,30 @@ void main() {
 
     expect(profile.publicProfileSupported, isTrue);
     expect(profile.publicProfileEnabled, isTrue);
+    expect(profile.publicProfileFieldAudienceSupported, isFalse);
+    expect(profile.publicDisplayNameEnabled, isTrue);
+    expect(profile.publicAvatarToneEnabled, isTrue);
+  });
+
+  test('parses independent public profile audiences from a current server', () {
+    final profile = LibrarySyncProfile.fromServerJson(<String, Object?>{
+      'account': <String, Object?>{
+        'id': 'primary',
+        'displayName': 'Primary listener',
+        'avatarTone': 'emerald',
+        'publicProfileEnabled': true,
+        'publicProfileFieldAudienceSupported': true,
+        'publicDisplayNameEnabled': true,
+        'publicAvatarToneEnabled': false,
+        'managed': true,
+        'editable': true,
+      },
+      'device': device,
+    });
+
+    expect(profile.publicProfileFieldAudienceSupported, isTrue);
+    expect(profile.publicDisplayNameEnabled, isTrue);
+    expect(profile.publicAvatarToneEnabled, isFalse);
   });
 
   test('keeps public profiles disabled for older compatible servers', () {

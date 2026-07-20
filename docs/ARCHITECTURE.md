@@ -205,8 +205,9 @@ digests, supports several independently revocable devices on one account, and
 atomically rotates a selected token. The profile endpoint returns only the
 authenticated account and current non-secret device metadata. Managed
 responses explicitly advertise profile editing; authenticated `PATCH` updates
-the shared display name, only that token's device label, and an optional
-fixed-tone initials avatar through the same copy-persist-publish transaction.
+the shared display name, only that token's device label, an optional fixed-tone
+initials avatar, and independent public audiences for the name and avatar
+through the same copy-persist-publish transaction.
 The avatar permits only six named tones or `null`, never image bytes, URLs,
 paths, or arbitrary profile content, and it is returned only to the
 authenticated account or operations-authorized metadata. The transaction

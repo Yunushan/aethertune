@@ -526,6 +526,9 @@ void main() {
         'displayName': 'Primary listener',
         'avatarTone': null,
         'publicProfileEnabled': false,
+        'publicProfileFieldAudienceSupported': true,
+        'publicDisplayNameEnabled': false,
+        'publicAvatarToneEnabled': false,
         'managed': true,
         'editable': true,
       },
@@ -585,6 +588,33 @@ void main() {
       'id': 'primary',
       'displayName': 'Shared listeners',
       'avatarTone': 'violet',
+    });
+
+    final nameOnlyPublicProfile = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{
+          'publicDisplayNameEnabled': true,
+          'publicAvatarToneEnabled': false,
+        },
+      ),
+    );
+    expect(nameOnlyPublicProfile.statusCode, 200);
+    final nameOnlyAccount = (await _json(nameOnlyPublicProfile))['account']
+        as Map<String, Object?>;
+    expect(nameOnlyAccount['publicProfileEnabled'], isTrue);
+    expect(nameOnlyAccount['publicDisplayNameEnabled'], isTrue);
+    expect(nameOnlyAccount['publicAvatarToneEnabled'], isFalse);
+
+    final publicNameOnly = await handler(
+      _request('GET', '/api/v1/public-profiles/primary'),
+    );
+    expect(publicNameOnly.statusCode, 200);
+    expect(await _json(publicNameOnly), <String, Object?>{
+      'id': 'primary',
+      'displayName': 'Shared listeners',
     });
 
     final phoneProfile = await handler(

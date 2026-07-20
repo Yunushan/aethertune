@@ -917,6 +917,10 @@ class _FakeSyncGateway
     bool includeAvatarTone = false,
     bool publicProfileEnabled = false,
     bool includePublicProfileEnabled = false,
+    bool publicDisplayNameEnabled = false,
+    bool includePublicDisplayNameEnabled = false,
+    bool publicAvatarToneEnabled = false,
+    bool includePublicAvatarToneEnabled = false,
   }) async {
     profileUpdateCalls += 1;
     lastDisplayName = displayName;
@@ -935,8 +939,14 @@ class _FakeSyncGateway
           displayName: displayName,
           avatarTone: avatarTone,
           avatarToneSupported: current.avatarToneSupported,
-          publicProfileEnabled: publicProfileEnabled,
+          publicProfileEnabled: current.publicProfileFieldAudienceSupported
+              ? publicDisplayNameEnabled || publicAvatarToneEnabled
+              : publicProfileEnabled,
           publicProfileSupported: current.publicProfileSupported,
+          publicProfileFieldAudienceSupported:
+              current.publicProfileFieldAudienceSupported,
+          publicDisplayNameEnabled: publicDisplayNameEnabled,
+          publicAvatarToneEnabled: publicAvatarToneEnabled,
           managed: true,
           device: LibrarySyncProfileDevice(
             id: current.device!.id,

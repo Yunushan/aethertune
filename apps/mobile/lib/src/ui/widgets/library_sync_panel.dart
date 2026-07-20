@@ -1593,6 +1593,8 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
   late final TextEditingController _deviceNameController;
   late LibrarySyncProfileAvatarTone? _avatarTone;
   late bool _publicProfileEnabled;
+  late bool _publicDisplayNameEnabled;
+  late bool _publicAvatarToneEnabled;
   bool _saving = false;
   String? _error;
 
@@ -1607,6 +1609,8 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
     );
     _avatarTone = widget.profile.avatarTone;
     _publicProfileEnabled = widget.profile.publicProfileEnabled;
+    _publicDisplayNameEnabled = widget.profile.publicDisplayNameEnabled;
+    _publicAvatarToneEnabled = widget.profile.publicAvatarToneEnabled;
   }
 
   @override
@@ -1672,7 +1676,8 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
                           _error = null;
                         }),
                 ),
-              if (widget.profile.publicProfileSupported)
+              if (widget.profile.publicProfileSupported &&
+                  !widget.profile.publicProfileFieldAudienceSupported)
                 SwitchListTile(
                   key: const Key('library-sync-profile-public'),
                   value: _publicProfileEnabled,
@@ -1684,6 +1689,31 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
                           _error = null;
                         }),
                 ),
+              if (widget.profile.publicProfileFieldAudienceSupported) ...<Widget>[
+                SwitchListTile(
+                  key: const Key('library-sync-profile-public-display-name'),
+                  value: _publicDisplayNameEnabled,
+                  title: const Text('Share display name publicly'),
+                  onChanged: _saving
+                      ? null
+                      : (value) => setState(() {
+                          _publicDisplayNameEnabled = value;
+                          _error = null;
+                        }),
+                ),
+                if (widget.profile.avatarToneSupported)
+                  SwitchListTile(
+                    key: const Key('library-sync-profile-public-avatar'),
+                    value: _publicAvatarToneEnabled,
+                    title: const Text('Share avatar publicly'),
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() {
+                            _publicAvatarToneEnabled = value;
+                            _error = null;
+                          }),
+                  ),
+              ],
               if (_error != null)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -1735,6 +1765,8 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
         deviceName: _deviceNameController.text,
         avatarTone: _avatarTone,
         publicProfileEnabled: _publicProfileEnabled,
+        publicDisplayNameEnabled: _publicDisplayNameEnabled,
+        publicAvatarToneEnabled: _publicAvatarToneEnabled,
       );
       if (mounted) {
         Navigator.of(context).pop(true);

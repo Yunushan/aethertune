@@ -286,6 +286,10 @@ abstract interface class LibrarySyncProfileEditorGateway {
     bool includeAvatarTone = false,
     bool publicProfileEnabled = false,
     bool includePublicProfileEnabled = false,
+    bool publicDisplayNameEnabled = false,
+    bool includePublicDisplayNameEnabled = false,
+    bool publicAvatarToneEnabled = false,
+    bool includePublicAvatarToneEnabled = false,
   });
 }
 
@@ -330,6 +334,10 @@ class LibrarySyncClient
     bool includeAvatarTone = false,
     bool publicProfileEnabled = false,
     bool includePublicProfileEnabled = false,
+    bool publicDisplayNameEnabled = false,
+    bool includePublicDisplayNameEnabled = false,
+    bool publicAvatarToneEnabled = false,
+    bool includePublicAvatarToneEnabled = false,
   }) async {
     final response = await _execute(
       'PATCH',
@@ -340,6 +348,10 @@ class LibrarySyncClient
         if (includeAvatarTone) 'avatarTone': avatarTone?.wireValue,
         if (includePublicProfileEnabled)
           'publicProfileEnabled': publicProfileEnabled,
+        if (includePublicDisplayNameEnabled)
+          'publicDisplayNameEnabled': publicDisplayNameEnabled,
+        if (includePublicAvatarToneEnabled)
+          'publicAvatarToneEnabled': publicAvatarToneEnabled,
       }),
     );
     if (response.statusCode != 200) {
