@@ -1862,8 +1862,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 shrinkWrap: true,
                 children: <Widget>[
                   if (stopAtEndOfTrack)
-                    const ListTile(
-                      leading: Icon(Icons.timer_outlined),
+                    ListTile(
+                      leading: const Icon(Icons.timer_outlined),
                       title: Text(localizations.sleepTimerActive),
                       subtitle: Text(localizations.sleepTimerStopsAtEnd),
                     )
@@ -17193,7 +17193,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _openLocalVideo(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.video,
       allowMultiple: false,
       withData: false,

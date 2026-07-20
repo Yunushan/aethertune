@@ -127,6 +127,7 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
                 child: Text('Turn captions off'),
               ),
             ],
+          ),
           PopupMenuButton<_FrameAction>(
             tooltip: 'Capture video frame',
             enabled: !_opening && error == null,
@@ -199,7 +200,7 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
         break;
     }
 
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const <String>['srt', 'vtt'],
       allowMultiple: false,

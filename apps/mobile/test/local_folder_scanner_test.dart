@@ -336,16 +336,34 @@ First caption
       ..._aiffChunk('NAME', <int>[9, 8, 7, 6]),
       ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
     ];
-    final oggFirst = _oggPage(<List<int>>[
-      <int>[...'OpusHead'.codeUnits],
-      <int>[...'OpusTags'.codeUnits, 1, 2, 3],
-      audioPayload,
-    ]);
-    final oggSecond = _oggPage(<List<int>>[
-      <int>[...'OpusHead'.codeUnits],
-      <int>[...'OpusTags'.codeUnits, 9, 8, 7],
-      audioPayload,
-    ]);
+    final oggFirst = <int>[
+      ..._oggPage(
+        <int>[...'OpusHead'.codeUnits],
+        serial: 1,
+        sequence: 0,
+        bos: true,
+      ),
+      ..._oggPage(
+        <int>[...'OpusTags'.codeUnits, 1, 2, 3],
+        serial: 1,
+        sequence: 1,
+      ),
+      ..._oggPage(audioPayload, serial: 1, sequence: 2),
+    ];
+    final oggSecond = <int>[
+      ..._oggPage(
+        <int>[...'OpusHead'.codeUnits],
+        serial: 2,
+        sequence: 0,
+        bos: true,
+      ),
+      ..._oggPage(
+        <int>[...'OpusTags'.codeUnits, 9, 8, 7],
+        serial: 2,
+        sequence: 1,
+      ),
+      ..._oggPage(audioPayload, serial: 2, sequence: 2),
+    ];
 
     expect(
       localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
@@ -2844,17 +2862,6 @@ List<int> _aiffChunk(String type, List<int> payload) {
     length & 0xff,
     ...payload,
     if (length.isOdd) 0,
-  ];
-}
-
-List<int> _oggPage(List<List<int>> packets) {
-  assert(packets.every((packet) => packet.length < 255));
-  return <int>[
-    ...'OggS'.codeUnits,
-    ...List<int>.filled(22, 0),
-    packets.length,
-    ...packets.map((packet) => packet.length),
-    ...packets.expand((packet) => packet),
   ];
 }
 
