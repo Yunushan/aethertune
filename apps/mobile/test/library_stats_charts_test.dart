@@ -1,0 +1,73 @@
+import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/domain/track.dart';
+import 'package:aethertune/src/ui/home_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('renders all listening chart dimensions on a compact viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 620));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final stats = LibraryStatsSummary(
+      trackCount: 4,
+      libraryDuration: const Duration(minutes: 16),
+      favoriteTrackCount: 1,
+      playbackCount: 12,
+      uniquePlayedTrackCount: 3,
+      estimatedListeningDuration: const Duration(minutes: 48),
+      topTracks: <LibraryStatsTrack>[
+        LibraryStatsTrack(
+          track: Track(id: 'signal', title: 'Signal', artist: 'Mira'),
+          playCount: 8,
+          estimatedListeningDuration: const Duration(minutes: 32),
+        ),
+      ],
+      topArtists: const <LibraryStatsGroup>[
+        LibraryStatsGroup(
+          label: 'Mira',
+          playCount: 8,
+          trackCount: 2,
+          estimatedListeningDuration: Duration(minutes: 32),
+        ),
+      ],
+      topAlbums: const <LibraryStatsGroup>[
+        LibraryStatsGroup(
+          label: 'Dawn',
+          playCount: 7,
+          trackCount: 2,
+          estimatedListeningDuration: Duration(minutes: 28),
+        ),
+      ],
+      topGenres: const <LibraryStatsGroup>[
+        LibraryStatsGroup(
+          label: 'Ambient',
+          playCount: 6,
+          trackCount: 3,
+          estimatedListeningDuration: Duration(minutes: 24),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: LibraryStatsCharts(stats: stats),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Top tracks chart'), findsOneWidget);
+    expect(find.text('Top artists chart'), findsOneWidget);
+    expect(find.text('Top albums chart'), findsOneWidget);
+    expect(find.text('Top genres chart'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}

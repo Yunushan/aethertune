@@ -5736,7 +5736,7 @@ class _LocalChartsPreview extends StatelessWidget {
         const SizedBox(height: 12),
         _LibraryStatsOverview(stats: stats),
         const SizedBox(height: 16),
-        _LibraryStatsCharts(stats: stats),
+        LibraryStatsCharts(stats: stats),
         const SizedBox(height: 16),
         _LibraryStatsTrackSection(stats: stats),
         const SizedBox(height: 12),
@@ -11251,7 +11251,7 @@ class _HistoryTabState extends State<_HistoryTab> {
         _LibraryStatsOverview(stats: stats),
         if (stats.playbackCount > 0) ...<Widget>[
           const SizedBox(height: 16),
-          _LibraryStatsCharts(stats: stats),
+          LibraryStatsCharts(stats: stats),
           const SizedBox(height: 16),
           _StatsSection(
             title: 'Listening calendar',
@@ -11914,8 +11914,8 @@ class _LibraryStatsOverview extends StatelessWidget {
   }
 }
 
-class _LibraryStatsCharts extends StatelessWidget {
-  const _LibraryStatsCharts({required this.stats});
+class LibraryStatsCharts extends StatelessWidget {
+  const LibraryStatsCharts({super.key, required this.stats});
 
   final LibraryStatsSummary stats;
 
@@ -11939,36 +11939,76 @@ class _LibraryStatsCharts extends StatelessWidget {
           ),
         )
         .toList(growable: false);
-    if (trackData.isEmpty && artistData.isEmpty) {
+    final albumData = stats.topAlbums
+        .map(
+          (albumStats) => ListeningStatsBarDatum(
+            label: albumStats.label,
+            value: albumStats.playCount,
+            valueLabel: '${albumStats.playCount} play(s)',
+          ),
+        )
+        .toList(growable: false);
+    final genreData = stats.topGenres
+        .map(
+          (genreStats) => ListeningStatsBarDatum(
+            label: genreStats.label,
+            value: genreStats.playCount,
+            valueLabel: '${genreStats.playCount} play(s)',
+          ),
+        )
+        .toList(growable: false);
+    if (trackData.isEmpty &&
+        artistData.isEmpty &&
+        albumData.isEmpty &&
+        genreData.isEmpty) {
       return const SizedBox.shrink();
     }
 
     final colorScheme = Theme.of(context).colorScheme;
-    final trackChart = ListeningStatsBarChart(
-      title: 'Top tracks chart',
-      icon: Icons.music_note_outlined,
-      color: colorScheme.primary,
-      data: trackData,
-    );
-    final artistChart = ListeningStatsBarChart(
-      title: 'Top artists chart',
-      icon: Icons.person_outline,
-      color: colorScheme.tertiary,
-      data: artistData,
-    );
+    final charts = <Widget>[
+      if (trackData.isNotEmpty)
+        ListeningStatsBarChart(
+          title: 'Top tracks chart',
+          icon: Icons.music_note_outlined,
+          color: colorScheme.primary,
+          data: trackData,
+        ),
+      if (artistData.isNotEmpty)
+        ListeningStatsBarChart(
+          title: 'Top artists chart',
+          icon: Icons.person_outline,
+          color: colorScheme.tertiary,
+          data: artistData,
+        ),
+      if (albumData.isNotEmpty)
+        ListeningStatsBarChart(
+          title: 'Top albums chart',
+          icon: Icons.album_outlined,
+          color: colorScheme.secondary,
+          data: albumData,
+        ),
+      if (genreData.isNotEmpty)
+        ListeningStatsBarChart(
+          title: 'Top genres chart',
+          icon: Icons.category_outlined,
+          color: colorScheme.error,
+          data: genreData,
+        ),
+    ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showSideBySide = constraints.maxWidth >= 720 &&
-            trackData.isNotEmpty &&
-            artistData.isNotEmpty;
-        if (showSideBySide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        if (charts.length == 1) {
+          return charts.single;
+        }
+        if (constraints.maxWidth >= 720) {
+          final chartWidth = (constraints.maxWidth - 28) / 2;
+          return Wrap(
+            spacing: 28,
+            runSpacing: 20,
             children: <Widget>[
-              Expanded(child: trackChart),
-              const SizedBox(width: 28),
-              Expanded(child: artistChart),
+              for (final chart in charts)
+                SizedBox(width: chartWidth, child: chart),
             ],
           );
         }
@@ -11976,10 +12016,10 @@ class _LibraryStatsCharts extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            if (trackData.isNotEmpty) trackChart,
-            if (trackData.isNotEmpty && artistData.isNotEmpty)
-              const SizedBox(height: 20),
-            if (artistData.isNotEmpty) artistChart,
+            for (var index = 0; index < charts.length; index += 1) ...<Widget>[
+              charts[index],
+              if (index != charts.length - 1) const SizedBox(height: 20),
+            ],
           ],
         );
       },
