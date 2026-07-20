@@ -1339,15 +1339,18 @@ class _NowPlayingArtwork extends StatelessWidget {
                 onHorizontalDragUpdate(details.primaryDelta ?? 0);
               },
               onHorizontalDragEnd: (_) => onHorizontalDragEnd(),
-              child: TrackArtwork(
-                key: const Key('now-playing-artwork'),
-                artworkUri: track.artworkUri,
-                providerId: track.sourceId,
-                providerArtworkId: track.providerArtworkId,
-                providerArtworkVersion: track.providerArtworkVersion,
-                artworkCrop: track.artworkCrop,
-                size: size,
-                borderRadius: 8,
+              child: Hero(
+                tag: playerArtworkHeroTag(track.id),
+                child: TrackArtwork(
+                  key: const Key('now-playing-artwork'),
+                  artworkUri: track.artworkUri,
+                  providerId: track.sourceId,
+                  providerArtworkId: track.providerArtworkId,
+                  providerArtworkVersion: track.providerArtworkVersion,
+                  artworkCrop: track.artworkCrop,
+                  size: size,
+                  borderRadius: 8,
+                ),
               ),
             ),
           ),

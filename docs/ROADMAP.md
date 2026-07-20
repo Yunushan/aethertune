@@ -55,7 +55,8 @@
 - [x] Provider interface
 - [ ] More unit tests
 - [ ] UI polish
-- [ ] Animated artwork transitions and artwork-derived player palettes
+- [x] Compact-to-full shared artwork transitions
+- [x] Artwork-derived player palettes
 
 ## 0.2.x: Library
 

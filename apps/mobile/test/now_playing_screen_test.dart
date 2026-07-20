@@ -18,6 +18,7 @@ import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/now_playing_screen.dart';
 import 'package:aethertune/src/ui/widgets/desktop_queue_pane.dart';
 import 'package:aethertune/src/ui/widgets/player_bar.dart';
+import 'package:aethertune/src/ui/widgets/track_artwork.dart';
 
 void main() {
   setUp(() {
@@ -92,6 +93,13 @@ void main() {
     expect(find.text('First Song'), findsOneWidget);
     expect(
       find.byKey(const Key('now-playing-artwork-palette')),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Hero && widget.tag == playerArtworkHeroTag(first.id),
+      ),
       findsOneWidget,
     );
     expect(find.text('Track 1 of 2'), findsOneWidget);
@@ -473,6 +481,13 @@ Recovered transcript
     expect(find.byTooltip('Play'), findsNothing);
     expect(find.byTooltip('Pause'), findsOneWidget);
     expect(find.byTooltip('Next'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Hero && widget.tag == playerArtworkHeroTag(track.id),
+      ),
+      findsOneWidget,
+    );
 
     final seekSlider = tester.widget<Slider>(
       find.byKey(const Key('player-bar-seek')),
@@ -484,6 +499,59 @@ Recovered transcript
 
     await tester.tap(find.byKey(const Key('open-now-playing')));
     expect(nowPlayingOpens, 1);
+  });
+
+  testWidgets('shared artwork survives compact-to-full player navigation', (
+    tester,
+  ) async {
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    final library = LibraryStore();
+    final track = _track('hero', title: 'Hero Song', durationSeconds: 180);
+    await library.addTracks(<Track>[track]);
+    await player.playTrack(track, queue: <Track>[track]);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: Builder(
+                builder: (context) => PlayerBar(
+                  onOpenNowPlaying: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => NowPlayingScreen(
+                          onOpenQueue: () {},
+                          onOpenLyrics: () {},
+                        ),
+                      ),
+                    );
+                  },
+                  onOpenQueue: () {},
+                  onSaveQueue: () {},
+                  onOpenLyrics: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('open-now-playing')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('now-playing-artwork')), findsOneWidget);
   });
 
   testWidgets('desktop queue pane selects removes and opens queue actions', (

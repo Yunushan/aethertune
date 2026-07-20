@@ -99,15 +99,18 @@ class PlayerBar extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(vertical: 4),
                                 child: Row(
                                   children: <Widget>[
-                                    TrackArtwork(
-                                      artworkUri: current.artworkUri,
-                                      providerId: current.sourceId,
-                                      providerArtworkId:
-                                          current.providerArtworkId,
-                                      providerArtworkVersion:
-                                          current.providerArtworkVersion,
-                                      size: 40,
-                                      borderRadius: 8,
+                                    Hero(
+                                      tag: playerArtworkHeroTag(current.id),
+                                      child: TrackArtwork(
+                                        artworkUri: current.artworkUri,
+                                        providerId: current.sourceId,
+                                        providerArtworkId:
+                                            current.providerArtworkId,
+                                        providerArtworkVersion:
+                                            current.providerArtworkVersion,
+                                        size: 40,
+                                        borderRadius: 8,
+                                      ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(

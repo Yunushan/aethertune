@@ -9,6 +9,9 @@ import '../../domain/artwork_crop.dart';
 
 typedef ProviderArtworkLoader = Future<Uint8List?> Function(int maxWidth);
 
+String playerArtworkHeroTag(String trackId) =>
+    'aethertune.player-artwork:$trackId';
+
 class TrackArtwork extends StatelessWidget {
   const TrackArtwork({
     required this.artworkUri,
