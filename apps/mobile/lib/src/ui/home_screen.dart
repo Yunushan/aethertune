@@ -9174,9 +9174,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     final library = context.read<LibraryStore>();
     try {
       var binding = store.bindingForLocalSmartPlaylist(rule.id);
-      if (binding == null) {
-        binding = await store.host(library, rule);
-      }
+      binding ??= await store.host(library, rule);
       if (!context.mounted) {
         return;
       }
