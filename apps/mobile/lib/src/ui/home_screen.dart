@@ -3534,9 +3534,10 @@ Future<void> _showLyricsTranslation(
   required String lyrics,
   required String targetLanguage,
 }) async {
-  final navigator = Navigator.of(context);
-  showDialog<void>(
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final progressDialog = showDialog<void>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (_) => const AlertDialog(
       content: Row(
@@ -3562,8 +3563,13 @@ Future<void> _showLyricsTranslation(
       return;
     }
     navigator.pop();
+    await progressDialog;
+    if (!context.mounted) {
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (_) => _TranslatedLyricsSheet(
@@ -3576,6 +3582,10 @@ Future<void> _showLyricsTranslation(
       return;
     }
     navigator.pop();
+    await progressDialog;
+    if (!context.mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Could not translate lyrics: $error')),
     );
