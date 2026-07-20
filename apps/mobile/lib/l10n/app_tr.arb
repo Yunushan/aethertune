@@ -28,5 +28,33 @@
   "privacyFirstTitle": "Önce gizlilik",
   "privacyFirstDescription": "AetherTune telemetri içermez. Ağ sağlayıcıları, kullanım öncesinde bağlantı kuracakları alan adlarını açıklar.",
   "startAtHome": "Ana Sayfada başla",
-  "skipSetup": "Kurulumu atla"
+  "skipSetup": "Kurulumu atla",
+  "sleepTimer": "Uyku zamanlayıcısı",
+  "sleepTimerActive": "Uyku zamanlayıcısı etkin",
+  "sleepTimerStopsAtEnd": "Çalma bu parçanın sonunda durur.",
+  "sleepTimerStopsIn": "Çalma {remaining} sonra durur.",
+  "@sleepTimerStopsIn": {
+    "placeholders": {
+      "remaining": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepTimerLessThanOneMinute": "1 dakikadan az",
+  "sleepTimerMinutes": "{count} dakika",
+  "@sleepTimerMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sleepTimerHours": "{count} saat",
+  "@sleepTimerHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

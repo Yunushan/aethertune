@@ -99,4 +99,25 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get skipSetup => 'Kurulumu atla';
+
+  @override
+  String get sleepTimer => 'Uyku zamanlayıcısı';
+
+  @override
+  String get sleepTimerActive => 'Uyku zamanlayıcısı etkin';
+
+  @override
+  String get sleepTimerStopsAtEnd => 'Çalma bu parçanın sonunda durur.';
+
+  @override
+  String sleepTimerStopsIn(String remaining) => 'Çalma $remaining sonra durur.';
+
+  @override
+  String get sleepTimerLessThanOneMinute => '1 dakikadan az';
+
+  @override
+  String sleepTimerMinutes(int count) => '$count dakika';
+
+  @override
+  String sleepTimerHours(int count) => '$count saat';
 }

@@ -99,4 +99,47 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get skipSetup => 'تخطي الإعداد';
+
+  @override
+  String get sleepTimer => 'مؤقت النوم';
+
+  @override
+  String get sleepTimerActive => 'مؤقت النوم نشط';
+
+  @override
+  String get sleepTimerStopsAtEnd => 'سيتوقف التشغيل عند نهاية هذا المقطع.';
+
+  @override
+  String sleepTimerStopsIn(String remaining) =>
+      'سيتوقف التشغيل خلال $remaining.';
+
+  @override
+  String get sleepTimerLessThanOneMinute => 'أقل من دقيقة واحدة';
+
+  @override
+  String sleepTimerMinutes(int count) {
+    return intl.Intl.plural(
+      count,
+      zero: 'أقل من دقيقة',
+      one: 'دقيقة واحدة',
+      two: 'دقيقتان',
+      few: '$count دقائق',
+      many: '$count دقيقة',
+      other: '$count دقيقة',
+      locale: localeName,
+    );
+  }
+
+  @override
+  String sleepTimerHours(int count) {
+    return intl.Intl.plural(
+      count,
+      one: 'ساعة واحدة',
+      two: 'ساعتان',
+      few: '$count ساعات',
+      many: '$count ساعة',
+      other: '$count ساعة',
+      locale: localeName,
+    );
+  }
 }

@@ -29,22 +29,27 @@ String sleepTimerFadeDurationLabel(Duration duration) {
   return minutes == 1 ? '1 minute' : '$minutes minutes';
 }
 
-String formatSleepTimerRemaining(Duration duration) {
+String formatSleepTimerRemaining(
+  Duration duration, {
+  required String lessThanOneMinute,
+  required String Function(int count) minutesLabel,
+  required String Function(int count) hoursLabel,
+}) {
   if (duration <= Duration.zero || duration.inSeconds < 60) {
-    return 'Less than 1 minute';
+    return lessThanOneMinute;
   }
 
   final totalMinutes = duration.inMinutes;
   final hours = totalMinutes ~/ 60;
   final minutes = totalMinutes % 60;
   if (hours == 0) {
-    return minutes == 1 ? '1 minute' : '$minutes minutes';
+    return minutesLabel(minutes);
   }
   if (minutes == 0) {
-    return hours == 1 ? '1 hour' : '$hours hours';
+    return hoursLabel(hours);
   }
-  final hourLabel = hours == 1 ? '1 hour' : '$hours hours';
-  final minuteLabel = minutes == 1 ? '1 minute' : '$minutes minutes';
+  final hourLabel = hoursLabel(hours);
+  final minuteLabel = minutesLabel(minutes);
   return '$hourLabel $minuteLabel';
 }
 

@@ -99,4 +99,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get skipSetup => 'Skip setup';
+
+  @override
+  String get sleepTimer => 'Sleep timer';
+
+  @override
+  String get sleepTimerActive => 'Sleep timer active';
+
+  @override
+  String get sleepTimerStopsAtEnd =>
+      'Playback stops at the end of this track.';
+
+  @override
+  String sleepTimerStopsIn(String remaining) => 'Playback stops in $remaining.';
+
+  @override
+  String get sleepTimerLessThanOneMinute => 'Less than 1 minute';
+
+  @override
+  String sleepTimerMinutes(int count) {
+    return intl.Intl.plural(
+      count,
+      one: '1 minute',
+      other: '$count minutes',
+      locale: localeName,
+    );
+  }
+
+  @override
+  String sleepTimerHours(int count) {
+    return intl.Intl.plural(
+      count,
+      one: '1 hour',
+      other: '$count hours',
+      locale: localeName,
+    );
+  }
 }

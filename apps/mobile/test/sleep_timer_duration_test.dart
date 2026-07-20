@@ -64,18 +64,52 @@ void main() {
   });
 
   test('formats active sleep timer durations for the player UI', () {
+    String minutes(int count) => count == 1 ? '1 minute' : '$count minutes';
+    String hours(int count) => count == 1 ? '1 hour' : '$count hours';
+
     expect(
-      formatSleepTimerRemaining(const Duration(seconds: 59)),
+      formatSleepTimerRemaining(
+        const Duration(seconds: 59),
+        lessThanOneMinute: 'Less than 1 minute',
+        minutesLabel: minutes,
+        hoursLabel: hours,
+      ),
       'Less than 1 minute',
     );
-    expect(formatSleepTimerRemaining(const Duration(minutes: 1)), '1 minute');
     expect(
-      formatSleepTimerRemaining(const Duration(minutes: 45)),
+      formatSleepTimerRemaining(
+        const Duration(minutes: 1),
+        lessThanOneMinute: 'Less than 1 minute',
+        minutesLabel: minutes,
+        hoursLabel: hours,
+      ),
+      '1 minute',
+    );
+    expect(
+      formatSleepTimerRemaining(
+        const Duration(minutes: 45),
+        lessThanOneMinute: 'Less than 1 minute',
+        minutesLabel: minutes,
+        hoursLabel: hours,
+      ),
       '45 minutes',
     );
-    expect(formatSleepTimerRemaining(const Duration(hours: 1)), '1 hour');
     expect(
-      formatSleepTimerRemaining(const Duration(hours: 2, minutes: 5)),
+      formatSleepTimerRemaining(
+        const Duration(hours: 1),
+        lessThanOneMinute: 'Less than 1 minute',
+        minutesLabel: minutes,
+        hoursLabel: hours,
+      ),
+      '1 hour',
+    );
+    expect(
+      formatSleepTimerRemaining(
+        const Duration(hours: 2, minutes: 5),
+        lessThanOneMinute: 'Less than 1 minute',
+        minutesLabel: minutes,
+        hoursLabel: hours,
+      ),
       '2 hours 5 minutes',
     );
   });

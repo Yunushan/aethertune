@@ -992,7 +992,9 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.create_new_folder_outlined),
           ),
           IconButton(
-            tooltip: sleepTimerActive ? 'Sleep timer active' : 'Sleep timer',
+            tooltip: sleepTimerActive
+                ? localizations.sleepTimerActive
+                : localizations.sleepTimer,
             onPressed: () => _showSleepTimer(context),
             icon: Icon(
               sleepTimerActive ? Icons.timer : Icons.bedtime_outlined,
@@ -1708,6 +1710,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showSleepTimer(BuildContext context) async {
     final player = context.read<PlayerController>();
+    final localizations = AppLocalizations.of(context)!;
     final durations = <int>[5, 15, 30, 60, 90];
     var fadeOut = player.sleepTimerFadeOutEnabled;
     var fadeDuration =
@@ -1731,15 +1734,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (stopAtEndOfTrack)
                     const ListTile(
                       leading: Icon(Icons.timer_outlined),
-                      title: Text('Sleep timer active'),
-                      subtitle: Text('Playback stops at the end of this track.'),
+                      title: Text(localizations.sleepTimerActive),
+                      subtitle: Text(localizations.sleepTimerStopsAtEnd),
                     )
                   else if (remaining != null)
                     ListTile(
                       leading: const Icon(Icons.timer_outlined),
-                      title: const Text('Sleep timer active'),
+                      title: Text(localizations.sleepTimerActive),
                       subtitle: Text(
-                        'Playback stops in ${formatSleepTimerRemaining(remaining)}.',
+                        localizations.sleepTimerStopsIn(
+                          formatSleepTimerRemaining(
+                            remaining,
+                            lessThanOneMinute:
+                                localizations.sleepTimerLessThanOneMinute,
+                            minutesLabel: localizations.sleepTimerMinutes,
+                            hoursLabel: localizations.sleepTimerHours,
+                          ),
+                        ),
                       ),
                     ),
                   if (hasActiveTimer) const Divider(height: 1),

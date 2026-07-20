@@ -273,6 +273,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skip setup'**
   String get skipSetup;
+
+  /// No description provided for @sleepTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer'**
+  String get sleepTimer;
+
+  /// No description provided for @sleepTimerActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer active'**
+  String get sleepTimerActive;
+
+  /// No description provided for @sleepTimerStopsAtEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback stops at the end of this track.'**
+  String get sleepTimerStopsAtEnd;
+
+  /// No description provided for @sleepTimerStopsIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback stops in {remaining}.'**
+  String sleepTimerStopsIn(String remaining);
+
+  /// No description provided for @sleepTimerLessThanOneMinute.
+  ///
+  /// In en, this message translates to:
+  /// **'Less than 1 minute'**
+  String get sleepTimerLessThanOneMinute;
+
+  /// No description provided for @sleepTimerMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} minutes'**
+  String sleepTimerMinutes(int count);
+
+  /// No description provided for @sleepTimerHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} hours'**
+  String sleepTimerHours(int count);
 }
 
 class _AppLocalizationsDelegate

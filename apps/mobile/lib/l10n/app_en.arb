@@ -28,5 +28,33 @@
   "privacyFirstTitle": "Privacy first",
   "privacyFirstDescription": "AetherTune has no telemetry. Network providers disclose the domains they contact before use.",
   "startAtHome": "Start at Home",
-  "skipSetup": "Skip setup"
+  "skipSetup": "Skip setup",
+  "sleepTimer": "Sleep timer",
+  "sleepTimerActive": "Sleep timer active",
+  "sleepTimerStopsAtEnd": "Playback stops at the end of this track.",
+  "sleepTimerStopsIn": "Playback stops in {remaining}.",
+  "@sleepTimerStopsIn": {
+    "placeholders": {
+      "remaining": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepTimerLessThanOneMinute": "Less than 1 minute",
+  "sleepTimerMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@sleepTimerMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sleepTimerHours": "{count, plural, =1{1 hour} other{{count} hours}}",
+  "@sleepTimerHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }
