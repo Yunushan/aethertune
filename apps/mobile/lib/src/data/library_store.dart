@@ -7242,6 +7242,42 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<CustomSmartPlaylist?> duplicateCustomSmartPlaylist(String id) async {
+    final index = _customSmartPlaylists.indexWhere((rule) => rule.id == id);
+    if (index == -1) {
+      return null;
+    }
+
+    final source = _customSmartPlaylists[index];
+    final duplicate = await createCustomSmartPlaylist(
+      name: _duplicatePlaylistName(
+        source.name,
+        _customSmartPlaylists.map((playlist) => playlist.name),
+      ),
+      query: source.query,
+      sourceId: source.sourceId,
+      artist: source.artist,
+      album: source.album,
+      genre: source.genre,
+      minimumDurationSeconds: source.minimumDurationSeconds,
+      maximumDurationSeconds: source.maximumDurationSeconds,
+      favoritesOnly: source.favoritesOnly,
+      minimumPlayCount: source.minimumPlayCount,
+      minimumDaysSinceLastPlayed: source.minimumDaysSinceLastPlayed,
+      matchMode: source.matchMode,
+      ruleGroups: source.ruleGroups,
+      sortMode: source.sortMode,
+      limit: source.limit,
+    );
+    final artworkUri = source.artworkUri;
+    if (!_isWebArtworkUri(artworkUri)) {
+      return duplicate;
+    }
+
+    return (await updateCustomSmartPlaylistArtwork(duplicate.id, artworkUri)) ??
+        duplicate;
+  }
+
   Future<SavedHistoryView> createSavedHistoryView({
     required String name,
     String query = '',
@@ -7488,6 +7524,30 @@ class LibraryStore extends ChangeNotifier {
     _playlists.removeAt(index);
     await _save();
     notifyListeners();
+  }
+
+  Future<Playlist?> duplicatePlaylist(String playlistId) async {
+    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    if (index == -1) {
+      return null;
+    }
+
+    final source = _playlists[index];
+    final artworkUri = _isWebArtworkUri(source.artworkUri)
+        ? source.artworkUri
+        : null;
+    return createPlaylist(
+      _duplicatePlaylistName(
+        source.name,
+        _playlists.map((playlist) => playlist.name),
+      ),
+      trackIds: source.trackIds,
+      folder: source.folder,
+      artworkUri: artworkUri,
+      artworkCrop: artworkUri == null
+          ? ArtworkCrop.centered
+          : source.artworkCrop,
+    );
   }
 
   Future<void> addTrackToPlaylist(String playlistId, String trackId) async {
@@ -9136,6 +9196,27 @@ class LibraryStore extends ChangeNotifier {
   }
 
   String _browseKey(String value) => _nonEmptyMetadata(value, '').toLowerCase();
+
+  String _duplicatePlaylistName(String sourceName, Iterable<String> names) {
+    final existingNames = names
+        .map((name) => name.trim().toLowerCase())
+        .toSet();
+    final normalizedSourceName = sourceName.trim();
+    final copyName = '$normalizedSourceName (copy)';
+    if (!existingNames.contains(copyName.toLowerCase())) {
+      return copyName;
+    }
+
+    for (var suffix = 2; ; suffix += 1) {
+      final candidate = '$normalizedSourceName (copy $suffix)';
+      if (!existingNames.contains(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+  }
+
+  bool _isWebArtworkUri(Uri? uri) =>
+      uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
 
   String _normalizeCustomSmartPlaylistName(String name) {
     final normalized = name.trim();

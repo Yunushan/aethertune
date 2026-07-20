@@ -734,6 +734,71 @@ void main() {
     );
   });
 
+  test('duplicates smart playlists with rules and safe artwork', () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 7, 20, 12),
+    );
+    await store.load();
+    final original = await store.createCustomSmartPlaylist(
+      name: 'Mira favorites',
+      query: 'midnight',
+      sourceId: 'archive',
+      artist: 'Mira',
+      album: 'Dawn',
+      genre: 'Jazz',
+      minimumDurationSeconds: 120,
+      maximumDurationSeconds: 360,
+      favoritesOnly: true,
+      minimumPlayCount: 2,
+      minimumDaysSinceLastPlayed: 7,
+      matchMode: CustomSmartPlaylistMatchMode.any,
+      ruleGroups: <CustomSmartPlaylistRuleGroup>[
+        CustomSmartPlaylistRuleGroup(
+          rules: const <CustomSmartPlaylistRule>[
+            CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.minimumRating,
+              value: '4',
+            ),
+          ],
+        ),
+      ],
+      sortMode: CustomSmartPlaylistSortMode.title,
+      limit: 20,
+    );
+    final artworkUri = Uri.parse('https://media.example.test/mira.jpg');
+    await store.updateCustomSmartPlaylistArtwork(original.id, artworkUri);
+
+    final duplicate = await store.duplicateCustomSmartPlaylist(original.id);
+
+    expect(duplicate, isNotNull);
+    expect(duplicate!.id, isNot(original.id));
+    expect(duplicate.name, 'Mira favorites (copy)');
+    expect(duplicate.query, original.query);
+    expect(duplicate.sourceId, original.sourceId);
+    expect(duplicate.artist, original.artist);
+    expect(duplicate.minimumDurationSeconds, original.minimumDurationSeconds);
+    expect(duplicate.minimumDaysSinceLastPlayed, original.minimumDaysSinceLastPlayed);
+    expect(duplicate.matchMode, original.matchMode);
+    expect(duplicate.ruleGroups.single.rules.single.value, '4');
+    expect(duplicate.sortMode, original.sortMode);
+    expect(duplicate.limit, original.limit);
+    expect(duplicate.artworkUri, artworkUri);
+    expect(
+      (await store.duplicateCustomSmartPlaylist(original.id))!.name,
+      'Mira favorites (copy 2)',
+    );
+    expect(await store.duplicateCustomSmartPlaylist('missing'), isNull);
+
+    await store.updateCustomSmartPlaylistArtwork(
+      original.id,
+      Uri.file('/private/mira-rules.png'),
+    );
+    final privateArtworkDuplicate = await store.duplicateCustomSmartPlaylist(
+      original.id,
+    );
+    expect(privateArtworkDuplicate!.artworkUri, isNull);
+  });
+
   test('shares and imports nested smart playlist links without local artwork',
       () async {
     final store = LibraryStore();
@@ -871,6 +936,47 @@ void main() {
           .toList(growable: false),
       <String>['1', '2'],
     );
+  });
+
+  test('duplicates manual playlists with unique names and safe artwork',
+      () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 7, 20, 12),
+    );
+    await store.load();
+    await store.addTracks(<Track>[_track('1'), _track('2')]);
+    final artworkUri = Uri.parse('https://media.example.test/road.jpg');
+    final original = await store.createPlaylist(
+      'Road Mix',
+      trackIds: <String>['2', '1'],
+      folder: 'Travel',
+      artworkUri: artworkUri,
+      artworkCrop: ArtworkCrop.normalized(
+        alignmentX: 0.4,
+        alignmentY: -0.25,
+        zoom: 1.8,
+      ),
+    );
+
+    final duplicate = await store.duplicatePlaylist(original.id);
+
+    expect(duplicate, isNotNull);
+    expect(duplicate!.id, isNot(original.id));
+    expect(duplicate.name, 'Road Mix (copy)');
+    expect(duplicate.trackIds, <String>['2', '1']);
+    expect(duplicate.folder, 'Travel');
+    expect(duplicate.artworkUri, artworkUri);
+    expect(duplicate.artworkCrop.zoom, 1.8);
+    expect((await store.duplicatePlaylist(original.id))!.name, 'Road Mix (copy 2)');
+    expect(await store.duplicatePlaylist('missing'), isNull);
+
+    await store.updatePlaylistArtwork(
+      original.id,
+      Uri.file('/private/road-mix.png'),
+    );
+    final privateArtworkDuplicate = await store.duplicatePlaylist(original.id);
+    expect(privateArtworkDuplicate!.artworkUri, isNull);
+    expect(privateArtworkDuplicate.artworkCrop.isCentered, isTrue);
   });
 
   test('adds and removes tracks without duplicating playlist entries', () async {

@@ -8384,6 +8384,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onCopyImportLink: () => unawaited(
                 _copyCustomSmartPlaylistImportLink(context, library, rule),
               ),
+              onDuplicate: () => unawaited(
+                _duplicateCustomSmartPlaylist(context, rule),
+              ),
               onDelete: () => _deleteCustomSmartPlaylist(context, rule),
             ),
         const SizedBox(height: 16),
@@ -8446,6 +8449,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 _showPlaylistShareCard(context, playlist),
               ),
               onArtwork: () => _editPlaylistArtwork(context, playlist),
+              onDuplicate: () => unawaited(
+                _duplicatePlaylist(context, playlist),
+              ),
               onRename: () => _renamePlaylist(context, playlist),
               onMoveToFolder: () => _movePlaylistToFolder(context, playlist),
               onDelete: () => _deletePlaylist(context, playlist),
@@ -8876,6 +8882,22 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     );
   }
 
+  Future<void> _duplicateCustomSmartPlaylist(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final duplicate = await context
+        .read<LibraryStore>()
+        .duplicateCustomSmartPlaylist(rule.id);
+    if (!context.mounted || duplicate == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Created ${duplicate.name}.')),
+    );
+  }
+
   Future<void> _renamePlaylist(
     BuildContext context,
     Playlist playlist,
@@ -9145,6 +9167,22 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
 
     messenger.showSnackBar(
       SnackBar(content: Text('Deleted ${playlist.name}.')),
+    );
+  }
+
+  Future<void> _duplicatePlaylist(
+    BuildContext context,
+    Playlist playlist,
+  ) async {
+    final duplicate = await context.read<LibraryStore>().duplicatePlaylist(
+      playlist.id,
+    );
+    if (!context.mounted || duplicate == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Created ${duplicate.name}.')),
     );
   }
 
@@ -10769,6 +10807,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
     required this.onEdit,
     required this.onArtwork,
     required this.onCopyImportLink,
+    required this.onDuplicate,
     required this.onDelete,
   });
 
@@ -10778,6 +10817,7 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onArtwork;
   final VoidCallback onCopyImportLink;
+  final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
   @override
@@ -10800,6 +10840,9 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 break;
               case _CustomSmartPlaylistAction.copyImportLink:
                 onCopyImportLink();
+                break;
+              case _CustomSmartPlaylistAction.duplicate:
+                onDuplicate();
                 break;
               case _CustomSmartPlaylistAction.delete:
                 onDelete();
@@ -10830,6 +10873,13 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
               ),
             ),
             PopupMenuItem(
+              value: _CustomSmartPlaylistAction.duplicate,
+              child: ListTile(
+                leading: Icon(Icons.copy_outlined),
+                title: Text('Duplicate'),
+              ),
+            ),
+            PopupMenuItem(
               value: _CustomSmartPlaylistAction.delete,
               child: ListTile(
                 leading: Icon(Icons.delete_outline),
@@ -10853,6 +10903,7 @@ class _PlaylistCard extends StatelessWidget {
     required this.onCopyImportLink,
     required this.onShareCard,
     required this.onArtwork,
+    required this.onDuplicate,
     required this.onRename,
     required this.onMoveToFolder,
     required this.onDelete,
@@ -10866,6 +10917,7 @@ class _PlaylistCard extends StatelessWidget {
   final VoidCallback onCopyImportLink;
   final VoidCallback onShareCard;
   final VoidCallback onArtwork;
+  final VoidCallback onDuplicate;
   final VoidCallback onRename;
   final VoidCallback onMoveToFolder;
   final VoidCallback onDelete;
@@ -10911,6 +10963,9 @@ class _PlaylistCard extends StatelessWidget {
                 break;
               case _PlaylistAction.shareCard:
                 onShareCard();
+                break;
+              case _PlaylistAction.duplicate:
+                onDuplicate();
                 break;
               case _PlaylistAction.rename:
                 onRename();
@@ -10991,6 +11046,13 @@ class _PlaylistCard extends StatelessWidget {
               ),
             ),
             PopupMenuDivider(),
+            PopupMenuItem(
+              value: _PlaylistAction.duplicate,
+              child: ListTile(
+                leading: Icon(Icons.copy_outlined),
+                title: Text('Duplicate'),
+              ),
+            ),
             PopupMenuItem(
               value: _PlaylistAction.rename,
               child: ListTile(
@@ -11074,13 +11136,20 @@ enum _PlaylistAction {
   share,
   copyImportLink,
   shareCard,
+  duplicate,
   rename,
   folder,
   artwork,
   delete,
 }
 
-enum _CustomSmartPlaylistAction { edit, artwork, copyImportLink, delete }
+enum _CustomSmartPlaylistAction {
+  edit,
+  artwork,
+  copyImportLink,
+  duplicate,
+  delete,
+}
 
 enum _PlaylistTrackAction { moveUp, moveDown, editMetadata, remove }
 
