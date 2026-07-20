@@ -63,6 +63,23 @@ void main() {
     );
   });
 
+  test('formats active sleep timer durations for the player UI', () {
+    expect(
+      formatSleepTimerRemaining(const Duration(seconds: 59)),
+      'Less than 1 minute',
+    );
+    expect(formatSleepTimerRemaining(const Duration(minutes: 1)), '1 minute');
+    expect(
+      formatSleepTimerRemaining(const Duration(minutes: 45)),
+      '45 minutes',
+    );
+    expect(formatSleepTimerRemaining(const Duration(hours: 1)), '1 hour');
+    expect(
+      formatSleepTimerRemaining(const Duration(hours: 2, minutes: 5)),
+      '2 hours 5 minutes',
+    );
+  });
+
   test('calculates clamped sleep timer fade volumes', () {
     expect(sleepTimerFadeVolume(startVolume: 1, step: 0), 1);
     expect(sleepTimerFadeVolume(startVolume: 1, step: 5), 0.5);

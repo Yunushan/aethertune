@@ -881,6 +881,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final savedDesktopQueuePaneWidth = context.select<LibraryStore, double>(
       (library) => library.desktopQueuePaneWidth,
     );
+    final sleepTimerActive = context.select<PlayerController, bool>(
+      (player) =>
+          player.sleepTimerRemaining != null || player.stopAtEndOfTrackEnabled,
+    );
     final desktopQueuePaneWidth =
         _desktopQueuePaneDragWidth ?? savedDesktopQueuePaneWidth;
     final tabContent = Column(
@@ -988,9 +992,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.create_new_folder_outlined),
           ),
           IconButton(
-            tooltip: 'Sleep timer',
+            tooltip: sleepTimerActive ? 'Sleep timer active' : 'Sleep timer',
             onPressed: () => _showSleepTimer(context),
-            icon: const Icon(Icons.bedtime_outlined),
+            icon: Icon(
+              sleepTimerActive ? Icons.timer : Icons.bedtime_outlined,
+            ),
           ),
         ],
       ),
@@ -1715,10 +1721,28 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
+            final remaining = player.sleepTimerRemaining;
+            final stopAtEndOfTrack = player.stopAtEndOfTrackEnabled;
+            final hasActiveTimer = remaining != null || stopAtEndOfTrack;
             return SafeArea(
               child: ListView(
                 shrinkWrap: true,
                 children: <Widget>[
+                  if (stopAtEndOfTrack)
+                    const ListTile(
+                      leading: Icon(Icons.timer_outlined),
+                      title: Text('Sleep timer active'),
+                      subtitle: Text('Playback stops at the end of this track.'),
+                    )
+                  else if (remaining != null)
+                    ListTile(
+                      leading: const Icon(Icons.timer_outlined),
+                      title: const Text('Sleep timer active'),
+                      subtitle: Text(
+                        'Playback stops in ${formatSleepTimerRemaining(remaining)}.',
+                      ),
+                    ),
+                  if (hasActiveTimer) const Divider(height: 1),
                   SwitchListTile(
                     secondary: const Icon(Icons.volume_down_outlined),
                     title: const Text('Fade out before stopping'),
@@ -1762,10 +1786,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   ListTile(
                     leading: const Icon(Icons.timer_off_outlined),
                     title: const Text('Cancel sleep timer'),
-                    onTap: () {
-                      player.cancelSleepTimer();
-                      Navigator.of(sheetContext).pop();
-                    },
+                    enabled: hasActiveTimer,
+                    onTap: hasActiveTimer
+                        ? () {
+                            player.cancelSleepTimer();
+                            Navigator.of(sheetContext).pop();
+                          }
+                        : null,
                   ),
                   ListTile(
                     leading: const Icon(Icons.edit_outlined),
