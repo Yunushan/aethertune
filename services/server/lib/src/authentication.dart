@@ -146,6 +146,7 @@ class ManagedSyncAccountProfile {
     required this.id,
     required this.displayName,
     required this.avatarTone,
+    required this.publicProfileEnabled,
     required this.createdAt,
     required this.tokens,
   });
@@ -153,6 +154,7 @@ class ManagedSyncAccountProfile {
   final String id;
   final String displayName;
   final String? avatarTone;
+  final bool publicProfileEnabled;
   final DateTime createdAt;
   final List<ManagedSyncTokenMetadata> tokens;
 
@@ -160,6 +162,7 @@ class ManagedSyncAccountProfile {
         'id': id,
         'displayName': displayName,
         'avatarTone': avatarTone,
+        'publicProfileEnabled': publicProfileEnabled,
         'createdAt': createdAt.toUtc().toIso8601String(),
         'tokens': tokens.map((token) => token.toJson()).toList(growable: false),
       };
@@ -593,6 +596,8 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     String? deviceName,
     bool avatarToneProvided = false,
     String? avatarTone,
+    bool publicProfileEnabledProvided = false,
+    bool publicProfileEnabled = false,
   }) {
     final normalizedAccountId = _validatedAccountId(accountId);
     final normalizedTokenId = tokenId.trim();
@@ -601,7 +606,8 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     }
     if (displayName == null &&
         deviceName == null &&
-        !avatarToneProvided) {
+        !avatarToneProvided &&
+        !publicProfileEnabledProvided) {
       throw const FormatException(
         'At least one profile field must be provided.',
       );
@@ -654,6 +660,8 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
           normalizedDeviceName != currentToken.deviceName;
       final avatarChanged = avatarToneProvided &&
           normalizedAvatarTone != account.avatarTone;
+      final publicProfileChanged = publicProfileEnabledProvided &&
+          publicProfileEnabled != account.publicProfileEnabled;
       if (accountChanged) {
         account.displayName = normalizedDisplayName;
       }
@@ -669,7 +677,10 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
       if (avatarChanged) {
         account.avatarTone = normalizedAvatarTone;
       }
-      if (accountChanged || deviceChanged || avatarChanged) {
+      if (publicProfileChanged) {
+        account.publicProfileEnabled = publicProfileEnabled;
+      }
+      if (accountChanged || deviceChanged || avatarChanged || publicProfileChanged) {
         final nextRevision = await _persist(candidate);
         _accounts = candidate;
         _revision = nextRevision;
@@ -988,6 +999,7 @@ ManagedSyncAccountProfile _profileForRecord(_ManagedAccountRecord account) {
     id: account.id,
     displayName: account.displayName,
     avatarTone: account.avatarTone,
+    publicProfileEnabled: account.publicProfileEnabled,
     createdAt: account.createdAt,
     tokens: List<ManagedSyncTokenMetadata>.unmodifiable(tokens),
   );
@@ -1005,6 +1017,7 @@ class _ManagedAccountRecord {
     required this.id,
     required this.displayName,
     this.avatarTone,
+    this.publicProfileEnabled = false,
     required this.createdAt,
     required this.tokens,
     this.recovery,
@@ -1017,6 +1030,7 @@ class _ManagedAccountRecord {
     final rawTokens = json['tokens'];
     final rawRecovery = json['recovery'];
     final rawAvatarTone = json['avatarTone'];
+    final rawPublicProfileEnabled = json['publicProfileEnabled'];
     if (id is! String ||
         displayName is! String ||
         createdAt == null ||
@@ -1034,6 +1048,11 @@ class _ManagedAccountRecord {
         : rawAvatarTone is String
         ? _validatedAvatarTone(rawAvatarTone)
         : throw const FormatException('Stored authentication avatar is invalid.');
+    final publicProfileEnabled = rawPublicProfileEnabled == null
+        ? false
+        : rawPublicProfileEnabled is bool
+        ? rawPublicProfileEnabled
+        : throw const FormatException('Stored public profile flag is invalid.');
     final tokens = <_ManagedTokenRecord>[];
     final tokenIds = <String>{};
     for (final rawToken in rawTokens) {
@@ -1064,6 +1083,7 @@ class _ManagedAccountRecord {
       id: normalizedId,
       displayName: normalizedName,
       avatarTone: avatarTone,
+      publicProfileEnabled: publicProfileEnabled,
       createdAt: createdAt.toUtc(),
       tokens: tokens,
       recovery: recovery,
@@ -1073,6 +1093,7 @@ class _ManagedAccountRecord {
   final String id;
   String displayName;
   String? avatarTone;
+  bool publicProfileEnabled;
   final DateTime createdAt;
   final List<_ManagedTokenRecord> tokens;
   _ManagedRecoveryRecord? recovery;
@@ -1081,6 +1102,7 @@ class _ManagedAccountRecord {
         id: id,
         displayName: displayName,
         avatarTone: avatarTone,
+        publicProfileEnabled: publicProfileEnabled,
         createdAt: createdAt,
         tokens: tokens.map((token) => token.copy()).toList(),
         recovery: recovery?.copy(),
@@ -1090,6 +1112,7 @@ class _ManagedAccountRecord {
         'id': id,
         'displayName': displayName,
         'avatarTone': avatarTone,
+        'publicProfileEnabled': publicProfileEnabled,
         'createdAt': createdAt.toUtc().toIso8601String(),
         'tokens': tokens
             .map((token) => token.toStorageJson())

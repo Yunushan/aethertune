@@ -193,6 +193,9 @@ Handler createServerHandler({
   final rateLimiter = requestRateLimiter ?? ServerRequestRateLimiter(clock: now);
 
   Future<Response> route(Request request) async {
+    if (request.url.path.startsWith('api/v1/public-profiles/')) {
+      return _handlePublicProfile(request, managedAccounts: managedSyncAccounts);
+    }
     if (request.url.path.startsWith('api/v1/shared-playlist-invites/')) {
       return _handleSharedPlaylistInviteJoin(
         request,
@@ -562,7 +565,11 @@ Future<Response> _handleAuthProfile(
     final hasDisplayName = body.containsKey('displayName');
     final hasDeviceName = body.containsKey('deviceName');
     final hasAvatarTone = body.containsKey('avatarTone');
-    if (!hasDisplayName && !hasDeviceName && !hasAvatarTone) {
+    final hasPublicProfileEnabled = body.containsKey('publicProfileEnabled');
+    if (!hasDisplayName &&
+        !hasDeviceName &&
+        !hasAvatarTone &&
+        !hasPublicProfileEnabled) {
       throw const FormatException(
         'At least one profile field must be provided.',
       );
@@ -575,6 +582,10 @@ Future<Response> _handleAuthProfile(
       avatarToneProvided: hasAvatarTone,
       avatarTone:
           hasAvatarTone ? _optionalAvatarTone(body['avatarTone']) : null,
+      publicProfileEnabledProvided: hasPublicProfileEnabled,
+      publicProfileEnabled: hasPublicProfileEnabled
+          ? _requiredBool(body, 'publicProfileEnabled')
+          : false,
     );
     if (updated == null) {
       return _unauthorizedResponse();
@@ -616,11 +627,40 @@ Map<String, Object?> _authProfileJson({
       'id': accountId,
       'displayName': account?.displayName,
       'avatarTone': account?.avatarTone,
+      'publicProfileEnabled': account?.publicProfileEnabled ?? false,
       'managed': account != null,
       'editable': account != null && device != null,
     },
     'device': device?.toJson(),
   };
+}
+
+Future<Response> _handlePublicProfile(
+  Request request, {
+  required ManagedSyncAccountRegistry? managedAccounts,
+}) async {
+  if (request.method != 'GET') {
+    return _methodNotAllowed(request);
+  }
+  if (managedAccounts == null) {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  final segments = request.url.pathSegments;
+  if (segments.length != 4 ||
+      segments[0] != 'api' ||
+      segments[1] != 'v1' ||
+      segments[2] != 'public-profiles') {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  final account = managedAccounts.account(segments[3]);
+  if (account == null || !account.publicProfileEnabled) {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  return _jsonResponse(200, <String, Object?>{
+    'id': account.id,
+    'displayName': account.displayName,
+    'avatarTone': account.avatarTone,
+  });
 }
 
 String? _optionalAvatarTone(Object? value) {
@@ -629,6 +669,14 @@ String? _optionalAvatarTone(Object? value) {
   }
   if (value is! String) {
     throw const FormatException('avatarTone must be a string or null.');
+  }
+  return value;
+}
+
+bool _requiredBool(Map<String, Object?> body, String key) {
+  final value = body[key];
+  if (value is! bool) {
+    throw FormatException('$key must be a boolean.');
   }
   return value;
 }

@@ -525,6 +525,7 @@ void main() {
         'id': 'primary',
         'displayName': 'Primary listener',
         'avatarTone': null,
+        'publicProfileEnabled': false,
         'managed': true,
         'editable': true,
       },
@@ -538,6 +539,11 @@ void main() {
       '2026-07-15T12:00:00.000Z',
     );
 
+    final defaultPublicProfile = await handler(
+      _request('GET', '/api/v1/public-profiles/primary'),
+    );
+    expect(defaultPublicProfile.statusCode, 404);
+
     final profileUpdate = await handler(
       _request(
         'PATCH',
@@ -547,6 +553,7 @@ void main() {
           'displayName': 'Shared listeners',
           'deviceName': 'Workstation',
           'avatarTone': 'violet',
+          'publicProfileEnabled': true,
         },
       ),
     );
@@ -560,11 +567,25 @@ void main() {
     );
     expect((profileUpdateBody['account'] as Map)['avatarTone'], 'violet');
     expect(
+      (profileUpdateBody['account'] as Map)['publicProfileEnabled'],
+      isTrue,
+    );
+    expect(
       (profileUpdateBody['device'] as Map)['deviceName'],
       'Workstation',
     );
     expect(profileUpdateText, isNot(contains(desktopToken)));
     expect(profileUpdateText, isNot(contains('sha256')));
+
+    final publicProfile = await handler(
+      _request('GET', '/api/v1/public-profiles/primary'),
+    );
+    expect(publicProfile.statusCode, 200);
+    expect(await _json(publicProfile), <String, Object?>{
+      'id': 'primary',
+      'displayName': 'Shared listeners',
+      'avatarTone': 'violet',
+    });
 
     final phoneProfile = await handler(
       _request('GET', '/api/v1/auth/profile', token: phoneToken),
@@ -622,6 +643,20 @@ void main() {
       isNull,
     );
 
+    final privateProfileUpdate = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{'publicProfileEnabled': false},
+      ),
+    );
+    expect(privateProfileUpdate.statusCode, 200);
+    final hiddenProfile = await handler(
+      _request('GET', '/api/v1/public-profiles/primary'),
+    );
+    expect(hiddenProfile.statusCode, 404);
+
     final invalidAvatar = await handler(
       _request(
         'PATCH',
@@ -632,6 +667,20 @@ void main() {
     );
     expect(invalidAvatar.statusCode, 400);
     expect((await _json(invalidAvatar))['error'], 'invalid_auth_request');
+
+    final invalidPublicProfile = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{'publicProfileEnabled': 'yes'},
+      ),
+    );
+    expect(invalidPublicProfile.statusCode, 400);
+    expect(
+      (await _json(invalidPublicProfile))['error'],
+      'invalid_auth_request',
+    );
 
     final oversizedProfileUpdate = await handler(
       Request(
