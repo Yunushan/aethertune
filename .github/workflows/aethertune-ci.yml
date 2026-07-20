@@ -26,6 +26,9 @@ jobs:
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 
+      - name: Test provider contract workflow
+        run: python3 scripts/ci/test_provider_contract_workflow.py
+
       - name: Resolve client dependencies
         run: cd apps/mobile && flutter pub get
 
@@ -79,6 +82,39 @@ jobs:
 
       - name: Test
         run: cd apps/mobile && flutter test
+
+      - name: Provider contract - Core source model
+        run: cd apps/mobile && flutter test test/music_source_provider_test.dart test/provider_search_test.dart test/provider_home_feed_test.dart
+
+      - name: Provider contract - Local Library
+        run: cd apps/mobile && flutter test test/local_library_provider_test.dart test/provider_binary_loader_test.dart
+
+      - name: Provider contract - Podcast RSS
+        run: cd apps/mobile && flutter test test/itunes_podcast_directory_test.dart test/podcast_rss_provider_test.dart test/podcast_subscription_refresh_worker_test.dart
+
+      - name: Provider contract - Radio Browser
+        run: cd apps/mobile && flutter test test/radio_browser_provider_test.dart test/radio_browser_station_screen_test.dart
+
+      - name: Provider contract - Internet Archive
+        run: cd apps/mobile && flutter test test/internet_archive_provider_test.dart test/internet_archive_item_screen_test.dart test/internet_archive_collection_screen_test.dart
+
+      - name: Provider contract - Custom Catalog
+        run: cd apps/mobile && flutter test test/custom_catalog_provider_test.dart
+
+      - name: Provider contract - Spotify metadata
+        run: cd apps/mobile && flutter test test/spotify_metadata_provider_test.dart test/spotify_oauth_client_test.dart test/spotify_oauth_flow_test.dart
+
+      - name: Provider contract - YouTube Data metadata
+        run: cd apps/mobile && flutter test test/youtube_data_metadata_provider_test.dart test/youtube_music_chart_screen_test.dart test/youtube_public_playlists_screen_test.dart test/youtube_followed_channel_feed_screen_test.dart
+
+      - name: Provider contract - Jellyfin
+        run: cd apps/mobile && flutter test test/jellyfin_provider_test.dart
+
+      - name: Provider contract - Navidrome and Subsonic
+        run: cd apps/mobile && flutter test test/subsonic_provider_test.dart
+
+      - name: Provider contract - LRCLIB lyrics
+        run: cd apps/mobile && flutter test test/lrclib_lyrics_provider_test.dart
 
       - name: Build Android debug app
         run: cd apps/mobile && flutter build apk --debug
