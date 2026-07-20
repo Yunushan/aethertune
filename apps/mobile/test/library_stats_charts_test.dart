@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('renders all listening chart dimensions on a compact viewport', (
+  testWidgets('renders all compact chart dimensions and listening-time mode', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(320, 620));
@@ -68,6 +68,15 @@ void main() {
     expect(find.text('Top artists chart'), findsOneWidget);
     expect(find.text('Top albums chart'), findsOneWidget);
     expect(find.text('Top genres chart'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('28m'), findsOneWidget);
+    expect(
+      tester.widget<SegmentedButton<LibraryStatsChartMetric>>(
+        find.byKey(const Key('listening-stats-chart-metric')),
+      ).selected,
+      <LibraryStatsChartMetric>{LibraryStatsChartMetric.listeningTime},
+    );
     expect(tester.takeException(), isNull);
   });
 }

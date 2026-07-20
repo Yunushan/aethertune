@@ -11914,19 +11914,35 @@ class _LibraryStatsOverview extends StatelessWidget {
   }
 }
 
-class LibraryStatsCharts extends StatelessWidget {
+enum LibraryStatsChartMetric { plays, listeningTime }
+
+class LibraryStatsCharts extends StatefulWidget {
   const LibraryStatsCharts({super.key, required this.stats});
 
   final LibraryStatsSummary stats;
 
   @override
+  State<LibraryStatsCharts> createState() => _LibraryStatsChartsState();
+}
+
+class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
+  var _metric = LibraryStatsChartMetric.plays;
+
+  @override
   Widget build(BuildContext context) {
+    final stats = widget.stats;
     final trackData = stats.topTracks
         .map(
           (trackStats) => ListeningStatsBarDatum(
             label: trackStats.track.title,
-            value: trackStats.playCount,
-            valueLabel: '${trackStats.playCount} play(s)',
+            value: _valueFor(
+              playCount: trackStats.playCount,
+              listeningDuration: trackStats.estimatedListeningDuration,
+            ),
+            valueLabel: _labelFor(
+              playCount: trackStats.playCount,
+              listeningDuration: trackStats.estimatedListeningDuration,
+            ),
           ),
         )
         .toList(growable: false);
@@ -11934,8 +11950,14 @@ class LibraryStatsCharts extends StatelessWidget {
         .map(
           (artistStats) => ListeningStatsBarDatum(
             label: artistStats.label,
-            value: artistStats.playCount,
-            valueLabel: '${artistStats.playCount} play(s)',
+            value: _valueFor(
+              playCount: artistStats.playCount,
+              listeningDuration: artistStats.estimatedListeningDuration,
+            ),
+            valueLabel: _labelFor(
+              playCount: artistStats.playCount,
+              listeningDuration: artistStats.estimatedListeningDuration,
+            ),
           ),
         )
         .toList(growable: false);
@@ -11943,8 +11965,14 @@ class LibraryStatsCharts extends StatelessWidget {
         .map(
           (albumStats) => ListeningStatsBarDatum(
             label: albumStats.label,
-            value: albumStats.playCount,
-            valueLabel: '${albumStats.playCount} play(s)',
+            value: _valueFor(
+              playCount: albumStats.playCount,
+              listeningDuration: albumStats.estimatedListeningDuration,
+            ),
+            valueLabel: _labelFor(
+              playCount: albumStats.playCount,
+              listeningDuration: albumStats.estimatedListeningDuration,
+            ),
           ),
         )
         .toList(growable: false);
@@ -11952,8 +11980,14 @@ class LibraryStatsCharts extends StatelessWidget {
         .map(
           (genreStats) => ListeningStatsBarDatum(
             label: genreStats.label,
-            value: genreStats.playCount,
-            valueLabel: '${genreStats.playCount} play(s)',
+            value: _valueFor(
+              playCount: genreStats.playCount,
+              listeningDuration: genreStats.estimatedListeningDuration,
+            ),
+            valueLabel: _labelFor(
+              playCount: genreStats.playCount,
+              listeningDuration: genreStats.estimatedListeningDuration,
+            ),
           ),
         )
         .toList(growable: false);
@@ -11996,35 +12030,79 @@ class LibraryStatsCharts extends StatelessWidget {
         ),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (charts.length == 1) {
-          return charts.single;
-        }
-        if (constraints.maxWidth >= 720) {
-          final chartWidth = (constraints.maxWidth - 28) / 2;
-          return Wrap(
-            spacing: 28,
-            runSpacing: 20,
-            children: <Widget>[
-              for (final chart in charts)
-                SizedBox(width: chartWidth, child: chart),
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            for (var index = 0; index < charts.length; index += 1) ...<Widget>[
-              charts[index],
-              if (index != charts.length - 1) const SizedBox(height: 20),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SegmentedButton<LibraryStatsChartMetric>(
+          key: const Key('listening-stats-chart-metric'),
+          segments: const <ButtonSegment<LibraryStatsChartMetric>>[
+            ButtonSegment<LibraryStatsChartMetric>(
+              value: LibraryStatsChartMetric.plays,
+              icon: Icon(Icons.play_arrow_outlined),
+              tooltip: 'Play count',
+            ),
+            ButtonSegment<LibraryStatsChartMetric>(
+              value: LibraryStatsChartMetric.listeningTime,
+              icon: Icon(Icons.schedule_outlined),
+              tooltip: 'Listening time',
+            ),
           ],
-        );
-      },
+          selected: <LibraryStatsChartMetric>{_metric},
+          onSelectionChanged: (selection) {
+            setState(() => _metric = selection.first);
+          },
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (charts.length == 1) {
+              return charts.single;
+            }
+            if (constraints.maxWidth >= 720) {
+              final chartWidth = (constraints.maxWidth - 28) / 2;
+              return Wrap(
+                spacing: 28,
+                runSpacing: 20,
+                children: <Widget>[
+                  for (final chart in charts)
+                    SizedBox(width: chartWidth, child: chart),
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                for (var index = 0; index < charts.length; index += 1)
+                  ...<Widget>[
+                    charts[index],
+                    if (index != charts.length - 1)
+                      const SizedBox(height: 20),
+                  ],
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
+
+  int _valueFor({
+    required int playCount,
+    required Duration listeningDuration,
+  }) => switch (_metric) {
+    LibraryStatsChartMetric.plays => playCount,
+    LibraryStatsChartMetric.listeningTime => listeningDuration.inSeconds,
+  };
+
+  String _labelFor({
+    required int playCount,
+    required Duration listeningDuration,
+  }) => switch (_metric) {
+    LibraryStatsChartMetric.plays => '$playCount play(s)',
+    LibraryStatsChartMetric.listeningTime =>
+      _formatStatsDuration(listeningDuration),
+  };
 }
 
 class _StatsMetricTile extends StatelessWidget {
