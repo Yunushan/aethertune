@@ -1790,9 +1790,49 @@ class LibraryStore extends ChangeNotifier {
     if (!_watchedLocalFolderPaths.contains(root)) {
       return;
     }
-    final scannedTracks = tracks
-        .where((track) => _isLocalTrackWithinFolder(track, root))
-        .toList(growable: false);
+    await _reconcileScannedLocalTracks(
+      tracks: tracks.where((track) => _isLocalTrackWithinFolder(track, root)),
+      isExistingTrackInScope: (track) =>
+          _isLocalTrackWithinFolder(track, root),
+      sidecarLyricsByTrackId: sidecarLyricsByTrackId,
+      embeddedLyricsByTrackId: embeddedLyricsByTrackId,
+      sidecarChaptersByTrackId: sidecarChaptersByTrackId,
+      pruneMissing: pruneMissing,
+    );
+  }
+
+  /// Reconciles an explicit local-file refresh without removing unavailable
+  /// tracks. This lets selected files receive later tag and sidecar changes
+  /// while retaining every user-owned library field.
+  Future<void> reconcileLocalTracks(
+    Iterable<Track> tracks, {
+    required Map<String, String> sidecarLyricsByTrackId,
+    Map<String, String> embeddedLyricsByTrackId = const <String, String>{},
+    Map<String, List<TrackChapter>> sidecarChaptersByTrackId =
+        const <String, List<TrackChapter>>{},
+  }) {
+    return _reconcileScannedLocalTracks(
+      tracks: tracks.where(
+        (track) => track.sourceId == 'local' && track.localPath != null,
+      ),
+      isExistingTrackInScope: (track) =>
+          track.sourceId == 'local' && track.localPath != null,
+      sidecarLyricsByTrackId: sidecarLyricsByTrackId,
+      embeddedLyricsByTrackId: embeddedLyricsByTrackId,
+      sidecarChaptersByTrackId: sidecarChaptersByTrackId,
+      pruneMissing: false,
+    );
+  }
+
+  Future<void> _reconcileScannedLocalTracks({
+    required Iterable<Track> tracks,
+    required bool Function(Track track) isExistingTrackInScope,
+    required Map<String, String> sidecarLyricsByTrackId,
+    required Map<String, String> embeddedLyricsByTrackId,
+    required Map<String, List<TrackChapter>> sidecarChaptersByTrackId,
+    required bool pruneMissing,
+  }) async {
+    final scannedTracks = tracks.toList(growable: false);
     final scannedIds = scannedTracks.map((track) => track.id).toSet();
     var changed = false;
 
@@ -1814,7 +1854,7 @@ class LibraryStore extends ChangeNotifier {
 
     if (pruneMissing) {
       final deletedIds = _tracks
-          .where((track) => _isLocalTrackWithinFolder(track, root))
+          .where(isExistingTrackInScope)
           .where((track) => !scannedIds.contains(track.id))
           .map((track) => track.id)
           .toList(growable: false);

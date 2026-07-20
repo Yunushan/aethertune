@@ -171,6 +171,65 @@ void main() {
     expect(store.tracks.single.id, existing.id);
   });
 
+  test(
+    'refreshes explicit local files without a watcher or pruning gaps',
+    () async {
+      final store = LibraryStore(clock: () => DateTime.utc(2026, 7, 12));
+      await store.load();
+      final refreshedPath = '/music/selected/refresh.mp3';
+      final unavailablePath = '/music/selected/unavailable.mp3';
+      final original = _track(
+        path: refreshedPath,
+        title: 'Original metadata',
+        hash: 'original-hash',
+        addedAt: DateTime.utc(2026, 1, 1),
+      );
+      final unavailable = _track(
+        path: unavailablePath,
+        title: 'Keep unavailable file',
+        hash: 'unavailable-hash',
+      );
+      await store.addTracks(<Track>[original, unavailable]);
+      await store.toggleFavorite(original.id);
+      await store.setLyrics(original.id, 'Manual lyric remains authoritative');
+
+      await store.reconcileLocalTracks(
+        <Track>[
+          _track(
+            path: refreshedPath,
+            title: 'Refreshed metadata',
+            hash: 'refreshed-hash',
+            albumArtist: 'Refreshed album artist',
+            year: 2026,
+            trackNumber: 4,
+          ),
+        ],
+        sidecarLyricsByTrackId: <String, String>{
+          original.id: 'Sidecar must not replace a manual lyric',
+        },
+      );
+
+      final refreshed = store.tracks.firstWhere(
+        (track) => track.id == original.id,
+      );
+      expect(store.watchedLocalFolderPaths, isEmpty);
+      expect(refreshed.title, 'Refreshed metadata');
+      expect(refreshed.albumArtist, 'Refreshed album artist');
+      expect(refreshed.year, 2026);
+      expect(refreshed.trackNumber, 4);
+      expect(refreshed.isFavorite, isTrue);
+      expect(refreshed.addedAt, DateTime.utc(2026, 1, 1));
+      expect(
+        store.lyricsForTrack(original.id)?.plainText,
+        'Manual lyric remains authoritative',
+      );
+      expect(
+        store.tracks.map((track) => track.id),
+        contains(unavailable.id),
+      );
+    },
+  );
+
   test('adds a newly available audio fingerprint without a file-content change',
       () async {
     const root = '/music/fingerprint-upgrade';

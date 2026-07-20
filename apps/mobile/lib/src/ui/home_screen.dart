@@ -693,6 +693,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _lastRecordedPlaybackSerial = 0;
   double? _desktopQueuePaneDragWidth;
   Duration _lyricsSearchCacheLifetime = defaultLyricsSearchCacheLifetime;
+  bool _isRefreshingLocalMetadata = false;
 
   @override
   void initState() {
@@ -969,6 +970,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               _SettingsTab(
                 onRestartOnboarding: widget.onRestartOnboarding,
+                isRefreshingLocalMetadata: _isRefreshingLocalMetadata,
+                onRefreshLocalMetadata: _refreshLocalLibraryMetadata,
                 onClearLyricsSearchCache: () => _clearLyricsSearchCache(context),
                 lyricsSearchCacheLifetime: _lyricsSearchCacheLifetime,
                 onLyricsSearchCacheLifetimeChanged: (retention) {
@@ -1716,6 +1719,74 @@ class _HomeScreenState extends State<HomeScreen> {
       messenger.showSnackBar(
         SnackBar(content: Text(_folderImportErrorMessage(error))),
       );
+    }
+  }
+
+  Future<void> _refreshLocalLibraryMetadata() async {
+    if (_isRefreshingLocalMetadata) {
+      return;
+    }
+
+    final library = context.read<LibraryStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    final localFilePaths = library.tracks
+        .where(
+          (track) =>
+              track.sourceId == 'local' &&
+              track.localPath != null &&
+              track.localPath!.isNotEmpty,
+        )
+        .map((track) => track.localPath!)
+        .toList(growable: false);
+    if (localFilePaths.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No local audio files are available to refresh.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isRefreshingLocalMetadata = true);
+    try {
+      _showLocalImportProgress(
+        messenger,
+        'Refreshing local audio metadata...',
+      );
+      final scanResult = await scanLocalFilesInBackground(
+        localFilePaths,
+        importedAt: DateTime.now(),
+      );
+      await library.reconcileLocalTracks(
+        scanResult.tracks,
+        sidecarLyricsByTrackId: scanResult.sidecarLyricsByTrackId,
+        embeddedLyricsByTrackId: scanResult.embeddedLyricsByTrackId,
+        sidecarChaptersByTrackId: scanResult.sidecarChaptersByTrackId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            scanResult.tracks.isEmpty
+                ? 'No readable local audio files were refreshed.'
+                : 'Refreshed metadata for ${scanResult.tracks.length} local audio file(s).',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(_folderImportErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshingLocalMetadata = false);
+      }
     }
   }
 
@@ -3129,6 +3200,7 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
         onAdjustTiming?.call();
     }
   }
+
 }
 
 enum _NowPlayingLyricsMenuAction {
@@ -18707,12 +18779,16 @@ String _languagePreferenceLabel(
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab({
     this.onRestartOnboarding,
+    required this.isRefreshingLocalMetadata,
+    this.onRefreshLocalMetadata,
     this.onClearLyricsSearchCache,
     required this.lyricsSearchCacheLifetime,
     this.onLyricsSearchCacheLifetimeChanged,
   });
 
   final VoidCallback? onRestartOnboarding;
+  final bool isRefreshingLocalMetadata;
+  final Future<void> Function()? onRefreshLocalMetadata;
   final Future<void> Function()? onClearLyricsSearchCache;
   final Duration lyricsSearchCacheLifetime;
   final ValueChanged<Duration>? onLyricsSearchCacheLifetimeChanged;
@@ -18738,6 +18814,14 @@ class _SettingsTab extends StatelessWidget {
         .toList(growable: false);
     final pausedOfflineQueueCount = offlineQueue
         .where((entry) => entry.status == OfflineCacheEntryStatus.paused)
+        .length;
+    final localTrackCount = library.tracks
+        .where(
+          (track) =>
+              track.sourceId == 'local' &&
+              track.localPath != null &&
+              track.localPath!.isNotEmpty,
+        )
         .length;
 
     return ListView(
@@ -19156,6 +19240,27 @@ class _SettingsTab extends StatelessWidget {
                   },
           ),
         ),
+        if (localTrackCount > 0)
+          ListTile(
+            key: const Key('refresh-local-metadata'),
+            leading: const Icon(Icons.refresh_outlined),
+            title: const Text('Refresh local metadata'),
+            subtitle: Text(
+              isRefreshingLocalMetadata
+                  ? 'Scanning local files and sidecars...'
+                  : 'Rescan $localTrackCount local file(s) without removing unavailable tracks.',
+            ),
+            trailing: isRefreshingLocalMetadata
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            onTap: isRefreshingLocalMetadata || onRefreshLocalMetadata == null
+                ? null
+                : () => unawaited(onRefreshLocalMetadata!()),
+          ),
         if (library.watchedLocalFolderPaths.isNotEmpty) ...<Widget>[
           const Divider(),
           Text(
