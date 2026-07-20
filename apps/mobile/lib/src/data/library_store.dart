@@ -82,7 +82,7 @@ enum LibraryHomeSectionType {
 }
 
 /// The source subset to include in the combined following feed.
-enum FollowingFeedSource { all, artists, podcasts }
+enum FollowingFeedSource { all, artists, podcasts, youtube }
 
 enum LibraryChartRange { allTime, sevenDays, thirtyDays, year }
 
@@ -3214,7 +3214,8 @@ class LibraryStore extends ChangeNotifier {
     return sections;
   }
 
-  /// Returns newest items from the user's local artist follows and RSS feeds.
+  /// Returns newest items from followed artists, RSS feeds, and explicitly
+  /// refreshed public channel metadata supplied by the caller.
   ///
   /// A track can appear in both sources after a feed episode is saved into the
   /// library. Sorting before de-duplication keeps the most recently added
@@ -3222,6 +3223,7 @@ class LibraryStore extends ChangeNotifier {
   List<Track> followingFeedTracks({
     FollowingFeedSource source = FollowingFeedSource.all,
     int limit = 8,
+    Iterable<Track> youtubeTracks = const <Track>[],
   }) {
     if (limit <= 0) {
       return <Track>[];
@@ -3231,11 +3233,13 @@ class LibraryStore extends ChangeNotifier {
       FollowingFeedSource.all => <Track>[
         ..._followedArtistTracks(limit: _tracks.length),
         ..._subscribedPodcastEpisodeTracks(),
+        ...youtubeTracks,
       ],
       FollowingFeedSource.artists => _followedArtistTracks(
         limit: _tracks.length,
       ),
       FollowingFeedSource.podcasts => _subscribedPodcastEpisodeTracks(),
+      FollowingFeedSource.youtube => youtubeTracks.toList(growable: false),
     };
     tracks.sort(_compareByDateThenTitle);
     return _uniqueTracks(tracks).take(limit).toList(growable: false);

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/youtube_channel_follow_store.dart';
 import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
+import 'package:aethertune/src/data/youtube_followed_channel_feed_store.dart';
 import 'package:aethertune/src/ui/youtube_followed_channel_feed_screen.dart';
 
 void main() {
@@ -15,9 +16,15 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final library = LibraryStore();
     final follows = YouTubeChannelFollowStore();
-    await Future.wait<void>(<Future<void>>[library.load(), follows.load()]);
+    final followedFeed = YouTubeFollowedChannelFeedStore();
+    await Future.wait<void>(<Future<void>>[
+      library.load(),
+      follows.load(),
+      followedFeed.load(),
+    ]);
     addTearDown(library.dispose);
     addTearDown(follows.dispose);
+    addTearDown(followedFeed.dispose);
     await follows.setFollowed(
       const YouTubeDataChannel(id: 'channel-one', title: 'One'),
       true,
@@ -50,6 +57,9 @@ void main() {
           ChangeNotifierProvider<LibraryStore>.value(value: library),
           ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
             value: follows,
+          ),
+          ChangeNotifierProvider<YouTubeFollowedChannelFeedStore>.value(
+            value: followedFeed,
           ),
         ],
         child: MaterialApp(

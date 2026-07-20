@@ -48,6 +48,7 @@ import '../data/track_artwork_file_store.dart';
 import '../data/wav_riff_info_writer.dart';
 import '../data/youtube_channel_follow_store.dart';
 import '../data/youtube_followed_channel_feed.dart';
+import '../data/youtube_followed_channel_feed_store.dart';
 import '../data/youtube_data_settings_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/backup_file_document.dart';
@@ -3591,6 +3592,8 @@ class _HomeTabState extends State<_HomeTab> {
     final providerStore = context.watch<SelfHostedProviderStore>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
     final youtubeFollows = context.watch<YouTubeChannelFollowStore?>();
+    final youtubeFollowedFeed =
+        context.watch<YouTubeFollowedChannelFeedStore?>();
     final spotify = context.watch<SpotifySettingsStore?>();
     final player = context.read<PlayerController>();
 
@@ -3599,8 +3602,13 @@ class _HomeTabState extends State<_HomeTab> {
     }
 
     final sections = library.homeFeedSections();
+    final youtubeFollowingTracks = youtubeFollowedFeed?.items
+            .map((item) => item.track)
+            .toList(growable: false) ??
+        const <Track>[];
     final followingTracks = library.followingFeedTracks(
       source: _followingFeedSource,
+      youtubeTracks: youtubeFollowingTracks,
     );
     final charts = library.localCharts(range: _chartRange);
     final recommendationMatches = library.personalizedRecommendationMatches(
@@ -3686,6 +3694,7 @@ class _HomeTabState extends State<_HomeTab> {
           player: player,
           library: library,
           tracks: followingTracks,
+          youtubeTracks: youtubeFollowingTracks,
         ),
         ..._homeTrackPreviewWidgets(
           context: context,
@@ -3846,9 +3855,10 @@ class _HomeTabState extends State<_HomeTab> {
     required PlayerController player,
     required LibraryStore library,
     required List<Track> tracks,
+    required List<Track> youtubeTracks,
   }) {
     final hasFollowingContent = library
-        .followingFeedTracks(limit: 1)
+        .followingFeedTracks(youtubeTracks: youtubeTracks, limit: 1)
         .isNotEmpty;
     if (!hasFollowingContent) {
       return <Widget>[];
@@ -3859,7 +3869,7 @@ class _HomeTabState extends State<_HomeTab> {
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.dynamic_feed_outlined),
         title: const Text('Following'),
-        subtitle: const Text('Newest updates from artists and podcasts'),
+        subtitle: const Text('Newest updates from artists, podcasts, and public channels'),
         trailing: Text('${tracks.length}'),
       ),
       Wrap(
@@ -4253,20 +4263,19 @@ final class _FollowedYouTubeChannelShelf extends StatefulWidget {
 
 final class _FollowedYouTubeChannelShelfState
     extends State<_FollowedYouTubeChannelShelf> {
-  List<YouTubeFollowedChannelFeedItem> _items =
-      const <YouTubeFollowedChannelFeedItem>[];
-  bool _loading = false;
-  int _failedChannelCount = 0;
-  int _requestSerial = 0;
-
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final follows = context.watch<YouTubeChannelFollowStore?>();
+    final feedStore = context.watch<YouTubeFollowedChannelFeedStore?>();
     final offline = library.offlineModeEnabled;
     final followCount = follows?.follows.length ?? 0;
+    final items = feedStore?.items.take(6).toList(growable: false) ??
+        const <YouTubeFollowedChannelFeedItem>[];
+    final loading = feedStore?.refreshing ?? false;
+    final failedChannelCount = feedStore?.lastFailedChannelCount ?? 0;
     final canRefresh =
-        follows?.loaded == true && followCount > 0 && !_loading && !offline;
+        follows?.loaded == true && followCount > 0 && !loading && !offline;
     return Column(
       children: <Widget>[
         ListTile(
@@ -4292,25 +4301,25 @@ final class _FollowedYouTubeChannelShelfState
             icon: const Icon(Icons.refresh),
           ),
         ),
-        if (offline && _items.isEmpty)
+        if (offline && items.isEmpty)
           const ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.cloud_off_outlined),
             title: Text('Offline mode'),
           ),
-        if (_loading && _items.isEmpty)
+        if (loading && items.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: LinearProgressIndicator(),
           ),
-        if (_failedChannelCount > 0)
+        if (failedChannelCount > 0)
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.error_outline),
-            title: Text('$_failedChannelCount channel(s) unavailable'),
+            title: Text('$failedChannelCount channel(s) unavailable'),
             subtitle: const Text('Other followed-channel metadata is shown.'),
           ),
-        for (final item in _items)
+        for (final item in items)
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.ondemand_video_outlined),
@@ -4331,7 +4340,7 @@ final class _FollowedYouTubeChannelShelfState
               ),
             ),
           ),
-        if (_loading && _items.isNotEmpty)
+        if (loading && items.isNotEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: LinearProgressIndicator(),
@@ -4341,34 +4350,22 @@ final class _FollowedYouTubeChannelShelfState
   }
 
   Future<void> _refresh() async {
-    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+    final feedStore = context.read<YouTubeFollowedChannelFeedStore?>();
+    if (feedStore == null ||
+        feedStore.refreshing ||
+        context.read<LibraryStore>().offlineModeEnabled) {
       return;
     }
     final follows = context.read<YouTubeChannelFollowStore?>();
     if (follows?.loaded != true || follows!.follows.isEmpty) {
       return;
     }
-    final request = ++_requestSerial;
-    setState(() {
-      _loading = true;
-      _failedChannelCount = 0;
-    });
-    final feed = await loadYouTubeFollowedChannelFeed(
+    await feedStore.refresh(
       widget.provider,
       follows.follows,
       limitPerChannel: 2,
       maxChannels: 6,
     );
-    if (!mounted || request != _requestSerial) {
-      return;
-    }
-    setState(() {
-      _items = List<YouTubeFollowedChannelFeedItem>.unmodifiable(
-        feed.items.take(6),
-      );
-      _failedChannelCount = feed.failedChannelCount;
-      _loading = false;
-    });
   }
 
   Future<void> _saveTrack(BuildContext context, Track track) async {
@@ -5551,10 +5548,14 @@ String _followingFeedSourceLabel(FollowingFeedSource source) {
     FollowingFeedSource.all => 'All',
     FollowingFeedSource.artists => 'Artists',
     FollowingFeedSource.podcasts => 'Podcasts',
+    FollowingFeedSource.youtube => 'YouTube',
   };
 }
 
 String _followingFeedTrackDetail(Track track) {
+  if (track.sourceId == 'youtube-data-metadata') {
+    return 'Followed public channel metadata';
+  }
   return track.sourceId.startsWith('podcast-')
       ? 'Podcast subscription'
       : 'Followed artist';

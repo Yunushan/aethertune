@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
 import '../data/youtube_channel_follow_store.dart';
-import '../data/youtube_followed_channel_feed.dart';
+import '../data/youtube_followed_channel_feed_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/track.dart';
 import 'widgets/track_artwork.dart';
@@ -29,19 +29,17 @@ final class YouTubeFollowedChannelFeedScreen extends StatefulWidget {
 
 final class _YouTubeFollowedChannelFeedScreenState
     extends State<YouTubeFollowedChannelFeedScreen> {
-  List<YouTubeFollowedChannelFeedItem> _items =
-      const <YouTubeFollowedChannelFeedItem>[];
-  bool _loading = false;
-  bool _refreshed = false;
-  int _failedChannels = 0;
-
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
     final follows = context.watch<YouTubeChannelFollowStore>();
+    final feedStore = context.watch<YouTubeFollowedChannelFeedStore>();
     final offlineModeEnabled = library.offlineModeEnabled;
     final canRefresh =
-        follows.loaded && follows.follows.isNotEmpty && !_loading && !offlineModeEnabled;
+        follows.loaded &&
+        follows.follows.isNotEmpty &&
+        !feedStore.refreshing &&
+        !offlineModeEnabled;
     return Scaffold(
       appBar: AppBar(title: const Text('Followed YouTube channels')),
       body: ListView(
@@ -87,12 +85,14 @@ final class _YouTubeFollowedChannelFeedScreenState
                 subtitle: Text('Turn it off to refresh followed channels.'),
               ),
             ),
-          if (_loading)
+          if (feedStore.refreshing)
             const Padding(
               padding: EdgeInsets.only(top: 16),
               child: LinearProgressIndicator(),
             ),
-          if (_refreshed && !_loading && _items.isEmpty)
+          if (feedStore.lastRefreshedAt != null &&
+              !feedStore.refreshing &&
+              feedStore.items.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: ListTile(
@@ -100,16 +100,16 @@ final class _YouTubeFollowedChannelFeedScreenState
                 title: Text('No recent public videos found'),
               ),
             ),
-          if (_failedChannels > 0)
+          if (feedStore.lastFailedChannelCount > 0)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: ListTile(
                 leading: const Icon(Icons.error_outline),
-                title: Text('$_failedChannels followed channel(s) could not refresh'),
+                title: Text('${feedStore.lastFailedChannelCount} followed channel(s) could not refresh'),
                 subtitle: const Text('Other public channel results are still shown.'),
               ),
             ),
-          for (final item in _items)
+          for (final item in feedStore.items)
             ListTile(
               leading: TrackArtwork(artworkUri: item.track.artworkUri),
               title: Text(item.track.title),
@@ -132,30 +132,18 @@ final class _YouTubeFollowedChannelFeedScreenState
   }
 
   Future<void> _refresh() async {
-    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+    if (context.read<YouTubeFollowedChannelFeedStore>().refreshing ||
+        context.read<LibraryStore>().offlineModeEnabled) {
       return;
     }
     final follows = context.read<YouTubeChannelFollowStore>();
     if (!follows.loaded || follows.follows.isEmpty) {
       return;
     }
-    setState(() {
-      _loading = true;
-      _failedChannels = 0;
-    });
-    final feed = await loadYouTubeFollowedChannelFeed(
+    await context.read<YouTubeFollowedChannelFeedStore>().refresh(
       widget.provider,
       follows.follows,
     );
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _items = feed.items;
-      _failedChannels = feed.failedChannelCount;
-      _loading = false;
-      _refreshed = true;
-    });
   }
 
   Future<void> _saveTrack(Track track) async {

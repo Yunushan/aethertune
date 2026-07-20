@@ -374,6 +374,17 @@ void main() {
       store.followingFeedTracks().map((track) => track.id),
       <String>['podcast-new', 'artist-update'],
     );
+    final publicVideo = _track(
+      'youtube-update',
+      sourceId: 'youtube-data-metadata',
+      addedAt: DateTime.utc(2026, 1, 6),
+    );
+    expect(
+      store
+          .followingFeedTracks(youtubeTracks: <Track>[publicVideo])
+          .map((track) => track.id),
+      <String>['youtube-update', 'podcast-new', 'artist-update'],
+    );
     expect(
       store
           .followingFeedTracks(source: FollowingFeedSource.artists)
@@ -385,6 +396,15 @@ void main() {
           .followingFeedTracks(source: FollowingFeedSource.podcasts)
           .map((track) => track.id),
       <String>['podcast-new', 'artist-update'],
+    );
+    expect(
+      store
+          .followingFeedTracks(
+            source: FollowingFeedSource.youtube,
+            youtubeTracks: <Track>[publicVideo],
+          )
+          .map((track) => track.id),
+      <String>['youtube-update'],
     );
     expect(store.followingFeedTracks(limit: 0), isEmpty);
   });
