@@ -27,6 +27,7 @@ class MainActivity : AudioServiceActivity() {
     private val audioVirtualizer = AetherTuneAudioVirtualizer()
     private var pendingVisualizerResult: MethodChannel.Result? = null
     private var pendingVisualizerSessionId: Int? = null
+    private var pendingAudioLibraryAccessResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -159,6 +160,16 @@ class MainActivity : AudioServiceActivity() {
                 result.success(false)
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/storage_access",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "requestAudioLibraryAccess") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            requestAudioLibraryAccess(result)
+        }
     }
 
     private fun requestPinnedShortcut(shortcut: String?): Boolean {
@@ -208,6 +219,14 @@ class MainActivity : AudioServiceActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == audioLibraryPermissionRequestCode) {
+            val result = pendingAudioLibraryAccessResult
+            pendingAudioLibraryAccessResult = null
+            result?.success(
+                grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED,
+            )
+            return
+        }
         if (requestCode != visualizerPermissionRequestCode) {
             return
         }
@@ -233,7 +252,9 @@ class MainActivity : AudioServiceActivity() {
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
                 PackageManager.PERMISSION_GRANTED
         ) {
-            if (pendingVisualizerResult != null) {
+            if (pendingVisualizerResult != null ||
+                pendingAudioLibraryAccessResult != null
+            ) {
                 result.error("permission-request-active", "A visualizer permission request is active.", null)
                 return
             }
@@ -248,8 +269,37 @@ class MainActivity : AudioServiceActivity() {
         result.success(audioVisualizer.start(sessionId))
     }
 
+    private fun requestAudioLibraryAccess(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            result.success(true)
+            return
+        }
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+            result.success(true)
+            return
+        }
+        if (pendingVisualizerResult != null ||
+            pendingAudioLibraryAccessResult != null
+        ) {
+            result.error(
+                "permission-request-active",
+                "A platform permission request is already active.",
+                null,
+            )
+            return
+        }
+        pendingAudioLibraryAccessResult = result
+        requestPermissions(arrayOf(permission), audioLibraryPermissionRequestCode)
+    }
+
     private companion object {
         const val visualizerPermissionRequestCode = 7318
+        const val audioLibraryPermissionRequestCode = 7319
     }
 
     private fun dispatchLauncherShortcut(intent: Intent) {

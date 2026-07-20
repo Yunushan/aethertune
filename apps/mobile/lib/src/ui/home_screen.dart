@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import '../data/demo_source_provider.dart';
 import '../data/custom_catalog_provider.dart';
 import '../data/custom_catalog_store.dart';
+import '../data/android_audio_library_access.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/itunes_podcast_directory.dart';
@@ -1685,6 +1686,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
+    if (Platform.isAndroid && !await _requestAndroidFolderImportAccess(context)) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+
     final folderPath = await FilePicker.getDirectoryPath(
       dialogTitle: 'Import audio folder',
     );
@@ -1720,6 +1728,44 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(content: Text(_folderImportErrorMessage(error))),
       );
     }
+  }
+
+  Future<bool> _requestAndroidFolderImportAccess(BuildContext context) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Allow audio-library access?'),
+        content: const Text(
+          'Folder import reads audio files and matching lyric or chapter sidecars in the folder you choose. AetherTune uses this access only after you start an import.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || approved != true) {
+      return false;
+    }
+
+    final granted = await AndroidAudioLibraryAccess.request();
+    if (!context.mounted || granted) {
+      return granted;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Audio-library access was not granted. You can still import individual files instead.',
+        ),
+      ),
+    );
+    return false;
   }
 
   Future<void> _refreshLocalLibraryMetadata() async {

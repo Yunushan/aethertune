@@ -130,11 +130,23 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'dev.aethertune/storage_access',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'requestAudioLibraryAccess',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 'AetherTuneAudioVirtualizer',
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
                 'android.permission.RECORD_AUDIO',
+                manifest_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'android.permission.READ_MEDIA_AUDIO',
                 manifest_path.read_text(encoding="utf-8"),
             )
             widget_layout = (
