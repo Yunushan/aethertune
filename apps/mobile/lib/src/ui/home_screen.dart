@@ -17765,6 +17765,8 @@ String _duplicateMatchLabel(DuplicateMatchType type) {
       return 'Same file path';
     case DuplicateMatchType.contentHash:
       return 'Same file content';
+    case DuplicateMatchType.audioFingerprint:
+      return 'Same encoded audio payload';
     case DuplicateMatchType.sourceExternalId:
       return 'Same provider item';
     case DuplicateMatchType.streamUrl:

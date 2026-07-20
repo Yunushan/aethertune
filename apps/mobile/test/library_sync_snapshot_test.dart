@@ -23,6 +23,7 @@ void main() {
       artworkUri: Uri.file(r'C:\Users\Yunus\Pictures\cover.png'),
       localPath: r'C:\Users\Yunus\Music\private.mp3',
       contentHash: 'content-hash-1',
+      audioFingerprint: 'audio-payload-fnv64-v1:mp3-1234abcd',
       streamUrl: 'https://media.example.test/audio?token=private-token',
       sourceId: 'local',
     );
@@ -74,6 +75,10 @@ void main() {
     expect(privateJson['artworkUri'], isNull);
     expect(privateJson['streamUrl'], isNull);
     expect(privateJson['contentHash'], 'content-hash-1');
+    expect(
+      privateJson['audioFingerprint'],
+      'audio-payload-fnv64-v1:mp3-1234abcd',
+    );
     expect(publicJson['streamUrl'], publicTrack.streamUrl);
     expect(publicJson['artworkUri'], publicTrack.artworkUri.toString());
     expect(playlist['artworkUri'], isNull);
@@ -91,7 +96,8 @@ void main() {
       title: 'Edited on desktop',
       artist: 'Shared artist',
       localPath: '/home/yunus/Music/song.mp3',
-      contentHash: 'shared-content-hash',
+      contentHash: 'desktop-tag-hash',
+      audioFingerprint: 'audio-payload-fnv64-v1:mp3-shared-audio',
       sourceId: 'local',
     );
     await remoteStore.addTracks(<Track>[remoteTrack]);
@@ -117,7 +123,8 @@ void main() {
       id: 'phone-track-id',
       title: 'Original phone metadata',
       localPath: r'D:\Music\song.mp3',
-      contentHash: 'shared-content-hash',
+      contentHash: 'phone-tag-hash',
+      audioFingerprint: 'audio-payload-fnv64-v1:mp3-shared-audio',
       sourceId: 'local',
     );
     await localStore.addTracks(<Track>[localTrack]);
@@ -144,6 +151,10 @@ void main() {
     expect(localStore.tracks.single.id, 'remote-track-id');
     expect(localStore.tracks.single.title, 'Edited on desktop');
     expect(localStore.tracks.single.localPath, r'D:\Music\song.mp3');
+    expect(
+      localStore.tracks.single.audioFingerprint,
+      'audio-payload-fnv64-v1:mp3-shared-audio',
+    );
     expect(localStore.playlists.single.name, 'Desktop playlist');
     expect(localStore.playlists.single.trackIds, <String>['remote-track-id']);
     expect(localStore.lyricsForTrack('remote-track-id')?.plainText,

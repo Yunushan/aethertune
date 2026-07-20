@@ -171,6 +171,39 @@ void main() {
     expect(store.tracks.single.id, existing.id);
   });
 
+  test('adds a newly available audio fingerprint without a file-content change',
+      () async {
+    const root = '/music/fingerprint-upgrade';
+    final store = LibraryStore();
+    await store.load();
+    await store.watchLocalFolder(root);
+    final existing = _track(
+      path: '$root/song.mp3',
+      title: 'Existing scan',
+      hash: 'unchanged-file-hash',
+    );
+    await store.addTracks(<Track>[existing]);
+
+    await store.reconcileWatchedLocalFolder(
+      root,
+      tracks: <Track>[
+        _track(
+          path: '$root/song.mp3',
+          title: 'Existing scan',
+          hash: 'unchanged-file-hash',
+          audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
+        ),
+      ],
+      sidecarLyricsByTrackId: const <String, String>{},
+      pruneMissing: true,
+    );
+
+    expect(
+      store.tracks.single.audioFingerprint,
+      'audio-payload-fnv64-v1:mp3-1111222233334444',
+    );
+  });
+
   test('watches relevant changes, debounces rescans, and ignores artwork',
       () async {
     const root = '/music/live';
@@ -250,6 +283,7 @@ Track _track({
   Duration duration = Duration.zero,
   double? replayGainTrackDb,
   double? replayGainAlbumDb,
+  String? audioFingerprint,
   List<TrackChapter>? chapters,
 }) {
   return Track(
@@ -263,6 +297,7 @@ Track _track({
     duration: duration,
     localPath: path,
     contentHash: hash,
+    audioFingerprint: audioFingerprint,
     replayGainTrackDb: replayGainTrackDb,
     replayGainAlbumDb: replayGainAlbumDb,
     artworkUri: artworkUri,

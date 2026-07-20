@@ -29,6 +29,7 @@ class Track {
     this.providerArtworkVersion,
     this.localPath,
     this.contentHash,
+    this.audioFingerprint,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
     this.replayGainTrackPeak,
@@ -74,6 +75,7 @@ class Track {
   final String? providerArtworkVersion;
   final String? localPath;
   final String? contentHash;
+  final String? audioFingerprint;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
   final double? replayGainTrackPeak;
@@ -124,6 +126,7 @@ class Track {
     String? providerArtworkVersion,
     String? localPath,
     String? contentHash,
+    String? audioFingerprint,
     double? replayGainTrackDb,
     double? replayGainAlbumDb,
     double? replayGainTrackPeak,
@@ -165,6 +168,7 @@ class Track {
           providerArtworkVersion ?? this.providerArtworkVersion,
       localPath: localPath ?? this.localPath,
       contentHash: contentHash ?? this.contentHash,
+      audioFingerprint: audioFingerprint ?? this.audioFingerprint,
       replayGainTrackDb: replayGainTrackDb ?? this.replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb ?? this.replayGainAlbumDb,
       replayGainTrackPeak: replayGainTrackPeak ?? this.replayGainTrackPeak,
@@ -207,6 +211,7 @@ class Track {
       providerArtworkVersion: providerArtworkVersion,
       localPath: localPath,
       contentHash: contentHash,
+      audioFingerprint: audioFingerprint,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
       replayGainTrackPeak: replayGainTrackPeak,
@@ -244,6 +249,7 @@ class Track {
       'providerArtworkVersion': providerArtworkVersion,
       'localPath': localPath,
       'contentHash': contentHash,
+      if (audioFingerprint != null) 'audioFingerprint': audioFingerprint,
       if (replayGainTrackDb != null) 'replayGainTrackDb': replayGainTrackDb,
       if (replayGainAlbumDb != null) 'replayGainAlbumDb': replayGainAlbumDb,
       if (replayGainTrackPeak != null)
@@ -289,6 +295,7 @@ class Track {
       providerArtworkVersion: json['providerArtworkVersion'] as String?,
       localPath: json['localPath'] as String?,
       contentHash: json['contentHash'] as String?,
+      audioFingerprint: json['audioFingerprint'] as String?,
       replayGainTrackDb: sanitizeReplayGainDb(
         (json['replayGainTrackDb'] as num?)?.toDouble(),
       ),

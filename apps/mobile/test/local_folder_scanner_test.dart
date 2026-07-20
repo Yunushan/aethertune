@@ -174,6 +174,155 @@ Timed sidecar
     expect(localFileContentHash(<int>[1, 2, 3, 4]), hashesByTitle['First']);
   });
 
+  test('derives matching audio payload fingerprints despite tag changes',
+      () async {
+    const audioPayload = <int>[0xff, 0xfb, 0x90, 0x64, 0x11, 0x22, 0x33];
+    final mp3First = <int>[
+      ..._id3v2Prefix(<int>[1, 2, 3]),
+      ...audioPayload,
+      ..._id3v1Tail(4),
+    ];
+    final mp3Second = <int>[
+      ..._id3v2Prefix(<int>[9, 8, 7]),
+      ...audioPayload,
+      ..._id3v1Tail(6),
+    ];
+    final flacFirst = <int>[
+      ...'fLaC'.codeUnits,
+      0x80,
+      0,
+      0,
+      3,
+      1,
+      2,
+      3,
+      ...audioPayload,
+    ];
+    final flacSecond = <int>[
+      ...'fLaC'.codeUnits,
+      0x80,
+      0,
+      0,
+      4,
+      9,
+      8,
+      7,
+      6,
+      ...audioPayload,
+    ];
+    final wavFirst = <int>[
+      ...'RIFF'.codeUnits,
+      0,
+      0,
+      0,
+      0,
+      ...'WAVE'.codeUnits,
+      ..._riffChunk('LIST', <int>[1, 2, 3, 4]),
+      ..._riffChunk('data', audioPayload),
+    ];
+    final wavSecond = <int>[
+      ...'RIFF'.codeUnits,
+      0,
+      0,
+      0,
+      0,
+      ...'WAVE'.codeUnits,
+      ..._riffChunk('LIST', <int>[9, 8, 7, 6, 5]),
+      ..._riffChunk('data', audioPayload),
+    ];
+    final mp4First = <int>[
+      ..._mp4Atom('ftyp', <int>[1, 2, 3, 4]),
+      ..._mp4Atom('moov', <int>[1, 2, 3]),
+      ..._mp4Atom('mdat', audioPayload),
+    ];
+    final mp4Second = <int>[
+      ..._mp4Atom('ftyp', <int>[1, 2, 3, 4]),
+      ..._mp4Atom('moov', <int>[9, 8, 7, 6]),
+      ..._mp4Atom('mdat', audioPayload),
+    ];
+    final aiffFirst = <int>[
+      ...'FORM'.codeUnits,
+      0,
+      0,
+      0,
+      0,
+      ...'AIFF'.codeUnits,
+      ..._aiffChunk('NAME', <int>[1, 2, 3]),
+      ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
+    ];
+    final aiffSecond = <int>[
+      ...'FORM'.codeUnits,
+      0,
+      0,
+      0,
+      0,
+      ...'AIFF'.codeUnits,
+      ..._aiffChunk('NAME', <int>[9, 8, 7, 6]),
+      ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
+    ];
+    final oggFirst = _oggPage(<List<int>>[
+      <int>[...'OpusHead'.codeUnits],
+      <int>[...'OpusTags'.codeUnits, 1, 2, 3],
+      audioPayload,
+    ]);
+    final oggSecond = _oggPage(<List<int>>[
+      <int>[...'OpusHead'.codeUnits],
+      <int>[...'OpusTags'.codeUnits, 9, 8, 7],
+      audioPayload,
+    ]);
+
+    expect(
+      localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
+      localAudioPayloadFingerprint(mp3Second, extension: '.mp3'),
+    );
+    expect(
+      localAudioPayloadFingerprint(flacFirst, extension: '.flac'),
+      localAudioPayloadFingerprint(flacSecond, extension: '.flac'),
+    );
+    expect(
+      localAudioPayloadFingerprint(wavFirst, extension: '.wav'),
+      localAudioPayloadFingerprint(wavSecond, extension: '.wav'),
+    );
+    expect(
+      localAudioPayloadFingerprint(mp4First, extension: '.m4a'),
+      localAudioPayloadFingerprint(mp4Second, extension: '.m4a'),
+    );
+    expect(
+      localAudioPayloadFingerprint(aiffFirst, extension: '.aiff'),
+      localAudioPayloadFingerprint(aiffSecond, extension: '.aiff'),
+    );
+    expect(
+      localAudioPayloadFingerprint(oggFirst, extension: '.opus'),
+      localAudioPayloadFingerprint(oggSecond, extension: '.opus'),
+    );
+    expect(
+      localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
+      startsWith('audio-payload-fnv64-v1:mp3-'),
+    );
+    expect(
+      localAudioPayloadFingerprint(
+        <int>[..._id3v2Prefix(<int>[1, 2, 3]), 0xff, 0xfb, 0x90, 0x65],
+        extension: '.mp3',
+      ),
+      isNot(localAudioPayloadFingerprint(mp3First, extension: '.mp3')),
+    );
+
+    await File(p.join(root.path, 'Retagged first.mp3')).writeAsBytes(mp3First);
+    await File(p.join(root.path, 'Retagged second.mp3')).writeAsBytes(mp3Second);
+    final scanned = await const LocalFolderScanner().scan(root.path);
+    final tracksByTitle = <String, Track>{
+      for (final track in scanned.tracks) track.title: track,
+    };
+    expect(
+      tracksByTitle['Retagged first']!.contentHash,
+      isNot(tracksByTitle['Retagged second']!.contentHash),
+    );
+    expect(
+      tracksByTitle['Retagged first']!.audioFingerprint,
+      tracksByTitle['Retagged second']!.audioFingerprint,
+    );
+  });
+
   test('keeps dashed song titles after parsed local artists', () async {
     await File(
       p.join(root.path, '03. Aether Artist - Movement - Live.opus'),
@@ -2554,6 +2703,50 @@ List<int> _m4aReplayGainFreeformItem(
 
 List<int> _mp4Atom(String type, List<int> payload) {
   return _mp4AtomBytes(type.codeUnits, payload);
+}
+
+List<int> _id3v2Prefix(List<int> payload) {
+  assert(payload.length < 128);
+  return <int>[0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, payload.length, ...payload];
+}
+
+List<int> _id3v1Tail(int fill) => <int>[0x54, 0x41, 0x47, ...List<int>.filled(125, fill)];
+
+List<int> _riffChunk(String type, List<int> payload) {
+  final length = payload.length;
+  return <int>[
+    ...type.codeUnits,
+    length & 0xff,
+    (length >> 8) & 0xff,
+    (length >> 16) & 0xff,
+    (length >> 24) & 0xff,
+    ...payload,
+    if (length.isOdd) 0,
+  ];
+}
+
+List<int> _aiffChunk(String type, List<int> payload) {
+  final length = payload.length;
+  return <int>[
+    ...type.codeUnits,
+    (length >> 24) & 0xff,
+    (length >> 16) & 0xff,
+    (length >> 8) & 0xff,
+    length & 0xff,
+    ...payload,
+    if (length.isOdd) 0,
+  ];
+}
+
+List<int> _oggPage(List<List<int>> packets) {
+  assert(packets.every((packet) => packet.length < 255));
+  return <int>[
+    ...'OggS'.codeUnits,
+    ...List<int>.filled(22, 0),
+    packets.length,
+    ...packets.map((packet) => packet.length),
+    ...packets.expand((packet) => packet),
+  ];
 }
 
 List<int> _mp4AtomBytes(List<int> type, List<int> payload) {

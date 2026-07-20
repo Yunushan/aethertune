@@ -258,7 +258,7 @@ final class _LocalFolderScanState {
 
   Future<_ScannedLocalTrack> _trackForFile(String path) async {
     final metadata = await _metadataForFile(path);
-    final contentHash = await _contentHashForFile(path);
+    final hashes = await _hashesForFile(path);
 
     return _ScannedLocalTrack(
       track: Track(
@@ -272,7 +272,8 @@ final class _LocalFolderScanState {
         genre: metadata.genre ?? 'Unknown Genre',
         artworkUri: metadata.artworkUri,
         localPath: path,
-        contentHash: contentHash,
+        contentHash: hashes?.contentHash,
+        audioFingerprint: hashes?.audioFingerprint,
         replayGainTrackDb: metadata.replayGainTrackDb,
         replayGainAlbumDb: metadata.replayGainAlbumDb,
         replayGainTrackPeak: metadata.replayGainTrackPeak,
@@ -286,9 +287,16 @@ final class _LocalFolderScanState {
     );
   }
 
-  Future<String?> _contentHashForFile(String path) async {
+  Future<_LocalFileHashes?> _hashesForFile(String path) async {
     try {
-      return localFileContentHash(await File(path).readAsBytes());
+      final bytes = await File(path).readAsBytes();
+      return _LocalFileHashes(
+        contentHash: localFileContentHash(bytes),
+        audioFingerprint: localAudioPayloadFingerprint(
+          bytes,
+          extension: p.extension(path),
+        ),
+      );
     } on FileSystemException {
       return null;
     }
@@ -3463,6 +3471,278 @@ String localFileContentHash(List<int> bytes) {
   }
 
   return 'fnv64-${hash.toRadixString(16).padLeft(16, '0')}';
+}
+
+/// Returns a stable fingerprint for the encoded audio payload in common local
+/// containers. Unlike [localFileContentHash], embedded tag and container
+/// metadata changes do not affect this value. It is intentionally not an
+/// acoustic fingerprint: different encodes of the same recording do not match.
+String? localAudioPayloadFingerprint(
+  List<int> bytes, {
+  String? extension,
+}) {
+  if (bytes.isEmpty) {
+    return null;
+  }
+
+  final normalizedExtension = extension?.trim().toLowerCase();
+  if (_payloadStartsWith(bytes, const <int>[0x66, 0x4c, 0x61, 0x43])) {
+    return _flacAudioPayloadFingerprint(bytes);
+  }
+  if (_payloadStartsWith(bytes, const <int>[0x52, 0x49, 0x46, 0x46]) &&
+      bytes.length >= 12 &&
+      _payloadStartsWithAt(bytes, const <int>[0x57, 0x41, 0x56, 0x45], 8)) {
+    return _riffAudioPayloadFingerprint(bytes);
+  }
+  if (_payloadStartsWith(bytes, const <int>[0x46, 0x4f, 0x52, 0x4d]) &&
+      bytes.length >= 12 &&
+      (_payloadStartsWithAt(bytes, const <int>[0x41, 0x49, 0x46, 0x46], 8) ||
+          _payloadStartsWithAt(bytes, const <int>[0x41, 0x49, 0x46, 0x43], 8))) {
+    return _aiffAudioPayloadFingerprint(bytes);
+  }
+  if (_payloadStartsWith(bytes, const <int>[0x4f, 0x67, 0x67, 0x53])) {
+    return _oggAudioPayloadFingerprint(bytes);
+  }
+  if (_looksLikeMp4(bytes) ||
+      const <String>{'.m4a', '.m4b', '.m4r', '.alac'}.contains(
+        normalizedExtension,
+      )) {
+    return _mp4AudioPayloadFingerprint(bytes);
+  }
+  if (normalizedExtension == '.mp3' ||
+      _payloadStartsWith(bytes, const <int>[0x49, 0x44, 0x33])) {
+    return _mp3AudioPayloadFingerprint(bytes);
+  }
+
+  return null;
+}
+
+String? _mp3AudioPayloadFingerprint(List<int> bytes) {
+  var start = 0;
+  if (_payloadStartsWith(bytes, const <int>[0x49, 0x44, 0x33])) {
+    if (bytes.length < 10) {
+      return null;
+    }
+    final tagSize = ((bytes[6] & 0x7f) << 21) |
+        ((bytes[7] & 0x7f) << 14) |
+        ((bytes[8] & 0x7f) << 7) |
+        (bytes[9] & 0x7f);
+    start = 10 + tagSize;
+    if (start > bytes.length) {
+      return null;
+    }
+  }
+
+  var end = bytes.length;
+  if (end >= 128 &&
+      _payloadStartsWithAt(bytes, const <int>[0x54, 0x41, 0x47], end - 128)) {
+    end -= 128;
+  }
+  if (end >= 32 &&
+      _payloadStartsWithAt(
+        bytes,
+        const <int>[0x41, 0x50, 0x45, 0x54, 0x41, 0x47, 0x45, 0x58],
+        end - 32,
+      )) {
+    final tagSize = _payloadUint32LittleEndian(bytes, end - 20);
+    if (tagSize >= 32 && tagSize <= end - start) {
+      end -= tagSize;
+    }
+  }
+  return start >= end
+      ? null
+      : _payloadFingerprint('mp3', <List<int>>[bytes.sublist(start, end)]);
+}
+
+String? _flacAudioPayloadFingerprint(List<int> bytes) {
+  var offset = 4;
+  while (offset + 4 <= bytes.length) {
+    final isLast = (bytes[offset] & 0x80) != 0;
+    final length = (bytes[offset + 1] << 16) |
+        (bytes[offset + 2] << 8) |
+        bytes[offset + 3];
+    offset += 4;
+    if (length > bytes.length - offset) {
+      return null;
+    }
+    offset += length;
+    if (isLast) {
+      return offset >= bytes.length
+          ? null
+          : _payloadFingerprint('flac', <List<int>>[bytes.sublist(offset)]);
+    }
+  }
+  return null;
+}
+
+String? _riffAudioPayloadFingerprint(List<int> bytes) {
+  var offset = 12;
+  while (offset + 8 <= bytes.length) {
+    final length = _payloadUint32LittleEndian(bytes, offset + 4);
+    final payloadStart = offset + 8;
+    if (length < 0 || length > bytes.length - payloadStart) {
+      return null;
+    }
+    if (_payloadStartsWithAt(bytes, const <int>[0x64, 0x61, 0x74, 0x61], offset)) {
+      return length == 0
+          ? null
+          : _payloadFingerprint(
+              'wav',
+              <List<int>>[bytes.sublist(payloadStart, payloadStart + length)],
+            );
+    }
+    offset = payloadStart + length + (length.isOdd ? 1 : 0);
+  }
+  return null;
+}
+
+String? _aiffAudioPayloadFingerprint(List<int> bytes) {
+  var offset = 12;
+  while (offset + 8 <= bytes.length) {
+    final length = _payloadUint32BigEndian(bytes, offset + 4);
+    final payloadStart = offset + 8;
+    if (length < 0 || length > bytes.length - payloadStart) {
+      return null;
+    }
+    if (_payloadStartsWithAt(bytes, const <int>[0x53, 0x53, 0x4e, 0x44], offset)) {
+      if (length <= 8) {
+        return null;
+      }
+      return _payloadFingerprint(
+        'aiff',
+        <List<int>>[bytes.sublist(payloadStart + 8, payloadStart + length)],
+      );
+    }
+    offset = payloadStart + length + (length.isOdd ? 1 : 0);
+  }
+  return null;
+}
+
+String? _oggAudioPayloadFingerprint(List<int> bytes) {
+  final hash = _PayloadFNV64();
+  var offset = 0;
+  var completedPackets = 0;
+  var hashedAudioBytes = 0;
+  while (offset + 27 <= bytes.length) {
+    if (!_payloadStartsWithAt(bytes, const <int>[0x4f, 0x67, 0x67, 0x53], offset)) {
+      return null;
+    }
+    final segmentCount = bytes[offset + 26];
+    final lacingStart = offset + 27;
+    final payloadStart = lacingStart + segmentCount;
+    if (payloadStart > bytes.length) {
+      return null;
+    }
+    var payloadLength = 0;
+    for (var index = 0; index < segmentCount; index += 1) {
+      payloadLength += bytes[lacingStart + index];
+    }
+    if (payloadLength > bytes.length - payloadStart) {
+      return null;
+    }
+    var cursor = payloadStart;
+    for (var index = 0; index < segmentCount; index += 1) {
+      final length = bytes[lacingStart + index];
+      if (completedPackets >= 2 && length > 0) {
+        hash.addRange(bytes, cursor, cursor + length);
+        hashedAudioBytes += length;
+      }
+      cursor += length;
+      if (length < 255) {
+        completedPackets += 1;
+      }
+    }
+    offset = payloadStart + payloadLength;
+  }
+  return offset == bytes.length && hashedAudioBytes > 0
+      ? hash.finish('ogg')
+      : null;
+}
+
+String? _mp4AudioPayloadFingerprint(List<int> bytes) {
+  final hash = _PayloadFNV64();
+  var offset = 0;
+  var payloadBytes = 0;
+  while (offset + 8 <= bytes.length) {
+    final size = _payloadUint32BigEndian(bytes, offset);
+    if (size < 8 || size > bytes.length - offset) {
+      return null;
+    }
+    if (_payloadStartsWithAt(bytes, const <int>[0x6d, 0x64, 0x61, 0x74], offset)) {
+      hash.addRange(bytes, offset + 8, offset + size);
+      payloadBytes += size - 8;
+    }
+    offset += size;
+  }
+  return offset == bytes.length && payloadBytes > 0 ? hash.finish('mp4') : null;
+}
+
+String? _payloadFingerprint(String format, Iterable<List<int>> chunks) {
+  final hash = _PayloadFNV64();
+  var hasBytes = false;
+  for (final chunk in chunks) {
+    if (chunk.isEmpty) {
+      continue;
+    }
+    hash.addRange(chunk, 0, chunk.length);
+    hasBytes = true;
+  }
+  return hasBytes ? hash.finish(format) : null;
+}
+
+bool _looksLikeMp4(List<int> bytes) =>
+    bytes.length >= 8 &&
+    _payloadStartsWithAt(bytes, const <int>[0x66, 0x74, 0x79, 0x70], 4);
+
+bool _payloadStartsWith(List<int> bytes, List<int> expected) =>
+    _payloadStartsWithAt(bytes, expected, 0);
+
+bool _payloadStartsWithAt(List<int> bytes, List<int> expected, int offset) {
+  if (offset < 0 || offset + expected.length > bytes.length) {
+    return false;
+  }
+  for (var index = 0; index < expected.length; index += 1) {
+    if (bytes[offset + index] != expected[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+int _payloadUint32LittleEndian(List<int> bytes, int offset) =>
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24);
+
+int _payloadUint32BigEndian(List<int> bytes, int offset) =>
+    (bytes[offset] << 24) |
+    (bytes[offset + 1] << 16) |
+    (bytes[offset + 2] << 8) |
+    bytes[offset + 3];
+
+final class _PayloadFNV64 {
+  var _value = 0xcbf29ce484222325;
+
+  void addRange(List<int> bytes, int start, int end) {
+    for (var index = start; index < end; index += 1) {
+      _value = (_value ^ (bytes[index] & 0xff)).toUnsigned(64);
+      _value = (_value * 0x100000001b3).toUnsigned(64);
+    }
+  }
+
+  String finish(String format) =>
+      'audio-payload-fnv64-v1:$format-${_value.toRadixString(16).padLeft(16, '0')}';
+}
+
+final class _LocalFileHashes {
+  const _LocalFileHashes({
+    required this.contentHash,
+    this.audioFingerprint,
+  });
+
+  final String contentHash;
+  final String? audioFingerprint;
 }
 
 final class _Mp4Atom {

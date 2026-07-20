@@ -984,7 +984,7 @@ void main() {
   });
 
   test(
-    'detects duplicate tracks by path hash provider stream and metadata',
+    'detects duplicate tracks by path hash audio provider stream and metadata',
     () async {
     final store = LibraryStore();
     await store.load();
@@ -1010,6 +1010,18 @@ void main() {
         title: 'Hash B',
         localPath: '/music/hash-b.mp3',
         contentHash: 'fnv64-1111222233334444',
+      ),
+      _track(
+        'audio-a',
+        title: 'Retagged A',
+        localPath: '/music/retagged-a.mp3',
+        audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
+      ),
+      _track(
+        'audio-b',
+        title: 'Retagged B',
+        localPath: '/music/retagged-b.mp3',
+        audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
       ),
       _track(
         'provider-a',
@@ -1060,6 +1072,7 @@ void main() {
       containsAll(<DuplicateMatchType>[
         DuplicateMatchType.localPath,
         DuplicateMatchType.contentHash,
+        DuplicateMatchType.audioFingerprint,
         DuplicateMatchType.sourceExternalId,
         DuplicateMatchType.streamUrl,
         DuplicateMatchType.metadata,
@@ -1078,6 +1091,13 @@ void main() {
           .tracks
           .map((track) => track.id),
       containsAll(<String>['hash-a', 'hash-b']),
+    );
+    expect(
+      groups
+          .firstWhere((group) => group.type == DuplicateMatchType.audioFingerprint)
+          .tracks
+          .map((track) => track.id),
+      containsAll(<String>['audio-a', 'audio-b']),
     );
   });
 
@@ -5703,6 +5723,7 @@ Track _track(
   DateTime? addedAt,
   String? localPath,
   String? contentHash,
+  String? audioFingerprint,
   String? streamUrl,
   Uri? artworkUri,
 }) {
@@ -5719,6 +5740,7 @@ Track _track(
     artworkUri: artworkUri,
     localPath: localPath ?? '/music/$id.mp3',
     contentHash: contentHash,
+    audioFingerprint: audioFingerprint,
     streamUrl: streamUrl,
     sourceId: sourceId,
     externalId: externalId,

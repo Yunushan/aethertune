@@ -62,6 +62,7 @@ enum SearchSuggestionType {
 enum DuplicateMatchType {
   localPath,
   contentHash,
+  audioFingerprint,
   sourceExternalId,
   streamUrl,
   metadata,
@@ -1779,7 +1780,8 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
       final current = _tracks[index];
-      if (current.contentHash == scanned.contentHash) {
+      if (current.contentHash == scanned.contentHash &&
+          current.audioFingerprint == scanned.audioFingerprint) {
         continue;
       }
       _tracks[index] = _scannedTrackWithPreservedUserState(current, scanned);
@@ -2844,6 +2846,11 @@ class LibraryStore extends ChangeNotifier {
       addGroupTrack(
         DuplicateMatchType.contentHash,
         track.contentHash ?? '',
+        track,
+      );
+      addGroupTrack(
+        DuplicateMatchType.audioFingerprint,
+        track.audioFingerprint ?? '',
         track,
       );
       final externalId = track.externalId?.trim();
@@ -5590,6 +5597,10 @@ class LibraryStore extends ChangeNotifier {
       _tracks,
       (track) => track.contentHash,
     );
+    final byAudioFingerprint = _uniqueSyncTrackIndex(
+      _tracks,
+      (track) => track.audioFingerprint,
+    );
     final byProviderIdentity = _uniqueSyncTrackIndex(
       _tracks,
       (track) {
@@ -5615,6 +5626,7 @@ class LibraryStore extends ChangeNotifier {
       }
       final id = _syncString(trackJson['id']);
       final contentHash = _syncString(trackJson['contentHash']);
+      final audioFingerprint = _syncString(trackJson['audioFingerprint']);
       final sourceId = _syncString(trackJson['sourceId']);
       final externalId = _syncString(trackJson['externalId']);
       final providerKey = sourceId == null || externalId == null
@@ -5622,11 +5634,17 @@ class LibraryStore extends ChangeNotifier {
           : '$sourceId|$externalId';
       final localTrack = (id == null ? null : byId[id]) ??
           (contentHash == null ? null : byContentHash[contentHash]) ??
+          (audioFingerprint == null
+              ? null
+              : byAudioFingerprint[audioFingerprint]) ??
           (providerKey == null ? null : byProviderIdentity[providerKey]);
       final localPath = localTrack?.localPath?.trim() ?? '';
       trackJson['localPath'] = localPath.isEmpty ? null : localPath;
       if (contentHash == null && localTrack?.contentHash != null) {
         trackJson['contentHash'] = localTrack!.contentHash;
+      }
+      if (audioFingerprint == null && localTrack?.audioFingerprint != null) {
+        trackJson['audioFingerprint'] = localTrack!.audioFingerprint;
       }
       if (trackJson['artworkUri'] == null && localTrack?.artworkUri != null) {
         trackJson['artworkUri'] = localTrack!.artworkUri.toString();
@@ -9985,6 +10003,7 @@ class LibraryStore extends ChangeNotifier {
       providerArtworkVersion: scanned.providerArtworkVersion,
       localPath: scanned.localPath,
       contentHash: scanned.contentHash,
+      audioFingerprint: scanned.audioFingerprint,
       replayGainTrackDb: scanned.replayGainTrackDb,
       replayGainAlbumDb: scanned.replayGainAlbumDb,
       replayGainTrackPeak: scanned.replayGainTrackPeak,
