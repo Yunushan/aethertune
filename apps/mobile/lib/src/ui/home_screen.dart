@@ -13366,42 +13366,79 @@ Future<void> _showLyricsShareCard(
     return;
   }
   final boundaryKey = GlobalKey();
+  final localArtwork = _lyricsShareCardLocalArtwork(track);
+  var includeArtwork = false;
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Lyrics share card'),
-      content: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: RepaintBoundary(
-          key: boundaryKey,
-          child: LyricsShareCard(
-            title: track.title,
-            artist: track.artist,
-            shareText: shareText,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: const Text('Lyrics share card'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (localArtwork != null)
+                SwitchListTile.adaptive(
+                  key: const Key('lyrics-share-card-artwork-toggle'),
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.image_outlined),
+                  title: const Text('Include local artwork'),
+                  subtitle: const Text(
+                    'Include this selected local image only in the PNG you save or share.',
+                  ),
+                  value: includeArtwork,
+                  onChanged: (enabled) {
+                    setDialogState(() => includeArtwork = enabled);
+                  },
+                ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  child: LyricsShareCard(
+                    title: track.title,
+                    artist: track.artist,
+                    shareText: shareText,
+                    backgroundImage: includeArtwork ? localArtwork : null,
+                    artworkCrop: includeArtwork
+                        ? track.artworkCrop
+                        : ArtworkCrop.centered,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => unawaited(
+              _saveLyricsShareCard(dialogContext, boundaryKey, track),
+            ),
+            icon: const Icon(Icons.save_alt_outlined),
+            label: const Text('Save PNG'),
+          ),
+          FilledButton.icon(
+            onPressed: () => unawaited(
+              _shareLyricsShareCard(dialogContext, boundaryKey, track),
+            ),
+            icon: const Icon(Icons.ios_share),
+            label: const Text('Share'),
+          ),
+        ],
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Close'),
-        ),
-        OutlinedButton.icon(
-          onPressed: () => unawaited(
-            _saveLyricsShareCard(dialogContext, boundaryKey, track),
-          ),
-          icon: const Icon(Icons.save_alt_outlined),
-          label: const Text('Save PNG'),
-        ),
-        FilledButton.icon(
-          onPressed: () => unawaited(
-            _shareLyricsShareCard(dialogContext, boundaryKey, track),
-          ),
-          icon: const Icon(Icons.ios_share),
-          label: const Text('Share'),
-        ),
-      ],
     ),
+  );
+}
+
+ImageProvider? _lyricsShareCardLocalArtwork(Track track) {
+  return localLyricsShareCardBackgroundImageProvider(
+    artworkIsUserManaged: track.artworkIsUserManaged,
+    artworkUri: track.artworkUri,
   );
 }
 
