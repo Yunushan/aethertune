@@ -324,6 +324,31 @@ int syncedLyricWordIndexAt(
   return -1;
 }
 
+/// Finds bounded, case-insensitive matching lyric line indices for local UI.
+List<int> findLyricLineMatchIndices(
+  List<String> lines,
+  String query, {
+  int maximumResults = 50,
+}) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty || maximumResults <= 0) {
+    return const <int>[];
+  }
+
+  final resultLimit = maximumResults.clamp(1, 100) as int;
+  final matches = <int>[];
+  for (var index = 0; index < lines.length; index += 1) {
+    if (!lines[index].toLowerCase().contains(normalizedQuery)) {
+      continue;
+    }
+    matches.add(index);
+    if (matches.length == resultLimit) {
+      break;
+    }
+  }
+  return matches;
+}
+
 bool isTtmlLyricsDocument(String input) {
   var root = input.trimLeft();
   if (root.startsWith('<?xml')) {

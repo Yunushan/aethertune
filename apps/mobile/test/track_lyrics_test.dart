@@ -90,6 +90,23 @@ Plain lyric line
     expect(syncedLyricLineIndexAt(<SyncedLyricLine>[], Duration.zero), -1);
   });
 
+  test('finds bounded case-insensitive lyric line matches', () {
+    const lines = <String>[
+      'Signal in the dark',
+      'A quiet bridge',
+      'Second SIGNAL call',
+      'Closing line',
+    ];
+
+    expect(findLyricLineMatchIndices(lines, 'signal'), <int>[0, 2]);
+    expect(
+      findLyricLineMatchIndices(lines, 'SIGNAL', maximumResults: 1),
+      <int>[0],
+    );
+    expect(findLyricLineMatchIndices(lines, '   '), isEmpty);
+    expect(findLyricLineMatchIndices(lines, 'line', maximumResults: 0), isEmpty);
+  });
+
   test('parses TTML timed lines and word-level karaoke spans', () {
     const document = '''
 <?xml version="1.0" encoding="UTF-8"?>

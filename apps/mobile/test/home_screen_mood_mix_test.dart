@@ -336,7 +336,7 @@ void main() {
     expect(find.textContaining('translate.example.test to tr'), findsOneWidget);
   });
 
-  testWidgets('translates now playing lyrics without modifying source text',
+  testWidgets('finds and translates now playing lyrics without modifying source text',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1200, 800);
@@ -351,7 +351,10 @@ void main() {
       localPath: '/music/signal.mp3',
     );
     await library.addTracks(<Track>[track]);
-    await library.setLyrics(track.id, 'Original lyric line');
+    await library.setLyrics(
+      track.id,
+      '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
+    );
     addTearDown(library.dispose);
     final selfHosted = SelfHostedProviderStore();
     await selfHosted.load();
@@ -361,7 +364,8 @@ void main() {
     addTearDown(sync.dispose);
     final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
     addTearDown(folderWatch.dispose);
-    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    final audio = _TestPlaybackAudioEngine();
+    final player = PlayerController(audioEngine: audio);
     addTearDown(player.dispose);
     final translator = _FakeLyricsTranslator();
     final translations = LyricsTranslationSettingsStore(
@@ -403,13 +407,30 @@ void main() {
 
     await tester.tap(find.byTooltip('Lyrics'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Translate lyrics'));
+    await tester.tap(find.byTooltip('Find in lyrics'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('lyrics-find-input')),
+      'second',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('lyric-search-result-2')));
+    await tester.pumpAndSettle();
+
+    expect(audio.lastSeekPosition, const Duration(seconds: 4));
+
+    await tester.tap(find.byTooltip('Lyrics actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Translate lyrics'));
     await tester.pumpAndSettle();
 
     expect(translator.calls, 1);
     expect(translator.targetLanguage, 'tr');
     expect(find.text('Translated lyric line'), findsOneWidget);
-    expect(library.lyricsForTrack(track.id)?.plainText, 'Original lyric line');
+    expect(
+      library.lyricsForTrack(track.id)?.plainText,
+      '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
+    );
   });
 
   testWidgets('opens full artist and album pages with collection actions', (
@@ -744,6 +765,7 @@ final class _FakeLyricsTranslator implements LyricsTranslator {
 
 class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
   bool playCalled = false;
+  Duration? lastSeekPosition;
   bool _shuffleModeEnabled = false;
 
   @override
@@ -808,7 +830,9 @@ class _TestPlaybackAudioEngine implements PlaybackAudioEngine {
   Future<void> stop() async {}
 
   @override
-  Future<void> seek(Duration position, {int? index}) async {}
+  Future<void> seek(Duration position, {int? index}) async {
+    lastSeekPosition = position;
+  }
 
   @override
   Future<void> seekToNext() async {}

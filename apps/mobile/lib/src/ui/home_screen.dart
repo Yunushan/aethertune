@@ -1547,6 +1547,14 @@ class _HomeScreenState extends State<HomeScreen> {
           onAdjustTiming: () => unawaited(
             _showLyricsTimingAdjustment(context, library, track),
           ),
+          onSearch: () => unawaited(
+            _showLyricsSearch(
+              context,
+              track: track,
+              lyrics: library.lyricsForTrack(track.id),
+              player: player,
+            ),
+          ),
         );
       },
     );
@@ -2700,6 +2708,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
     required this.onShare,
     required this.onShareRange,
     required this.onAdjustTiming,
+    required this.onSearch,
   });
 
   final Track track;
@@ -2711,6 +2720,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onShareRange;
   final VoidCallback onAdjustTiming;
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -2731,6 +2741,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
             onEdit: onEdit,
             onShare: onShare,
             onShareRange: onShareRange,
+            onSearch: onSearch,
             onTranslate: _translationAction(
               context,
               currentLyrics.plainText,
@@ -2747,6 +2758,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
           onShare: onShare,
           onShareRange: onShareRange,
           onAdjustTiming: onAdjustTiming,
+          onSearch: onSearch,
           onTranslate: _translationAction(
             context,
             syncedLines.map((line) => line.text).join('\n'),
@@ -2814,6 +2826,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
     required this.onEdit,
     required this.onShare,
     required this.onShareRange,
+    required this.onSearch,
     this.onTranslate,
   });
 
@@ -2823,6 +2836,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onShareRange;
+  final VoidCallback onSearch;
   final VoidCallback? onTranslate;
 
   @override
@@ -2843,6 +2857,7 @@ class _PlainNowPlayingLyrics extends StatelessWidget {
                 onEdit: onEdit,
                 onShare: onShare,
                 onShareRange: onShareRange,
+                onSearch: onSearch,
                 onTranslate: onTranslate,
               ),
               const Divider(height: 1),
@@ -2868,6 +2883,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
     required this.onShare,
     required this.onShareRange,
     required this.onAdjustTiming,
+    required this.onSearch,
     this.onTranslate,
   });
 
@@ -2879,6 +2895,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
   final VoidCallback onShare;
   final VoidCallback onShareRange;
   final VoidCallback onAdjustTiming;
+  final VoidCallback onSearch;
   final VoidCallback? onTranslate;
 
   @override
@@ -2927,6 +2944,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                       onShare: widget.onShare,
                       onShareRange: widget.onShareRange,
                       onAdjustTiming: widget.onAdjustTiming,
+                      onSearch: widget.onSearch,
                       onTranslate: widget.onTranslate,
                     );
                   }
@@ -2979,6 +2997,7 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
     this.onShare,
     this.onShareRange,
     this.onAdjustTiming,
+    this.onSearch,
     this.onTranslate,
   });
 
@@ -2988,10 +3007,17 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
   final VoidCallback? onShare;
   final VoidCallback? onShareRange;
   final VoidCallback? onAdjustTiming;
+  final VoidCallback? onSearch;
   final VoidCallback? onTranslate;
 
   @override
   Widget build(BuildContext context) {
+    final hasOverflowActions =
+        onShare != null ||
+        onShareRange != null ||
+        onAdjustTiming != null ||
+        onTranslate != null;
+
     return ListTile(
       leading: const Icon(Icons.subtitles_outlined),
       title: Text(track.title),
@@ -2999,29 +3025,38 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (onShare != null)
+          if (onSearch != null)
             IconButton(
-              tooltip: 'Copy share text',
-              onPressed: onShare,
-              icon: const Icon(Icons.ios_share),
+              tooltip: 'Find in lyrics',
+              onPressed: onSearch,
+              icon: const Icon(Icons.manage_search_outlined),
             ),
-          if (onShareRange != null)
-            IconButton(
-              tooltip: 'Share selected lines',
-              onPressed: onShareRange,
-              icon: const Icon(Icons.format_line_spacing),
-            ),
-          if (onTranslate != null)
-            IconButton(
-              tooltip: 'Translate lyrics',
-              onPressed: onTranslate,
-              icon: const Icon(Icons.translate_outlined),
-            ),
-          if (onAdjustTiming != null)
-            IconButton(
-              tooltip: 'Adjust lyric timing',
-              onPressed: onAdjustTiming,
-              icon: const Icon(Icons.tune_outlined),
+          if (hasOverflowActions)
+            PopupMenuButton<_NowPlayingLyricsMenuAction>(
+              tooltip: 'Lyrics actions',
+              onSelected: _selectOverflowAction,
+              itemBuilder: (context) => <PopupMenuEntry<_NowPlayingLyricsMenuAction>>[
+                if (onShare != null)
+                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                    value: _NowPlayingLyricsMenuAction.share,
+                    child: Text('Copy share text'),
+                  ),
+                if (onShareRange != null)
+                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                    value: _NowPlayingLyricsMenuAction.shareRange,
+                    child: Text('Share selected lines'),
+                  ),
+                if (onTranslate != null)
+                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                    value: _NowPlayingLyricsMenuAction.translate,
+                    child: Text('Translate lyrics'),
+                  ),
+                if (onAdjustTiming != null)
+                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                    value: _NowPlayingLyricsMenuAction.adjustTiming,
+                    child: Text('Adjust lyric timing'),
+                  ),
+              ],
             ),
           IconButton(
             tooltip: 'Edit lyrics',
@@ -3032,6 +3067,26 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
       ),
     );
   }
+
+  void _selectOverflowAction(_NowPlayingLyricsMenuAction action) {
+    switch (action) {
+      case _NowPlayingLyricsMenuAction.share:
+        onShare?.call();
+      case _NowPlayingLyricsMenuAction.shareRange:
+        onShareRange?.call();
+      case _NowPlayingLyricsMenuAction.translate:
+        onTranslate?.call();
+      case _NowPlayingLyricsMenuAction.adjustTiming:
+        onAdjustTiming?.call();
+    }
+  }
+}
+
+enum _NowPlayingLyricsMenuAction {
+  share,
+  shareRange,
+  translate,
+  adjustTiming,
 }
 
 String _lyricsSubtitle(String base, String? sourceLabel) {
@@ -3046,6 +3101,149 @@ String _formatLyricsTimingOffset(Duration offset) {
   final seconds = absoluteMilliseconds ~/ 1000;
   final tenths = (absoluteMilliseconds % 1000) ~/ 100;
   return '$sign$seconds.$tenths s';
+}
+
+class _LyricsSearchEntry {
+  const _LyricsSearchEntry({
+    required this.lineNumber,
+    required this.text,
+    this.timestamp,
+  });
+
+  final int lineNumber;
+  final String text;
+  final Duration? timestamp;
+}
+
+Future<void> _showLyricsSearch(
+  BuildContext context, {
+  required Track track,
+  required TrackLyrics? lyrics,
+  required PlayerController player,
+}) async {
+  final currentLyrics = lyrics;
+  if (currentLyrics == null || currentLyrics.isEmpty) {
+    return;
+  }
+
+  final syncedLines = currentLyrics.syncedLines;
+  final entries = syncedLines.isNotEmpty
+      ? <_LyricsSearchEntry>[
+          for (var index = 0; index < syncedLines.length; index += 1)
+            _LyricsSearchEntry(
+              lineNumber: index + 1,
+              text: syncedLines[index].text,
+              timestamp: syncedLines[index].timestamp,
+            ),
+        ]
+      : <_LyricsSearchEntry>[
+          for (final entry in currentLyrics.plainText
+              .split(RegExp(r'\r?\n'))
+              .map((line) => line.trim())
+              .where((line) => line.isNotEmpty)
+              .toList(growable: false)
+              .indexed)
+            _LyricsSearchEntry(
+              lineNumber: entry.$1 + 1,
+              text: entry.$2,
+            ),
+        ];
+  if (entries.isEmpty) {
+    return;
+  }
+
+  final controller = TextEditingController();
+  var query = '';
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final matchingIndices = findLyricLineMatchIndices(
+              entries.map((entry) => entry.text).toList(growable: false),
+              query,
+            );
+
+            return AlertDialog(
+              title: Text('Find in ${track.title}'),
+              content: SizedBox(
+                width: 460,
+                height: 360,
+                child: Column(
+                  children: <Widget>[
+                    TextField(
+                      autofocus: true,
+                      controller: controller,
+                      key: const Key('lyrics-find-input'),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        labelText: 'Find lyrics',
+                      ),
+                      onChanged: (value) {
+                        query = value;
+                        setDialogState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: query.trim().isEmpty
+                          ? const SizedBox.shrink()
+                          : matchingIndices.isEmpty
+                              ? const Center(child: Text('No matching lines'))
+                              : ListView.separated(
+                                  itemCount: matchingIndices.length,
+                                  separatorBuilder: (_, _) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final entry = entries[
+                                        matchingIndices[index]];
+                                    return ListTile(
+                                      key: Key(
+                                        'lyric-search-result-${entry.lineNumber}',
+                                      ),
+                                      dense: true,
+                                      title: Text(
+                                        entry.text,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        entry.timestamp == null
+                                            ? 'Line ${entry.lineNumber}'
+                                            : formatSyncedLyricTimestamp(
+                                                entry.timestamp!,
+                                              ),
+                                      ),
+                                      onTap: () async {
+                                        if (entry.timestamp != null) {
+                                          await player.seek(entry.timestamp!);
+                                        }
+                                        if (dialogContext.mounted) {
+                                          Navigator.of(dialogContext).pop();
+                                        }
+                                      },
+                                    );
+                                  },
+                                ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    controller.dispose();
+  }
 }
 
 Future<void> _showLyricsTimingAdjustment(
