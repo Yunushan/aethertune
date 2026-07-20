@@ -58,6 +58,12 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
     });
     try {
       await _player.open(Media(widget.source.toString()));
+      final sidecar = await loadLocalVideoCaptionSidecar(widget.source);
+      if (sidecar != null) {
+        await _player.setSubtitleTrack(
+          SubtitleTrack.data(sidecar.text, title: sidecar.title),
+        );
+      }
       if (mounted) {
         setState(() => _opening = false);
       }
