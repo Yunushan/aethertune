@@ -5904,6 +5904,7 @@ class _LocalChartsPreview extends StatelessWidget {
               width: 180,
               child: DropdownButtonFormField<LibraryChartRange>(
                 initialValue: selectedRange,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Range',
                   prefixIcon: Icon(Icons.bar_chart),
@@ -5912,7 +5913,11 @@ class _LocalChartsPreview extends StatelessWidget {
                   for (final range in LibraryChartRange.values)
                     DropdownMenuItem<LibraryChartRange>(
                       value: range,
-                      child: Text(_libraryChartRangeLabel(range)),
+                      child: Text(
+                        _libraryChartRangeLabel(range),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                 ],
                 onChanged: (range) {
