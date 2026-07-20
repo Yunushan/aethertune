@@ -3535,22 +3535,11 @@ Future<void> _showLyricsTranslation(
   required String targetLanguage,
 }) async {
   final navigator = Navigator.of(context, rootNavigator: true);
-  final progressDialog = showDialog<void>(
-    context: context,
-    useRootNavigator: true,
-    barrierDismissible: false,
-    builder: (_) => const AlertDialog(
-      content: Row(
-        children: <Widget>[
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 16),
-          Expanded(child: Text('Translating lyrics...')),
-        ],
-      ),
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    const SnackBar(
+      duration: Duration(days: 1),
+      content: Text('Translating lyrics...'),
     ),
   );
 
@@ -3559,11 +3548,7 @@ Future<void> _showLyricsTranslation(
       lyrics,
       targetLanguage: targetLanguage,
     );
-    if (!context.mounted) {
-      return;
-    }
-    navigator.pop();
-    await progressDialog;
+    messenger.hideCurrentSnackBar();
     if (!navigator.mounted) {
       return;
     }
@@ -3577,15 +3562,8 @@ Future<void> _showLyricsTranslation(
       ),
     );
   } on Object catch (error) {
-    if (!context.mounted) {
-      return;
-    }
-    navigator.pop();
-    await progressDialog;
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(content: Text('Could not translate lyrics: $error')),
     );
   }
