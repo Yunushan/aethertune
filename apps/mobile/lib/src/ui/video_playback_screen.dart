@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,9 +9,13 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'android_video_picture_in_picture.dart';
 import '../domain/legal_video_captions.dart';
+import '../domain/video_frame_capture.dart';
 import '../domain/video_track_selection.dart';
+import 'platform_image_share.dart';
 
 enum _CaptionAction { choose, embedded, automatic, disabled }
+
+enum _FrameAction { save, share }
 
 /// Full-screen-capable renderer for user-selected local or HTTPS video.
 class VideoPlaybackScreen extends StatefulWidget {
@@ -115,6 +121,22 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
                 child: Text('Turn captions off'),
               ),
             ],
+          PopupMenuButton<_FrameAction>(
+            tooltip: 'Capture video frame',
+            enabled: !_opening && error == null,
+            icon: const Icon(Icons.camera_alt_outlined),
+            onSelected: (action) => unawaited(_captureFrame(action)),
+            itemBuilder: (context) => const <PopupMenuEntry<_FrameAction>>[
+              PopupMenuItem<_FrameAction>(
+                value: _FrameAction.save,
+                child: Text('Save frame'),
+              ),
+              PopupMenuItem<_FrameAction>(
+                value: _FrameAction.share,
+                child: Text('Share frame'),
+              ),
+            ],
+          ),
         ],
       ),
       body: ColoredBox(
@@ -297,5 +319,77 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _captureFrame(_FrameAction action) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await captureVideoFramePng(
+        () => _player.screenshot(
+          format: 'image/png',
+          includeLibassSubtitles: true,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+
+      switch (action) {
+        case _FrameAction.save:
+          await _saveFrame(bytes);
+          break;
+        case _FrameAction.share:
+          final status = await const SharePlusImageShareService().share(
+            PlatformImageShareRequest(
+              bytes: bytes,
+              fileName: 'aethertune-video-frame.png',
+              title: 'AetherTune video frame',
+              subject: 'AetherTune video frame',
+              text: 'Video frame captured in AetherTune.',
+              sharePositionOrigin: platformSharePositionOrigin(context),
+            ),
+          );
+          if (!mounted || status == PlatformImageShareStatus.shared) {
+            return;
+          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                status == PlatformImageShareStatus.dismissed
+                    ? 'Frame sharing was dismissed.'
+                    : 'Frame sharing is unavailable.',
+              ),
+            ),
+          );
+          break;
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not capture video frame: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveFrame(Uint8List bytes) async {
+    final outputPath = await FilePicker.saveFile(
+      dialogTitle: 'Save video frame',
+      fileName: 'aethertune-video-frame.png',
+      type: FileType.custom,
+      allowedExtensions: const <String>['png'],
+      bytes: bytes,
+    );
+    if (outputPath == null || outputPath.isEmpty) {
+      return;
+    }
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      await File(outputPath).writeAsBytes(bytes, flush: true);
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved aethertune-video-frame.png.')),
+      );
+    }
   }
 }
