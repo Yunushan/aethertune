@@ -17,6 +17,9 @@ void main() {
   testWidgets('starts, completes setup, imports a local entry, and queues it', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1600);
+    addTearDown(tester.view.reset);
     final audio = _SmokePlaybackAudioEngine();
     await tester.pumpWidget(AetherTuneApp(audioEngine: audio));
     await tester.pumpAndSettle();

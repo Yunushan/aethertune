@@ -2948,6 +2948,9 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final searchQuery = _LibrarySearchQuery.parse(query);
+    if (!searchQuery.isEmpty && searchQuery.text.isEmpty) {
+      return <SearchSuggestion>[];
+    }
     final suggestions = <SearchSuggestion>[];
     final seenValues = <String>{};
 
