@@ -13,6 +13,7 @@ import 'package:aethertune/src/domain/playback_history_entry.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
+import 'package:aethertune/src/domain/track_lyrics.dart';
 import 'package:aethertune/src/domain/track_skip_segment.dart';
 
 void main() {
@@ -2141,6 +2142,48 @@ void main() {
     await secondStore.load();
 
     expect(secondStore.lyricsForTrack('1')!.plainText, 'saved lyrics');
+  });
+
+  test('persists bounded synced lyric timing corrections', () async {
+    DateTime clock() => DateTime.utc(2026, 1, 7, 1);
+    final firstStore = LibraryStore(clock: clock);
+    await firstStore.load();
+    await firstStore.addTracks(<Track>[_track('1'), _track('2')]);
+    await firstStore.setLyrics('1', '[00:01.00]First line');
+    await firstStore.setLyrics('2', 'Plain lyrics');
+
+    expect(
+      await firstStore.setLyricsTimingOffset(
+        '1',
+        const Duration(seconds: 45),
+      ),
+      isTrue,
+    );
+    expect(
+      await firstStore.setLyricsTimingOffset(
+        '2',
+        const Duration(seconds: 1),
+      ),
+      isFalse,
+    );
+    expect(
+      firstStore.lyricsForTrack('1')!.timingOffset,
+      TrackLyrics.maxTimingOffset,
+    );
+    expect(
+      firstStore.lyricsForTrack('1')!.syncedLines.single.timestamp,
+      const Duration(seconds: 31),
+    );
+
+    final backup = firstStore.exportBackupJson();
+    final secondStore = LibraryStore(clock: clock);
+    await secondStore.load();
+    await secondStore.restoreBackupJson(backup);
+
+    expect(
+      secondStore.lyricsForTrack('1')!.timingOffset,
+      TrackLyrics.maxTimingOffset,
+    );
   });
 
   test('persists and shares selected lyrics provider attribution', () async {

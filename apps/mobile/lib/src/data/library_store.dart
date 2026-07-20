@@ -7089,6 +7089,30 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
+  /// Stores a bounded local timing correction without rewriting lyric source text.
+  Future<bool> setLyricsTimingOffset(
+    String trackId,
+    Duration timingOffset,
+  ) async {
+    final existing = _lyricsByTrackId[trackId];
+    if (existing == null || !existing.hasSyncedLines) {
+      return false;
+    }
+
+    final normalized = TrackLyrics.normalizeTimingOffset(timingOffset);
+    if (existing.timingOffset == normalized) {
+      return true;
+    }
+
+    _lyricsByTrackId[trackId] = existing.copyWith(
+      timingOffset: normalized,
+      updatedAt: _clock(),
+    );
+    await _save();
+    notifyListeners();
+    return true;
+  }
+
   Future<void> deleteLyrics(String trackId) async {
     if (!_lyricsByTrackId.containsKey(trackId)) {
       return;

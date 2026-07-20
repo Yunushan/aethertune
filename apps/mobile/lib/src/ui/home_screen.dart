@@ -1529,7 +1529,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (sheetContext) {
         return _NowPlayingLyricsSheet(
           track: track,
-          lyrics: library.lyricsForTrack(track.id),
+          library: library,
           player: player,
           translator: translationSettings?.translator,
           translationTargetLanguage:
@@ -1543,6 +1543,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           onShareRange: () => unawaited(
             _copyLyricsSelectedRangeShareText(context, library, track),
+          ),
+          onAdjustTiming: () => unawaited(
+            _showLyricsTimingAdjustment(context, library, track),
           ),
         );
       },
@@ -2689,59 +2692,67 @@ class _SyncedLyricsPreview extends StatelessWidget {
 class _NowPlayingLyricsSheet extends StatelessWidget {
   const _NowPlayingLyricsSheet({
     required this.track,
-    required this.lyrics,
+    required this.library,
     required this.player,
     required this.translator,
     required this.translationTargetLanguage,
     required this.onEdit,
     required this.onShare,
     required this.onShareRange,
+    required this.onAdjustTiming,
   });
 
   final Track track;
-  final TrackLyrics? lyrics;
+  final LibraryStore library;
   final PlayerController player;
   final LyricsTranslator? translator;
   final String translationTargetLanguage;
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onShareRange;
+  final VoidCallback onAdjustTiming;
 
   @override
   Widget build(BuildContext context) {
-    final currentLyrics = lyrics;
-    if (currentLyrics == null || currentLyrics.isEmpty) {
-      return _EmptyNowPlayingLyrics(track: track, onEdit: onEdit);
-    }
+    return AnimatedBuilder(
+      animation: library,
+      builder: (context, _) {
+        final currentLyrics = library.lyricsForTrack(track.id);
+        if (currentLyrics == null || currentLyrics.isEmpty) {
+          return _EmptyNowPlayingLyrics(track: track, onEdit: onEdit);
+        }
 
-    final syncedLines = currentLyrics.syncedLines;
-    if (syncedLines.isEmpty) {
-      return _PlainNowPlayingLyrics(
-        track: track,
-        lyrics: currentLyrics.plainText,
-        sourceLabel: currentLyrics.attributionLabel,
-        onEdit: onEdit,
-        onShare: onShare,
-        onShareRange: onShareRange,
-        onTranslate: _translationAction(
-          context,
-          currentLyrics.plainText,
-        ),
-      );
-    }
+        final syncedLines = currentLyrics.syncedLines;
+        if (syncedLines.isEmpty) {
+          return _PlainNowPlayingLyrics(
+            track: track,
+            lyrics: currentLyrics.plainText,
+            sourceLabel: currentLyrics.attributionLabel,
+            onEdit: onEdit,
+            onShare: onShare,
+            onShareRange: onShareRange,
+            onTranslate: _translationAction(
+              context,
+              currentLyrics.plainText,
+            ),
+          );
+        }
 
-    return _SyncedNowPlayingLyrics(
-      track: track,
-      lines: syncedLines,
-      sourceLabel: currentLyrics.attributionLabel,
-      player: player,
-      onEdit: onEdit,
-      onShare: onShare,
-      onShareRange: onShareRange,
-      onTranslate: _translationAction(
-        context,
-        syncedLines.map((line) => line.text).join('\n'),
-      ),
+        return _SyncedNowPlayingLyrics(
+          track: track,
+          lines: syncedLines,
+          sourceLabel: currentLyrics.attributionLabel,
+          player: player,
+          onEdit: onEdit,
+          onShare: onShare,
+          onShareRange: onShareRange,
+          onAdjustTiming: onAdjustTiming,
+          onTranslate: _translationAction(
+            context,
+            syncedLines.map((line) => line.text).join('\n'),
+          ),
+        );
+      },
     );
   }
 
@@ -2856,6 +2867,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
     required this.onEdit,
     required this.onShare,
     required this.onShareRange,
+    required this.onAdjustTiming,
     this.onTranslate,
   });
 
@@ -2866,6 +2878,7 @@ class _SyncedNowPlayingLyrics extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onShare;
   final VoidCallback onShareRange;
+  final VoidCallback onAdjustTiming;
   final VoidCallback? onTranslate;
 
   @override
@@ -2913,6 +2926,7 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
                       onEdit: widget.onEdit,
                       onShare: widget.onShare,
                       onShareRange: widget.onShareRange,
+                      onAdjustTiming: widget.onAdjustTiming,
                       onTranslate: widget.onTranslate,
                     );
                   }
@@ -2964,6 +2978,7 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
     required this.onEdit,
     this.onShare,
     this.onShareRange,
+    this.onAdjustTiming,
     this.onTranslate,
   });
 
@@ -2972,6 +2987,7 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback? onShare;
   final VoidCallback? onShareRange;
+  final VoidCallback? onAdjustTiming;
   final VoidCallback? onTranslate;
 
   @override
@@ -3001,6 +3017,12 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
               onPressed: onTranslate,
               icon: const Icon(Icons.translate_outlined),
             ),
+          if (onAdjustTiming != null)
+            IconButton(
+              tooltip: 'Adjust lyric timing',
+              onPressed: onAdjustTiming,
+              icon: const Icon(Icons.tune_outlined),
+            ),
           IconButton(
             tooltip: 'Edit lyrics',
             onPressed: onEdit,
@@ -3015,6 +3037,107 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
 String _lyricsSubtitle(String base, String? sourceLabel) {
   final source = sourceLabel?.trim() ?? '';
   return source.isEmpty ? base : '$base - $source';
+}
+
+String _formatLyricsTimingOffset(Duration offset) {
+  final milliseconds = offset.inMilliseconds;
+  final sign = milliseconds < 0 ? '-' : '+';
+  final absoluteMilliseconds = milliseconds.abs();
+  final seconds = absoluteMilliseconds ~/ 1000;
+  final tenths = (absoluteMilliseconds % 1000) ~/ 100;
+  return '$sign$seconds.$tenths s';
+}
+
+Future<void> _showLyricsTimingAdjustment(
+  BuildContext context,
+  LibraryStore library,
+  Track track,
+) async {
+  if (library.lyricsForTrack(track.id)?.hasSyncedLines != true) {
+    return;
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          final offset =
+              library.lyricsForTrack(track.id)?.timingOffset ?? Duration.zero;
+
+          Future<void> adjust(Duration change) async {
+            await library.setLyricsTimingOffset(track.id, offset + change);
+            if (dialogContext.mounted) {
+              setDialogState(() {});
+            }
+          }
+
+          Future<void> reset() async {
+            await library.setLyricsTimingOffset(track.id, Duration.zero);
+            if (dialogContext.mounted) {
+              setDialogState(() {});
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Adjust lyric timing'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(_formatLyricsTimingOffset(offset)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <Widget>[
+                    IconButton(
+                      tooltip: 'Move lyrics 0.5 seconds earlier',
+                      onPressed: () => unawaited(
+                        adjust(const Duration(milliseconds: -500)),
+                      ),
+                      icon: const Icon(Icons.fast_rewind_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Move lyrics 0.1 seconds earlier',
+                      onPressed: () => unawaited(
+                        adjust(const Duration(milliseconds: -100)),
+                      ),
+                      icon: const Icon(Icons.remove_circle_outline),
+                    ),
+                    IconButton(
+                      tooltip: 'Move lyrics 0.1 seconds later',
+                      onPressed: () => unawaited(
+                        adjust(const Duration(milliseconds: 100)),
+                      ),
+                      icon: const Icon(Icons.add_circle_outline),
+                    ),
+                    IconButton(
+                      tooltip: 'Move lyrics 0.5 seconds later',
+                      onPressed: () => unawaited(
+                        adjust(const Duration(milliseconds: 500)),
+                      ),
+                      icon: const Icon(Icons.fast_forward_outlined),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: offset == Duration.zero
+                    ? null
+                    : () => unawaited(reset()),
+                child: const Text('Reset'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
 
 Future<void> _showLyricsTranslation(

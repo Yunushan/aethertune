@@ -30,6 +30,9 @@ class SyncedLyricLine {
 
 /// User-managed plain-text or LRC lyrics attached to one library track.
 class TrackLyrics {
+  static const minTimingOffset = Duration(seconds: -30);
+  static const maxTimingOffset = Duration(seconds: 30);
+
   TrackLyrics({
     required this.trackId,
     required this.plainText,
@@ -37,8 +40,10 @@ class TrackLyrics {
     this.sourceName = '',
     this.sourceExternalId = '',
     this.sourceUri,
+    Duration timingOffset = Duration.zero,
     DateTime? updatedAt,
-  }) : updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  })  : timingOffset = normalizeTimingOffset(timingOffset),
+        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String trackId;
   final String plainText;
@@ -46,12 +51,16 @@ class TrackLyrics {
   final String sourceName;
   final String sourceExternalId;
   final Uri? sourceUri;
+  final Duration timingOffset;
   final DateTime updatedAt;
 
   bool get isEmpty => plainText.trim().isEmpty;
   bool get isTtmlDocument => isTtmlLyricsDocument(plainText);
   bool get isSrtDocument => isSrtLyricsDocument(plainText);
-  List<SyncedLyricLine> get syncedLines => parseSyncedLyricLines(plainText);
+  List<SyncedLyricLine> get syncedLines => _offsetSyncedLyricLines(
+        parseSyncedLyricLines(plainText),
+        timingOffset,
+      );
   bool get hasSyncedLines => syncedLines.isNotEmpty;
   bool get hasProviderAttribution =>
       sourceId.trim().isNotEmpty &&
@@ -67,6 +76,7 @@ class TrackLyrics {
     String? sourceName,
     String? sourceExternalId,
     Uri? sourceUri,
+    Duration? timingOffset,
     DateTime? updatedAt,
   }) {
     return TrackLyrics(
@@ -76,8 +86,19 @@ class TrackLyrics {
       sourceName: sourceName ?? this.sourceName,
       sourceExternalId: sourceExternalId ?? this.sourceExternalId,
       sourceUri: sourceUri ?? this.sourceUri,
+      timingOffset: timingOffset ?? this.timingOffset,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static Duration normalizeTimingOffset(Duration value) {
+    if (value > maxTimingOffset) {
+      return maxTimingOffset;
+    }
+    if (value < minTimingOffset) {
+      return minTimingOffset;
+    }
+    return value;
   }
 
   Map<String, Object?> toJson() {
@@ -88,6 +109,8 @@ class TrackLyrics {
       'sourceName': sourceName,
       'sourceExternalId': sourceExternalId,
       'sourceUri': sourceUri?.toString(),
+      if (timingOffset != Duration.zero)
+        'timingOffsetMs': timingOffset.inMilliseconds,
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
@@ -100,10 +123,89 @@ class TrackLyrics {
       sourceName: json['sourceName'] as String? ?? '',
       sourceExternalId: json['sourceExternalId'] as String? ?? '',
       sourceUri: _parseLyricsSourceUri(json['sourceUri'] as String?),
+      timingOffset: Duration(
+        milliseconds: (json['timingOffsetMs'] as num?)?.toInt() ?? 0,
+      ),
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
+}
+
+List<SyncedLyricLine> _offsetSyncedLyricLines(
+  List<SyncedLyricLine> lines,
+  Duration offset,
+) {
+  if (offset == Duration.zero || lines.isEmpty) {
+    return lines;
+  }
+
+  return lines
+      .map((line) => _offsetSyncedLyricLine(line, offset))
+      .toList(growable: false);
+}
+
+SyncedLyricLine _offsetSyncedLyricLine(
+  SyncedLyricLine line,
+  Duration offset,
+) {
+  final timestamp = _offsetTimestamp(line.timestamp, offset);
+  return SyncedLyricLine(
+    timestamp: timestamp,
+    endTimestamp: _offsetEndTimestamp(
+      start: line.timestamp,
+      end: line.endTimestamp,
+      shiftedStart: timestamp,
+      offset: offset,
+    ),
+    text: line.text,
+    words: line.words
+        .map((word) => _offsetSyncedLyricWord(word, offset))
+        .toList(growable: false),
+  );
+}
+
+SyncedLyricWord _offsetSyncedLyricWord(
+  SyncedLyricWord word,
+  Duration offset,
+) {
+  final timestamp = _offsetTimestamp(word.timestamp, offset);
+  return SyncedLyricWord(
+    timestamp: timestamp,
+    endTimestamp: _offsetEndTimestamp(
+      start: word.timestamp,
+      end: word.endTimestamp,
+      shiftedStart: timestamp,
+      offset: offset,
+    ),
+    text: word.text,
+  );
+}
+
+Duration _offsetTimestamp(Duration timestamp, Duration offset) {
+  final shifted = timestamp + offset;
+  return shifted.isNegative ? Duration.zero : shifted;
+}
+
+Duration? _offsetEndTimestamp({
+  required Duration start,
+  required Duration? end,
+  required Duration shiftedStart,
+  required Duration offset,
+}) {
+  if (end == null) {
+    return null;
+  }
+
+  final shiftedEnd = _offsetTimestamp(end, offset);
+  if (shiftedEnd > shiftedStart) {
+    return shiftedEnd;
+  }
+
+  final originalDuration = end - start;
+  return originalDuration.isNegative || originalDuration == Duration.zero
+      ? shiftedStart
+      : shiftedStart + originalDuration;
 }
 
 Uri? _parseLyricsSourceUri(String? value) {

@@ -44,6 +44,35 @@ Plain lyric line
     );
   });
 
+  test('applies a portable timing correction to cue and karaoke timing', () {
+    const document = '''
+<tt><body><div><p begin="1s" end="3s"><span begin="0.2s" end="0.8s">Hello</span></p></div></body></tt>
+''';
+    final lyrics = TrackLyrics(
+      trackId: 'track-1',
+      plainText: document,
+      timingOffset: const Duration(milliseconds: -1500),
+    );
+
+    final line = lyrics.syncedLines.single;
+    expect(line.timestamp, Duration.zero);
+    expect(line.endTimestamp, const Duration(milliseconds: 1500));
+    expect(line.words.single.timestamp, Duration.zero);
+    expect(line.words.single.endTimestamp, const Duration(milliseconds: 300));
+
+    final delayed = lyrics.copyWith(
+      timingOffset: const Duration(milliseconds: 250),
+    );
+    expect(
+      delayed.syncedLines.single.timestamp,
+      const Duration(seconds: 1, milliseconds: 250),
+    );
+    expect(
+      delayed.syncedLines.single.words.single.timestamp,
+      const Duration(milliseconds: 1450),
+    );
+  });
+
   test('finds the active synced lyric line for a playback position', () {
     final lines = parseSyncedLyricLines('''
 [00:01.00]Intro
@@ -167,6 +196,7 @@ Second line
       sourceName: 'LRCLIB',
       sourceExternalId: '42',
       sourceUri: Uri.parse('https://lrclib.net/api/get/42'),
+      timingOffset: const Duration(seconds: 45),
       updatedAt: DateTime.utc(2026, 7, 10),
     );
 
@@ -180,7 +210,9 @@ Second line
     expect(restored.attributionLabel, 'LRCLIB');
     expect(restored.sourceExternalId, '42');
     expect(restored.sourceUri, Uri.parse('https://lrclib.net/api/get/42'));
+    expect(restored.timingOffset, TrackLyrics.maxTimingOffset);
     expect(legacy.sourceId, 'manual');
+    expect(legacy.timingOffset, Duration.zero);
     expect(legacy.hasProviderAttribution, isFalse);
   });
 }
