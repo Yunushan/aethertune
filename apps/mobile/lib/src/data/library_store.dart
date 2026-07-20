@@ -72,6 +72,7 @@ enum SmartPlaylistType { favorites, recentlyAdded, recentlyPlayed, mostPlayed }
 
 enum LibraryHomeSectionType {
   continueListening,
+  audiobooks,
   recentlyPlayed,
   followedArtists,
   radioSeeds,
@@ -79,6 +80,17 @@ enum LibraryHomeSectionType {
   favorites,
   subscribedEpisodes,
   recentlyAdded,
+}
+
+/// Whether [track] should retain an interrupted listening position.
+///
+/// Podcast episodes and imported DRM-free M4B audiobooks are long-form media;
+/// normal music tracks deliberately continue from the beginning.
+bool isLongFormProgressTrack(Track track) {
+  final localPath = track.localPath?.trim().toLowerCase() ?? '';
+  return track.genre.toLowerCase() == 'podcast' ||
+      track.sourceId.startsWith('podcast-') ||
+      localPath.endsWith('.m4b');
 }
 
 /// The source subset to include in the combined following feed.
@@ -3183,6 +3195,10 @@ class LibraryStore extends ChangeNotifier {
       _continueListeningTracks(limit: limit),
     );
     addSection(
+      LibraryHomeSectionType.audiobooks,
+      audiobookTracks(limit: limit),
+    );
+    addSection(
       LibraryHomeSectionType.recentlyPlayed,
       recentlyPlayedTracks(limit: limit),
     );
@@ -3212,6 +3228,38 @@ class LibraryStore extends ChangeNotifier {
     );
 
     return sections;
+  }
+
+  /// Returns imported M4B audiobooks, prioritizing interrupted listening.
+  List<Track> audiobookTracks({int limit = 50}) {
+    if (limit <= 0) {
+      return <Track>[];
+    }
+    final tracks = _tracks
+        .where(isLongFormProgressTrack)
+        .where(
+          (track) =>
+              (track.localPath?.trim().toLowerCase() ?? '').endsWith('.m4b'),
+        )
+        .toList(growable: false);
+    tracks.sort((first, second) {
+      final firstProgress = _progressByTrackId[first.id];
+      final secondProgress = _progressByTrackId[second.id];
+      if (firstProgress != null && secondProgress != null) {
+        final byProgress = secondProgress.updatedAt.compareTo(
+          firstProgress.updatedAt,
+        );
+        if (byProgress != 0) {
+          return byProgress;
+        }
+      } else if (firstProgress != null) {
+        return -1;
+      } else if (secondProgress != null) {
+        return 1;
+      }
+      return _compareByDateThenTitle(first, second);
+    });
+    return tracks.take(limit).toList(growable: false);
   }
 
   /// Returns newest items from followed artists, RSS feeds, and explicitly

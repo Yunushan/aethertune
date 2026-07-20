@@ -794,7 +794,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (!_tracksPodcastProgress(track)) {
+    if (!isLongFormProgressTrack(track)) {
       return;
     }
 
@@ -5505,6 +5505,8 @@ IconData _homeSectionIcon(LibraryHomeSectionType type) {
   switch (type) {
     case LibraryHomeSectionType.continueListening:
       return Icons.play_circle_outline;
+    case LibraryHomeSectionType.audiobooks:
+      return Icons.menu_book_outlined;
     case LibraryHomeSectionType.recentlyPlayed:
       return Icons.history_outlined;
     case LibraryHomeSectionType.followedArtists:
@@ -5526,6 +5528,8 @@ String _homeSectionTitle(LibraryHomeSectionType type) {
   switch (type) {
     case LibraryHomeSectionType.continueListening:
       return 'Continue listening';
+    case LibraryHomeSectionType.audiobooks:
+      return 'Audiobooks';
     case LibraryHomeSectionType.recentlyPlayed:
       return 'Recently played';
     case LibraryHomeSectionType.followedArtists:
@@ -5547,6 +5551,8 @@ String _homeSectionSubtitle(LibraryHomeSectionType type) {
   switch (type) {
     case LibraryHomeSectionType.continueListening:
       return 'Saved playback progress';
+    case LibraryHomeSectionType.audiobooks:
+      return 'Imported M4B audiobooks, with resume progress';
     case LibraryHomeSectionType.recentlyPlayed:
       return 'Latest library plays';
     case LibraryHomeSectionType.followedArtists:
@@ -12004,11 +12010,6 @@ String _formatHistoryTime(DateTime? value) {
       '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
 }
 
-bool _tracksPodcastProgress(Track track) {
-  return track.genre.toLowerCase() == 'podcast' ||
-      track.sourceId.startsWith('podcast-');
-}
-
 Future<void> _playLibraryCollection(
   BuildContext context,
   PlayerController player,
@@ -12056,7 +12057,7 @@ Future<bool> _tryPlayTrackWithResume(
   Track track, {
   required List<Track> queue,
 }) async {
-  final initialPosition = _tracksPodcastProgress(track)
+  final initialPosition = isLongFormProgressTrack(track)
       ? library.playbackProgressForTrack(track.id)?.position
       : null;
 

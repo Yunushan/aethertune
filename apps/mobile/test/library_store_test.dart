@@ -5270,6 +5270,55 @@ void main() {
     expect(store.homeFeedSections(limit: 0), isEmpty);
   });
 
+  test('prioritizes resumed M4B audiobooks in a dedicated Home section',
+      () async {
+    var now = DateTime.utc(2026, 1, 14, 12);
+    final store = LibraryStore(clock: () => now);
+    await store.load();
+    final resumed = _track(
+      'book-resumed',
+      title: 'The Signal',
+      localPath: '/books/the-signal.m4b',
+      duration: const Duration(hours: 8),
+    );
+    final unread = _track(
+      'book-unread',
+      title: 'The Archive',
+      localPath: '/books/the-archive.M4B',
+      duration: const Duration(hours: 6),
+    );
+    final music = _track(
+      'music',
+      localPath: '/music/track.m4a',
+      duration: const Duration(minutes: 4),
+    );
+    await store.addTracks(<Track>[resumed, unread, music]);
+    now = now.add(const Duration(minutes: 1));
+    await store.recordPlaybackProgress(
+      resumed.id,
+      const Duration(minutes: 42),
+      resumed.duration,
+    );
+
+    expect(isLongFormProgressTrack(resumed), isTrue);
+    expect(isLongFormProgressTrack(unread), isTrue);
+    expect(isLongFormProgressTrack(music), isFalse);
+    expect(
+      store.audiobookTracks().map((track) => track.id),
+      <String>['book-resumed', 'book-unread'],
+    );
+    expect(
+      store
+          .homeFeedSections()
+          .firstWhere(
+            (section) => section.type == LibraryHomeSectionType.audiobooks,
+          )
+          .tracks
+          .map((track) => track.id),
+      <String>['book-resumed', 'book-unread'],
+    );
+  });
+
   test('creates updates and persists custom smart playlist rules', () async {
     var now = DateTime.utc(2026, 1, 15, 12);
     final store = LibraryStore(clock: () => now);
