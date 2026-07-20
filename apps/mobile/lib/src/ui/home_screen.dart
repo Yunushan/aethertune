@@ -3414,9 +3414,10 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                                 if (entry.timestamp != null) {
                                   await widget.player.seek(entry.timestamp!);
                                 }
-                                if (mounted) {
-                                  Navigator.of(context).pop();
+                                if (!mounted) {
+                                  return;
                                 }
+                                Navigator.of(this.context).pop();
                               },
                             );
                           },
