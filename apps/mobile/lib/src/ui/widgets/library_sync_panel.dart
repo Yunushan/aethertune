@@ -1651,7 +1651,7 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
               if (widget.profile.avatarToneSupported)
                 DropdownButtonFormField<LibrarySyncProfileAvatarTone?>(
                   key: const Key('library-sync-profile-avatar-tone'),
-                  value: _avatarTone,
+                  initialValue: _avatarTone,
                   decoration: const InputDecoration(labelText: 'Initials avatar'),
                   items: <DropdownMenuItem<LibrarySyncProfileAvatarTone?>>[
                     const DropdownMenuItem<LibrarySyncProfileAvatarTone?>(

@@ -1636,10 +1636,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _importAudio(BuildContext context) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
+    final scanningSelectedAudio = AppLocalizations.of(context)!.scanningSelectedAudio;
 
     final result = await FilePicker.pickFiles(
       type: FileType.audio,
-      allowMultiple: true,
     );
 
     if (result == null || result.files.isEmpty) {
@@ -1660,7 +1660,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       _showLocalImportProgress(
         messenger,
-        AppLocalizations.of(context)!.scanningSelectedAudio,
+        scanningSelectedAudio,
       );
       final scanResult = await scanLocalFilesInBackground(
         filePaths,
@@ -17193,16 +17193,13 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _openLocalVideo(BuildContext context) async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.video,
-      allowMultiple: false,
-      withData: false,
     );
-    if (!context.mounted || result == null || result.files.isEmpty) {
+    if (!context.mounted || file == null) {
       return;
     }
 
-    final file = result.files.single;
     final source = localVideoUri(file.path ?? '');
     if (source == null) {
       ScaffoldMessenger.of(context).showSnackBar(

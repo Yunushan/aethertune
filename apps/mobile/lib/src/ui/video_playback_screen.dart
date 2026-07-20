@@ -200,26 +200,19 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
         break;
     }
 
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const <String>['srt', 'vtt'],
-      allowMultiple: false,
-      withData: true,
     );
-    if (!mounted || result == null || result.files.isEmpty) {
-      return;
-    }
-
-    final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not read that caption file.')),
-      );
+    if (!mounted || file == null) {
       return;
     }
 
     try {
+      final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
       final captions = decodeLegalVideoCaptionDocument(
         bytes,
         fileName: file.name,

@@ -336,7 +336,7 @@ List<int> findLyricLineMatchIndices(
     return const <int>[];
   }
 
-  final resultLimit = maximumResults.clamp(1, 100) as int;
+  final resultLimit = maximumResults.clamp(1, 100);
   final matches = <int>[];
   for (var index = 0; index < lines.length; index += 1) {
     if (!lines[index].toLowerCase().contains(normalizedQuery)) {

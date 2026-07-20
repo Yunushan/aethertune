@@ -1198,7 +1198,7 @@ MediaItem _mediaItemForTrack(
     extras: <String, Object>{
       'sourceId': track.sourceId,
       if (track.externalId != null) 'externalId': track.externalId!,
-      if (extras != null) ...extras,
+      ...?extras,
     },
   );
 }
