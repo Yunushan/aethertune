@@ -24,4 +24,17 @@ void main() {
       'سيتوقف التشغيل خلال أقل من دقيقة واحدة.',
     );
   });
+
+  test('localizes desktop tray controls in every supported locale', () {
+    final english = AppLocalizationsEn();
+    final turkish = AppLocalizationsTr();
+    final arabic = AppLocalizationsAr();
+
+    expect(english.desktopTrayPlayPause, 'Play / Pause in tray menu');
+    expect(
+      turkish.desktopTrayMinimizeOnClose,
+      'Kapatırken sistem tepsisine küçült',
+    );
+    expect(arabic.desktopTrayNext, 'التالي في قائمة شريط النظام');
+  });
 }

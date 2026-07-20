@@ -101,6 +101,34 @@ class AppLocalizationsTr extends AppLocalizations {
   String get skipSetup => 'Kurulumu atla';
 
   @override
+  String get desktopTrayMinimizeOnClose => 'Kapatırken sistem tepsisine küçült';
+
+  @override
+  String get desktopTrayMinimizeOnCloseDescription =>
+      "Çalma işlemini, Çıkış'ı seçene kadar sistem tepsisinde sürdürün.";
+
+  @override
+  String get desktopTrayPrevious => 'Tepsi menüsünde önceki';
+
+  @override
+  String get desktopTrayPreviousDescription =>
+      'Her zaman kullanılabilen Göster ve Çıkış eylemlerinin yanında Önceki komutunu gösterin.';
+
+  @override
+  String get desktopTrayPlayPause => 'Tepsi menüsünde oynat / duraklat';
+
+  @override
+  String get desktopTrayPlayPauseDescription =>
+      'Her zaman kullanılabilen Göster ve Çıkış eylemlerinin yanında oynatma düğmesini gösterin.';
+
+  @override
+  String get desktopTrayNext => 'Tepsi menüsünde sonraki';
+
+  @override
+  String get desktopTrayNextDescription =>
+      'Her zaman kullanılabilen Göster ve Çıkış eylemlerinin yanında Sonraki komutunu gösterin.';
+
+  @override
   String get sleepTimer => 'Uyku zamanlayıcısı';
 
   @override

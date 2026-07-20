@@ -101,6 +101,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skipSetup => 'Skip setup';
 
   @override
+  String get desktopTrayMinimizeOnClose => 'Minimize to tray on close';
+
+  @override
+  String get desktopTrayMinimizeOnCloseDescription =>
+      'Keep playback running in the system tray until you choose Quit.';
+
+  @override
+  String get desktopTrayPrevious => 'Previous in tray menu';
+
+  @override
+  String get desktopTrayPreviousDescription =>
+      'Show a Previous command beside the always available Show and Quit actions.';
+
+  @override
+  String get desktopTrayPlayPause => 'Play / Pause in tray menu';
+
+  @override
+  String get desktopTrayPlayPauseDescription =>
+      'Show a playback toggle beside the always available Show and Quit actions.';
+
+  @override
+  String get desktopTrayNext => 'Next in tray menu';
+
+  @override
+  String get desktopTrayNextDescription =>
+      'Show a Next command beside the always available Show and Quit actions.';
+
+  @override
   String get sleepTimer => 'Sleep timer';
 
   @override

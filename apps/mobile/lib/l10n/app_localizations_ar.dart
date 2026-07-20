@@ -101,6 +101,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get skipSetup => 'تخطي الإعداد';
 
   @override
+  String get desktopTrayMinimizeOnClose =>
+      'تصغير إلى شريط النظام عند الإغلاق';
+
+  @override
+  String get desktopTrayMinimizeOnCloseDescription =>
+      'أبقِ التشغيل مستمرًا في شريط النظام حتى تختار إنهاء التطبيق.';
+
+  @override
+  String get desktopTrayPrevious => 'السابق في قائمة شريط النظام';
+
+  @override
+  String get desktopTrayPreviousDescription =>
+      'أظهر أمر السابق إلى جانب إجرائي الإظهار والإنهاء المتاحين دائمًا.';
+
+  @override
+  String get desktopTrayPlayPause =>
+      'تشغيل / إيقاف مؤقت في قائمة شريط النظام';
+
+  @override
+  String get desktopTrayPlayPauseDescription =>
+      'أظهر زر التشغيل أو الإيقاف المؤقت إلى جانب إجرائي الإظهار والإنهاء المتاحين دائمًا.';
+
+  @override
+  String get desktopTrayNext => 'التالي في قائمة شريط النظام';
+
+  @override
+  String get desktopTrayNextDescription =>
+      'أظهر أمر التالي إلى جانب إجرائي الإظهار والإنهاء المتاحين دائمًا.';
+
+  @override
   String get sleepTimer => 'مؤقت النوم';
 
   @override

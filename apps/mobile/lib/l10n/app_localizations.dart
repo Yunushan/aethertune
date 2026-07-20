@@ -274,6 +274,54 @@ abstract class AppLocalizations {
   /// **'Skip setup'**
   String get skipSetup;
 
+  /// No description provided for @desktopTrayMinimizeOnClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimize to tray on close'**
+  String get desktopTrayMinimizeOnClose;
+
+  /// No description provided for @desktopTrayMinimizeOnCloseDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep playback running in the system tray until you choose Quit.'**
+  String get desktopTrayMinimizeOnCloseDescription;
+
+  /// No description provided for @desktopTrayPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous in tray menu'**
+  String get desktopTrayPrevious;
+
+  /// No description provided for @desktopTrayPreviousDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a Previous command beside the always available Show and Quit actions.'**
+  String get desktopTrayPreviousDescription;
+
+  /// No description provided for @desktopTrayPlayPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Play / Pause in tray menu'**
+  String get desktopTrayPlayPause;
+
+  /// No description provided for @desktopTrayPlayPauseDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a playback toggle beside the always available Show and Quit actions.'**
+  String get desktopTrayPlayPauseDescription;
+
+  /// No description provided for @desktopTrayNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next in tray menu'**
+  String get desktopTrayNext;
+
+  /// No description provided for @desktopTrayNextDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a Next command beside the always available Show and Quit actions.'**
+  String get desktopTrayNextDescription;
+
   /// No description provided for @sleepTimer.
   ///
   /// In en, this message translates to:

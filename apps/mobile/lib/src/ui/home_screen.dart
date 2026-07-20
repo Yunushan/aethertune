@@ -18598,9 +18598,9 @@ class _SettingsTab extends StatelessWidget {
         if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
           SwitchListTile(
             secondary: const Icon(Icons.minimize_outlined),
-            title: const Text('Minimize to tray on close'),
-            subtitle: const Text(
-              'Keep playback running in the system tray until you choose Quit.',
+            title: Text(localizations.desktopTrayMinimizeOnClose),
+            subtitle: Text(
+              localizations.desktopTrayMinimizeOnCloseDescription,
             ),
             value: library.desktopMinimizeToTray,
             onChanged: (enabled) =>
@@ -18610,9 +18610,9 @@ class _SettingsTab extends StatelessWidget {
           SwitchListTile(
             key: const Key('desktop-tray-action-previous'),
             secondary: const Icon(Icons.skip_previous_outlined),
-            title: const Text('Previous in tray menu'),
-            subtitle: const Text(
-              'Show a Previous command beside the always available Show and Quit actions.',
+            title: Text(localizations.desktopTrayPrevious),
+            subtitle: Text(
+              localizations.desktopTrayPreviousDescription,
             ),
             value: library.desktopTrayTransportActions.contains(
               DesktopTrayTransportAction.previous,
@@ -18628,9 +18628,9 @@ class _SettingsTab extends StatelessWidget {
           SwitchListTile(
             key: const Key('desktop-tray-action-play-pause'),
             secondary: const Icon(Icons.play_circle_outline),
-            title: const Text('Play / Pause in tray menu'),
-            subtitle: const Text(
-              'Show a playback toggle beside the always available Show and Quit actions.',
+            title: Text(localizations.desktopTrayPlayPause),
+            subtitle: Text(
+              localizations.desktopTrayPlayPauseDescription,
             ),
             value: library.desktopTrayTransportActions.contains(
               DesktopTrayTransportAction.togglePlayPause,
@@ -18646,9 +18646,9 @@ class _SettingsTab extends StatelessWidget {
           SwitchListTile(
             key: const Key('desktop-tray-action-next'),
             secondary: const Icon(Icons.skip_next_outlined),
-            title: const Text('Next in tray menu'),
-            subtitle: const Text(
-              'Show a Next command beside the always available Show and Quit actions.',
+            title: Text(localizations.desktopTrayNext),
+            subtitle: Text(
+              localizations.desktopTrayNextDescription,
             ),
             value: library.desktopTrayTransportActions.contains(
               DesktopTrayTransportAction.next,
