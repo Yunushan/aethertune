@@ -2942,7 +2942,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
       return null;
     }
     return () => unawaited(() async {
-      await Future<void>.delayed(kThemeAnimationDuration);
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       if (!context.mounted) {
         return;
       }
