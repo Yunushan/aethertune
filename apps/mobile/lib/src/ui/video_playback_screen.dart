@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import 'android_video_picture_in_picture.dart';
+
 /// Full-screen-capable renderer for user-selected local or HTTPS video.
 class VideoPlaybackScreen extends StatefulWidget {
   const VideoPlaybackScreen({
@@ -22,6 +24,7 @@ class VideoPlaybackScreen extends StatefulWidget {
 class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
   late final Player _player = Player();
   late final VideoController _controller = VideoController(_player);
+  final _pictureInPicture = AndroidVideoPictureInPictureBridge();
   Object? _error;
   var _opening = true;
 
@@ -69,6 +72,14 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
             onPressed: _opening ? null : () => unawaited(_open()),
             icon: const Icon(Icons.refresh),
           ),
+          if (_pictureInPicture.isSupportedPlatform)
+            IconButton(
+              tooltip: 'Picture in picture',
+              onPressed: _opening || error != null
+                  ? null
+                  : () => unawaited(_enterPictureInPicture()),
+              icon: const Icon(Icons.picture_in_picture_alt_outlined),
+            ),
         ],
       ),
       body: ColoredBox(
@@ -98,6 +109,15 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
                 ),
         ),
       ),
+    );
+  }
+
+  Future<void> _enterPictureInPicture() async {
+    if (await _pictureInPicture.enter() || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Picture in picture is unavailable.')),
     );
   }
 }

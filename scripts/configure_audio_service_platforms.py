@@ -423,6 +423,7 @@ class AetherTunePlaybackWidget : AppWidgetProvider() {
 _MAIN_ACTIVITY_KOTLIN = """package dev.aethertune.aethertune
 
 import android.Manifest
+import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
@@ -565,13 +566,36 @@ class MainActivity : AudioServiceActivity() {
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/video_picture_in_picture",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "enter") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            result.success(enterVideoPictureInPicture())
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/storage_access",
         ).setMethodCallHandler { call, result ->
             if (call.method != "requestAudioLibraryAccess") {
                 result.notImplemented()
                 return@setMethodCallHandler
             }
-            requestAudioLibraryAccess(result)
+        requestAudioLibraryAccess(result)
+        }
+    }
+
+    private fun enterVideoPictureInPicture(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            !packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            return false
+        }
+        return try {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -1141,6 +1165,7 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
         raise RuntimeError(f"No <activity> in {manifest_path}")
     activity.set(f"{ANDROID}name", ACTIVITY_NAME)
     activity.set(f"{ANDROID}exported", "true")
+    activity.set(f"{ANDROID}supportsPictureInPicture", "true")
     _ensure_metadata_value(activity, "flutter_deeplinking_enabled", "false")
     _ensure_deep_link_intent_filter(activity)
     _ensure_metadata(
@@ -1498,6 +1523,8 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         raise RuntimeError("Android activity is not connected to audio_service")
     if activity.get(f"{ANDROID}exported") != "true":
         raise RuntimeError("Android activity is not exported for deep links")
+    if activity.get(f"{ANDROID}supportsPictureInPicture") != "true":
+        raise RuntimeError("Android Picture-in-Picture is not enabled")
     deep_link_metadata = next(
         (
             metadata
@@ -1605,6 +1632,9 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "requestPinShortcut",
         "dev.aethertune/audio_routes",
         "Settings.ACTION_SOUND_SETTINGS",
+        "dev.aethertune/video_picture_in_picture",
+        "PictureInPictureParams.Builder",
+        "FEATURE_PICTURE_IN_PICTURE",
         "dev.aethertune/storage_access",
         "requestAudioLibraryAccess",
         "READ_MEDIA_AUDIO",

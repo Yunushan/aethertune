@@ -65,6 +65,10 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity.get(f"{platform_config.ANDROID}exported"),
                 "true",
             )
+            self.assertEqual(
+                activity.get(f"{platform_config.ANDROID}supportsPictureInPicture"),
+                "true",
+            )
             self.assertTrue(
                 any(
                     any(
@@ -115,6 +119,14 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             )
             self.assertIn(
                 'dev.aethertune/audio_routes',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'dev.aethertune/video_picture_in_picture',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'PictureInPictureParams.Builder',
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(

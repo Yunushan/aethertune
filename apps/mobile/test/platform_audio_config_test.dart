@@ -28,12 +28,22 @@ void main() {
       _componentNames(document, 'activity'),
       contains('dev.aethertune.aethertune.MainActivity'),
     );
+    final activityElement = document.findAllElements('activity').single;
+    expect(
+      activityElement.getAttribute(
+        'supportsPictureInPicture',
+        namespace: _androidNamespace,
+      ),
+      'true',
+    );
     final activity = File(
       'android/app/src/main/kotlin/dev/aethertune/aethertune/MainActivity.kt',
     ).readAsStringSync();
     expect(activity, contains('class MainActivity : AudioServiceActivity()'));
     expect(activity, contains('dev.aethertune/playback_widget'));
     expect(activity, contains('dev.aethertune/pinned_shortcuts'));
+    expect(activity, contains('dev.aethertune/video_picture_in_picture'));
+    expect(activity, contains('PictureInPictureParams.Builder'));
     expect(activity, contains('ShortcutManager'));
     expect(activity, contains('requestPinShortcut'));
     for (final action in <String>[
