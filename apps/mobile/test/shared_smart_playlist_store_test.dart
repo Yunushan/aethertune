@@ -37,7 +37,10 @@ void main() {
     expect(gateway.createdRule?['ruleGroups'], isNotEmpty);
     expect(gateway.createdRule, isNot(contains('id')));
     expect(gateway.createdRule, isNot(contains('artworkUri')));
-    expect(store.bindingForLocalSmartPlaylist(local.id)?.remoteId, gateway.id);
+    expect(
+      store.bindingForLocalSmartPlaylist(local.id)?.remoteId,
+      _FakeSharedSmartPlaylistGateway.id,
+    );
   });
 
   test('joins a shared smart definition as a local dynamic playlist', () async {

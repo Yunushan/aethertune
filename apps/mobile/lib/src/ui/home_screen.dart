@@ -4800,7 +4800,6 @@ final class _FollowedYouTubeChannelShelfState
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
-    final sharedSmartPlaylists = context.watch<SharedSmartPlaylistStore>();
     final follows = context.watch<YouTubeChannelFollowStore?>();
     final feedStore = context.watch<YouTubeFollowedChannelFeedStore?>();
     final offline = library.offlineModeEnabled;
@@ -8495,6 +8494,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryStore>();
+    final sharedSmartPlaylists = context.watch<SharedSmartPlaylistStore>();
 
     if (!library.loaded) {
       return const Center(child: CircularProgressIndicator());
