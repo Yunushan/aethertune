@@ -402,6 +402,7 @@ void main() {
             'account': <String, Object?>{
               'id': 'primary',
               'displayName': 'Primary listener',
+              'avatarTone': 'emerald',
               'managed': true,
               'editable': true,
             },
@@ -422,6 +423,7 @@ void main() {
     expect(requestedUri.toString(), isNot(contains(token)));
     expect(profile?.id, 'primary');
     expect(profile?.effectiveDisplayName, 'Primary listener');
+    expect(profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
     expect(profile?.managed, isTrue);
     expect(profile?.editable, isTrue);
     expect(profile?.device?.name, 'Windows desktop');
@@ -448,6 +450,7 @@ void main() {
               '"account":{'
               '"id":"primary",'
               '"displayName":"Shared listeners",'
+              '"avatarTone":"violet",'
               '"managed":true,'
               '"editable":true'
               '},'
@@ -464,6 +467,8 @@ void main() {
     final updated = await client.updateProfile(
       displayName: '  Shared listeners  ',
       deviceName: '  Pocket player  ',
+      avatarTone: LibrarySyncProfileAvatarTone.violet,
+      includeAvatarTone: true,
     );
 
     expect(requestedMethod, 'PATCH');
@@ -473,9 +478,12 @@ void main() {
     expect(requestedBody, <String, Object?>{
       'displayName': 'Shared listeners',
       'deviceName': 'Pocket player',
+      'avatarTone': 'violet',
     });
     expect(jsonEncode(requestedBody), isNot(contains(token)));
     expect(updated.effectiveDisplayName, 'Shared listeners');
+    expect(updated.avatarTone, LibrarySyncProfileAvatarTone.violet);
+    expect(updated.avatarToneSupported, isTrue);
     expect(updated.editable, isTrue);
     expect(updated.device?.name, 'Pocket player');
     await expectLater(
@@ -540,6 +548,8 @@ void main() {
       },
     );
     expect(legacyManagedProfile.editable, isFalse);
+    expect(legacyManagedProfile.avatarTone, isNull);
+    expect(legacyManagedProfile.avatarToneSupported, isFalse);
     expect(
       () => LibrarySyncProfile.fromServerJson(<String, Object?>{
         'account': <String, Object?>{
@@ -548,6 +558,21 @@ void main() {
           'editable': true,
         },
         'device': null,
+      }),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => LibrarySyncProfile.fromServerJson(<String, Object?>{
+        'account': <String, Object?>{
+          'id': 'primary',
+          'managed': true,
+          'avatarTone': 'not-a-tone',
+        },
+        'device': <String, Object?>{
+          'id': '0123456789abcdef01234567',
+          'deviceName': 'Desktop',
+          'createdAt': '2026-07-15T12:00:00.000Z',
+        },
       }),
       throwsA(isA<FormatException>()),
     );
@@ -583,6 +608,45 @@ void main() {
       }),
       throwsA(isA<FormatException>()),
     );
+  });
+
+  test('omits avatar changes for a profile API that did not advertise them',
+      () async {
+    Map<String, Object?>? requestBody;
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        requestBody = jsonDecode(body!) as Map<String, Object?>;
+        return const LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: '{'
+              '"account":{'
+              '"id":"primary",'
+              '"displayName":"Older server",'
+              '"managed":true,'
+              '"editable":true'
+              '},'
+              '"device":{'
+              '"id":"0123456789abcdef01234567",'
+              '"deviceName":"Desktop",'
+              '"createdAt":"2026-07-15T12:00:00.000Z"'
+              '}'
+              '}',
+        );
+      },
+    );
+
+    final profile = await client.updateProfile(
+      displayName: 'Older server',
+      deviceName: 'Desktop',
+    );
+
+    expect(requestBody, <String, Object?>{
+      'displayName': 'Older server',
+      'deviceName': 'Desktop',
+    });
+    expect(profile.avatarToneSupported, isFalse);
   });
 
   test('deletes a remote snapshot with the current revision', () async {

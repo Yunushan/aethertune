@@ -55,13 +55,7 @@ class LibrarySyncPanel extends StatelessWidget {
           ListTile(
             key: const Key('library-sync-profile'),
             dense: true,
-            leading: Icon(
-              sync.profile == null
-                  ? Icons.person_outline
-                  : sync.profile!.managed
-                  ? Icons.manage_accounts_outlined
-                  : Icons.key_outlined,
-            ),
+            leading: _ProfileAvatar(profile: sync.profile),
             title: Text(
               sync.profile?.effectiveDisplayName ?? 'Server account',
               maxLines: 1,
@@ -1597,6 +1591,7 @@ class _LibrarySyncProfileDialog extends StatefulWidget {
 class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
   late final TextEditingController _displayNameController;
   late final TextEditingController _deviceNameController;
+  late LibrarySyncProfileAvatarTone? _avatarTone;
   bool _saving = false;
   String? _error;
 
@@ -1609,6 +1604,7 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
     _deviceNameController = TextEditingController(
       text: widget.profile.device?.name ?? '',
     );
+    _avatarTone = widget.profile.avatarTone;
   }
 
   @override
@@ -1650,6 +1646,30 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
                 onChanged: (_) => setState(() => _error = null),
                 onSubmitted: (_) => _save(),
               ),
+              if (widget.profile.avatarToneSupported)
+                DropdownButtonFormField<LibrarySyncProfileAvatarTone?>(
+                  key: const Key('library-sync-profile-avatar-tone'),
+                  value: _avatarTone,
+                  decoration: const InputDecoration(labelText: 'Initials avatar'),
+                  items: <DropdownMenuItem<LibrarySyncProfileAvatarTone?>>[
+                    const DropdownMenuItem<LibrarySyncProfileAvatarTone?>(
+                      value: null,
+                      child: Text('No avatar'),
+                    ),
+                    ...LibrarySyncProfileAvatarTone.values.map(
+                      (tone) => DropdownMenuItem<LibrarySyncProfileAvatarTone?>(
+                        value: tone,
+                        child: Text(_avatarToneLabel(tone)),
+                      ),
+                    ),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (tone) => setState(() {
+                          _avatarTone = tone;
+                          _error = null;
+                        }),
+                ),
               if (_error != null)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -1699,6 +1719,7 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
         context.read<LibraryStore>(),
         displayName: _displayNameController.text,
         deviceName: _deviceNameController.text,
+        avatarTone: _avatarTone,
       );
       if (mounted) {
         Navigator.of(context).pop(true);
@@ -1713,6 +1734,65 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
     }
   }
 }
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.profile});
+
+  final LibrarySyncProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = this.profile;
+    final tone = profile?.avatarTone;
+    if (profile == null || tone == null) {
+      return Icon(
+        profile?.managed == true
+            ? Icons.manage_accounts_outlined
+            : profile == null
+            ? Icons.person_outline
+            : Icons.key_outlined,
+      );
+    }
+    final name = profile.effectiveDisplayName.trim();
+    final initials = name.isEmpty
+        ? '?'
+        : name.split(RegExp(r'\s+')).take(2).map((part) => part[0]).join();
+    return Semantics(
+      label: 'Account avatar for ${profile.effectiveDisplayName}',
+      child: CircleAvatar(
+        backgroundColor: _avatarToneColor(context, tone),
+        child: Text(
+          initials.toUpperCase(),
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+Color _avatarToneColor(
+  BuildContext context,
+  LibrarySyncProfileAvatarTone tone,
+) {
+  final scheme = Theme.of(context).colorScheme;
+  return switch (tone) {
+    LibrarySyncProfileAvatarTone.azure => scheme.primary,
+    LibrarySyncProfileAvatarTone.emerald => scheme.tertiary,
+    LibrarySyncProfileAvatarTone.amber => scheme.secondary,
+    LibrarySyncProfileAvatarTone.rose => scheme.error,
+    LibrarySyncProfileAvatarTone.violet => scheme.primaryContainer,
+    LibrarySyncProfileAvatarTone.slate => scheme.outline,
+  };
+}
+
+String _avatarToneLabel(LibrarySyncProfileAvatarTone tone) => switch (tone) {
+  LibrarySyncProfileAvatarTone.azure => 'Azure',
+  LibrarySyncProfileAvatarTone.emerald => 'Emerald',
+  LibrarySyncProfileAvatarTone.amber => 'Amber',
+  LibrarySyncProfileAvatarTone.rose => 'Rose',
+  LibrarySyncProfileAvatarTone.violet => 'Violet',
+  LibrarySyncProfileAvatarTone.slate => 'Slate',
+};
 
 class _LibrarySyncConfigurationDialog extends StatefulWidget {
   const _LibrarySyncConfigurationDialog({this.account});

@@ -282,6 +282,8 @@ abstract interface class LibrarySyncProfileEditorGateway {
   Future<LibrarySyncProfile> updateProfile({
     required String displayName,
     required String deviceName,
+    LibrarySyncProfileAvatarTone? avatarTone,
+    bool includeAvatarTone = false,
   });
 }
 
@@ -322,6 +324,8 @@ class LibrarySyncClient
   Future<LibrarySyncProfile> updateProfile({
     required String displayName,
     required String deviceName,
+    LibrarySyncProfileAvatarTone? avatarTone,
+    bool includeAvatarTone = false,
   }) async {
     final response = await _execute(
       'PATCH',
@@ -329,6 +333,7 @@ class LibrarySyncClient
       body: jsonEncode(<String, Object?>{
         'displayName': normalizeLibrarySyncProfileDisplayName(displayName),
         'deviceName': normalizeLibrarySyncProfileDeviceName(deviceName),
+        if (includeAvatarTone) 'avatarTone': avatarTone?.wireValue,
       }),
     );
     if (response.statusCode != 200) {

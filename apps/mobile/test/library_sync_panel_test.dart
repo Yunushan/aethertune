@@ -104,11 +104,19 @@ void main() {
       find.byKey(const Key('library-sync-profile-device-name')),
       'Pocket player',
     );
+    await tester.tap(
+      find.byKey(const Key('library-sync-profile-avatar-tone')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Emerald').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('library-sync-save-profile')));
     await tester.pumpAndSettle();
     expect(gateway.profileUpdateCalls, 1);
     expect(find.text('Shared listeners'), findsOneWidget);
     expect(find.text('Account primary · Device Pocket player'), findsOneWidget);
+    expect(sync.profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
+    expect(sync.profile?.avatarToneSupported, isTrue);
     expect(sync.account?.deviceId, 'Pocket player');
     expect(find.text('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -497,6 +505,7 @@ LibrarySyncProfile _managedProfile() {
       createdAt: DateTime.utc(2026, 7, 15, 12),
     ),
     editable: true,
+    avatarToneSupported: true,
   );
 }
 
@@ -556,6 +565,8 @@ class _FakeSyncGateway
   Future<LibrarySyncProfile> updateProfile({
     required String displayName,
     required String deviceName,
+    LibrarySyncProfileAvatarTone? avatarTone,
+    bool includeAvatarTone = false,
   }) async {
     profileUpdateCalls += 1;
     final current = profile;
@@ -565,6 +576,8 @@ class _FakeSyncGateway
     profile = LibrarySyncProfile(
       id: current.id,
       displayName: displayName,
+      avatarTone: avatarTone,
+      avatarToneSupported: current.avatarToneSupported,
       managed: true,
       device: LibrarySyncProfileDevice(
         id: current.device!.id,

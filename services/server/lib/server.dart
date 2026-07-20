@@ -561,7 +561,8 @@ Future<Response> _handleAuthProfile(
     );
     final hasDisplayName = body.containsKey('displayName');
     final hasDeviceName = body.containsKey('deviceName');
-    if (!hasDisplayName && !hasDeviceName) {
+    final hasAvatarTone = body.containsKey('avatarTone');
+    if (!hasDisplayName && !hasDeviceName && !hasAvatarTone) {
       throw const FormatException(
         'At least one profile field must be provided.',
       );
@@ -571,6 +572,9 @@ Future<Response> _handleAuthProfile(
       tokenId: principal.token.id,
       displayName: hasDisplayName ? _requiredString(body, 'displayName') : null,
       deviceName: hasDeviceName ? _requiredString(body, 'deviceName') : null,
+      avatarToneProvided: hasAvatarTone,
+      avatarTone:
+          hasAvatarTone ? _optionalAvatarTone(body['avatarTone']) : null,
     );
     if (updated == null) {
       return _unauthorizedResponse();
@@ -611,11 +615,22 @@ Map<String, Object?> _authProfileJson({
     'account': <String, Object?>{
       'id': accountId,
       'displayName': account?.displayName,
+      'avatarTone': account?.avatarTone,
       'managed': account != null,
       'editable': account != null && device != null,
     },
     'device': device?.toJson(),
   };
+}
+
+String? _optionalAvatarTone(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is! String) {
+    throw const FormatException('avatarTone must be a string or null.');
+  }
+  return value;
 }
 
 Future<Response> _handleManagedSyncAccounts(

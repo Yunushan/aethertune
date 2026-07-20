@@ -290,6 +290,7 @@ class LibrarySyncStore extends ChangeNotifier {
     LibraryStore library, {
     required String displayName,
     required String deviceName,
+    LibrarySyncProfileAvatarTone? avatarTone,
   }) {
     final normalizedDisplayName = normalizeLibrarySyncProfileDisplayName(
       displayName,
@@ -317,6 +318,8 @@ class LibrarySyncStore extends ChangeNotifier {
           .updateProfile(
             displayName: normalizedDisplayName,
             deviceName: normalizedDeviceName,
+            avatarTone: avatarTone,
+            includeAvatarTone: previousProfile.avatarToneSupported,
           );
       if (!updated.managed ||
           updated.id != previousProfile.id ||

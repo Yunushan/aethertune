@@ -130,15 +130,19 @@ void main() {
       library,
       displayName: '  Shared listeners  ',
       deviceName: '  Pocket player  ',
+      avatarTone: LibrarySyncProfileAvatarTone.emerald,
     );
 
     expect(gateway.profileUpdateCalls, 1);
     expect(gateway.lastDisplayName, 'Shared listeners');
     expect(gateway.lastDeviceName, 'Pocket player');
+    expect(gateway.lastAvatarTone, LibrarySyncProfileAvatarTone.emerald);
     expect(updated.id, 'primary');
     expect(updated.device?.id, _managedProfile().device?.id);
     expect(store.profile?.effectiveDisplayName, 'Shared listeners');
     expect(store.profile?.device?.name, 'Pocket player');
+    expect(store.profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
+    expect(store.profile?.avatarToneSupported, isTrue);
     expect(store.account?.deviceId, 'Pocket player');
 
     final restored = LibrarySyncStore(
@@ -148,6 +152,8 @@ void main() {
     await restored.load();
     expect(restored.profile?.effectiveDisplayName, 'Shared listeners');
     expect(restored.profile?.device?.name, 'Pocket player');
+    expect(restored.profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
+    expect(restored.profile?.avatarToneSupported, isTrue);
     expect(restored.account?.deviceId, 'Pocket player');
     final metadata = (await SharedPreferences.getInstance()).getString(
       'aethertune.library_sync.metadata.v1',
@@ -822,6 +828,7 @@ LibrarySyncProfile _managedProfile() {
       createdAt: DateTime.utc(2026, 7, 15, 12),
     ),
     editable: true,
+    avatarToneSupported: true,
   );
 }
 
@@ -876,6 +883,7 @@ class _FakeSyncGateway
   int profileUpdateCalls = 0;
   String? lastDisplayName;
   String? lastDeviceName;
+  LibrarySyncProfileAvatarTone? lastAvatarTone;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
   final List<Map<String, Object?>> pushedSnapshots =
@@ -905,10 +913,13 @@ class _FakeSyncGateway
   Future<LibrarySyncProfile> updateProfile({
     required String displayName,
     required String deviceName,
+    LibrarySyncProfileAvatarTone? avatarTone,
+    bool includeAvatarTone = false,
   }) async {
     profileUpdateCalls += 1;
     lastDisplayName = displayName;
     lastDeviceName = deviceName;
+    lastAvatarTone = avatarTone;
     if (profileUpdateError != null) {
       throw profileUpdateError!;
     }
@@ -920,6 +931,8 @@ class _FakeSyncGateway
         LibrarySyncProfile(
           id: current.id,
           displayName: displayName,
+          avatarTone: avatarTone,
+          avatarToneSupported: current.avatarToneSupported,
           managed: true,
           device: LibrarySyncProfileDevice(
             id: current.device!.id,

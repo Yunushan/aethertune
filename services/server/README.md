@@ -189,20 +189,25 @@ An authenticated device can call `GET /api/v1/auth/profile` to verify its
 account and device identity. Managed profile responses advertise
 `"editable":true`; older servers and static credentials do not. A managed
 device can atomically rename the shared account display name and its own device
-label without changing its token, token ID, or creation time:
+label, and select a safe initials-avatar tone without changing its token, token
+ID, or creation time:
 
 ```bash
 curl --fail-with-body -X PATCH \
   -H "Authorization: Bearer $AETHERTUNE_DEVICE_TOKEN" \
   -H 'Content-Type: application/json' \
-  --data '{"displayName":"Family library","deviceName":"Living room"}' \
+  --data '{"displayName":"Family library","deviceName":"Living room","avatarTone":"emerald"}' \
   https://sync.example.com/api/v1/auth/profile
 ```
 
 At least one field is required, labels are limited to 80 printable characters,
-and a device label must remain unique within the account. Static credentials
-return `409 profile_not_managed`. Public registration, password login, OAuth,
-and automatic client-side token rotation are intentionally not exposed yet.
+and a device label must remain unique within the account. `avatarTone` may be
+`azure`, `emerald`, `amber`, `rose`, `violet`, `slate`, or `null` to remove it;
+avatars are initials only, contain no image/URL/path data, and are returned
+only to the authenticated managed account or operations-authorized metadata.
+Static credentials return `409 profile_not_managed`. Public registration,
+password login, OAuth, and
+automatic client-side token rotation are intentionally not exposed yet.
 
 `GET /api/v1/metrics` reports only process-lifetime aggregate state: start
 time, uptime, total request count, and whether library sync is configured. It

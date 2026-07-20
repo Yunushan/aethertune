@@ -1,8 +1,36 @@
+enum LibrarySyncProfileAvatarTone {
+  azure,
+  emerald,
+  amber,
+  rose,
+  violet,
+  slate;
+
+  String get wireValue => name;
+
+  static LibrarySyncProfileAvatarTone? fromJson(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is! String) {
+      throw const FormatException('Library sync profile avatar tone is invalid.');
+    }
+    for (final tone in values) {
+      if (tone.wireValue == value) {
+        return tone;
+      }
+    }
+    throw const FormatException('Library sync profile avatar tone is invalid.');
+  }
+}
+
 class LibrarySyncProfile {
   const LibrarySyncProfile({
     required this.id,
     required this.managed,
     this.displayName,
+    this.avatarTone,
+    this.avatarToneSupported = false,
     this.device,
     this.editable = false,
   });
@@ -41,6 +69,22 @@ class LibrarySyncProfile {
       fieldName: 'display name',
       maxLength: 80,
     );
+    final rawAvatarToneSupported = json['avatarToneSupported'];
+    final avatarToneSupported = rawAvatarToneSupported ??
+        json.containsKey('avatarTone');
+    if (avatarToneSupported is! bool) {
+      throw const FormatException(
+        'Library sync profile avatar capability is invalid.',
+      );
+    }
+    final avatarTone = LibrarySyncProfileAvatarTone.fromJson(
+      json['avatarTone'],
+    );
+    if (!avatarToneSupported && avatarTone != null) {
+      throw const FormatException(
+        'Library sync profile avatar capability is inconsistent.',
+      );
+    }
     final rawDevice = json['device'];
     final device = rawDevice == null
         ? null
@@ -56,6 +100,11 @@ class LibrarySyncProfile {
         'Managed library sync profile device is missing.',
       );
     }
+    if (!managed && avatarTone != null) {
+      throw const FormatException(
+        'Static library sync profiles cannot include an avatar.',
+      );
+    }
     if (editable && (!managed || device == null)) {
       throw const FormatException(
         'Editable library sync profile identity is invalid.',
@@ -64,6 +113,8 @@ class LibrarySyncProfile {
     return LibrarySyncProfile(
       id: id,
       displayName: displayName,
+      avatarTone: avatarTone,
+      avatarToneSupported: avatarToneSupported,
       managed: managed,
       device: device,
       editable: editable,
@@ -72,6 +123,8 @@ class LibrarySyncProfile {
 
   final String id;
   final String? displayName;
+  final LibrarySyncProfileAvatarTone? avatarTone;
+  final bool avatarToneSupported;
   final bool managed;
   final LibrarySyncProfileDevice? device;
   final bool editable;
@@ -81,6 +134,8 @@ class LibrarySyncProfile {
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'displayName': displayName,
+    if (avatarToneSupported) 'avatarTone': avatarTone?.wireValue,
+    'avatarToneSupported': avatarToneSupported,
     'managed': managed,
     'device': device?.toJson(),
     'editable': editable,

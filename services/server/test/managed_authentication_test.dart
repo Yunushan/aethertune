@@ -248,12 +248,15 @@ void main() {
       tokenId: phone.device.id,
       displayName: 'Updated account',
       deviceName: 'Pocket player',
+      avatarToneProvided: true,
+      avatarTone: 'emerald',
     );
 
     expect(updated?.account.displayName, 'Updated account');
     expect(updated?.device.id, phone.device.id);
     expect(updated?.device.deviceName, 'Pocket player');
     expect(updated?.device.createdAt, phone.device.createdAt);
+    expect(updated?.account.avatarTone, 'emerald');
     expect(registry.authenticate(phone.token), 'primary');
     await expectLater(
       registry.updateProfile(
@@ -279,6 +282,7 @@ void main() {
     final restarted = await ManagedSyncAccountRegistry.open(root);
     expect(restarted.authenticate(phone.token), 'primary');
     expect(restarted.account('primary')?.displayName, 'Updated account');
+    expect(restarted.account('primary')?.avatarTone, 'emerald');
     expect(
       restarted.account('primary')!.tokens.first.deviceName,
       'Pocket player',
@@ -520,6 +524,7 @@ void main() {
       <String, Object?>{
         'id': 'primary',
         'displayName': 'Primary listener',
+        'avatarTone': null,
         'managed': true,
         'editable': true,
       },
@@ -541,6 +546,7 @@ void main() {
         body: <String, Object?>{
           'displayName': 'Shared listeners',
           'deviceName': 'Workstation',
+          'avatarTone': 'violet',
         },
       ),
     );
@@ -552,6 +558,7 @@ void main() {
       (profileUpdateBody['account'] as Map)['displayName'],
       'Shared listeners',
     );
+    expect((profileUpdateBody['account'] as Map)['avatarTone'], 'violet');
     expect(
       (profileUpdateBody['device'] as Map)['deviceName'],
       'Workstation',
@@ -567,6 +574,7 @@ void main() {
       (phoneProfileBody['account'] as Map)['displayName'],
       'Shared listeners',
     );
+    expect((phoneProfileBody['account'] as Map)['avatarTone'], 'violet');
     expect(
       (phoneProfileBody['device'] as Map)['deviceName'],
       'Phone',
@@ -599,6 +607,31 @@ void main() {
       (await _json(emptyProfileUpdate))['error'],
       'invalid_auth_request',
     );
+
+    final clearAvatar = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{'avatarTone': null},
+      ),
+    );
+    expect(clearAvatar.statusCode, 200);
+    expect(
+      ((await _json(clearAvatar))['account'] as Map)['avatarTone'],
+      isNull,
+    );
+
+    final invalidAvatar = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{'avatarTone': 'remote-image-url'},
+      ),
+    );
+    expect(invalidAvatar.statusCode, 400);
+    expect((await _json(invalidAvatar))['error'], 'invalid_auth_request');
 
     final oversizedProfileUpdate = await handler(
       Request(

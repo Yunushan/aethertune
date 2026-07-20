@@ -145,18 +145,21 @@ class ManagedSyncAccountProfile {
   const ManagedSyncAccountProfile({
     required this.id,
     required this.displayName,
+    required this.avatarTone,
     required this.createdAt,
     required this.tokens,
   });
 
   final String id;
   final String displayName;
+  final String? avatarTone;
   final DateTime createdAt;
   final List<ManagedSyncTokenMetadata> tokens;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'id': id,
         'displayName': displayName,
+        'avatarTone': avatarTone,
         'createdAt': createdAt.toUtc().toIso8601String(),
         'tokens': tokens.map((token) => token.toJson()).toList(growable: false),
       };
@@ -588,13 +591,17 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     required String tokenId,
     String? displayName,
     String? deviceName,
+    bool avatarToneProvided = false,
+    String? avatarTone,
   }) {
     final normalizedAccountId = _validatedAccountId(accountId);
     final normalizedTokenId = tokenId.trim();
     if (!RegExp(r'^[0-9a-f]{24}$').hasMatch(normalizedTokenId)) {
       throw const FormatException('tokenId is invalid.');
     }
-    if (displayName == null && deviceName == null) {
+    if (displayName == null &&
+        deviceName == null &&
+        !avatarToneProvided) {
       throw const FormatException(
         'At least one profile field must be provided.',
       );
@@ -613,6 +620,9 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
             fieldName: 'deviceName',
             maxLength: 80,
           );
+    final normalizedAvatarTone = avatarTone == null
+        ? null
+        : _validatedAvatarTone(avatarTone);
 
     return _serialized(() async {
       final candidate = _copyAccounts();
@@ -642,6 +652,8 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
           normalizedDisplayName != account.displayName;
       final deviceChanged = normalizedDeviceName != null &&
           normalizedDeviceName != currentToken.deviceName;
+      final avatarChanged = avatarToneProvided &&
+          normalizedAvatarTone != account.avatarTone;
       if (accountChanged) {
         account.displayName = normalizedDisplayName;
       }
@@ -654,7 +666,10 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
           tokenHash: currentToken.tokenHash,
         );
       }
-      if (accountChanged || deviceChanged) {
+      if (avatarChanged) {
+        account.avatarTone = normalizedAvatarTone;
+      }
+      if (accountChanged || deviceChanged || avatarChanged) {
         final nextRevision = await _persist(candidate);
         _accounts = candidate;
         _revision = nextRevision;
@@ -937,6 +952,23 @@ List<int> _bytesFromHex(String value) => <int>[
 String _hex(List<int> bytes) =>
     bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
 
+const Set<String> managedProfileAvatarTones = <String>{
+  'azure',
+  'emerald',
+  'amber',
+  'rose',
+  'violet',
+  'slate',
+};
+
+String _validatedAvatarTone(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (!managedProfileAvatarTones.contains(normalized)) {
+    throw const FormatException('avatarTone is invalid.');
+  }
+  return normalized;
+}
+
 bool _containsTokenId(
   Map<String, _ManagedAccountRecord> accounts,
   String tokenId,
@@ -955,6 +987,7 @@ ManagedSyncAccountProfile _profileForRecord(_ManagedAccountRecord account) {
   return ManagedSyncAccountProfile(
     id: account.id,
     displayName: account.displayName,
+    avatarTone: account.avatarTone,
     createdAt: account.createdAt,
     tokens: List<ManagedSyncTokenMetadata>.unmodifiable(tokens),
   );
@@ -971,6 +1004,7 @@ class _ManagedAccountRecord {
   _ManagedAccountRecord({
     required this.id,
     required this.displayName,
+    this.avatarTone,
     required this.createdAt,
     required this.tokens,
     this.recovery,
@@ -982,6 +1016,7 @@ class _ManagedAccountRecord {
     final createdAt = DateTime.tryParse(json['createdAt'] as String? ?? '');
     final rawTokens = json['tokens'];
     final rawRecovery = json['recovery'];
+    final rawAvatarTone = json['avatarTone'];
     if (id is! String ||
         displayName is! String ||
         createdAt == null ||
@@ -994,6 +1029,11 @@ class _ManagedAccountRecord {
       fieldName: 'displayName',
       maxLength: 80,
     );
+    final avatarTone = rawAvatarTone == null
+        ? null
+        : rawAvatarTone is String
+        ? _validatedAvatarTone(rawAvatarTone)
+        : throw const FormatException('Stored authentication avatar is invalid.');
     final tokens = <_ManagedTokenRecord>[];
     final tokenIds = <String>{};
     for (final rawToken in rawTokens) {
@@ -1023,6 +1063,7 @@ class _ManagedAccountRecord {
     return _ManagedAccountRecord(
       id: normalizedId,
       displayName: normalizedName,
+      avatarTone: avatarTone,
       createdAt: createdAt.toUtc(),
       tokens: tokens,
       recovery: recovery,
@@ -1031,6 +1072,7 @@ class _ManagedAccountRecord {
 
   final String id;
   String displayName;
+  String? avatarTone;
   final DateTime createdAt;
   final List<_ManagedTokenRecord> tokens;
   _ManagedRecoveryRecord? recovery;
@@ -1038,6 +1080,7 @@ class _ManagedAccountRecord {
   _ManagedAccountRecord copy() => _ManagedAccountRecord(
         id: id,
         displayName: displayName,
+        avatarTone: avatarTone,
         createdAt: createdAt,
         tokens: tokens.map((token) => token.copy()).toList(),
         recovery: recovery?.copy(),
@@ -1046,6 +1089,7 @@ class _ManagedAccountRecord {
   Map<String, Object?> toStorageJson() => <String, Object?>{
         'id': id,
         'displayName': displayName,
+        'avatarTone': avatarTone,
         'createdAt': createdAt.toUtc().toIso8601String(),
         'tokens': tokens
             .map((token) => token.toStorageJson())
