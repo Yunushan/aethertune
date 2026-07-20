@@ -17,8 +17,9 @@ dependencies:
     path: packages/audio_service_mpris
   just_audio: ^0.10.6
   just_audio_media_kit: ^2.1.0
-  media_kit_libs_linux: ^1.2.1
-  media_kit_libs_windows_audio: ^1.0.9
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
   audio_session: ^0.2.4
   file_picker: 12.0.0-beta.7
   provider: ^6.1.2

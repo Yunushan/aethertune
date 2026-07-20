@@ -57,6 +57,7 @@ import '../domain/artwork_crop.dart';
 import '../domain/custom_catalog_definition.dart';
 import '../domain/desktop_tray_action.dart';
 import '../domain/lyrics_document.dart';
+import '../domain/legal_video_source.dart';
 import '../domain/lyrics_translator.dart';
 import '../domain/music_catalog_discovery_provider.dart';
 import '../domain/music_catalog_provider.dart';
@@ -89,6 +90,7 @@ import 'platform_text_share.dart';
 import 'radio_browser_station_screen.dart';
 import 'responsive_layout.dart';
 import 'self_hosted_browse_screen.dart';
+import 'video_playback_screen.dart';
 import 'spotify_saved_tracks_screen.dart';
 import 'spotify_saved_albums_screen.dart';
 import 'spotify_saved_playlists_screen.dart';
@@ -15061,6 +15063,36 @@ class _SourcesTabState extends State<_SourcesTab> {
         ],
         const SizedBox(height: 16),
         Text(
+          'Video',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        ListTile(
+          key: const Key('video-player-open'),
+          leading: const Icon(Icons.video_file_outlined),
+          title: const Text('Open video'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconButton(
+                key: const Key('video-player-open-local'),
+                tooltip: 'Open local video',
+                onPressed: () => unawaited(_openLocalVideo(context)),
+                icon: const Icon(Icons.folder_open_outlined),
+              ),
+              IconButton(
+                key: const Key('video-player-open-url'),
+                tooltip: 'Open HTTPS video',
+                onPressed: offlineModeEnabled
+                    ? null
+                    : () => unawaited(_openVideoUrl(context)),
+                icon: const Icon(Icons.link),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
           'Podcast RSS feeds',
           style: Theme.of(context).textTheme.titleMedium,
         ),
@@ -17158,6 +17190,86 @@ class _SourcesTabState extends State<_SourcesTab> {
       default:
         return Icons.public;
     }
+  }
+
+  Future<void> _openLocalVideo(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: false,
+      withData: false,
+    );
+    if (!context.mounted || result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.single;
+    final source = localVideoUri(file.path ?? '');
+    if (source == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open that video file.')),
+      );
+      return;
+    }
+    _pushVideo(context, source, title: file.name);
+  }
+
+  Future<void> _openVideoUrl(BuildContext context) async {
+    final controller = TextEditingController();
+    try {
+      final rawUrl = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Open HTTPS video'),
+          content: SizedBox(
+            width: 480,
+            child: TextField(
+              autofocus: true,
+              controller: controller,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(labelText: 'Video URL'),
+              onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                controller.text,
+              ),
+              child: const Text('Open'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || rawUrl == null) {
+        return;
+      }
+
+      final source = parseLegalVideoUrl(rawUrl);
+      if (source == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enter a complete HTTPS video URL.'),
+          ),
+        );
+        return;
+      }
+      _pushVideo(context, source, title: 'Direct video');
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  void _pushVideo(BuildContext context, Uri source, {required String title}) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => VideoPlaybackScreen(source: source, title: title),
+      ),
+    );
   }
 
   Future<void> _addPodcastFeed(BuildContext context) async {
