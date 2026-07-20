@@ -5451,6 +5451,64 @@ void main() {
     expect(store.homeFeedSections(limit: 0), isEmpty);
   });
 
+  test('filters library searches with quoted metadata fields and lyric text',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      Track(
+        id: 'match',
+        title: 'Morning Signal',
+        artist: 'Mira Vale',
+        album: 'Dawn Archive',
+        genre: 'Ambient',
+        year: 2024,
+        rating: 5,
+        localPath: '/music/Mira Vale/Dawn Archive/morning-signal.flac',
+        sourceId: 'local',
+      ),
+      Track(
+        id: 'lower-rating',
+        title: 'Morning Signal',
+        artist: 'Mira Vale',
+        album: 'Dawn Archive',
+        genre: 'Ambient',
+        year: 2024,
+        rating: 3,
+        localPath: '/music/Mira Vale/Dawn Archive/lower-rating.flac',
+        sourceId: 'local',
+      ),
+      Track(
+        id: 'remote',
+        title: 'Morning Signal',
+        artist: 'Mira Vale',
+        album: 'Dawn Archive',
+        genre: 'Ambient',
+        year: 2024,
+        rating: 5,
+        streamUrl: 'https://media.example.test/morning-signal.flac',
+        sourceId: 'archive',
+      ),
+    ]);
+    await store.setLyrics('match', 'A silver chorus begins at sunrise');
+
+    expect(
+      store
+          .search(
+            'artist:"Mira Vale" album:"Dawn Archive" genre:ambient '
+            'source:local folder:"Dawn Archive" rating>=4 year:2024 chorus',
+          )
+          .map((track) => track.id),
+      <String>['match'],
+    );
+    expect(
+      store.search('rating>=4').map((track) => track.id),
+      unorderedEquals(<String>['match', 'remote']),
+    );
+    expect(store.searchSuggestions('artist:"Mira Vale"'), isEmpty);
+    expect(store.search('unrecognized:term'), isEmpty);
+  });
+
   test('prioritizes resumed M4B audiobooks in a dedicated Home section',
       () async {
     var now = DateTime.utc(2026, 1, 14, 12);

@@ -27,6 +27,159 @@ import 'sponsorblock_segment_provider.dart' as sponsor_block;
 
 enum LibrarySortMode { recentlyAdded, title, artist, album, rating }
 
+final class _LibrarySearchQuery {
+  const _LibrarySearchQuery._({
+    required this.text,
+    this.artist,
+    this.album,
+    this.genre,
+    this.source,
+    this.folder,
+    this.minimumRating,
+    this.year,
+  });
+
+  factory _LibrarySearchQuery.parse(String query) {
+    final textTerms = <String>[];
+    SearchQuery? artist;
+    SearchQuery? album;
+    SearchQuery? genre;
+    SearchQuery? source;
+    SearchQuery? folder;
+    int? minimumRating;
+    int? year;
+
+    for (final term in _terms(query)) {
+      if (term.isEmpty) {
+        continue;
+      }
+      final ratingMatch = RegExp(r'^rating>=(\d)$', caseSensitive: false)
+          .firstMatch(term);
+      if (ratingMatch != null) {
+        final value = int.tryParse(ratingMatch.group(1)!);
+        if (value != null && value >= 1 && value <= 5) {
+          minimumRating = value;
+          continue;
+        }
+      }
+      final yearMatch = RegExp(r'^year:(\d{4})$', caseSensitive: false)
+          .firstMatch(term);
+      if (yearMatch != null) {
+        final value = int.tryParse(yearMatch.group(1)!);
+        if (value != null && value >= 1 && value <= 9999) {
+          year = value;
+          continue;
+        }
+      }
+
+      final separator = term.indexOf(':');
+      if (separator <= 0 || separator == term.length - 1) {
+        textTerms.add(term);
+        continue;
+      }
+      final value = SearchQuery.parse(term.substring(separator + 1));
+      if (value.isEmpty) {
+        textTerms.add(term);
+        continue;
+      }
+      switch (term.substring(0, separator).toLowerCase()) {
+        case 'artist':
+          artist = value;
+        case 'album':
+          album = value;
+        case 'genre':
+          genre = value;
+        case 'source':
+          source = value;
+        case 'folder':
+          folder = value;
+        default:
+          textTerms.add(term);
+      }
+    }
+
+    return _LibrarySearchQuery._(
+      text: SearchQuery.parse(textTerms.join(' ')),
+      artist: artist,
+      album: album,
+      genre: genre,
+      source: source,
+      folder: folder,
+      minimumRating: minimumRating,
+      year: year,
+    );
+  }
+
+  final SearchQuery text;
+  final SearchQuery? artist;
+  final SearchQuery? album;
+  final SearchQuery? genre;
+  final SearchQuery? source;
+  final SearchQuery? folder;
+  final int? minimumRating;
+  final int? year;
+
+  bool get isEmpty =>
+      text.isEmpty &&
+      artist == null &&
+      album == null &&
+      genre == null &&
+      source == null &&
+      folder == null &&
+      minimumRating == null &&
+      year == null;
+
+  bool matchesTrack(Track track) {
+    if (!_matches(track.artist, artist) ||
+        !_matches(track.album, album) ||
+        !_matches(track.genre, genre) ||
+        !_matches(track.sourceId, source)) {
+      return false;
+    }
+    if (minimumRating != null && track.rating < minimumRating!) {
+      return false;
+    }
+    if (year != null && track.year != year) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _matches(String value, SearchQuery? filter) {
+    return filter == null || searchTextMatches(value, filter);
+  }
+
+  static Iterable<String> _terms(String query) sync* {
+    final buffer = StringBuffer();
+    String? quote;
+
+    for (var index = 0; index < query.length; index += 1) {
+      final character = query[index];
+      if (character == '"' || character == "'") {
+        if (quote == null) {
+          quote = character;
+          continue;
+        }
+        if (quote == character) {
+          quote = null;
+          continue;
+        }
+      }
+      if (quote == null && RegExp(r'\s').hasMatch(character)) {
+        if (buffer.isNotEmpty) {
+          yield buffer.toString();
+          buffer.clear();
+        }
+        continue;
+      }
+      buffer.write(character);
+    }
+    if (buffer.isNotEmpty) {
+      yield buffer.toString();
+    }
+  }
+}
+
 LibrarySortMode _librarySortModeFromName(String? value) {
   return LibrarySortMode.values.firstWhere(
     (mode) => mode.name == value,
@@ -2776,14 +2929,14 @@ class LibraryStore extends ChangeNotifier {
     bool offlineOnly = false,
     LibrarySortMode sortMode = LibrarySortMode.recentlyAdded,
   }) {
-    final searchQuery = SearchQuery.parse(query);
+    final searchQuery = _LibrarySearchQuery.parse(query);
     final source = (favoritesOnly ? favorites : tracks)
         .where((track) => !offlineOnly || track.hasLocalSource);
 
     final results = searchQuery.isEmpty
         ? source.toList(growable: false)
         : source
-            .where((track) => _trackMatchesQuery(track, searchQuery))
+            .where((track) => _trackMatchesLibrarySearch(track, searchQuery))
             .toList(growable: false);
 
     return _sortTrackResults(results, sortMode);
@@ -2794,7 +2947,10 @@ class LibraryStore extends ChangeNotifier {
       return <SearchSuggestion>[];
     }
 
-    final searchQuery = SearchQuery.parse(query);
+    final searchQuery = _LibrarySearchQuery.parse(query);
+    if (searchQuery.text.isEmpty) {
+      return <SearchSuggestion>[];
+    }
     final suggestions = <SearchSuggestion>[];
     final seenValues = <String>{};
 
@@ -2808,7 +2964,7 @@ class LibraryStore extends ChangeNotifier {
         return;
       }
 
-      if (!searchTextMatches(trimmed, searchQuery)) {
+      if (!searchTextMatches(trimmed, searchQuery.text)) {
         return;
       }
 
@@ -8750,6 +8906,21 @@ class LibraryStore extends ChangeNotifier {
     }
 
     return searchFieldsMatch(_shareLyricsLines(lyrics), query);
+  }
+
+  bool _trackMatchesLibrarySearch(Track track, _LibrarySearchQuery query) {
+    if (!query.matchesTrack(track)) {
+      return false;
+    }
+    final folder = query.folder;
+    if (folder != null &&
+        !searchTextMatches(
+          _browseLabelForTrack(track, LibraryBrowseType.folder),
+          folder,
+        )) {
+      return false;
+    }
+    return query.text.isEmpty || _trackMatchesQuery(track, query.text);
   }
 
   void _sortCustomSmartPlaylistTracks(
