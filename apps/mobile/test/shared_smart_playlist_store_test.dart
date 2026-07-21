@@ -58,6 +58,27 @@ void main() {
     expect(local?.sortMode, CustomSmartPlaylistSortMode.title);
     expect(local?.ruleGroups.single.rules.single.value, 'Jazz');
   });
+
+  test('rotates a public link and retains the newer shared revision', () async {
+    final library = LibraryStore();
+    await library.load();
+    final local = await library.createCustomSmartPlaylist(name: 'Public rules');
+    final gateway = _FakeSharedSmartPlaylistGateway();
+    final store = SharedSmartPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final binding = await store.host(library, local);
+
+    final link = await store.createPublicLink(binding, library);
+
+    expect(
+      link.uri.toString(),
+      'https://sync.example.test/public/${_FakeSharedSmartPlaylistGateway.id}',
+    );
+    expect(
+      store.bindingForLocalSmartPlaylist(local.id)?.revision,
+      2,
+    );
+  });
 }
 
 class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
@@ -96,7 +117,23 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
     required String name,
     required Map<String, Object?> rule,
   }) async =>
-      _remote(name: name, rule: rule, role: SharedPlaylistAccessRole.editor);
+       _remote(name: name, rule: rule, role: SharedPlaylistAccessRole.editor);
+
+  @override
+  Future<SharedSmartPlaylistPublicLink> issueSharedSmartPlaylistPublicLink({
+    required String playlistId,
+    required int baseRevision,
+  }) async =>
+      SharedSmartPlaylistPublicLink(
+        uri: Uri.parse('https://sync.example.test/public/$id'),
+        revision: baseRevision + 1,
+      );
+
+  @override
+  Future<int> revokeSharedSmartPlaylistPublicLink({
+    required String playlistId,
+    required int baseRevision,
+  }) async => baseRevision + 1;
 
   @override
   Future<SharedPlaylistInvitation> issueSharedPlaylistInvite({

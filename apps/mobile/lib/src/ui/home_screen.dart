@@ -9196,34 +9196,61 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         }
         return;
       }
-      final role = await showDialog<SharedPlaylistAccessRole>(
+      final shareMode = await showDialog<String>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Create private smart-playlist invite'),
-          content: const Text('Choose whether the recipient can publish rule changes.'),
+          title: const Text('Share smart playlist'),
+          content: const Text('Choose private collaboration or a public rule link.'),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('public'),
+              child: const Text('Public link'),
+            ),
+            TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(
-                SharedPlaylistAccessRole.viewer,
+                'viewer',
               ),
               child: const Text('Viewer'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(
-                SharedPlaylistAccessRole.editor,
+                'editor',
               ),
               child: const Text('Editor'),
             ),
           ],
         ),
       );
-      if (!context.mounted || role == null) {
+      if (!context.mounted || shareMode == null) {
         return;
       }
+      if (shareMode == 'public') {
+        final link = await store.createPublicLink(binding, library);
+        if (!context.mounted) {
+          return;
+        }
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Public smart-playlist link'),
+            content: SelectableText(link.uri.toString()),
+            actions: <Widget>[
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      final role = shareMode == 'editor'
+          ? SharedPlaylistAccessRole.editor
+          : SharedPlaylistAccessRole.viewer;
       final invite = await store.createInvite(binding, role);
       if (!context.mounted) {
         return;

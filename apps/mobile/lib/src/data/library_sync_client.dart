@@ -146,6 +146,16 @@ class SharedSmartPlaylistDocument {
   };
 }
 
+class SharedSmartPlaylistPublicLink {
+  const SharedSmartPlaylistPublicLink({
+    required this.uri,
+    required this.revision,
+  });
+
+  final Uri uri;
+  final int revision;
+}
+
 class SharedPlaylistRemote {
   const SharedPlaylistRemote({
     required this.id,
@@ -313,6 +323,16 @@ abstract interface class SharedSmartPlaylistGateway
     required int baseRevision,
     required String name,
     required Map<String, Object?> rule,
+  });
+
+  Future<SharedSmartPlaylistPublicLink> issueSharedSmartPlaylistPublicLink({
+    required String playlistId,
+    required int baseRevision,
+  });
+
+  Future<int> revokeSharedSmartPlaylistPublicLink({
+    required String playlistId,
+    required int baseRevision,
   });
 }
 
@@ -671,6 +691,75 @@ class LibrarySyncClient
       throw _requestFailure(response);
     }
     return _parseSharedPlaylist(response.body);
+  }
+
+  @override
+  Future<SharedSmartPlaylistPublicLink> issueSharedSmartPlaylistPublicLink({
+    required String playlistId,
+    required int baseRevision,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    if (baseRevision <= 0) {
+      throw const FormatException('Shared playlist revision is invalid.');
+    }
+    final response = await _execute(
+      'POST',
+      endpoint: account.sharedPlaylistPublicLinkEndpointUri(normalized),
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final body = _jsonObject(response.body);
+    final secret = body['secret'];
+    final revision = body['revision'];
+    if (secret is! String ||
+        !_isSharedPlaylistInviteCode(secret) ||
+        revision is! int ||
+        revision <= baseRevision) {
+      throw const FormatException('Shared smart-playlist public link is invalid.');
+    }
+    return SharedSmartPlaylistPublicLink(
+      uri: account.publicSmartPlaylistEndpointUri(normalized, secret),
+      revision: revision,
+    );
+  }
+
+  @override
+  Future<int> revokeSharedSmartPlaylistPublicLink({
+    required String playlistId,
+    required int baseRevision,
+  }) async {
+    final normalized = _requireSharedPlaylistId(playlistId);
+    if (baseRevision <= 0) {
+      throw const FormatException('Shared playlist revision is invalid.');
+    }
+    final response = await _execute(
+      'DELETE',
+      endpoint: account.sharedPlaylistPublicLinkEndpointUri(normalized),
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+      }),
+    );
+    if (response.statusCode == 409) {
+      throw _parseSharedPlaylistConflict(response.body);
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final body = _jsonObject(response.body);
+    final revision = body['revision'];
+    if (body['revoked'] != true || revision is! int || revision <= baseRevision) {
+      throw const FormatException('Shared smart-playlist public-link revocation is invalid.');
+    }
+    return revision;
   }
 
   @override

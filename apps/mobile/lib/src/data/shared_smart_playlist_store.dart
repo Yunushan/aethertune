@@ -43,6 +43,20 @@ class SharedSmartPlaylistBinding {
     );
   }
 
+  SharedSmartPlaylistBinding withRevision(int value) {
+    if (value <= revision) {
+      throw const FormatException('Shared smart-playlist revision is invalid.');
+    }
+    return SharedSmartPlaylistBinding(
+      remoteId: remoteId,
+      localSmartPlaylistId: localSmartPlaylistId,
+      revision: value,
+      role: role,
+      updatedAt: updatedAt,
+      updatedByDevice: updatedByDevice,
+    );
+  }
+
   Map<String, Object?> toJson() => <String, Object?>{
     'remoteId': remoteId,
     'localSmartPlaylistId': localSmartPlaylistId,
@@ -244,6 +258,41 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
         playlistId: binding.remoteId,
         role: role,
       );
+    });
+  }
+
+  Future<SharedSmartPlaylistPublicLink> createPublicLink(
+    SharedSmartPlaylistBinding binding,
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (!binding.isOwner) {
+        throw StateError('Only the shared smart playlist owner can create public links.');
+      }
+      final link = await _requireGateway().issueSharedSmartPlaylistPublicLink(
+        playlistId: binding.remoteId,
+        baseRevision: binding.revision,
+      );
+      await _replaceBinding(binding.withRevision(link.revision));
+      return link;
+    });
+  }
+
+  Future<void> revokePublicLink(
+    SharedSmartPlaylistBinding binding,
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (!binding.isOwner) {
+        throw StateError('Only the shared smart playlist owner can revoke public links.');
+      }
+      final revision = await _requireGateway().revokeSharedSmartPlaylistPublicLink(
+        playlistId: binding.remoteId,
+        baseRevision: binding.revision,
+      );
+      await _replaceBinding(binding.withRevision(revision));
     });
   }
 
