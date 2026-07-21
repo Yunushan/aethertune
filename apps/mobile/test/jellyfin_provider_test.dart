@@ -319,46 +319,78 @@ void main() {
     expect(requests, hasLength(3));
   });
 
-  test('loads Jellyfin recently added albums from latest media', () async {
-    Uri? capturedUri;
+  test('loads Jellyfin home discovery album shelves with bounded ordering',
+      () async {
+    final requests = <Uri>[];
     final provider = JellyfinProvider(
       baseUri: Uri.parse('https://media.example.test/jellyfin'),
       userId: 'user-1',
       apiKey: 'api-secret',
       requestLoader: (uri) async {
-        capturedUri = uri;
-        return _jellyfinLatestAlbumsJson;
+        requests.add(uri);
+        return uri.path.endsWith('/Items/Latest')
+            ? _jellyfinLatestAlbumsJson
+            : _jellyfinAlbumsJson;
       },
     );
 
-    final albums = await provider.browseDiscoveryCollections(
+    final recentlyAdded = await provider.browseDiscoveryCollections(
       MusicCatalogDiscoveryKind.recentlyAdded,
+      limit: 7,
+    );
+    final frequentlyPlayed = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.frequentlyPlayed,
+      limit: 7,
+    );
+    final recentlyPlayed = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.recentlyPlayed,
+      limit: 7,
+    );
+    final random = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.random,
       limit: 7,
     );
 
     expect(provider.discoveryKinds, <MusicCatalogDiscoveryKind>[
       MusicCatalogDiscoveryKind.recentlyAdded,
+      MusicCatalogDiscoveryKind.frequentlyPlayed,
+      MusicCatalogDiscoveryKind.recentlyPlayed,
+      MusicCatalogDiscoveryKind.random,
     ]);
     expect(
       provider.capabilities,
       contains(MusicSourceCapability.recommendations),
     );
-    expect(albums.single.id, 'album-latest');
-    expect(albums.single.title, 'Latest Rooms');
-    expect(albums.single.subtitle, 'Mira Sol · 2026 · 9 item(s)');
-    expect(capturedUri!.path, '/jellyfin/Items/Latest');
-    expect(capturedUri!.queryParameters['userId'], 'user-1');
-    expect(capturedUri!.queryParameters['includeItemTypes'], 'MusicAlbum');
-    expect(capturedUri!.queryParameters['limit'], '7');
-    expect(capturedUri!.queryParameters['groupItems'], 'false');
-    expect(capturedUri!.queryParameters['api_key'], 'api-secret');
+    expect(recentlyAdded.single.id, 'album-latest');
+    expect(frequentlyPlayed.single.id, 'album-1');
+    expect(recentlyPlayed.single.id, 'album-1');
+    expect(random.single.id, 'album-1');
 
-    await expectLater(
-      provider.browseDiscoveryCollections(
-        MusicCatalogDiscoveryKind.random,
-      ),
-      throwsUnsupportedError,
-    );
+    final latestRequest = requests[0];
+    expect(latestRequest.path, '/jellyfin/Items/Latest');
+    expect(latestRequest.queryParameters['userId'], 'user-1');
+    expect(latestRequest.queryParameters['includeItemTypes'], 'MusicAlbum');
+    expect(latestRequest.queryParameters['limit'], '7');
+    expect(latestRequest.queryParameters['groupItems'], 'false');
+    expect(latestRequest.queryParameters['api_key'], 'api-secret');
+
+    final frequentRequest = requests[1];
+    expect(frequentRequest.path, '/jellyfin/Users/user-1/Items');
+    expect(frequentRequest.queryParameters['IncludeItemTypes'], 'MusicAlbum');
+    expect(frequentRequest.queryParameters['SortBy'], 'PlayCount');
+    expect(frequentRequest.queryParameters['SortOrder'], 'Descending');
+    expect(frequentRequest.queryParameters['IsPlayed'], 'true');
+    expect(frequentRequest.queryParameters['Limit'], '7');
+
+    final recentRequest = requests[2];
+    expect(recentRequest.queryParameters['SortBy'], 'DatePlayed');
+    expect(recentRequest.queryParameters['SortOrder'], 'Descending');
+    expect(recentRequest.queryParameters['IsPlayed'], 'true');
+
+    final randomRequest = requests[3];
+    expect(randomRequest.queryParameters['SortBy'], 'Random');
+    expect(randomRequest.queryParameters['SortOrder'], 'Descending');
+    expect(randomRequest.queryParameters['IsPlayed'], isNull);
   });
 
   test('loads Jellyfin instant-mix radio for track artist and album seeds',

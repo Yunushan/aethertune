@@ -280,6 +280,9 @@ class JellyfinProvider
   List<MusicCatalogDiscoveryKind> get discoveryKinds =>
       const <MusicCatalogDiscoveryKind>[
         MusicCatalogDiscoveryKind.recentlyAdded,
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.random,
       ];
 
   @override
@@ -287,29 +290,50 @@ class JellyfinProvider
     MusicCatalogDiscoveryKind kind, {
     int limit = 6,
   }) {
-    if (kind != MusicCatalogDiscoveryKind.recentlyAdded) {
+    if (!discoveryKinds.contains(kind)) {
       return Future<List<MusicCatalogCollection>>.error(
         UnsupportedError('Jellyfin discovery kind is not supported.'),
       );
     }
     final boundedLimit = limit.clamp(1, 50);
     return _guardRequest(() async {
-      return parseJellyfinLatestCollectionsResponse(
+      if (kind == MusicCatalogDiscoveryKind.recentlyAdded) {
+        return parseJellyfinLatestCollectionsResponse(
+          await _requestLoader(
+            _requestUri(
+              '/Items/Latest',
+              <String, String>{
+                'userId': userId,
+                'includeItemTypes': 'MusicAlbum',
+                'fields': 'Genres,RecursiveItemCount,ChildCount',
+                'enableImages': 'true',
+                'enableImageTypes': 'Primary',
+                'imageTypeLimit': '1',
+                'limit': boundedLimit.toString(),
+                'groupItems': 'false',
+              },
+            ),
+          ),
+        );
+      }
+      return parseJellyfinCollectionsResponse(
         await _requestLoader(
-          _requestUri(
-            '/Items/Latest',
-            <String, String>{
-              'userId': userId,
-              'includeItemTypes': 'MusicAlbum',
-              'fields': 'Genres,RecursiveItemCount,ChildCount',
-              'enableImages': 'true',
-              'enableImageTypes': 'Primary',
-              'imageTypeLimit': '1',
-              'limit': boundedLimit.toString(),
-              'groupItems': 'false',
+          _itemsUri(
+            itemType: 'MusicAlbum',
+            extra: <String, String>{
+              'Limit': boundedLimit.toString(),
+              'SortBy': switch (kind) {
+                MusicCatalogDiscoveryKind.frequentlyPlayed => 'PlayCount',
+                MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
+                MusicCatalogDiscoveryKind.random => 'Random',
+                MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
+              },
+              'SortOrder': 'Descending',
+              if (kind != MusicCatalogDiscoveryKind.random) 'IsPlayed': 'true',
             },
           ),
         ),
+        MusicCatalogCollectionKind.album,
       );
     });
   }
