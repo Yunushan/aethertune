@@ -282,8 +282,8 @@ class JellyfinProvider
         MusicCatalogDiscoveryKind.recentlyAdded,
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
-        MusicCatalogDiscoveryKind.random,
         MusicCatalogDiscoveryKind.favorites,
+        MusicCatalogDiscoveryKind.random,
       ];
 
   @override
