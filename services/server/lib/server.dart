@@ -673,6 +673,9 @@ Future<Response> _handlePublicProfile(
   if (account == null || !account.publicProfileEnabled) {
     return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
   }
+  if (request.url.queryParameters['format'] == 'html') {
+    return _publicProfileHtmlResponse(account);
+  }
   return _jsonResponse(200, <String, Object?>{
     'id': account.id,
     if (account.publicDisplayNameEnabled) 'displayName': account.displayName,
@@ -1859,6 +1862,59 @@ Response _jsonResponse(
     statusCode,
     body: jsonEncode(body),
     headers: <String, String>{..._jsonHeaders, ...headers},
+  );
+}
+
+Response _publicProfileHtmlResponse(ManagedSyncAccountProfile profile) {
+  final displayName = profile.publicDisplayNameEnabled
+      ? profile.displayName
+      : 'AetherTune listener';
+  final escapedName = const HtmlEscape(HtmlEscapeMode.element).convert(
+    displayName,
+  );
+  final initials = displayName
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .take(2)
+      .map((part) => part[0])
+      .join()
+      .toUpperCase();
+  final publicAvatarTone = profile.publicAvatarToneEnabled
+      ? profile.avatarTone
+      : null;
+  final avatarColor = switch (publicAvatarTone) {
+    'azure' => '#006bcb',
+    'emerald' => '#007f5f',
+    'amber' => '#8a5a00',
+    'rose' => '#b4235c',
+    'violet' => '#6e3fa3',
+    'slate' => '#455a64',
+    _ => '#455a64',
+  };
+  final avatarText = initials.isEmpty ? 'A' : initials;
+  final escapedAvatarText = const HtmlEscape(HtmlEscapeMode.element).convert(
+    avatarText,
+  );
+  return Response.ok(
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    '<title>$escapedName | AetherTune</title><style>'
+    ':root{color-scheme:light dark;font-family:system-ui,sans-serif;}'
+    'body{margin:0;min-height:100vh;display:grid;place-items:center;}'
+    'main{width:min(28rem,calc(100% - 2rem));text-align:center;}'
+    '.avatar{display:grid;place-items:center;width:5rem;height:5rem;margin:0 auto 1rem;'
+    'border-radius:50%;background:$avatarColor;color:#fff;font-size:1.75rem;font-weight:700;}'
+    'p{color:#5f6368;}@media (prefers-color-scheme:dark){p{color:#b9c0c7;}}'
+    '</style></head><body><main><div class="avatar" aria-hidden="true">$escapedAvatarText</div>'
+    '<p>AetherTune profile</p><h1>$escapedName</h1></main></body></html>',
+    headers: const <String, String>{
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'content-security-policy':
+          "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      'referrer-policy': 'no-referrer',
+      'x-content-type-options': 'nosniff',
+    },
   );
 }
 

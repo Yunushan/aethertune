@@ -590,6 +590,18 @@ void main() {
       'avatarTone': 'violet',
     });
 
+    final publicProfilePage = await handler(
+      _request('GET', '/api/v1/public-profiles/primary?format=html'),
+    );
+    final publicProfilePageBody = await publicProfilePage.readAsString();
+    expect(publicProfilePage.statusCode, 200);
+    expect(publicProfilePage.headers['content-type'], 'text/html; charset=utf-8');
+    expect(publicProfilePage.headers['cache-control'], 'no-store');
+    expect(publicProfilePage.headers['x-content-type-options'], 'nosniff');
+    expect(publicProfilePageBody, contains('Shared listeners'));
+    expect(publicProfilePageBody, isNot(contains('Desktop')));
+    expect(publicProfilePageBody, isNot(contains(desktopToken)));
+
     final nameOnlyPublicProfile = await handler(
       _request(
         'PATCH',
@@ -630,6 +642,33 @@ void main() {
       (phoneProfileBody['device'] as Map)['deviceName'],
       'Phone',
     );
+
+    final escapedProfileUpdate = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{
+          'displayName': '<img src=x onerror=alert(1)>',
+        },
+      ),
+    );
+    expect(escapedProfileUpdate.statusCode, 200);
+    final escapedProfilePage = await handler(
+      _request('GET', '/api/v1/public-profiles/primary?format=html'),
+    );
+    final escapedProfilePageBody = await escapedProfilePage.readAsString();
+    expect(escapedProfilePageBody, contains('&lt;img src=x onerror=alert(1)&gt;'));
+    expect(escapedProfilePageBody, isNot(contains('<img src=x onerror=alert(1)>')));
+    final restoredProfile = await handler(
+      _request(
+        'PATCH',
+        '/api/v1/auth/profile',
+        token: desktopToken,
+        body: const <String, Object?>{'displayName': 'Shared listeners'},
+      ),
+    );
+    expect(restoredProfile.statusCode, 200);
 
     final duplicateDeviceUpdate = await handler(
       _request(

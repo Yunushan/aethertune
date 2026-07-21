@@ -67,6 +67,10 @@ class LibrarySyncAccount {
   Uri publicProfileEndpointUri(String accountId) =>
       _endpointUri(<String>['api', 'v1', 'public-profiles', accountId]);
 
+  Uri publicProfilePageUri(String accountId) => publicProfileEndpointUri(
+    accountId,
+  ).replace(queryParameters: const <String, String>{'format': 'html'});
+
   Uri get recoveryEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'sync', 'recovery']);
 

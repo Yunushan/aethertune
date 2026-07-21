@@ -75,5 +75,9 @@ void main() {
       account.publicProfileEndpointUri('primary').toString(),
       'https://sync.example.test/aethertune/api/v1/public-profiles/primary',
     );
+    expect(
+      account.publicProfilePageUri('primary').toString(),
+      'https://sync.example.test/aethertune/api/v1/public-profiles/primary?format=html',
+    );
   });
 }

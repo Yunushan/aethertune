@@ -423,7 +423,7 @@ class LibrarySyncPanel extends StatelessWidget {
     LibrarySyncAccount account,
     LibrarySyncProfile profile,
   ) async {
-    final link = account.publicProfileEndpointUri(profile.id).toString();
+    final link = account.publicProfilePageUri(profile.id).toString();
     await Clipboard.setData(ClipboardData(text: link));
     if (!context.mounted) {
       return;
