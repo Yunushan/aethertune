@@ -79,6 +79,16 @@ void main() {
       find.byKey(const Key('library-sync-copy-public-profile-link')),
       findsNothing,
     );
+    await tester.tap(find.byKey(const Key('library-sync-discover-profiles')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('library-sync-profile-search-query')),
+      'Mira',
+    );
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mira listener'), findsOneWidget);
+    expect(find.text('public-mira'), findsOneWidget);
     final queueSync = tester.widget<SwitchListTile>(
       find.byKey(const Key('library-sync-queue')),
     );
@@ -550,6 +560,7 @@ class _FakeSyncGateway
     implements
         LibrarySyncGateway,
         LibrarySyncProfileGateway,
+        LibrarySyncPublicProfileGateway,
         LibrarySyncProfileEditorGateway {
   _FakeSyncGateway({
     required this.remote,
@@ -566,6 +577,7 @@ class _FakeSyncGateway
   int fetchCalls = 0;
   int profileFetchCalls = 0;
   int profileUpdateCalls = 0;
+  int publicProfileSearchCalls = 0;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
 
@@ -579,6 +591,23 @@ class _FakeSyncGateway
   Future<LibrarySyncProfile?> fetchProfile() async {
     profileFetchCalls += 1;
     return profile;
+  }
+
+  @override
+  Future<List<LibrarySyncPublicProfile>> findPublicProfiles(
+    String query,
+  ) async {
+    publicProfileSearchCalls += 1;
+    if (query.trim().toLowerCase() != 'mira') {
+      return const <LibrarySyncPublicProfile>[];
+    }
+    return const <LibrarySyncPublicProfile>[
+      LibrarySyncPublicProfile(
+        id: 'public-mira',
+        displayName: 'Mira listener',
+        avatarTone: 'violet',
+      ),
+    ];
   }
 
   @override
