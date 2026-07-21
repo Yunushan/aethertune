@@ -32,6 +32,12 @@ void main() {
       ),
     );
     expect(
+      account.publicProfileDiscoveryEndpointUri('mira'),
+      Uri.parse(
+        'https://sync.example.test/aethertune/api/v1/public-profiles?q=mira',
+      ),
+    );
+    expect(
       () => createLibrarySyncAccount(
         baseUrl: 'http://192.168.1.10:8080',
         deviceId: 'Phone',
@@ -872,6 +878,34 @@ void main() {
 
     expect(shared.trackIds, isEmpty);
     expect(shared.trackReferences?.single.title, 'One');
+  });
+
+  test('searches opt-in public profiles without a sync token', () async {
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'GET');
+        expect(uri, _account().publicProfileDiscoveryEndpointUri('mira'));
+        expect(headers, const <String, String>{'accept': 'application/json'});
+        expect(body, isNull);
+        return const LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: '{"profiles":[{"id":"mira","displayName":"Mira","avatarTone":"violet"}]}',
+        );
+      },
+    );
+
+    final profiles = await client.findPublicProfiles(' mira ');
+
+    expect(profiles, hasLength(1));
+    expect(profiles.single.id, 'mira');
+    expect(profiles.single.displayName, 'Mira');
+    expect(profiles.single.avatarTone, 'violet');
+    await expectLater(
+      client.findPublicProfiles('m'),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('creates and parses a private shared smart-playlist definition', () async {

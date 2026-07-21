@@ -146,6 +146,38 @@ class SharedSmartPlaylistDocument {
   };
 }
 
+class LibrarySyncPublicProfile {
+  const LibrarySyncPublicProfile({
+    required this.id,
+    required this.displayName,
+    this.avatarTone,
+  });
+
+  final String id;
+  final String displayName;
+  final String? avatarTone;
+
+  static LibrarySyncPublicProfile fromJson(Map<String, Object?> json) {
+    final id = json['id'];
+    final displayName = json['displayName'];
+    final avatarTone = json['avatarTone'];
+    if (id is! String ||
+        id.trim().isEmpty ||
+        id.length > 128 ||
+        displayName is! String ||
+        displayName.trim().isEmpty ||
+        displayName.length > 160 ||
+        (avatarTone != null && avatarTone is! String)) {
+      throw const FormatException('Public profile result is invalid.');
+    }
+    return LibrarySyncPublicProfile(
+      id: id,
+      displayName: displayName,
+      avatarTone: avatarTone as String?,
+    );
+  }
+}
+
 /// A privacy-bounded, cross-library identity for a manual shared playlist.
 ///
 /// It deliberately excludes device-local IDs, paths, provider IDs, stream
@@ -451,6 +483,10 @@ abstract interface class LibrarySyncProfileGateway {
   Future<LibrarySyncProfile?> fetchProfile();
 }
 
+abstract interface class LibrarySyncPublicProfileGateway {
+  Future<List<LibrarySyncPublicProfile>> findPublicProfiles(String query);
+}
+
 abstract interface class LibrarySyncProfileEditorGateway {
   Future<LibrarySyncProfile> updateProfile({
     required String displayName,
@@ -474,6 +510,7 @@ class LibrarySyncClient
         SharedPlaylistGateway,
         SharedSmartPlaylistGateway,
         LibrarySyncProfileGateway,
+        LibrarySyncPublicProfileGateway,
         LibrarySyncProfileEditorGateway {
   LibrarySyncClient({
     required this.account,
@@ -498,6 +535,38 @@ class LibrarySyncClient
       throw _requestFailure(response);
     }
     return LibrarySyncProfile.fromServerJson(_jsonObject(response.body));
+  }
+
+  @override
+  Future<List<LibrarySyncPublicProfile>> findPublicProfiles(
+    String query,
+  ) async {
+    final normalized = query.trim();
+    if (normalized.length < 2 || normalized.length > 80) {
+      throw const FormatException('Enter at least two characters to search profiles.');
+    }
+    final response = await _httpExecutor(
+      'GET',
+      account.publicProfileDiscoveryEndpointUri(normalized),
+      headers: const <String, String>{'accept': 'application/json'},
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final profiles = _jsonObject(response.body)['profiles'];
+    if (profiles is! List || profiles.length > 20) {
+      throw const FormatException('Public profile results are invalid.');
+    }
+    return List<LibrarySyncPublicProfile>.unmodifiable(
+      profiles.map((item) {
+        if (item is! Map) {
+          throw const FormatException('Public profile result is invalid.');
+        }
+        return LibrarySyncPublicProfile.fromJson(
+          Map<String, Object?>.from(item),
+        );
+      }),
+    );
   }
 
   @override
