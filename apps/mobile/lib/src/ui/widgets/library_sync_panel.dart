@@ -19,6 +19,75 @@ import '../../player/player_controller.dart';
 
 enum _LibrarySyncConflictChoice { server, merge, local }
 
+Future<void> _showPublicProfileDiscovery(BuildContext context) async {
+  final controller = TextEditingController();
+  List<LibrarySyncPublicProfile>? profiles;
+  String? error;
+  var searching = false;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setState) => AlertDialog(
+        title: const Text('Find public profiles'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                key: const Key('library-sync-profile-search-query'),
+                controller: controller,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(labelText: 'Name'),
+                onSubmitted: (_) async {
+                  final query = controller.text.trim();
+                  if (query.length < 2) {
+                    setState(() => error = 'Enter at least two characters.');
+                    return;
+                  }
+                  setState(() { searching = true; error = null; });
+                  try {
+                    profiles = await context
+                        .read<LibrarySyncStore>()
+                        .findPublicProfiles(context.read<LibraryStore>(), query);
+                  } on Object catch (_) {
+                    error = 'Could not search public profiles.';
+                  } finally {
+                    if (dialogContext.mounted) setState(() => searching = false);
+                  }
+                },
+              ),
+              if (searching) const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: CircularProgressIndicator(),
+              ),
+              if (error != null) Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(error!, key: const Key('library-sync-profile-search-error')),
+              ),
+              if (profiles != null) ...<Widget>[
+                const SizedBox(height: 12),
+                for (final profile in profiles!) ListTile(
+                  dense: true,
+                  leading: CircleAvatar(child: Text(profile.displayName[0].toUpperCase())),
+                  title: Text(profile.displayName),
+                  subtitle: Text(profile.id),
+                ),
+                if (profiles!.isEmpty) const Text('No public profiles matched.'),
+              ],
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
+}
+
 class LibrarySyncPanel extends StatelessWidget {
   const LibrarySyncPanel({super.key});
 
@@ -115,6 +184,21 @@ class LibrarySyncPanel extends StatelessWidget {
                     )
                   : null,
               icon: const Icon(Icons.copy_outlined),
+            ),
+          ),
+        if (sync.isConfigured && sync.profile?.managed == true)
+          ListTile(
+            key: const Key('library-sync-discover-profiles'),
+            dense: true,
+            leading: const Icon(Icons.person_search_outlined),
+            title: const Text('Find public profiles'),
+            subtitle: const Text('Search people who chose to share their name.'),
+            trailing: IconButton(
+              tooltip: 'Find public profiles',
+              onPressed: actionsEnabled
+                  ? () => _showPublicProfileDiscovery(context)
+                  : null,
+              icon: const Icon(Icons.search_outlined),
             ),
           ),
         if (sync.isConfigured && listenTogether != null)

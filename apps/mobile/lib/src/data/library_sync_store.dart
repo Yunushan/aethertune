@@ -601,6 +601,21 @@ class LibrarySyncStore extends ChangeNotifier {
     return client as SharedPlaylistGateway;
   }
 
+  Future<List<LibrarySyncPublicProfile>> findPublicProfiles(
+    LibraryStore library,
+    String query,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      if (client is! LibrarySyncPublicProfileGateway) {
+        throw StateError('This sync server does not support profile discovery.');
+      }
+      return (client as LibrarySyncPublicProfileGateway)
+          .findPublicProfiles(query);
+    });
+  }
+
   /// Creates the authenticated client used for private shared smart playlists.
   /// The secure sync token stays owned by this store.
   SharedSmartPlaylistGateway createSharedSmartPlaylistGateway() {
