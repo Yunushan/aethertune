@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/shared_smart_playlist_store.dart';
@@ -86,6 +89,45 @@ void main() {
       store.bindingForLocalSmartPlaylist(local.id)?.revision,
       3,
     );
+  });
+
+  test('imports a public smart playlist without creating a private binding',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final store = SharedSmartPlaylistStore();
+    await store.load();
+    final document = <String, Object?>{
+      'version': 2,
+      'kind': 'smart',
+      'name': 'Public jazz',
+      'rule': _rule(),
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
+
+    final imported = await store.importPublicLink(
+      'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+      library,
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'GET');
+        expect(headers, <String, String>{'accept': 'application/json'});
+        expect(body, isNull);
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 4,
+            'checksum': checksum,
+            'playlist': document,
+          }),
+        );
+      },
+    );
+
+    expect(imported.name, 'Public jazz');
+    expect(imported.artist, 'Mira');
+    expect(imported.sortMode, CustomSmartPlaylistSortMode.title);
+    expect(imported.ruleGroups.single.rules.single.value, 'Jazz');
+    expect(store.bindings, isEmpty);
   });
 }
 

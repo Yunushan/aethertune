@@ -296,6 +296,25 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     });
   }
 
+  /// Imports the rules behind a public link as an independent local playlist.
+  ///
+  /// The public capability is intentionally not saved. It cannot be refreshed
+  /// silently and importing it never creates a private collaboration binding.
+  Future<CustomSmartPlaylist> importPublicLink(
+    String link,
+    LibraryStore library, {
+    LibrarySyncHttpExecutor? httpExecutor,
+  }) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final remote = await fetchPublicSharedSmartPlaylist(
+        link,
+        httpExecutor: httpExecutor,
+      );
+      return _createLocalDocument(remote.playlist, library);
+    });
+  }
+
   Future<void> unlink(SharedSmartPlaylistBinding binding) =>
       _runBusy(() => _removeBinding(binding));
 
@@ -354,9 +373,20 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     SharedPlaylistRemote remote,
     LibraryStore library,
   ) async {
-    final values = _valuesFromRemote(remote);
+    final smart = remote.smartPlaylist;
+    if (remote.kind != SharedPlaylistKind.smart || smart == null) {
+      throw const FormatException('Shared playlist is not a smart playlist.');
+    }
+    return _createLocalDocument(smart, library);
+  }
+
+  Future<CustomSmartPlaylist> _createLocalDocument(
+    SharedSmartPlaylistDocument smart,
+    LibraryStore library,
+  ) async {
+    final values = _valuesFromSmartDocument(smart);
     return library.createCustomSmartPlaylist(
-      name: remote.name,
+      name: smart.name,
       query: values.query,
       sourceId: values.sourceId,
       artist: values.artist,
@@ -476,6 +506,10 @@ CustomSmartPlaylist _valuesFromRemote(SharedPlaylistRemote remote) {
   if (remote.kind != SharedPlaylistKind.smart || smart == null) {
     throw const FormatException('Shared playlist is not a smart playlist.');
   }
+  return _valuesFromSmartDocument(smart);
+}
+
+CustomSmartPlaylist _valuesFromSmartDocument(SharedSmartPlaylistDocument smart) {
   return CustomSmartPlaylist.fromJson(<String, Object?>{
     'id': 'shared-smart-playlist',
     'name': smart.name,

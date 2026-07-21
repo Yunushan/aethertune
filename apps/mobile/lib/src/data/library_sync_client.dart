@@ -156,6 +156,85 @@ class SharedSmartPlaylistPublicLink {
   final int revision;
 }
 
+/// A checksum-verified smart-playlist document fetched with a public link.
+///
+/// Public links are bearer capabilities. They deliberately use a separate
+/// client path so a configured library-sync token can never accompany them.
+class PublicSharedSmartPlaylist {
+  const PublicSharedSmartPlaylist({
+    required this.uri,
+    required this.playlistId,
+    required this.revision,
+    required this.playlist,
+  });
+
+  final Uri uri;
+  final String playlistId;
+  final int revision;
+  final SharedSmartPlaylistDocument playlist;
+}
+
+Future<PublicSharedSmartPlaylist> fetchPublicSharedSmartPlaylist(
+  String link, {
+  LibrarySyncHttpExecutor? httpExecutor,
+}) async {
+  final uri = _parsePublicSharedSmartPlaylistUri(link);
+  final executor = httpExecutor ?? executeLibrarySyncHttpRequest;
+  try {
+    final response = await executor(
+      'GET',
+      uri,
+      headers: const <String, String>{'accept': 'application/json'},
+    );
+    if (response.statusCode == 404) {
+      throw const ProviderRequestException('This public smart playlist is unavailable.');
+    }
+    if (response.statusCode != 200) {
+      throw const ProviderRequestException('Could not fetch this public smart playlist.');
+    }
+    final body = _jsonObject(response.body);
+    if (body.keys.any(
+      (key) => key != 'revision' && key != 'checksum' && key != 'playlist',
+    )) {
+      throw const FormatException('Public smart playlist response is invalid.');
+    }
+    final revision = body['revision'];
+    final checksum = body['checksum'];
+    final rawPlaylist = body['playlist'];
+    if (revision is! int ||
+        revision <= 0 ||
+        checksum is! String ||
+        rawPlaylist is! Map) {
+      throw const FormatException('Public smart playlist response is invalid.');
+    }
+    final document = Map<String, Object?>.from(rawPlaylist);
+    final actualChecksum = sha256
+        .convert(utf8.encode(jsonEncode(document)))
+        .toString();
+    if (checksum != actualChecksum) {
+      throw const ProviderRequestException(
+        'Public smart playlist response checksum does not match.',
+      );
+    }
+    final parsedDocument = _parseSharedPlaylistDocument(document);
+    final smartPlaylist = parsedDocument.smartPlaylist;
+    if (parsedDocument.kind != SharedPlaylistKind.smart || smartPlaylist == null) {
+      throw const FormatException('This public link is not a smart playlist.');
+    }
+    return PublicSharedSmartPlaylist(
+      uri: uri,
+      playlistId: _publicSharedSmartPlaylistIdFromUri(uri),
+      revision: revision,
+      playlist: smartPlaylist,
+    );
+  } on Object catch (error) {
+    if (error is ProviderRequestException || error is FormatException) {
+      rethrow;
+    }
+    throw const ProviderRequestException('Could not fetch this public smart playlist.');
+  }
+}
+
 class SharedPlaylistRemote {
   const SharedPlaylistRemote({
     required this.id,
@@ -1455,6 +1534,41 @@ String _requireSharedPlaylistId(String value) {
   return normalized;
 }
 
+Uri _parsePublicSharedSmartPlaylistUri(String value) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null ||
+      uri.scheme.toLowerCase() != 'https' ||
+      !uri.hasAuthority ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    throw const FormatException(
+      'Enter a valid HTTPS public smart-playlist link.',
+    );
+  }
+  final segments = uri.pathSegments;
+  if (segments.length < 5 || segments.any((segment) => segment.isEmpty)) {
+    throw const FormatException(
+      'Enter a valid HTTPS public smart-playlist link.',
+    );
+  }
+  final tail = segments.sublist(segments.length - 5);
+  if (tail[0] != 'api' ||
+      tail[1] != 'v1' ||
+      tail[2] != 'public-smart-playlists' ||
+      !_isSharedPlaylistId(tail[3]) ||
+      !_isSharedPlaylistInviteCode(tail[4])) {
+    throw const FormatException(
+      'Enter a valid HTTPS public smart-playlist link.',
+    );
+  }
+  return uri;
+}
+
+String _publicSharedSmartPlaylistIdFromUri(Uri uri) =>
+    uri.pathSegments[uri.pathSegments.length - 2];
+
 bool _isSharedPlaylistId(String value) =>
     RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
 
@@ -1494,6 +1608,8 @@ Future<LibrarySyncHttpResponse> executeLibrarySyncHttpRequest(
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
   try {
     final request = await client.openUrl(method, uri);
+    request.followRedirects = false;
+    request.maxRedirects = 0;
     headers.forEach(request.headers.set);
     if (body != null) {
       request.write(body);

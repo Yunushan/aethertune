@@ -49,6 +49,59 @@ void main() {
     );
   });
 
+  test('fetches a public smart playlist without an authorization header',
+      () async {
+    final document = <String, Object?>{
+      'version': 2,
+      'kind': 'smart',
+      'name': 'Mira discoveries',
+      'rule': _sharedSmartRule(),
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
+    Map<String, String>? capturedHeaders;
+    final publicPlaylist = await fetchPublicSharedSmartPlaylist(
+      'https://sync.example.test/base/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'GET');
+        expect(
+          uri,
+          Uri.parse(
+            'https://sync.example.test/base/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+          ),
+        );
+        expect(body, isNull);
+        capturedHeaders = headers;
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 4,
+            'checksum': checksum,
+            'playlist': document,
+          }),
+        );
+      },
+    );
+
+    expect(capturedHeaders, <String, String>{'accept': 'application/json'});
+    expect(publicPlaylist.playlistId, 'AAAAAAAAAAAAAAAAAAAAAAAA');
+    expect(publicPlaylist.revision, 4);
+    expect(publicPlaylist.playlist.name, 'Mira discoveries');
+    expect(publicPlaylist.playlist.rule['artist'], 'Mira');
+  });
+
+  test('rejects insecure or malformed public smart-playlist links', () async {
+    for (final link in <String>[
+      'http://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+      'https://sync.example.test/api/v1/public-smart-playlists/too-short/BBBBBBBBBBBBBBBBBBBBBBBB',
+      'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB?token=private',
+    ]) {
+      await expectLater(
+        fetchPublicSharedSmartPlaylist(link),
+        throwsA(isA<FormatException>()),
+      );
+    }
+  });
+
   test('fetch sends bearer auth and verifies the server checksum', () async {
     const token = 'private-sync-token';
     final snapshot = <String, Object?>{
@@ -1017,3 +1070,20 @@ LibrarySyncAccount _account() {
     allowInsecureHttp: false,
   );
 }
+
+Map<String, Object?> _sharedSmartRule() => <String, Object?>{
+  'query': '',
+  'sourceId': '',
+  'artist': 'Mira',
+  'album': '',
+  'genre': '',
+  'minimumDurationSeconds': 0,
+  'maximumDurationSeconds': 0,
+  'favoritesOnly': false,
+  'minimumPlayCount': 0,
+  'minimumDaysSinceLastPlayed': 0,
+  'matchMode': 'all',
+  'ruleGroups': <Object?>[],
+  'sortMode': 'title',
+  'limit': 25,
+};

@@ -8715,6 +8715,15 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   await _importCustomSmartPlaylistLink(context);
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.public_outlined),
+                title: const Text('Paste public smart playlist link'),
+                subtitle: const Text('Import checksum-verified rules from an HTTPS public link.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _importPublicSharedSmartPlaylistLink(context);
+                },
+              ),
             ],
           ),
         );
@@ -8940,6 +8949,55 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _importPublicSharedSmartPlaylistLink(BuildContext context) async {
+    final controller = TextEditingController();
+    try {
+      final link = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Import public smart playlist'),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'HTTPS public link'),
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || link == null || link.trim().isEmpty) {
+        return;
+      }
+      final playlist = await context
+          .read<SharedSmartPlaylistStore>()
+          .importPublicLink(link, context.read<LibraryStore>());
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported public smart playlist ${playlist.name}.')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not import public smart playlist: $error')),
         );
       }
     } finally {
