@@ -906,6 +906,7 @@ void main() {
           'trackIds': <String>['track-$revision'],
         },
         collaborators: const <String, SharedPlaylistRole>{},
+        publicShareSecretHash: null,
         updatedAt: DateTime.utc(2026, 7, 17, 12, revision),
       );
       expect(result.isConflict, isFalse);
