@@ -5,6 +5,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/shared_smart_playlist_store.dart';
+import 'package:aethertune/src/domain/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -99,6 +100,66 @@ void main() {
     final rules = group['rules'] as List<Object?>;
     final rule = rules.single as Map<String, Object?>;
     expect(rule['value'], 'aethertune-source-kind:custom-catalog');
+  });
+
+  test('evaluates portable source selectors against the recipient library',
+      () async {
+    final hostLibrary = LibraryStore();
+    await hostLibrary.load();
+    await hostLibrary.addTracks(<Track>[
+      Track(
+        id: 'host-jellyfin',
+        title: 'Host track',
+        localPath: '/music/host.mp3',
+        sourceId: 'self-hosted-jellyfin-host-account',
+      ),
+    ]);
+    final hostLocal = await hostLibrary.createCustomSmartPlaylist(
+      name: 'Shared Jellyfin library',
+      sourceId: 'self-hosted-jellyfin-host-account',
+    );
+    final hostGateway = _FakeSharedSmartPlaylistGateway();
+    final hostStore = SharedSmartPlaylistStore(
+      gatewayFactory: () => hostGateway,
+    );
+    await hostStore.load();
+    await hostStore.host(hostLibrary, hostLocal);
+
+    final recipientLibrary = LibraryStore();
+    await recipientLibrary.load();
+    await recipientLibrary.addTracks(<Track>[
+      Track(
+        id: 'recipient-jellyfin',
+        title: 'Recipient track',
+        localPath: '/music/recipient.mp3',
+        sourceId: 'self-hosted-jellyfin-recipient-account',
+      ),
+      Track(
+        id: 'recipient-subsonic',
+        title: 'Other provider track',
+        localPath: '/music/other.mp3',
+        sourceId: 'self-hosted-subsonic-recipient-account',
+      ),
+    ]);
+    final recipientStore = SharedSmartPlaylistStore(
+      gatewayFactory: () => _FakeSharedSmartPlaylistGateway(
+        joinName: hostLocal.name,
+        joinRule: hostGateway.createdRule!,
+      ),
+    );
+    await recipientStore.load();
+
+    final binding = await recipientStore.joinInvite(
+      'BBBBBBBBBBBBBBBBBBBBBBBB',
+      recipientLibrary,
+    );
+
+    expect(
+      recipientLibrary
+          .tracksForCustomSmartPlaylist(binding.localSmartPlaylistId)
+          .map((track) => track.id),
+      <String>['recipient-jellyfin'],
+    );
   });
 
   test('joins a shared smart definition as a local dynamic playlist', () async {
@@ -283,7 +344,14 @@ class _MemoryCredentialVault implements ProviderCredentialVault {
 }
 
 class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
+  _FakeSharedSmartPlaylistGateway({
+    this.joinName = 'Shared jazz',
+    this.joinRule,
+  });
+
   static const id = 'AAAAAAAAAAAAAAAAAAAAAAAA';
+  final String joinName;
+  final Map<String, Object?>? joinRule;
   Map<String, Object?>? createdRule;
 
   @override
@@ -298,16 +366,16 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
   @override
   Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode) async =>
       _remote(
-        name: 'Shared jazz',
-        rule: _rule(),
+        name: joinName,
+        rule: joinRule ?? _rule(),
         role: SharedPlaylistAccessRole.viewer,
       );
 
   @override
   Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId) async =>
       _remote(
-        name: 'Shared jazz',
-        rule: _rule(),
+        name: joinName,
+        rule: joinRule ?? _rule(),
         role: SharedPlaylistAccessRole.viewer,
       );
 

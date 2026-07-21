@@ -877,7 +877,7 @@ void main() {
   test('creates and parses a private shared smart-playlist definition', () async {
     final rule = <String, Object?>{
       'query': '',
-      'sourceId': '',
+      'sourceId': 'aethertune-source-kind:self-hosted-jellyfin',
       'artist': 'Mira',
       'album': '',
       'genre': '',
@@ -891,7 +891,10 @@ void main() {
         <String, Object?>{
           'matchMode': 'any',
           'rules': <Object?>[
-            <String, Object?>{'field': 'genre', 'value': 'Jazz'},
+            <String, Object?>{
+              'field': 'sourceId',
+              'value': 'aethertune-source-kind:custom-catalog',
+            },
           ],
           'groups': <Object?>[],
         },

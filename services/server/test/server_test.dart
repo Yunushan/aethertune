@@ -1487,7 +1487,7 @@ void main() {
         'name': 'Mira discoveries',
         'rule': <String, Object?>{
           'query': '',
-          'sourceId': '',
+          'sourceId': 'aethertune-source-kind:self-hosted-jellyfin',
           'artist': 'Mira',
           'album': '',
           'genre': '',
@@ -1501,7 +1501,10 @@ void main() {
             <String, Object?>{
               'matchMode': 'any',
               'rules': <Object?>[
-                <String, Object?>{'field': 'genre', 'value': 'Jazz'},
+                <String, Object?>{
+                  'field': 'sourceId',
+                  'value': 'aethertune-source-kind:custom-catalog',
+                },
               ],
               'groups': <Object?>[],
             },
