@@ -55,6 +55,20 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 platform_config.WIDGET_PROVIDER_NAME,
             )
             self.assertIsNotNone(widget)
+            offline_cache_job = platform_config._find_named(
+                application,
+                "service",
+                platform_config.OFFLINE_CACHE_JOB_SERVICE_NAME,
+            )
+            self.assertIsNotNone(offline_cache_job)
+            self.assertEqual(
+                offline_cache_job.get(f"{platform_config.ANDROID}exported"),
+                "true",
+            )
+            self.assertEqual(
+                offline_cache_job.get(f"{platform_config.ANDROID}permission"),
+                "android.permission.BIND_JOB_SERVICE",
+            )
             activity = application.find("activity")
             self.assertIsNotNone(activity)
             self.assertEqual(
@@ -150,6 +164,20 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'dev.aethertune/offline_cache_background',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            background_job_source = activity_source.with_name(
+                "AetherTuneOfflineCacheJobService.kt",
+            )
+            background_job_text = background_job_source.read_text(encoding="utf-8")
+            self.assertIn("JobScheduler", background_job_text)
+            self.assertIn("setPersisted(true)", background_job_text)
+            self.assertIn(
+                "offlineCacheBackgroundEntrypoint",
+                background_job_text,
+            )
+            self.assertIn(
                 'AetherTuneAudioVirtualizer',
                 activity_source.read_text(encoding="utf-8"),
             )
@@ -159,6 +187,10 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             )
             self.assertIn(
                 'android.permission.READ_MEDIA_AUDIO',
+                manifest_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'android.permission.RECEIVE_BOOT_COMPLETED',
                 manifest_path.read_text(encoding="utf-8"),
             )
             widget_layout = (

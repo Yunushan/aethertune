@@ -7,8 +7,9 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'src/player/playback_audio_engine_factory.dart';
 import 'src/data/local_diagnostic_log.dart';
+import 'src/data/offline_cache_background_runner.dart';
+import 'src/player/playback_audio_engine_factory.dart';
 import 'src/ui/aethertune_app.dart';
 import 'src/ui/widgets/desktop_tray_controls.dart';
 
@@ -53,3 +54,7 @@ Future<void> main() async {
     ),
   );
 }
+
+@pragma('vm:entry-point')
+Future<void> offlineCacheBackgroundEntrypoint() =>
+    runOfflineCacheBackgroundQueue();

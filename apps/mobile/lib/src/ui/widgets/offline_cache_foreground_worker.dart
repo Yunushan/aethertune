@@ -5,13 +5,20 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
+import '../../data/offline_cache_background_scheduler.dart';
 import '../../data/offline_cache_queue_worker.dart';
 import '../../data/self_hosted_provider_store.dart';
 
 class OfflineCacheForegroundWorker extends StatefulWidget {
-  const OfflineCacheForegroundWorker({super.key, required this.child});
+  OfflineCacheForegroundWorker({
+    super.key,
+    required this.child,
+    OfflineCacheBackgroundScheduler? backgroundScheduler,
+  }) : backgroundScheduler =
+           backgroundScheduler ?? OfflineCacheBackgroundScheduler();
 
   final Widget child;
+  final OfflineCacheBackgroundScheduler backgroundScheduler;
 
   @override
   State<OfflineCacheForegroundWorker> createState() =>
@@ -23,6 +30,7 @@ class _OfflineCacheForegroundWorkerState
     with WidgetsBindingObserver {
   Timer? _timer;
   bool _processing = false;
+  bool _appInForeground = true;
 
   @override
   void initState() {
@@ -42,7 +50,15 @@ class _OfflineCacheForegroundWorkerState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _appInForeground = true;
       _processNext();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _appInForeground = false;
+      if (mounted) {
+        final library = context.read<LibraryStore>();
+        unawaited(_handoffToBackgroundJob(library));
+      }
     }
   }
 
@@ -51,12 +67,39 @@ class _OfflineCacheForegroundWorkerState
       return;
     }
     final library = context.read<LibraryStore>();
+    unawaited(_syncBackgroundJob(library));
     if (!library.loaded ||
         !library.automaticOfflineQueueEnabled ||
-        library.offlineModeEnabled) {
+        library.offlineModeEnabled ||
+        !library.hasPendingOfflineCacheWork) {
       return;
     }
     unawaited(_run(library));
+  }
+
+  Future<void> _syncBackgroundJob(LibraryStore library) async {
+    try {
+      if (!library.loaded ||
+          _appInForeground ||
+          !library.automaticOfflineQueueEnabled ||
+          library.offlineModeEnabled ||
+          !library.hasPendingOfflineCacheWork) {
+        await widget.backgroundScheduler.cancel();
+        return;
+      }
+
+      await widget.backgroundScheduler.schedule();
+    } on PlatformException {
+      // Foreground queue processing must remain available if a device omits
+      // the optional Android wrapper service.
+    } on MissingPluginException {
+      // Desktop and test engines have no native scheduler channel.
+    }
+  }
+
+  Future<void> _handoffToBackgroundJob(LibraryStore library) async {
+    await library.requeueProcessingOfflineCacheEntriesForBackground();
+    await _syncBackgroundJob(library);
   }
 
   Future<void> _run(LibraryStore library) async {
@@ -74,12 +117,16 @@ class _OfflineCacheForegroundWorkerState
       await worker.processPending(library);
     } finally {
       _processing = false;
+      await _syncBackgroundJob(library);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LibraryStore>();
+    final library = context.watch<LibraryStore>();
+    if (library.loaded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _processNext());
+    }
     return widget.child;
   }
 }

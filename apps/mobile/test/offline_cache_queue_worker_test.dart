@@ -41,6 +41,7 @@ void main() {
     await _queueLocalEntry(library, 'first');
     await _queueLocalEntry(library, 'second');
     await _queueLocalEntry(library, 'third');
+    expect(library.hasPendingOfflineCacheWork, isTrue);
     final resolvedIds = <String>[];
     final worker = OfflineCacheQueueWorker(
       cacheRoot: root,
@@ -70,6 +71,7 @@ void main() {
       ),
       hasLength(1),
     );
+    expect(library.hasPendingOfflineCacheWork, isTrue);
   });
 
   test(
@@ -149,6 +151,51 @@ void main() {
     expect(
       library.offlineCacheEntryById(waitingEntryId)!.status,
       OfflineCacheEntryStatus.queued,
+    );
+  });
+
+  test('requeues interrupted processing work after a background handoff',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final entry = await _queueLocalEntry(library, 'background-handoff');
+    await library.markOfflineCacheEntryProcessing(entry.id);
+
+    await library.requeueProcessingOfflineCacheEntriesForBackground();
+
+    expect(
+      library.offlineCacheEntryById(entry.id)!.status,
+      OfflineCacheEntryStatus.queued,
+    );
+    expect(
+      library.offlineCacheEntryById(entry.id)!.reason,
+      'Continuing with the background downloader.',
+    );
+    final reloaded = LibraryStore();
+    await reloaded.load();
+    expect(
+      reloaded.offlineCacheEntryById(entry.id)!.status,
+      OfflineCacheEntryStatus.queued,
+    );
+  });
+
+  test('restores processing work as queued after an interrupted process',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final entry = await _queueLocalEntry(library, 'interrupted-process');
+    await library.markOfflineCacheEntryProcessing(entry.id);
+
+    final reloaded = LibraryStore();
+    await reloaded.load();
+
+    expect(
+      reloaded.offlineCacheEntryById(entry.id)!.status,
+      OfflineCacheEntryStatus.queued,
+    );
+    expect(
+      reloaded.offlineCacheEntryById(entry.id)!.reason,
+      'Resuming an interrupted cache request.',
     );
   });
 

@@ -1522,6 +1522,11 @@ class LibraryStore extends ChangeNotifier {
       Map.unmodifiable(_trackPlaybackSpeedOverrides);
   List<OfflineCacheEntry> get offlineCacheQueue =>
       List.unmodifiable(_offlineCacheQueue);
+  bool get hasPendingOfflineCacheWork => _offlineCacheQueue.any(
+        (entry) =>
+            entry.status == OfflineCacheEntryStatus.queued ||
+            entry.status == OfflineCacheEntryStatus.failed,
+      );
   List<String> get watchedLocalFolderPaths =>
       List.unmodifiable(_watchedLocalFolderPaths);
   List<Track> get favorites =>
@@ -1850,6 +1855,7 @@ class LibraryStore extends ChangeNotifier {
         ),
       );
     final rawOfflineCacheQueue = prefs.getString(_offlineCacheQueueKey);
+    var restoredInterruptedOfflineCacheWork = false;
     if (rawOfflineCacheQueue != null && rawOfflineCacheQueue.isNotEmpty) {
       final decoded = jsonDecode(rawOfflineCacheQueue) as List<dynamic>;
       _offlineCacheQueue
@@ -1866,6 +1872,18 @@ class LibraryStore extends ChangeNotifier {
                 .toList(growable: false),
           ),
         );
+      for (var index = 0; index < _offlineCacheQueue.length; index += 1) {
+        final entry = _offlineCacheQueue[index];
+        if (entry.status != OfflineCacheEntryStatus.processing) {
+          continue;
+        }
+        _offlineCacheQueue[index] = entry.copyWith(
+          status: OfflineCacheEntryStatus.queued,
+          updatedAt: _clock(),
+          reason: 'Resuming an interrupted cache request.',
+        );
+        restoredInterruptedOfflineCacheWork = true;
+      }
     }
     _watchedLocalFolderPaths
       ..clear()
@@ -1888,6 +1906,9 @@ class LibraryStore extends ChangeNotifier {
     _sortPodcastSubscriptions();
     _sortOfflineCacheQueue();
     _loaded = true;
+    if (restoredInterruptedOfflineCacheWork) {
+      await _save();
+    }
     notifyListeners();
   }
 
@@ -3436,6 +3457,34 @@ class LibraryStore extends ChangeNotifier {
     );
 
     return sections;
+  }
+
+  /// Returns active work to the durable queue before an OS scheduler takes it
+  /// over. The cancellation token leaves any private `.part` file resumable.
+  Future<void> requeueProcessingOfflineCacheEntriesForBackground() async {
+    var changed = false;
+    final now = _clock();
+    for (var index = 0; index < _offlineCacheQueue.length; index += 1) {
+      final entry = _offlineCacheQueue[index];
+      if (entry.status != OfflineCacheEntryStatus.processing) {
+        continue;
+      }
+
+      OfflineCacheCancellationRegistry.instance.cancel(entry.id);
+      _offlineCacheQueue[index] = entry.copyWith(
+        status: OfflineCacheEntryStatus.queued,
+        updatedAt: now,
+        reason: 'Continuing with the background downloader.',
+      );
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+
+    _sortOfflineCacheQueue();
+    await _save();
+    notifyListeners();
   }
 
   /// Returns imported M4B audiobooks, prioritizing interrupted listening.

@@ -22,11 +22,15 @@ ANDROID_PERMISSIONS = (
     "android.permission.RECORD_AUDIO",
     "android.permission.READ_EXTERNAL_STORAGE",
     "android.permission.READ_MEDIA_AUDIO",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
 )
 ACTIVITY_NAME = "dev.aethertune.aethertune.MainActivity"
 SERVICE_NAME = "com.ryanheise.audioservice.AudioService"
 RECEIVER_NAME = "com.ryanheise.audioservice.MediaButtonReceiver"
 WIDGET_PROVIDER_NAME = "dev.aethertune.aethertune.AetherTunePlaybackWidget"
+OFFLINE_CACHE_JOB_SERVICE_NAME = (
+    "dev.aethertune.aethertune.AetherTuneOfflineCacheJobService"
+)
 IOS_DEPLOYMENT_TARGET = "14.0"
 ANDROID_MIN_SDK = 23
 KEYCHAIN_ACCESS_GROUPS = "keychain-access-groups"
@@ -461,6 +465,11 @@ class MainActivity : AudioServiceActivity() {
         dispatchLauncherShortcut(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        AetherTuneOfflineCacheJobService.cancel(applicationContext)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         EventChannel(
@@ -583,6 +592,21 @@ class MainActivity : AudioServiceActivity() {
                 return@setMethodCallHandler
             }
         requestAudioLibraryAccess(result)
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/offline_cache_background",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "schedule" -> result.success(
+                    AetherTuneOfflineCacheJobService.schedule(applicationContext),
+                )
+                "cancel" -> {
+                    AetherTuneOfflineCacheJobService.cancel(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
         }
     }
 
@@ -920,6 +944,97 @@ private class AetherTuneAudioVirtualizer {
 }
 """
 
+_OFFLINE_CACHE_JOB_KOTLIN = """package dev.aethertune.aethertune
+
+import android.app.job.JobInfo
+import android.app.job.JobParameters
+import android.app.job.JobScheduler
+import android.app.job.JobService
+import android.content.ComponentName
+import android.content.Context
+import io.flutter.FlutterInjector
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugins.GeneratedPluginRegistrant
+
+class AetherTuneOfflineCacheJobService : JobService() {
+    private var activeEngine: FlutterEngine? = null
+    private var activeParameters: JobParameters? = null
+
+    override fun onStartJob(parameters: JobParameters): Boolean {
+        if (activeEngine != null) {
+            return false
+        }
+        activeParameters = parameters
+        val engine = FlutterEngine(applicationContext)
+        activeEngine = engine
+        GeneratedPluginRegistrant.registerWith(engine)
+        MethodChannel(
+            engine.dartExecutor.binaryMessenger,
+            channelName,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "complete") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val hasPendingWork = call.argument<Boolean>("hasPendingWork") ?: true
+            result.success(null)
+            finish(hasPendingWork)
+        }
+        engine.dartExecutor.executeDartEntrypoint(
+            DartExecutor.DartEntrypoint(
+                FlutterInjector.instance().flutterLoader().findAppBundlePath(),
+                dartEntrypoint,
+            ),
+        )
+        return true
+    }
+
+    override fun onStopJob(parameters: JobParameters): Boolean {
+        disposeEngine()
+        return true
+    }
+
+    private fun finish(hasPendingWork: Boolean) {
+        val parameters = activeParameters ?: return
+        activeParameters = null
+        disposeEngine()
+        jobFinished(parameters, hasPendingWork)
+    }
+
+    private fun disposeEngine() {
+        activeEngine?.destroy()
+        activeEngine = null
+    }
+
+    companion object {
+        private const val jobId = 18472
+        private const val channelName = "dev.aethertune/offline_cache_background"
+        private const val dartEntrypoint = "offlineCacheBackgroundEntrypoint"
+
+        fun schedule(context: Context): Boolean {
+            val scheduler = context.getSystemService(JobScheduler::class.java)
+                ?: return false
+            val job = JobInfo.Builder(
+                jobId,
+                ComponentName(context, AetherTuneOfflineCacheJobService::class.java),
+            )
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setMinimumLatency(30_000L)
+                .setPersisted(true)
+                .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
+                .build()
+            return scheduler.schedule(job) == JobScheduler.RESULT_SUCCESS
+        }
+
+        fun cancel(context: Context) {
+            context.getSystemService(JobScheduler::class.java)?.cancel(jobId)
+        }
+    }
+}
+"""
+
 _APP_DELEGATE_SWIFT = """import AVKit
 import Flutter
 import UIKit
@@ -1101,6 +1216,14 @@ def _widget_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path]:
     )
 
 
+def _offline_cache_job_path(manifest_path: Path) -> Path:
+    return (
+        manifest_path.parents[2]
+        / "src/main/kotlin/dev/aethertune/aethertune"
+        / "AetherTuneOfflineCacheJobService.kt"
+    )
+
+
 def _shortcut_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     resources = manifest_path.parents[2] / "src/main/res"
     return (
@@ -1123,6 +1246,7 @@ def _write_android_playback_widget(manifest_path: Path) -> None:
         shortcut_play_pause,
         shortcut_next,
     ) = _shortcut_paths(manifest_path)
+    background_job_source = _offline_cache_job_path(manifest_path)
     for path, content in (
         (widget_info, _WIDGET_INFO_XML),
         (widget_layout, _WIDGET_LAYOUT_XML),
@@ -1133,6 +1257,7 @@ def _write_android_playback_widget(manifest_path: Path) -> None:
         (shortcut_previous, _SHORTCUT_PREVIOUS_VECTOR_XML),
         (shortcut_play_pause, _SHORTCUT_PLAY_PAUSE_VECTOR_XML),
         (shortcut_next, _SHORTCUT_NEXT_VECTOR_XML),
+        (background_job_source, _OFFLINE_CACHE_JOB_KOTLIN),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
@@ -1186,6 +1311,21 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
         }
     )
     _ensure_action(service, "android.media.browse.MediaBrowserService")
+
+    offline_cache_job = _find_named(
+        application,
+        "service",
+        OFFLINE_CACHE_JOB_SERVICE_NAME,
+    )
+    if offline_cache_job is None:
+        offline_cache_job = ET.SubElement(application, "service")
+    offline_cache_job.attrib.update(
+        {
+            f"{ANDROID}name": OFFLINE_CACHE_JOB_SERVICE_NAME,
+            f"{ANDROID}exported": "true",
+            f"{ANDROID}permission": "android.permission.BIND_JOB_SERVICE",
+        }
+    )
 
     receiver = _find_named(application, "receiver", RECEIVER_NAME)
     if receiver is None:
@@ -1576,6 +1716,20 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         raise RuntimeError("Android launcher shortcuts metadata is missing")
     if _find_named(application, "service", SERVICE_NAME) is None:
         raise RuntimeError("Android audio_service service is missing")
+    offline_cache_job = _find_named(
+        application,
+        "service",
+        OFFLINE_CACHE_JOB_SERVICE_NAME,
+    )
+    if offline_cache_job is None:
+        raise RuntimeError("Android offline-cache job service is missing")
+    if offline_cache_job.get(f"{ANDROID}exported") != "true":
+        raise RuntimeError("Android offline-cache job service must be scheduler-visible")
+    if (
+        offline_cache_job.get(f"{ANDROID}permission")
+        != "android.permission.BIND_JOB_SERVICE"
+    ):
+        raise RuntimeError("Android offline-cache job service is not protected")
     if _find_named(application, "receiver", RECEIVER_NAME) is None:
         raise RuntimeError("Android media-button receiver is missing")
     widget = _find_named(application, "receiver", WIDGET_PROVIDER_NAME)
@@ -1594,9 +1748,16 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     widget_info, widget_layout, widget_source, activity_source = _widget_paths(
         manifest_path
     )
+    background_job_source = _offline_cache_job_path(manifest_path)
     if not all(
         path.is_file()
-        for path in (widget_info, widget_layout, widget_source, activity_source)
+        for path in (
+            widget_info,
+            widget_layout,
+            widget_source,
+            activity_source,
+            background_job_source,
+        )
     ):
         raise RuntimeError("Android playback widget resources are missing")
     widget_info_root = ET.parse(widget_info).getroot()
@@ -1646,9 +1807,25 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "dev.aethertune/audio_virtualizer",
         "AetherTuneAudioVirtualizer",
         "Virtualizer(0, audioSessionId)",
+        "dev.aethertune/offline_cache_background",
+        "AetherTuneOfflineCacheJobService.schedule",
+        "AetherTuneOfflineCacheJobService.cancel(applicationContext)",
     )
     if not all(snippet in activity_source_text for snippet in required_activity_snippets):
         raise RuntimeError("Android playback widget state bridge is missing")
+    background_job_text = background_job_source.read_text(encoding="utf-8")
+    required_background_job_snippets = (
+        "JobScheduler",
+        "setPersisted(true)",
+        "setMinimumLatency(30_000L)",
+        "setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)",
+        "GeneratedPluginRegistrant.registerWith",
+        "offlineCacheBackgroundEntrypoint",
+        "hasPendingWork",
+        "jobFinished(parameters, hasPendingWork)",
+    )
+    if not all(snippet in background_job_text for snippet in required_background_job_snippets):
+        raise RuntimeError("Android offline-cache job source is incomplete")
     (
         shortcuts_xml,
         shortcut_strings,
