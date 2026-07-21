@@ -24,10 +24,30 @@ Future<void> _showPublicProfileDiscovery(BuildContext context) async {
   List<LibrarySyncPublicProfile>? profiles;
   String? error;
   var searching = false;
+  StateSetter? update;
+  Future<void> search() async {
+    final query = controller.text.trim();
+    if (query.length < 2) {
+      update?.call(() => error = 'Enter at least two characters.');
+      return;
+    }
+    update?.call(() { searching = true; error = null; });
+    try {
+      profiles = await context
+          .read<LibrarySyncStore>()
+          .findPublicProfiles(context.read<LibraryStore>(), query);
+    } on Object catch (_) {
+      error = 'Could not search public profiles.';
+    } finally {
+      update?.call(() => searching = false);
+    }
+  }
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
-      builder: (dialogContext, setState) => AlertDialog(
+      builder: (dialogContext, setState) {
+        update = setState;
+        return AlertDialog(
         title: const Text('Find public profiles'),
         content: SizedBox(
           width: 420,
@@ -40,23 +60,7 @@ Future<void> _showPublicProfileDiscovery(BuildContext context) async {
                 autofocus: true,
                 textInputAction: TextInputAction.search,
                 decoration: const InputDecoration(labelText: 'Name'),
-                onSubmitted: (_) async {
-                  final query = controller.text.trim();
-                  if (query.length < 2) {
-                    setState(() => error = 'Enter at least two characters.');
-                    return;
-                  }
-                  setState(() { searching = true; error = null; });
-                  try {
-                    profiles = await context
-                        .read<LibrarySyncStore>()
-                        .findPublicProfiles(context.read<LibraryStore>(), query);
-                  } on Object catch (_) {
-                    error = 'Could not search public profiles.';
-                  } finally {
-                    if (dialogContext.mounted) setState(() => searching = false);
-                  }
-                },
+                onSubmitted: (_) => search(),
               ),
               if (searching) const Padding(
                 padding: EdgeInsets.only(top: 16),
@@ -81,10 +85,16 @@ Future<void> _showPublicProfileDiscovery(BuildContext context) async {
         ),
         actions: <Widget>[
           TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+          FilledButton(
+            onPressed: searching ? null : search,
+            child: const Text('Search'),
+          ),
         ],
-      ),
+      );
+      },
     ),
   );
+  update = null;
   controller.dispose();
 }
 
