@@ -3,12 +3,33 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
+import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/shared_smart_playlist_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  test('keeps existing private bindings when metadata upgrades', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.shared_smart_playlists.v1': jsonEncode(<Object?>[
+        <String, Object?>{
+          'remoteId': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+          'localSmartPlaylistId': 'legacy-local-rule',
+          'revision': 1,
+          'role': 'owner',
+        },
+      ]),
+    });
+    final store = SharedSmartPlaylistStore();
+
+    await store.load();
+
+    expect(store.bindings, hasLength(1));
+    expect(store.bindings.single.localSmartPlaylistId, 'legacy-local-rule');
+    expect(store.publicSubscriptions, isEmpty);
+  });
 
   test('hosts only a portable smart-playlist rule definition', () async {
     final library = LibraryStore();
@@ -129,6 +150,102 @@ void main() {
     expect(imported.ruleGroups.single.rules.single.value, 'Jazz');
     expect(store.bindings, isEmpty);
   });
+
+  test('securely subscribes, refreshes, and unsubscribes public smart rules',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final vault = _MemoryCredentialVault();
+    final store = SharedSmartPlaylistStore(publicLinkVault: vault);
+    await store.load();
+    var revision = 4;
+    var artist = 'Mira';
+    Future<LibrarySyncHttpResponse> executor(
+      String method,
+      Uri uri, {
+      required Map<String, String> headers,
+      String? body,
+    }) async {
+      final rule = Map<String, Object?>.from(_rule())..['artist'] = artist;
+      final document = <String, Object?>{
+        'version': 2,
+        'kind': 'smart',
+        'name': 'Subscribed jazz',
+        'rule': rule,
+      };
+      final checksum = sha256
+          .convert(utf8.encode(jsonEncode(document)))
+          .toString();
+      return LibrarySyncHttpResponse(
+        statusCode: 200,
+        body: jsonEncode(<String, Object?>{
+          'revision': revision,
+          'checksum': checksum,
+          'playlist': document,
+        }),
+      );
+    }
+
+    final subscription = await store.subscribeToPublicLink(
+      'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+      library,
+      httpExecutor: executor,
+    );
+
+    expect(store.publicSubscriptions, <PublicSmartPlaylistSubscription>[subscription]);
+    expect(vault.values.values.single, contains('BBBBBBBBBBBBBBBBBBBBBBBB'));
+    final rawMetadata = (await SharedPreferences.getInstance()).getString(
+      'aethertune.shared_smart_playlists.v1',
+    );
+    expect(rawMetadata, isNot(contains('BBBBBBBBBBBBBBBBBBBBBBBB')));
+
+    final restoredStore = SharedSmartPlaylistStore(publicLinkVault: vault);
+    await restoredStore.load();
+    expect(restoredStore.publicSubscriptions, hasLength(1));
+    expect(restoredStore.publicSubscriptions.single.id, subscription.id);
+    expect(
+      restoredStore.publicSubscriptions.single.localSmartPlaylistId,
+      subscription.localSmartPlaylistId,
+    );
+
+    revision = 5;
+    artist = 'Nia';
+    final refreshed = await restoredStore.refreshPublicSubscription(
+      subscription,
+      library,
+      httpExecutor: executor,
+    );
+    expect(refreshed.revision, 5);
+    expect(
+      library.customSmartPlaylistById(subscription.localSmartPlaylistId)?.artist,
+      'Nia',
+    );
+
+    await restoredStore.unsubscribeFromPublicLink(refreshed);
+    expect(restoredStore.publicSubscriptions, isEmpty);
+    expect(vault.values, isEmpty);
+    expect(
+      library.customSmartPlaylistById(subscription.localSmartPlaylistId)?.name,
+      'Subscribed jazz',
+    );
+  });
+}
+
+class _MemoryCredentialVault implements ProviderCredentialVault {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  Future<void> delete(String accountId) async {
+    values.remove(accountId);
+  }
+
+  @override
+  Future<String?> read(String accountId) async => values[accountId];
+
+  @override
+  Future<void> write(String accountId, String secret) async {
+    values[accountId] = secret;
+  }
 }
 
 class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {

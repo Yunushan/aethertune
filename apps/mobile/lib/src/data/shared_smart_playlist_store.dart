@@ -1,10 +1,12 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'library_store.dart';
 import 'library_sync_client.dart';
+import 'provider_credential_vault.dart';
 
 typedef SharedSmartPlaylistGatewayFactory = SharedSmartPlaylistGateway
     Function();
@@ -91,19 +93,87 @@ class SharedSmartPlaylistBinding {
   }
 }
 
+/// A local smart playlist that the user explicitly chose to refresh from a
+/// public link. The link itself is retained only in the credential vault.
+class PublicSmartPlaylistSubscription {
+  const PublicSmartPlaylistSubscription({
+    required this.id,
+    required this.remoteId,
+    required this.localSmartPlaylistId,
+    required this.revision,
+  });
+
+  final String id;
+  final String remoteId;
+  final String localSmartPlaylistId;
+  final int revision;
+
+  PublicSmartPlaylistSubscription withRevision(int value) {
+    if (value < revision || value <= 0) {
+      throw const FormatException('Public smart-playlist revision is invalid.');
+    }
+    return PublicSmartPlaylistSubscription(
+      id: id,
+      remoteId: remoteId,
+      localSmartPlaylistId: localSmartPlaylistId,
+      revision: value,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'id': id,
+    'remoteId': remoteId,
+    'localSmartPlaylistId': localSmartPlaylistId,
+    'revision': revision,
+  };
+
+  static PublicSmartPlaylistSubscription? tryFromJson(
+    Map<String, Object?> json,
+  ) {
+    final id = json['id'];
+    final remoteId = json['remoteId'];
+    final localId = json['localSmartPlaylistId'];
+    final revision = json['revision'];
+    if (id is! String ||
+        !_isPublicSubscriptionId(id) ||
+        remoteId is! String ||
+        !_isIdentifier(remoteId) ||
+        localId is! String ||
+        localId.trim().isEmpty ||
+        revision is! int ||
+        revision <= 0) {
+      return null;
+    }
+    return PublicSmartPlaylistSubscription(
+      id: id,
+      remoteId: remoteId,
+      localSmartPlaylistId: localId,
+      revision: revision,
+    );
+  }
+}
+
 /// Links local dynamic rules to a private, revisioned shared smart playlist.
 ///
 /// Only rule definitions cross the network. Every collaborator evaluates the
 /// rules against their own local library, which may produce a different queue.
 class SharedSmartPlaylistStore extends ChangeNotifier {
-  SharedSmartPlaylistStore({SharedSmartPlaylistGatewayFactory? gatewayFactory})
-    : _gatewayFactory = gatewayFactory;
+  SharedSmartPlaylistStore({
+    SharedSmartPlaylistGatewayFactory? gatewayFactory,
+    ProviderCredentialVault? publicLinkVault,
+  }) : _gatewayFactory = gatewayFactory,
+       _publicLinkVault = publicLinkVault ?? SecureProviderCredentialVault();
 
   static const _metadataKey = 'aethertune.shared_smart_playlists.v1';
+  static const _publicLinkCredentialPrefix =
+      'public-smart-playlist-link.';
 
   SharedSmartPlaylistGatewayFactory? _gatewayFactory;
+  final ProviderCredentialVault _publicLinkVault;
   final List<SharedSmartPlaylistBinding> _bindings =
       <SharedSmartPlaylistBinding>[];
+  final List<PublicSmartPlaylistSubscription> _publicSubscriptions =
+      <PublicSmartPlaylistSubscription>[];
   bool _loaded = false;
   bool _busy = false;
   String? _lastError;
@@ -114,6 +184,8 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   String? get lastError => _lastError;
   List<SharedSmartPlaylistBinding> get bindings =>
       List<SharedSmartPlaylistBinding>.unmodifiable(_bindings);
+  List<PublicSmartPlaylistSubscription> get publicSubscriptions =>
+      List<PublicSmartPlaylistSubscription>.unmodifiable(_publicSubscriptions);
 
   void updateGatewayFactory(SharedSmartPlaylistGatewayFactory? factory) {
     if (identical(_gatewayFactory, factory)) {
@@ -130,26 +202,12 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     try {
       final raw = (await SharedPreferences.getInstance()).getString(_metadataKey);
       if (raw != null && raw.trim().isNotEmpty) {
-        final values = jsonDecode(raw);
-        if (values is! List) {
-          throw const FormatException('Shared smart playlist bindings are invalid.');
-        }
-        final remoteIds = <String>{};
-        final localIds = <String>{};
-        for (final value in values.whereType<Map>()) {
-          final binding = SharedSmartPlaylistBinding.tryFromJson(
-            Map<String, Object?>.from(value),
-          );
-          if (binding != null &&
-              remoteIds.add(binding.remoteId) &&
-              localIds.add(binding.localSmartPlaylistId)) {
-            _bindings.add(binding);
-          }
-        }
+        _loadMetadata(jsonDecode(raw));
       }
       _lastError = null;
     } on Object {
       _bindings.clear();
+      _publicSubscriptions.clear();
       _lastError = 'Could not load shared smart-playlist settings.';
     } finally {
       _loaded = true;
@@ -161,6 +219,16 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     for (final binding in _bindings) {
       if (binding.localSmartPlaylistId == id) {
         return binding;
+      }
+    }
+    return null;
+  }
+
+  PublicSmartPlaylistSubscription?
+  publicSubscriptionForLocalSmartPlaylist(String id) {
+    for (final subscription in _publicSubscriptions) {
+      if (subscription.localSmartPlaylistId == id) {
+        return subscription;
       }
     }
     return null;
@@ -315,6 +383,98 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     });
   }
 
+  /// Stores a public link in the platform credential vault for user-triggered
+  /// refreshes. No background fetches are scheduled.
+  Future<PublicSmartPlaylistSubscription> subscribeToPublicLink(
+    String link,
+    LibraryStore library, {
+    LibrarySyncHttpExecutor? httpExecutor,
+  }) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final remote = await fetchPublicSharedSmartPlaylist(
+        link,
+        httpExecutor: httpExecutor,
+      );
+      final id = _publicSubscriptionId(remote.uri);
+      final existing = _publicSubscriptionById(id);
+      if (existing != null) {
+        if (remote.revision < existing.revision) {
+          throw const FormatException('Public smart-playlist revision is invalid.');
+        }
+        await _applyPublicDocument(existing, remote.playlist, library);
+        final updated = existing.withRevision(remote.revision);
+        if (updated.revision != existing.revision) {
+          await _replacePublicSubscription(updated);
+        }
+        return publicSubscriptionForLocalSmartPlaylist(
+          existing.localSmartPlaylistId,
+        )!;
+      }
+      if (_publicSubscriptionForRemoteId(remote.playlistId) != null) {
+        throw StateError('This public smart playlist is already subscribed.');
+      }
+      final local = await _createLocalDocument(remote.playlist, library);
+      final subscription = PublicSmartPlaylistSubscription(
+        id: id,
+        remoteId: remote.playlistId,
+        localSmartPlaylistId: local.id,
+        revision: remote.revision,
+      );
+      await _publicLinkVault.write(_publicLinkCredentialKey(id), remote.uri.toString());
+      try {
+        await _addPublicSubscription(subscription);
+      } on Object {
+        await _publicLinkVault.delete(_publicLinkCredentialKey(id));
+        rethrow;
+      }
+      return subscription;
+    });
+  }
+
+  Future<PublicSmartPlaylistSubscription> refreshPublicSubscription(
+    PublicSmartPlaylistSubscription subscription,
+    LibraryStore library, {
+    LibrarySyncHttpExecutor? httpExecutor,
+  }) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final link = await _publicLinkVault.read(
+        _publicLinkCredentialKey(subscription.id),
+      );
+      if (link == null || link.trim().isEmpty) {
+        throw StateError('This public smart-playlist link is no longer available.');
+      }
+      final remote = await fetchPublicSharedSmartPlaylist(
+        link,
+        httpExecutor: httpExecutor,
+      );
+      if (remote.playlistId != subscription.remoteId) {
+        throw const FormatException('Public smart-playlist link does not match.');
+      }
+      if (remote.revision < subscription.revision) {
+        throw const FormatException('Public smart-playlist revision is invalid.');
+      }
+      await _applyPublicDocument(subscription, remote.playlist, library);
+      final updated = subscription.withRevision(remote.revision);
+      if (updated.revision != subscription.revision) {
+        await _replacePublicSubscription(updated);
+      }
+      return publicSubscriptionForLocalSmartPlaylist(
+        subscription.localSmartPlaylistId,
+      )!;
+    });
+  }
+
+  Future<void> unsubscribeFromPublicLink(
+    PublicSmartPlaylistSubscription subscription,
+  ) {
+    return _runBusy(() async {
+      await _publicLinkVault.delete(_publicLinkCredentialKey(subscription.id));
+      await _removePublicSubscription(subscription);
+    });
+  }
+
   Future<void> unlink(SharedSmartPlaylistBinding binding) =>
       _runBusy(() => _removeBinding(binding));
 
@@ -367,6 +527,36 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       limit: values.limit,
     );
     await _replaceBinding(_bindingFromRemote(remote, local.id));
+  }
+
+  Future<void> _applyPublicDocument(
+    PublicSmartPlaylistSubscription subscription,
+    SharedSmartPlaylistDocument document,
+    LibraryStore library,
+  ) async {
+    final local = library.customSmartPlaylistById(subscription.localSmartPlaylistId);
+    if (local == null) {
+      throw StateError('The linked local smart playlist no longer exists.');
+    }
+    final values = _valuesFromSmartDocument(document);
+    await library.updateCustomSmartPlaylist(
+      local.id,
+      name: document.name,
+      query: values.query,
+      sourceId: values.sourceId,
+      artist: values.artist,
+      album: values.album,
+      genre: values.genre,
+      minimumDurationSeconds: values.minimumDurationSeconds,
+      maximumDurationSeconds: values.maximumDurationSeconds,
+      favoritesOnly: values.favoritesOnly,
+      minimumPlayCount: values.minimumPlayCount,
+      minimumDaysSinceLastPlayed: values.minimumDaysSinceLastPlayed,
+      matchMode: values.matchMode,
+      ruleGroups: values.ruleGroups,
+      sortMode: values.sortMode,
+      limit: values.limit,
+    );
   }
 
   Future<CustomSmartPlaylist> _createLocal(
@@ -457,13 +647,116 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _addPublicSubscription(
+    PublicSmartPlaylistSubscription subscription,
+  ) async {
+    _publicSubscriptions.add(subscription);
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> _replacePublicSubscription(
+    PublicSmartPlaylistSubscription subscription,
+  ) async {
+    final index = _publicSubscriptions.indexWhere(
+      (item) => item.id == subscription.id,
+    );
+    if (index < 0) {
+      throw StateError('Public smart-playlist subscription no longer exists.');
+    }
+    _publicSubscriptions[index] = subscription;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> _removePublicSubscription(
+    PublicSmartPlaylistSubscription subscription,
+  ) async {
+    _publicSubscriptions.removeWhere((item) => item.id == subscription.id);
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(
       _metadataKey,
-      jsonEncode(_bindings.map((binding) => binding.toJson()).toList()),
+      jsonEncode(<String, Object?>{
+        'version': 2,
+        'privateBindings': _bindings
+            .map((binding) => binding.toJson())
+            .toList(growable: false),
+        'publicSubscriptions': _publicSubscriptions
+            .map((subscription) => subscription.toJson())
+            .toList(growable: false),
+      }),
     );
   }
+
+  void _loadMetadata(Object? value) {
+    final privateBindings = <Object?>[];
+    final publicSubscriptions = <Object?>[];
+    if (value is List) {
+      privateBindings.addAll(value);
+    } else if (value is Map) {
+      final metadata = Map<String, Object?>.from(value);
+      if (metadata['version'] != 2 ||
+          metadata['privateBindings'] is! List ||
+          metadata['publicSubscriptions'] is! List) {
+        throw const FormatException('Shared smart playlist metadata is invalid.');
+      }
+      privateBindings.addAll(metadata['privateBindings'] as List);
+      publicSubscriptions.addAll(metadata['publicSubscriptions'] as List);
+    } else {
+      throw const FormatException('Shared smart playlist metadata is invalid.');
+    }
+    final remoteIds = <String>{};
+    final localIds = <String>{};
+    for (final value in privateBindings.whereType<Map>()) {
+      final binding = SharedSmartPlaylistBinding.tryFromJson(
+        Map<String, Object?>.from(value),
+      );
+      if (binding != null &&
+          remoteIds.add(binding.remoteId) &&
+          localIds.add(binding.localSmartPlaylistId)) {
+        _bindings.add(binding);
+      }
+    }
+    final subscriptionIds = <String>{};
+    final subscriptionRemoteIds = <String>{};
+    for (final value in publicSubscriptions.whereType<Map>()) {
+      final subscription = PublicSmartPlaylistSubscription.tryFromJson(
+        Map<String, Object?>.from(value),
+      );
+      if (subscription != null &&
+          subscriptionIds.add(subscription.id) &&
+          subscriptionRemoteIds.add(subscription.remoteId) &&
+          localIds.add(subscription.localSmartPlaylistId)) {
+        _publicSubscriptions.add(subscription);
+      }
+    }
+  }
+
+  PublicSmartPlaylistSubscription? _publicSubscriptionById(String id) {
+    for (final subscription in _publicSubscriptions) {
+      if (subscription.id == id) {
+        return subscription;
+      }
+    }
+    return null;
+  }
+
+  PublicSmartPlaylistSubscription? _publicSubscriptionForRemoteId(String id) {
+    for (final subscription in _publicSubscriptions) {
+      if (subscription.remoteId == id) {
+        return subscription;
+      }
+    }
+    return null;
+  }
+
+  String _publicLinkCredentialKey(String id) =>
+      '$_publicLinkCredentialPrefix$id';
 
   Future<T> _runBusy<T>(Future<T> Function() action) async {
     if (_busy) {
@@ -536,3 +829,9 @@ DateTime? _optionalDate(Object? value) {
 
 bool _isIdentifier(String value) =>
     RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
+
+String _publicSubscriptionId(Uri uri) =>
+    sha256.convert(utf8.encode(uri.toString())).toString();
+
+bool _isPublicSubscriptionId(String value) =>
+    RegExp(r'^[a-f0-9]{64}$').hasMatch(value);

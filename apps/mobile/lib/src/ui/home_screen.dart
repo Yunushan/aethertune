@@ -8603,6 +8603,18 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               onPrivateShare: sharedSmartPlaylists?.available ?? false
                   ? () => _shareCustomSmartPlaylist(context, rule)
                   : null,
+              onRefreshPublicSubscription:
+                  sharedSmartPlaylists
+                          ?.publicSubscriptionForLocalSmartPlaylist(rule.id) !=
+                      null
+                  ? () => _refreshPublicSmartPlaylistSubscription(context, rule)
+                  : null,
+              onUnsubscribePublicSubscription:
+                  sharedSmartPlaylists
+                          ?.publicSubscriptionForLocalSmartPlaylist(rule.id) !=
+                      null
+                  ? () => _unsubscribeFromPublicSmartPlaylist(context, rule)
+                  : null,
               onDuplicate: () => unawaited(
                 _duplicateCustomSmartPlaylist(context, rule),
               ),
@@ -8722,6 +8734,15 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _importPublicSharedSmartPlaylistLink(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.bookmark_add_outlined),
+                title: const Text('Subscribe to public smart playlist'),
+                subtitle: const Text('Store an HTTPS link securely for manual refreshes.'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _subscribeToPublicSharedSmartPlaylist(context);
                 },
               ),
             ],
@@ -9005,6 +9026,120 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     }
   }
 
+  Future<void> _subscribeToPublicSharedSmartPlaylist(
+    BuildContext context,
+  ) async {
+    final controller = TextEditingController();
+    try {
+      final link = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Subscribe to public smart playlist'),
+          content: TextField(
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'HTTPS public link'),
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Subscribe'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || link == null || link.trim().isEmpty) {
+        return;
+      }
+      final subscription = await context
+          .read<SharedSmartPlaylistStore>()
+          .subscribeToPublicLink(link, context.read<LibraryStore>());
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Subscribed to public smart playlist ${subscription.remoteId}.',
+            ),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not subscribe to public smart playlist: $error'),
+          ),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _refreshPublicSmartPlaylistSubscription(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final store = context.read<SharedSmartPlaylistStore>();
+    final subscription = store.publicSubscriptionForLocalSmartPlaylist(rule.id);
+    if (subscription == null) {
+      return;
+    }
+    try {
+      await store.refreshPublicSubscription(
+        subscription,
+        context.read<LibraryStore>(),
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Refreshed public smart playlist ${rule.name}.')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not refresh public smart playlist: $error'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _unsubscribeFromPublicSmartPlaylist(
+    BuildContext context,
+    CustomSmartPlaylist rule,
+  ) async {
+    final store = context.read<SharedSmartPlaylistStore>();
+    final subscription = store.publicSubscriptionForLocalSmartPlaylist(rule.id);
+    if (subscription == null) {
+      return;
+    }
+    try {
+      await store.unsubscribeFromPublicLink(subscription);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unsubscribed from ${rule.name}.')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not unsubscribe from public smart playlist: $error'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<String?> _promptForPlaylistDocument(
     BuildContext context,
     PlaylistDocumentFormat format,
@@ -9145,8 +9280,14 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     CustomSmartPlaylist rule,
   ) async {
     final library = context.read<LibraryStore>();
+    final sharedSmartPlaylists = context.read<SharedSmartPlaylistStore?>();
     final messenger = ScaffoldMessenger.of(context);
 
+    final publicSubscription = sharedSmartPlaylists
+        ?.publicSubscriptionForLocalSmartPlaylist(rule.id);
+    if (publicSubscription != null) {
+      await sharedSmartPlaylists!.unsubscribeFromPublicLink(publicSubscription);
+    }
     await library.deleteCustomSmartPlaylist(rule.id);
     await _playlistArtworkFileStore.delete(rule.artworkUri);
 
@@ -11258,6 +11399,8 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
     required this.onArtwork,
     required this.onCopyImportLink,
     this.onPrivateShare,
+    this.onRefreshPublicSubscription,
+    this.onUnsubscribePublicSubscription,
     required this.onDuplicate,
     required this.onDelete,
   });
@@ -11269,6 +11412,8 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
   final VoidCallback onArtwork;
   final VoidCallback onCopyImportLink;
   final VoidCallback? onPrivateShare;
+  final VoidCallback? onRefreshPublicSubscription;
+  final VoidCallback? onUnsubscribePublicSubscription;
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
@@ -11295,6 +11440,12 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 break;
               case _CustomSmartPlaylistAction.privateShare:
                 onPrivateShare?.call();
+                break;
+              case _CustomSmartPlaylistAction.refreshPublicSubscription:
+                onRefreshPublicSubscription?.call();
+                break;
+              case _CustomSmartPlaylistAction.unsubscribePublicSubscription:
+                onUnsubscribePublicSubscription?.call();
                 break;
               case _CustomSmartPlaylistAction.duplicate:
                 onDuplicate();
@@ -11332,6 +11483,22 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 child: ListTile(
                   leading: Icon(Icons.group_add_outlined),
                   title: Text('Private collaboration'),
+                ),
+              ),
+            if (onRefreshPublicSubscription != null)
+              const PopupMenuItem(
+                value: _CustomSmartPlaylistAction.refreshPublicSubscription,
+                child: ListTile(
+                  leading: Icon(Icons.refresh_outlined),
+                  title: Text('Refresh public subscription'),
+                ),
+              ),
+            if (onUnsubscribePublicSubscription != null)
+              const PopupMenuItem(
+                value: _CustomSmartPlaylistAction.unsubscribePublicSubscription,
+                child: ListTile(
+                  leading: Icon(Icons.bookmark_remove_outlined),
+                  title: Text('Unsubscribe public link'),
                 ),
               ),
             PopupMenuItem(
@@ -11610,6 +11777,8 @@ enum _CustomSmartPlaylistAction {
   artwork,
   copyImportLink,
   privateShare,
+  refreshPublicSubscription,
+  unsubscribePublicSubscription,
   duplicate,
   delete,
 }
