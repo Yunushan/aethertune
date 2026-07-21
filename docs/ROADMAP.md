@@ -202,6 +202,7 @@
 - [x] Navidrome/Subsonic private local artwork bridge for notification/lock-screen media metadata
 - [x] Navidrome/Subsonic remote playlist create/edit/delete/reorder
 - [x] Navidrome/Subsonic test-before-replace password rotation with rollback and queue/cache invalidation
+- [x] Navidrome/Subsonic favorite, newest, most played, recently played, and random album discovery shelves with continuation
 
 ## 0.6.x: Offline and lyrics
 

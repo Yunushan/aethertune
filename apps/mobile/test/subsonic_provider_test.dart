@@ -328,11 +328,12 @@ void main() {
       MusicCatalogDiscoveryKind.recentlyAdded,
       MusicCatalogDiscoveryKind.frequentlyPlayed,
       MusicCatalogDiscoveryKind.recentlyPlayed,
+      MusicCatalogDiscoveryKind.favorites,
       MusicCatalogDiscoveryKind.random,
     ]);
     expect(
       requests.map((request) => request.queryParameters['type']),
-      <String>['newest', 'frequent', 'recent', 'random'],
+      <String>['newest', 'frequent', 'recent', 'starred', 'random'],
     );
     expect(
       requests.every(
@@ -383,12 +384,16 @@ void main() {
       ),
       throwsArgumentError,
     );
-    await expectLater(
-      provider.browseDiscoveryCollectionsPage(
-        MusicCatalogDiscoveryKind.favorites,
-      ),
-      throwsUnsupportedError,
+    final favorites = await provider.browseDiscoveryCollectionsPage(
+      MusicCatalogDiscoveryKind.favorites,
+      offset: 9,
+      limit: 1,
     );
+    expect(favorites.collections.single.id, 'album-1');
+    expect(favorites.nextOffset, 10);
+    expect(requests.last.queryParameters['type'], 'starred');
+    expect(requests.last.queryParameters['offset'], '9');
+    expect(requests.last.queryParameters['size'], '1');
   });
 
   test('loads Subsonic track album and ID3 artist radio', () async {

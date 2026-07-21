@@ -270,6 +270,7 @@ class SubsonicProvider
         MusicCatalogDiscoveryKind.recentlyAdded,
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.favorites,
         MusicCatalogDiscoveryKind.random,
       ];
 
@@ -313,9 +314,8 @@ class SubsonicProvider
       MusicCatalogDiscoveryKind.recentlyAdded => 'newest',
       MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequent',
       MusicCatalogDiscoveryKind.recentlyPlayed => 'recent',
+      MusicCatalogDiscoveryKind.favorites => 'starred',
       MusicCatalogDiscoveryKind.random => 'random',
-      MusicCatalogDiscoveryKind.favorites =>
-        throw UnsupportedError('Subsonic favorite albums are not supported.'),
     };
     final boundedLimit = limit.clamp(1, 500);
     return _guardRequest(() async {
