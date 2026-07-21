@@ -125,6 +125,7 @@ class _PublicProfileDiscoveryDialogState
           ),
         ],
       );
+}
 
 class LibrarySyncPanel extends StatelessWidget {
   const LibrarySyncPanel({super.key});
