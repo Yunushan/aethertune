@@ -196,6 +196,9 @@ Handler createServerHandler({
     if (request.url.path.startsWith('api/v1/public-profiles/')) {
       return _handlePublicProfile(request, managedAccounts: managedSyncAccounts);
     }
+    if (request.url.path.startsWith('api/v1/public-smart-playlists/')) {
+      return _handlePublicSmartPlaylist(request, playlists: sharedPlaylists);
+    }
     if (request.url.path.startsWith('api/v1/shared-playlist-invites/')) {
       return _handleSharedPlaylistInviteJoin(
         request,
@@ -488,6 +491,9 @@ void _writeRequestLog(
 }
 
 String _logRoute(String path) {
+  if (path.startsWith('api/v1/public-smart-playlists/')) {
+    return '/api/v1/public-smart-playlists/:id/:secret';
+  }
   if (path.startsWith('api/v1/listen-together/invites/')) {
     return '/api/v1/listen-together/invites/:code';
   }
@@ -681,6 +687,39 @@ Future<Response> _handlePublicProfile(
     if (account.publicDisplayNameEnabled) 'displayName': account.displayName,
     if (account.publicAvatarToneEnabled && account.avatarTone != null)
       'avatarTone': account.avatarTone,
+  });
+}
+
+Future<Response> _handlePublicSmartPlaylist(
+  Request request, {
+  required SharedPlaylistStore playlists,
+}) async {
+  if (request.method != 'GET') {
+    return _methodNotAllowed(request);
+  }
+  final segments = request.url.pathSegments;
+  if (segments.length != 5 ||
+      segments[0] != 'api' ||
+      segments[1] != 'v1' ||
+      segments[2] != 'public-smart-playlists' ||
+      !isSharedPlaylistPublicShareSecret(segments[4])) {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  final record = await playlists.read(segments[3]);
+  final storedHash = record?.publicShareSecretHash;
+  if (record == null ||
+      record.document['kind'] != 'smart' ||
+      storedHash == null ||
+      !_constantTimeStringEquals(
+        storedHash,
+        _sharedPlaylistPublicSecretHash(segments[4]),
+      )) {
+    return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
+  }
+  return _jsonResponse(200, <String, Object?>{
+    'revision': record.revision,
+    'checksum': record.checksum,
+    'playlist': record.document,
   });
 }
 
@@ -1129,6 +1168,7 @@ Future<Response> _handleSharedPlaylistCollection(
         deviceId: mutation.deviceId,
         document: document,
         collaborators: const <String, SharedPlaylistRole>{},
+        publicShareSecretHash: null,
         updatedAt: now().toUtc(),
       );
       if (!result.isConflict) {
@@ -1179,10 +1219,13 @@ Future<Response> _handleSharedPlaylistItem(
       segments.length == 5 && segments[4] == 'revisions';
   final isCollaboratorEndpoint =
       segments.length == 6 && segments[4] == 'collaborators';
+  final isPublicLinkEndpoint =
+      segments.length == 5 && segments[4] == 'public-link';
   if (segments.length != 4 &&
       !isInviteEndpoint &&
       !isHistoryEndpoint &&
-      !isCollaboratorEndpoint) {
+      !isCollaboratorEndpoint &&
+      !isPublicLinkEndpoint) {
     return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
   }
   final record = await playlists.read(playlistId);
@@ -1202,6 +1245,66 @@ Future<Response> _handleSharedPlaylistItem(
             .toList(growable: false),
       },
     );
+  }
+  if (isPublicLinkEndpoint) {
+    if (!record.isOwner(accountId)) {
+      return _sharedPlaylistForbidden();
+    }
+    if (record.document['kind'] != 'smart') {
+      return _jsonResponse(
+        400,
+        <String, Object?>{'error': 'shared_playlist_not_smart'},
+      );
+    }
+    if (request.method != 'POST' && request.method != 'DELETE') {
+      return _methodNotAllowed(request);
+    }
+    try {
+      final mutation = _syncMutationFields(
+        await _readBoundedJson(request, maxBytes: maxSharedPlaylistBytes),
+      );
+      final secret = request.method == 'POST'
+          ? newSharedPlaylistPublicShareSecret()
+          : null;
+      final result = await playlists.write(
+        playlistId: record.id,
+        ownerId: record.ownerId,
+        baseRevision: mutation.baseRevision,
+        deviceId: mutation.deviceId,
+        document: record.document,
+        collaborators: record.collaborators,
+        publicShareSecretHash: secret == null
+            ? null
+            : _sharedPlaylistPublicSecretHash(secret),
+        updatedAt: now().toUtc(),
+      );
+      if (result.isConflict) {
+        return _sharedPlaylistConflict(result.record);
+      }
+      final saved = result.record!;
+      return _jsonResponse(
+        200,
+        <String, Object?>{
+          if (secret != null) 'secret': secret,
+          'revoked': secret == null,
+          'revision': saved.revision,
+          'checksum': saved.checksum,
+        },
+      );
+    } on _PayloadTooLarge catch (error) {
+      return _jsonResponse(
+        413,
+        <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
+      );
+    } on FormatException catch (error) {
+      return _jsonResponse(
+        400,
+        <String, Object?>{
+          'error': 'invalid_shared_playlist',
+          'message': error.message,
+        },
+      );
+    }
   }
   if (isInviteEndpoint) {
     if (!record.isOwner(accountId)) {
@@ -1282,6 +1385,7 @@ Future<Response> _handleSharedPlaylistItem(
         deviceId: mutation.deviceId,
         document: record.document,
         collaborators: collaborators,
+        publicShareSecretHash: record.publicShareSecretHash,
         updatedAt: now().toUtc(),
       );
       if (result.isConflict) {
@@ -1329,6 +1433,7 @@ Future<Response> _handleSharedPlaylistItem(
           deviceId: mutation.deviceId,
           document: document,
           collaborators: record.collaborators,
+          publicShareSecretHash: record.publicShareSecretHash,
           updatedAt: now().toUtc(),
         );
         if (result.isConflict) {
@@ -1424,6 +1529,7 @@ Future<Response> _handleSharedPlaylistInviteJoin(
     deviceId: 'invite-join',
     document: record.document,
     collaborators: collaborators,
+    publicShareSecretHash: record.publicShareSecretHash,
     updatedAt: now().toUtc(),
   );
   if (result.isConflict) {
@@ -1445,6 +1551,24 @@ String? _authenticatedSharedPlaylistUser(
 
 Response _sharedPlaylistForbidden() =>
     _jsonResponse(403, <String, Object?>{'error': 'shared_playlist_forbidden'});
+
+String _sharedPlaylistPublicSecretHash(String secret) =>
+    sha256.convert(utf8.encode(secret)).toString();
+
+bool _constantTimeStringEquals(String left, String right) {
+  final leftBytes = utf8.encode(left);
+  final rightBytes = utf8.encode(right);
+  var difference = leftBytes.length ^ rightBytes.length;
+  final length = leftBytes.length > rightBytes.length
+      ? leftBytes.length
+      : rightBytes.length;
+  for (var index = 0; index < length; index += 1) {
+    final leftByte = index < leftBytes.length ? leftBytes[index] : 0;
+    final rightByte = index < rightBytes.length ? rightBytes[index] : 0;
+    difference |= leftByte ^ rightByte;
+  }
+  return difference == 0;
+}
 
 Response _sharedPlaylistConflict(SharedPlaylistRecord? record) {
   return _jsonResponse(

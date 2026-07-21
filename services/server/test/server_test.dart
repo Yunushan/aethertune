@@ -937,6 +937,132 @@ void main() {
       sharedPlaylistInviteStore: MemorySharedPlaylistInviteStore(),
     );
 
+    test('issues, rotates, and revokes anonymous smart-playlist links',
+        () async {
+      final server = handler();
+      final created = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 2,
+              'kind': 'smart',
+              'name': 'Rated favorites',
+              'rule': <String, Object?>{
+                'favoritesOnly': true,
+                'limit': 25,
+              },
+            },
+          },
+        ),
+      );
+      expect(created.statusCode, 201);
+      final playlistId = (await _json(created))['id'] as String;
+
+      final issued = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/public-link',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{
+            'baseRevision': 1,
+            'deviceId': 'owner-phone',
+          },
+        ),
+      );
+      expect(issued.statusCode, 200);
+      final firstSecret = (await _json(issued))['secret'] as String;
+      expect(firstSecret, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
+
+      final anonymousRead = await server(
+        _request(
+          'GET',
+          '/api/v1/public-smart-playlists/$playlistId/$firstSecret',
+        ),
+      );
+      expect(anonymousRead.statusCode, 200);
+      final anonymousBody = await _json(anonymousRead);
+      expect((anonymousBody['playlist'] as Map)['name'], 'Rated favorites');
+      expect(anonymousBody.containsKey('updatedByDevice'), isFalse);
+      expect(anonymousBody.containsKey('ownerId'), isFalse);
+
+      final rotated = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$playlistId/public-link',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{
+            'baseRevision': 2,
+            'deviceId': 'owner-phone',
+          },
+        ),
+      );
+      expect(rotated.statusCode, 200);
+      final secondSecret = (await _json(rotated))['secret'] as String;
+      expect(secondSecret, isNot(firstSecret));
+      final retiredRead = await server(
+        _request(
+          'GET',
+          '/api/v1/public-smart-playlists/$playlistId/$firstSecret',
+        ),
+      );
+      expect(retiredRead.statusCode, 404);
+
+      final revoked = await server(
+        _request(
+          'DELETE',
+          '/api/v1/shared-playlists/$playlistId/public-link',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{
+            'baseRevision': 3,
+            'deviceId': 'owner-phone',
+          },
+        ),
+      );
+      expect(revoked.statusCode, 200);
+      final revokedRead = await server(
+        _request(
+          'GET',
+          '/api/v1/public-smart-playlists/$playlistId/$secondSecret',
+        ),
+      );
+      expect(revokedRead.statusCode, 404);
+
+      final manual = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 1,
+              'name': 'Private IDs',
+              'trackIds': <String>['local-track'],
+            },
+          },
+        ),
+      );
+      final manualId = (await _json(manual))['id'] as String;
+      final rejectedManualLink = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists/$manualId/public-link',
+          token: ownerToken,
+          jsonBody: const <String, Object?>{
+            'baseRevision': 1,
+            'deviceId': 'owner-phone',
+          },
+        ),
+      );
+      expect(rejectedManualLink.statusCode, 400);
+    });
+
     test('enforces authenticated viewer/editor invitations and revisions',
         () async {
       final server = handler();

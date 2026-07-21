@@ -37,6 +37,7 @@ class SharedPlaylistRecord {
     required this.checksum,
     required this.document,
     this.collaborators = const <String, SharedPlaylistRole>{},
+    this.publicShareSecretHash,
   });
 
   final String id;
@@ -47,6 +48,7 @@ class SharedPlaylistRecord {
   final String checksum;
   final Map<String, Object?> document;
   final Map<String, SharedPlaylistRole> collaborators;
+  final String? publicShareSecretHash;
 
   SharedPlaylistRole? roleFor(String accountId) {
     if (accountId == ownerId) {
@@ -71,6 +73,8 @@ class SharedPlaylistRecord {
         sharedPlaylistRoleToWire(role),
       ),
     ),
+    if (publicShareSecretHash != null)
+      'publicShareSecretHash': publicShareSecretHash,
   };
 
   factory SharedPlaylistRecord.fromStorageJson(Map<String, Object?> json) {
@@ -82,6 +86,7 @@ class SharedPlaylistRecord {
     final checksum = json['checksum'];
     final document = json['document'];
     final collaborators = json['collaborators'];
+    final publicShareSecretHash = json['publicShareSecretHash'];
     if (id is! String ||
         ownerId is! String ||
         revision is! int ||
@@ -95,6 +100,11 @@ class SharedPlaylistRecord {
         revision <= 0 ||
         updatedByDevice.trim().isEmpty ||
         checksum.isEmpty) {
+      throw const FormatException('Stored shared playlist is invalid.');
+    }
+    if (publicShareSecretHash != null &&
+        (publicShareSecretHash is! String ||
+            !RegExp(r'^[0-9a-f]{64}$').hasMatch(publicShareSecretHash))) {
       throw const FormatException('Stored shared playlist is invalid.');
     }
     final parsedCollaborators = <String, SharedPlaylistRole>{};
@@ -131,6 +141,7 @@ class SharedPlaylistRecord {
       collaborators: Map<String, SharedPlaylistRole>.unmodifiable(
         parsedCollaborators,
       ),
+      publicShareSecretHash: publicShareSecretHash as String?,
     );
   }
 }
@@ -165,6 +176,7 @@ abstract interface class SharedPlaylistStore {
     required String deviceId,
     required Map<String, Object?> document,
     required Map<String, SharedPlaylistRole> collaborators,
+    required String? publicShareSecretHash,
     required DateTime updatedAt,
   });
 
@@ -198,6 +210,7 @@ class MemorySharedPlaylistStore implements SharedPlaylistStore {
     required String deviceId,
     required Map<String, Object?> document,
     required Map<String, SharedPlaylistRole> collaborators,
+    required String? publicShareSecretHash,
     required DateTime updatedAt,
   }) async {
     final current = _records[playlistId];
@@ -211,6 +224,7 @@ class MemorySharedPlaylistStore implements SharedPlaylistStore {
       deviceId: deviceId,
       document: document,
       collaborators: collaborators,
+      publicShareSecretHash: publicShareSecretHash,
       updatedAt: updatedAt,
     );
     _records[playlistId] = saved;
@@ -310,6 +324,7 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
     required String deviceId,
     required Map<String, Object?> document,
     required Map<String, SharedPlaylistRole> collaborators,
+    required String? publicShareSecretHash,
     required DateTime updatedAt,
   }) {
     return _serialized(playlistId, () async {
@@ -324,6 +339,7 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
         deviceId: deviceId,
         document: document,
         collaborators: collaborators,
+        publicShareSecretHash: publicShareSecretHash,
         updatedAt: updatedAt,
       );
       await rootDirectory.create(recursive: true);
@@ -807,6 +823,7 @@ SharedPlaylistRecord _newSharedPlaylistRecord({
   required String deviceId,
   required Map<String, Object?> document,
   required Map<String, SharedPlaylistRole> collaborators,
+  required String? publicShareSecretHash,
   required DateTime updatedAt,
 }) {
   if (!_isSharedPlaylistId(playlistId) ||
@@ -825,6 +842,10 @@ SharedPlaylistRecord _newSharedPlaylistRecord({
     }
     copiedCollaborators[entry.key] = entry.value;
   }
+  if (publicShareSecretHash != null &&
+      !RegExp(r'^[0-9a-f]{64}$').hasMatch(publicShareSecretHash)) {
+    throw const FormatException('Shared playlist public link is invalid.');
+  }
   return SharedPlaylistRecord(
     id: playlistId,
     ownerId: ownerId,
@@ -834,6 +855,7 @@ SharedPlaylistRecord _newSharedPlaylistRecord({
     checksum: sha256.convert(utf8.encode(jsonEncode(copiedDocument))).toString(),
     document: Map<String, Object?>.unmodifiable(copiedDocument),
     collaborators: Map<String, SharedPlaylistRole>.unmodifiable(copiedCollaborators),
+    publicShareSecretHash: publicShareSecretHash,
   );
 }
 
@@ -847,6 +869,13 @@ String newSharedPlaylistInviteCode() => base64Url.encode(
 String newSharedPlaylistId() => base64Url.encode(
   List<int>.generate(18, (_) => _sharedPlaylistRandom.nextInt(256)),
 );
+
+String newSharedPlaylistPublicShareSecret() => base64Url.encode(
+  List<int>.generate(18, (_) => _sharedPlaylistRandom.nextInt(256)),
+);
+
+bool isSharedPlaylistPublicShareSecret(String value) =>
+    RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
 
 bool _isSharedPlaylistId(String value) =>
     RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(value);
