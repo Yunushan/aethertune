@@ -477,6 +477,66 @@ void main() {
       'existing-song',
     ]);
   });
+
+  test('queues only policy-approved provider tracks for shared downloads',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[
+      Track(
+        id: 'downloadable',
+        title: 'Downloadable',
+        sourceId: 'provider',
+        streamUrl: 'https://catalog.example.test/downloadable',
+      ),
+      Track(
+        id: 'unsupported',
+        title: 'Unsupported',
+        sourceId: 'other-provider',
+        streamUrl: 'https://catalog.example.test/unsupported',
+      ),
+      Track(
+        id: 'local',
+        title: 'Local',
+        localPath: '/library/local.mp3',
+      ),
+    ]);
+    final playlist = await library.createPlaylist(
+      'Shared downloads',
+      trackIds: const <String>[
+        'downloadable',
+        'downloadable',
+        'unsupported',
+        'local',
+      ],
+    );
+    final binding = SharedPlaylistBinding(
+      remoteId: _MemorySharedPlaylistGateway.id,
+      localPlaylistId: playlist.id,
+      revision: 1,
+      role: SharedPlaylistAccessRole.viewer,
+    );
+    final provider = _SearchProvider(
+      capabilities: const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.downloads,
+      },
+      disclosure: const ProviderPrivacyDisclosure(supportsDownloads: true),
+      tracks: const <Track>[],
+    );
+
+    final result = await SharedPlaylistStore().queueProviderDownloads(
+      binding,
+      library,
+      ProviderSearchCoordinator(<MusicSourceProvider>[provider]),
+    );
+
+    expect(result.queuedTrackCount, 1);
+    expect(result.skippedTrackCount, 2);
+    expect(library.offlineCacheQueue, hasLength(1));
+    expect(library.offlineCacheQueue.single.track.id, 'downloadable');
+    expect(library.offlineCacheQueue.single.action, OfflineMediaAction.download);
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {
@@ -490,21 +550,23 @@ Future<LibraryStore> _libraryWithTracks() async {
 }
 
 class _SearchProvider implements MusicSourceProvider {
-  _SearchProvider({required this.tracks});
+  _SearchProvider({
+    required this.tracks,
+    this.capabilities = const <MusicSourceCapability>{
+      MusicSourceCapability.metadataSearch,
+    },
+    this.disclosure = const ProviderPrivacyDisclosure(),
+  });
 
   final List<Track> tracks;
   final List<String> queries = <String>[];
-
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{MusicSourceCapability.metadataSearch};
+  final Set<MusicSourceCapability> capabilities;
+  @override
+  final ProviderPrivacyDisclosure disclosure;
 
   @override
   String get description => 'Test provider';
-
-  @override
-  ProviderPrivacyDisclosure get disclosure =>
-      const ProviderPrivacyDisclosure(networkDomains: <String>['catalog.example.test']);
 
   @override
   String get id => 'provider';

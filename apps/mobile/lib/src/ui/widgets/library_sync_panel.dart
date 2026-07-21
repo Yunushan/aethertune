@@ -778,20 +778,77 @@ class LibrarySyncPanel extends StatelessWidget {
 
   static List<MusicSourceProvider> _sharedPlaylistSearchProviders(
     BuildContext context,
-  ) {
-    final providers = <MusicSourceProvider>[
+  ) => _sharedPlaylistProviders(context)
+      .where(
+        (provider) => provider.capabilities.contains(
+          MusicSourceCapability.metadataSearch,
+        ),
+      )
+      .toList(growable: false);
+
+  static List<MusicSourceProvider> _sharedPlaylistProviders(
+    BuildContext context,
+  ) => <MusicSourceProvider>[
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
       ...?context.read<SpotifySettingsStore?>()?.musicProviders,
       ...context.read<SelfHostedProviderStore>().musicProviders,
       ...?context.read<CustomCatalogStore?>()?.musicProviders,
     ];
-    return providers
-        .where(
-          (provider) => provider.capabilities.contains(
-            MusicSourceCapability.metadataSearch,
+
+  static Future<void> _queueSharedPlaylistDownloads(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final providers = _sharedPlaylistProviders(context);
+    if (providers.isEmpty) {
+      _showError(context, 'Configure a music provider first.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Queue shared playlist downloads?'),
+        content: const Text(
+          'Only tracks from providers that explicitly allow downloads will '
+          'be queued. Local files and unsupported provider tracks are left '
+          'unchanged; queued downloads run through the existing foreground '
+          'offline queue and its limits.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
           ),
-        )
-        .toList(growable: false);
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Queue downloads'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      final result = await context
+          .read<SharedPlaylistStore>()
+          .queueProviderDownloads(
+            binding,
+            context.read<LibraryStore>(),
+            ProviderSearchCoordinator(providers),
+          );
+      if (context.mounted) {
+        _showSuccess(
+          context,
+          'Queued ${result.queuedTrackCount} provider download(s); '
+          '${result.skippedTrackCount} track(s) skipped.',
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not queue shared playlist downloads: $error');
+      }
+    }
   }
 
   static Future<void> _mergeSharedPlaylist(
@@ -1594,6 +1651,9 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
                 binding,
               );
               break;
+            case _SharedPlaylistAction.download:
+              LibrarySyncPanel._queueSharedPlaylistDownloads(context, binding);
+              break;
             case _SharedPlaylistAction.publish:
               LibrarySyncPanel._publishSharedPlaylist(context, binding);
               break;
@@ -1643,6 +1703,13 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
                 title: Text('Find unavailable tracks'),
               ),
             ),
+          const PopupMenuItem(
+            value: _SharedPlaylistAction.download,
+            child: ListTile(
+              leading: Icon(Icons.download_for_offline_outlined),
+              title: Text('Queue provider downloads'),
+            ),
+          ),
           if (binding.canEdit)
             const PopupMenuItem(
               value: _SharedPlaylistAction.publish,
@@ -1709,6 +1776,7 @@ enum _SharedPlaylistAction {
   refresh,
   history,
   resolve,
+  download,
   publish,
   merge,
   invite,

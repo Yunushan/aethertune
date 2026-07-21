@@ -343,6 +343,57 @@ class SharedPlaylistStore extends ChangeNotifier {
     });
   }
 
+  /// Queues the linked provider-backed tracks for download when their
+  /// registered provider explicitly allows it. Local files are already
+  /// available and are intentionally left out of the download queue.
+  Future<SharedPlaylistDownloadQueueResult> queueProviderDownloads(
+    SharedPlaylistBinding binding,
+    LibraryStore library,
+    ProviderSearchCoordinator coordinator,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final playlist = library.playlistById(binding.localPlaylistId);
+      if (playlist == null) {
+        throw StateError('The linked local playlist no longer exists.');
+      }
+      final tracksById = <String, Track>{
+        for (final track in library.tracks) track.id: track,
+      };
+      final seenTrackIds = <String>{};
+      var queuedTrackCount = 0;
+      var skippedTrackCount = 0;
+      for (final trackId in playlist.trackIds) {
+        if (!seenTrackIds.add(trackId)) {
+          continue;
+        }
+        final track = tracksById[trackId];
+        if (track == null || track.hasLocalSource) {
+          skippedTrackCount += 1;
+          continue;
+        }
+        final decision = coordinator.offlineDecision(
+          track,
+          OfflineMediaAction.download,
+        );
+        if (!decision.isAllowed) {
+          skippedTrackCount += 1;
+          continue;
+        }
+        await library.queueOfflineCache(
+          track,
+          OfflineMediaAction.download,
+          decision,
+        );
+        queuedTrackCount += 1;
+      }
+      return SharedPlaylistDownloadQueueResult(
+        queuedTrackCount: queuedTrackCount,
+        skippedTrackCount: skippedTrackCount,
+      );
+    });
+  }
+
   Future<List<SharedPlaylistRevision>> history(
     SharedPlaylistBinding binding,
     LibraryStore library,
@@ -669,6 +720,16 @@ class SharedPlaylistProviderResolution {
   final int resolvedTrackCount;
   final int unavailableTrackCount;
   final int providerErrorCount;
+}
+
+class SharedPlaylistDownloadQueueResult {
+  const SharedPlaylistDownloadQueueResult({
+    required this.queuedTrackCount,
+    required this.skippedTrackCount,
+  });
+
+  final int queuedTrackCount;
+  final int skippedTrackCount;
 }
 
 class _SharedPlaylistTrackResolution {
