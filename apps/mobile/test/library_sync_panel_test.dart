@@ -89,6 +89,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Mira listener'), findsOneWidget);
     expect(find.text('public-mira'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
     final queueSync = tester.widget<SwitchListTile>(
       find.byKey(const Key('library-sync-queue')),
     );
