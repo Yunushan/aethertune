@@ -282,7 +282,7 @@ void main() {
     );
     final merged = mergeSharedPlaylistTrackReferences(
       const <SharedPlaylistTrackReference>[one, two, one],
-      const <SharedPlaylistTrackReference>[one, one, two],
+      const <SharedPlaylistTrackReference>[one, one, one, two],
     );
     expect(
       merged.map((reference) => reference.title),
