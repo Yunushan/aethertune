@@ -19,6 +19,7 @@ class SharedPlaylistBinding {
     this.updatedAt,
     this.updatedByDevice,
     this.collaborators = const <String, SharedPlaylistAccessRole>{},
+    this.unavailableTrackCount = 0,
   });
 
   final String remoteId;
@@ -28,11 +29,15 @@ class SharedPlaylistBinding {
   final DateTime? updatedAt;
   final String? updatedByDevice;
   final Map<String, SharedPlaylistAccessRole> collaborators;
+  final int unavailableTrackCount;
 
   bool get canEdit => role != SharedPlaylistAccessRole.viewer;
   bool get isOwner => role == SharedPlaylistAccessRole.owner;
 
-  SharedPlaylistBinding fromRemote(SharedPlaylistRemote remote) {
+  SharedPlaylistBinding fromRemote(
+    SharedPlaylistRemote remote, {
+    int unavailableTrackCount = 0,
+  }) {
     return SharedPlaylistBinding(
       remoteId: remote.id,
       localPlaylistId: localPlaylistId,
@@ -41,6 +46,7 @@ class SharedPlaylistBinding {
       updatedAt: remote.updatedAt,
       updatedByDevice: remote.updatedByDevice,
       collaborators: remote.collaborators,
+      unavailableTrackCount: unavailableTrackCount,
     );
   }
 
@@ -51,6 +57,7 @@ class SharedPlaylistBinding {
     'role': role.name,
     'updatedAt': updatedAt?.toUtc().toIso8601String(),
     'updatedByDevice': updatedByDevice,
+    'unavailableTrackCount': unavailableTrackCount,
     'collaborators': collaborators.map(
       (accountId, accessRole) => MapEntry<String, String>(
         accountId,
@@ -65,6 +72,7 @@ class SharedPlaylistBinding {
     final revision = json['revision'];
     final role = _roleFromName(json['role']);
     final collaborators = _collaboratorsFromJson(json['collaborators']);
+    final unavailableTrackCount = json['unavailableTrackCount'] ?? 0;
     if (remoteId is! String ||
         !_isIdentifier(remoteId) ||
         localPlaylistId is! String ||
@@ -73,6 +81,9 @@ class SharedPlaylistBinding {
         revision <= 0 ||
         role == null ||
         collaborators == null ||
+        unavailableTrackCount is! int ||
+        unavailableTrackCount < 0 ||
+        unavailableTrackCount > 200 ||
         (role != SharedPlaylistAccessRole.owner && collaborators.isNotEmpty)) {
       return null;
     }
@@ -84,6 +95,7 @@ class SharedPlaylistBinding {
       updatedAt: _optionalDate(json['updatedAt']),
       updatedByDevice: _optionalString(json['updatedByDevice']),
       collaborators: collaborators,
+      unavailableTrackCount: unavailableTrackCount,
     );
   }
 }
@@ -204,9 +216,10 @@ class SharedPlaylistStore extends ChangeNotifier {
         return bindingForLocalPlaylist(binding.localPlaylistId)!;
       }
       final playlist = await library.createPlaylist(remote.name);
+      final resolution = _trackResolutionForRemote(library, remote);
       await library.replacePlaylistTracks(
         playlist.id,
-        _trackIdsForRemote(library, remote),
+        resolution.trackIds,
       );
       final binding = SharedPlaylistBinding(
         remoteId: remote.id,
@@ -216,6 +229,7 @@ class SharedPlaylistStore extends ChangeNotifier {
         updatedAt: remote.updatedAt,
         updatedByDevice: remote.updatedByDevice,
         collaborators: remote.collaborators,
+        unavailableTrackCount: resolution.unavailableTrackCount,
       );
       await _addBinding(binding);
       return binding;
@@ -383,7 +397,12 @@ class SharedPlaylistStore extends ChangeNotifier {
         collaboratorId: normalizedCollaboratorId,
         baseRevision: binding.revision,
       );
-      await _replaceBinding(binding.fromRemote(remote));
+      await _replaceBinding(
+        binding.fromRemote(
+          remote,
+          unavailableTrackCount: binding.unavailableTrackCount,
+        ),
+      );
       return bindingForLocalPlaylist(binding.localPlaylistId)!;
     });
   }
@@ -421,11 +440,14 @@ class SharedPlaylistStore extends ChangeNotifier {
     if (playlist.name != remote.name) {
       await library.renamePlaylist(playlist.id, remote.name);
     }
-    await library.replacePlaylistTracks(
-      playlist.id,
-      _trackIdsForRemote(library, remote),
+    final resolution = _trackResolutionForRemote(library, remote);
+    await library.replacePlaylistTracks(playlist.id, resolution.trackIds);
+    await _replaceBinding(
+      binding.fromRemote(
+        remote,
+        unavailableTrackCount: resolution.unavailableTrackCount,
+      ),
     );
-    await _replaceBinding(binding.fromRemote(remote));
   }
 
   SharedPlaylistGateway _requireGateway() {
@@ -467,13 +489,16 @@ class SharedPlaylistStore extends ChangeNotifier {
     return List<SharedPlaylistTrackReference>.unmodifiable(references);
   }
 
-  List<String> _trackIdsForRemote(
+  _SharedPlaylistTrackResolution _trackResolutionForRemote(
     LibraryStore library,
     SharedPlaylistRemote remote,
   ) {
     final references = remote.trackReferences;
     if (references == null) {
-      return remote.trackIds;
+      return _SharedPlaylistTrackResolution(
+        trackIds: remote.trackIds,
+        unavailableTrackCount: 0,
+      );
     }
     final resolved = <String>[];
     for (final reference in references) {
@@ -490,7 +515,10 @@ class SharedPlaylistStore extends ChangeNotifier {
         resolved.add(candidates.single.id);
       }
     }
-    return resolved;
+    return _SharedPlaylistTrackResolution(
+      trackIds: resolved,
+      unavailableTrackCount: references.length - resolved.length,
+    );
   }
 
   Future<void> _addBinding(SharedPlaylistBinding binding) async {
@@ -542,6 +570,16 @@ class SharedPlaylistStore extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+class _SharedPlaylistTrackResolution {
+  const _SharedPlaylistTrackResolution({
+    required this.trackIds,
+    required this.unavailableTrackCount,
+  });
+
+  final List<String> trackIds;
+  final int unavailableTrackCount;
 }
 
 SharedPlaylistAccessRole? _roleFromName(Object? value) => switch (value) {

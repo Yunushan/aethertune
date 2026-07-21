@@ -1478,7 +1478,11 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
     final library = context.watch<LibraryStore>();
     final playlist = library.playlistById(binding.localPlaylistId);
     final title = playlist?.name ?? 'Missing local playlist';
-    final subtitle = '${binding.role.name} · revision ${binding.revision}';
+    final unavailable = binding.unavailableTrackCount;
+    final subtitle = unavailable == 0
+        ? '${binding.role.name} · revision ${binding.revision}'
+        : '${binding.role.name} · revision ${binding.revision} · '
+              '$unavailable shared track${unavailable == 1 ? '' : 's'} unavailable on this device';
     return ListTile(
       dense: true,
       leading: Icon(

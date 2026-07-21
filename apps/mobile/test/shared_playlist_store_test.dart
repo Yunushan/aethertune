@@ -265,6 +265,11 @@ void main() {
       recipientLibrary.playlistById(binding.localPlaylistId)?.trackIds,
       <String>['recipient-two'],
     );
+    expect(binding.unavailableTrackCount, 2);
+
+    final reloaded = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await reloaded.load();
+    expect(reloaded.bindings.single.unavailableTrackCount, 2);
   });
 
   test('merges portable shared track references without dropping duplicates', () {
