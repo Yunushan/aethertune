@@ -62,6 +62,11 @@ class LibrarySyncAccount {
   Uri get profileEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'auth', 'profile']);
 
+  /// Public, token-free profile document for an account that explicitly opted
+  /// into sharing one or more profile fields.
+  Uri publicProfileEndpointUri(String accountId) =>
+      _endpointUri(<String>['api', 'v1', 'public-profiles', accountId]);
+
   Uri get recoveryEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'sync', 'recovery']);
 

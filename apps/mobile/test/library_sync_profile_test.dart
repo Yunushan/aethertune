@@ -1,4 +1,5 @@
 import 'package:aethertune/src/domain/library_sync_profile.dart';
+import 'package:aethertune/src/domain/library_sync_account.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -61,5 +62,18 @@ void main() {
 
     expect(profile.publicProfileSupported, isFalse);
     expect(profile.publicProfileEnabled, isFalse);
+  });
+
+  test('builds a token-free public profile endpoint under a server path', () {
+    final account = createLibrarySyncAccount(
+      baseUrl: 'https://sync.example.test/aethertune',
+      deviceId: 'Phone',
+      allowInsecureHttp: false,
+    );
+
+    expect(
+      account.publicProfileEndpointUri('primary').toString(),
+      'https://sync.example.test/aethertune/api/v1/public-profiles/primary',
+    );
   });
 }

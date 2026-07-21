@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
@@ -87,6 +88,27 @@ class LibrarySyncPanel extends StatelessWidget {
                   icon: const Icon(Icons.refresh_outlined),
                 ),
               ],
+            ),
+          ),
+        if (sync.isConfigured &&
+            account != null &&
+            sync.profile?.publicProfileEnabled == true)
+          ListTile(
+            key: const Key('library-sync-public-profile-link'),
+            dense: true,
+            leading: const Icon(Icons.link_outlined),
+            title: const Text('Public profile link'),
+            trailing: IconButton(
+              key: const Key('library-sync-copy-public-profile-link'),
+              tooltip: 'Copy public profile link',
+              onPressed: actionsEnabled
+                  ? () => _copyPublicProfileLink(
+                      context,
+                      account,
+                      sync.profile!,
+                    )
+                  : null,
+              icon: const Icon(Icons.copy_outlined),
             ),
           ),
         if (sync.isConfigured && listenTogether != null)
@@ -394,6 +416,21 @@ class LibrarySyncPanel extends StatelessWidget {
         _showError(context, error);
       }
     }
+  }
+
+  static Future<void> _copyPublicProfileLink(
+    BuildContext context,
+    LibrarySyncAccount account,
+    LibrarySyncProfile profile,
+  ) async {
+    final link = account.publicProfileEndpointUri(profile.id).toString();
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Copied public profile link.')),
+    );
   }
 
   static Future<void> _hostListenTogether(BuildContext context) async {

@@ -75,6 +75,10 @@ void main() {
     expect(find.text('0123456789abcdef01234567'), findsNothing);
     expect(find.byKey(const Key('library-sync-upload')), findsOneWidget);
     expect(find.byKey(const Key('library-sync-queue')), findsOneWidget);
+    expect(
+      find.byKey(const Key('library-sync-copy-public-profile-link')),
+      findsNothing,
+    );
     final queueSync = tester.widget<SwitchListTile>(
       find.byKey(const Key('library-sync-queue')),
     );
@@ -130,6 +134,10 @@ void main() {
     expect(sync.profile?.publicDisplayNameEnabled, isTrue);
     expect(sync.profile?.publicAvatarToneEnabled, isTrue);
     expect(sync.account?.deviceId, 'Pocket player');
+    expect(
+      find.byKey(const Key('library-sync-copy-public-profile-link')),
+      findsOneWidget,
+    );
     expect(find.text('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
   });
