@@ -547,6 +547,11 @@ void main() {
     );
     expect(defaultPublicProfile.statusCode, 404);
 
+    final rejectedPublicProfileSearch = await handler(
+      _request('GET', '/api/v1/public-profiles?q=p'),
+    );
+    expect(rejectedPublicProfileSearch.statusCode, 400);
+
     final profileUpdate = await handler(
       _request(
         'PATCH',
@@ -588,6 +593,21 @@ void main() {
       'id': 'primary',
       'displayName': 'Shared listeners',
       'avatarTone': 'violet',
+    });
+
+    final publicProfileSearch = await handler(
+      _request('GET', '/api/v1/public-profiles?q=listener'),
+    );
+    expect(publicProfileSearch.statusCode, 200);
+    expect(publicProfileSearch.headers['cache-control'], 'no-store');
+    expect(await _json(publicProfileSearch), <String, Object?>{
+      'profiles': <Object?>[
+        <String, Object?>{
+          'id': 'primary',
+          'displayName': 'Shared listeners',
+          'avatarTone': 'violet',
+        },
+      ],
     });
 
     final publicProfilePage = await handler(

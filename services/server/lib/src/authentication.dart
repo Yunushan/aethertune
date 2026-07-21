@@ -318,6 +318,36 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     return record == null ? null : _profileForRecord(record);
   }
 
+  /// Returns only accounts whose owners explicitly made their display name
+  /// public. Discovery never exposes device or credential metadata.
+  List<ManagedSyncAccountProfile> findPublicProfiles(
+    String query, {
+    int limit = 20,
+  }) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.length < 2 || normalizedQuery.length > 80 ||
+        limit < 1 || limit > 20) {
+      throw const FormatException('Public profile query is invalid.');
+    }
+    final profiles = _accounts.values
+        .map(_profileForRecord)
+        .where(
+          (profile) =>
+              profile.publicDisplayNameEnabled &&
+              profile.displayName.toLowerCase().contains(normalizedQuery),
+        )
+        .toList()
+      ..sort((left, right) {
+        final byName = left.displayName
+            .toLowerCase()
+            .compareTo(right.displayName.toLowerCase());
+        return byName != 0 ? byName : left.id.compareTo(right.id);
+      });
+    return List<ManagedSyncAccountProfile>.unmodifiable(
+      profiles.take(limit),
+    );
+  }
+
   @override
   String? authenticate(String token) => authenticatePrincipal(token)?.accountId;
 

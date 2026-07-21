@@ -193,7 +193,8 @@ Handler createServerHandler({
   final rateLimiter = requestRateLimiter ?? ServerRequestRateLimiter(clock: now);
 
   Future<Response> route(Request request) async {
-    if (request.url.path.startsWith('api/v1/public-profiles/')) {
+    if (request.url.path == 'api/v1/public-profiles' ||
+        request.url.path.startsWith('api/v1/public-profiles/')) {
       return _handlePublicProfile(request, managedAccounts: managedSyncAccounts);
     }
     if (request.url.path.startsWith('api/v1/public-smart-playlists/')) {
@@ -669,6 +670,34 @@ Future<Response> _handlePublicProfile(
     return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
   }
   final segments = request.url.pathSegments;
+  if (segments.length == 3 &&
+      segments[0] == 'api' &&
+      segments[1] == 'v1' &&
+      segments[2] == 'public-profiles') {
+    try {
+      final profiles = managedAccounts.findPublicProfiles(
+        request.url.queryParameters['q'] ?? '',
+      );
+      return _jsonResponse(200, <String, Object?>{
+        'profiles': profiles
+            .map(
+              (profile) => <String, Object?>{
+                'id': profile.id,
+                'displayName': profile.displayName,
+                if (profile.publicAvatarToneEnabled &&
+                    profile.avatarTone != null)
+                  'avatarTone': profile.avatarTone,
+              },
+            )
+            .toList(growable: false),
+      }, headers: const <String, String>{'cache-control': 'no-store'});
+    } on FormatException {
+      return _jsonResponse(
+        400,
+        <String, Object?>{'error': 'invalid_public_profile_query'},
+      );
+    }
+  }
   if (segments.length != 4 ||
       segments[0] != 'api' ||
       segments[1] != 'v1' ||
