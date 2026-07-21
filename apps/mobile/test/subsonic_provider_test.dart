@@ -383,6 +383,12 @@ void main() {
       ),
       throwsArgumentError,
     );
+    await expectLater(
+      provider.browseDiscoveryCollectionsPage(
+        MusicCatalogDiscoveryKind.favorites,
+      ),
+      throwsUnsupportedError,
+    );
   });
 
   test('loads Subsonic track album and ID3 artist radio', () async {

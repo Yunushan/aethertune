@@ -5832,6 +5832,7 @@ String _providerHomeDiscoveryLabel(MusicCatalogDiscoveryKind kind) {
     MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequently played',
     MusicCatalogDiscoveryKind.recentlyPlayed => 'recently played',
     MusicCatalogDiscoveryKind.random => 'random albums',
+    MusicCatalogDiscoveryKind.favorites => 'favorite albums',
   };
 }
 
@@ -5845,6 +5846,8 @@ String _providerHomeDiscoverySubtitle(MusicCatalogDiscoveryKind kind) {
       'Recently played albums reported by this server',
     MusicCatalogDiscoveryKind.random =>
       'Random albums selected by this server',
+    MusicCatalogDiscoveryKind.favorites =>
+      'Favorite albums reported by this server',
   };
 }
 
@@ -5854,6 +5857,7 @@ IconData _providerHomeDiscoveryIcon(MusicCatalogDiscoveryKind kind) {
     MusicCatalogDiscoveryKind.frequentlyPlayed => Icons.trending_up,
     MusicCatalogDiscoveryKind.recentlyPlayed => Icons.history_outlined,
     MusicCatalogDiscoveryKind.random => Icons.shuffle,
+    MusicCatalogDiscoveryKind.favorites => Icons.favorite_outline,
   };
 }
 

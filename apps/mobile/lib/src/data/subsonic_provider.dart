@@ -294,6 +294,11 @@ class SubsonicProvider
     int offset = 0,
     int limit = 6,
   }) {
+    if (!discoveryKinds.contains(kind)) {
+      return Future<MusicCatalogCollectionPage>.error(
+        UnsupportedError('Subsonic discovery kind is not supported.'),
+      );
+    }
     if (offset < 0) {
       return Future<MusicCatalogCollectionPage>.error(
         ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
@@ -309,6 +314,8 @@ class SubsonicProvider
       MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequent',
       MusicCatalogDiscoveryKind.recentlyPlayed => 'recent',
       MusicCatalogDiscoveryKind.random => 'random',
+      MusicCatalogDiscoveryKind.favorites =>
+        throw UnsupportedError('Subsonic favorite albums are not supported.'),
     };
     final boundedLimit = limit.clamp(1, 500);
     return _guardRequest(() async {

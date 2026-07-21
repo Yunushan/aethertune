@@ -346,6 +346,10 @@ void main() {
       MusicCatalogDiscoveryKind.recentlyPlayed,
       limit: 7,
     );
+    final favorites = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.favorites,
+      limit: 7,
+    );
     final random = await provider.browseDiscoveryCollections(
       MusicCatalogDiscoveryKind.random,
       limit: 7,
@@ -355,6 +359,7 @@ void main() {
       MusicCatalogDiscoveryKind.recentlyAdded,
       MusicCatalogDiscoveryKind.frequentlyPlayed,
       MusicCatalogDiscoveryKind.recentlyPlayed,
+      MusicCatalogDiscoveryKind.favorites,
       MusicCatalogDiscoveryKind.random,
     ]);
     expect(
@@ -364,6 +369,7 @@ void main() {
     expect(recentlyAdded.single.id, 'album-latest');
     expect(frequentlyPlayed.single.id, 'album-1');
     expect(recentlyPlayed.single.id, 'album-1');
+    expect(favorites.single.id, 'album-1');
     expect(random.single.id, 'album-1');
 
     final latestRequest = requests[0];
@@ -387,7 +393,13 @@ void main() {
     expect(recentRequest.queryParameters['SortOrder'], 'Descending');
     expect(recentRequest.queryParameters['IsPlayed'], 'true');
 
-    final randomRequest = requests[3];
+    final favoriteRequest = requests[3];
+    expect(favoriteRequest.queryParameters['SortBy'], 'SortName');
+    expect(favoriteRequest.queryParameters['SortOrder'], 'Descending');
+    expect(favoriteRequest.queryParameters['IsFavorite'], 'true');
+    expect(favoriteRequest.queryParameters['IsPlayed'], isNull);
+
+    final randomRequest = requests[4];
     expect(randomRequest.queryParameters['SortBy'], 'Random');
     expect(randomRequest.queryParameters['SortOrder'], 'Descending');
     expect(randomRequest.queryParameters['IsPlayed'], isNull);
@@ -430,6 +442,7 @@ void main() {
       <MusicCatalogDiscoveryKind>{
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.favorites,
         MusicCatalogDiscoveryKind.random,
       },
     );

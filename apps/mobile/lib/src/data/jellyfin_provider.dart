@@ -283,6 +283,7 @@ class JellyfinProvider
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
         MusicCatalogDiscoveryKind.random,
+        MusicCatalogDiscoveryKind.favorites,
       ];
 
   @override
@@ -291,6 +292,7 @@ class JellyfinProvider
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
         MusicCatalogDiscoveryKind.random,
+        MusicCatalogDiscoveryKind.favorites,
       };
 
   @override
@@ -361,11 +363,15 @@ class JellyfinProvider
                   MusicCatalogDiscoveryKind.frequentlyPlayed => 'PlayCount',
                   MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
                   MusicCatalogDiscoveryKind.random => 'Random',
+                  MusicCatalogDiscoveryKind.favorites => 'SortName',
                   MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
                 },
                 'SortOrder': 'Descending',
-                if (kind != MusicCatalogDiscoveryKind.random)
+                if (kind == MusicCatalogDiscoveryKind.frequentlyPlayed ||
+                    kind == MusicCatalogDiscoveryKind.recentlyPlayed)
                   'IsPlayed': 'true',
+                if (kind == MusicCatalogDiscoveryKind.favorites)
+                  'IsFavorite': 'true',
               },
             ),
           ),
