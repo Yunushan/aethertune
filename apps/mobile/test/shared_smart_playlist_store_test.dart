@@ -125,6 +125,7 @@ void main() {
     await hostStore.load();
     await hostStore.host(hostLibrary, hostLocal);
 
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     final recipientLibrary = LibraryStore();
     await recipientLibrary.load();
     await recipientLibrary.addTracks(<Track>[
