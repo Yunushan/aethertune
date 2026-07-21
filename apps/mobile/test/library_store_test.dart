@@ -451,6 +451,45 @@ void main() {
     );
   });
 
+  test('matches portable shared provider-kind source selectors', () async {
+    final store = LibraryStore();
+    await store.load();
+    await store.addTracks(<Track>[
+      _track('jellyfin-a', sourceId: 'self-hosted-jellyfin-device-a'),
+      _track('jellyfin-b', sourceId: 'self-hosted-jellyfin-device-b'),
+      _track('subsonic', sourceId: 'self-hosted-subsonic-device-a'),
+      _track('catalog', sourceId: 'custom-catalog-device-a'),
+    ]);
+    final jellyfin = await store.createCustomSmartPlaylist(
+      name: 'Jellyfin library',
+      sourceId: 'aethertune-source-kind:self-hosted-jellyfin',
+    );
+    final catalogGroup = await store.createCustomSmartPlaylist(
+      name: 'Catalog library',
+      ruleGroups: <CustomSmartPlaylistRuleGroup>[
+        CustomSmartPlaylistRuleGroup(
+          rules: const <CustomSmartPlaylistRule>[
+            CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.sourceId,
+              value: 'aethertune-source-kind:custom-catalog',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(
+      store.tracksForCustomSmartPlaylist(jellyfin.id).map((track) => track.id),
+      <String>['jellyfin-a', 'jellyfin-b'],
+    );
+    expect(
+      store
+          .tracksForCustomSmartPlaylist(catalogGroup.id)
+          .map((track) => track.id),
+      <String>['catalog'],
+    );
+  });
+
   test('matches any custom smart playlist criterion and persists the mode', () async {
     final store = LibraryStore();
     await store.load();

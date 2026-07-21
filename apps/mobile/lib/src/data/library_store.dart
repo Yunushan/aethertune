@@ -3989,7 +3989,7 @@ class LibraryStore extends ChangeNotifier {
             now.difference(lastPlayedAt) >=
                 Duration(days: rule.minimumDaysSinceLastPlayed),
       if (rule.sourceId.isNotEmpty)
-        track.sourceId.toLowerCase() == rule.sourceId.toLowerCase(),
+        _matchesCustomSmartPlaylistSource(track.sourceId, rule.sourceId),
       if (rule.artist.isNotEmpty)
         track.artist.toLowerCase() == rule.artist.toLowerCase(),
       if (rule.album.isNotEmpty)
@@ -4072,7 +4072,7 @@ class LibraryStore extends ChangeNotifier {
       CustomSmartPlaylistRuleField.searchText =>
         _trackMatchesQuery(track, SearchQuery.parse(value)),
       CustomSmartPlaylistRuleField.sourceId =>
-        track.sourceId.toLowerCase() == value.toLowerCase(),
+        _matchesCustomSmartPlaylistSource(track.sourceId, value),
       CustomSmartPlaylistRuleField.artist =>
         track.artist.toLowerCase() == value.toLowerCase(),
       CustomSmartPlaylistRuleField.album =>
@@ -4092,6 +4092,27 @@ class LibraryStore extends ChangeNotifier {
         lastPlayedAt == null ||
             now.difference(lastPlayedAt) >=
                 Duration(days: int.tryParse(value) ?? 0),
+    };
+  }
+
+  bool _matchesCustomSmartPlaylistSource(
+    String sourceId,
+    String selector,
+  ) {
+    final normalizedSource = sourceId.trim().toLowerCase();
+    final normalizedSelector = selector.trim().toLowerCase();
+    const prefix = 'aethertune-source-kind:';
+    if (!normalizedSelector.startsWith(prefix)) {
+      return normalizedSource == normalizedSelector;
+    }
+    final kind = normalizedSelector.substring(prefix.length);
+    return switch (kind) {
+      'self-hosted-jellyfin' =>
+        normalizedSource.startsWith('self-hosted-jellyfin-'),
+      'self-hosted-subsonic' =>
+        normalizedSource.startsWith('self-hosted-subsonic-'),
+      'custom-catalog' => normalizedSource.startsWith('custom-catalog-'),
+      _ => false,
     };
   }
 

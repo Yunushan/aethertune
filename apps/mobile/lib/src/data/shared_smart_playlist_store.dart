@@ -777,22 +777,93 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   }
 }
 
-Map<String, Object?> _ruleJson(CustomSmartPlaylist playlist) => <String, Object?>{
-  'query': playlist.query,
-  'sourceId': playlist.sourceId,
-  'artist': playlist.artist,
-  'album': playlist.album,
-  'genre': playlist.genre,
-  'minimumDurationSeconds': playlist.minimumDurationSeconds,
-  'maximumDurationSeconds': playlist.maximumDurationSeconds,
-  'favoritesOnly': playlist.favoritesOnly,
-  'minimumPlayCount': playlist.minimumPlayCount,
-  'minimumDaysSinceLastPlayed': playlist.minimumDaysSinceLastPlayed,
-  'matchMode': playlist.matchMode.name,
-  'ruleGroups': playlist.ruleGroups.map((group) => group.toJson()).toList(),
-  'sortMode': playlist.sortMode.name,
-  'limit': playlist.limit,
-};
+Map<String, Object?> _ruleJson(CustomSmartPlaylist playlist) {
+  return _portableSharedSmartPlaylistRule(<String, Object?>{
+    'query': playlist.query,
+    'sourceId': playlist.sourceId,
+    'artist': playlist.artist,
+    'album': playlist.album,
+    'genre': playlist.genre,
+    'minimumDurationSeconds': playlist.minimumDurationSeconds,
+    'maximumDurationSeconds': playlist.maximumDurationSeconds,
+    'favoritesOnly': playlist.favoritesOnly,
+    'minimumPlayCount': playlist.minimumPlayCount,
+    'minimumDaysSinceLastPlayed': playlist.minimumDaysSinceLastPlayed,
+    'matchMode': playlist.matchMode.name,
+    'ruleGroups': playlist.ruleGroups.map((group) => group.toJson()).toList(),
+    'sortMode': playlist.sortMode.name,
+    'limit': playlist.limit,
+  });
+}
+
+Map<String, Object?> _portableSharedSmartPlaylistRule(
+  Map<String, Object?> rule,
+) {
+  final normalized = Map<String, Object?>.from(rule);
+  normalized['sourceId'] = _portableSharedSourceSelector(
+    normalized['sourceId'] as String? ?? '',
+  );
+  final rawGroups = normalized['ruleGroups'];
+  if (rawGroups is List) {
+    normalized['ruleGroups'] = rawGroups
+        .whereType<Map>()
+        .map(
+          (group) => _portableSharedSmartPlaylistGroup(
+            Map<String, Object?>.from(group),
+          ),
+        )
+        .toList(growable: false);
+  }
+  return normalized;
+}
+
+Map<String, Object?> _portableSharedSmartPlaylistGroup(
+  Map<String, Object?> group,
+) {
+  final normalized = Map<String, Object?>.from(group);
+  final rawRules = normalized['rules'];
+  if (rawRules is List) {
+    normalized['rules'] = rawRules
+        .whereType<Map>()
+        .map((rule) {
+          final normalizedRule = Map<String, Object?>.from(rule);
+          if (normalizedRule['field'] == 'sourceId') {
+            normalizedRule['value'] = _portableSharedSourceSelector(
+              normalizedRule['value'] as String? ?? '',
+            );
+          }
+          return normalizedRule;
+        })
+        .toList(growable: false);
+  }
+  final rawGroups = normalized['groups'];
+  if (rawGroups is List) {
+    normalized['groups'] = rawGroups
+        .whereType<Map>()
+        .map(
+          (child) => _portableSharedSmartPlaylistGroup(
+            Map<String, Object?>.from(child),
+          ),
+        )
+        .toList(growable: false);
+  }
+  return normalized;
+}
+
+String _portableSharedSourceSelector(String value) {
+  final normalized = value.trim();
+  final lowerCase = normalized.toLowerCase();
+  if (lowerCase.startsWith('self-hosted-jellyfin-')) {
+    return 'aethertune-source-kind:self-hosted-jellyfin';
+  }
+  if (lowerCase.startsWith('self-hosted-subsonic-')) {
+    return 'aethertune-source-kind:self-hosted-subsonic';
+  }
+  if (lowerCase.startsWith('custom-catalog-')) {
+    return 'aethertune-source-kind:custom-catalog';
+  }
+  return normalized;
+}
 
 CustomSmartPlaylist _valuesFromRemote(SharedPlaylistRemote remote) {
   final smart = remote.smartPlaylist;

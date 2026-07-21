@@ -67,6 +67,40 @@ void main() {
     );
   });
 
+  test('normalizes device-specific source IDs in shared smart rules', () async {
+    final library = LibraryStore();
+    await library.load();
+    final local = await library.createCustomSmartPlaylist(
+      name: 'Portable sources',
+      sourceId: 'self-hosted-jellyfin-device-a',
+      ruleGroups: <CustomSmartPlaylistRuleGroup>[
+        CustomSmartPlaylistRuleGroup(
+          rules: const <CustomSmartPlaylistRule>[
+            CustomSmartPlaylistRule(
+              field: CustomSmartPlaylistRuleField.sourceId,
+              value: 'custom-catalog-device-b',
+            ),
+          ],
+        ),
+      ],
+    );
+    final gateway = _FakeSharedSmartPlaylistGateway();
+    final store = SharedSmartPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+
+    await store.host(library, local);
+
+    expect(
+      gateway.createdRule?['sourceId'],
+      'aethertune-source-kind:self-hosted-jellyfin',
+    );
+    final groups = gateway.createdRule?['ruleGroups'] as List<Object?>;
+    final group = groups.single as Map<String, Object?>;
+    final rules = group['rules'] as List<Object?>;
+    final rule = rules.single as Map<String, Object?>;
+    expect(rule['value'], 'aethertune-source-kind:custom-catalog');
+  });
+
   test('joins a shared smart definition as a local dynamic playlist', () async {
     final library = LibraryStore();
     await library.load();
