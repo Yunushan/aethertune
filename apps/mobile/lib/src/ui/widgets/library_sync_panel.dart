@@ -203,6 +203,9 @@ class LibrarySyncPanel extends StatelessWidget {
             leading: const Icon(Icons.person_search_outlined),
             title: const Text('Find public profiles'),
             subtitle: const Text('Search people who chose to share their name.'),
+            onTap: actionsEnabled
+                ? () => _showPublicProfileDiscovery(context)
+                : null,
             trailing: IconButton(
               tooltip: 'Find public profiles',
               onPressed: actionsEnabled
