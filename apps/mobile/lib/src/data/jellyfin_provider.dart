@@ -18,7 +18,7 @@ typedef JellyfinMutationLoader = Future<void> Function(
 
 class JellyfinProvider
     implements
-        MusicCatalogDiscoveryProvider,
+        MusicCatalogDiscoveryPagingProvider,
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
@@ -286,56 +286,93 @@ class JellyfinProvider
       ];
 
   @override
+  Set<MusicCatalogDiscoveryKind> get pagedDiscoveryKinds =>
+      const <MusicCatalogDiscoveryKind>{
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.random,
+      };
+
+  @override
   Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
     MusicCatalogDiscoveryKind kind, {
     int limit = 6,
-  }) {
+  }) async {
     if (!discoveryKinds.contains(kind)) {
       return Future<List<MusicCatalogCollection>>.error(
         UnsupportedError('Jellyfin discovery kind is not supported.'),
       );
     }
+    if (pagedDiscoveryKinds.contains(kind)) {
+      return (await browseDiscoveryCollectionsPage(kind, limit: limit))
+          .collections;
+    }
     final boundedLimit = limit.clamp(1, 50);
-    return _guardRequest(() async {
-      if (kind == MusicCatalogDiscoveryKind.recentlyAdded) {
-        return parseJellyfinLatestCollectionsResponse(
-          await _requestLoader(
-            _requestUri(
-              '/Items/Latest',
-              <String, String>{
-                'userId': userId,
-                'includeItemTypes': 'MusicAlbum',
-                'fields': 'Genres,RecursiveItemCount,ChildCount',
-                'enableImages': 'true',
-                'enableImageTypes': 'Primary',
-                'imageTypeLimit': '1',
-                'limit': boundedLimit.toString(),
-                'groupItems': 'false',
-              },
-            ),
-          ),
-        );
-      }
-      return parseJellyfinCollectionsResponse(
+    return _guardRequest(() async => parseJellyfinLatestCollectionsResponse(
         await _requestLoader(
-          _itemsUri(
-            itemType: 'MusicAlbum',
-            extra: <String, String>{
-              'Limit': boundedLimit.toString(),
-              'SortBy': switch (kind) {
-                MusicCatalogDiscoveryKind.frequentlyPlayed => 'PlayCount',
-                MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
-                MusicCatalogDiscoveryKind.random => 'Random',
-                MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
-              },
-              'SortOrder': 'Descending',
-              if (kind != MusicCatalogDiscoveryKind.random) 'IsPlayed': 'true',
+          _requestUri(
+            '/Items/Latest',
+            <String, String>{
+              'userId': userId,
+              'includeItemTypes': 'MusicAlbum',
+              'fields': 'Genres,RecursiveItemCount,ChildCount',
+              'enableImages': 'true',
+              'enableImageTypes': 'Primary',
+              'imageTypeLimit': '1',
+              'limit': boundedLimit.toString(),
+              'groupItems': 'false',
             },
           ),
         ),
-        MusicCatalogCollectionKind.album,
+      ));
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> browseDiscoveryCollectionsPage(
+    MusicCatalogDiscoveryKind kind, {
+    int offset = 0,
+    int limit = 6,
+  }) {
+    if (!pagedDiscoveryKinds.contains(kind)) {
+      return Future<MusicCatalogCollectionPage>.error(
+        UnsupportedError('Jellyfin discovery kind is not pageable.'),
       );
-    });
+    }
+    if (offset < 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 50);
+    return _guardRequest(() async => parseJellyfinCollectionPageResponse(
+          await _requestLoader(
+            _itemsUri(
+              itemType: 'MusicAlbum',
+              extra: <String, String>{
+                'StartIndex': offset.toString(),
+                'Limit': boundedLimit.toString(),
+                'EnableTotalRecordCount': 'true',
+                'SortBy': switch (kind) {
+                  MusicCatalogDiscoveryKind.frequentlyPlayed => 'PlayCount',
+                  MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
+                  MusicCatalogDiscoveryKind.random => 'Random',
+                  MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
+                },
+                'SortOrder': 'Descending',
+                if (kind != MusicCatalogDiscoveryKind.random)
+                  'IsPlayed': 'true',
+              },
+            ),
+          ),
+          MusicCatalogCollectionKind.album,
+          requestOffset: offset,
+          requestLimit: boundedLimit,
+        ));
   }
 
   @override

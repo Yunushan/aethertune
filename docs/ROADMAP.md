@@ -192,7 +192,7 @@
 - [x] Jellyfin private local artwork bridge for notification/lock-screen media metadata
 - [x] Jellyfin remote playlist create/edit/delete/reorder
 - [x] Jellyfin test-before-replace API-key rotation with rollback and queue/cache invalidation
-- [x] Jellyfin recently added, most played, recently played, and random album discovery shelves
+- [x] Jellyfin recently added, most played, recently played, and random album discovery shelves with continuation for query-backed shelves
 - [x] Navidrome/Subsonic provider foundation
 - [x] Navidrome/Subsonic settings UI and secure credential storage
 - [x] First-run guided self-hosted connection setup

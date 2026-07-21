@@ -393,6 +393,79 @@ void main() {
     expect(randomRequest.queryParameters['IsPlayed'], isNull);
   });
 
+  test('pages Jellyfin query-backed discovery shelves', () async {
+    Uri? capturedUri;
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        capturedUri = uri;
+        return '''
+          {
+            "StartIndex": 9,
+            "TotalRecordCount": 12,
+            "Items": [
+              {
+                "Id": "album-continued",
+                "Name": "Late Rooms",
+                "AlbumArtist": "Mira Sol",
+                "ProductionYear": 2026,
+                "ChildCount": 10
+              }
+            ]
+          }
+        ''';
+      },
+    );
+
+    final page = await provider.browseDiscoveryCollectionsPage(
+      MusicCatalogDiscoveryKind.recentlyPlayed,
+      offset: 9,
+      limit: 1,
+    );
+
+    expect(
+      provider.pagedDiscoveryKinds,
+      <MusicCatalogDiscoveryKind>{
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.random,
+      },
+    );
+    expect(page.collections.single.id, 'album-continued');
+    expect(page.nextOffset, 10);
+    expect(page.totalCount, 12);
+    expect(page.hasMore, isTrue);
+    expect(capturedUri!.path, '/jellyfin/Users/user-1/Items');
+    expect(capturedUri!.queryParameters['StartIndex'], '9');
+    expect(capturedUri!.queryParameters['Limit'], '1');
+    expect(capturedUri!.queryParameters['EnableTotalRecordCount'], 'true');
+    expect(capturedUri!.queryParameters['SortBy'], 'DatePlayed');
+    expect(capturedUri!.queryParameters['IsPlayed'], 'true');
+
+    await expectLater(
+      provider.browseDiscoveryCollectionsPage(
+        MusicCatalogDiscoveryKind.recentlyAdded,
+      ),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      provider.browseDiscoveryCollectionsPage(
+        MusicCatalogDiscoveryKind.random,
+        offset: -1,
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      provider.browseDiscoveryCollectionsPage(
+        MusicCatalogDiscoveryKind.random,
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('loads Jellyfin instant-mix radio for track artist and album seeds',
       () async {
     final requests = <Uri>[];
