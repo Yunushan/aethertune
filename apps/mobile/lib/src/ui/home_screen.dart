@@ -9211,6 +9211,10 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               child: const Text('Public link'),
             ),
             TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('revokePublic'),
+              child: const Text('Revoke public link'),
+            ),
+            TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(
                 'viewer',
               ),
@@ -9246,6 +9250,15 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             ],
           ),
         );
+        return;
+      }
+      if (shareMode == 'revokePublic') {
+        await store.revokePublicLink(binding, library);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Revoked public smart-playlist link.')),
+          );
+        }
         return;
       }
       final role = shareMode == 'editor'

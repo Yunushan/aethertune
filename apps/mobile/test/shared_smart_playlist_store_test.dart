@@ -78,6 +78,14 @@ void main() {
       store.bindingForLocalSmartPlaylist(local.id)?.revision,
       2,
     );
+    await store.revokePublicLink(
+      store.bindingForLocalSmartPlaylist(local.id)!,
+      library,
+    );
+    expect(
+      store.bindingForLocalSmartPlaylist(local.id)?.revision,
+      3,
+    );
   });
 }
 
