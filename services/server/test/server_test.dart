@@ -1422,6 +1422,63 @@ void main() {
       expect(unauthenticated.statusCode, 401);
     });
 
+    test('stores portable manual playlist references without local identifiers',
+        () async {
+      final server = handler();
+      final accepted = await server(
+        _request(
+          'POST',
+          '/api/v1/shared-playlists',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 3,
+              'name': 'Portable',
+              'tracks': <Object?>[
+                <String, Object?>{
+                  'title': 'One',
+                  'artist': 'Artist',
+                  'album': 'Album',
+                  'durationMs': 180000,
+                },
+              ],
+            },
+          },
+        ),
+      );
+      expect(accepted.statusCode, 201);
+      final playlistId = (await _json(accepted))['id'] as String;
+
+      final rejected = await server(
+        _request(
+          'PUT',
+          '/api/v1/shared-playlists/$playlistId',
+          token: ownerToken,
+          jsonBody: <String, Object?>{
+            'baseRevision': 1,
+            'deviceId': 'owner-phone',
+            'playlist': <String, Object?>{
+              'version': 3,
+              'name': 'Portable',
+              'tracks': <Object?>[
+                <String, Object?>{
+                  'title': 'One',
+                  'artist': 'Artist',
+                  'album': 'Album',
+                  'durationMs': 180000,
+                  'localTrackId': 'private-device-id',
+                },
+              ],
+            },
+          },
+        ),
+      );
+      expect(rejected.statusCode, 400);
+      expect((await _json(rejected))['error'], 'invalid_shared_playlist');
+    });
+
     test('stores bounded smart-playlist rules without library data', () async {
       final server = handler();
       final smartDocument = <String, Object?>{

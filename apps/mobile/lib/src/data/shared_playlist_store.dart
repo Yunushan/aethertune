@@ -173,6 +173,7 @@ class SharedPlaylistStore extends ChangeNotifier {
       final remote = await _requireGateway().createSharedPlaylist(
         name: playlist.name,
         trackIds: playlist.trackIds,
+        trackReferences: _trackReferencesFor(library, playlist.trackIds),
       );
       final binding = SharedPlaylistBinding(
         remoteId: remote.id,
@@ -202,7 +203,10 @@ class SharedPlaylistStore extends ChangeNotifier {
         return bindingForLocalPlaylist(binding.localPlaylistId)!;
       }
       final playlist = await library.createPlaylist(remote.name);
-      await library.replacePlaylistTracks(playlist.id, remote.trackIds);
+      await library.replacePlaylistTracks(
+        playlist.id,
+        _trackIdsForRemote(library, remote),
+      );
       final binding = SharedPlaylistBinding(
         remoteId: remote.id,
         localPlaylistId: playlist.id,
@@ -257,6 +261,7 @@ class SharedPlaylistStore extends ChangeNotifier {
         baseRevision: binding.revision,
         name: revision.name,
         trackIds: revision.trackIds,
+        trackReferences: revision.trackReferences,
       );
       await _applyRemote(binding, remote, library);
       return bindingForLocalPlaylist(binding.localPlaylistId)!;
@@ -283,14 +288,20 @@ class SharedPlaylistStore extends ChangeNotifier {
       if (!current.canEdit) {
         throw StateError('This shared playlist is view-only.');
       }
+      final localReferences = _trackReferencesFor(library, playlist.trackIds);
       final remote = await _requireGateway().updateSharedPlaylist(
         playlistId: binding.remoteId,
         baseRevision: current.revision,
         name: preferLocalName ? playlist.name : current.name,
-        trackIds: mergeSharedPlaylistTrackIds(
-          current.trackIds,
-          playlist.trackIds,
-        ),
+        trackIds: current.trackReferences == null
+            ? mergeSharedPlaylistTrackIds(current.trackIds, playlist.trackIds)
+            : const <String>[],
+        trackReferences: current.trackReferences == null
+            ? null
+            : mergeSharedPlaylistTrackReferences(
+                current.trackReferences!,
+                localReferences,
+              ),
       );
       await _applyRemote(binding, remote, library);
       return bindingForLocalPlaylist(binding.localPlaylistId)!;
@@ -315,6 +326,7 @@ class SharedPlaylistStore extends ChangeNotifier {
         baseRevision: binding.revision,
         name: playlist.name,
         trackIds: playlist.trackIds,
+        trackReferences: _trackReferencesFor(library, playlist.trackIds),
       );
       await _replaceBinding(binding.fromRemote(remote));
       return bindingForLocalPlaylist(binding.localPlaylistId)!;
@@ -408,7 +420,10 @@ class SharedPlaylistStore extends ChangeNotifier {
     if (playlist.name != remote.name) {
       await library.renamePlaylist(playlist.id, remote.name);
     }
-    await library.replacePlaylistTracks(playlist.id, remote.trackIds);
+    await library.replacePlaylistTracks(
+      playlist.id,
+      _trackIdsForRemote(library, remote),
+    );
     await _replaceBinding(binding.fromRemote(remote));
   }
 
@@ -424,6 +439,57 @@ class SharedPlaylistStore extends ChangeNotifier {
     if (library.offlineModeEnabled) {
       throw StateError('Turn off offline mode before using shared playlists.');
     }
+  }
+
+  List<SharedPlaylistTrackReference> _trackReferencesFor(
+    LibraryStore library,
+    List<String> trackIds,
+  ) {
+    final tracksById = {
+      for (final track in library.tracks) track.id: track,
+    };
+    final references = <SharedPlaylistTrackReference>[];
+    for (final trackId in trackIds) {
+      final track = tracksById[trackId];
+      if (track == null) {
+        throw StateError('A shared playlist track is unavailable locally.');
+      }
+      references.add(
+        SharedPlaylistTrackReference(
+          title: track.title.trim(),
+          artist: track.artist.trim(),
+          album: track.album.trim(),
+          durationMilliseconds: track.duration.inMilliseconds,
+        ),
+      );
+    }
+    return List<SharedPlaylistTrackReference>.unmodifiable(references);
+  }
+
+  List<String> _trackIdsForRemote(
+    LibraryStore library,
+    SharedPlaylistRemote remote,
+  ) {
+    final references = remote.trackReferences;
+    if (references == null) {
+      return remote.trackIds;
+    }
+    final resolved = <String>[];
+    for (final reference in references) {
+      final candidates = library.tracks.where((track) {
+        if (normalizeSearchText(track.title) != normalizeSearchText(reference.title) ||
+            normalizeSearchText(track.artist) != normalizeSearchText(reference.artist) ||
+            normalizeSearchText(track.album) != normalizeSearchText(reference.album)) {
+          return false;
+        }
+        return reference.durationMilliseconds == 0 ||
+            (track.duration.inMilliseconds - reference.durationMilliseconds).abs() <= 2000;
+      }).toList(growable: false);
+      if (candidates.length == 1) {
+        resolved.add(candidates.single.id);
+      }
+    }
+    return resolved;
   }
 
   Future<void> _addBinding(SharedPlaylistBinding binding) async {
@@ -545,3 +611,33 @@ List<String> mergeSharedPlaylistTrackIds(
   }
   return List<String>.unmodifiable(merged);
 }
+
+/// Merges portable references using their normalized metadata identity.
+List<SharedPlaylistTrackReference> mergeSharedPlaylistTrackReferences(
+  List<SharedPlaylistTrackReference> serverReferences,
+  List<SharedPlaylistTrackReference> localReferences,
+) {
+  final remainingServerOccurrences = <String, int>{};
+  for (final reference in serverReferences) {
+    final key = _sharedPlaylistTrackReferenceKey(reference);
+    remainingServerOccurrences[key] = (remainingServerOccurrences[key] ?? 0) + 1;
+  }
+  final merged = <SharedPlaylistTrackReference>[...serverReferences];
+  for (final reference in localReferences) {
+    final key = _sharedPlaylistTrackReferenceKey(reference);
+    final remaining = remainingServerOccurrences[key] ?? 0;
+    if (remaining > 0) {
+      remainingServerOccurrences[key] = remaining - 1;
+    } else {
+      merged.add(reference);
+    }
+  }
+  return List<SharedPlaylistTrackReference>.unmodifiable(merged);
+}
+
+String _sharedPlaylistTrackReferenceKey(
+  SharedPlaylistTrackReference reference,
+) => '${normalizeSearchText(reference.title)}\u0000'
+    '${normalizeSearchText(reference.artist)}\u0000'
+    '${normalizeSearchText(reference.album)}\u0000'
+    '${reference.durationMilliseconds}';

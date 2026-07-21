@@ -819,6 +819,61 @@ void main() {
     expect(shared.collaborators, isEmpty);
   });
 
+  test('creates a cross-library shared playlist without device-local IDs',
+      () async {
+    final playlist = <String, Object?>{
+      'version': 3,
+      'name': 'Portable mix',
+      'tracks': <Object?>[
+        <String, Object?>{
+          'title': 'One',
+          'artist': 'Artist',
+          'album': 'Album',
+          'durationMs': 180000,
+        },
+      ],
+    };
+    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: 'private-sync-token',
+      httpExecutor: (method, uri, {required headers, body}) async {
+        final document = jsonDecode(body!)['playlist'] as Map;
+        expect(document, playlist);
+        expect(jsonEncode(document), isNot(contains('device-local-track-id')));
+        return LibrarySyncHttpResponse(
+          statusCode: 201,
+          body: jsonEncode(<String, Object?>{
+            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+            'revision': 1,
+            'role': 'owner',
+            'updatedAt': '2026-07-21T10:00:00.000Z',
+            'updatedByDevice': 'Test device',
+            'checksum': checksum,
+            'playlist': playlist,
+            'collaborators': <String, Object?>{},
+          }),
+        );
+      },
+    );
+
+    final shared = await client.createSharedPlaylist(
+      name: 'Portable mix',
+      trackIds: const <String>['device-local-track-id'],
+      trackReferences: const <SharedPlaylistTrackReference>[
+        SharedPlaylistTrackReference(
+          title: 'One',
+          artist: 'Artist',
+          album: 'Album',
+          durationMilliseconds: 180000,
+        ),
+      ],
+    );
+
+    expect(shared.trackIds, isEmpty);
+    expect(shared.trackReferences?.single.title, 'One');
+  });
+
   test('creates and parses a private shared smart-playlist definition', () async {
     final rule = <String, Object?>{
       'query': '',

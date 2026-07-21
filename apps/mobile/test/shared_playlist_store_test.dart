@@ -34,7 +34,10 @@ void main() {
     final published = await store.publish(hosted, library);
 
     expect(published.revision, 2);
-    expect(gateway.remote.trackIds, <String>['one', 'two', 'one']);
+    expect(
+      gateway.remote.trackReferences?.map((reference) => reference.title),
+      <String>['One', 'Two', 'One'],
+    );
   });
 
   test('joins an invite as a local playlist and preserves repeated tracks',
@@ -193,6 +196,98 @@ void main() {
       <String>['one', 'two', 'one', 'three', 'one'],
     );
   });
+
+  test('resolves only unambiguous portable shared tracks in another library',
+      () async {
+    final recipientLibrary = LibraryStore();
+    await recipientLibrary.load();
+    await recipientLibrary.addTracks(<Track>[
+      Track(
+        id: 'recipient-one',
+        title: 'One',
+        artist: 'Artist',
+        album: 'Album',
+        duration: const Duration(minutes: 3),
+        localPath: '/recipient/one.mp3',
+      ),
+      Track(
+        id: 'ambiguous-one',
+        title: 'One',
+        artist: 'Artist',
+        album: 'Album',
+        duration: const Duration(minutes: 3),
+        localPath: '/recipient/another-one.mp3',
+      ),
+      Track(
+        id: 'recipient-two',
+        title: 'Two',
+        artist: 'Artist',
+        album: 'Album',
+        duration: const Duration(minutes: 4),
+        localPath: '/recipient/two.mp3',
+      ),
+    ]);
+    final gateway = _MemorySharedPlaylistGateway()
+      ..remote = _remote(
+        role: SharedPlaylistAccessRole.viewer,
+        revision: 1,
+        trackIds: const <String>[],
+        trackReferences: const <SharedPlaylistTrackReference>[
+          SharedPlaylistTrackReference(
+            title: 'Two',
+            artist: 'Artist',
+            album: 'Album',
+            durationMilliseconds: 240000,
+          ),
+          SharedPlaylistTrackReference(
+            title: 'One',
+            artist: 'Artist',
+            album: 'Album',
+            durationMilliseconds: 180000,
+          ),
+          SharedPlaylistTrackReference(
+            title: 'Missing',
+            artist: 'Artist',
+            album: 'Album',
+            durationMilliseconds: 0,
+          ),
+        ],
+      );
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+
+    final binding = await store.joinInvite(
+      'BBBBBBBBBBBBBBBBBBBBBBBB',
+      recipientLibrary,
+    );
+
+    expect(
+      recipientLibrary.playlistById(binding.localPlaylistId)?.trackIds,
+      <String>['recipient-two'],
+    );
+  });
+
+  test('merges portable shared track references without dropping duplicates', () {
+    const one = SharedPlaylistTrackReference(
+      title: 'One',
+      artist: 'Artist',
+      album: 'Album',
+      durationMilliseconds: 180000,
+    );
+    const two = SharedPlaylistTrackReference(
+      title: 'Two',
+      artist: 'Artist',
+      album: 'Album',
+      durationMilliseconds: 240000,
+    );
+    expect(
+      mergeSharedPlaylistTrackReferences(
+        const <SharedPlaylistTrackReference>[one, two, one],
+        const <SharedPlaylistTrackReference>[one, one, two],
+      ),
+      const <SharedPlaylistTrackReference>[one, two, one, one],
+    );
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {
@@ -217,12 +312,14 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
   Future<SharedPlaylistRemote> createSharedPlaylist({
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   }) async {
     remote = _remote(
       role: SharedPlaylistAccessRole.owner,
       revision: 1,
       name: name,
-      trackIds: trackIds,
+      trackIds: trackReferences == null ? trackIds : const <String>[],
+      trackReferences: trackReferences,
     );
     return remote;
   }
@@ -247,8 +344,9 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
   ) async => <SharedPlaylistRevision>[
     SharedPlaylistRevision(
       revision: remote.revision,
-      name: remote.name,
-      trackIds: remote.trackIds,
+        name: remote.name,
+        trackIds: remote.trackIds,
+        trackReferences: remote.trackReferences,
       updatedAt: remote.updatedAt ?? DateTime.utc(2026, 7, 17),
       updatedByDevice: remote.updatedByDevice ?? 'Test device',
       checksum: 'a' * 64,
@@ -287,6 +385,7 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
       revision: remote.revision + 1,
       name: remote.name,
       trackIds: remote.trackIds,
+      trackReferences: remote.trackReferences,
       collaborators: collaborators,
     );
     return remote;
@@ -302,6 +401,7 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
     required int baseRevision,
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   }) async {
     if (baseRevision != remote.revision) {
       throw SharedPlaylistConflictException(currentRevision: remote.revision);
@@ -310,7 +410,8 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
       role: remote.role,
       revision: remote.revision + 1,
       name: name,
-      trackIds: trackIds,
+      trackIds: trackReferences == null ? trackIds : const <String>[],
+      trackReferences: trackReferences,
       collaborators: remote.collaborators,
     );
     return remote;
@@ -321,6 +422,7 @@ SharedPlaylistRemote _remote({
   required SharedPlaylistAccessRole role,
   required int revision,
   required List<String> trackIds,
+  List<SharedPlaylistTrackReference>? trackReferences,
   String name = 'Shared mix',
   Map<String, SharedPlaylistAccessRole> collaborators =
       const <String, SharedPlaylistAccessRole>{},
@@ -331,6 +433,7 @@ SharedPlaylistRemote _remote({
     role: role,
     name: name,
     trackIds: trackIds,
+    trackReferences: trackReferences,
     updatedAt: DateTime.utc(2026, 7, 17),
     updatedByDevice: 'Test device',
     collaborators: collaborators,

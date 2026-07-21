@@ -146,6 +146,32 @@ class SharedSmartPlaylistDocument {
   };
 }
 
+/// A privacy-bounded, cross-library identity for a manual shared playlist.
+///
+/// It deliberately excludes device-local IDs, paths, provider IDs, stream
+/// URLs, hashes, and fingerprints. Receivers resolve it only when it maps to
+/// exactly one local track.
+class SharedPlaylistTrackReference {
+  const SharedPlaylistTrackReference({
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.durationMilliseconds,
+  });
+
+  final String title;
+  final String artist;
+  final String album;
+  final int durationMilliseconds;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'title': title,
+    'artist': artist,
+    'album': album,
+    'durationMs': durationMilliseconds,
+  };
+}
+
 class SharedSmartPlaylistPublicLink {
   const SharedSmartPlaylistPublicLink({
     required this.uri,
@@ -242,6 +268,7 @@ class SharedPlaylistRemote {
     required this.role,
     required this.name,
     required this.trackIds,
+    this.trackReferences,
     this.kind = SharedPlaylistKind.manual,
     this.smartPlaylist,
     this.updatedAt,
@@ -255,6 +282,7 @@ class SharedPlaylistRemote {
   final SharedPlaylistAccessRole role;
   final String name;
   final List<String> trackIds;
+  final List<SharedPlaylistTrackReference>? trackReferences;
   final SharedPlaylistKind kind;
   final SharedSmartPlaylistDocument? smartPlaylist;
   final DateTime? updatedAt;
@@ -283,6 +311,7 @@ class SharedPlaylistRevision {
     required this.revision,
     required this.name,
     required this.trackIds,
+    this.trackReferences,
     this.kind = SharedPlaylistKind.manual,
     this.smartPlaylist,
     required this.updatedAt,
@@ -293,6 +322,7 @@ class SharedPlaylistRevision {
   final int revision;
   final String name;
   final List<String> trackIds;
+  final List<SharedPlaylistTrackReference>? trackReferences;
   final SharedPlaylistKind kind;
   final SharedSmartPlaylistDocument? smartPlaylist;
   final DateTime updatedAt;
@@ -352,6 +382,7 @@ abstract interface class SharedPlaylistGateway {
   Future<SharedPlaylistRemote> createSharedPlaylist({
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   });
 
   Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId);
@@ -365,6 +396,7 @@ abstract interface class SharedPlaylistGateway {
     required int baseRevision,
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   });
 
   Future<void> deleteSharedPlaylist({
@@ -633,8 +665,15 @@ class LibrarySyncClient
   Future<SharedPlaylistRemote> createSharedPlaylist({
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   }) async {
-    return _createSharedPlaylistDocument(_sharedPlaylistDocument(name, trackIds));
+    return _createSharedPlaylistDocument(
+      _sharedPlaylistDocument(
+        name,
+        trackIds,
+        trackReferences: trackReferences,
+      ),
+    );
   }
 
   /// Creates a private shared rule definition. Each device evaluates the rules
@@ -720,6 +759,7 @@ class LibrarySyncClient
     required int baseRevision,
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   }) async {
     final normalized = _requireSharedPlaylistId(playlistId);
     if (baseRevision <= 0) {
@@ -731,7 +771,11 @@ class LibrarySyncClient
       body: jsonEncode(<String, Object?>{
         'baseRevision': baseRevision,
         'deviceId': account.deviceId,
-        'playlist': _sharedPlaylistDocument(name, trackIds),
+        'playlist': _sharedPlaylistDocument(
+          name,
+          trackIds,
+          trackReferences: trackReferences,
+        ),
       }),
     );
     if (response.statusCode == 409) {
@@ -1243,6 +1287,7 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
     role: role,
     name: parsedDocument.name,
     trackIds: parsedDocument.trackIds,
+    trackReferences: parsedDocument.trackReferences,
     kind: parsedDocument.kind,
     smartPlaylist: parsedDocument.smartPlaylist,
     updatedAt: _optionalDate(body['updatedAt']),
@@ -1284,6 +1329,7 @@ SharedPlaylistRevision _parseSharedPlaylistRevision(
     revision: revision,
     name: parsedDocument.name,
     trackIds: parsedDocument.trackIds,
+    trackReferences: parsedDocument.trackReferences,
     kind: parsedDocument.kind,
     smartPlaylist: parsedDocument.smartPlaylist,
     updatedAt: updatedAt,
@@ -1297,12 +1343,14 @@ class _ParsedSharedPlaylistDocument {
     required this.name,
     required this.trackIds,
     required this.kind,
+    this.trackReferences,
     this.smartPlaylist,
   });
 
   final String name;
   final List<String> trackIds;
   final SharedPlaylistKind kind;
+  final List<SharedPlaylistTrackReference>? trackReferences;
   final SharedSmartPlaylistDocument? smartPlaylist;
 }
 
@@ -1340,6 +1388,32 @@ _ParsedSharedPlaylistDocument _parseSharedPlaylistDocument(
       kind: SharedPlaylistKind.manual,
     );
   }
+  if (document['version'] == 3) {
+    if (document.keys.any((key) => key != 'version' && key != 'name' && key != 'tracks')) {
+      throw const FormatException('Shared playlist document is invalid.');
+    }
+    final rawTracks = document['tracks'];
+    if (rawTracks is! List || rawTracks.length > 200) {
+      throw const FormatException('Shared playlist track references are invalid.');
+    }
+    final trackReferences = <SharedPlaylistTrackReference>[];
+    for (final value in rawTracks) {
+      if (value is! Map) {
+        throw const FormatException('Shared playlist track references are invalid.');
+      }
+      trackReferences.add(
+        _parseSharedPlaylistTrackReference(Map<String, Object?>.from(value)),
+      );
+    }
+    return _ParsedSharedPlaylistDocument(
+      name: name,
+      trackIds: const <String>[],
+      trackReferences: List<SharedPlaylistTrackReference>.unmodifiable(
+        trackReferences,
+      ),
+      kind: SharedPlaylistKind.manual,
+    );
+  }
   if (document['version'] != 2 ||
       document['kind'] != 'smart' ||
       document.keys.any(
@@ -1356,6 +1430,38 @@ _ParsedSharedPlaylistDocument _parseSharedPlaylistDocument(
     trackIds: const <String>[],
     kind: SharedPlaylistKind.smart,
     smartPlaylist: SharedSmartPlaylistDocument(name: name, rule: rule),
+  );
+}
+
+SharedPlaylistTrackReference _parseSharedPlaylistTrackReference(
+  Map<String, Object?> reference,
+) {
+  const allowed = <String>{'title', 'artist', 'album', 'durationMs'};
+  if (reference.keys.any((key) => !allowed.contains(key))) {
+    throw const FormatException('Shared playlist track references are invalid.');
+  }
+  String text(String key) {
+    final value = reference[key];
+    if (value is! String ||
+        value != value.trim() ||
+        value.isEmpty ||
+        value.length > 160) {
+      throw const FormatException('Shared playlist track references are invalid.');
+    }
+    return value;
+  }
+
+  final durationMilliseconds = reference['durationMs'];
+  if (durationMilliseconds is! int ||
+      durationMilliseconds < 0 ||
+      durationMilliseconds > 86400000) {
+    throw const FormatException('Shared playlist track references are invalid.');
+  }
+  return SharedPlaylistTrackReference(
+    title: text('title'),
+    artist: text('artist'),
+    album: text('album'),
+    durationMilliseconds: durationMilliseconds,
   );
 }
 
@@ -1475,7 +1581,23 @@ SharedPlaylistConflictException _parseSharedPlaylistConflict(String rawBody) {
 Map<String, Object?> _sharedPlaylistDocument(
   String name,
   List<String> trackIds,
+  {List<SharedPlaylistTrackReference>? trackReferences,}
 ) {
+  if (trackReferences != null) {
+    final candidate = <String, Object?>{
+      'version': 3,
+      'name': name.trim(),
+      'tracks': trackReferences.map((reference) => reference.toJson()).toList(),
+    };
+    final parsed = _parseSharedPlaylistDocument(candidate);
+    return <String, Object?>{
+      'version': 3,
+      'name': parsed.name,
+      'tracks': parsed.trackReferences!
+          .map((reference) => reference.toJson())
+          .toList(growable: false),
+    };
+  }
   final normalizedName = name.trim();
   if (normalizedName.isEmpty || normalizedName.length > 160 || trackIds.length > 500) {
     throw const FormatException('Shared playlist document is invalid.');

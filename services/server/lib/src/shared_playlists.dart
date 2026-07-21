@@ -650,6 +650,10 @@ void validateSharedPlaylistDocument(Map<String, Object?> document) {
     _validateSharedSmartPlaylistDocument(document);
     return;
   }
+  if (version == 3) {
+    _validatePortableSharedPlaylistDocument(document);
+    return;
+  }
   const allowed = <String>{'version', 'name', 'trackIds'};
   if (document.keys.any((key) => !allowed.contains(key))) {
     throw const FormatException('Shared playlists contain unsupported fields.');
@@ -671,6 +675,50 @@ void validateSharedPlaylistDocument(Map<String, Object?> document) {
         trackId.isEmpty ||
         trackId.length > 256) {
       throw const FormatException('Shared playlist track IDs are invalid.');
+    }
+  }
+}
+
+/// Validates a cross-library manual playlist without accepting any device or
+/// provider-specific identifiers.
+void _validatePortableSharedPlaylistDocument(Map<String, Object?> document) {
+  const allowed = <String>{'version', 'name', 'tracks'};
+  if (document.keys.any((key) => !allowed.contains(key))) {
+    throw const FormatException('Shared playlists contain unsupported fields.');
+  }
+  final name = document['name'];
+  final tracks = document['tracks'];
+  if (name is! String ||
+      name != name.trim() ||
+      name.isEmpty ||
+      name.length > 160 ||
+      tracks is! List ||
+      tracks.length > 200) {
+    throw const FormatException('Shared playlist document is invalid.');
+  }
+  for (final value in tracks) {
+    if (value is! Map) {
+      throw const FormatException('Shared playlist track references are invalid.');
+    }
+    final reference = Map<String, Object?>.from(value);
+    const referenceFields = <String>{'title', 'artist', 'album', 'durationMs'};
+    if (reference.keys.any((key) => !referenceFields.contains(key))) {
+      throw const FormatException('Shared playlist track references are invalid.');
+    }
+    for (final field in <String>['title', 'artist', 'album']) {
+      final text = reference[field];
+      if (text is! String ||
+          text != text.trim() ||
+          text.isEmpty ||
+          text.length > 160) {
+        throw const FormatException('Shared playlist track references are invalid.');
+      }
+    }
+    final durationMilliseconds = reference['durationMs'];
+    if (durationMilliseconds is! int ||
+        durationMilliseconds < 0 ||
+        durationMilliseconds > 86400000) {
+      throw const FormatException('Shared playlist track references are invalid.');
     }
   }
 }

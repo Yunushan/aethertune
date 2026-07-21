@@ -351,6 +351,7 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
   Future<SharedPlaylistRemote> createSharedPlaylist({
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   }) => throw UnimplementedError();
 
   @override
@@ -364,6 +365,7 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
     required int baseRevision,
     required String name,
     required List<String> trackIds,
+    List<SharedPlaylistTrackReference>? trackReferences,
   }) => throw UnimplementedError();
 
   @override
