@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/playlist.dart';
+import '../domain/provider_search.dart';
 import '../domain/search_matcher.dart';
+import '../domain/track.dart';
 import 'library_store.dart';
 import 'library_sync_client.dart';
 
@@ -245,6 +247,99 @@ class SharedPlaylistStore extends ChangeNotifier {
       final remote = await _requireGateway().fetchSharedPlaylist(binding.remoteId);
       await _applyRemote(binding, remote, library);
       return bindingForLocalPlaylist(binding.localPlaylistId)!;
+    });
+  }
+
+  /// Searches user-configured providers for strict matches to unresolved
+  /// portable references. This is deliberately opt-in: the server receives no
+  /// provider IDs, local paths, stream URLs, credentials, or match results.
+  Future<SharedPlaylistProviderResolution> resolveUnavailableTracks(
+    SharedPlaylistBinding binding,
+    LibraryStore library,
+    ProviderSearchCoordinator coordinator,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      if (coordinator.providers.isEmpty) {
+        throw StateError('Configure a searchable music provider first.');
+      }
+      final remote = await _requireGateway().fetchSharedPlaylist(binding.remoteId);
+      final references = remote.trackReferences;
+      if (references == null) {
+        throw StateError(
+          'Only portable shared playlists can search provider matches.',
+        );
+      }
+
+      final before = _trackResolutionForRemote(library, remote);
+      if (before.unavailableTrackCount == 0) {
+        await _applyRemote(binding, remote, library);
+        return const SharedPlaylistProviderResolution(
+          resolvedTrackCount: 0,
+          unavailableTrackCount: 0,
+          providerErrorCount: 0,
+        );
+      }
+
+      final unresolved = <String, SharedPlaylistTrackReference>{};
+      for (final reference in references) {
+        if (_matchingTracksForReference(library.tracks, reference).length != 1) {
+          unresolved.putIfAbsent(
+            _sharedPlaylistTrackReferenceKey(reference),
+            () => reference,
+          );
+        }
+      }
+
+      final providerMatches = <Track>[];
+      final workingTracks = <Track>[...library.tracks];
+      var workingUnavailableTrackCount = before.unavailableTrackCount;
+      var providerErrorCount = 0;
+      for (final reference in unresolved.values) {
+        final response = await coordinator.search(
+          '${reference.title} ${reference.artist} ${reference.album}',
+        );
+        providerErrorCount += response.errors.length;
+        final candidates = response.results
+            .map((result) => result.track)
+            .where(
+              (track) =>
+                  coordinator.canResolve(track) &&
+                  _matchesSharedPlaylistTrackReference(track, reference),
+            )
+            .toList(growable: false);
+        if (candidates.length == 1) {
+          final candidate = candidates.single;
+          if (workingTracks.any((track) => track.id == candidate.id)) {
+            continue;
+          }
+          final nextTracks = <Track>[...workingTracks, candidate];
+          final nextUnavailableTrackCount =
+              _unavailableTrackCountForReferences(nextTracks, references);
+          if (nextUnavailableTrackCount < workingUnavailableTrackCount &&
+              !_losesSharedPlaylistResolution(
+                workingTracks,
+                nextTracks,
+                references,
+              )) {
+            providerMatches.add(candidate);
+            workingTracks.add(candidate);
+            workingUnavailableTrackCount = nextUnavailableTrackCount;
+          }
+        }
+      }
+
+      if (providerMatches.isNotEmpty) {
+        await library.addTracks(providerMatches);
+      }
+      await _applyRemote(binding, remote, library);
+      final updated = bindingForLocalPlaylist(binding.localPlaylistId)!;
+      return SharedPlaylistProviderResolution(
+        resolvedTrackCount:
+            before.unavailableTrackCount - updated.unavailableTrackCount,
+        unavailableTrackCount: updated.unavailableTrackCount,
+        providerErrorCount: providerErrorCount,
+      );
     });
   }
 
@@ -502,15 +597,7 @@ class SharedPlaylistStore extends ChangeNotifier {
     }
     final resolved = <String>[];
     for (final reference in references) {
-      final candidates = library.tracks.where((track) {
-        if (normalizeSearchText(track.title) != normalizeSearchText(reference.title) ||
-            normalizeSearchText(track.artist) != normalizeSearchText(reference.artist) ||
-            normalizeSearchText(track.album) != normalizeSearchText(reference.album)) {
-          return false;
-        }
-        return reference.durationMilliseconds == 0 ||
-            (track.duration.inMilliseconds - reference.durationMilliseconds).abs() <= 2000;
-      }).toList(growable: false);
+      final candidates = _matchingTracksForReference(library.tracks, reference);
       if (candidates.length == 1) {
         resolved.add(candidates.single.id);
       }
@@ -570,6 +657,18 @@ class SharedPlaylistStore extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+class SharedPlaylistProviderResolution {
+  const SharedPlaylistProviderResolution({
+    required this.resolvedTrackCount,
+    required this.unavailableTrackCount,
+    required this.providerErrorCount,
+  });
+
+  final int resolvedTrackCount;
+  final int unavailableTrackCount;
+  final int providerErrorCount;
 }
 
 class _SharedPlaylistTrackResolution {
@@ -680,3 +779,45 @@ String _sharedPlaylistTrackReferenceKey(
     '${normalizeSearchText(reference.artist)}\u0000'
     '${normalizeSearchText(reference.album)}\u0000'
     '${reference.durationMilliseconds}';
+
+List<Track> _matchingTracksForReference(
+  Iterable<Track> tracks,
+  SharedPlaylistTrackReference reference,
+) => tracks
+    .where((track) => _matchesSharedPlaylistTrackReference(track, reference))
+    .toList(growable: false);
+
+bool _matchesSharedPlaylistTrackReference(
+  Track track,
+  SharedPlaylistTrackReference reference,
+) {
+  if (normalizeSearchText(track.title) != normalizeSearchText(reference.title) ||
+      normalizeSearchText(track.artist) != normalizeSearchText(reference.artist) ||
+      normalizeSearchText(track.album) != normalizeSearchText(reference.album)) {
+    return false;
+  }
+  return reference.durationMilliseconds == 0 ||
+      (track.duration.inMilliseconds - reference.durationMilliseconds).abs() <=
+          2000;
+}
+
+int _unavailableTrackCountForReferences(
+  Iterable<Track> tracks,
+  Iterable<SharedPlaylistTrackReference> references,
+) => references
+    .where((reference) => _matchingTracksForReference(tracks, reference).length != 1)
+    .length;
+
+bool _losesSharedPlaylistResolution(
+  Iterable<Track> before,
+  Iterable<Track> after,
+  Iterable<SharedPlaylistTrackReference> references,
+) {
+  for (final reference in references) {
+    if (_matchingTracksForReference(before, reference).length == 1 &&
+        _matchingTracksForReference(after, reference).length != 1) {
+      return true;
+    }
+  }
+  return false;
+}

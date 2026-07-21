@@ -6,9 +6,15 @@ import '../../data/library_store.dart';
 import '../../data/library_sync_client.dart';
 import '../../data/library_sync_store.dart';
 import '../../data/listen_together_store.dart';
+import '../../data/custom_catalog_store.dart';
 import '../../data/shared_playlist_store.dart';
+import '../../data/self_hosted_provider_store.dart';
+import '../../data/spotify_settings_store.dart';
+import '../../data/youtube_data_settings_store.dart';
 import '../../domain/library_sync_account.dart';
 import '../../domain/library_sync_profile.dart';
+import '../../domain/music_source_provider.dart';
+import '../../domain/provider_search.dart';
 import '../../player/player_controller.dart';
 
 enum _LibrarySyncConflictChoice { server, merge, local }
@@ -708,6 +714,84 @@ class LibrarySyncPanel extends StatelessWidget {
         _showError(context, 'Could not publish shared playlist: $error');
       }
     }
+  }
+
+  static Future<void> _resolveUnavailableSharedPlaylistTracks(
+    BuildContext context,
+    SharedPlaylistBinding binding,
+  ) async {
+    final providers = _sharedPlaylistSearchProviders(context);
+    if (providers.isEmpty) {
+      _showError(context, 'Configure a searchable music provider first.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Find unavailable shared tracks?'),
+        content: Text(
+          'AetherTune will send only each unavailable shared track\'s title, '
+          'artist, and album to ${providers.map((provider) => provider.name).join(', ')}. '
+          'It adds a result only when exactly one provider track matches the '
+          'shared metadata and duration; local paths, provider credentials, '
+          'and private playlist data are not sent.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Search providers'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      final resolution = await context
+          .read<SharedPlaylistStore>()
+          .resolveUnavailableTracks(
+            binding,
+            context.read<LibraryStore>(),
+            ProviderSearchCoordinator(providers, maxResultsPerProvider: 8),
+          );
+      if (context.mounted) {
+        final errorSuffix = resolution.providerErrorCount == 0
+            ? ''
+            : ' ${resolution.providerErrorCount} provider search(es) failed.';
+        _showSuccess(
+          context,
+          'Resolved ${resolution.resolvedTrackCount} shared track(s); '
+          '${resolution.unavailableTrackCount} still unavailable.$errorSuffix',
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        _showError(context, 'Could not find provider matches: $error');
+      }
+    }
+  }
+
+  static List<MusicSourceProvider> _sharedPlaylistSearchProviders(
+    BuildContext context,
+  ) {
+    final providers = <MusicSourceProvider>[
+      ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
+      ...?context.read<SpotifySettingsStore?>()?.musicProviders,
+      ...context.read<SelfHostedProviderStore>().musicProviders,
+      ...?context.read<CustomCatalogStore?>()?.musicProviders,
+    ];
+    return providers
+        .where(
+          (provider) => provider.capabilities.contains(
+            MusicSourceCapability.metadataSearch,
+          ),
+        )
+        .toList(growable: false);
   }
 
   static Future<void> _mergeSharedPlaylist(
@@ -1504,6 +1588,12 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
             case _SharedPlaylistAction.history:
               LibrarySyncPanel._showSharedPlaylistHistory(context, binding);
               break;
+            case _SharedPlaylistAction.resolve:
+              LibrarySyncPanel._resolveUnavailableSharedPlaylistTracks(
+                context,
+                binding,
+              );
+              break;
             case _SharedPlaylistAction.publish:
               LibrarySyncPanel._publishSharedPlaylist(context, binding);
               break;
@@ -1545,6 +1635,14 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
               title: Text('Revision history'),
             ),
           ),
+          if (binding.unavailableTrackCount > 0)
+            const PopupMenuItem(
+              value: _SharedPlaylistAction.resolve,
+              child: ListTile(
+                leading: Icon(Icons.travel_explore_outlined),
+                title: Text('Find unavailable tracks'),
+              ),
+            ),
           if (binding.canEdit)
             const PopupMenuItem(
               value: _SharedPlaylistAction.publish,
@@ -1610,6 +1708,7 @@ class _SharedPlaylistBindingTile extends StatelessWidget {
 enum _SharedPlaylistAction {
   refresh,
   history,
+  resolve,
   publish,
   merge,
   invite,

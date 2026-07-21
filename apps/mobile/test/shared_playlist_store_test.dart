@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/shared_playlist_store.dart';
+import 'package:aethertune/src/domain/music_source_provider.dart';
+import 'package:aethertune/src/domain/provider_search.dart';
 import 'package:aethertune/src/domain/track.dart';
 
 void main() {
@@ -294,6 +296,187 @@ void main() {
       <String>['One', 'Two', 'One', 'One'],
     );
   });
+
+  test('adds only a single exact provider match for an unavailable shared track',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final gateway = _MemorySharedPlaylistGateway()
+      ..remote = _remote(
+        role: SharedPlaylistAccessRole.viewer,
+        revision: 1,
+        trackIds: const <String>[],
+        trackReferences: const <SharedPlaylistTrackReference>[
+          SharedPlaylistTrackReference(
+            title: 'Provider song',
+            artist: 'Provider artist',
+            album: 'Provider album',
+            durationMilliseconds: 180000,
+          ),
+        ],
+      );
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final binding = await store.joinInvite(
+      'BBBBBBBBBBBBBBBBBBBBBBBB',
+      library,
+    );
+    final provider = _SearchProvider(
+      tracks: <Track>[
+        Track(
+          id: 'provider-song',
+          title: 'Provider song',
+          artist: 'Provider artist',
+          album: 'Provider album',
+          duration: const Duration(minutes: 3),
+          sourceId: 'provider',
+          streamUrl: 'https://catalog.example.test/provider-song',
+        ),
+      ],
+    );
+
+    final result = await store.resolveUnavailableTracks(
+      binding,
+      library,
+      ProviderSearchCoordinator(<MusicSourceProvider>[provider]),
+    );
+
+    expect(result.resolvedTrackCount, 1);
+    expect(result.unavailableTrackCount, 0);
+    expect(result.providerErrorCount, 0);
+    expect(provider.queries, <String>['Provider song Provider artist Provider album']);
+    expect(library.playlistById(binding.localPlaylistId)?.trackIds, <String>[
+      'provider-song',
+    ]);
+    expect(store.bindings.single.unavailableTrackCount, 0);
+  });
+
+  test('keeps provider results unavailable when an exact match is ambiguous',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    final gateway = _MemorySharedPlaylistGateway()
+      ..remote = _remote(
+        role: SharedPlaylistAccessRole.viewer,
+        revision: 1,
+        trackIds: const <String>[],
+        trackReferences: const <SharedPlaylistTrackReference>[
+          SharedPlaylistTrackReference(
+            title: 'Provider song',
+            artist: 'Provider artist',
+            album: 'Provider album',
+            durationMilliseconds: 180000,
+          ),
+        ],
+      );
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final binding = await store.joinInvite(
+      'BBBBBBBBBBBBBBBBBBBBBBBB',
+      library,
+    );
+    final provider = _SearchProvider(
+      tracks: <Track>[
+        Track(
+          id: 'provider-song-one',
+          title: 'Provider song',
+          artist: 'Provider artist',
+          album: 'Provider album',
+          duration: const Duration(minutes: 3),
+          sourceId: 'provider',
+          streamUrl: 'https://catalog.example.test/provider-song-one',
+        ),
+        Track(
+          id: 'provider-song-two',
+          title: 'Provider song',
+          artist: 'Provider artist',
+          album: 'Provider album',
+          duration: const Duration(minutes: 3),
+          sourceId: 'provider',
+          streamUrl: 'https://catalog.example.test/provider-song-two',
+        ),
+      ],
+    );
+
+    final result = await store.resolveUnavailableTracks(
+      binding,
+      library,
+      ProviderSearchCoordinator(<MusicSourceProvider>[provider]),
+    );
+
+    expect(result.resolvedTrackCount, 0);
+    expect(result.unavailableTrackCount, 1);
+    expect(library.tracks, isEmpty);
+    expect(library.playlistById(binding.localPlaylistId)?.trackIds, isEmpty);
+  });
+
+  test('does not make a resolved duration-less shared track ambiguous',
+      () async {
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[
+      Track(
+        id: 'existing-song',
+        title: 'Provider song',
+        artist: 'Provider artist',
+        album: 'Provider album',
+        duration: const Duration(minutes: 2),
+        localPath: '/library/existing-song.mp3',
+      ),
+    ]);
+    final gateway = _MemorySharedPlaylistGateway()
+      ..remote = _remote(
+        role: SharedPlaylistAccessRole.viewer,
+        revision: 1,
+        trackIds: const <String>[],
+        trackReferences: const <SharedPlaylistTrackReference>[
+          SharedPlaylistTrackReference(
+            title: 'Provider song',
+            artist: 'Provider artist',
+            album: 'Provider album',
+            durationMilliseconds: 0,
+          ),
+          SharedPlaylistTrackReference(
+            title: 'Provider song',
+            artist: 'Provider artist',
+            album: 'Provider album',
+            durationMilliseconds: 180000,
+          ),
+        ],
+      );
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    await store.load();
+    final binding = await store.joinInvite(
+      'BBBBBBBBBBBBBBBBBBBBBBBB',
+      library,
+    );
+    final provider = _SearchProvider(
+      tracks: <Track>[
+        Track(
+          id: 'provider-song',
+          title: 'Provider song',
+          artist: 'Provider artist',
+          album: 'Provider album',
+          duration: const Duration(minutes: 3),
+          sourceId: 'provider',
+          streamUrl: 'https://catalog.example.test/provider-song',
+        ),
+      ],
+    );
+
+    final result = await store.resolveUnavailableTracks(
+      binding,
+      library,
+      ProviderSearchCoordinator(<MusicSourceProvider>[provider]),
+    );
+
+    expect(result.resolvedTrackCount, 0);
+    expect(result.unavailableTrackCount, 1);
+    expect(library.tracks.map((track) => track.id), <String>['existing-song']);
+    expect(library.playlistById(binding.localPlaylistId)?.trackIds, <String>[
+      'existing-song',
+    ]);
+  });
 }
 
 Future<LibraryStore> _libraryWithTracks() async {
@@ -304,6 +487,39 @@ Future<LibraryStore> _libraryWithTracks() async {
     Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
   ]);
   return library;
+}
+
+class _SearchProvider implements MusicSourceProvider {
+  _SearchProvider({required this.tracks});
+
+  final List<Track> tracks;
+  final List<String> queries = <String>[];
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{MusicSourceCapability.metadataSearch};
+
+  @override
+  String get description => 'Test provider';
+
+  @override
+  ProviderPrivacyDisclosure get disclosure =>
+      const ProviderPrivacyDisclosure(networkDomains: <String>['catalog.example.test']);
+
+  @override
+  String get id => 'provider';
+
+  @override
+  String get name => 'Test provider';
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
+
+  @override
+  Future<List<Track>> search(String query) async {
+    queries.add(query);
+    return tracks;
+  }
 }
 
 class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
