@@ -280,12 +280,13 @@ void main() {
       album: 'Album',
       durationMilliseconds: 240000,
     );
+    final merged = mergeSharedPlaylistTrackReferences(
+      const <SharedPlaylistTrackReference>[one, two, one],
+      const <SharedPlaylistTrackReference>[one, one, two],
+    );
     expect(
-      mergeSharedPlaylistTrackReferences(
-        const <SharedPlaylistTrackReference>[one, two, one],
-        const <SharedPlaylistTrackReference>[one, one, two],
-      ),
-      const <SharedPlaylistTrackReference>[one, two, one, one],
+      merged.map((reference) => reference.title),
+      <String>['One', 'Two', 'One', 'One'],
     );
   });
 }
