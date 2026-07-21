@@ -20,34 +20,59 @@ import '../../player/player_controller.dart';
 enum _LibrarySyncConflictChoice { server, merge, local }
 
 Future<void> _showPublicProfileDiscovery(BuildContext context) async {
-  final controller = TextEditingController();
-  List<LibrarySyncPublicProfile>? profiles;
-  String? error;
-  var searching = false;
-  StateSetter? update;
-  Future<void> search() async {
-    final query = controller.text.trim();
-    if (query.length < 2) {
-      update?.call(() => error = 'Enter at least two characters.');
-      return;
-    }
-    update?.call(() { searching = true; error = null; });
-    try {
-      profiles = await context
-          .read<LibrarySyncStore>()
-          .findPublicProfiles(context.read<LibraryStore>(), query);
-    } on Object catch (_) {
-      error = 'Could not search public profiles.';
-    } finally {
-      update?.call(() => searching = false);
-    }
-  }
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (dialogContext, setState) {
-        update = setState;
-        return AlertDialog(
+    builder: (_) => const _PublicProfileDiscoveryDialog(),
+  );
+}
+
+class _PublicProfileDiscoveryDialog extends StatefulWidget {
+  const _PublicProfileDiscoveryDialog();
+
+  @override
+  State<_PublicProfileDiscoveryDialog> createState() =>
+      _PublicProfileDiscoveryDialogState();
+}
+
+class _PublicProfileDiscoveryDialogState
+    extends State<_PublicProfileDiscoveryDialog> {
+  final _controller = TextEditingController();
+  List<LibrarySyncPublicProfile>? _profiles;
+  String? _error;
+  var _searching = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.length < 2) {
+      setState(() => _error = 'Enter at least two characters.');
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final profiles = await context
+          .read<LibrarySyncStore>()
+          .findPublicProfiles(context.read<LibraryStore>(), query);
+      if (!mounted) return;
+      setState(() => _profiles = profiles);
+    } on Object catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not search public profiles.');
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
         title: const Text('Find public profiles'),
         content: SizedBox(
           width: 420,
@@ -56,47 +81,50 @@ Future<void> _showPublicProfileDiscovery(BuildContext context) async {
             children: <Widget>[
               TextField(
                 key: const Key('library-sync-profile-search-query'),
-                controller: controller,
+                controller: _controller,
                 autofocus: true,
                 textInputAction: TextInputAction.search,
                 decoration: const InputDecoration(labelText: 'Name'),
-                onSubmitted: (_) => search(),
+                onSubmitted: (_) => _search(),
               ),
-              if (searching) const Padding(
+              if (_searching) const Padding(
                 padding: EdgeInsets.only(top: 16),
                 child: CircularProgressIndicator(),
               ),
-              if (error != null) Padding(
+              if (_error != null) Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Text(error!, key: const Key('library-sync-profile-search-error')),
+                child: Text(
+                  _error!,
+                  key: const Key('library-sync-profile-search-error'),
+                ),
               ),
-              if (profiles != null) ...<Widget>[
+              if (_profiles != null) ...<Widget>[
                 const SizedBox(height: 12),
-                for (final profile in profiles!) ListTile(
+                for (final profile in _profiles!) ListTile(
                   dense: true,
-                  leading: CircleAvatar(child: Text(profile.displayName[0].toUpperCase())),
+                  leading: CircleAvatar(
+                    child: Text(profile.displayName[0].toUpperCase()),
+                  ),
                   title: Text(profile.displayName),
                   subtitle: Text(profile.id),
                 ),
-                if (profiles!.isEmpty) const Text('No public profiles matched.'),
+                if (_profiles!.isEmpty)
+                  const Text('No public profiles matched.'),
               ],
             ],
           ),
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
           FilledButton(
-            onPressed: searching ? null : search,
+            onPressed: _searching ? null : _search,
             child: const Text('Search'),
           ),
         ],
       );
-      },
-    ),
-  );
-  update = null;
-  controller.dispose();
-}
 
 class LibrarySyncPanel extends StatelessWidget {
   const LibrarySyncPanel({super.key});
