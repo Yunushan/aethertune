@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/playlist.dart';
+import '../domain/music_source_provider.dart';
 import '../domain/provider_search.dart';
 import '../domain/search_matcher.dart';
 import '../domain/track.dart';
