@@ -1,3 +1,4 @@
+import 'music_catalog_provider.dart';
 import 'music_source_provider.dart';
 
 /// The semantic version of AetherTune's public provider SDK.
@@ -39,6 +40,7 @@ enum MusicSourceProviderContractIssueCode {
   undisclosedMediaCache,
   undisclosedDownloads,
   missingSuggestionExtension,
+  missingFavoriteMutationExtension,
 }
 
 /// Validates the stable v1 provider requirements without making network calls.
@@ -182,6 +184,19 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
         code: MusicSourceProviderContractIssueCode.missingSuggestionExtension,
         message:
             'Search suggestions capability requires MusicSourceSearchSuggestionProvider.',
+      ),
+    );
+  }
+  if (provider.capabilities.contains(
+        MusicSourceCapability.favoriteMutation,
+      ) &&
+      provider is! MusicTrackFavoriteMutationProvider) {
+    issues.add(
+      const MusicSourceProviderContractIssue(
+        code:
+            MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
+        message:
+            'Server favorites capability requires MusicTrackFavoriteMutationProvider.',
       ),
     );
   }

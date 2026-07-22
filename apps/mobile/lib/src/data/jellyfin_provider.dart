@@ -22,6 +22,7 @@ class JellyfinProvider
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
+        MusicTrackFavoriteMutationProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
   JellyfinProvider({
@@ -47,6 +48,7 @@ class JellyfinProvider
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
     MusicSourceCapability.playlistMutation,
+    MusicSourceCapability.favoriteMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -90,6 +92,7 @@ class JellyfinProvider
           'Home discovery list selection and result limit',
           'radio seed item identifier and result limit',
           'playlist names, membership, and track order changes',
+          'favorite track changes',
           'audio item stream identifier',
           'cover art item identifier',
         ],
@@ -660,6 +663,21 @@ class JellyfinProvider
     );
   }
 
+  @override
+  Future<void> setTrackFavorite(
+    String trackId, {
+    required bool isFavorite,
+  }) {
+    final normalizedTrackId = _requiredPlaylistId(trackId);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Users/$userId/FavoriteItems/$normalizedTrackId'),
+        isFavorite ? 'POST' : 'DELETE',
+        null,
+      ),
+    );
+  }
+
   Uri _itemsUri({
     required String itemType,
     Map<String, String> extra = const <String, String>{},
@@ -745,6 +763,7 @@ final class JellyfinAudioItem {
     required this.genre,
     required this.duration,
     required this.primaryImageTag,
+    this.isFavorite = false,
   });
 
   final String id;
@@ -754,6 +773,7 @@ final class JellyfinAudioItem {
   final String genre;
   final Duration duration;
   final String primaryImageTag;
+  final bool isFavorite;
 
   bool get hasPrimaryImage => primaryImageTag.isNotEmpty;
 
@@ -776,6 +796,7 @@ final class JellyfinAudioItem {
       streamUrl: streamUri?.toString(),
       sourceId: sourceId,
       externalId: id,
+      isFavorite: isFavorite,
     );
   }
 }
@@ -1004,7 +1025,13 @@ JellyfinAudioItem? _audioItemFromJson(Map<String, Object?> json) {
     genre: _firstString(json['Genres']),
     duration: _durationFromTicks(json['RunTimeTicks']),
     primaryImageTag: _primaryImageTag(json),
+    isFavorite: _jellyfinIsFavorite(json),
   );
+}
+
+bool _jellyfinIsFavorite(Map<String, Object?> json) {
+  final userData = json['UserData'];
+  return userData is Map<dynamic, dynamic> && userData['IsFavorite'] == true;
 }
 
 Future<String> _loadJellyfinJson(Uri uri) async {

@@ -146,6 +146,11 @@ void main() {
       )) {
         expect(provider, isA<MusicSourceSearchSuggestionProvider>());
       }
+      if (provider.capabilities.contains(
+        MusicSourceCapability.favoriteMutation,
+      )) {
+        expect(provider, isA<MusicTrackFavoriteMutationProvider>());
+      }
 
       final contractReport = validateMusicSourceProviderContract(provider);
       expect(
@@ -164,6 +169,7 @@ void main() {
       capabilities: <MusicSourceCapability>{
         MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.offlineCache,
+        MusicSourceCapability.favoriteMutation,
       },
       disclosure: ProviderPrivacyDisclosure(
         networkDomains: <String>['api.example.test', 'API.EXAMPLE.TEST'],
@@ -185,6 +191,7 @@ void main() {
         MusicSourceProviderContractIssueCode.missingAuthenticationCapability,
         MusicSourceProviderContractIssueCode.undisclosedMediaCache,
         MusicSourceProviderContractIssueCode.missingSuggestionExtension,
+        MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
       ]),
     );
   });

@@ -122,3 +122,12 @@ abstract interface class MusicPlaylistMutationProvider {
     List<String> trackIds,
   );
 }
+
+/// Optional extension for user-owned catalogs that can persist a track's
+/// favorite state on the remote server.
+abstract interface class MusicTrackFavoriteMutationProvider {
+  Future<void> setTrackFavorite(
+    String trackId, {
+    required bool isFavorite,
+  });
+}

@@ -191,6 +191,7 @@
 - [x] Jellyfin credential-safe in-app authenticated artwork
 - [x] Jellyfin private local artwork bridge for notification/lock-screen media metadata
 - [x] Jellyfin remote playlist create/edit/delete/reorder
+- [x] Jellyfin remote track favorite/unfavorite
 - [x] Jellyfin test-before-replace API-key rotation with rollback and queue/cache invalidation
 - [x] Jellyfin recently added, favorite, most played, recently played, and random album discovery shelves with continuation for query-backed shelves
 - [x] Navidrome/Subsonic provider foundation
@@ -201,6 +202,7 @@
 - [x] Navidrome/Subsonic credential-safe in-app authenticated artwork
 - [x] Navidrome/Subsonic private local artwork bridge for notification/lock-screen media metadata
 - [x] Navidrome/Subsonic remote playlist create/edit/delete/reorder
+- [x] Navidrome/Subsonic remote track favorite/unfavorite
 - [x] Navidrome/Subsonic test-before-replace password rotation with rollback and queue/cache invalidation
 - [x] Navidrome/Subsonic favorite, newest, most played, recently played, and random album discovery shelves with continuation
 

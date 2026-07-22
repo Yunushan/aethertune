@@ -10,6 +10,7 @@ enum MusicSourceCapability {
   libraryBrowse,
   playlists,
   playlistMutation,
+  favoriteMutation,
   artwork,
   lyrics,
   syncedLyrics,
@@ -41,6 +42,8 @@ extension MusicSourceCapabilityLabel on MusicSourceCapability {
         return 'Playlists';
       case MusicSourceCapability.playlistMutation:
         return 'Playlist editing';
+      case MusicSourceCapability.favoriteMutation:
+        return 'Server favorites';
       case MusicSourceCapability.artwork:
         return 'Artwork';
       case MusicSourceCapability.lyrics:

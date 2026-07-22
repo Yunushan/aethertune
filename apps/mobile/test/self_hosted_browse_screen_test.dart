@@ -431,6 +431,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('adds and removes server favorites from a catalog track', (
+    tester,
+  ) async {
+    final provider = _FakeCatalogProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Blue Rooms'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Favorite on server'));
+    await tester.pumpAndSettle();
+
+    expect(provider.favoriteMutationCalls, <String>['song-1:true']);
+    expect(find.text('Added Aether Session to server favorites.'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(ListTile, 'Remove server favorite'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      provider.favoriteMutationCalls,
+      <String>['song-1:true', 'song-1:false'],
+    );
+    expect(
+      find.text('Removed Aether Session from server favorites.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'retains paged catalog results and retries a failed continuation',
     (tester) async {
@@ -645,7 +695,8 @@ class _FakeCatalogProvider
     implements
         MusicCatalogProvider,
         MusicCatalogRadioProvider,
-        MusicPlaylistMutationProvider {
+        MusicPlaylistMutationProvider,
+        MusicTrackFavoriteMutationProvider {
   _FakeCatalogProvider({
     this.artistFailuresRemaining = 0,
     this.albumFailuresRemaining = 0,
@@ -667,6 +718,7 @@ class _FakeCatalogProvider
   final List<MusicCatalogCollection> loadCalls = <MusicCatalogCollection>[];
   final List<String> artworkCalls = <String>[];
   final List<String> mutationCalls = <String>[];
+  final List<String> favoriteMutationCalls = <String>[];
   final List<String> radioCalls = <String>[];
   final List<MusicCatalogCollection> _playlists =
       <MusicCatalogCollection>[
@@ -698,6 +750,7 @@ class _FakeCatalogProvider
         MusicSourceCapability.libraryBrowse,
         MusicSourceCapability.playlists,
         MusicSourceCapability.playlistMutation,
+        MusicSourceCapability.favoriteMutation,
         MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
@@ -899,6 +952,15 @@ class _FakeCatalogProvider
     _playlistTracks[playlistId] =
         trackIds.map(_trackForId).toList(growable: true);
     _syncPlaylistCount(playlistId);
+  }
+
+  @override
+  Future<void> setTrackFavorite(
+    String trackId, {
+    required bool isFavorite,
+  }) async {
+    _failMutationIfNeeded();
+    favoriteMutationCalls.add('$trackId:$isFavorite');
   }
 
   List<String> playlistTrackIds(String playlistId) {

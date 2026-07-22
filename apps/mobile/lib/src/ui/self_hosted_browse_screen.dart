@@ -624,6 +624,8 @@ class _SelfHostedCollectionScreenState
   final TextEditingController _filterController = TextEditingController();
   String _query = '';
   bool _playlistMutationInProgress = false;
+  bool _favoriteMutationInProgress = false;
+  final Map<String, bool> _remoteFavoriteOverrides = <String, bool>{};
   bool _radioInProgress = false;
 
   @override
@@ -769,6 +771,12 @@ class _SelfHostedCollectionScreenState
     final isMutablePlaylist =
         widget.collection.kind == MusicCatalogCollectionKind.playlist &&
             playlistMutator != null;
+    final favoriteMutator = widget.provider.capabilities.contains(
+              MusicSourceCapability.favoriteMutation,
+            ) &&
+            widget.provider is MusicTrackFavoriteMutationProvider
+        ? widget.provider as MusicTrackFavoriteMutationProvider
+        : null;
     final normalizedQuery = _query.trim().toLowerCase();
     final visible = normalizedQuery.isEmpty
         ? tracks
@@ -824,6 +832,9 @@ class _SelfHostedCollectionScreenState
           );
         }
         final track = visible[index - 1];
+        final trackId = track.externalId?.trim() ?? '';
+        final isRemoteFavorite =
+            _remoteFavoriteOverrides[trackId] ?? track.isFavorite;
         final playlistIndex = tracks.indexWhere(
           (candidate) => candidate.id == track.id,
         );
@@ -855,7 +866,8 @@ class _SelfHostedCollectionScreenState
           onTap: () => _play(track, tracks),
           trailing: PopupMenuButton<_CatalogTrackAction>(
             key: ValueKey<String>('catalog-track-actions-${track.id}'),
-            enabled: !_playlistMutationInProgress,
+            enabled:
+                !_playlistMutationInProgress && !_favoriteMutationInProgress,
             tooltip: 'Actions for ${track.title}',
             onSelected: (action) => _handleTrackAction(
               action,
@@ -863,6 +875,8 @@ class _SelfHostedCollectionScreenState
               tracks,
               playlistIndex,
               playlistMutator,
+              favoriteMutator,
+              isRemoteFavorite,
             ),
             itemBuilder: (_) => <PopupMenuEntry<_CatalogTrackAction>>[
               const PopupMenuItem<_CatalogTrackAction>(
@@ -899,6 +913,24 @@ class _SelfHostedCollectionScreenState
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.playlist_add),
                     title: Text('Add to remote playlist'),
+                  ),
+                ),
+              if (favoriteMutator != null)
+                PopupMenuItem<_CatalogTrackAction>(
+                  value: _CatalogTrackAction.favoriteOnServer,
+                  enabled: trackId.isNotEmpty,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isRemoteFavorite
+                          ? Icons.favorite_border
+                          : Icons.favorite,
+                    ),
+                    title: Text(
+                      isRemoteFavorite
+                          ? 'Remove server favorite'
+                          : 'Favorite on server',
+                    ),
                   ),
                 ),
               const PopupMenuItem<_CatalogTrackAction>(
@@ -1229,6 +1261,42 @@ class _SelfHostedCollectionScreenState
     }
   }
 
+  Future<void> _setRemoteFavorite(
+    MusicTrackFavoriteMutationProvider favoriteMutator,
+    Track track,
+    bool isFavorite,
+  ) async {
+    final trackId = track.externalId?.trim() ?? '';
+    if (trackId.isEmpty || _favoriteMutationInProgress) {
+      return;
+    }
+    final nextFavorite = !isFavorite;
+    setState(() => _favoriteMutationInProgress = true);
+    try {
+      await favoriteMutator.setTrackFavorite(
+        trackId,
+        isFavorite: nextFavorite,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _remoteFavoriteOverrides[trackId] = nextFavorite);
+      _showMessage(
+        nextFavorite
+            ? 'Added ${track.title} to server favorites.'
+            : 'Removed ${track.title} from server favorites.',
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _favoriteMutationInProgress = false);
+      }
+    }
+  }
+
   Future<void> _moveRemotePlaylistTrack(
     MusicPlaylistMutationProvider playlistMutator,
     List<Track> tracks,
@@ -1350,6 +1418,8 @@ class _SelfHostedCollectionScreenState
     List<Track> queue,
     int playlistIndex,
     MusicPlaylistMutationProvider? playlistMutator,
+    MusicTrackFavoriteMutationProvider? favoriteMutator,
+    bool isRemoteFavorite,
   ) {
     switch (action) {
       case _CatalogTrackAction.play:
@@ -1375,6 +1445,12 @@ class _SelfHostedCollectionScreenState
       case _CatalogTrackAction.addToRemotePlaylist:
         if (playlistMutator != null) {
           unawaited(_addToRemotePlaylist(playlistMutator, track));
+        }
+      case _CatalogTrackAction.favoriteOnServer:
+        if (favoriteMutator != null) {
+          unawaited(
+            _setRemoteFavorite(favoriteMutator, track, isRemoteFavorite),
+          );
         }
       case _CatalogTrackAction.cache:
         unawaited(_queueOffline(track, OfflineMediaAction.cache));
@@ -1422,6 +1498,7 @@ enum _CatalogTrackAction {
   startRadio,
   save,
   addToRemotePlaylist,
+  favoriteOnServer,
   cache,
   download,
   moveUp,

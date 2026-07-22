@@ -56,6 +56,7 @@ void main() {
     expect(track.artworkUri, isNull);
     expect(track.providerArtworkId, 'song-1');
     expect(track.providerArtworkVersion, 'image-tag');
+    expect(track.isFavorite, isTrue);
 
     final streamUri = await provider.resolveStream(track);
     expect(streamUri!.path, '/jellyfin/Audio/song-1/stream');
@@ -744,6 +745,50 @@ void main() {
     });
   });
 
+  test('syncs Jellyfin track favorites through the user favorite endpoint',
+      () async {
+    final requests = <Uri>[];
+    final methods = <String>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (_) async => _jellyfinItemsJson,
+      mutationLoader: (uri, method, body) async {
+        requests.add(uri);
+        methods.add(method);
+        expect(body, isNull);
+      },
+    );
+
+    expect(provider, isA<MusicTrackFavoriteMutationProvider>());
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.favoriteMutation),
+    );
+    expect(provider.disclosure.dataSent, contains('favorite track changes'));
+    expect((await provider.search('sea')).single.isFavorite, isTrue);
+
+    await provider.setTrackFavorite('song-1', isFavorite: true);
+    await provider.setTrackFavorite('song-1', isFavorite: false);
+
+    expect(methods, <String>['POST', 'DELETE']);
+    expect(requests.map((request) => request.path), <String>[
+      '/jellyfin/Users/user-1/FavoriteItems/song-1',
+      '/jellyfin/Users/user-1/FavoriteItems/song-1',
+    ]);
+    expect(
+      requests.every(
+        (request) => request.queryParameters['api_key'] == 'api-secret',
+      ),
+      isTrue,
+    );
+    expect(
+      () => provider.setTrackFavorite(' ', isFavorite: true),
+      throwsArgumentError,
+    );
+  });
+
   test('handles empty responses and offline policy for user-owned media', () {
     expect(parseJellyfinItemsResponse('{"Items":[]}'), isEmpty);
     expect(
@@ -801,6 +846,9 @@ const _jellyfinItemsJson = '''
       "RunTimeTicks": 2450000000,
       "ImageTags": {
         "Primary": "image-tag"
+      },
+      "UserData": {
+        "IsFavorite": true
       }
     }
   ],

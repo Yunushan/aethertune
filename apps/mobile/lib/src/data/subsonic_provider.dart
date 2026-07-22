@@ -22,6 +22,7 @@ class SubsonicProvider
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
+        MusicTrackFavoriteMutationProvider,
         MusicSourceSearchSuggestionProvider,
         MusicSourceSearchPagingProvider {
   SubsonicProvider({
@@ -49,6 +50,7 @@ class SubsonicProvider
     MusicSourceCapability.libraryBrowse,
     MusicSourceCapability.playlists,
     MusicSourceCapability.playlistMutation,
+    MusicSourceCapability.favoriteMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -94,6 +96,7 @@ class SubsonicProvider
           'Home discovery list selection and result limit',
           'radio seed item identifier and result limit',
           'playlist names, membership, and track order changes',
+          'favorite track changes',
           'song stream identifier',
           'cover art identifier',
         ],
@@ -618,6 +621,24 @@ class SubsonicProvider
     );
   }
 
+  @override
+  Future<void> setTrackFavorite(
+    String trackId, {
+    required bool isFavorite,
+  }) {
+    final normalizedTrackId = _requiredPlaylistId(trackId);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            isFavorite ? '/rest/star.view' : '/rest/unstar.view',
+            <String, Object?>{'id': normalizedTrackId},
+          ),
+        ),
+      );
+    });
+  }
+
   Uri _requestUri(String endpointPath, Map<String, Object?> parameters) {
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, endpointPath),
@@ -669,6 +690,7 @@ final class SubsonicSong {
     required this.duration,
     required this.coverArt,
     required this.suffix,
+    this.isFavorite = false,
   });
 
   final String id;
@@ -679,6 +701,7 @@ final class SubsonicSong {
   final Duration duration;
   final String coverArt;
   final String suffix;
+  final bool isFavorite;
 
   Track toTrack({
     required String sourceId,
@@ -697,6 +720,7 @@ final class SubsonicSong {
       streamUrl: streamUri?.toString(),
       sourceId: sourceId,
       externalId: id,
+      isFavorite: isFavorite,
     );
   }
 }
@@ -1032,7 +1056,16 @@ SubsonicSong? _songFromJson(Map<String, Object?> json) {
     duration: Duration(seconds: _intValue(json['duration'])),
     coverArt: _stringValue(json['coverArt']),
     suffix: _stringValue(json['suffix']),
+    isFavorite: _subsonicIsFavorite(json['starred']),
   );
+}
+
+bool _subsonicIsFavorite(Object? value) {
+  return switch (value) {
+    bool favorite => favorite,
+    null => false,
+    _ => _stringValue(value).isNotEmpty,
+  };
 }
 
 Future<String> _loadSubsonicJson(Uri uri) async {

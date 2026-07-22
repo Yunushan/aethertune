@@ -72,6 +72,7 @@ void main() {
     expect(tracks.first.streamUrl, isNull);
     expect(tracks.first.artworkUri, isNull);
     expect(tracks.first.providerArtworkId, 'cover-1');
+    expect(tracks.first.isFavorite, isTrue);
     expect(
       await provider.resolveStream(tracks.first),
       Uri(
@@ -652,6 +653,51 @@ void main() {
     expect(capturedHeaders, isEmpty);
   });
 
+  test('syncs Subsonic track favorites through star and unstar', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return '{"subsonic-response":{"status":"ok"}}';
+      },
+    );
+
+    expect(provider, isA<MusicTrackFavoriteMutationProvider>());
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.favoriteMutation),
+    );
+    expect(provider.disclosure.dataSent, contains('favorite track changes'));
+
+    await provider.setTrackFavorite('song-1', isFavorite: true);
+    await provider.setTrackFavorite('song-1', isFavorite: false);
+
+    expect(requests.map((request) => request.path), <String>[
+      '/navidrome/rest/star.view',
+      '/navidrome/rest/unstar.view',
+    ]);
+    expect(
+      requests.map((request) => request.queryParameters['id']),
+      <String>['song-1', 'song-1'],
+    );
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters.containsKey('t') &&
+            !request.queryParameters.containsKey('p'),
+      ),
+      isTrue,
+    );
+    expect(
+      () => provider.setTrackFavorite(' ', isFavorite: true),
+      throwsArgumentError,
+    );
+  });
+
   test('handles failed responses and offline policy for user-owned media', () {
     expect(
       () => parseSubsonicSearchResponse(_failedResponseJson),
@@ -723,7 +769,8 @@ const _searchResponseJson = '''
           "genre": "Ambient",
           "duration": 245,
           "coverArt": "cover-1",
-          "suffix": "mp3"
+          "suffix": "mp3",
+          "starred": "2026-07-22T12:00:00Z"
         },
         {
           "id": "song-2",
