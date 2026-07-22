@@ -18,6 +18,8 @@ class ReleaseManifestTest(unittest.TestCase):
             release_dir = Path(temporary_directory)
             apk = release_dir / "app-release.apk"
             apk.write_bytes(b"android release")
+            ios_archive = release_dir / "aethertune-ios-unsigned.zip"
+            ios_archive.write_bytes(b"ios unsigned archive")
             sbom = release_dir / "aethertune-server.cdx.json"
             sbom.write_text("{}", encoding="utf-8")
             output = release_dir / "RELEASE_MANIFEST.json"
@@ -31,6 +33,13 @@ class ReleaseManifestTest(unittest.TestCase):
             self.assertEqual(1, manifest["schema_version"])
             self.assertEqual(
                 [
+                    {
+                        "file": "aethertune-ios-unsigned.zip",
+                        "kind": "unsigned-app-archive",
+                        "platform": "ios",
+                        "sha256": hashlib.sha256(b"ios unsigned archive").hexdigest(),
+                        "size_bytes": len(b"ios unsigned archive"),
+                    },
                     {
                         "file": "aethertune-server.cdx.json",
                         "kind": "cyclonedx-sbom",

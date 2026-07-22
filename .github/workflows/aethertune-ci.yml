@@ -196,9 +196,15 @@ jobs:
           bash ./scripts/ci/package_macos_zip.sh "$app_bundle" build/aethertune-macos-debug.zip
           bash ./scripts/ci/package_macos_dmg.sh "$app_bundle" build/aethertune-macos-debug.dmg
 
-      - name: Build iOS app without signing
+      - name: Build and package unsigned iOS app
         if: matrix.target == 'macos'
-        run: cd apps/mobile && flutter build ios --debug --no-codesign
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd apps/mobile && flutter build ios --debug --no-codesign)
+          bash ./scripts/ci/test_package_ios_unsigned_zip.sh
+          app_bundle="$(find apps/mobile/build/ios/iphoneos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          bash ./scripts/ci/package_ios_unsigned_zip.sh "$app_bundle" build/aethertune-ios-unsigned-debug.zip
 
   server:
     name: Server analyze and test

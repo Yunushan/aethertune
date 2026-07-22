@@ -144,6 +144,16 @@ jobs:
           bash scripts/ci/package_macos_zip.sh "$app_bundle" release/aethertune-macos.zip
           bash scripts/ci/package_macos_dmg.sh "$app_bundle" release/aethertune-macos.dmg
 
+      - name: Build and package unsigned iOS app
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd apps/mobile && flutter build ios --release --no-codesign)
+          mkdir -p release
+          app_bundle="$(find apps/mobile/build/ios/iphoneos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          bash scripts/ci/package_ios_unsigned_zip.sh "$app_bundle" release/aethertune-ios-unsigned.zip
+
       - name: Package Windows desktop app
         if: matrix.target == 'windows'
         shell: pwsh

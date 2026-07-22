@@ -12,6 +12,7 @@ from pathlib import Path
 ARTIFACT_DETAILS = {
     "app-release.aab": ("android", "app-bundle"),
     "app-release.apk": ("android", "apk"),
+    "aethertune-ios-unsigned.zip": ("ios", "unsigned-app-archive"),
     "aethertune-linux-x64.deb": ("linux", "debian-package"),
     "aethertune-linux-x64.tar.gz": ("linux", "portable-archive"),
     "aethertune-macos.dmg": ("macos", "disk-image"),

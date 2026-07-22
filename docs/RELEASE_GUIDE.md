@@ -29,6 +29,10 @@ flutter build ios --release
 
 Open the generated iOS project in Xcode for signing, capabilities, and App Store upload.
 
+Tag/manual releases also include `aethertune-ios-unsigned.zip`, a verified
+unsigned `.app` archive for developer inspection or local re-signing. It is
+not installable on a device and is not an App Store or TestFlight artifact.
+
 ## Desktop release
 
 Build desktop packages on their native operating systems:
@@ -97,6 +101,7 @@ workflow manually. Both runs assemble the following files into the
 `RELEASE_MANIFEST.json` inventory:
 
 - Android: `app-release.apk` and `app-release.aab`
+- iOS: `aethertune-ios-unsigned.zip` for developer re-signing only
 - Linux desktop archive
 - macOS ZIP and DMG desktop packages
 - Windows desktop archive
