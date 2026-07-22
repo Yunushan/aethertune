@@ -424,6 +424,49 @@ void main() {
     }
   });
 
+  test('repairs chunk offsets for a final extended-size M4A mdat atom', () async {
+    for (final useCo64 in <bool>[false, true]) {
+      final preliminary = _frontLoadedM4aFile(
+        audio: <int>[4, 5, 6],
+        chunkOffset: 0,
+        useCo64: useCo64,
+        extendedSizedMdat: true,
+      );
+      final original = _frontLoadedM4aFile(
+        audio: <int>[4, 5, 6],
+        chunkOffset: _mdatPayloadStart(preliminary),
+        useCo64: useCo64,
+        extendedSizedMdat: true,
+      );
+      final file = File(
+        '${temporaryDirectory.path}/${useCo64 ? 'co64' : 'stco'}-extended-sized.m4a',
+      );
+      await file.writeAsBytes(original);
+
+      await const M4aMetadataWriter().write(
+        path: file.path,
+        title: 'Extended media title',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Rock',
+      );
+
+      final bytes = await file.readAsBytes();
+      final payloadStart = _mdatPayloadStart(bytes);
+      expect(bytes.sublist(payloadStart), <int>[4, 5, 6]);
+      expect(_chunkOffset(bytes, useCo64: useCo64), payloadStart);
+
+      final result = await const LocalFolderScanner().scan(
+        temporaryDirectory.path,
+        importedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(
+        result.tracks.any((track) => track.title == 'Extended media title'),
+        isTrue,
+      );
+    }
+  });
+
   test('leaves front-loaded M4A files with malformed chunk offsets untouched', () async {
     final file = File('${temporaryDirectory.path}/malformed-front-loaded.m4a');
     final original = _m4aFile(
@@ -606,6 +649,7 @@ List<int> _frontLoadedM4aFile({
   required int chunkOffset,
   required bool useCo64,
   bool zeroSizedMdat = false,
+  bool extendedSizedMdat = false,
 }) {
   final chunkOffsetTable = useCo64
       ? _atom(
@@ -626,12 +670,25 @@ List<int> _frontLoadedM4aFile({
       ),
     ],
   );
-  if (!zeroSizedMdat) {
+  if (!zeroSizedMdat && !extendedSizedMdat) {
     return file;
   }
   final standardMdat = _atom('mdat', audio);
+  final prefix = file.sublist(0, file.length - standardMdat.length);
+  if (extendedSizedMdat) {
+    return <int>[
+      ...prefix,
+      0,
+      0,
+      0,
+      1,
+      ...'mdat'.codeUnits,
+      ..._uint64Bytes(audio.length + 16),
+      ...audio,
+    ];
+  }
   return <int>[
-    ...file.sublist(0, file.length - standardMdat.length),
+    ...prefix,
     0,
     0,
     0,
@@ -688,9 +745,17 @@ List<int> _mdatPayload(List<int> bytes) {
         bytes[offset + 3];
     final type = ascii.decode(bytes.sublist(offset + 4, offset + 8));
     if (type == 'mdat') {
-      return bytes.sublist(offset + 8, offset + size);
+      final payloadStart = offset + (size == 1 ? 16 : 8);
+      final atomEnd = size == 0
+          ? bytes.length
+          : offset + (size == 1 ? _uint64(bytes, offset + 8) : size);
+      return bytes.sublist(payloadStart, atomEnd);
     }
-    offset += size;
+    offset += size == 0
+        ? bytes.length - offset
+        : size == 1
+        ? _uint64(bytes, offset + 8)
+        : size;
   }
   throw StateError('M4A media atom was not found.');
 }
@@ -701,9 +766,13 @@ int _mdatPayloadStart(List<int> bytes) {
     final size = _uint32(bytes, offset);
     final type = ascii.decode(bytes.sublist(offset + 4, offset + 8));
     if (type == 'mdat') {
-      return offset + 8;
+      return offset + (size == 1 ? 16 : 8);
     }
-    offset += size;
+    offset += size == 0
+        ? bytes.length - offset
+        : size == 1
+        ? _uint64(bytes, offset + 8)
+        : size;
   }
   throw StateError('M4A media atom was not found.');
 }
