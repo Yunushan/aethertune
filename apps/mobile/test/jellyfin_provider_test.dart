@@ -831,13 +831,17 @@ void main() {
 
   test('syncs Jellyfin artist favorites through the user favorite endpoint',
       () async {
+    final catalogRequests = <Uri>[];
     final requests = <Uri>[];
     final methods = <String>[];
     final provider = JellyfinProvider(
       baseUri: Uri.parse('https://media.example.test/jellyfin'),
       userId: 'user-1',
       apiKey: 'api-secret',
-      requestLoader: (_) async => _jellyfinArtistsJson,
+      requestLoader: (uri) async {
+        catalogRequests.add(uri);
+        return _jellyfinArtistsJson;
+      },
       mutationLoader: (uri, method, body) async {
         requests.add(uri);
         methods.add(method);
@@ -855,6 +859,10 @@ void main() {
           .single
           .isFavorite,
       isTrue,
+    );
+    expect(
+      catalogRequests.single.queryParameters['EnableUserData'],
+      'true',
     );
 
     await provider.setArtistFavorite('artist-1', isFavorite: true);

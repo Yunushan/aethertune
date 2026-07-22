@@ -204,6 +204,7 @@ class JellyfinProvider
               'EnableImages': 'true',
               'EnableImageTypes': 'Primary',
               'ImageTypeLimit': '1',
+              'EnableUserData': 'true',
               'Limit': '500',
             },
           ),
