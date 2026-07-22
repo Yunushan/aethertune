@@ -200,9 +200,16 @@ Future<List<_M4aAtom>> _readTopLevelAtoms(
     if (header.length != 8) {
       throw const FormatException('M4A atom header could not be read completely.');
     }
-    final size = _uint32(header, 0);
-    if (size < 8 || size == 1 || offset + size > fileLength) {
+    final declaredSize = _uint32(header, 0);
+    if (declaredSize == 1) {
       throw const FormatException('M4A uses an unsupported top-level atom size.');
+    }
+    // ISO BMFF permits a zero size only for the final atom, where it means
+    // that atom extends to end of file. Retaining that header is safe because
+    // the tagged copy preserves the atom as the final top-level atom.
+    final size = declaredSize == 0 ? fileLength - offset : declaredSize;
+    if (size < 8 || offset + size > fileLength) {
+      throw const FormatException('M4A top-level atom layout is invalid.');
     }
     atoms.add(
       _M4aAtom(
