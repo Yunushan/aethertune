@@ -473,6 +473,20 @@ void main() {
   });
 
   test('detects bounded radio stream codec signatures', () {
+    expect(
+      detectRadioBrowserStreamCodec(<int>[
+        0x4f, 0x67, 0x67, 0x53, 0, 0, 0x4f, 0x70, 0x75, 0x73,
+        0x48, 0x65, 0x61, 0x64,
+      ]),
+      'Opus',
+    );
+    expect(
+      detectRadioBrowserStreamCodec(<int>[
+        0x4f, 0x67, 0x67, 0x53, 0, 0, 0x76, 0x6f, 0x72, 0x62,
+        0x69, 0x73,
+      ]),
+      'Ogg/Vorbis',
+    );
     expect(detectRadioBrowserStreamCodec(<int>[0x4f, 0x67, 0x67, 0x53]), 'Ogg');
     expect(detectRadioBrowserStreamCodec(<int>[0x66, 0x4c, 0x61, 0x43]), 'FLAC');
     expect(
@@ -488,6 +502,21 @@ void main() {
     expect(detectRadioBrowserStreamCodec(<int>[0x49, 0x44, 0x33]), 'MP3');
     expect(detectRadioBrowserStreamCodec(<int>[0xff, 0xf1]), 'AAC');
     expect(detectRadioBrowserStreamCodec(<int>[0xff, 0xfb]), 'MP3');
+    expect(detectRadioBrowserStreamCodec(<int>[0x56, 0xe0]), 'AAC-LATM');
+    expect(
+      detectRadioBrowserStreamCodec(<int>[0x1a, 0x45, 0xdf, 0xa3]),
+      'WebM/Matroska',
+    );
+    expect(
+      detectRadioBrowserStreamCodec(<int>[
+        0x47,
+        ...List<int>.filled(187, 0),
+        0x47,
+        ...List<int>.filled(187, 0),
+        0x47,
+      ]),
+      'MPEG-TS',
+    );
     expect(detectRadioBrowserStreamCodec(<int>[0, 1, 2]), isNull);
   });
 

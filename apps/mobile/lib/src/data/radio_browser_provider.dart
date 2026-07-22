@@ -731,6 +731,16 @@ String? detectRadioBrowserStreamCodec(List<int> bytes) {
       bytes[1] == 0x67 &&
       bytes[2] == 0x67 &&
       bytes[3] == 0x53) {
+    if (_containsRadioBrowserSignature(bytes, const <int>[
+      0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64,
+    ])) {
+      return 'Opus';
+    }
+    if (_containsRadioBrowserSignature(bytes, const <int>[
+      0x76, 0x6f, 0x72, 0x62, 0x69, 0x73,
+    ])) {
+      return 'Ogg/Vorbis';
+    }
     return 'Ogg';
   }
   if (bytes.length >= 4 &&
@@ -758,6 +768,19 @@ String? detectRadioBrowserStreamCodec(List<int> bytes) {
       bytes[7] == 0x70) {
     return 'MP4/AAC';
   }
+  if (bytes.length >= 4 &&
+      bytes[0] == 0x1a &&
+      bytes[1] == 0x45 &&
+      bytes[2] == 0xdf &&
+      bytes[3] == 0xa3) {
+    return 'WebM/Matroska';
+  }
+  if (bytes.length >= 377 &&
+      bytes[0] == 0x47 &&
+      bytes[188] == 0x47 &&
+      bytes[376] == 0x47) {
+    return 'MPEG-TS';
+  }
   if (bytes.length >= 3 &&
       bytes[0] == 0x49 &&
       bytes[1] == 0x44 &&
@@ -781,7 +804,34 @@ String? detectRadioBrowserStreamCodec(List<int> bytes) {
       return 'MP3';
     }
   }
+  for (var index = 0; index + 1 < limit; index += 1) {
+    if (bytes[index] == 0x56 && (bytes[index + 1] & 0xe0) == 0xe0) {
+      return 'AAC-LATM';
+    }
+  }
   return null;
+}
+
+bool _containsRadioBrowserSignature(List<int> bytes, List<int> signature) {
+  if (signature.isEmpty || bytes.length < signature.length) {
+    return false;
+  }
+  final limit = bytes.length < _maxRadioBrowserProbeBytes
+      ? bytes.length
+      : _maxRadioBrowserProbeBytes;
+  for (var start = 0; start + signature.length <= limit; start += 1) {
+    var matches = true;
+    for (var offset = 0; offset < signature.length; offset += 1) {
+      if (bytes[start + offset] != signature[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return true;
+    }
+  }
+  return false;
 }
 
 Future<List<int>> _readRadioBrowserProbe(HttpClientResponse response) async {
