@@ -130,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          tar -czf release/aethertune-linux-x64.tar.gz -C apps/mobile/build/linux/x64/release/bundle .
+          bash scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.tar.gz
           version="$(awk '/^version:/ {print $2}' apps/mobile/pubspec.yaml | cut -d+ -f1)"
           bash scripts/ci/package_linux_deb.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.deb "$version"
 

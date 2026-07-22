@@ -55,7 +55,7 @@ flutter build windows --release
 The `aethertune-release-artifacts` GitHub Actions workflow builds downloadable
 desktop archives on tags or manual dispatch:
 
-- `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`
+- `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`, containing the verified portable Flutter bundle
 - `aethertune-linux-x64`: `aethertune-linux-x64.deb` for 64-bit Debian/Ubuntu systems
 - `aethertune-macos`: `aethertune-macos.zip`, containing the validated `.app` bundle
 - `aethertune-macos`: `aethertune-macos.dmg`, containing the same bundle and an Applications shortcut
@@ -66,6 +66,10 @@ manifest. The ZIP reopens the archive to verify both paths, while the DMG test
 mounts the volume to verify the bundle and its Applications shortcut. The DMG
 is unsigned: platform-specific signing, notarization, universal binaries, and
 installer work still remain before store-quality distribution.
+
+The Linux portable-archive and Debian packagers validate the executable and
+Flutter asset manifest, then reopen their output to verify the executable and
+payload before upload.
 
 ## Server release
 

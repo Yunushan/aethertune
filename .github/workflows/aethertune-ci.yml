@@ -166,6 +166,17 @@ jobs:
       - name: Build desktop app
         run: cd apps/mobile && flutter build ${{ matrix.target }} --debug
 
+      - name: Test Linux release packaging
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/ci/test_package_linux_tarball.sh
+          bash ./scripts/ci/test_package_linux_deb.sh
+          bash ./scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/debug/bundle build/aethertune-linux-x64-debug.tar.gz
+          version="$(awk '/^version:/ {print $2}' apps/mobile/pubspec.yaml | cut -d+ -f1)"
+          bash ./scripts/ci/package_linux_deb.sh apps/mobile/build/linux/x64/debug/bundle build/aethertune-linux-x64-debug.deb "$version"
+
       - name: Test Windows ZIP packaging
         if: matrix.target == 'windows'
         shell: pwsh

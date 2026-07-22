@@ -10,6 +10,12 @@ if [[ ! -d "$bundle_dir" || ! -x "$bundle_dir/aethertune" ]]; then
   exit 1
 fi
 
+flutter_assets_path="$bundle_dir/data/flutter_assets/AssetManifest.bin"
+if [[ ! -f "$flutter_assets_path" ]]; then
+  echo "Expected Flutter assets at $flutter_assets_path." >&2
+  exit 1
+fi
+
 package_root="$(mktemp -d)"
 trap 'rm -rf "$package_root"' EXIT
 mkdir -p "$package_root/DEBIAN" "$package_root/opt/aethertune" \
@@ -42,4 +48,5 @@ mkdir -p "$(dirname "$output_path")"
 dpkg-deb --build --root-owner-group "$package_root" "$output_path"
 dpkg-deb --info "$output_path" >/dev/null
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'
+dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/data/flutter_assets/AssetManifest.bin$'
 dpkg-deb --contents "$output_path" | grep -q '/usr/share/applications/aethertune.desktop$'

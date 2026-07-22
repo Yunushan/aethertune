@@ -18,6 +18,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("uses: actions/download-artifact@v8", workflow)
         self.assertIn("merge-multiple: true", workflow)
         self.assertIn("sha256sum -- * > SHA256SUMS.txt", workflow)
+        self.assertIn("scripts/ci/package_linux_tarball.sh", workflow)
+        self.assertIn("aethertune-linux-x64.tar.gz", workflow)
         self.assertIn("scripts/ci/package_linux_deb.sh", workflow)
         self.assertIn("aethertune-linux-x64.deb", workflow)
         self.assertIn("scripts/ci/package_windows_zip.ps1", workflow)
