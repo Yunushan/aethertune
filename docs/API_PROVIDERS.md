@@ -2,6 +2,25 @@
 
 AetherTune supports source adapters through `MusicSourceProvider`.
 
+## Provider SDK v1
+
+Use the versioned public SDK entry point instead of importing `src/` files:
+
+```dart
+import 'package:aethertune/aethertune_provider_sdk.dart';
+```
+
+`aetherTuneProviderSdkVersion` is currently `1.0.0`. SDK v1 guarantees the
+provider, catalog, discovery, radio, playlist-mutation, paging, suggestion,
+privacy-disclosure, and neutral `Track` contracts exported from that entry
+point. Additive capabilities can arrive in later minor versions; breaking
+changes require a new major version.
+
+Run `validateMusicSourceProviderContract(provider)` in an adapter's test
+suite before registration. It verifies stable source IDs, required metadata,
+network/data disclosures, credential and offline capability pairing, and the
+type-ahead extension contract without issuing any network request.
+
 ## Good provider candidates
 
 - Local files selected by the user.
@@ -54,7 +73,7 @@ Authenticated providers return metadata-only `Track` objects from search and cat
 
 `MusicPlaylistMutationProvider` is separate from read-only `MusicCatalogProvider`, and adapters must also declare the `playlistMutation` capability before write controls appear. The neutral contract supports create, rename, delete, append, and ordered track replacement. Sources exposes create/rename/delete on the Playlists tab, add-to-remote-playlist from album track menus, and move/remove actions inside a playlist. Offline mode hides the network-backed catalog entirely; mutations use the same guarded/redacted credential path as reads, refresh after success, preserve the current view on failure, and never persist credentials in playlist state. Portable cross-device library snapshots can carry local playlists and safe metadata, but never provider credentials or remote provider playlist state.
 
-`MusicCatalogDiscoveryProvider` is an optional extension for documented, server-ordered album lists. It exposes only the kinds an adapter supports and loads one bounded shelf at a time so `ProviderHomeFeedCoordinator` can deduplicate results and isolate failures per shelf. Jellyfin implements recently added albums through `/Items/Latest`; Subsonic-compatible adapters map recently added, frequently played, recently played, and random shelves to `getAlbumList2.view` types `newest`, `frequent`, `recent`, and `random`. The Home coordinator keeps provider playlists beside these shelves and falls back to generic albums/playlists for catalog providers without the extension. Discovery runs only after the user presses refresh, remains disabled offline, and is deliberately distinct from the `recommendations` capability because these server orderings are not necessarily personalized.
+`MusicCatalogDiscoveryProvider` is an optional extension for documented, server-ordered album lists. It exposes only the kinds an adapter supports and loads one bounded shelf at a time so `ProviderHomeFeedCoordinator` can deduplicate results and isolate failures per shelf. Jellyfin implements recently added albums through `/Items/Latest`; Subsonic-compatible adapters map recently added, favorite, frequently played, recently played, and random shelves to `getAlbumList2.view` types `newest`, `starred`, `frequent`, `recent`, and `random`. The Home coordinator keeps provider playlists beside these shelves and falls back to generic albums/playlists for catalog providers without the extension. Discovery runs only after the user presses refresh, remains disabled offline, and is deliberately distinct from the `recommendations` capability because these server orderings are not necessarily personalized.
 
 `MusicCatalogPagingProvider` is an optional extension for catalog kinds with documented offset support. `MusicCatalogCollectionPage` carries the returned neutral collections, an explicit next offset, `hasMore`, and an optional server total. The self-hosted browser requests a bounded first page, appends and deduplicates only after the user chooses **Load more**, retains all prior rows and the same offset after a failed continuation, stops on empty or non-progressing pages, and resets continuation state on pull-to-refresh. Catalog providers without this extension keep the original one-shot behavior. Offline mode prevents both initial and continuation requests.
 

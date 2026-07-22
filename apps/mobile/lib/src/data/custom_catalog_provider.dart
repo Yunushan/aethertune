@@ -51,6 +51,9 @@ final class CustomCatalogProvider
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
         networkDomains: definition.declaredNetworkDomains,
+        dataSent: const <String>[
+          'catalog document request',
+        ],
         cachesMetadata: false,
       );
 

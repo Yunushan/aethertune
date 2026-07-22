@@ -236,7 +236,7 @@
 
 ## 1.0.0: Stable
 
-- [ ] Stable provider SDK
+- [x] Stable provider SDK v1 with public import surface and conformance validator
 - [x] Release artifact workflow
 - [ ] Fully signed/notarized release process
 - [x] Persisted system/light/dark/AMOLED theme preference

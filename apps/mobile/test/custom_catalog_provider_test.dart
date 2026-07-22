@@ -106,6 +106,10 @@ void main() {
       ]),
     );
     expect(provider.disclosure.networkDomains, definition.declaredNetworkDomains);
+    expect(
+      provider.disclosure.dataSent,
+      const <String>['catalog document request'],
+    );
   });
 
   test('rejects catalog media URLs outside the user-declared domains', () {

@@ -1,5 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aethertune/aethertune_provider_sdk.dart' show
+    aetherTuneProviderSdkVersion,
+    MusicSourceProviderContractIssueCode,
+    validateMusicSourceProviderContract;
 import 'package:aethertune/src/data/custom_catalog_provider.dart';
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
@@ -142,7 +146,47 @@ void main() {
       )) {
         expect(provider, isA<MusicSourceSearchSuggestionProvider>());
       }
+
+      final contractReport = validateMusicSourceProviderContract(provider);
+      expect(
+        contractReport.isCompliant,
+        isTrue,
+        reason: contractReport.issues.map((issue) => issue.message).join(' '),
+      );
     }
+  });
+
+  test('provider SDK v1 flags invalid disclosures and capability mismatches', () {
+    expect(aetherTuneProviderSdkVersion, '1.0.0');
+    const provider = _PolicyProvider(
+      id: 'Invalid provider',
+      name: '',
+      capabilities: <MusicSourceCapability>{
+        MusicSourceCapability.searchSuggestions,
+        MusicSourceCapability.offlineCache,
+      },
+      disclosure: ProviderPrivacyDisclosure(
+        networkDomains: <String>['api.example.test', 'API.EXAMPLE.TEST'],
+        requiresUserCredentials: true,
+        dataSent: <String>[],
+      ),
+    );
+
+    final report = validateMusicSourceProviderContract(provider);
+
+    expect(report.isCompliant, isFalse);
+    expect(
+      report.issues.map((issue) => issue.code),
+      containsAll(<MusicSourceProviderContractIssueCode>[
+        MusicSourceProviderContractIssueCode.invalidId,
+        MusicSourceProviderContractIssueCode.missingName,
+        MusicSourceProviderContractIssueCode.duplicateNetworkDomain,
+        MusicSourceProviderContractIssueCode.missingNetworkDisclosure,
+        MusicSourceProviderContractIssueCode.missingAuthenticationCapability,
+        MusicSourceProviderContractIssueCode.undisclosedMediaCache,
+        MusicSourceProviderContractIssueCode.missingSuggestionExtension,
+      ]),
+    );
   });
 
   test('official metadata providers remain audio-free and cache-free',
