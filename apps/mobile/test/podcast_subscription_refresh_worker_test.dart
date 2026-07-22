@@ -190,7 +190,7 @@ Future<PodcastSubscription> _saveSubscription(
   );
 }
 
-PodcastRssFeed _feed(Uri feedUri) {
+Future<PodcastRssFeed> _feed(Uri feedUri) async {
   return PodcastRssFeed(
     feedUri: feedUri,
     title: 'Example podcast',

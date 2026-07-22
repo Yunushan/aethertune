@@ -45,7 +45,7 @@ StartupNotify=true
 EOF
 
 mkdir -p "$(dirname "$output_path")"
-dpkg-deb --build --root-owner-group "$package_root" "$output_path"
+dpkg-deb --build --root-owner-group -Zgzip "$package_root" "$output_path"
 dpkg-deb --info "$output_path" >/dev/null
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/data/flutter_assets/AssetManifest.bin$'
