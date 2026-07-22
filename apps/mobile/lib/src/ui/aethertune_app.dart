@@ -466,16 +466,9 @@ ThemeData _darkThemeForPreference(
     dynamicColorScheme: dynamicColorScheme,
   );
   if (preference == AppThemePreference.amoled) {
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: colorScheme,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
-      canvasColor: Colors.black,
-      appBarTheme: const AppBarTheme(backgroundColor: Colors.black),
-      navigationBarTheme: const NavigationBarThemeData(
-        backgroundColor: Colors.black,
-      ),
+    return amoledThemeForAccent(
+      accentColor,
+      dynamicColorScheme: dynamicColorScheme,
       visualDensity: visualDensity,
     );
   }

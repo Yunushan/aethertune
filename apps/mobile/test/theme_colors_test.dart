@@ -72,4 +72,38 @@ void main() {
       ),
     );
   });
+
+  test('AMOLED theme keeps rest surfaces black and controls distinguishable', () {
+    final theme = amoledThemeForAccent(AppAccentColor.teal);
+
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.scaffoldBackgroundColor, Colors.black);
+    expect(theme.canvasColor, Colors.black);
+    expect(theme.colorScheme.surface, Colors.black);
+    expect(theme.colorScheme.surfaceDim, Colors.black);
+    expect(theme.colorScheme.surfaceContainerLowest, Colors.black);
+    expect(theme.colorScheme.surfaceContainerLow, const Color(0xFF050505));
+    expect(theme.colorScheme.surfaceContainer, const Color(0xFF090909));
+    expect(theme.colorScheme.surfaceContainerHigh, const Color(0xFF0E0E0E));
+    expect(
+      theme.colorScheme.surfaceContainerHighest,
+      const Color(0xFF151515),
+    );
+    expect(theme.cardTheme.color, theme.colorScheme.surfaceContainerLow);
+    expect(
+      theme.dialogTheme.backgroundColor,
+      theme.colorScheme.surfaceContainerHigh,
+    );
+    expect(
+      theme.bottomSheetTheme.modalBackgroundColor,
+      theme.colorScheme.surfaceContainer,
+    );
+    expect(theme.navigationBarTheme.backgroundColor, Colors.black);
+    expect(theme.navigationRailTheme.backgroundColor, Colors.black);
+    expect(
+      theme.inputDecorationTheme.fillColor,
+      theme.colorScheme.surfaceContainerLow,
+    );
+    expect(theme.colorScheme.primary, isNot(Colors.black));
+  });
 }
