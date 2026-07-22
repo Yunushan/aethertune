@@ -227,10 +227,6 @@ final class ProviderHomeFeedCoordinator {
     MusicCatalogCollectionKind kind, {
     required int limit,
   }) async {
-    final collectionKind =
-        discoveryKind == MusicCatalogDiscoveryKind.favoriteArtists
-        ? MusicCatalogCollectionKind.artist
-        : MusicCatalogCollectionKind.album;
     try {
       final visible = _visibleCollections(
         await provider.browseCollections(kind),
@@ -263,6 +259,10 @@ final class ProviderHomeFeedCoordinator {
     MusicCatalogDiscoveryKind discoveryKind, {
     required int limit,
   }) async {
+    final collectionKind =
+        discoveryKind == MusicCatalogDiscoveryKind.favoriteArtists
+        ? MusicCatalogCollectionKind.artist
+        : MusicCatalogCollectionKind.album;
     try {
       if (provider is MusicCatalogDiscoveryPagingProvider &&
           provider.pagedDiscoveryKinds.contains(discoveryKind)) {
