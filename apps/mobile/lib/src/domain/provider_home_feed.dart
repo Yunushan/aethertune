@@ -227,6 +227,10 @@ final class ProviderHomeFeedCoordinator {
     MusicCatalogCollectionKind kind, {
     required int limit,
   }) async {
+    final collectionKind =
+        discoveryKind == MusicCatalogDiscoveryKind.favoriteArtists
+        ? MusicCatalogCollectionKind.artist
+        : MusicCatalogCollectionKind.album;
     try {
       final visible = _visibleCollections(
         await provider.browseCollections(kind),
@@ -268,7 +272,7 @@ final class ProviderHomeFeedCoordinator {
         );
         final visible = _visibleCollections(
           page.collections,
-          MusicCatalogCollectionKind.album,
+          collectionKind,
           limit: limit,
         );
         final canContinue = page.hasMore && page.nextOffset > 0;
@@ -277,7 +281,7 @@ final class ProviderHomeFeedCoordinator {
               ? null
               : ProviderHomeSection(
                   provider: provider,
-                  kind: MusicCatalogCollectionKind.album,
+                  kind: collectionKind,
                   collections: visible,
                   discoveryKind: discoveryKind,
                   nextOffset: canContinue ? page.nextOffset : 0,
@@ -290,7 +294,7 @@ final class ProviderHomeFeedCoordinator {
           discoveryKind,
           limit: limit,
         ),
-        MusicCatalogCollectionKind.album,
+        collectionKind,
         limit: limit,
       );
       return _ProviderHomeLoadResult(
@@ -298,7 +302,7 @@ final class ProviderHomeFeedCoordinator {
             ? null
             : ProviderHomeSection(
                 provider: provider,
-                kind: MusicCatalogCollectionKind.album,
+                kind: collectionKind,
                 collections: visible,
                 discoveryKind: discoveryKind,
               ),
@@ -308,7 +312,7 @@ final class ProviderHomeFeedCoordinator {
         error: ProviderHomeFeedError(
           providerId: provider.id,
           providerName: provider.name,
-          kind: MusicCatalogCollectionKind.album,
+          kind: collectionKind,
           discoveryKind: discoveryKind,
         ),
       );

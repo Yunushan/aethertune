@@ -280,18 +280,34 @@ class SubsonicProvider
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
         MusicCatalogDiscoveryKind.favorites,
+        MusicCatalogDiscoveryKind.favoriteArtists,
         MusicCatalogDiscoveryKind.random,
       ];
 
   @override
   Set<MusicCatalogDiscoveryKind> get pagedDiscoveryKinds =>
-      Set<MusicCatalogDiscoveryKind>.unmodifiable(discoveryKinds);
+      const <MusicCatalogDiscoveryKind>{
+        MusicCatalogDiscoveryKind.recentlyAdded,
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.favorites,
+        MusicCatalogDiscoveryKind.random,
+      };
 
   @override
   Future<List<MusicCatalogCollection>> browseDiscoveryCollections(
     MusicCatalogDiscoveryKind kind, {
     int limit = 6,
   }) async {
+    if (kind == MusicCatalogDiscoveryKind.favoriteArtists) {
+      final boundedLimit = limit.clamp(1, 500);
+      return _guardRequest(() async {
+        final artists = parseSubsonicStarredArtistsResponse(
+          await _requestLoader(_requestUri('/rest/getStarred2.view', const <String, String>{})),
+        );
+        return artists.take(boundedLimit).toList(growable: false);
+      });
+    }
     return (await browseDiscoveryCollectionsPage(
       kind,
       limit: limit.clamp(1, 500),
@@ -324,6 +340,7 @@ class SubsonicProvider
       MusicCatalogDiscoveryKind.frequentlyPlayed => 'frequent',
       MusicCatalogDiscoveryKind.recentlyPlayed => 'recent',
       MusicCatalogDiscoveryKind.favorites => 'starred',
+      MusicCatalogDiscoveryKind.favoriteArtists => 'starred',
       MusicCatalogDiscoveryKind.random => 'random',
     };
     final boundedLimit = limit.clamp(1, 500);
@@ -1097,6 +1114,20 @@ SubsonicSong? _songFromJson(Map<String, Object?> json) {
     coverArt: _stringValue(json['coverArt']),
     suffix: _stringValue(json['suffix']),
     isFavorite: _subsonicIsFavorite(json['starred']),
+  );
+}
+
+List<MusicCatalogCollection> parseSubsonicStarredArtistsResponse(
+  String jsonText,
+) {
+  final response = _subsonicResponse(jsonText);
+  final starred = response['starred2'];
+  if (starred is! Map<dynamic, dynamic>) {
+    return const <MusicCatalogCollection>[];
+  }
+  return _subsonicCollections(
+    starred['artist'],
+    MusicCatalogCollectionKind.artist,
   );
 }
 

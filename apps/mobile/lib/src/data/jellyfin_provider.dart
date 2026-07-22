@@ -293,6 +293,7 @@ class JellyfinProvider
         MusicCatalogDiscoveryKind.frequentlyPlayed,
         MusicCatalogDiscoveryKind.recentlyPlayed,
         MusicCatalogDiscoveryKind.favorites,
+        MusicCatalogDiscoveryKind.favoriteArtists,
         MusicCatalogDiscoveryKind.random,
       ];
 
@@ -318,6 +319,29 @@ class JellyfinProvider
     if (pagedDiscoveryKinds.contains(kind)) {
       return (await browseDiscoveryCollectionsPage(kind, limit: limit))
           .collections;
+    }
+    if (kind == MusicCatalogDiscoveryKind.favoriteArtists) {
+      final boundedLimit = limit.clamp(1, 50);
+      return _guardRequest(() async => parseJellyfinCollectionsResponse(
+            await _requestLoader(
+              _requestUri(
+                '/Artists',
+                <String, String>{
+                  'UserId': userId,
+                  'Filters': 'IsFavorite',
+                  'SortBy': 'SortName',
+                  'SortOrder': 'Ascending',
+                  'Fields': 'Genres,RecursiveItemCount',
+                  'EnableImages': 'true',
+                  'EnableImageTypes': 'Primary',
+                  'ImageTypeLimit': '1',
+                  'EnableUserData': 'true',
+                  'Limit': boundedLimit.toString(),
+                },
+              ),
+            ),
+            MusicCatalogCollectionKind.artist,
+          ));
     }
     final boundedLimit = limit.clamp(1, 50);
     return _guardRequest(() async => parseJellyfinLatestCollectionsResponse(
@@ -374,6 +398,7 @@ class JellyfinProvider
                   MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
                   MusicCatalogDiscoveryKind.random => 'Random',
                   MusicCatalogDiscoveryKind.favorites => 'SortName',
+                  MusicCatalogDiscoveryKind.favoriteArtists => 'SortName',
                   MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
                 },
                 'SortOrder': 'Descending',

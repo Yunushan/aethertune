@@ -362,6 +362,7 @@ void main() {
       MusicCatalogDiscoveryKind.frequentlyPlayed,
       MusicCatalogDiscoveryKind.recentlyPlayed,
       MusicCatalogDiscoveryKind.favorites,
+      MusicCatalogDiscoveryKind.favoriteArtists,
       MusicCatalogDiscoveryKind.random,
     ]);
     expect(

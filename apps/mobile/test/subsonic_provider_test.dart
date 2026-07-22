@@ -320,7 +320,9 @@ void main() {
       },
     );
 
-    for (final kind in provider.discoveryKinds) {
+    for (final kind in provider.discoveryKinds.where(
+      (kind) => kind != MusicCatalogDiscoveryKind.favoriteArtists,
+    )) {
       final albums = await provider.browseDiscoveryCollections(kind, limit: 7);
       expect(albums.single.id, 'album-1');
     }
@@ -330,6 +332,7 @@ void main() {
       MusicCatalogDiscoveryKind.frequentlyPlayed,
       MusicCatalogDiscoveryKind.recentlyPlayed,
       MusicCatalogDiscoveryKind.favorites,
+      MusicCatalogDiscoveryKind.favoriteArtists,
       MusicCatalogDiscoveryKind.random,
     ]);
     expect(

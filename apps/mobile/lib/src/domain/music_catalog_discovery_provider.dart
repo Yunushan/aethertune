@@ -6,6 +6,7 @@ enum MusicCatalogDiscoveryKind {
   recentlyPlayed,
   random,
   favorites,
+  favoriteArtists,
 }
 
 /// Optional catalog extension for server-defined album discovery lists.
