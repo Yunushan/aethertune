@@ -80,6 +80,8 @@ dart compile exe bin/server.dart -o build/aethertune-server
 ```
 
 For hosted deployments, set `PORT` in the environment. The server exposes `/health` for uptime checks.
+Each CI and release executable is started on a temporary loopback port and must
+return `200` from `/health` before it is uploaded.
 
 The release workflow uploads native server executables as:
 

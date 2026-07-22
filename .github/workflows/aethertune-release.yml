@@ -193,6 +193,9 @@ jobs:
           mkdir -p build
           dart compile exe bin/server.dart -o "build/${{ matrix.binary_name }}"
 
+      - name: Smoke test server executable
+        run: dart scripts/ci/test_server_executable.dart "services/server/build/${{ matrix.binary_name }}"
+
       - name: Upload server executable
         uses: actions/upload-artifact@v7
         with:

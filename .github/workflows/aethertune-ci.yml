@@ -220,3 +220,6 @@ jobs:
 
       - name: Compile server executable
         run: cd services/server && mkdir -p build && dart compile exe bin/server.dart -o build/aethertune-server
+
+      - name: Smoke test server executable
+        run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server
