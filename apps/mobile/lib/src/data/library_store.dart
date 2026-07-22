@@ -1527,6 +1527,26 @@ class LibraryStore extends ChangeNotifier {
             entry.status == OfflineCacheEntryStatus.queued ||
             entry.status == OfflineCacheEntryStatus.failed,
       );
+
+  /// Returns the earliest eligible podcast refresh deadline, if any.
+  ///
+  /// The caller owns platform scheduling; keeping this calculation in the
+  /// store makes foreground and persisted Android jobs use the same cadence.
+  Duration? nextPodcastSubscriptionRefreshDelay(DateTime now) {
+    Duration? earliest;
+    for (final subscription in _podcastSubscriptions) {
+      final fetchedAt = subscription.lastFetchedAt;
+      final delay = fetchedAt == null
+          ? Duration.zero
+          : fetchedAt.add(defaultPodcastRefreshInterval).difference(now);
+      final normalized = delay.isNegative ? Duration.zero : delay;
+      if (earliest == null || normalized.compareTo(earliest) < 0) {
+        earliest = normalized;
+      }
+    }
+    return earliest;
+  }
+
   List<String> get watchedLocalFolderPaths =>
       List.unmodifiable(_watchedLocalFolderPaths);
   List<Track> get favorites =>

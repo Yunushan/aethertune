@@ -3739,6 +3739,10 @@ void main() {
       <String>['episode-1'],
     );
     expect(subscription.addedAt, DateTime.utc(2026, 1, 15));
+    expect(
+      firstStore.nextPodcastSubscriptionRefreshDelay(now),
+      Duration.zero,
+    );
 
     now = DateTime.utc(2026, 1, 15, 6);
     final refreshed = await firstStore.markPodcastSubscriptionFetched(
@@ -3773,6 +3777,10 @@ void main() {
 
     expect(recovered!.lastFetchedAt, DateTime.utc(2026, 1, 15, 8));
     expect(recovered.lastFetchError, isEmpty);
+    expect(
+      firstStore.nextPodcastSubscriptionRefreshDelay(now),
+      defaultPodcastRefreshInterval,
+    );
 
     final secondStore = LibraryStore(clock: clock);
     await secondStore.load();
@@ -3801,6 +3809,7 @@ void main() {
     await secondStore.deletePodcastSubscription(subscription.id);
 
     expect(secondStore.podcastSubscriptions, isEmpty);
+    expect(secondStore.nextPodcastSubscriptionRefreshDelay(now), isNull);
   });
 
   test('sorts library searches and exposes recently added tracks', () async {

@@ -83,13 +83,24 @@ class _OfflineCacheForegroundWorkerState
       if (!library.loaded ||
           _appInForeground ||
           !library.automaticOfflineQueueEnabled ||
-          library.offlineModeEnabled ||
-          !library.hasPendingOfflineCacheWork) {
+          library.offlineModeEnabled) {
         await widget.backgroundScheduler.cancel();
         return;
       }
 
-      await widget.backgroundScheduler.schedule();
+      final podcastDelay = library.nextPodcastSubscriptionRefreshDelay(
+        DateTime.now(),
+      );
+      if (!library.hasPendingOfflineCacheWork && podcastDelay == null) {
+        await widget.backgroundScheduler.cancel();
+        return;
+      }
+
+      await widget.backgroundScheduler.schedule(
+        minimumLatency: library.hasPendingOfflineCacheWork
+            ? null
+            : podcastDelay,
+      );
     } on PlatformException {
       // Foreground queue processing must remain available if a device omits
       // the optional Android wrapper service.

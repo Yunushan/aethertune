@@ -97,8 +97,9 @@ Authenticated providers return metadata-only `Track` objects from search and cat
 
 On Android 5+, eligible automatic Podcast RSS and Internet Archive cache work
 can continue through the app-owned, network-constrained JobScheduler service
-after the app backgrounds. It is resumable and private-cache-only; iOS and
-desktop schedulers remain roadmap work.
+after the app backgrounds. It schedules the next due RSS deadline, retries a
+failed feed after one hour, and keeps cache retries resumable and private-cache-
+only; iOS and desktop schedulers remain roadmap work.
 
 ## YouTube Data API metadata source
 

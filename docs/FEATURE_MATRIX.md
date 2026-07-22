@@ -161,9 +161,9 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 ### Offline, Cache, And Downloads
 
 Android 5+ has a persisted, network-constrained JobScheduler handoff for
-eligible automatic offline-cache work and due RSS feed refresh. The iOS and
-desktop equivalents, independently scheduled feed refresh, provider checksum
-manifests, and system Downloads integration remain separate parity work.
+eligible automatic offline-cache work and independently scheduled due RSS feed
+refresh. The iOS and desktop equivalents, provider checksum manifests, and
+system Downloads integration remain separate parity work.
 
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
@@ -350,7 +350,7 @@ This table maps each named app to the AetherTune feature surface it implies. It 
 2. Build full local library: recursive folder import, metadata scanner, metadata editing, duplicate resolver, playlists, backup/restore.
 3. Extend the implemented mobile/system sessions and desktop global media keys with physical-host lifecycle fixtures, Windows installation fixtures, and Android Auto/CarPlay browsing where allowed.
 4. Publish and maintain provider SDK v1 packages, sandbox rules, and opt-in integration fixtures.
-5. Complete legal providers: OS-background Podcast RSS jobs, richer Radio Browser UX, automated self-hosted sync merge, and pagination/browse surfaces for additional legal providers.
+5. Complete legal providers: iOS/desktop Podcast RSS scheduling, richer Radio Browser UX, automated self-hosted sync merge, and pagination/browse surfaces for additional legal providers.
 6. Add official-only adapters where terms allow: Spotify physical-device authorization coverage and any separately permitted official playback scope, YouTube OAuth playlist/channel features, SoundCloud, Bandcamp, or others.
 7. Expand the current checksum-verified direct-URL offline cache with HTTP Range retry resume, queue pause/resume, and user-chosen folder export into a full cache/download manager with background jobs, in-progress cancellation, provider checksum manifests where available, and deeper system Downloads integration where legally allowed.
 8. Add lyrics: plain text, synced LRC, cache, search, manual import/edit.

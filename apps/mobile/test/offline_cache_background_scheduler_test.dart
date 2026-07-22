@@ -25,10 +25,16 @@ void main() {
     );
     final scheduler = OfflineCacheBackgroundScheduler(isSupported: true);
 
-    expect(await scheduler.schedule(), isTrue);
+    expect(
+      await scheduler.schedule(minimumLatency: const Duration(hours: 12)),
+      isTrue,
+    );
     await scheduler.cancel();
     await scheduler.complete(hasPendingWork: true);
-    await scheduler.complete(hasPendingWork: false);
+    await scheduler.complete(
+      hasPendingWork: false,
+      nextRunDelay: const Duration(hours: 1),
+    );
 
     expect(calls.map((call) => call.method), <String>[
       'schedule',
@@ -36,8 +42,15 @@ void main() {
       'complete',
       'complete',
     ]);
+    expect(
+      calls.first.arguments,
+      <String, Object>{'minimumLatencyMilliseconds': 43200000},
+    );
     expect(calls[2].arguments, <String, Object>{'hasPendingWork': true});
-    expect(calls.last.arguments, <String, Object>{'hasPendingWork': false});
+    expect(calls.last.arguments, <String, Object>{
+      'hasPendingWork': false,
+      'nextRunDelayMilliseconds': 3600000,
+    });
   });
 
   test('leaves unsupported platforms untouched', () async {

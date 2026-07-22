@@ -16,12 +16,16 @@ Future<void> runOfflineCacheBackgroundQueue() async {
   WidgetsFlutterBinding.ensureInitialized();
   final scheduler = OfflineCacheBackgroundScheduler();
   var hasPendingWork = true;
+  Duration? nextRunDelay;
+  PodcastRefreshReport? podcastReport;
 
   try {
     final library = LibraryStore();
     await library.load();
     if (library.automaticOfflineQueueEnabled && !library.offlineModeEnabled) {
-      await refreshDuePodcastSubscriptionsInBackground(library);
+      podcastReport = await refreshDuePodcastSubscriptionsInBackground(
+        library,
+      );
       final providers = SelfHostedProviderStore();
       await providers.load();
       final root = await getApplicationDocumentsDirectory();
@@ -35,13 +39,26 @@ Future<void> runOfflineCacheBackgroundQueue() async {
         library.automaticOfflineQueueEnabled &&
         !library.offlineModeEnabled &&
         library.hasPendingOfflineCacheWork;
+    if (!hasPendingWork &&
+        library.automaticOfflineQueueEnabled &&
+        !library.offlineModeEnabled) {
+      nextRunDelay = library.nextPodcastSubscriptionRefreshDelay(
+        DateTime.now(),
+      );
+      if (podcastReport != null && podcastReport.failedCount > 0) {
+        nextRunDelay = const Duration(hours: 1);
+      }
+    }
   } on Object {
     // Ask JobScheduler to apply its bounded exponential backoff. Queue entries
     // retain their own error reason once the worker has a chance to process.
     hasPendingWork = true;
   } finally {
     try {
-      await scheduler.complete(hasPendingWork: hasPendingWork);
+      await scheduler.complete(
+        hasPendingWork: hasPendingWork,
+        nextRunDelay: nextRunDelay,
+      );
     } on MissingPluginException {
       // This entry point is meaningful only for the Android job service.
     }

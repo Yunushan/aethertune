@@ -22,12 +22,20 @@ final class OfflineCacheBackgroundScheduler {
 
   bool get isSupported => _isSupported;
 
-  Future<bool> schedule() async {
+  Future<bool> schedule({Duration? minimumLatency}) async {
     if (!_isSupported) {
       return false;
     }
 
-    return await _channel.invokeMethod<bool>('schedule') ?? false;
+    return await _channel.invokeMethod<bool>(
+          'schedule',
+          minimumLatency == null
+              ? null
+              : <String, Object>{
+                  'minimumLatencyMilliseconds': minimumLatency.inMilliseconds,
+                },
+        ) ??
+        false;
   }
 
   Future<void> cancel() async {
@@ -38,14 +46,21 @@ final class OfflineCacheBackgroundScheduler {
     await _channel.invokeMethod<void>('cancel');
   }
 
-  Future<void> complete({required bool hasPendingWork}) async {
+  Future<void> complete({
+    required bool hasPendingWork,
+    Duration? nextRunDelay,
+  }) async {
     if (!_isSupported) {
       return;
     }
 
     await _channel.invokeMethod<void>(
       'complete',
-      <String, Object>{'hasPendingWork': hasPendingWork},
+      <String, Object>{
+        'hasPendingWork': hasPendingWork,
+        if (nextRunDelay != null)
+          'nextRunDelayMilliseconds': nextRunDelay.inMilliseconds,
+      },
     );
   }
 }

@@ -173,6 +173,9 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             background_job_text = background_job_source.read_text(encoding="utf-8")
             self.assertIn("JobScheduler", background_job_text)
             self.assertIn("setPersisted(true)", background_job_text)
+            self.assertIn("minimumLatencyMilliseconds", activity_text)
+            self.assertIn("nextRunDelayMilliseconds", background_job_text)
+            self.assertIn("maximumMinimumLatencyMillis", background_job_text)
             self.assertIn(
                 "offlineCacheBackgroundEntrypoint",
                 background_job_text,

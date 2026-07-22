@@ -599,7 +599,10 @@ class MainActivity : AudioServiceActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "schedule" -> result.success(
-                    AetherTuneOfflineCacheJobService.schedule(applicationContext),
+                    AetherTuneOfflineCacheJobService.schedule(
+                        applicationContext,
+                        call.argument<Number>("minimumLatencyMilliseconds")?.toLong(),
+                    ),
                 )
                 "cancel" -> {
                     AetherTuneOfflineCacheJobService.cancel(applicationContext)
@@ -979,8 +982,10 @@ class AetherTuneOfflineCacheJobService : JobService() {
                 return@setMethodCallHandler
             }
             val hasPendingWork = call.argument<Boolean>("hasPendingWork") ?: true
+            val nextRunDelayMillis =
+                call.argument<Number>("nextRunDelayMilliseconds")?.toLong()
             result.success(null)
-            finish(hasPendingWork)
+            finish(hasPendingWork, nextRunDelayMillis)
         }
         engine.dartExecutor.executeDartEntrypoint(
             DartExecutor.DartEntrypoint(
@@ -996,11 +1001,14 @@ class AetherTuneOfflineCacheJobService : JobService() {
         return true
     }
 
-    private fun finish(hasPendingWork: Boolean) {
+    private fun finish(hasPendingWork: Boolean, nextRunDelayMillis: Long?) {
         val parameters = activeParameters ?: return
         activeParameters = null
         disposeEngine()
         jobFinished(parameters, hasPendingWork)
+        if (!hasPendingWork && nextRunDelayMillis != null) {
+            schedule(applicationContext, nextRunDelayMillis)
+        }
     }
 
     private fun disposeEngine() {
@@ -1013,15 +1021,23 @@ class AetherTuneOfflineCacheJobService : JobService() {
         private const val channelName = "dev.aethertune/offline_cache_background"
         private const val dartEntrypoint = "offlineCacheBackgroundEntrypoint"
 
-        fun schedule(context: Context): Boolean {
+        fun schedule(
+            context: Context,
+            requestedMinimumLatencyMillis: Long? = null,
+        ): Boolean {
             val scheduler = context.getSystemService(JobScheduler::class.java)
                 ?: return false
+            val minimumLatencyMillis = (requestedMinimumLatencyMillis
+                ?: defaultMinimumLatencyMillis).coerceIn(
+                defaultMinimumLatencyMillis,
+                maximumMinimumLatencyMillis,
+            )
             val job = JobInfo.Builder(
                 jobId,
                 ComponentName(context, AetherTuneOfflineCacheJobService::class.java),
             )
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setMinimumLatency(30_000L)
+                .setMinimumLatency(minimumLatencyMillis)
                 .setPersisted(true)
                 .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
                 .build()
@@ -1031,6 +1047,9 @@ class AetherTuneOfflineCacheJobService : JobService() {
         fun cancel(context: Context) {
             context.getSystemService(JobScheduler::class.java)?.cancel(jobId)
         }
+
+        private const val defaultMinimumLatencyMillis = 30_000L
+        private const val maximumMinimumLatencyMillis = 7 * 24 * 60 * 60 * 1_000L
     }
 }
 """
@@ -1817,11 +1836,13 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     required_background_job_snippets = (
         "JobScheduler",
         "setPersisted(true)",
-        "setMinimumLatency(30_000L)",
+        "setMinimumLatency(minimumLatencyMillis)",
         "setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)",
         "GeneratedPluginRegistrant.registerWith",
         "offlineCacheBackgroundEntrypoint",
         "hasPendingWork",
+        "nextRunDelayMillis",
+        "maximumMinimumLatencyMillis",
         "jobFinished(parameters, hasPendingWork)",
     )
     if not all(snippet in background_job_text for snippet in required_background_job_snippets):
