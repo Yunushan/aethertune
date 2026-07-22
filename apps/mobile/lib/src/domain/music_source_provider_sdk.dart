@@ -43,9 +43,9 @@ enum MusicSourceProviderContractIssueCode {
 
 /// Validates the stable v1 provider requirements without making network calls.
 ///
-/// Provider IDs are intentionally conservative: lowercase letters and digits
-/// separated by single hyphens. This keeps persisted source IDs portable across
-/// library snapshots, deep links, and platform filesystems.
+/// Provider IDs use URL-safe ASCII letters, digits, hyphens, and underscores.
+/// This keeps persisted IDs portable across library snapshots, deep links, and
+/// platform filesystems while allowing stable URL-safe Base64 account IDs.
 MusicSourceProviderContractReport validateMusicSourceProviderContract(
   MusicSourceProvider provider,
 ) {
@@ -58,12 +58,12 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
         message: 'Provider IDs must not be empty.',
       ),
     );
-  } else if (!RegExp(r'^[a-z0-9]+(?:-[a-z0-9]+)*$').hasMatch(id)) {
+  } else if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]*$').hasMatch(id)) {
     issues.add(
       const MusicSourceProviderContractIssue(
         code: MusicSourceProviderContractIssueCode.invalidId,
         message:
-            'Provider IDs must use lowercase letters, digits, and single hyphens.',
+            'Provider IDs must use URL-safe letters, digits, hyphens, or underscores.',
       ),
     );
   }
