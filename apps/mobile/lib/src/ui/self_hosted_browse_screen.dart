@@ -150,6 +150,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       <MusicCatalogCollection>[];
   String _query = '';
   bool _playlistMutationInProgress = false;
+  bool _albumFavoriteMutationInProgress = false;
+  final Map<String, bool> _remoteAlbumFavoriteOverrides = <String, bool>{};
   bool _loadingMore = false;
   Object? _loadMoreError;
   bool? _hasMoreOverride;
@@ -203,6 +205,14 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         final canMutatePlaylists =
             widget.kind == MusicCatalogCollectionKind.playlist &&
                 playlistMutator != null;
+        final albumFavoriteMutator = widget.kind ==
+                    MusicCatalogCollectionKind.album &&
+                widget.provider.capabilities.contains(
+                  MusicSourceCapability.albumFavoriteMutation,
+                ) &&
+                widget.provider is MusicAlbumFavoriteMutationProvider
+            ? widget.provider as MusicAlbumFavoriteMutationProvider
+            : null;
         final library = context.watch<LibraryStore>();
         final normalizedQuery = _query.trim().toLowerCase();
         final visible = normalizedQuery.isEmpty
@@ -292,6 +302,9 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                   collection.kind == MusicCatalogCollectionKind.artist;
               final isFollowed =
                   isArtist && library.isArtistFollowed(collection.title);
+              final isRemoteAlbumFavorite =
+                  _remoteAlbumFavoriteOverrides[collection.id] ??
+                      collection.isFavorite;
               return ListTile(
                 key: ValueKey<String>(
                   'catalog-${collection.kind.name}-${collection.id}',
@@ -377,6 +390,29 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                             ),
                           ),
                         ],
+                      )
+                    : albumFavoriteMutator != null
+                    ? IconButton(
+                        key: ValueKey<String>(
+                          'catalog-favorite-album-${collection.id}',
+                        ),
+                        tooltip: isRemoteAlbumFavorite
+                            ? 'Remove server album favorite'
+                            : 'Favorite album on server',
+                        onPressed: _albumFavoriteMutationInProgress
+                            ? null
+                            : () => unawaited(
+                                  _setRemoteAlbumFavorite(
+                                    albumFavoriteMutator,
+                                    collection,
+                                    isRemoteAlbumFavorite,
+                                  ),
+                                ),
+                        icon: Icon(
+                          isRemoteAlbumFavorite
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                        ),
                       )
                     : const Icon(Icons.chevron_right),
                 onTap: () => widget.onOpen(collection),
@@ -595,6 +631,49 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     } finally {
       if (mounted) {
         setState(() => _playlistMutationInProgress = false);
+      }
+    }
+  }
+
+  Future<void> _setRemoteAlbumFavorite(
+    MusicAlbumFavoriteMutationProvider favoriteMutator,
+    MusicCatalogCollection album,
+    bool isFavorite,
+  ) async {
+    if (album.id.trim().isEmpty || _albumFavoriteMutationInProgress) {
+      return;
+    }
+    final nextFavorite = !isFavorite;
+    setState(() => _albumFavoriteMutationInProgress = true);
+    try {
+      await favoriteMutator.setAlbumFavorite(
+        album.id,
+        isFavorite: nextFavorite,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _remoteAlbumFavoriteOverrides[album.id] = nextFavorite,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nextFavorite
+                ? 'Added ${album.title} to server favorite albums.'
+                : 'Removed ${album.title} from server favorite albums.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _albumFavoriteMutationInProgress = false);
       }
     }
   }

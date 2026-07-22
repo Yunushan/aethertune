@@ -24,6 +24,7 @@ final class MusicCatalogCollection {
     required this.kind,
     this.subtitle = '',
     this.itemCount = 0,
+    this.isFavorite = false,
     this.artworkId,
     this.artworkVersion,
   });
@@ -33,6 +34,7 @@ final class MusicCatalogCollection {
   final MusicCatalogCollectionKind kind;
   final String subtitle;
   final int itemCount;
+  final bool isFavorite;
   final String? artworkId;
   final String? artworkVersion;
 }
@@ -128,6 +130,15 @@ abstract interface class MusicPlaylistMutationProvider {
 abstract interface class MusicTrackFavoriteMutationProvider {
   Future<void> setTrackFavorite(
     String trackId, {
+    required bool isFavorite,
+  });
+}
+
+/// Optional extension for user-owned catalogs that can persist an album's
+/// favorite state on the remote server.
+abstract interface class MusicAlbumFavoriteMutationProvider {
+  Future<void> setAlbumFavorite(
+    String albumId, {
     required bool isFavorite,
   });
 }

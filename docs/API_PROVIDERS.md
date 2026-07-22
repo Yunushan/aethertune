@@ -168,6 +168,10 @@ action entirely.
 
 Official references: [Subsonic API](https://subsonic.org/pages/api.jsp) and [Navidrome's documented Subsonic compatibility](https://www.navidrome.org/docs/developers/subsonic-api/).
 
+### Remote favorite scope
+
+Self-hosted track menus synchronize track favorites, while the Albums tab reads each server's favorite state and can add or remove a server favorite. Jellyfin uses the authenticated user favorite-item endpoint for both item types. Navidrome/Subsonic uses `id` for tracks and `albumId` for ID3 album favorites in documented `star.view` and `unstar.view` requests. These server mutations remain separate from AetherTune's local-library favorites and artist-following signals.
+
 ## Minimal provider
 
 ```dart

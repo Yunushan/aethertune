@@ -41,6 +41,7 @@ enum MusicSourceProviderContractIssueCode {
   undisclosedDownloads,
   missingSuggestionExtension,
   missingFavoriteMutationExtension,
+  missingAlbumFavoriteMutationExtension,
 }
 
 /// Validates the stable v1 provider requirements without making network calls.
@@ -197,6 +198,19 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
             MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
         message:
             'Server favorites capability requires MusicTrackFavoriteMutationProvider.',
+      ),
+    );
+  }
+  if (provider.capabilities.contains(
+        MusicSourceCapability.albumFavoriteMutation,
+      ) &&
+      provider is! MusicAlbumFavoriteMutationProvider) {
+    issues.add(
+      const MusicSourceProviderContractIssue(
+        code:
+            MusicSourceProviderContractIssueCode.missingAlbumFavoriteMutationExtension,
+        message:
+            'Server album favorites capability requires MusicAlbumFavoriteMutationProvider.',
       ),
     );
   }

@@ -23,6 +23,7 @@ class SubsonicProvider
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
         MusicTrackFavoriteMutationProvider,
+        MusicAlbumFavoriteMutationProvider,
         MusicSourceSearchSuggestionProvider,
         MusicSourceSearchPagingProvider {
   SubsonicProvider({
@@ -51,6 +52,7 @@ class SubsonicProvider
     MusicSourceCapability.playlists,
     MusicSourceCapability.playlistMutation,
     MusicSourceCapability.favoriteMutation,
+    MusicSourceCapability.albumFavoriteMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -97,6 +99,7 @@ class SubsonicProvider
           'radio seed item identifier and result limit',
           'playlist names, membership, and track order changes',
           'favorite track changes',
+          'favorite album changes',
           'song stream identifier',
           'cover art identifier',
         ],
@@ -639,6 +642,24 @@ class SubsonicProvider
     });
   }
 
+  @override
+  Future<void> setAlbumFavorite(
+    String albumId, {
+    required bool isFavorite,
+  }) {
+    final normalizedAlbumId = _requiredPlaylistId(albumId);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            isFavorite ? '/rest/star.view' : '/rest/unstar.view',
+            <String, Object?>{'albumId': normalizedAlbumId},
+          ),
+        ),
+      );
+    });
+  }
+
   Uri _requestUri(String endpointPath, Map<String, Object?> parameters) {
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, endpointPath),
@@ -999,6 +1020,7 @@ MusicCatalogCollection? _subsonicCollection(
     kind: kind,
     subtitle: subtitleParts.join(' · '),
     itemCount: itemCount,
+    isFavorite: _subsonicIsFavorite(json['starred']),
     artworkId: artworkId.isEmpty ? null : artworkId,
   );
 }

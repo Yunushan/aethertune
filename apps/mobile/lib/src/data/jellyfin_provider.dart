@@ -23,6 +23,7 @@ class JellyfinProvider
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
         MusicTrackFavoriteMutationProvider,
+        MusicAlbumFavoriteMutationProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
   JellyfinProvider({
@@ -49,6 +50,7 @@ class JellyfinProvider
     MusicSourceCapability.playlists,
     MusicSourceCapability.playlistMutation,
     MusicSourceCapability.favoriteMutation,
+    MusicSourceCapability.albumFavoriteMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -93,6 +95,7 @@ class JellyfinProvider
           'radio seed item identifier and result limit',
           'playlist names, membership, and track order changes',
           'favorite track changes',
+          'favorite album changes',
           'audio item stream identifier',
           'cover art item identifier',
         ],
@@ -647,6 +650,7 @@ class JellyfinProvider
         'StartIndex': offset.toString(),
         'Limit': limit.toString(),
         'EnableTotalRecordCount': 'true',
+        'EnableUserData': 'true',
       },
     );
   }
@@ -678,6 +682,21 @@ class JellyfinProvider
     );
   }
 
+  @override
+  Future<void> setAlbumFavorite(
+    String albumId, {
+    required bool isFavorite,
+  }) {
+    final normalizedAlbumId = _requiredPlaylistId(albumId);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Users/$userId/FavoriteItems/$normalizedAlbumId'),
+        isFavorite ? 'POST' : 'DELETE',
+        null,
+      ),
+    );
+  }
+
   Uri _itemsUri({
     required String itemType,
     Map<String, String> extra = const <String, String>{},
@@ -695,6 +714,7 @@ class JellyfinProvider
         'EnableImages': 'true',
         'EnableImageTypes': 'Primary',
         'ImageTypeLimit': '1',
+        'EnableUserData': 'true',
         'Limit': '500',
         ...extra,
       },
@@ -1006,6 +1026,7 @@ MusicCatalogCollection? _jellyfinCollection(
     kind: kind,
     subtitle: subtitleParts.join(' · '),
     itemCount: itemCount,
+    isFavorite: _jellyfinIsFavorite(json),
     artworkId: primaryImageTag.isEmpty ? null : id,
     artworkVersion: primaryImageTag.isEmpty ? null : primaryImageTag,
   );

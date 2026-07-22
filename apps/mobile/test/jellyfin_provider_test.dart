@@ -96,6 +96,7 @@ void main() {
       requests.single.queryParameters['EnableTotalRecordCount'],
       'true',
     );
+    expect(requests.single.queryParameters['EnableUserData'], 'true');
 
     await expectLater(
       provider.searchPage('glass', cursor: 'invalid'),
@@ -455,6 +456,7 @@ void main() {
     expect(capturedUri!.queryParameters['StartIndex'], '9');
     expect(capturedUri!.queryParameters['Limit'], '1');
     expect(capturedUri!.queryParameters['EnableTotalRecordCount'], 'true');
+    expect(capturedUri!.queryParameters['EnableUserData'], 'true');
     expect(capturedUri!.queryParameters['SortBy'], 'DatePlayed');
     expect(capturedUri!.queryParameters['IsPlayed'], 'true');
 
@@ -789,6 +791,44 @@ void main() {
     );
   });
 
+  test('syncs Jellyfin album favorites through the user favorite endpoint',
+      () async {
+    final requests = <Uri>[];
+    final methods = <String>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (_) async => _jellyfinAlbumsJson,
+      mutationLoader: (uri, method, body) async {
+        requests.add(uri);
+        methods.add(method);
+        expect(body, isNull);
+      },
+    );
+
+    expect(provider, isA<MusicAlbumFavoriteMutationProvider>());
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.albumFavoriteMutation),
+    );
+    expect(
+      (await provider.browseCollections(MusicCatalogCollectionKind.album))
+          .single
+          .isFavorite,
+      isTrue,
+    );
+
+    await provider.setAlbumFavorite('album-1', isFavorite: true);
+    await provider.setAlbumFavorite('album-1', isFavorite: false);
+
+    expect(methods, <String>['POST', 'DELETE']);
+    expect(requests.map((request) => request.path), <String>[
+      '/jellyfin/Users/user-1/FavoriteItems/album-1',
+      '/jellyfin/Users/user-1/FavoriteItems/album-1',
+    ]);
+  });
+
   test('handles empty responses and offline policy for user-owned media', () {
     expect(parseJellyfinItemsResponse('{"Items":[]}'), isEmpty);
     expect(
@@ -907,7 +947,8 @@ const _jellyfinAlbumsJson = '''
       "AlbumArtist": "Mira Sol",
       "ProductionYear": 2025,
       "ChildCount": 8,
-      "ImageTags": {"Primary": "album-image-tag"}
+      "ImageTags": {"Primary": "album-image-tag"},
+      "UserData": {"IsFavorite": true}
     }
   ]
 }
