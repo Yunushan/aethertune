@@ -29,6 +29,9 @@ jobs:
       - name: Test provider contract workflow
         run: python3 scripts/ci/test_provider_contract_workflow.py
 
+      - name: Test privacy and network audit
+        run: python3 scripts/ci/test_privacy_network_audit.py
+
       - name: Resolve client dependencies
         run: cd apps/mobile && flutter pub get
 
