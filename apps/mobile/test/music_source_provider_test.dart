@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/aethertune_provider_sdk.dart' show
     aetherTuneProviderSdkVersion,
+    MusicTrackFavoriteMutationProvider,
     MusicSourceProviderContractIssueCode,
     validateMusicSourceProviderContract;
 import 'package:aethertune/src/data/custom_catalog_provider.dart';
