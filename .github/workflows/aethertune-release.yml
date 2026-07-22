@@ -239,6 +239,8 @@ jobs:
           cd release
           sha256sum -- * > SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
+          cd ..
+          python3 scripts/ci/verify_release_manifest.py --release-dir release --manifest release/RELEASE_MANIFEST.json
 
       - name: Upload verified release bundle
         uses: actions/upload-artifact@v7

@@ -115,7 +115,8 @@ same bundle files individually. Manual dispatch intentionally remains
 artifact-only, so it can validate a candidate without publishing it. Verify a
 download with `sha256sum -c SHA256SUMS.txt` on Linux/macOS, or
 `Get-FileHash` on Windows. `RELEASE_MANIFEST.json` identifies each artifact's
-platform, kind, byte size, and SHA-256 digest without timestamps or user data.
+platform, kind, byte size, and SHA-256 digest without timestamps or user data;
+the workflow verifies that inventory against the assembled bundle before upload.
 
 The SBOM artifact is generated from the exact `dart pub deps --json` graph
 resolved by that workflow. It intentionally omits a timestamp, embeds the
