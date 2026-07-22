@@ -12,6 +12,7 @@ enum MusicSourceCapability {
   playlistMutation,
   favoriteMutation,
   albumFavoriteMutation,
+  artistFavoriteMutation,
   artwork,
   lyrics,
   syncedLyrics,
@@ -47,6 +48,8 @@ extension MusicSourceCapabilityLabel on MusicSourceCapability {
         return 'Server favorites';
       case MusicSourceCapability.albumFavoriteMutation:
         return 'Server album favorites';
+      case MusicSourceCapability.artistFavoriteMutation:
+        return 'Server artist favorites';
       case MusicSourceCapability.artwork:
         return 'Artwork';
       case MusicSourceCapability.lyrics:

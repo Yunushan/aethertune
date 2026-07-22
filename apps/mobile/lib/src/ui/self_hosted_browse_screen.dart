@@ -152,6 +152,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   bool _playlistMutationInProgress = false;
   bool _albumFavoriteMutationInProgress = false;
   final Map<String, bool> _remoteAlbumFavoriteOverrides = <String, bool>{};
+  bool _artistFavoriteMutationInProgress = false;
+  final Map<String, bool> _remoteArtistFavoriteOverrides = <String, bool>{};
   bool _loadingMore = false;
   Object? _loadMoreError;
   bool? _hasMoreOverride;
@@ -212,6 +214,14 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                 ) &&
                 widget.provider is MusicAlbumFavoriteMutationProvider
             ? widget.provider as MusicAlbumFavoriteMutationProvider
+            : null;
+        final artistFavoriteMutator = widget.kind ==
+                    MusicCatalogCollectionKind.artist &&
+                widget.provider.capabilities.contains(
+                  MusicSourceCapability.artistFavoriteMutation,
+                ) &&
+                widget.provider is MusicArtistFavoriteMutationProvider
+            ? widget.provider as MusicArtistFavoriteMutationProvider
             : null;
         final library = context.watch<LibraryStore>();
         final normalizedQuery = _query.trim().toLowerCase();
@@ -305,6 +315,9 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
               final isRemoteAlbumFavorite =
                   _remoteAlbumFavoriteOverrides[collection.id] ??
                       collection.isFavorite;
+              final isRemoteArtistFavorite =
+                  _remoteArtistFavoriteOverrides[collection.id] ??
+                      collection.isFavorite;
               return ListTile(
                 key: ValueKey<String>(
                   'catalog-${collection.kind.name}-${collection.id}',
@@ -340,24 +353,52 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                         overflow: TextOverflow.ellipsis,
                       ),
                 trailing: isArtist
-                    ? IconButton(
-                        key: ValueKey<String>(
-                          'catalog-follow-artist-${collection.id}',
-                        ),
-                        tooltip: isFollowed
-                            ? 'Unfollow artist'
-                            : 'Follow artist',
-                        onPressed: () => unawaited(
-                          library.setArtistFollowed(
-                            collection.title,
-                            !isFollowed,
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          IconButton(
+                            key: ValueKey<String>(
+                              'catalog-follow-artist-${collection.id}',
+                            ),
+                            tooltip: isFollowed
+                                ? 'Unfollow artist'
+                                : 'Follow artist',
+                            onPressed: () => unawaited(
+                              library.setArtistFollowed(
+                                collection.title,
+                                !isFollowed,
+                              ),
+                            ),
+                            icon: Icon(
+                              isFollowed
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                            ),
                           ),
-                        ),
-                        icon: Icon(
-                          isFollowed
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                        ),
+                          if (artistFavoriteMutator != null)
+                            IconButton(
+                              key: ValueKey<String>(
+                                'catalog-favorite-artist-${collection.id}',
+                              ),
+                              tooltip: isRemoteArtistFavorite
+                                  ? 'Remove server artist favorite'
+                                  : 'Favorite artist on server',
+                              onPressed: _artistFavoriteMutationInProgress
+                                  ? null
+                                  : () => unawaited(
+                                        _setRemoteArtistFavorite(
+                                          artistFavoriteMutator,
+                                          collection,
+                                          isRemoteArtistFavorite,
+                                        ),
+                                      ),
+                              icon: Icon(
+                                isRemoteArtistFavorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                              ),
+                            ),
+                        ],
                       )
                     : canMutatePlaylists
                     ? PopupMenuButton<_CatalogPlaylistAction>(
@@ -674,6 +715,49 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     } finally {
       if (mounted) {
         setState(() => _albumFavoriteMutationInProgress = false);
+      }
+    }
+  }
+
+  Future<void> _setRemoteArtistFavorite(
+    MusicArtistFavoriteMutationProvider favoriteMutator,
+    MusicCatalogCollection artist,
+    bool isFavorite,
+  ) async {
+    if (artist.id.trim().isEmpty || _artistFavoriteMutationInProgress) {
+      return;
+    }
+    final nextFavorite = !isFavorite;
+    setState(() => _artistFavoriteMutationInProgress = true);
+    try {
+      await favoriteMutator.setArtistFavorite(
+        artist.id,
+        isFavorite: nextFavorite,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _remoteArtistFavoriteOverrides[artist.id] = nextFavorite,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nextFavorite
+                ? 'Added ${artist.title} to server favorite artists.'
+                : 'Removed ${artist.title} from server favorite artists.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _artistFavoriteMutationInProgress = false);
       }
     }
   }

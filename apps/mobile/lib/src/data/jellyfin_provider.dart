@@ -24,6 +24,7 @@ class JellyfinProvider
         MusicPlaylistMutationProvider,
         MusicTrackFavoriteMutationProvider,
         MusicAlbumFavoriteMutationProvider,
+        MusicArtistFavoriteMutationProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
   JellyfinProvider({
@@ -51,6 +52,7 @@ class JellyfinProvider
     MusicSourceCapability.playlistMutation,
     MusicSourceCapability.favoriteMutation,
     MusicSourceCapability.albumFavoriteMutation,
+    MusicSourceCapability.artistFavoriteMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -96,6 +98,7 @@ class JellyfinProvider
           'playlist names, membership, and track order changes',
           'favorite track changes',
           'favorite album changes',
+          'favorite artist changes',
           'audio item stream identifier',
           'cover art item identifier',
         ],
@@ -691,6 +694,18 @@ class JellyfinProvider
     return _guardRequest(
       () => _mutationLoader(
         _requestUri('/Users/$userId/FavoriteItems/$normalizedAlbumId'),
+        isFavorite ? 'POST' : 'DELETE',
+        null,
+      ),
+    );
+  }
+
+  @override
+  Future<void> setArtistFavorite(String artistId, {required bool isFavorite}) {
+    final normalizedArtistId = _requiredPlaylistId(artistId);
+    return _guardRequest(
+      () => _mutationLoader(
+        _requestUri('/Users/$userId/FavoriteItems/$normalizedArtistId'),
         isFavorite ? 'POST' : 'DELETE',
         null,
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethertune/aethertune_provider_sdk.dart' show
     aetherTuneProviderSdkVersion,
     MusicAlbumFavoriteMutationProvider,
+    MusicArtistFavoriteMutationProvider,
     MusicTrackFavoriteMutationProvider,
     MusicSourceProviderContractIssueCode,
     validateMusicSourceProviderContract;
@@ -158,6 +159,11 @@ void main() {
       )) {
         expect(provider, isA<MusicAlbumFavoriteMutationProvider>());
       }
+      if (provider.capabilities.contains(
+        MusicSourceCapability.artistFavoriteMutation,
+      )) {
+        expect(provider, isA<MusicArtistFavoriteMutationProvider>());
+      }
 
       final contractReport = validateMusicSourceProviderContract(provider);
       expect(
@@ -178,6 +184,7 @@ void main() {
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.favoriteMutation,
         MusicSourceCapability.albumFavoriteMutation,
+        MusicSourceCapability.artistFavoriteMutation,
       },
       disclosure: ProviderPrivacyDisclosure(
         networkDomains: <String>['api.example.test', 'API.EXAMPLE.TEST'],
@@ -201,6 +208,7 @@ void main() {
         MusicSourceProviderContractIssueCode.missingSuggestionExtension,
         MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
         MusicSourceProviderContractIssueCode.missingAlbumFavoriteMutationExtension,
+        MusicSourceProviderContractIssueCode.missingArtistFavoriteMutationExtension,
       ]),
     );
   });

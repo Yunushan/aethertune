@@ -474,6 +474,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'keeps local artist following distinct from server artist favorites', (
+    tester,
+  ) async {
+    final provider = _FakeCatalogProvider();
+    final library = LibraryStore();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _testApp(provider: provider, library: library, player: player),
+    );
+    await tester.pumpAndSettle();
+
+    final followButton = find.byKey(
+      const Key('catalog-follow-artist-artist-1'),
+    );
+    final favoriteButton = find.byKey(
+      const Key('catalog-favorite-artist-artist-1'),
+    );
+    expect(followButton, findsOneWidget);
+    expect(favoriteButton, findsOneWidget);
+    expect(
+      tester.widget<IconButton>(favoriteButton).tooltip,
+      'Favorite artist on server',
+    );
+
+    await tester.tap(favoriteButton);
+    await tester.pumpAndSettle();
+    expect(provider.artistFavoriteMutationCalls, <String>['artist-1:true']);
+    expect(library.isArtistFollowed('Open Artist'), isFalse);
+
+    await tester.tap(followButton);
+    await tester.pumpAndSettle();
+    expect(library.isArtistFollowed('Open Artist'), isTrue);
+    expect(provider.artistFavoriteMutationCalls, <String>['artist-1:true']);
+
+    await tester.tap(favoriteButton);
+    await tester.pumpAndSettle();
+    expect(
+      provider.artistFavoriteMutationCalls,
+      <String>['artist-1:true', 'artist-1:false'],
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('adds and removes server favorites from a catalog track', (
     tester,
   ) async {
@@ -736,7 +781,8 @@ class _FakeCatalogProvider
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
         MusicTrackFavoriteMutationProvider,
-        MusicAlbumFavoriteMutationProvider {
+        MusicAlbumFavoriteMutationProvider,
+        MusicArtistFavoriteMutationProvider {
   _FakeCatalogProvider({
     this.artistFailuresRemaining = 0,
     this.albumFailuresRemaining = 0,
@@ -760,6 +806,7 @@ class _FakeCatalogProvider
   final List<String> mutationCalls = <String>[];
   final List<String> favoriteMutationCalls = <String>[];
   final List<String> albumFavoriteMutationCalls = <String>[];
+  final List<String> artistFavoriteMutationCalls = <String>[];
   final List<String> radioCalls = <String>[];
   final List<MusicCatalogCollection> _playlists =
       <MusicCatalogCollection>[
@@ -793,6 +840,7 @@ class _FakeCatalogProvider
         MusicSourceCapability.playlistMutation,
         MusicSourceCapability.favoriteMutation,
         MusicSourceCapability.albumFavoriteMutation,
+        MusicSourceCapability.artistFavoriteMutation,
         MusicSourceCapability.artwork,
         MusicSourceCapability.offlineCache,
         MusicSourceCapability.downloads,
@@ -1012,6 +1060,15 @@ class _FakeCatalogProvider
   }) async {
     _failMutationIfNeeded();
     albumFavoriteMutationCalls.add('$albumId:$isFavorite');
+  }
+
+  @override
+  Future<void> setArtistFavorite(
+    String artistId, {
+    required bool isFavorite,
+  }) async {
+    _failMutationIfNeeded();
+    artistFavoriteMutationCalls.add('$artistId:$isFavorite');
   }
 
   List<String> playlistTrackIds(String playlistId) {

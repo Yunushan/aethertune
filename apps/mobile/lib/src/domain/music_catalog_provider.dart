@@ -142,3 +142,10 @@ abstract interface class MusicAlbumFavoriteMutationProvider {
     required bool isFavorite,
   });
 }
+
+abstract interface class MusicArtistFavoriteMutationProvider {
+  Future<void> setArtistFavorite(
+    String artistId, {
+    required bool isFavorite,
+  });
+}

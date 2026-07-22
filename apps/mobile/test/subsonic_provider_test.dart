@@ -730,6 +730,38 @@ void main() {
     );
   });
 
+  test('syncs Subsonic artist favorites through star and unstar', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return '{"subsonic-response":{"status":"ok"}}';
+      },
+    );
+
+    expect(provider, isA<MusicArtistFavoriteMutationProvider>());
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.artistFavoriteMutation),
+    );
+
+    await provider.setArtistFavorite('artist-1', isFavorite: true);
+    await provider.setArtistFavorite('artist-1', isFavorite: false);
+
+    expect(requests.map((request) => request.path), <String>[
+      '/navidrome/rest/star.view',
+      '/navidrome/rest/unstar.view',
+    ]);
+    expect(
+      requests.map((request) => request.queryParameters['artistId']),
+      <String>['artist-1', 'artist-1'],
+    );
+  });
+
   test('handles failed responses and offline policy for user-owned media', () {
     expect(
       () => parseSubsonicSearchResponse(_failedResponseJson),
@@ -914,7 +946,8 @@ const _artistsResponseJson = '''
               "id": "artist-1",
               "name": "Open Artist",
               "albumCount": 2,
-              "coverArt": "artist-cover-1"
+              "coverArt": "artist-cover-1",
+              "starred": "2026-07-22T12:00:00Z"
             }
           ]
         }

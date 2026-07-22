@@ -829,6 +829,44 @@ void main() {
     ]);
   });
 
+  test('syncs Jellyfin artist favorites through the user favorite endpoint',
+      () async {
+    final requests = <Uri>[];
+    final methods = <String>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (_) async => _jellyfinArtistsJson,
+      mutationLoader: (uri, method, body) async {
+        requests.add(uri);
+        methods.add(method);
+        expect(body, isNull);
+      },
+    );
+
+    expect(provider, isA<MusicArtistFavoriteMutationProvider>());
+    expect(
+      provider.capabilities,
+      contains(MusicSourceCapability.artistFavoriteMutation),
+    );
+    expect(
+      (await provider.browseCollections(MusicCatalogCollectionKind.artist))
+          .single
+          .isFavorite,
+      isTrue,
+    );
+
+    await provider.setArtistFavorite('artist-1', isFavorite: true);
+    await provider.setArtistFavorite('artist-1', isFavorite: false);
+
+    expect(methods, <String>['POST', 'DELETE']);
+    expect(requests.map((request) => request.path), <String>[
+      '/jellyfin/Users/user-1/FavoriteItems/artist-1',
+      '/jellyfin/Users/user-1/FavoriteItems/artist-1',
+    ]);
+  });
+
   test('handles empty responses and offline policy for user-owned media', () {
     expect(parseJellyfinItemsResponse('{"Items":[]}'), isEmpty);
     expect(
@@ -932,7 +970,8 @@ const _jellyfinArtistsJson = '''
       "Id": "artist-1",
       "Name": "Mira Sol",
       "RecursiveItemCount": 12,
-      "ImageTags": {"Primary": "artist-image-tag"}
+      "ImageTags": {"Primary": "artist-image-tag"},
+      "UserData": {"IsFavorite": true}
     }
   ]
 }

@@ -24,6 +24,7 @@ class SubsonicProvider
         MusicPlaylistMutationProvider,
         MusicTrackFavoriteMutationProvider,
         MusicAlbumFavoriteMutationProvider,
+        MusicArtistFavoriteMutationProvider,
         MusicSourceSearchSuggestionProvider,
         MusicSourceSearchPagingProvider {
   SubsonicProvider({
@@ -53,6 +54,7 @@ class SubsonicProvider
     MusicSourceCapability.playlistMutation,
     MusicSourceCapability.favoriteMutation,
     MusicSourceCapability.albumFavoriteMutation,
+    MusicSourceCapability.artistFavoriteMutation,
     MusicSourceCapability.artwork,
     MusicSourceCapability.directPlayback,
     MusicSourceCapability.offlineCache,
@@ -100,6 +102,7 @@ class SubsonicProvider
           'playlist names, membership, and track order changes',
           'favorite track changes',
           'favorite album changes',
+          'favorite artist changes',
           'song stream identifier',
           'cover art identifier',
         ],
@@ -654,6 +657,21 @@ class SubsonicProvider
           _requestUri(
             isFavorite ? '/rest/star.view' : '/rest/unstar.view',
             <String, Object?>{'albumId': normalizedAlbumId},
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> setArtistFavorite(String artistId, {required bool isFavorite}) {
+    final normalizedArtistId = _requiredPlaylistId(artistId);
+    return _guardRequest(() async {
+      _subsonicResponse(
+        await _requestLoader(
+          _requestUri(
+            isFavorite ? '/rest/star.view' : '/rest/unstar.view',
+            <String, Object?>{'artistId': normalizedArtistId},
           ),
         ),
       );
