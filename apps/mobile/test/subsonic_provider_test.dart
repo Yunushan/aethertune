@@ -318,7 +318,9 @@ void main() {
       saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async {
         requests.add(uri);
-        return _albumListResponseJson;
+        return uri.path.endsWith('/getStarred2.view')
+            ? _starredArtistsResponseJson
+            : _albumListResponseJson;
       },
     );
 
@@ -383,7 +385,20 @@ void main() {
       limit: 1,
     );
 
-    expect(provider.pagedDiscoveryKinds, containsAll(provider.discoveryKinds));
+    expect(
+      provider.pagedDiscoveryKinds,
+      containsAll(<MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.favorites,
+        MusicCatalogDiscoveryKind.random,
+      ]),
+    );
+    expect(
+      provider.pagedDiscoveryKinds,
+      isNot(contains(MusicCatalogDiscoveryKind.favoriteArtists)),
+    );
     expect(page.collections.single.id, 'album-1');
     expect(page.nextOffset, 10);
     expect(page.hasMore, isTrue);
