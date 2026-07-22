@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'library_store.dart';
 import 'offline_cache_background_scheduler.dart';
 import 'offline_cache_queue_worker.dart';
+import 'podcast_subscription_refresh_worker.dart';
 import 'self_hosted_provider_store.dart';
 
 /// Runs a persisted Android JobScheduler pass after the foreground activity
@@ -20,6 +21,7 @@ Future<void> runOfflineCacheBackgroundQueue() async {
     final library = LibraryStore();
     await library.load();
     if (library.automaticOfflineQueueEnabled && !library.offlineModeEnabled) {
+      await refreshDuePodcastSubscriptionsInBackground(library);
       final providers = SelfHostedProviderStore();
       await providers.load();
       final root = await getApplicationDocumentsDirectory();
@@ -44,4 +46,13 @@ Future<void> runOfflineCacheBackgroundQueue() async {
       // This entry point is meaningful only for the Android job service.
     }
   }
+}
+
+/// Refreshes due RSS feeds within an already-authorized Android background
+/// pass. The worker itself rejects offline mode before making any request.
+Future<PodcastRefreshReport> refreshDuePodcastSubscriptionsInBackground(
+  LibraryStore library, {
+  PodcastSubscriptionRefreshWorker? worker,
+}) {
+  return (worker ?? PodcastSubscriptionRefreshWorker()).refreshDue(library);
 }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/data/offline_cache_background_runner.dart';
 import 'package:aethertune/src/data/podcast_rss_provider.dart';
 import 'package:aethertune/src/data/podcast_subscription_refresh_worker.dart';
 import 'package:aethertune/src/domain/podcast_subscription.dart';
@@ -81,6 +82,32 @@ void main() {
       );
     },
   );
+
+  test('refreshes due feeds from an authorized background pass', () async {
+    final now = DateTime.utc(2026, 7, 16, 12);
+    final library = LibraryStore(clock: () => now);
+    await library.load();
+    final subscription = await _saveSubscription(
+      library,
+      feedUrl: 'https://feeds.example.test/background.xml',
+      lastFetchedAt: now.subtract(defaultPodcastRefreshInterval),
+    );
+    final worker = PodcastSubscriptionRefreshWorker(
+      clock: () => now,
+      feedFetcher: _feed,
+    );
+
+    final report = await refreshDuePodcastSubscriptionsInBackground(
+      library,
+      worker: worker,
+    );
+
+    expect(report.refreshedCount, 1);
+    expect(
+      library.podcastSubscriptionById(subscription.id)!.episodes.single.title,
+      'Fresh episode',
+    );
+  });
 
   testWidgets(
     'runs due refreshes on launch and resume but never in offline mode',
