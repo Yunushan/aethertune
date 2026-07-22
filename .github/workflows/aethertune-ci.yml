@@ -26,6 +26,9 @@ jobs:
       - name: Test release manifest generator
         run: python3 scripts/ci/test_generate_release_manifest.py
 
+      - name: Test Android release artifact verifier
+        run: python3 scripts/ci/test_verify_android_release_artifacts.py
+
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 

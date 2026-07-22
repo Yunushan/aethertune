@@ -19,6 +19,8 @@ flutter build appbundle --release
 ```
 
 For a real Play Store/F-Droid release, configure signing keys outside the repository. Never commit keystores or passwords.
+The tag/manual workflow reopens both outputs before upload and requires their
+Android manifest, primary dex payload, and Flutter asset manifest.
 
 ## iOS release
 

@@ -68,6 +68,12 @@ jobs:
       - name: Build app bundle
         run: cd apps/mobile && flutter build appbundle --release
 
+      - name: Verify Android release artifacts
+        run: |
+          python3 scripts/ci/verify_android_release_artifacts.py \
+            --apk apps/mobile/build/app/outputs/flutter-apk/app-release.apk \
+            --aab apps/mobile/build/app/outputs/bundle/release/app-release.aab
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v7
         with:
