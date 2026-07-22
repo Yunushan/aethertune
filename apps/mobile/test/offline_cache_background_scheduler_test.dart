@@ -28,13 +28,16 @@ void main() {
     expect(await scheduler.schedule(), isTrue);
     await scheduler.cancel();
     await scheduler.complete(hasPendingWork: true);
+    await scheduler.complete(hasPendingWork: false);
 
     expect(calls.map((call) => call.method), <String>[
       'schedule',
       'cancel',
       'complete',
+      'complete',
     ]);
-    expect(calls.last.arguments, <String, Object>{'hasPendingWork': true});
+    expect(calls[2].arguments, <String, Object>{'hasPendingWork': true});
+    expect(calls.last.arguments, <String, Object>{'hasPendingWork': false});
   });
 
   test('leaves unsupported platforms untouched', () async {

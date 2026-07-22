@@ -160,6 +160,11 @@ To claim 100% implemented parity later, AetherTune must satisfy all of these gat
 
 ### Offline, Cache, And Downloads
 
+Android 5+ has a persisted, network-constrained JobScheduler handoff for
+eligible automatic offline-cache work. The iOS and desktop equivalents,
+OS-background feed refresh, provider checksum manifests, and system Downloads
+integration remain separate parity work.
+
 | Feature | Status | Inspired by | Needed to add |
 |---|---:|---|---|
 | Local offline playback | Done | Local music apps | Better file indexing. |
