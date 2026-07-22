@@ -241,6 +241,6 @@
 - [ ] Fully signed/notarized release process
 - [x] Persisted system/light/dark/AMOLED theme preference
 - [x] Custom accent color picker
-- [ ] Material You dynamic platform color
+- [x] Material You dynamic platform color with explicit accent overrides and fallback
 - [ ] Accessibility pass
 - [ ] Localization setup

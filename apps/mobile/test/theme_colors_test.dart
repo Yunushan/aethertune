@@ -49,6 +49,16 @@ void main() {
         brightness: Brightness.light,
       ),
     );
+    expect(
+      darkColorSchemeForAccent(
+        AppAccentColor.rose,
+        dynamicColorScheme: dynamicDark,
+      ),
+      ColorScheme.fromSeed(
+        seedColor: Colors.pink,
+        brightness: Brightness.dark,
+      ),
+    );
   });
 
   test('falls back safely when a platform has no dynamic scheme', () {
