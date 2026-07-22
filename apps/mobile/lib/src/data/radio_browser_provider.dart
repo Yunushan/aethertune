@@ -60,6 +60,7 @@ final class RadioBrowserStreamValidation {
     required this.reason,
     this.statusCode,
     this.contentType,
+    this.detectedCodec,
   });
 
   final Uri? streamUri;
@@ -67,6 +68,7 @@ final class RadioBrowserStreamValidation {
   final String reason;
   final int? statusCode;
   final String? contentType;
+  final String? detectedCodec;
 }
 
 final class RadioBrowserStationSearchPage {
@@ -673,6 +675,7 @@ Future<RadioBrowserStreamValidation> _validateRadioBrowserStream(
     request.headers.set(HttpHeaders.acceptHeader, 'audio/*,*/*;q=0.8');
     request.headers.set(HttpHeaders.userAgentHeader, 'AetherTune/0.1');
     request.headers.set('Icy-MetaData', '1');
+    request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-4095');
     final response = await request.close();
     final contentType = response.headers.contentType?.mimeType ??
         response.headers.value(HttpHeaders.contentTypeHeader);
@@ -695,11 +698,16 @@ Future<RadioBrowserStreamValidation> _validateRadioBrowserStream(
       );
     }
 
+    final detectedCodec = detectRadioBrowserStreamCodec(
+      await _readRadioBrowserProbe(response),
+    );
+
     return RadioBrowserStreamValidation(
       streamUri: streamUri,
       isPlayable: true,
       statusCode: response.statusCode,
       contentType: contentType,
+      detectedCodec: detectedCodec,
       reason: contentType == null || contentType.trim().isEmpty
           ? 'Stream responded successfully.'
           : 'Stream responded as $contentType.',
@@ -714,6 +722,89 @@ Future<RadioBrowserStreamValidation> _validateRadioBrowserStream(
     client.close(force: true);
   }
 }
+
+/// Detects common live-radio container and frame signatures from a bounded
+/// validation probe. It never attempts to decode or retain audio media.
+String? detectRadioBrowserStreamCodec(List<int> bytes) {
+  if (bytes.length >= 4 &&
+      bytes[0] == 0x4f &&
+      bytes[1] == 0x67 &&
+      bytes[2] == 0x67 &&
+      bytes[3] == 0x53) {
+    return 'Ogg';
+  }
+  if (bytes.length >= 4 &&
+      bytes[0] == 0x66 &&
+      bytes[1] == 0x4c &&
+      bytes[2] == 0x61 &&
+      bytes[3] == 0x43) {
+    return 'FLAC';
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x46 &&
+      bytes[8] == 0x57 &&
+      bytes[9] == 0x41 &&
+      bytes[10] == 0x56 &&
+      bytes[11] == 0x45) {
+    return 'WAV';
+  }
+  if (bytes.length >= 8 &&
+      bytes[4] == 0x66 &&
+      bytes[5] == 0x74 &&
+      bytes[6] == 0x79 &&
+      bytes[7] == 0x70) {
+    return 'MP4/AAC';
+  }
+  if (bytes.length >= 3 &&
+      bytes[0] == 0x49 &&
+      bytes[1] == 0x44 &&
+      bytes[2] == 0x33) {
+    return 'MP3';
+  }
+
+  final limit = bytes.length < _maxRadioBrowserProbeBytes
+      ? bytes.length
+      : _maxRadioBrowserProbeBytes;
+  for (var index = 0; index + 1 < limit; index += 1) {
+    final first = bytes[index];
+    final second = bytes[index + 1];
+    if (first != 0xff || (second & 0xf0) != 0xf0) {
+      continue;
+    }
+    if ((second & 0x06) == 0 || (second & 0x0c) == 0x0c) {
+      return 'AAC';
+    }
+    if ((second & 0xe0) == 0xe0) {
+      return 'MP3';
+    }
+  }
+  return null;
+}
+
+Future<List<int>> _readRadioBrowserProbe(HttpClientResponse response) async {
+  final bytes = <int>[];
+  try {
+    await for (final chunk in response.timeout(const Duration(seconds: 10))) {
+      final remaining = _maxRadioBrowserProbeBytes - bytes.length;
+      if (remaining <= 0) {
+        break;
+      }
+      bytes.addAll(chunk.take(remaining));
+      if (bytes.length >= _maxRadioBrowserProbeBytes) {
+        break;
+      }
+    }
+  } on TimeoutException {
+    // A MIME-valid live stream may not emit data promptly; retain the useful
+    // response validation while reporting no inferred codec.
+  }
+  return bytes;
+}
+
+const _maxRadioBrowserProbeBytes = 4096;
 
 bool _looksLikeRadioStreamContentType(String? contentType) {
   final normalized = contentType?.trim().toLowerCase();

@@ -25,6 +25,7 @@ void main() {
           isPlayable: true,
           statusCode: 200,
           contentType: 'audio/aac',
+          detectedCodec: 'AAC',
           reason: 'Stream responded as audio/aac.',
         );
       },
@@ -63,6 +64,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stream validated'), findsOneWidget);
     expect(find.textContaining('audio/aac'), findsOneWidget);
+    expect(find.textContaining('Detected AAC'), findsOneWidget);
   });
 }
 

@@ -456,6 +456,7 @@ void main() {
           isPlayable: true,
           statusCode: 200,
           contentType: 'audio/aac',
+          detectedCodec: 'AAC',
           reason: 'Stream responded as audio/aac.',
         );
       },
@@ -468,6 +469,26 @@ void main() {
     expect(validation.isPlayable, isTrue);
     expect(validation.statusCode, 200);
     expect(validation.contentType, 'audio/aac');
+    expect(validation.detectedCodec, 'AAC');
+  });
+
+  test('detects bounded radio stream codec signatures', () {
+    expect(detectRadioBrowserStreamCodec(<int>[0x4f, 0x67, 0x67, 0x53]), 'Ogg');
+    expect(detectRadioBrowserStreamCodec(<int>[0x66, 0x4c, 0x61, 0x43]), 'FLAC');
+    expect(
+      detectRadioBrowserStreamCodec(<int>[
+        0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45,
+      ]),
+      'WAV',
+    );
+    expect(
+      detectRadioBrowserStreamCodec(<int>[0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70]),
+      'MP4/AAC',
+    );
+    expect(detectRadioBrowserStreamCodec(<int>[0x49, 0x44, 0x33]), 'MP3');
+    expect(detectRadioBrowserStreamCodec(<int>[0xff, 0xf1]), 'AAC');
+    expect(detectRadioBrowserStreamCodec(<int>[0xff, 0xfb]), 'MP3');
+    expect(detectRadioBrowserStreamCodec(<int>[0, 1, 2]), isNull);
   });
 
   test('rejects stream validation for non-radio tracks', () async {

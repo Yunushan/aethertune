@@ -192,6 +192,9 @@ class _RadioBrowserStationScreenState extends State<RadioBrowserStationScreen> {
       if (validation.statusCode != null) 'HTTP ${validation.statusCode}',
       if (validation.contentType != null && validation.contentType!.isNotEmpty)
         validation.contentType!,
+      if (validation.detectedCodec != null &&
+          validation.detectedCodec!.isNotEmpty)
+        'Detected ${validation.detectedCodec}',
     ];
     return parts.join(' / ');
   }
