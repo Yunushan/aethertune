@@ -263,7 +263,9 @@ void main() {
       saltGenerator: _fixedSaltGenerator,
       requestLoader: (uri) async {
         requests.add(uri);
-        return _albumListResponseJson;
+        return uri.path.endsWith('/getStarred2.view')
+            ? _starredArtistsResponseJson
+            : _albumListResponseJson;
       },
     );
 
@@ -353,6 +355,13 @@ void main() {
       provider.capabilities,
       contains(MusicSourceCapability.recommendations),
     );
+    final favoriteArtists = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.favoriteArtists,
+      limit: 7,
+    );
+    expect(favoriteArtists.single.id, 'artist-1');
+    expect(requests.last.path, '/navidrome/rest/getStarred2.view');
+    expect(requests.last.queryParameters['t'], _secretToken);
   });
 
   test('pages Subsonic discovery lists with the requested offset', () async {
@@ -953,6 +962,25 @@ const _artistsResponseJson = '''
               "starred": "2026-07-22T12:00:00Z"
             }
           ]
+        }
+      ]
+    }
+  }
+}
+''';
+
+const _starredArtistsResponseJson = '''
+{
+  "subsonic-response": {
+    "status": "ok",
+    "starred2": {
+      "artist": [
+        {
+          "id": "artist-1",
+          "name": "Open Artist",
+          "albumCount": 2,
+          "coverArt": "artist-cover-1",
+          "starred": "2026-07-22T12:00:00Z"
         }
       ]
     }

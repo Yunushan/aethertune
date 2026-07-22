@@ -330,8 +330,11 @@ void main() {
       apiKey: 'api-secret',
       requestLoader: (uri) async {
         requests.add(uri);
-        return uri.path.endsWith('/Items/Latest')
-            ? _jellyfinLatestAlbumsJson
+        if (uri.path.endsWith('/Items/Latest')) {
+          return _jellyfinLatestAlbumsJson;
+        }
+        return uri.path.endsWith('/Artists')
+            ? _jellyfinArtistsJson
             : _jellyfinAlbumsJson;
       },
     );
@@ -356,6 +359,10 @@ void main() {
       MusicCatalogDiscoveryKind.random,
       limit: 7,
     );
+    final favoriteArtists = await provider.browseDiscoveryCollections(
+      MusicCatalogDiscoveryKind.favoriteArtists,
+      limit: 7,
+    );
 
     expect(provider.discoveryKinds, <MusicCatalogDiscoveryKind>[
       MusicCatalogDiscoveryKind.recentlyAdded,
@@ -374,6 +381,7 @@ void main() {
     expect(recentlyPlayed.single.id, 'album-1');
     expect(favorites.single.id, 'album-1');
     expect(random.single.id, 'album-1');
+    expect(favoriteArtists.single.id, 'artist-1');
 
     final latestRequest = requests[0];
     expect(latestRequest.path, '/jellyfin/Items/Latest');
@@ -406,6 +414,12 @@ void main() {
     expect(randomRequest.queryParameters['SortBy'], 'Random');
     expect(randomRequest.queryParameters['SortOrder'], 'Descending');
     expect(randomRequest.queryParameters['IsPlayed'], isNull);
+
+    final favoriteArtistsRequest = requests[5];
+    expect(favoriteArtistsRequest.path, '/jellyfin/Artists');
+    expect(favoriteArtistsRequest.queryParameters['UserId'], 'user-1');
+    expect(favoriteArtistsRequest.queryParameters['Filters'], 'IsFavorite');
+    expect(favoriteArtistsRequest.queryParameters['EnableUserData'], 'true');
   });
 
   test('pages Jellyfin query-backed discovery shelves', () async {
