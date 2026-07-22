@@ -29,6 +29,9 @@ jobs:
       - name: Test release manifest verifier
         run: python3 scripts/ci/test_verify_release_manifest.py
 
+      - name: Test Node 24 action pins
+        run: python3 scripts/ci/test_actions_node24_contract.py
+
       - name: Test Android release artifact verifier
         run: python3 scripts/ci/test_verify_android_release_artifacts.py
 
