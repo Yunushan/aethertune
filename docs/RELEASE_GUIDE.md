@@ -93,7 +93,8 @@ The release workflow uploads native server executables as:
 
 Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts`
 workflow manually. Both runs assemble the following files into the
-`aethertune-release-bundle` artifact with a `SHA256SUMS.txt` manifest:
+`aethertune-release-bundle` artifact with `SHA256SUMS.txt` and a deterministic
+`RELEASE_MANIFEST.json` inventory:
 
 - Android: `app-release.apk` and `app-release.aab`
 - Linux desktop archive
@@ -106,7 +107,8 @@ A pushed `v*` tag also creates or updates a GitHub Release and attaches the
 same bundle files individually. Manual dispatch intentionally remains
 artifact-only, so it can validate a candidate without publishing it. Verify a
 download with `sha256sum -c SHA256SUMS.txt` on Linux/macOS, or
-`Get-FileHash` on Windows.
+`Get-FileHash` on Windows. `RELEASE_MANIFEST.json` identifies each artifact's
+platform, kind, byte size, and SHA-256 digest without timestamps or user data.
 
 The SBOM artifact is generated from the exact `dart pub deps --json` graph
 resolved by that workflow. It intentionally omits a timestamp, embeds the

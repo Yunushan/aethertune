@@ -219,8 +219,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/ci/generate_release_manifest.py --release-dir release --output release/RELEASE_MANIFEST.json
           cd release
           sha256sum -- * > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
 
       - name: Upload verified release bundle
         uses: actions/upload-artifact@v7

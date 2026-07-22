@@ -23,6 +23,9 @@ jobs:
       - name: Test SBOM generator
         run: python3 scripts/ci/test_generate_dart_sbom.py
 
+      - name: Test release manifest generator
+        run: python3 scripts/ci/test_generate_release_manifest.py
+
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 

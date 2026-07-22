@@ -17,7 +17,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         self.assertIn("uses: actions/download-artifact@v8", workflow)
         self.assertIn("merge-multiple: true", workflow)
+        self.assertIn("scripts/ci/generate_release_manifest.py", workflow)
+        self.assertIn("RELEASE_MANIFEST.json", workflow)
         self.assertIn("sha256sum -- * > SHA256SUMS.txt", workflow)
+        self.assertIn("sha256sum --check SHA256SUMS.txt", workflow)
         self.assertIn("scripts/ci/package_linux_tarball.sh", workflow)
         self.assertIn("aethertune-linux-x64.tar.gz", workflow)
         self.assertIn("scripts/ci/package_linux_deb.sh", workflow)
