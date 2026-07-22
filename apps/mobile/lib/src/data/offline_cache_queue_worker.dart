@@ -88,9 +88,9 @@ class OfflineCacheQueueWorker {
           OfflineCacheEntryStatus.processing) {
         return library.offlineCacheEntryById(entry.id) ?? entry;
       }
-      final reason = materialization.checksum.isEmpty
-          ? 'Cached ${materialization.byteCount} bytes.'
-          : 'Cached ${materialization.byteCount} bytes; checksum verified.';
+      final reason = materialization.expectedMediaChecksumVerified
+          ? 'Cached ${materialization.byteCount} bytes; provider checksum verified.'
+          : 'Cached ${materialization.byteCount} bytes; integrity check verified.';
       await library.markOfflineCacheEntryCached(
         entry.id,
         materialization.track,

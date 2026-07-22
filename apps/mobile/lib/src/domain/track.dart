@@ -29,6 +29,7 @@ class Track {
     this.providerArtworkVersion,
     this.localPath,
     this.contentHash,
+    this.expectedMediaChecksum,
     this.audioFingerprint,
     this.replayGainTrackDb,
     this.replayGainAlbumDb,
@@ -75,6 +76,7 @@ class Track {
   final String? providerArtworkVersion;
   final String? localPath;
   final String? contentHash;
+  final String? expectedMediaChecksum;
   final String? audioFingerprint;
   final double? replayGainTrackDb;
   final double? replayGainAlbumDb;
@@ -126,6 +128,7 @@ class Track {
     String? providerArtworkVersion,
     String? localPath,
     String? contentHash,
+    String? expectedMediaChecksum,
     String? audioFingerprint,
     double? replayGainTrackDb,
     double? replayGainAlbumDb,
@@ -168,6 +171,8 @@ class Track {
           providerArtworkVersion ?? this.providerArtworkVersion,
       localPath: localPath ?? this.localPath,
       contentHash: contentHash ?? this.contentHash,
+      expectedMediaChecksum:
+          expectedMediaChecksum ?? this.expectedMediaChecksum,
       audioFingerprint: audioFingerprint ?? this.audioFingerprint,
       replayGainTrackDb: replayGainTrackDb ?? this.replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb ?? this.replayGainAlbumDb,
@@ -211,6 +216,7 @@ class Track {
       providerArtworkVersion: providerArtworkVersion,
       localPath: localPath,
       contentHash: contentHash,
+      expectedMediaChecksum: expectedMediaChecksum,
       audioFingerprint: audioFingerprint,
       replayGainTrackDb: replayGainTrackDb,
       replayGainAlbumDb: replayGainAlbumDb,
@@ -249,6 +255,8 @@ class Track {
       'providerArtworkVersion': providerArtworkVersion,
       'localPath': localPath,
       'contentHash': contentHash,
+      if (expectedMediaChecksum != null)
+        'expectedMediaChecksum': expectedMediaChecksum,
       if (audioFingerprint != null) 'audioFingerprint': audioFingerprint,
       if (replayGainTrackDb != null) 'replayGainTrackDb': replayGainTrackDb,
       if (replayGainAlbumDb != null) 'replayGainAlbumDb': replayGainAlbumDb,
@@ -295,6 +303,9 @@ class Track {
       providerArtworkVersion: json['providerArtworkVersion'] as String?,
       localPath: json['localPath'] as String?,
       contentHash: json['contentHash'] as String?,
+      expectedMediaChecksum: _parseExpectedMediaChecksum(
+        json['expectedMediaChecksum'] as String?,
+      ),
       audioFingerprint: json['audioFingerprint'] as String?,
       replayGainTrackDb: sanitizeReplayGainDb(
         (json['replayGainTrackDb'] as num?)?.toDouble(),
@@ -329,6 +340,16 @@ class Track {
       return null;
     }
     return Uri.tryParse(value);
+  }
+
+  static String? _parseExpectedMediaChecksum(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    if (RegExp(r'^md5:[a-f0-9]{32}$').hasMatch(normalized) ||
+        RegExp(r'^sha1:[a-f0-9]{40}$').hasMatch(normalized) ||
+        RegExp(r'^sha256:[a-f0-9]{64}$').hasMatch(normalized)) {
+      return normalized;
+    }
+    return null;
   }
 
   static int _normalizeRating(int value) => value.clamp(0, 5).toInt();

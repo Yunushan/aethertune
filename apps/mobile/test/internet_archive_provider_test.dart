@@ -36,6 +36,10 @@ void main() {
     );
     expect(track.externalId, 'aether_session|aether-session-vbr.mp3');
     expect(
+      track.expectedMediaChecksum,
+      'md5:0123456789abcdef0123456789abcdef',
+    );
+    expect(
       item
           .toTracks(
             sourceId: 'internet-archive',
@@ -437,7 +441,8 @@ const _itemMetadataJson = '''
       "name": "aether-session-vbr.mp3",
       "format": "VBR MP3",
       "length": "123.5",
-      "source": "derivative"
+      "source": "derivative",
+      "md5": "0123456789abcdef0123456789abcdef"
     }
   ]
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,7 @@ void main() {
         artist: 'Archive',
         sourceId: 'internet-archive',
         streamUrl: 'https://archive.org/download/item/audio.ogg',
+        expectedMediaChecksum: 'md5:${md5.convert(<int>[1, 2, 3, 4])}',
       ),
       action: OfflineMediaAction.cache,
       createdAt: DateTime.utc(2026, 1, 17),
@@ -54,6 +56,7 @@ void main() {
     expect(materialization.byteCount, 4);
     expect(materialization.checksum, offlineMediaChecksum(<int>[1, 2, 3, 4]));
     expect(materialization.checksum, hasLength(8));
+    expect(materialization.expectedMediaChecksumVerified, isTrue);
     expect(materialization.track.localPath, isNotNull);
     expect(materialization.track.hasLocalSource, isTrue);
     expect(materialization.track.streamUrl, entry.track.streamUrl);
@@ -62,6 +65,43 @@ void main() {
       (await File(materialization.track.localPath!).readAsBytes()).toList(),
       <int>[1, 2, 3, 4],
     );
+  });
+
+  test('rejects and removes media that fails its provider checksum', () async {
+    final entry = OfflineCacheEntry(
+      id: 'entry-checksum-mismatch',
+      track: Track(
+        id: 'track-checksum-mismatch',
+        title: 'Altered archive media',
+        artist: 'Archive',
+        sourceId: 'internet-archive',
+        streamUrl: 'https://archive.org/download/item/audio.ogg',
+        expectedMediaChecksum: 'md5:${'0' * 32}',
+      ),
+      action: OfflineMediaAction.cache,
+      createdAt: DateTime.utc(2026, 1, 17),
+    );
+    final manager = OfflineCacheManager(
+      cacheRoot: cacheRoot,
+      downloader: (_) async => <int>[1, 2, 3, 4],
+    );
+
+    await expectLater(
+      manager.materialize(entry),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('Provider media checksum mismatch'),
+        ),
+      ),
+    );
+
+    final file = File(
+      p.join(manager.mediaDirectory.path, '${entry.id}.ogg'),
+    );
+    expect(await file.exists(), isFalse);
+    expect(await File('${file.path}.part').exists(), isFalse);
   });
 
   test('resumes an existing partial HTTP cache file', () async {

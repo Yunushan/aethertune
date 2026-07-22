@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/offline_cache_cancellation.dart';
@@ -14,11 +15,13 @@ final class OfflineCacheMaterialization {
     required this.track,
     required this.byteCount,
     required this.checksum,
+    required this.expectedMediaChecksumVerified,
   });
 
   final Track track;
   final int byteCount;
   final String checksum;
+  final bool expectedMediaChecksumVerified;
 }
 
 final class OfflineCacheUsage {
@@ -94,6 +97,7 @@ final class OfflineCacheManager {
         track: entry.track,
         byteCount: 0,
         checksum: '',
+        expectedMediaChecksumVerified: false,
       );
     }
 
@@ -148,6 +152,18 @@ final class OfflineCacheManager {
       throw StateError('Downloaded media is empty for ${entry.track.title}.');
     }
     final checksum = offlineMediaChecksum(savedBytes);
+    final expectedMediaChecksumVerified = _verifyExpectedMediaChecksum(
+      entry.track.expectedMediaChecksum,
+      savedBytes,
+    );
+    if (entry.track.expectedMediaChecksum != null &&
+        !expectedMediaChecksumVerified) {
+      await _deleteIfExists(file);
+      await _deleteIfExists(partialFile);
+      throw StateError(
+        'Provider media checksum mismatch for ${entry.track.title}.',
+      );
+    }
     final savedBytesAfterChecksum = await file.readAsBytes();
     if (savedBytesAfterChecksum.length != savedBytes.length ||
         offlineMediaChecksum(savedBytesAfterChecksum) != checksum) {
@@ -161,6 +177,7 @@ final class OfflineCacheManager {
       track: entry.track.copyWith(localPath: file.path),
       byteCount: savedBytes.length,
       checksum: checksum,
+      expectedMediaChecksumVerified: expectedMediaChecksumVerified,
     );
   }
 
@@ -515,4 +532,25 @@ String offlineMediaChecksum(List<int> bytes) {
   }
 
   return hash.toRadixString(16).padLeft(8, '0');
+}
+
+bool _verifyExpectedMediaChecksum(String? expected, List<int> bytes) {
+  final normalized = expected?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) {
+    return false;
+  }
+
+  final separator = normalized.indexOf(':');
+  if (separator <= 0 || separator == normalized.length - 1) {
+    return false;
+  }
+  final algorithm = normalized.substring(0, separator);
+  final value = normalized.substring(separator + 1);
+  final actual = switch (algorithm) {
+    'md5' => md5.convert(bytes).toString(),
+    'sha1' => sha1.convert(bytes).toString(),
+    'sha256' => sha256.convert(bytes).toString(),
+    _ => '',
+  };
+  return actual.isNotEmpty && actual == value;
 }

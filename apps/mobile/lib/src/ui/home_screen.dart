@@ -20750,9 +20750,9 @@ class _SettingsTab extends StatelessWidget {
             OfflineCacheEntryStatus.processing) {
           continue;
         }
-        final cacheReason = materialization.checksum.isEmpty
-            ? 'Cached ${_formatByteCount(materialization.byteCount)}.'
-            : 'Cached ${_formatByteCount(materialization.byteCount)}; checksum verified.';
+        final cacheReason = materialization.expectedMediaChecksumVerified
+            ? 'Cached ${_formatByteCount(materialization.byteCount)}; provider checksum verified.'
+            : 'Cached ${_formatByteCount(materialization.byteCount)}; integrity check verified.';
         await library.markOfflineCacheEntryCached(
           entry.id,
           materialization.track,

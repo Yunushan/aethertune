@@ -17,6 +17,7 @@ void main() {
       duration: const Duration(seconds: 42),
       localPath: '/music/song.mp3',
       contentHash: 'fnv64-0011223344556677',
+      expectedMediaChecksum: 'sha256:${'a' * 64}',
       replayGainTrackDb: -6.2,
       replayGainAlbumDb: -4.7,
       replayGainTrackPeak: 0.95,
@@ -47,6 +48,7 @@ void main() {
     expect(decoded.duration, track.duration);
     expect(decoded.localPath, track.localPath);
     expect(decoded.contentHash, track.contentHash);
+    expect(decoded.expectedMediaChecksum, track.expectedMediaChecksum);
     expect(decoded.replayGainTrackDb, -6.2);
     expect(decoded.replayGainAlbumDb, -4.7);
     expect(decoded.replayGainTrackPeak, 0.95);
@@ -68,6 +70,16 @@ void main() {
     });
 
     expect(decoded.genre, 'Unknown Genre');
+  });
+
+  test('Track JSON discards malformed expected media checksums', () {
+    final decoded = Track.fromJson(<String, Object?>{
+      'id': 'untrusted-checksum',
+      'title': 'Untrusted checksum',
+      'expectedMediaChecksum': 'md5:not-a-checksum',
+    });
+
+    expect(decoded.expectedMediaChecksum, isNull);
   });
 
   test('Track JSON rejects non-web transcript links', () {

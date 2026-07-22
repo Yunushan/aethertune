@@ -10320,6 +10320,7 @@ class LibraryStore extends ChangeNotifier {
       streamUrl: cachedTrack.streamUrl,
       sourceId: cachedTrack.sourceId,
       externalId: cachedTrack.externalId,
+      expectedMediaChecksum: cachedTrack.expectedMediaChecksum,
     );
     _sortTracks();
   }

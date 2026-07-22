@@ -486,6 +486,7 @@ final class InternetArchiveItem {
       duration: audioFile.duration,
       artworkUri: _imageUri(baseUri, identifier),
       streamUrl: _downloadUri(baseUri, identifier, audioFile.name).toString(),
+      expectedMediaChecksum: audioFile.expectedMediaChecksum,
       sourceId: sourceId,
       externalId: '$identifier|${audioFile.name}',
     );
@@ -499,6 +500,7 @@ final class InternetArchiveFile {
     required this.title,
     required this.source,
     required this.duration,
+    this.expectedMediaChecksum,
   });
 
   final String name;
@@ -506,6 +508,7 @@ final class InternetArchiveFile {
   final String title;
   final String source;
   final Duration duration;
+  final String? expectedMediaChecksum;
 
   String get displayTitle {
     if (title.isNotEmpty) {
@@ -723,7 +726,22 @@ InternetArchiveFile _fileFromJson(Map<String, Object?> json) {
     title: _stringValue(json['title']),
     source: _stringValue(json['source']),
     duration: _durationValue(json['length']),
+    expectedMediaChecksum: _archiveMediaChecksum(json),
   );
+}
+
+String? _archiveMediaChecksum(Map<String, Object?> json) {
+  final md5 = _stringValue(json['md5']).toLowerCase();
+  if (RegExp(r'^[a-f0-9]{32}$').hasMatch(md5)) {
+    return 'md5:$md5';
+  }
+
+  final sha1 = _stringValue(json['sha1']).toLowerCase();
+  if (RegExp(r'^[a-f0-9]{40}$').hasMatch(sha1)) {
+    return 'sha1:$sha1';
+  }
+
+  return null;
 }
 
 Future<String> _loadInternetArchiveJson(Uri uri) async {

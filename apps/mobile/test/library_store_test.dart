@@ -4672,6 +4672,7 @@ void main() {
       externalId: 'archive-cache',
       localPath: '',
       streamUrl: 'https://archive.org/download/archive-cache/audio.mp3',
+      expectedMediaChecksum: 'md5:${'a' * 32}',
     );
     final store = LibraryStore(clock: clock);
     await store.load();
@@ -4714,6 +4715,7 @@ void main() {
     expect(cached.track.localPath, '/cache/audio.mp3');
     expect(cached.cachedByteCount, 1024 * 1024);
     expect(cached.cachedMediaChecksum, 'cache-checksum');
+    expect(cached.track.expectedMediaChecksum, 'md5:${'a' * 32}');
     expect(store.tracks.single.id, track.id);
     expect(store.tracks.single.localPath, '/cache/audio.mp3');
     expect(store.search('', offlineOnly: true).single.id, track.id);
@@ -4723,6 +4725,7 @@ void main() {
     final persistedCached = persistedStore.offlineCacheEntryById(queued.id)!;
     expect(persistedCached.cachedByteCount, 1024 * 1024);
     expect(persistedCached.cachedMediaChecksum, 'cache-checksum');
+    expect(persistedCached.track.expectedMediaChecksum, 'md5:${'a' * 32}');
 
     now = DateTime.utc(2026, 1, 16, 16, 30);
     final evicted = await store.markOfflineCacheEntryEvicted(
@@ -6079,6 +6082,7 @@ Track _track(
   DateTime? addedAt,
   String? localPath,
   String? contentHash,
+  String? expectedMediaChecksum,
   String? audioFingerprint,
   String? streamUrl,
   Uri? artworkUri,
@@ -6096,6 +6100,7 @@ Track _track(
     artworkUri: artworkUri,
     localPath: localPath ?? '/music/$id.mp3',
     contentHash: contentHash,
+    expectedMediaChecksum: expectedMediaChecksum,
     audioFingerprint: audioFingerprint,
     streamUrl: streamUrl,
     sourceId: sourceId,
