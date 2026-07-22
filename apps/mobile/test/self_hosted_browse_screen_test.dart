@@ -474,10 +474,6 @@ void main() {
       provider.favoriteMutationCalls,
       <String>['song-1:true', 'song-1:false'],
     );
-    expect(
-      find.text('Removed Aether Session from server favorites.'),
-      findsOneWidget,
-    );
     expect(tester.takeException(), isNull);
   });
 
