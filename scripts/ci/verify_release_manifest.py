@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path, PurePosixPath
 
-from generate_release_manifest import sha256
+from generate_release_manifest import ARTIFACT_DETAILS, sha256
 
 
 METADATA_FILES = frozenset({"RELEASE_MANIFEST.json", "SHA256SUMS.txt"})
@@ -49,6 +49,11 @@ def verify_release_manifest(release_dir: Path, manifest_path: Path) -> None:
         entries[name] = artifact
 
     actual_files = bundle_files(release_dir)
+    missing_release_artifacts = sorted(set(ARTIFACT_DETAILS) - actual_files)
+    if missing_release_artifacts:
+        raise ValueError(
+            f"release bundle is missing required artifacts: {missing_release_artifacts}"
+        )
     if set(entries) != actual_files:
         missing = sorted(actual_files - set(entries))
         unexpected = sorted(set(entries) - actual_files)
