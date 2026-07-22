@@ -24,6 +24,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("aethertune-windows-x64.zip", workflow)
         self.assertIn("scripts/ci/package_macos_zip.sh", workflow)
         self.assertIn("aethertune-macos.zip", workflow)
+        self.assertIn("scripts/ci/package_macos_dmg.sh", workflow)
+        self.assertIn("aethertune-macos.dmg", workflow)
         self.assertIn("name: aethertune-release-bundle", workflow)
         self.assertIn("startsWith(github.ref, 'refs/tags/v')", workflow)
         self.assertIn("contents: write", workflow)

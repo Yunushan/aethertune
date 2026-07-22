@@ -142,6 +142,7 @@ jobs:
           mkdir -p release
           app_bundle="$(find apps/mobile/build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -type d | head -n 1)"
           bash scripts/ci/package_macos_zip.sh "$app_bundle" release/aethertune-macos.zip
+          bash scripts/ci/package_macos_dmg.sh "$app_bundle" release/aethertune-macos.dmg
 
       - name: Package Windows desktop app
         if: matrix.target == 'windows'

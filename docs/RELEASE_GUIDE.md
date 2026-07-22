@@ -58,12 +58,14 @@ desktop archives on tags or manual dispatch:
 - `aethertune-linux-x64`: `aethertune-linux-x64.tar.gz`
 - `aethertune-linux-x64`: `aethertune-linux-x64.deb` for 64-bit Debian/Ubuntu systems
 - `aethertune-macos`: `aethertune-macos.zip`, containing the validated `.app` bundle
+- `aethertune-macos`: `aethertune-macos.dmg`, containing the same bundle and an Applications shortcut
 - `aethertune-windows-x64`: `aethertune-windows-x64.zip`
 
-The macOS ZIP packager validates the app executable and Flutter asset manifest,
-then reopens the archive to verify both paths before upload. Release packaging
-still needs platform-specific signing, notarization, universal binaries, and
-installer work before store-quality distribution.
+The macOS ZIP and DMG packagers validate the app executable and Flutter asset
+manifest. The ZIP reopens the archive to verify both paths, while the DMG test
+mounts the volume to verify the bundle and its Applications shortcut. The DMG
+is unsigned: platform-specific signing, notarization, universal binaries, and
+installer work still remain before store-quality distribution.
 
 ## Server release
 
@@ -89,7 +91,7 @@ workflow manually. Both runs assemble the following files into the
 
 - Android: `app-release.apk` and `app-release.aab`
 - Linux desktop archive
-- macOS desktop archive
+- macOS ZIP and DMG desktop packages
 - Windows desktop archive
 - Linux/macOS/Windows server executables
 - `aethertune-dependency-provenance`: resolved client/server dependency inventories and deterministic CycloneDX 1.5 SBOMs
