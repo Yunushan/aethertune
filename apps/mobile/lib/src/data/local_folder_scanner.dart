@@ -237,7 +237,7 @@ Future<void> _runLocalScanInBackground(Map<String, Object?> request) async {
       'completed': progress.completed,
       'total': progress.total,
     });
-  };
+  }
 
   try {
     final importedAt = request['importedAt'] as DateTime?;
