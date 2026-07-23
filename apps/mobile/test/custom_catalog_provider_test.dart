@@ -80,6 +80,7 @@ void main() {
               'durationMs': 185000,
               'streamUrl': 'https://cdn.example.test/audio/night-drive.mp3',
               'artworkUrl': 'https://cdn.example.test/art/night-drive.jpg',
+              'expectedMediaChecksum': 'SHA256:${'a' * 64}',
             },
           ],
         });
@@ -93,6 +94,7 @@ void main() {
     expect(tracks.single.id, 'custom-catalog-catalog-003:night-drive');
     expect(tracks.single.sourceId, definition.providerId);
     expect(tracks.single.duration, const Duration(milliseconds: 185000));
+    expect(tracks.single.expectedMediaChecksum, 'sha256:${'a' * 64}');
     expect(
       await provider.resolveStream(tracks.single),
       Uri.parse('https://cdn.example.test/audio/night-drive.mp3'),
@@ -130,6 +132,34 @@ void main() {
               'id': 'untrusted',
               'title': 'Untrusted host',
               'streamUrl': 'https://tracker.example.test/stream.mp3',
+            },
+          ],
+        }),
+        definition,
+      ),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('rejects malformed custom catalog media checksums', () {
+    final definition = CustomCatalogDefinition.create(
+      id: 'catalog-004b',
+      name: 'Checksum catalog',
+      catalogUrl: 'https://catalog.example.test/music.json',
+      mediaDomains: const <String>['cdn.example.test'],
+      allowInsecureHttp: false,
+    );
+
+    expect(
+      () => parseCustomCatalogTracks(
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'tracks': <Object?>[
+            <String, Object?>{
+              'id': 'invalid-checksum',
+              'title': 'Invalid checksum',
+              'streamUrl': 'https://cdn.example.test/stream.mp3',
+              'expectedMediaChecksum': 'sha256:not-a-digest',
             },
           ],
         }),

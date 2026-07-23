@@ -15,7 +15,8 @@ typedef CustomCatalogJsonLoader = Future<String> Function(Uri catalogUri);
 ///
 /// Expected document shape:
 /// `{ "version": 1, "tracks": [{ "id": "...", "title": "...",
-/// "streamUrl": "https://declared-host/..." }] }`.
+/// "streamUrl": "https://declared-host/...", "expectedMediaChecksum":
+/// "sha256:<64 lowercase hexadecimal digits>" }] }`.
 final class CustomCatalogProvider
     implements
         MusicSourceSearchPagingProvider,
@@ -196,6 +197,9 @@ Track _parseCustomCatalogTrack(
   final title = _requiredText(json, 'title', maximum: 240);
   final streamUrl = _optionalRemoteUrl(json['streamUrl'], definition);
   final artworkUri = _optionalRemoteUrl(json['artworkUrl'], definition);
+  final expectedMediaChecksum = _optionalExpectedMediaChecksum(
+    json['expectedMediaChecksum'],
+  );
   final durationMs = json['durationMs'];
   if (durationMs != null &&
       (durationMs is! int || durationMs < 0 || durationMs > 24 * 60 * 60 * 1000)) {
@@ -212,6 +216,27 @@ Track _parseCustomCatalogTrack(
     artworkUri: artworkUri,
     sourceId: definition.providerId,
     externalId: externalId,
+    expectedMediaChecksum: expectedMediaChecksum,
+  );
+}
+
+String? _optionalExpectedMediaChecksum(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is! String) {
+    throw const ProviderRequestException(
+      'Catalog track expectedMediaChecksum is invalid.',
+    );
+  }
+  final normalized = value.trim().toLowerCase();
+  if (RegExp(r'^md5:[a-f0-9]{32}$').hasMatch(normalized) ||
+      RegExp(r'^sha1:[a-f0-9]{40}$').hasMatch(normalized) ||
+      RegExp(r'^sha256:[a-f0-9]{64}$').hasMatch(normalized)) {
+    return normalized;
+  }
+  throw const ProviderRequestException(
+    'Catalog track expectedMediaChecksum is invalid.',
   );
 }
 
