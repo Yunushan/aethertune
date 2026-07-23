@@ -70,7 +70,6 @@ class _ListenTogetherForegroundSyncState
       return;
     }
     final library = context.read<LibraryStore>();
-    final player = context.read<PlayerController>();
     if (!library.loaded || library.offlineModeEnabled) {
       return;
     }
@@ -79,6 +78,7 @@ class _ListenTogetherForegroundSyncState
       unawaited(_ignoreErrors(runSynchronization(session, library)));
       return;
     }
+    final player = context.read<PlayerController>();
     if (session.hosting) {
       unawaited(_ignoreErrors(session.publishHostPlayback(library, player)));
     } else {
