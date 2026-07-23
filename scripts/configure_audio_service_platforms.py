@@ -428,6 +428,7 @@ _MAIN_ACTIVITY_KOTLIN = """package dev.aethertune.aethertune
 
 import android.Manifest
 import android.app.PictureInPictureParams
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
@@ -437,6 +438,8 @@ import android.media.audiofx.Visualizer
 import android.media.audiofx.Virtualizer
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
@@ -445,6 +448,8 @@ import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.IOException
 import kotlin.math.ln
 import kotlin.math.sqrt
 
@@ -610,6 +615,110 @@ class MainActivity : AudioServiceActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/system_downloads",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "exportVerifiedFile") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val sourcePath = call.argument<String>("sourcePath")
+            val displayName = call.argument<String>("displayName")
+            val byteCount = call.argument<Number>("byteCount")?.toLong()
+            val checksum = call.argument<String>("checksum")
+            if (sourcePath == null || displayName == null || byteCount == null || checksum == null) {
+                result.error("invalid_arguments", "Verified cache export arguments are required.", null)
+                return@setMethodCallHandler
+            }
+            try {
+                result.success(
+                    exportVerifiedFileToDownloads(
+                        sourcePath,
+                        displayName,
+                        byteCount,
+                        checksum,
+                    ),
+                )
+            } catch (error: Exception) {
+                result.error("export_failed", error.message, null)
+            }
+        }
+    }
+
+    private fun exportVerifiedFileToDownloads(
+        sourcePath: String,
+        requestedDisplayName: String,
+        expectedByteCount: Long,
+        expectedChecksum: String,
+    ): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return null
+        }
+        if (expectedByteCount < 0 || !expectedChecksum.matches(Regex("[a-f0-9]{8}"))) {
+            throw IllegalArgumentException("Verified cache metadata is invalid.")
+        }
+        val source = File(sourcePath)
+        if (!source.isFile) {
+            throw IOException("Verified cache file is missing.")
+        }
+        val displayName = requestedDisplayName
+            .replace(Regex("[\\\\/:*?\\\"<>|\\\\p{Cntrl}]"), " ")
+            .replace(Regex("\\\\s+"), " ")
+            .trim()
+            .ifEmpty { "aethertune-media" }
+            .take(100)
+        val extension = displayName.substringAfterLast('.', "")
+        val mimeType = if (extension.isEmpty()) {
+            "application/octet-stream"
+        } else {
+            android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(extension.lowercase())
+                ?: "application/octet-stream"
+        }
+        val resolver = contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(
+            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            values,
+        ) ?: throw IOException("Could not create a Downloads entry.")
+        try {
+            var written = 0L
+            var checksum = 0x811c9dc5L
+            source.inputStream().use { input ->
+                resolver.openOutputStream(uri, "w")?.use { output ->
+                    val buffer = ByteArray(32 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count <= 0) {
+                            break
+                        }
+                        output.write(buffer, 0, count)
+                        written += count.toLong()
+                        for (index in 0 until count) {
+                            checksum = ((checksum xor (buffer[index].toInt() and 0xff).toLong()) *
+                                0x01000193L) and 0xffffffffL
+                        }
+                    }
+                } ?: throw IOException("Could not open the Downloads entry.")
+            }
+            val actualChecksum = checksum.toString(16).padStart(8, '0')
+            if (written != expectedByteCount || actualChecksum != expectedChecksum) {
+                throw IOException("Verified cache changed before export completed.")
+            }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return uri.toString()
+        } catch (error: Exception) {
+            resolver.delete(uri, null, null)
+            throw error
         }
     }
 
@@ -1829,6 +1938,11 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "dev.aethertune/offline_cache_background",
         "AetherTuneOfflineCacheJobService.schedule",
         "AetherTuneOfflineCacheJobService.cancel(applicationContext)",
+        "dev.aethertune/system_downloads",
+        "exportVerifiedFileToDownloads",
+        "MediaStore.Downloads.getContentUri",
+        "IS_PENDING",
+        "Verified cache changed before export completed.",
     )
     if not all(snippet in activity_source_text for snippet in required_activity_snippets):
         raise RuntimeError("Android playback widget state bridge is missing")

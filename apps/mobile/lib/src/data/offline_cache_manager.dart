@@ -247,6 +247,41 @@ final class OfflineCacheManager {
     required OfflineCacheEntry entry,
     required Directory destinationDirectory,
   }) async {
+    final verifiedCache = await verifyCachedMedia(entry: entry);
+    final sourceFile = verifiedCache.file;
+
+    await destinationDirectory.create(recursive: true);
+    final exportFile = await _availableExportFile(
+      destinationDirectory,
+      entry,
+      p.extension(sourceFile.path),
+    );
+    final sourceBytes = await sourceFile.readAsBytes();
+    await exportFile.writeAsBytes(sourceBytes, flush: true);
+
+    final exportedBytes = await exportFile.readAsBytes();
+    if (exportedBytes.length != verifiedCache.byteCount ||
+        offlineMediaChecksum(exportedBytes) != verifiedCache.checksum) {
+      throw StateError(
+        'Exported media checksum verification failed for ${entry.track.title}.',
+      );
+    }
+
+    return OfflineCacheExport(
+      file: exportFile,
+      byteCount: exportedBytes.length,
+      checksum: verifiedCache.checksum,
+    );
+  }
+
+  /// Verifies a private cached file before an explicit user-directed export.
+  ///
+  /// Callers may pass the resulting file to a platform-owned destination such
+  /// as Android's system Downloads collection. The platform bridge must verify
+  /// the supplied byte count and checksum again while copying it.
+  Future<OfflineCacheExport> verifyCachedMedia({
+    required OfflineCacheEntry entry,
+  }) async {
     final sourceFile = _privateCacheFileFor(entry);
     if (sourceFile == null) {
       throw StateError(
@@ -273,27 +308,18 @@ final class OfflineCacheManager {
       );
     }
 
-    await destinationDirectory.create(recursive: true);
-    final exportFile = await _availableExportFile(
-      destinationDirectory,
-      entry,
-      p.extension(sourceFile.path),
-    );
-    await exportFile.writeAsBytes(sourceBytes, flush: true);
-
-    final exportedBytes = await exportFile.readAsBytes();
-    if (exportedBytes.length != sourceBytes.length ||
-        offlineMediaChecksum(exportedBytes) != checksum) {
-      throw StateError(
-        'Exported media checksum verification failed for ${entry.track.title}.',
-      );
-    }
-
     return OfflineCacheExport(
-      file: exportFile,
-      byteCount: exportedBytes.length,
+      file: sourceFile,
+      byteCount: sourceBytes.length,
       checksum: checksum,
     );
+  }
+
+  String exportDisplayName(OfflineCacheEntry entry) {
+    final sourceFile = _privateCacheFileFor(entry);
+    return '${_safeExportBaseName(entry)}${_safeMediaExtension(
+      sourceFile == null ? '' : p.extension(sourceFile.path),
+    )}';
   }
 
   Future<List<_OfflineCacheFileCandidate>> _privateCachedFiles(

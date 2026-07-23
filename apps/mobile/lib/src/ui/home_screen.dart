@@ -16,6 +16,7 @@ import '../data/demo_source_provider.dart';
 import '../data/custom_catalog_provider.dart';
 import '../data/custom_catalog_store.dart';
 import '../data/android_audio_library_access.dart';
+import '../data/android_system_downloads_exporter.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/itunes_podcast_directory.dart';
@@ -20671,16 +20672,40 @@ class _SettingsTab extends StatelessWidget {
       return;
     }
 
-    final destinationPath = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Export cached media',
-    );
-    if (!context.mounted || destinationPath == null) {
-      return;
-    }
-
     final cacheRoot = await getApplicationDocumentsDirectory();
     final manager = OfflineCacheManager(cacheRoot: cacheRoot);
     try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final verifiedCache = await manager.verifyCachedMedia(entry: entry);
+        final downloadUri = await AndroidSystemDownloadsExporter()
+            .exportVerifiedFile(
+              file: verifiedCache.file,
+              displayName: manager.exportDisplayName(entry),
+              byteCount: verifiedCache.byteCount,
+              checksum: verifiedCache.checksum,
+            );
+        if (!context.mounted) {
+          return;
+        }
+        if (downloadUri != null) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Saved ${manager.exportDisplayName(entry)} to Downloads.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
+      final destinationPath = await FilePicker.getDirectoryPath(
+        dialogTitle: 'Export cached media',
+      );
+      if (!context.mounted || destinationPath == null) {
+        return;
+      }
+
       final export = await manager.exportCachedMedia(
         entry: entry,
         destinationDirectory: Directory(destinationPath),

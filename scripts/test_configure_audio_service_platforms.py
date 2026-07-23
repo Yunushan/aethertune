@@ -167,6 +167,18 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 'dev.aethertune/offline_cache_background',
                 activity_source.read_text(encoding="utf-8"),
             )
+            self.assertIn(
+                'dev.aethertune/system_downloads',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'exportVerifiedFileToDownloads',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'MediaStore.Downloads.getContentUri',
+                activity_source.read_text(encoding="utf-8"),
+            )
             background_job_source = activity_source.with_name(
                 "AetherTuneOfflineCacheJobService.kt",
             )

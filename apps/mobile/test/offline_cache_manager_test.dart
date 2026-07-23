@@ -333,6 +333,12 @@ void main() {
       cachedMediaChecksum: checksum,
     );
 
+    final verified = await manager.verifyCachedMedia(entry: entry);
+    expect(verified.file.path, cachedFile.path);
+    expect(verified.byteCount, bytes.length);
+    expect(verified.checksum, checksum);
+    expect(manager.exportDisplayName(entry), 'Archive Artist - Unsafe Song.ogg');
+
     final export = await manager.exportCachedMedia(
       entry: entry,
       destinationDirectory: exportDirectory,
