@@ -158,7 +158,8 @@
 - [x] Podcast offline cache/download queue
 - [x] Podcast direct enclosure private cache storage
 - [x] Android persisted Podcast background download jobs
-- [ ] iOS and desktop Podcast background download jobs
+- [x] iOS Podcast background download jobs
+- [ ] Desktop Podcast background download jobs
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
@@ -228,7 +229,8 @@
 - [x] Per-provider private cache quotas
 - [x] Resumable direct URL cache retries
 - [x] Android persisted background offline downloader jobs
-- [ ] iOS and desktop background offline downloader jobs
+- [x] iOS background offline downloader jobs
+- [ ] Desktop background offline downloader jobs
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview
 - [x] Playback-synced lyric highlighting

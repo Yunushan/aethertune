@@ -7,15 +7,16 @@ const offlineCacheBackgroundChannel = MethodChannel(
   'dev.aethertune/offline_cache_background',
 );
 
-/// Schedules persisted offline-cache work when Android can run it without the
-/// foreground Flutter activity. Other platforms deliberately remain no-ops
-/// until they gain an equivalent system scheduler.
+/// Schedules persisted offline-cache work when Android or iOS can run it
+/// without the foreground Flutter activity. Other platforms deliberately
+/// remain no-ops until they gain an equivalent system scheduler.
 final class OfflineCacheBackgroundScheduler {
   OfflineCacheBackgroundScheduler({
     MethodChannel? channel,
     bool? isSupported,
   }) : _channel = channel ?? offlineCacheBackgroundChannel,
-       _isSupported = isSupported ?? (!kIsWeb && Platform.isAndroid);
+       _isSupported =
+           isSupported ?? (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
 
   final MethodChannel _channel;
   final bool _isSupported;

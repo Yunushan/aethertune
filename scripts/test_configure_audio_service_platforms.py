@@ -245,6 +245,11 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             with info_path.open("rb") as stream:
                 ios = platform_config.plistlib.load(stream)
             self.assertFalse(ios["FlutterDeepLinkingEnabled"])
+            self.assertIn("processing", ios["UIBackgroundModes"])
+            self.assertEqual(
+                ios["BGTaskSchedulerPermittedIdentifiers"],
+                ["dev.aethertune.aethertune.offline-cache"],
+            )
             self.assertEqual(
                 ios["CFBundleURLTypes"][0]["CFBundleURLSchemes"],
                 [platform_config.DEEP_LINK_SCHEME],
@@ -252,6 +257,9 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             app_delegate = app_delegate_path.read_text(encoding="utf-8")
             self.assertIn("AVRoutePickerView", app_delegate)
             self.assertIn("dev.aethertune/audio_routes", app_delegate)
+            self.assertIn("BGProcessingTaskRequest", app_delegate)
+            self.assertIn("dev.aethertune/offline_cache_background", app_delegate)
+            self.assertIn("offlineCacheBackgroundEntrypoint", app_delegate)
 
             platform_config.configure_macos(info_path)
             platform_config.verify_macos(info_path)

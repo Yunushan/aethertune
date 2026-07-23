@@ -10,8 +10,8 @@ import 'offline_cache_queue_worker.dart';
 import 'podcast_subscription_refresh_worker.dart';
 import 'self_hosted_provider_store.dart';
 
-/// Runs a persisted Android JobScheduler pass after the foreground activity
-/// has been stopped.
+/// Runs a persisted Android or iOS background scheduler pass after foreground
+/// processing has been stopped.
 Future<void> runOfflineCacheBackgroundQueue() async {
   WidgetsFlutterBinding.ensureInitialized();
   final scheduler = OfflineCacheBackgroundScheduler();
@@ -60,12 +60,12 @@ Future<void> runOfflineCacheBackgroundQueue() async {
         nextRunDelay: nextRunDelay,
       );
     } on MissingPluginException {
-      // This entry point is meaningful only for the Android job service.
+      // This entry point is meaningful only for a native background scheduler.
     }
   }
 }
 
-/// Refreshes due RSS feeds within an already-authorized Android background
+/// Refreshes due RSS feeds within an already-authorized native background
 /// pass. The worker itself rejects offline mode before making any request.
 Future<PodcastRefreshReport> refreshDuePodcastSubscriptionsInBackground(
   LibraryStore library, {

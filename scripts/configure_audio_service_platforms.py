@@ -1164,18 +1164,23 @@ class AetherTuneOfflineCacheJobService : JobService() {
 """
 
 _APP_DELEGATE_SWIFT = """import AVKit
+import BackgroundTasks
 import Flutter
 import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+    private static let offlineCacheTaskIdentifier = "dev.aethertune.aethertune.offline-cache"
     private var audioRoutePickerController: UIViewController?
+    private var activeOfflineCacheTask: BGProcessingTask?
+    private var activeOfflineCacheEngine: FlutterEngine?
 
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         GeneratedPluginRegistrant.register(with: self)
+        registerOfflineCacheTask()
         if let flutterController = window?.rootViewController as? FlutterViewController {
             let channel = FlutterMethodChannel(
                 name: "dev.aethertune/audio_routes",
@@ -1192,8 +1197,111 @@ import UIKit
                 }
                 result(appDelegate.showAudioRoutePicker(from: controller))
             }
+            configureOfflineCacheChannel(
+                messenger: flutterController.binaryMessenger
+            )
         }
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    private func registerOfflineCacheTask() {
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: Self.offlineCacheTaskIdentifier,
+            using: nil
+        ) { [weak self] task in
+            guard let processingTask = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self?.runOfflineCacheTask(processingTask)
+        }
+    }
+
+    private func configureOfflineCacheChannel(messenger: FlutterBinaryMessenger) {
+        let channel = FlutterMethodChannel(
+            name: "dev.aethertune/offline_cache_background",
+            binaryMessenger: messenger
+        )
+        channel.setMethodCallHandler { [weak self] call, result in
+            switch call.method {
+            case "schedule":
+                let arguments = call.arguments as? [String: Any]
+                let delay = (arguments?["minimumLatencyMilliseconds"] as? NSNumber)?.doubleValue
+                result(self?.scheduleOfflineCacheTask(afterMilliseconds: delay) ?? false)
+            case "cancel":
+                BGTaskScheduler.shared.cancel(
+                    taskRequestWithIdentifier: Self.offlineCacheTaskIdentifier
+                )
+                result(nil)
+            case "complete":
+                let arguments = call.arguments as? [String: Any]
+                let hasPendingWork = (arguments?["hasPendingWork"] as? Bool) ?? true
+                let nextDelay = (arguments?["nextRunDelayMilliseconds"] as? NSNumber)?.doubleValue
+                self?.completeOfflineCacheTask(
+                    hasPendingWork: hasPendingWork,
+                    nextRunDelayMilliseconds: nextDelay
+                )
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+    }
+
+    private func scheduleOfflineCacheTask(afterMilliseconds delay: Double?) -> Bool {
+        let request = BGProcessingTaskRequest(
+            identifier: Self.offlineCacheTaskIdentifier
+        )
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
+        let milliseconds = max(30_000, delay ?? 30_000)
+        request.earliestBeginDate = Date(
+            timeIntervalSinceNow: milliseconds / 1_000
+        )
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func runOfflineCacheTask(_ task: BGProcessingTask) {
+        guard activeOfflineCacheTask == nil else {
+            task.setTaskCompleted(success: false)
+            return
+        }
+        let engine = FlutterEngine(name: "aethertune-offline-cache")
+        activeOfflineCacheTask = task
+        activeOfflineCacheEngine = engine
+        task.expirationHandler = { [weak self] in
+            self?.finishOfflineCacheTask(success: false)
+        }
+        GeneratedPluginRegistrant.register(with: engine)
+        configureOfflineCacheChannel(messenger: engine.binaryMessenger)
+        if !engine.run(withEntrypoint: "offlineCacheBackgroundEntrypoint") {
+            finishOfflineCacheTask(success: false)
+        }
+    }
+
+    private func completeOfflineCacheTask(
+        hasPendingWork: Bool,
+        nextRunDelayMilliseconds: Double?
+    ) {
+        if hasPendingWork {
+            _ = scheduleOfflineCacheTask(afterMilliseconds: 30_000)
+        } else if let nextRunDelayMilliseconds {
+            _ = scheduleOfflineCacheTask(afterMilliseconds: nextRunDelayMilliseconds)
+        }
+        finishOfflineCacheTask(success: true)
+    }
+
+    private func finishOfflineCacheTask(success: Bool) {
+        let task = activeOfflineCacheTask
+        activeOfflineCacheTask = nil
+        activeOfflineCacheEngine?.destroyContext()
+        activeOfflineCacheEngine = nil
+        task?.setTaskCompleted(success: success)
     }
 
     private func showAudioRoutePicker(from controller: UIViewController) -> Bool {
@@ -1524,7 +1632,12 @@ def configure_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
     modes = list(info.get("UIBackgroundModes", []))
     if "audio" not in modes:
         modes.append("audio")
+    if "processing" not in modes:
+        modes.append("processing")
     info["UIBackgroundModes"] = modes
+    info["BGTaskSchedulerPermittedIdentifiers"] = [
+        "dev.aethertune.aethertune.offline-cache"
+    ]
     info["FlutterDeepLinkingEnabled"] = False
     _configure_apple_url_scheme(info)
     with info_plist_path.open("wb") as stream:
@@ -2009,6 +2122,12 @@ def verify_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
         info = plistlib.load(stream)
     if "audio" not in info.get("UIBackgroundModes", []):
         raise RuntimeError("iOS audio background mode is missing")
+    if "processing" not in info.get("UIBackgroundModes", []):
+        raise RuntimeError("iOS background processing mode is missing")
+    if info.get("BGTaskSchedulerPermittedIdentifiers") != [
+        "dev.aethertune.aethertune.offline-cache"
+    ]:
+        raise RuntimeError("iOS offline-cache task identifier is missing")
     if info.get("FlutterDeepLinkingEnabled") is not False:
         raise RuntimeError("iOS app_links ownership is not configured")
     _verify_apple_url_scheme(info, "iOS")
@@ -2017,6 +2136,12 @@ def verify_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
         "AVRoutePickerView",
         "dev.aethertune/audio_routes",
         "showAudioRoutePicker",
+        "BGProcessingTaskRequest",
+        "dev.aethertune/offline_cache_background",
+        "offlineCacheBackgroundEntrypoint",
+        "requiresNetworkConnectivity = true",
+        "expirationHandler",
+        "setTaskCompleted",
     )
     if not all(snippet in app_delegate_source for snippet in required_route_picker_snippets):
         raise RuntimeError("iOS audio route picker is not configured")
