@@ -230,7 +230,7 @@
 - [x] Resumable direct URL cache retries
 - [x] Android persisted background offline downloader jobs
 - [x] iOS background offline downloader jobs
-- [ ] Desktop background offline downloader jobs
+- [x] Desktop-resident offline downloader processing while the app is hidden or minimized to the tray
 - [x] Plain lyrics display/edit
 - [x] LRC parser and timestamp preview
 - [x] Playback-synced lyric highlighting

@@ -10,16 +10,38 @@ import '../../data/offline_cache_background_scheduler.dart';
 import '../../data/offline_cache_queue_worker.dart';
 import '../../data/self_hosted_provider_store.dart';
 
+/// True when a desktop AetherTune process should keep its automatic queue
+/// moving after its window is hidden or minimized to the system tray.
+///
+/// This deliberately excludes [AppLifecycleState.detached]: the process is
+/// ending, so desktop has no operating-system job that can safely continue it.
+bool shouldKeepOfflineQueueProcessingInProcess({
+  required TargetPlatform platform,
+  required AppLifecycleState state,
+}) {
+  final isDesktop =
+      platform == TargetPlatform.linux ||
+      platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows;
+  return isDesktop &&
+      (state == AppLifecycleState.inactive ||
+          state == AppLifecycleState.hidden ||
+          state == AppLifecycleState.paused);
+}
+
 class OfflineCacheForegroundWorker extends StatefulWidget {
   OfflineCacheForegroundWorker({
     super.key,
     required this.child,
     OfflineCacheBackgroundScheduler? backgroundScheduler,
+    TargetPlatform? platform,
   }) : backgroundScheduler =
-           backgroundScheduler ?? OfflineCacheBackgroundScheduler();
+           backgroundScheduler ?? OfflineCacheBackgroundScheduler(),
+       platform = platform ?? defaultTargetPlatform;
 
   final Widget child;
   final OfflineCacheBackgroundScheduler backgroundScheduler;
+  final TargetPlatform platform;
 
   @override
   State<OfflineCacheForegroundWorker> createState() =>
@@ -51,6 +73,12 @@ class _OfflineCacheForegroundWorkerState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _appInForeground = true;
+      _processNext();
+    } else if (shouldKeepOfflineQueueProcessingInProcess(
+      platform: widget.platform,
+      state: state,
+    )) {
       _appInForeground = true;
       _processNext();
     } else if (state == AppLifecycleState.paused ||
