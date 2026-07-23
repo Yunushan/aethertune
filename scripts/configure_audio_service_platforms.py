@@ -1213,7 +1213,11 @@ import UIKit
                 task.setTaskCompleted(success: false)
                 return
             }
-            self?.runOfflineCacheTask(processingTask)
+            guard let self else {
+                processingTask.setTaskCompleted(success: false)
+                return
+            }
+            self.runOfflineCacheTask(processingTask)
         }
     }
 
