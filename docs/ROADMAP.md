@@ -68,7 +68,7 @@
 - [x] Custom rule smart playlists
 - [x] Nested smart playlist rule builder
 - [x] Playlist artwork URL display/editing
-- [ ] Playlist artwork picker, cropper, generated collage, and sync
+- [x] Playlist artwork picker, cropper, generated collage, and sync
 - [x] Backup/restore JSON
 - [x] Imported-track folder browse
 - [x] Recursive folder import
@@ -249,4 +249,4 @@
 - [x] Custom accent color picker
 - [x] Material You dynamic platform color with explicit accent overrides and fallback
 - [ ] Accessibility pass
-- [ ] Localization setup
+- [x] Localization setup
