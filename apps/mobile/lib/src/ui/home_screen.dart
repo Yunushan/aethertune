@@ -3337,6 +3337,11 @@ Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
     if (!context.mounted || endpoint == null) {
       return;
     }
+    // Let the route dispose before its setting notification rebuilds Options.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!context.mounted) {
+      return;
+    }
     await store.save(endpoint);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
