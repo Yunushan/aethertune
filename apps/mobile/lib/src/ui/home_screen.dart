@@ -90,6 +90,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/android_pinned_shortcut_bridge.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
+import 'desktop_audio_output_settings.dart';
 import 'desktop_navigation_shortcuts.dart';
 import 'internet_archive_item_screen.dart';
 import 'internet_archive_collection_screen.dart';
@@ -299,6 +300,17 @@ Future<void> _removeListenBrainz(BuildContext context) async {
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('ListenBrainz disconnected.')),
+    );
+  }
+}
+
+Future<void> _showDesktopAudioOutputSettings(BuildContext context) async {
+  final opened = await openDesktopAudioOutputSettings();
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Windows Sound settings could not be opened.'),
+      ),
     );
   }
 }
@@ -21170,6 +21182,17 @@ class _SettingsTab extends StatelessWidget {
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => unawaited(_showMobileAudioRoutePicker(context)),
+          ),
+        if (!kIsWeb && supportsDesktopAudioOutputSettings(defaultTargetPlatform))
+          ListTile(
+            key: const Key('desktop-audio-output-settings'),
+            leading: const Icon(Icons.speaker_group_outlined),
+            title: const Text('Audio output settings'),
+            subtitle: const Text(
+              'Choose the Windows playback device and output controls.',
+            ),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: () => unawaited(_showDesktopAudioOutputSettings(context)),
           ),
         if (!kIsWeb && Platform.isAndroid)
           ListTile(
