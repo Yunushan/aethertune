@@ -17,6 +17,9 @@ class LibrarySyncAccount {
   Uri get libraryMetadataEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'sync', 'library', 'metadata']);
 
+  Uri get providerConfigurationEndpointUri =>
+      _endpointUri(<String>['api', 'v1', 'sync', 'providers']);
+
   Uri get listenTogetherEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'listen-together', 'session']);
 

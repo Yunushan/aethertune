@@ -171,6 +171,7 @@ Handler createServerHandler({
   ManagedSyncAccountRegistry? managedSyncAccounts,
   OperationsAuthenticator? operationsAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
+  LibrarySyncSnapshotStore? providerConfigurationStore,
   LibrarySyncSnapshotStore? listenTogetherStore,
   ListenTogetherInviteStore? listenTogetherInviteStore,
   SharedPlaylistStore? sharedPlaylistStore,
@@ -183,6 +184,8 @@ Handler createServerHandler({
   final operations =
       operationsAuthenticator ?? const DisabledOperationsAuthenticator();
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
+  final providerConfigurations =
+      providerConfigurationStore ?? MemoryLibrarySyncSnapshotStore();
   final sessions = listenTogetherStore ?? MemoryLibrarySyncSnapshotStore();
   final invites = listenTogetherInviteStore ?? MemoryListenTogetherInviteStore();
   final sharedPlaylists = sharedPlaylistStore ?? MemorySharedPlaylistStore();
@@ -258,6 +261,7 @@ Handler createServerHandler({
             'uptimeSeconds': uptime.isNegative ? 0 : uptime.inSeconds,
             'requestsTotal': requestsTotal,
             'librarySync': authenticator.isConfigured,
+            'providerConfigurationSync': authenticator.isConfigured,
             'listenTogether': authenticator.isConfigured,
             'sharedPlaylists': authenticator.isConfigured,
           },
@@ -273,6 +277,7 @@ Handler createServerHandler({
             'service': 'aethertune-server',
             'version': '0.3.0',
             'librarySync': authenticator.isConfigured,
+            'providerConfigurationSync': authenticator.isConfigured,
             'listenTogether': authenticator.isConfigured,
             'sharedPlaylists': authenticator.isConfigured,
             'managedAuthentication': managedSyncAccounts != null,
@@ -339,6 +344,14 @@ Handler createServerHandler({
           request,
           authenticator: authenticator,
           snapshots: snapshots,
+        );
+      case 'api/v1/sync/providers':
+        return _handleLibrarySync(
+          request,
+          authenticator: authenticator,
+          snapshots: providerConfigurations,
+          now: now,
+          validateSnapshot: _validateProviderConfigurationSnapshot,
         );
       case 'api/v1/listen-together/session':
         return _handleListenTogetherSession(
@@ -456,6 +469,7 @@ bool _isManagedActivityRoute(String path) {
   return path == 'api/v1/auth/profile' ||
       path == 'api/v1/sync/library' ||
       path == 'api/v1/sync/library/metadata' ||
+      path == 'api/v1/sync/providers' ||
       path == 'api/v1/listen-together/session' ||
       path == 'api/v1/listen-together/session/invite' ||
       path.startsWith('api/v1/listen-together/invites/') ||
@@ -1001,6 +1015,8 @@ Future<Response> _handleLibrarySync(
   required SyncAuthenticator authenticator,
   required LibrarySyncSnapshotStore snapshots,
   required DateTime Function() now,
+  void Function(Map<String, Object?> snapshot) validateSnapshot =
+      _validateSyncSnapshot,
 }) async {
   if (!authenticator.isConfigured) {
     return _jsonResponse(
@@ -1039,7 +1055,7 @@ Future<Response> _handleLibrarySync(
           throw const FormatException('snapshot must be an object.');
         }
         final snapshot = Map<String, Object?>.from(rawSnapshot);
-        _validateSyncSnapshot(snapshot);
+        validateSnapshot(snapshot);
         final canonicalSnapshot = jsonEncode(snapshot);
         final checksum =
             sha256.convert(utf8.encode(canonicalSnapshot)).toString();
@@ -2015,6 +2031,95 @@ Response _jsonResponse(
     statusCode,
     body: jsonEncode(body),
     headers: <String, String>{..._jsonHeaders, ...headers},
+  );
+}
+
+void _validateProviderConfigurationSnapshot(Map<String, Object?> snapshot) {
+  const allowedRootKeys = <String>{'format', 'version', 'customCatalogs'};
+  if (snapshot.keys.any((key) => !allowedRootKeys.contains(key)) ||
+      snapshot['format'] != 'aethertune.provider_configurations' ||
+      snapshot['version'] != 1) {
+    throw const FormatException('Provider configuration is invalid.');
+  }
+  final rawDocument = snapshot['customCatalogs'];
+  if (rawDocument is! Map) {
+    throw const FormatException('Provider configuration is missing catalogs.');
+  }
+  final document = Map<String, Object?>.from(rawDocument);
+  const allowedDocumentKeys = <String>{'format', 'version', 'catalogs'};
+  if (document.keys.any((key) => !allowedDocumentKeys.contains(key)) ||
+      document['format'] != 'aethertune.custom_catalogs' ||
+      document['version'] != 1) {
+    throw const FormatException('Custom catalog configuration is invalid.');
+  }
+  final catalogs = document['catalogs'];
+  if (catalogs is! List || catalogs.length > 20) {
+    throw const FormatException('Custom catalog list is invalid.');
+  }
+  final ids = <String>{};
+  for (final rawCatalog in catalogs) {
+    if (rawCatalog is! Map) {
+      throw const FormatException('Custom catalog is invalid.');
+    }
+    final catalog = Map<String, Object?>.from(rawCatalog);
+    const allowedCatalogKeys = <String>{
+      'version',
+      'id',
+      'name',
+      'catalogUrl',
+      'mediaDomains',
+      'allowInsecureHttp',
+      'description',
+    };
+    if (catalog.keys.any((key) => !allowedCatalogKeys.contains(key)) ||
+        catalog['version'] != 1 ||
+        catalog['allowInsecureHttp'] != false) {
+      throw const FormatException('Custom catalog is invalid.');
+    }
+    final id = catalog['id'];
+    final name = catalog['name'];
+    final catalogUrl = catalog['catalogUrl'];
+    final domains = catalog['mediaDomains'];
+    final description = catalog['description'];
+    if (id is! String ||
+        !RegExp(r'^[a-z0-9][a-z0-9-]{5,79}$').hasMatch(id) ||
+        !ids.add(id) ||
+        name is! String ||
+        name.trim().isEmpty ||
+        name.length > 80 ||
+        catalogUrl is! String ||
+        domains is! List ||
+        domains.length > 12 ||
+        description is! String ||
+        description.length > 280) {
+      throw const FormatException('Custom catalog is invalid.');
+    }
+    final uri = Uri.tryParse(catalogUrl);
+    if (uri == null ||
+        uri.scheme.toLowerCase() != 'https' ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        _containsCredentialQuery(uri)) {
+      throw const FormatException('Custom catalog URL is invalid.');
+    }
+    for (final domain in domains) {
+      if (domain is! String ||
+          !RegExp(r'^[a-z0-9.-]+$').hasMatch(domain) ||
+          domain.startsWith('.') ||
+          domain.endsWith('.')) {
+        throw const FormatException('Custom catalog media domains are invalid.');
+      }
+    }
+  }
+}
+
+bool _containsCredentialQuery(Uri uri) {
+  return uri.queryParameters.keys.any(
+    (key) => RegExp(
+      r'^(?:api_?key|access_?token|auth(?:entication)?|credential|password|secret|token)$',
+      caseSensitive: false,
+    ).hasMatch(key),
   );
 }
 

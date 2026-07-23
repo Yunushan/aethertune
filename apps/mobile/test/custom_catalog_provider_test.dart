@@ -289,8 +289,13 @@ void main() {
     final export = source.exportConfiguration();
     expect(export.exportedCatalogCount, 1);
     expect(export.skippedInsecureCatalogCount, 1);
-    expect(export.json, contains('catalog-https'));
-    expect(export.json, isNot(contains('catalog-http')));
+    final exportedDocument = jsonDecode(export.json) as Map<String, dynamic>;
+    expect(
+      (exportedDocument['catalogs'] as List<dynamic>)
+          .map((catalog) => (catalog as Map<String, dynamic>)['id'])
+          .toList(),
+      <String>['catalog-https'],
+    );
 
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final destination = CustomCatalogStore();

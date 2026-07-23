@@ -538,6 +538,47 @@ class LibrarySyncStore extends ChangeNotifier {
     });
   }
 
+  /// Fetches the separately versioned, credential-free provider document.
+  /// It deliberately does not merge it into library metadata automatically.
+  Future<LibrarySyncRemoteSnapshot> fetchProviderConfiguration(
+    LibraryStore library,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      if (client is! ProviderConfigurationGateway) {
+        throw StateError(
+          'This library sync server does not support provider configuration sync.',
+        );
+      }
+      return (client as ProviderConfigurationGateway)
+          .fetchProviderConfiguration();
+    });
+  }
+
+  /// Publishes a caller-validated provider configuration document. Credentials,
+  /// local paths, and media URLs are intentionally outside this contract.
+  Future<LibrarySyncRemoteSnapshot> pushProviderConfiguration(
+    LibraryStore library,
+    Map<String, Object?> snapshot,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      if (client is! ProviderConfigurationGateway) {
+        throw StateError(
+          'This library sync server does not support provider configuration sync.',
+        );
+      }
+      final gateway = client as ProviderConfigurationGateway;
+      final remote = await gateway.fetchProviderConfiguration();
+      return gateway.pushProviderConfiguration(
+        baseRevision: remote.revision,
+        snapshot: snapshot,
+      );
+    });
+  }
+
   Future<void> remove() async {
     await _runBusy(() async {
       final oldToken = _token;

@@ -32,6 +32,12 @@ void main() {
       ),
     );
     expect(
+      account.providerConfigurationEndpointUri,
+      Uri.parse(
+        'https://sync.example.test/aethertune/api/v1/sync/providers',
+      ),
+    );
+    expect(
       account.publicProfileDiscoveryEndpointUri('mira'),
       Uri.parse(
         'https://sync.example.test/aethertune/api/v1/public-profiles?q=mira',
@@ -156,6 +162,47 @@ void main() {
     expect(result.revision, 4);
     expect(result.snapshot, snapshot);
     expect(result.updatedByDevice, 'Android phone');
+  });
+
+  test('fetches provider configuration through its isolated endpoint', () async {
+    const token = 'private-sync-token';
+    final snapshot = <String, Object?>{
+      'format': 'aethertune.provider_configurations',
+      'version': 1,
+      'customCatalogs': <String, Object?>{
+        'format': 'aethertune.custom_catalogs',
+        'version': 1,
+        'catalogs': <Object?>[],
+      },
+    };
+    final checksum = sha256
+        .convert(utf8.encode(jsonEncode(snapshot)))
+        .toString();
+    final client = LibrarySyncClient(
+      account: _account(),
+      token: token,
+      httpExecutor: (method, uri, {required headers, body}) async {
+        expect(method, 'GET');
+        expect(uri, _account().providerConfigurationEndpointUri);
+        expect(headers['authorization'], 'Bearer $token');
+        expect(body, isNull);
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': 1,
+            'updatedAt': '2026-07-10T12:30:00.000Z',
+            'updatedByDevice': 'Desktop',
+            'checksum': checksum,
+            'snapshot': snapshot,
+          }),
+        );
+      },
+    );
+
+    final result = await client.fetchProviderConfiguration();
+
+    expect(result.revision, 1);
+    expect(result.snapshot, snapshot);
   });
 
   test('redeems a recovery code without bearer authentication', () async {

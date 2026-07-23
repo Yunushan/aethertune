@@ -23,6 +23,7 @@ import '../data/itunes_podcast_directory.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
 import '../data/library_sync_client.dart';
+import '../data/library_sync_store.dart';
 import '../data/listenbrainz_scrobbling_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/local_folder_watch_store.dart';
@@ -14621,6 +14622,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     final podcastChapterHosts = context.watch<PodcastChapterHostPolicy?>();
     final selfHosted = context.watch<SelfHostedProviderStore>();
     final customCatalogs = context.watch<CustomCatalogStore?>();
+    final librarySync = context.watch<LibrarySyncStore?>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
     final youtubeProviders = youtubeData?.musicProviders ??
         const <MusicSourceProvider>[];
@@ -15258,6 +15260,30 @@ class _SourcesTabState extends State<_SourcesTab> {
                   : null,
               icon: const Icon(Icons.file_download_outlined),
               label: const Text('Import catalogs'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('upload-custom-catalogs-to-sync'),
+              onPressed: customCatalogs?.loaded == true &&
+                      librarySync?.isConfigured == true &&
+                      !offlineModeEnabled
+                  ? () => unawaited(
+                      _uploadCustomCatalogConfigurationToSync(context),
+                    )
+                  : null,
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Upload to sync server'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('import-custom-catalogs-from-sync'),
+              onPressed: customCatalogs?.loaded == true &&
+                      librarySync?.isConfigured == true &&
+                      !offlineModeEnabled
+                  ? () => unawaited(
+                      _importCustomCatalogConfigurationFromSync(context),
+                    )
+                  : null,
+              icon: const Icon(Icons.cloud_download_outlined),
+              label: const Text('Import from sync server'),
             ),
           ],
         ),
@@ -16646,6 +16672,116 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
       messenger.showSnackBar(
         SnackBar(content: Text('Could not export catalogs: $error')),
+      );
+    }
+  }
+
+  Future<void> _uploadCustomCatalogConfigurationToSync(
+    BuildContext context,
+  ) async {
+    final catalogs = context.read<CustomCatalogStore>();
+    final export = catalogs.exportConfiguration();
+    final document = jsonDecode(export.json);
+    if (document is! Map) {
+      throw const FormatException('Custom catalog configuration is invalid.');
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await context
+          .read<LibrarySyncStore>()
+          .pushProviderConfiguration(
+            context.read<LibraryStore>(),
+            <String, Object?>{
+              'format': 'aethertune.provider_configurations',
+              'version': 1,
+              'customCatalogs': Map<String, Object?>.from(document),
+            },
+          );
+      if (!context.mounted) {
+        return;
+      }
+      final skipped = export.skippedInsecureCatalogCount;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Uploaded ${export.exportedCatalogCount} secure '
+            '${export.exportedCatalogCount == 1 ? 'catalog' : 'catalogs'} '
+            'at provider revision ${result.revision}'
+            '${skipped == 0 ? '.' : '; skipped $skipped HTTP catalog${skipped == 1 ? '' : 's'}.'}',
+          ),
+        ),
+      );
+    } on LibrarySyncConflictException {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Provider settings changed remotely. Import them before uploading again.'),
+        ),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not upload catalogs: $error')),
+      );
+    }
+  }
+
+  Future<void> _importCustomCatalogConfigurationFromSync(
+    BuildContext context,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final remote = await context
+          .read<LibrarySyncStore>()
+          .fetchProviderConfiguration(context.read<LibraryStore>());
+      final snapshot = remote.snapshot;
+      if (snapshot == null) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('No provider configuration is stored on this sync server.')),
+          );
+        }
+        return;
+      }
+      if (snapshot['format'] != 'aethertune.provider_configurations' ||
+          snapshot['version'] != 1 ||
+          snapshot['customCatalogs'] is! Map ||
+          snapshot.keys.any(
+            (key) =>
+                key != 'format' && key != 'version' && key != 'customCatalogs',
+          )) {
+        throw const FormatException('Remote provider configuration is invalid.');
+      }
+      final result = await context
+          .read<CustomCatalogStore>()
+          .importConfiguration(jsonEncode(snapshot['customCatalogs']));
+      if (!context.mounted) {
+        return;
+      }
+      final parts = <String>[
+        '${result.importedCatalogCount} imported',
+        if (result.skippedExistingCatalogCount > 0)
+          '${result.skippedExistingCatalogCount} already configured',
+        if (result.skippedInsecureCatalogCount > 0)
+          '${result.skippedInsecureCatalogCount} HTTP catalog${result.skippedInsecureCatalogCount == 1 ? '' : 's'} skipped',
+      ];
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Provider configuration revision ${remote.revision}: ${parts.join(', ')}.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not import synced catalogs: $error')),
       );
     }
   }

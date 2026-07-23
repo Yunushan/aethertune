@@ -40,6 +40,11 @@ Future<void> main() async {
       operationsAuthenticator: operationsAuthenticator,
       requestRateLimiter: requestRateLimiter,
       syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
+      providerConfigurationStore: FileLibrarySyncSnapshotStore(
+        Directory(
+          '${dataDirectory.path}${Platform.pathSeparator}provider-configurations',
+        ),
+      ),
         listenTogetherStore: FileLibrarySyncSnapshotStore(
           Directory(
             '${dataDirectory.path}${Platform.pathSeparator}listen-together',

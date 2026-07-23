@@ -359,6 +359,48 @@ void main() {
       expect(jsonEncode(downloadBody), isNot(contains(token)));
     });
 
+    test('isolates authenticated provider configurations from library snapshots',
+        () async {
+      final providerStore = MemoryLibrarySyncSnapshotStore();
+      final handler = createServerHandler(
+        syncAuthenticator: authenticator,
+        syncStore: store,
+        providerConfigurationStore: providerStore,
+      );
+      final providerSnapshot = <String, Object?>{
+        'format': 'aethertune.provider_configurations',
+        'version': 1,
+        'customCatalogs': <String, Object?>{
+          'format': 'aethertune.custom_catalogs',
+          'version': 1,
+          'catalogs': <Object?>[],
+        },
+      };
+
+      final uploaded = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/providers',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'desktop',
+            'snapshot': providerSnapshot,
+          },
+        ),
+      );
+      final providerResponse = await handler(
+        _request('GET', '/api/v1/sync/providers', token: token),
+      );
+      final libraryResponse = await handler(
+        _request('GET', '/api/v1/sync/library', token: token),
+      );
+
+      expect(uploaded.statusCode, 200);
+      expect((await _json(providerResponse))['snapshot'], providerSnapshot);
+      expect((await _json(libraryResponse))['snapshot'], isNull);
+    });
+
     test('detects stale revisions without overwriting the current snapshot',
         () async {
       final handler = createServerHandler(

@@ -391,6 +391,17 @@ abstract interface class LibrarySyncMetadataGateway {
   Future<LibrarySyncRemoteSnapshot?> fetchMetadata();
 }
 
+/// Coordinates provider settings separately from portable library metadata.
+/// Callers are responsible for allowing only credential-free documents.
+abstract interface class ProviderConfigurationGateway {
+  Future<LibrarySyncRemoteSnapshot> fetchProviderConfiguration();
+
+  Future<LibrarySyncRemoteSnapshot> pushProviderConfiguration({
+    required int baseRevision,
+    required Map<String, Object?> snapshot,
+  });
+}
+
 abstract interface class ListenTogetherGateway {
   Future<ListenTogetherRemoteSession> fetchListenTogetherSession();
 
@@ -506,6 +517,7 @@ class LibrarySyncClient
     implements
         LibrarySyncGateway,
         LibrarySyncMetadataGateway,
+        ProviderConfigurationGateway,
         ListenTogetherGateway,
         SharedPlaylistGateway,
         SharedSmartPlaylistGateway,
@@ -638,6 +650,31 @@ class LibrarySyncClient
       throw _requestFailure(response);
     }
     return _parseRemoteMetadata(response.body);
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> fetchProviderConfiguration() async {
+    final response = await _execute(
+      'GET',
+      endpoint: account.providerConfigurationEndpointUri,
+    );
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final result = _parseRemoteSnapshot(response.body);
+    final snapshot = result.snapshot;
+    if (snapshot != null) {
+      final expected = result.checksum;
+      final actual = sha256
+          .convert(utf8.encode(jsonEncode(snapshot)))
+          .toString();
+      if (expected == null || expected != actual) {
+        throw const ProviderRequestException(
+          'Provider configuration checksum does not match.',
+        );
+      }
+    }
+    return result;
   }
 
   @override
@@ -1321,6 +1358,47 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
       role == null ||
       rawPlaylist is! Map) {
     throw const FormatException('Shared playlist response is invalid.');
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> pushProviderConfiguration({
+    required int baseRevision,
+    required Map<String, Object?> snapshot,
+  }) async {
+    final response = await _execute(
+      'PUT',
+      endpoint: account.providerConfigurationEndpointUri,
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+        'snapshot': snapshot,
+      }),
+    );
+    if (response.statusCode == 409) {
+      final body = _jsonObject(response.body);
+      throw LibrarySyncConflictException(
+        currentRevision: body['currentRevision'] as int? ?? 0,
+        updatedAt: _optionalDate(body['updatedAt']),
+        updatedByDevice: _optionalString(body['updatedByDevice']),
+        checksum: _optionalString(body['checksum']),
+      );
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final body = _jsonObject(response.body);
+    final revision = body['revision'];
+    if (revision is! int || revision <= baseRevision) {
+      throw const ProviderRequestException(
+        'Provider configuration returned an invalid revision.',
+      );
+    }
+    return LibrarySyncRemoteSnapshot(
+      revision: revision,
+      updatedAt: _optionalDate(body['updatedAt']),
+      updatedByDevice: _optionalString(body['updatedByDevice']),
+      checksum: _optionalString(body['checksum']),
+    );
   }
 
   final document = Map<String, Object?>.from(rawPlaylist);
