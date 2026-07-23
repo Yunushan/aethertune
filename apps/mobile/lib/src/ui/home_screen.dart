@@ -30,6 +30,7 @@ import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
+import '../data/lyrics_search_endpoint_settings_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/m4a_metadata_writer.dart';
 import '../data/musicbrainz_metadata_provider.dart';
@@ -683,7 +684,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   late final RadioBrowserProvider _radioClickProvider;
-  final _lyricsProvider = LrcLibLyricsProvider();
   final _lyricsCacheSettings = LyricsSearchCacheSettingsStore();
   late int _tabIndex;
   bool _favoritesOnly = false;
@@ -839,7 +839,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _clearLyricsSearchCache(BuildContext context) async {
     try {
-      await _lyricsProvider.clearCachedSearchResults();
+      await _lyricsProviderFor(context).clearCachedSearchResults();
     } on Object {
       if (!context.mounted) {
         return;
@@ -862,7 +862,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    _lyricsProvider.setCacheLifetime(retention);
     setState(() => _lyricsSearchCacheLifetime = retention);
   }
 
@@ -884,8 +883,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    _lyricsProvider.setCacheLifetime(retention);
     setState(() => _lyricsSearchCacheLifetime = retention);
+  }
+
+  LrcLibLyricsProvider _lyricsProviderFor(BuildContext context) {
+    final endpoint = context.read<LyricsSearchEndpointSettingsStore?>()?.endpoint;
+    return LrcLibLyricsProvider(
+      baseUri: endpoint,
+      cacheLifetime: _lyricsSearchCacheLifetime,
+    );
   }
 
   @override
@@ -1296,14 +1302,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 actions: <Widget>[
                   Tooltip(
                     message: library.offlineModeEnabled
-                        ? 'Search cached ${_lyricsProvider.name} results'
-                        : 'Search ${_lyricsProvider.name}',
+                        ? 'Search cached ${_lyricsProviderFor(context).name} results'
+                        : 'Search ${_lyricsProviderFor(context).name}',
                     child: TextButton.icon(
                       onPressed: () async {
                               final selected = await showLyricsSearchSheet(
                                 dialogContext,
                                 track: track,
-                                provider: _lyricsProvider,
+                                provider: _lyricsProviderFor(context),
                                 offlineOnly: library.offlineModeEnabled,
                               );
                               final lyrics = selected?.preferredLyrics;
@@ -3258,6 +3264,129 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
     }
   }
 
+}
+
+Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
+  final store = context.read<LyricsSearchEndpointSettingsStore?>();
+  if (store == null) {
+    return;
+  }
+  final controller = TextEditingController(text: store.endpoint?.toString() ?? '');
+  String? validationError;
+  try {
+    final endpoint = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Configure lyrics search'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const Text(
+                  'AetherTune sends track title, artist, album, and any search terms only to the HTTPS LRCLIB-compatible service you choose. This endpoint receives no credentials and results remain stored on this device.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('lyrics-search-endpoint'),
+                  controller: controller,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'Service URL',
+                    hintText: 'https://lyrics.example',
+                  ),
+                  onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+                ),
+                if (validationError != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    validationError!,
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isEmpty) {
+                  setDialogState(
+                    () => validationError = 'Enter an HTTPS service URL.',
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop(value);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || endpoint == null) {
+      return;
+    }
+    await store.save(endpoint);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lyrics search service configured.')),
+      );
+    }
+  } on FormatException catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  } finally {
+    controller.dispose();
+  }
+}
+
+Future<void> _removeLyricsSearchEndpoint(BuildContext context) async {
+  final store = context.read<LyricsSearchEndpointSettingsStore?>();
+  if (store == null || !store.isConfigured) {
+    return;
+  }
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Use public LRCLIB again?'),
+      content: const Text(
+        'This removes the custom lyrics search endpoint from this device. Saved lyrics and cached searches remain unchanged.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Remove'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted || confirmed != true) {
+    return;
+  }
+  await store.remove();
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Using public LRCLIB for lyrics search.')),
+    );
+  }
 }
 
 enum _NowPlayingLyricsMenuAction {
@@ -19917,6 +20046,8 @@ class _SettingsTab extends StatelessWidget {
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
     final lyricsTranslation =
         context.watch<LyricsTranslationSettingsStore?>();
+    final lyricsSearchEndpoint =
+        context.watch<LyricsSearchEndpointSettingsStore?>();
     final listenBrainz = context.watch<ListenBrainzScrobblingStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
@@ -20200,6 +20331,26 @@ class _SettingsTab extends StatelessWidget {
                     tooltip: 'Remove lyrics translation service',
                     onPressed: () =>
                         unawaited(_removeLyricsTranslation(context)),
+                    icon: const Icon(Icons.delete_outline),
+                  )
+                : const Icon(Icons.chevron_right),
+          ),
+        if (lyricsSearchEndpoint != null)
+          ListTile(
+            key: const Key('lyrics-search-endpoint-settings'),
+            leading: const Icon(Icons.lyrics_outlined),
+            title: const Text('Lyrics search service'),
+            subtitle: Text(
+              lyricsSearchEndpoint.isConfigured
+                  ? 'Self-hosted LRCLIB-compatible service: ${lyricsSearchEndpoint.endpoint!.host}.'
+                  : 'Use public LRCLIB or configure a self-hosted compatible service.',
+            ),
+            onTap: () => unawaited(_configureLyricsSearchEndpoint(context)),
+            trailing: lyricsSearchEndpoint.isConfigured
+                ? IconButton(
+                    tooltip: 'Use public LRCLIB for lyrics search',
+                    onPressed: () =>
+                        unawaited(_removeLyricsSearchEndpoint(context)),
                     icon: const Icon(Icons.delete_outline),
                   )
                 : const Icon(Icons.chevron_right),

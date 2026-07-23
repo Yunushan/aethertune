@@ -15,6 +15,7 @@ import '../data/listen_together_store.dart';
 import '../data/shared_playlist_store.dart';
 import '../data/shared_smart_playlist_store.dart';
 import '../data/local_folder_watch_store.dart';
+import '../data/lyrics_search_endpoint_settings_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/custom_catalog_store.dart';
 import '../data/podcast_chapter_host_policy.dart';
@@ -92,6 +93,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
         ChangeNotifierProvider<LyricsTranslationSettingsStore>(
           create: (_) => LyricsTranslationSettingsStore()..load(),
+        ),
+        ChangeNotifierProvider<LyricsSearchEndpointSettingsStore>(
+          create: (_) => LyricsSearchEndpointSettingsStore()..load(),
         ),
         ChangeNotifierProvider<LibrarySyncStore>(
           create: (_) => LibrarySyncStore()..load(),

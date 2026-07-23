@@ -9,6 +9,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/lyrics_translation_settings_store.dart';
+import 'package:aethertune/src/data/lyrics_search_endpoint_settings_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -343,6 +344,73 @@ void main() {
     await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
     await tester.pumpAndSettle();
     expect(find.textContaining('translate.example.test to tr'), findsOneWidget);
+  });
+
+  testWidgets('configures a self-hosted lyrics search service from Options',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    final endpoints = LyricsSearchEndpointSettingsStore();
+    await endpoints.load();
+    addTearDown(endpoints.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(value: selfHosted),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(value: folderWatch),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+          ChangeNotifierProvider<LyricsSearchEndpointSettingsStore>.value(
+            value: endpoints,
+          ),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 5),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final settingsTile = find.byKey(
+      const Key('lyrics-search-endpoint-settings'),
+    );
+    await tester.scrollUntilVisible(settingsTile, 300);
+    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(settingsTile);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('lyrics-search-endpoint')),
+      'https://lyrics.example.test',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(endpoints.endpoint, Uri.parse('https://lyrics.example.test'));
+    await tester.scrollUntilVisible(settingsTile, 300);
+    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('lyrics.example.test'), findsOneWidget);
   });
 
   testWidgets('finds and translates now playing lyrics without modifying source text',
