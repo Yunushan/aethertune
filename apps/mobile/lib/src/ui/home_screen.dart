@@ -16756,6 +16756,9 @@ class _SourcesTabState extends State<_SourcesTab> {
           )) {
         throw const FormatException('Remote provider configuration is invalid.');
       }
+      if (!context.mounted) {
+        return;
+      }
       final result = await context
           .read<CustomCatalogStore>()
           .importConfiguration(jsonEncode(snapshot['customCatalogs']));

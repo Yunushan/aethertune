@@ -1195,6 +1195,47 @@ class LibrarySyncClient
     );
   }
 
+  @override
+  Future<LibrarySyncRemoteSnapshot> pushProviderConfiguration({
+    required int baseRevision,
+    required Map<String, Object?> snapshot,
+  }) async {
+    final response = await _execute(
+      'PUT',
+      endpoint: account.providerConfigurationEndpointUri,
+      body: jsonEncode(<String, Object?>{
+        'baseRevision': baseRevision,
+        'deviceId': account.deviceId,
+        'snapshot': snapshot,
+      }),
+    );
+    if (response.statusCode == 409) {
+      final body = _jsonObject(response.body);
+      throw LibrarySyncConflictException(
+        currentRevision: body['currentRevision'] as int? ?? 0,
+        updatedAt: _optionalDate(body['updatedAt']),
+        updatedByDevice: _optionalString(body['updatedByDevice']),
+        checksum: _optionalString(body['checksum']),
+      );
+    }
+    if (response.statusCode != 200) {
+      throw _requestFailure(response);
+    }
+    final body = _jsonObject(response.body);
+    final revision = body['revision'];
+    if (revision is! int || revision <= baseRevision) {
+      throw const ProviderRequestException(
+        'Provider configuration returned an invalid revision.',
+      );
+    }
+    return LibrarySyncRemoteSnapshot(
+      revision: revision,
+      updatedAt: _optionalDate(body['updatedAt']),
+      updatedByDevice: _optionalString(body['updatedByDevice']),
+      checksum: _optionalString(body['checksum']),
+    );
+  }
+
   Future<LibrarySyncHttpResponse> _execute(
     String method, {
     Uri? endpoint,
@@ -1358,47 +1399,6 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
       role == null ||
       rawPlaylist is! Map) {
     throw const FormatException('Shared playlist response is invalid.');
-  }
-
-  @override
-  Future<LibrarySyncRemoteSnapshot> pushProviderConfiguration({
-    required int baseRevision,
-    required Map<String, Object?> snapshot,
-  }) async {
-    final response = await _execute(
-      'PUT',
-      endpoint: account.providerConfigurationEndpointUri,
-      body: jsonEncode(<String, Object?>{
-        'baseRevision': baseRevision,
-        'deviceId': account.deviceId,
-        'snapshot': snapshot,
-      }),
-    );
-    if (response.statusCode == 409) {
-      final body = _jsonObject(response.body);
-      throw LibrarySyncConflictException(
-        currentRevision: body['currentRevision'] as int? ?? 0,
-        updatedAt: _optionalDate(body['updatedAt']),
-        updatedByDevice: _optionalString(body['updatedByDevice']),
-        checksum: _optionalString(body['checksum']),
-      );
-    }
-    if (response.statusCode != 200) {
-      throw _requestFailure(response);
-    }
-    final body = _jsonObject(response.body);
-    final revision = body['revision'];
-    if (revision is! int || revision <= baseRevision) {
-      throw const ProviderRequestException(
-        'Provider configuration returned an invalid revision.',
-      );
-    }
-    return LibrarySyncRemoteSnapshot(
-      revision: revision,
-      updatedAt: _optionalDate(body['updatedAt']),
-      updatedByDevice: _optionalString(body['updatedByDevice']),
-      checksum: _optionalString(body['checksum']),
-    );
   }
 
   final document = Map<String, Object?>.from(rawPlaylist);
