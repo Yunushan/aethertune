@@ -184,6 +184,10 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                "replace('\\\\', '_')",
+                activity_text,
+            )
+            self.assertIn(
                 'dev.aethertune/offline_cache_background',
                 activity_source.read_text(encoding="utf-8"),
             )
