@@ -73,9 +73,10 @@ try {
   Import-Certificate `
     -FilePath $certificatePath `
     -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-  Import-Certificate `
-    -FilePath $certificatePath `
-    -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+  & certutil.exe -addstore TrustedPeople $certificatePath | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw 'The temporary machine trusted-people certificate could not be added.'
+  }
   $machineTrustInstalled = $true
 
   Write-Host 'Signing temporary MSIX package.'
