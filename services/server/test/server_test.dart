@@ -439,9 +439,12 @@ void main() {
           },
         ),
       );
+      final downloaded = await handler(
+        _request('GET', '/api/v1/sync/providers', token: token),
+      );
 
       expect(uploaded.statusCode, 200);
-      expect((await _json(uploaded))['snapshot'], providerSnapshot);
+      expect((await _json(downloaded))['snapshot'], providerSnapshot);
     });
 
     test('rejects insecure or credential-bearing self-hosted accounts',
