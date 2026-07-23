@@ -592,11 +592,11 @@ class MainActivity : AudioServiceActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/storage_access",
         ).setMethodCallHandler { call, result ->
-            if (call.method != "requestAudioLibraryAccess") {
-                result.notImplemented()
-                return@setMethodCallHandler
+            when (call.method) {
+                "requestAudioLibraryAccess" -> requestAudioLibraryAccess(result)
+                "openAudioLibrarySettings" -> result.success(openAudioLibrarySettings())
+                else -> result.notImplemented()
             }
-        requestAudioLibraryAccess(result)
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -858,6 +858,19 @@ class MainActivity : AudioServiceActivity() {
         }
         pendingAudioLibraryAccessResult = result
         requestPermissions(arrayOf(permission), audioLibraryPermissionRequestCode)
+    }
+
+    private fun openAudioLibrarySettings(): Boolean {
+        return try {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.fromParts("package", packageName, null)
+                },
+            )
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private companion object {

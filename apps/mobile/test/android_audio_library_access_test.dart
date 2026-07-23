@@ -38,4 +38,26 @@ void main() {
       expect(await AndroidAudioLibraryAccess.request(), isFalse);
     },
   );
+
+  test('opens the app settings page only through its storage channel',
+      () async {
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async {
+        expect(call.method, 'openAudioLibrarySettings');
+        return true;
+      },
+    );
+
+    expect(await AndroidAudioLibraryAccess.openAppSettings(), isTrue);
+  });
+
+  test('treats unavailable settings bridges as a no-op', () async {
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => throw PlatformException(code: 'not-available'),
+    );
+
+    expect(await AndroidAudioLibraryAccess.openAppSettings(), isFalse);
+  });
 }

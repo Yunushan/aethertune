@@ -164,6 +164,14 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'openAudioLibrarySettings',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'Settings.ACTION_APPLICATION_DETAILS_SETTINGS',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 'dev.aethertune/offline_cache_background',
                 activity_source.read_text(encoding="utf-8"),
             )

@@ -17,4 +17,17 @@ abstract final class AndroidAudioLibraryAccess {
       return false;
     }
   }
+
+  /// Opens this app's system settings page after a user declines a folder
+  /// import permission request. Individual-file imports never need this.
+  static Future<bool> openAppSettings() async {
+    try {
+      return await _channel.invokeMethod<bool>('openAudioLibrarySettings') ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 }

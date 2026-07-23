@@ -1890,7 +1890,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Allow audio-library access?'),
         content: const Text(
-          'Folder import reads audio files and matching lyric or chapter sidecars in the folder you choose. AetherTune uses this access only after you start an import.',
+          'Folder import reads audio files plus matching lyric and chapter sidecars in the folder you choose. Android will show its audio and music permission next. This access is used only after you start an import; individual-file imports use the system picker without it.',
         ),
         actions: <Widget>[
           TextButton(
@@ -1913,9 +1913,15 @@ class _HomeScreenState extends State<HomeScreen> {
       return granted;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
           'Audio-library access was not granted. You can still import individual files instead.',
+        ),
+        action: SnackBarAction(
+          label: 'Settings',
+          onPressed: () => unawaited(
+            AndroidAudioLibraryAccess.openAppSettings(),
+          ),
         ),
       ),
     );
