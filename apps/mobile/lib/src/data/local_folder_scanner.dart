@@ -367,7 +367,6 @@ final class _LocalFolderScanState {
           ),
     );
 
-    final cuePaths = <String>[];
     for (final entry in entries) {
       final entityType = await _entityType(entry);
       if (entityType == null) {
