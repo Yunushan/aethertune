@@ -401,6 +401,92 @@ void main() {
       expect((await _json(libraryResponse))['snapshot'], isNull);
     });
 
+    test('accepts secure self-hosted accounts without credentials', () async {
+      final providerStore = MemoryLibrarySyncSnapshotStore();
+      final handler = createServerHandler(
+        syncAuthenticator: authenticator,
+        syncStore: store,
+        providerConfigurationStore: providerStore,
+      );
+      final providerSnapshot = <String, Object?>{
+        'format': 'aethertune.provider_configurations',
+        'version': 1,
+        'selfHostedAccounts': <String, Object?>{
+          'format': 'aethertune.self_hosted_accounts',
+          'version': 1,
+          'accounts': <Object?>[
+            <String, Object?>{
+              'id': 'c3Vic29uaWN8aHR0cHM6Ly9tdXNpYy5leGFtcGxlfGFsaWNl',
+              'kind': 'subsonic',
+              'name': 'Music server',
+              'baseUrl': 'https://music.example',
+              'identity': 'alice',
+              'allowInsecureHttp': false,
+            },
+          ],
+        },
+      };
+
+      final uploaded = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/providers',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'desktop',
+            'snapshot': providerSnapshot,
+          },
+        ),
+      );
+
+      expect(uploaded.statusCode, 200);
+      expect((await _json(uploaded))['snapshot'], providerSnapshot);
+    });
+
+    test('rejects insecure or credential-bearing self-hosted accounts',
+        () async {
+      final providerStore = MemoryLibrarySyncSnapshotStore();
+      final handler = createServerHandler(
+        syncAuthenticator: authenticator,
+        syncStore: store,
+        providerConfigurationStore: providerStore,
+      );
+      final invalidSnapshot = <String, Object?>{
+        'format': 'aethertune.provider_configurations',
+        'version': 1,
+        'selfHostedAccounts': <String, Object?>{
+          'format': 'aethertune.self_hosted_accounts',
+          'version': 1,
+          'accounts': <Object?>[
+            <String, Object?>{
+              'id': 'c3Vic29uaWN8aHR0cDovL2xvY2FsaG9zdHxhZGFt',
+              'kind': 'subsonic',
+              'name': 'Local server',
+              'baseUrl': 'http://token@example.test',
+              'identity': 'adam',
+              'allowInsecureHttp': false,
+            },
+          ],
+        },
+      };
+
+      final response = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/providers',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'desktop',
+            'snapshot': invalidSnapshot,
+          },
+        ),
+      );
+
+      expect(response.statusCode, 400);
+    });
+
     test('detects stale revisions without overwriting the current snapshot',
         () async {
       final handler = createServerHandler(

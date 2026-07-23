@@ -15106,6 +15106,30 @@ class _SourcesTabState extends State<_SourcesTab> {
               icon: const Icon(Icons.file_open_outlined),
               label: const Text('Import servers'),
             ),
+            OutlinedButton.icon(
+              key: const Key('upload-self-hosted-accounts-to-sync'),
+              onPressed: selfHosted.loaded &&
+                      librarySync?.isConfigured == true &&
+                      !offlineModeEnabled
+                  ? () => unawaited(
+                        _uploadSelfHostedAccountConfigurationToSync(context),
+                      )
+                  : null,
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Upload to sync server'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('import-self-hosted-accounts-from-sync'),
+              onPressed: selfHosted.loaded &&
+                      librarySync?.isConfigured == true &&
+                      !offlineModeEnabled
+                  ? () => unawaited(
+                        _importSelfHostedAccountConfigurationFromSync(context),
+                      )
+                  : null,
+              icon: const Icon(Icons.cloud_download_outlined),
+              label: const Text('Import from sync server'),
+            ),
           ],
         ),
         if (!selfHosted.loaded) ...<Widget>[
@@ -16689,13 +16713,13 @@ class _SourcesTabState extends State<_SourcesTab> {
     try {
       final result = await context
           .read<LibrarySyncStore>()
-          .pushProviderConfiguration(
+          .updateProviderConfiguration(
             context.read<LibraryStore>(),
-            <String, Object?>{
-              'format': 'aethertune.provider_configurations',
-              'version': 1,
-              'customCatalogs': Map<String, Object?>.from(document),
-            },
+            (remoteSnapshot) => _providerConfigurationWithSection(
+              remoteSnapshot,
+              section: 'customCatalogs',
+              document: Map<String, Object?>.from(document),
+            ),
           );
       if (!context.mounted) {
         return;
@@ -16747,21 +16771,20 @@ class _SourcesTabState extends State<_SourcesTab> {
         }
         return;
       }
-      if (snapshot['format'] != 'aethertune.provider_configurations' ||
-          snapshot['version'] != 1 ||
-          snapshot['customCatalogs'] is! Map ||
-          snapshot.keys.any(
-            (key) =>
-                key != 'format' && key != 'version' && key != 'customCatalogs',
-          )) {
-        throw const FormatException('Remote provider configuration is invalid.');
+      _validateProviderConfigurationRoot(snapshot);
+      final customCatalogs = snapshot['customCatalogs'];
+      if (customCatalogs is! Map) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No custom catalogs are stored on this sync server.')),
+        );
+        return;
       }
       if (!context.mounted) {
         return;
       }
       final result = await context
           .read<CustomCatalogStore>()
-          .importConfiguration(jsonEncode(snapshot['customCatalogs']));
+          .importConfiguration(jsonEncode(customCatalogs));
       if (!context.mounted) {
         return;
       }
@@ -16785,6 +16808,152 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
       messenger.showSnackBar(
         SnackBar(content: Text('Could not import synced catalogs: $error')),
+      );
+    }
+  }
+
+  Map<String, Object?> _providerConfigurationWithSection(
+    Map<String, Object?>? remoteSnapshot, {
+    required String section,
+    required Map<String, Object?> document,
+  }) {
+    final root = Map<String, Object?>.from(
+      remoteSnapshot ??
+          const <String, Object?>{
+            'format': 'aethertune.provider_configurations',
+            'version': 1,
+          },
+    );
+    if (remoteSnapshot != null) {
+      _validateProviderConfigurationRoot(root);
+    }
+    return <String, Object?>{...root, section: document};
+  }
+
+  void _validateProviderConfigurationRoot(Map<String, Object?> snapshot) {
+    const allowedKeys = <String>{
+      'format',
+      'version',
+      'customCatalogs',
+      'selfHostedAccounts',
+    };
+    if (snapshot.keys.any((key) => !allowedKeys.contains(key)) ||
+        snapshot['format'] != 'aethertune.provider_configurations' ||
+        snapshot['version'] != 1 ||
+        (snapshot['customCatalogs'] == null &&
+            snapshot['selfHostedAccounts'] == null)) {
+      throw const FormatException('Remote provider configuration is invalid.');
+    }
+  }
+
+  Future<void> _uploadSelfHostedAccountConfigurationToSync(
+    BuildContext context,
+  ) async {
+    final accounts = context.read<SelfHostedProviderStore>();
+    final export = accounts.exportAccountConfiguration();
+    final document = jsonDecode(export.json);
+    if (document is! Map) {
+      throw const FormatException('Self-hosted account configuration is invalid.');
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await context
+          .read<LibrarySyncStore>()
+          .updateProviderConfiguration(
+            context.read<LibraryStore>(),
+            (remoteSnapshot) => _providerConfigurationWithSection(
+              remoteSnapshot,
+              section: 'selfHostedAccounts',
+              document: Map<String, Object?>.from(document),
+            ),
+          );
+      if (!context.mounted) {
+        return;
+      }
+      final skipped = export.skippedInsecureAccountCount;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Uploaded ${export.exportedAccountCount} secure '
+            '${export.exportedAccountCount == 1 ? 'server' : 'servers'} '
+            'at provider revision ${result.revision}'
+            '${skipped == 0 ? '.' : '; skipped $skipped HTTP server${skipped == 1 ? '' : 's'}.'}',
+          ),
+        ),
+      );
+    } on LibrarySyncConflictException {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Provider settings changed remotely. Import them before uploading again.'),
+        ),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not upload servers: $error')),
+      );
+    }
+  }
+
+  Future<void> _importSelfHostedAccountConfigurationFromSync(
+    BuildContext context,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final remote = await context
+          .read<LibrarySyncStore>()
+          .fetchProviderConfiguration(context.read<LibraryStore>());
+      final snapshot = remote.snapshot;
+      if (snapshot == null) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('No provider configuration is stored on this sync server.')),
+          );
+        }
+        return;
+      }
+      _validateProviderConfigurationRoot(snapshot);
+      final selfHostedAccounts = snapshot['selfHostedAccounts'];
+      if (selfHostedAccounts is! Map) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No self-hosted servers are stored on this sync server.')),
+        );
+        return;
+      }
+      if (!context.mounted) {
+        return;
+      }
+      final result = await context
+          .read<SelfHostedProviderStore>()
+          .importAccountConfiguration(jsonEncode(selfHostedAccounts));
+      if (!context.mounted) {
+        return;
+      }
+      final parts = <String>[
+        '${result.importedAccountCount} imported',
+        if (result.skippedExistingAccountCount > 0)
+          '${result.skippedExistingAccountCount} already configured',
+        if (result.skippedInsecureAccountCount > 0)
+          '${result.skippedInsecureAccountCount} HTTP server${result.skippedInsecureAccountCount == 1 ? '' : 's'} skipped',
+      ];
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Provider configuration revision ${remote.revision}: ${parts.join(', ')}. Credentials remain local.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not import synced servers: $error')),
       );
     }
   }

@@ -2035,17 +2035,47 @@ Response _jsonResponse(
 }
 
 void _validateProviderConfigurationSnapshot(Map<String, Object?> snapshot) {
-  const allowedRootKeys = <String>{'format', 'version', 'customCatalogs'};
+  const allowedRootKeys = <String>{
+    'format',
+    'version',
+    'customCatalogs',
+    'selfHostedAccounts',
+  };
   if (snapshot.keys.any((key) => !allowedRootKeys.contains(key)) ||
       snapshot['format'] != 'aethertune.provider_configurations' ||
-      snapshot['version'] != 1) {
+      snapshot['version'] != 1 ||
+      (snapshot['customCatalogs'] == null &&
+          snapshot['selfHostedAccounts'] == null)) {
     throw const FormatException('Provider configuration is invalid.');
   }
-  final rawDocument = snapshot['customCatalogs'];
-  if (rawDocument is! Map) {
-    throw const FormatException('Provider configuration is missing catalogs.');
+  final rawCatalogDocument = snapshot['customCatalogs'];
+  if (rawCatalogDocument != null) {
+    _validateCustomCatalogConfiguration(
+      Map<String, Object?>.from(_requireMap(
+        rawCatalogDocument,
+        'Custom catalog configuration is invalid.',
+      )),
+    );
   }
-  final document = Map<String, Object?>.from(rawDocument);
+  final rawAccountDocument = snapshot['selfHostedAccounts'];
+  if (rawAccountDocument != null) {
+    _validateSelfHostedAccountConfiguration(
+      Map<String, Object?>.from(_requireMap(
+        rawAccountDocument,
+        'Self-hosted account configuration is invalid.',
+      )),
+    );
+  }
+}
+
+Map _requireMap(Object? value, String message) {
+  if (value is! Map) {
+    throw FormatException(message);
+  }
+  return value;
+}
+
+void _validateCustomCatalogConfiguration(Map<String, Object?> document) {
   const allowedDocumentKeys = <String>{'format', 'version', 'catalogs'};
   if (document.keys.any((key) => !allowedDocumentKeys.contains(key)) ||
       document['format'] != 'aethertune.custom_catalogs' ||
@@ -2110,6 +2140,70 @@ void _validateProviderConfigurationSnapshot(Map<String, Object?> snapshot) {
           domain.endsWith('.')) {
         throw const FormatException('Custom catalog media domains are invalid.');
       }
+    }
+  }
+}
+
+void _validateSelfHostedAccountConfiguration(Map<String, Object?> document) {
+  const allowedDocumentKeys = <String>{'format', 'version', 'accounts'};
+  if (document.keys.any((key) => !allowedDocumentKeys.contains(key)) ||
+      document['format'] != 'aethertune.self_hosted_accounts' ||
+      document['version'] != 1) {
+    throw const FormatException('Self-hosted account configuration is invalid.');
+  }
+  final accounts = document['accounts'];
+  if (accounts is! List || accounts.length > 32) {
+    throw const FormatException('Self-hosted account list is invalid.');
+  }
+  final ids = <String>{};
+  for (final rawAccount in accounts) {
+    if (rawAccount is! Map) {
+      throw const FormatException('Self-hosted account is invalid.');
+    }
+    final account = Map<String, Object?>.from(rawAccount);
+    const allowedAccountKeys = <String>{
+      'id',
+      'kind',
+      'name',
+      'baseUrl',
+      'identity',
+      'allowInsecureHttp',
+    };
+    if (account.keys.any((key) => !allowedAccountKeys.contains(key)) ||
+        account['allowInsecureHttp'] != false) {
+      throw const FormatException('Self-hosted account is invalid.');
+    }
+    final id = account['id'];
+    final kind = account['kind'];
+    final name = account['name'];
+    final baseUrl = account['baseUrl'];
+    final identity = account['identity'];
+    if (id is! String ||
+        id.isEmpty ||
+        id.length > 512 ||
+        !RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(id) ||
+        !ids.add(id) ||
+        kind is! String ||
+        (kind != 'jellyfin' && kind != 'subsonic') ||
+        name is! String ||
+        name.trim().isEmpty ||
+        name.length > 160 ||
+        baseUrl is! String ||
+        baseUrl.length > 2048 ||
+        identity is! String ||
+        identity.trim().isEmpty ||
+        identity.length > 320) {
+      throw const FormatException('Self-hosted account is invalid.');
+    }
+    final uri = Uri.tryParse(baseUrl);
+    if (uri == null ||
+        uri.scheme.toLowerCase() != 'https' ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const FormatException('Self-hosted account URL is invalid.');
     }
   }
 }

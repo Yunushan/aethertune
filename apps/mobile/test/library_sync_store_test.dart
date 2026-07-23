@@ -612,6 +612,60 @@ void main() {
     expect(pushedViews, hasLength(2));
   });
 
+  test('provider configuration updates preserve other configuration sections',
+      () async {
+    final remoteProviderSnapshot = <String, Object?>{
+      'format': 'aethertune.provider_configurations',
+      'version': 1,
+      'customCatalogs': <String, Object?>{
+        'format': 'aethertune.custom_catalogs',
+        'version': 1,
+        'catalogs': <Object?>[],
+      },
+    };
+    final gateway = _FakeSyncGateway(
+      remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      providerRemote: LibrarySyncRemoteSnapshot(
+        revision: 6,
+        updatedAt: DateTime.utc(2026, 7, 12),
+        updatedByDevice: 'Desktop',
+        checksum: 'provider-checksum',
+        snapshot: remoteProviderSnapshot,
+      ),
+    );
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(
+      credentialVault: _MemorySyncVault(),
+      clientFactory: (account, token) => gateway,
+    );
+    await library.load();
+    await sync.load();
+    await sync.testAndSave(library, _account(), 'token');
+
+    await sync.updateProviderConfiguration(
+      library,
+      (remoteSnapshot) => <String, Object?>{
+        ...remoteSnapshot!,
+        'selfHostedAccounts': <String, Object?>{
+          'format': 'aethertune.self_hosted_accounts',
+          'version': 1,
+          'accounts': <Object?>[],
+        },
+      },
+    );
+
+    expect(gateway.providerFetchCalls, 1);
+    expect(gateway.providerPushedBaseRevisions, <int>[6]);
+    expect(
+      gateway.pushedProviderSnapshots.single['customCatalogs'],
+      remoteProviderSnapshot['customCatalogs'],
+    );
+    expect(
+      gateway.pushedProviderSnapshots.single['selfHostedAccounts'],
+      isA<Map>(),
+    );
+  });
+
   test('merge and push restores the local library when the server rejects it',
       () async {
     final remoteSnapshot = _emptySnapshot()
@@ -859,14 +913,17 @@ class _FakeSyncGateway
         LibrarySyncGateway,
         LibrarySyncMetadataGateway,
         LibrarySyncProfileGateway,
-        LibrarySyncProfileEditorGateway {
+        LibrarySyncProfileEditorGateway,
+        ProviderConfigurationGateway {
   _FakeSyncGateway({
     required this.remote,
     this.profile,
     this.fetchError,
-  });
+    LibrarySyncRemoteSnapshot? providerRemote,
+  }) : providerRemote = providerRemote ?? const LibrarySyncRemoteSnapshot(revision: 0);
 
   LibrarySyncRemoteSnapshot remote;
+  LibrarySyncRemoteSnapshot providerRemote;
   LibrarySyncProfile? profile;
   Object? fetchError;
   Object? pushError;
@@ -881,12 +938,16 @@ class _FakeSyncGateway
   bool usesSnapshotChecksum = false;
   int profileFetchCalls = 0;
   int profileUpdateCalls = 0;
+  int providerFetchCalls = 0;
   String? lastDisplayName;
   String? lastDeviceName;
   LibrarySyncProfileAvatarTone? lastAvatarTone;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
   final List<Map<String, Object?>> pushedSnapshots =
+      <Map<String, Object?>>[];
+  final List<int> providerPushedBaseRevisions = <int>[];
+  final List<Map<String, Object?>> pushedProviderSnapshots =
       <Map<String, Object?>>[];
 
   @override
@@ -997,6 +1058,30 @@ class _FakeSyncGateway
           updatedAt: DateTime.utc(2026, 7, 10),
           updatedByDevice: 'Test device',
         );
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> fetchProviderConfiguration() async {
+    providerFetchCalls += 1;
+    return providerRemote;
+  }
+
+  @override
+  Future<LibrarySyncRemoteSnapshot> pushProviderConfiguration({
+    required int baseRevision,
+    required Map<String, Object?> snapshot,
+  }) async {
+    providerPushedBaseRevisions.add(baseRevision);
+    pushedProviderSnapshots.add(snapshot);
+    final result = LibrarySyncRemoteSnapshot(
+      revision: baseRevision + 1,
+      updatedAt: DateTime.utc(2026, 7, 12),
+      updatedByDevice: 'Test device',
+      checksum: 'provider-checksum',
+      snapshot: snapshot,
+    );
+    providerRemote = result;
+    return result;
   }
 }
 

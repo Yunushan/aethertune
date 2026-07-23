@@ -781,6 +781,31 @@ class LibrarySyncStore extends ChangeNotifier {
       throw StateError('Could not save library sync metadata.');
     }
   }
+
+  /// Atomically replaces one validated section while preserving other provider
+  /// configuration sections stored on the same authenticated sync account.
+  Future<LibrarySyncRemoteSnapshot> updateProviderConfiguration(
+    LibraryStore library,
+    Map<String, Object?> Function(Map<String, Object?>? remoteSnapshot)
+        update,
+  ) {
+    return _runBusy(() async {
+      _requireOnline(library);
+      final client = _requireClient();
+      if (client is! ProviderConfigurationGateway) {
+        throw StateError(
+          'This library sync server does not support provider configuration sync.',
+        );
+      }
+      final gateway = client as ProviderConfigurationGateway;
+      final remote = await gateway.fetchProviderConfiguration();
+      final snapshot = update(remote.snapshot);
+      return gateway.pushProviderConfiguration(
+        baseRevision: remote.revision,
+        snapshot: snapshot,
+      );
+    });
+  }
 }
 
 int _nonNegativeInt(Object? value) {
