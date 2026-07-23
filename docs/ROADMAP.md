@@ -235,6 +235,7 @@
 - [x] LRC parser and timestamp preview
 - [x] Playback-synced lyric highlighting
 - [x] User-triggered LRCLIB plain/synced lyrics search
+- [x] Consent-based bounded batch matching for unambiguous missing lyrics
 - [x] Local lyrics match ranking and attributed cache persistence
 - [x] Lyrics provider loading, empty, error, retry, and instrumental states
 - [x] Native lyrics file-save export

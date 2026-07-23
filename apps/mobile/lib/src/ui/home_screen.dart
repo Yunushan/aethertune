@@ -31,6 +31,7 @@ import '../data/local_library_provider.dart';
 import '../data/local_media_uri.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
+import '../data/lyrics_batch_matcher.dart';
 import '../data/lyrics_search_endpoint_settings_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/m4a_metadata_writer.dart';
@@ -1096,6 +1097,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   track,
                 ),
+                onBatchLyrics: (tracks) => unawaited(
+                  _matchMissingLyrics(context, tracks),
+                ),
               ),
               _PlaylistsTab(
                 onAddToPlaylist: (track) => _showAddToPlaylist(
@@ -1880,6 +1884,97 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(content: Text(_folderImportErrorMessage(error))),
       );
     }
+  }
+
+  Future<void> _matchMissingLyrics(
+    BuildContext context,
+    List<Track> tracks,
+  ) async {
+    final library = context.read<LibraryStore>();
+    if (library.offlineModeEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Turn off Offline mode before searching for lyrics.'),
+        ),
+      );
+      return;
+    }
+    final candidates = tracks
+        .where(
+          (track) =>
+              library.lyricsForTrack(track.id) == null &&
+              track.title.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No missing lyrics in these results.')),
+      );
+      return;
+    }
+
+    final provider = _lyricsProviderFor(context);
+    final disclosure = provider.disclosure;
+    final searchCount = candidates.length > LyricsBatchMatcher.maxTracksPerBatch
+        ? LyricsBatchMatcher.maxTracksPerBatch
+        : candidates.length;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Find missing lyrics?'),
+        content: Text(
+          'AetherTune will search ${provider.name} for up to '
+          '$searchCount tracks. It sends ${disclosure.dataSent.join(', ')} '
+          'to ${disclosure.networkSummary}. Only one exact title and artist '
+          'match with a compatible duration is saved. Existing lyrics, '
+          'ambiguous matches, and instrumental results stay untouched.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Search'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || approved != true) {
+      return;
+    }
+
+    final report = await LyricsBatchMatcher(provider).match(candidates);
+    var applied = 0;
+    var skippedExisting = 0;
+    for (final outcome in report.matches) {
+      final result = outcome.result!;
+      if (library.lyricsForTrack(outcome.track.id) != null) {
+        skippedExisting += 1;
+        continue;
+      }
+      await library.setLyricsIfAbsent(
+        outcome.track.id,
+        result.preferredLyrics!,
+        sourceId: result.providerId,
+        sourceName: result.providerName,
+        sourceExternalId: result.externalId,
+        sourceUri: result.sourceUri,
+      );
+      applied += 1;
+    }
+    if (!mounted) {
+      return;
+    }
+    final summary = <String>[
+      'Added lyrics to $applied ${applied == 1 ? 'track' : 'tracks'}',
+      if (report.unmatchedCount > 0) '${report.unmatchedCount} unmatched',
+      if (report.failedCount > 0) '${report.failedCount} failed',
+      if (skippedExisting > 0) '$skippedExisting kept existing',
+      if (report.wasLimited) 'first ${LyricsBatchMatcher.maxTracksPerBatch} searched',
+    ].join('; ');
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
   }
 
   Future<String?> _selectAndroidAudioTree(BuildContext context) async {
@@ -6462,6 +6557,7 @@ class _LibraryTab extends StatelessWidget {
     required this.onImportFolder,
     required this.onAddToPlaylist,
     required this.onLyrics,
+    required this.onBatchLyrics,
   });
 
   final TextEditingController searchController;
@@ -6478,6 +6574,7 @@ class _LibraryTab extends StatelessWidget {
   final VoidCallback onImportFolder;
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
+  final ValueChanged<List<Track>> onBatchLyrics;
 
   @override
   Widget build(BuildContext context) {
@@ -6508,6 +6605,11 @@ class _LibraryTab extends StatelessWidget {
                 tooltip: 'Saved library views',
                 onPressed: () => _showSavedLibraryViews(context),
                 icon: const Icon(Icons.bookmark_outline),
+              ),
+              IconButton(
+                tooltip: 'Find missing lyrics in these results',
+                onPressed: tracks.isEmpty ? null : () => onBatchLyrics(tracks),
+                icon: const Icon(Icons.lyrics_outlined),
               ),
               PopupMenuButton<LibrarySortMode>(
                 tooltip: 'Sort library',
