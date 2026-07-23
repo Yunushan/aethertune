@@ -11,6 +11,7 @@ import '../../data/listenbrainz_scrobbling_store.dart';
 import '../../data/offline_cache_background_scheduler.dart';
 import '../../data/offline_cache_queue_worker.dart';
 import '../../data/self_hosted_provider_store.dart';
+import 'desktop_background_work_policy.dart';
 
 /// True when a desktop AetherTune process should keep its automatic queue
 /// moving after its window is hidden or minimized to the system tray.
@@ -21,14 +22,10 @@ bool shouldKeepOfflineQueueProcessingInProcess({
   required TargetPlatform platform,
   required AppLifecycleState state,
 }) {
-  final isDesktop =
-      platform == TargetPlatform.linux ||
-      platform == TargetPlatform.macOS ||
-      platform == TargetPlatform.windows;
-  return isDesktop &&
-      (state == AppLifecycleState.inactive ||
-          state == AppLifecycleState.hidden ||
-          state == AppLifecycleState.paused);
+  return shouldKeepBackgroundWorkInDesktopProcess(
+    platform: platform,
+    state: state,
+  );
 }
 
 class OfflineCacheForegroundWorker extends StatefulWidget {

@@ -110,7 +110,7 @@ void main() {
   });
 
   testWidgets(
-    'runs due refreshes on launch and resume but never in offline mode',
+    'runs due refreshes on launch, mobile resume, and desktop tray states',
     (tester) async {
       final library = LibraryStore();
       await library.load();
@@ -136,6 +136,32 @@ void main() {
 
       await _sendLifecycleState(tester, AppLifecycleState.paused);
       await _sendLifecycleState(tester, AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(calls, 2);
+
+      await tester.pumpWidget(const SizedBox());
+      calls = 0;
+      await tester.pumpWidget(
+        ChangeNotifierProvider<LibraryStore>.value(
+          value: library,
+          child: MaterialApp(
+            home: PodcastRssRefreshWorker(
+              platform: TargetPlatform.windows,
+              runRefresh: (_) async {
+                calls += 1;
+                return const PodcastRefreshReport.empty();
+              },
+              child: const SizedBox(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(calls, 1);
+
+      await _sendLifecycleState(tester, AppLifecycleState.hidden);
       await tester.pump();
 
       expect(calls, 2);

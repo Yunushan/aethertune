@@ -1,24 +1,28 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
 import '../../data/podcast_chapter_host_policy.dart';
 import '../../data/podcast_subscription_refresh_worker.dart';
+import 'desktop_background_work_policy.dart';
 
 typedef PodcastRefreshRunner =
     Future<PodcastRefreshReport> Function(LibraryStore library);
 
 class PodcastRssRefreshWorker extends StatefulWidget {
-  const PodcastRssRefreshWorker({
+  PodcastRssRefreshWorker({
     super.key,
     required this.child,
     this.runRefresh,
-  });
+    TargetPlatform? platform,
+  }) : platform = platform ?? defaultTargetPlatform;
 
   final Widget child;
   final PodcastRefreshRunner? runRefresh;
+  final TargetPlatform platform;
 
   @override
   State<PodcastRssRefreshWorker> createState() =>
@@ -53,7 +57,11 @@ class _PodcastRssRefreshWorkerState extends State<PodcastRssRefreshWorker>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed ||
+        shouldKeepBackgroundWorkInDesktopProcess(
+          platform: widget.platform,
+          state: state,
+        )) {
       _runIfDue();
     }
   }

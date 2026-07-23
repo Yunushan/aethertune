@@ -159,7 +159,7 @@
 - [x] Podcast direct enclosure private cache storage
 - [x] Android persisted Podcast background download jobs
 - [x] iOS Podcast background download jobs
-- [ ] Desktop Podcast background download jobs
+- [x] Desktop Podcast background download jobs
 - [x] Radio Browser parser/provider foundation
 - [x] Radio Browser station search/play/save UI
 - [x] Radio Browser station click accounting
