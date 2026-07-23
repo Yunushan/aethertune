@@ -83,6 +83,7 @@ import '../domain/provider_home_feed.dart';
 import '../domain/self_hosted_provider_account.dart';
 import '../domain/sleep_timer_duration.dart';
 import '../domain/track.dart';
+import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/android_pinned_shortcut_bridge.dart';
