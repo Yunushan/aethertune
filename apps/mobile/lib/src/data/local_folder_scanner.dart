@@ -230,7 +230,7 @@ Future<LocalFolderScanResult> _scanInBackground({
 
 Future<void> _runLocalScanInBackground(Map<String, Object?> request) async {
   final replyTo = request['replyTo']! as SendPort;
-  final reportProgress = (LocalFolderScanProgress progress) {
+  void reportProgress(LocalFolderScanProgress progress) {
     replyTo.send(<String, Object?>{
       'type': 'progress',
       'phase': progress.phase.name,
