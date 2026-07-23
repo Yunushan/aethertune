@@ -8,8 +8,10 @@ import android.graphics.drawable.Icon
 import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
 import android.media.audiofx.Virtualizer
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
@@ -19,6 +21,8 @@ import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.ln
 import kotlin.math.sqrt
 
@@ -28,6 +32,8 @@ class MainActivity : AudioServiceActivity() {
     private var pendingVisualizerResult: MethodChannel.Result? = null
     private var pendingVisualizerSessionId: Int? = null
     private var pendingAudioLibraryAccessResult: MethodChannel.Result? = null
+    private var pendingSafTreeResult: MethodChannel.Result? = null
+    private var pendingSafMaterializationResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -167,6 +173,21 @@ class MainActivity : AudioServiceActivity() {
             when (call.method) {
                 "requestAudioLibraryAccess" -> requestAudioLibraryAccess(result)
                 "openAudioLibrarySettings" -> result.success(openAudioLibrarySettings())
+                "selectAudioTree" -> selectPersistedAudioTree(result)
+                "materializeAudioTree" -> {
+                    val treeUri = call.argument<String>("treeUri")
+                    if (treeUri == null) {
+                        result.error("invalid_arguments", "A tree URI is required.", null)
+                    } else {
+                        materializeAudioTree(treeUri, result)
+                    }
+                }
+                "discardAudioTreeMaterialization" -> {
+                    discardAudioTreeMaterialization(
+                        call.argument<String>("stagingRootPath"),
+                    )
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -269,6 +290,35 @@ class MainActivity : AudioServiceActivity() {
         result.success(audioVisualizer.start(sessionId))
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != safTreeRequestCode) {
+            return
+        }
+        val result = pendingSafTreeResult
+        pendingSafTreeResult = null
+        val returnedData = data
+        val treeUri = returnedData?.data
+        if (result == null || resultCode != RESULT_OK || treeUri == null) {
+            result?.success(null)
+            return
+        }
+        val grantedFlags = returnedData.flags and (
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        if (grantedFlags and Intent.FLAG_GRANT_READ_URI_PERMISSION == 0) {
+            result.error("read-access-denied", "The selected folder was not readable.", null)
+            return
+        }
+        try {
+            contentResolver.takePersistableUriPermission(treeUri, grantedFlags)
+            result.success(treeUri.toString())
+        } catch (_: SecurityException) {
+            result.error("persist-access-denied", "Android could not retain folder access.", null)
+        }
+    }
+
     private fun requestAudioLibraryAccess(result: MethodChannel.Result) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             result.success(true)
@@ -310,9 +360,253 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
+    private fun selectPersistedAudioTree(result: MethodChannel.Result) {
+        if (pendingSafTreeResult != null || pendingSafMaterializationResult != null) {
+            result.error("saf-request-active", "Android folder access is already active.", null)
+            return
+        }
+        pendingSafTreeResult = result
+        startActivityForResult(
+            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                .addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                .addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION),
+            safTreeRequestCode,
+        )
+    }
+
+    private fun materializeAudioTree(treeUriText: String, result: MethodChannel.Result) {
+        if (pendingSafTreeResult != null || pendingSafMaterializationResult != null) {
+            result.error("saf-request-active", "Android folder access is already active.", null)
+            return
+        }
+        val treeUri = try {
+            Uri.parse(treeUriText)
+        } catch (_: Exception) {
+            null
+        }
+        if (treeUri == null || treeUri.scheme != "content" || treeUri.authority.isNullOrBlank()) {
+            result.error("invalid_tree_uri", "A persisted content tree URI is required.", null)
+            return
+        }
+        if (contentResolver.persistedUriPermissions.none {
+                it.uri == treeUri && it.isReadPermission
+            }
+        ) {
+            result.error("tree-access-revoked", "Android folder access is no longer available.", null)
+            return
+        }
+        pendingSafMaterializationResult = result
+        Thread {
+            try {
+                val materialization = materializePersistedAudioTree(treeUri)
+                runOnUiThread {
+                    pendingSafMaterializationResult = null
+                    result.success(materialization)
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    pendingSafMaterializationResult = null
+                    result.error("tree-materialization-failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun materializePersistedAudioTree(treeUri: Uri): Map<String, Any> {
+        val stagingParent = File(cacheDir, safMaterializationDirectoryName)
+        if (!stagingParent.exists() && !stagingParent.mkdirs()) {
+            throw IllegalStateException("Could not prepare Android folder scan cache.")
+        }
+        val stagingRoot = File(
+            stagingParent,
+            "${System.currentTimeMillis()}-${Integer.toHexString(treeUri.toString().hashCode())}",
+        )
+        if (!stagingRoot.mkdirs()) {
+            throw IllegalStateException("Could not create Android folder scan cache.")
+        }
+        val budget = SafMaterializationBudget()
+        val audioFiles = ArrayList<Map<String, String>>()
+        try {
+            materializeSafDirectory(
+                treeUri,
+                DocumentsContract.getTreeDocumentId(treeUri),
+                stagingRoot,
+                stagingRoot,
+                budget,
+                audioFiles,
+            )
+            return mapOf(
+                "stagingRootPath" to stagingRoot.absolutePath,
+                "audioFiles" to audioFiles,
+                "inaccessibleDirectoryCount" to budget.inaccessibleCount,
+            )
+        } catch (error: Exception) {
+            stagingRoot.deleteRecursively()
+            throw error
+        }
+    }
+
+    private fun materializeSafDirectory(
+        treeUri: Uri,
+        documentId: String,
+        stagingRoot: File,
+        destination: File,
+        budget: SafMaterializationBudget,
+        audioFiles: MutableList<Map<String, String>>,
+    ) {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+            treeUri,
+            documentId,
+        )
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+        )
+        val cursor = try {
+            contentResolver.query(
+                childrenUri,
+                projection,
+                null,
+                null,
+                "${DocumentsContract.Document.COLUMN_DISPLAY_NAME} COLLATE NOCASE ASC",
+            )
+        } catch (_: SecurityException) {
+            budget.inaccessibleCount += 1
+            return
+        }
+        cursor?.use {
+            val idIndex = it.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameIndex = it.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            val mimeTypeIndex = it.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            while (it.moveToNext()) {
+                if (idIndex < 0 || nameIndex < 0 || mimeTypeIndex < 0) {
+                    budget.inaccessibleCount += 1
+                    return@use
+                }
+                val childDocumentId = it.getString(idIndex) ?: continue
+                val displayName = it.getString(nameIndex) ?: continue
+                val mimeType = it.getString(mimeTypeIndex)
+                val childUri = DocumentsContract.buildDocumentUriUsingTree(
+                    treeUri,
+                    childDocumentId,
+                )
+                val childDestination = File(destination, safFileName(displayName))
+                if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                    if (!childDestination.exists() && !childDestination.mkdirs()) {
+                        budget.inaccessibleCount += 1
+                        continue
+                    }
+                    materializeSafDirectory(
+                        treeUri,
+                        childDocumentId,
+                        stagingRoot,
+                        childDestination,
+                        budget,
+                        audioFiles,
+                    )
+                    continue
+                }
+                if (!isSafScanCandidate(displayName)) {
+                    continue
+                }
+                if (budget.fileCount >= maximumSafMaterializedFiles) {
+                    throw IllegalStateException("The selected folder has too many supported files.")
+                }
+                try {
+                    copySafDocument(childUri, childDestination, budget)
+                    budget.fileCount += 1
+                    if (isSafAudioFile(displayName)) {
+                        audioFiles.add(
+                            mapOf(
+                                "relativePath" to childDestination
+                                    .relativeTo(stagingRoot)
+                                    .invariantSeparatorsPath,
+                                "sourceUri" to childUri.toString(),
+                            ),
+                        )
+                    }
+                } catch (_: SecurityException) {
+                    childDestination.delete()
+                    budget.inaccessibleCount += 1
+                } catch (_: java.io.IOException) {
+                    childDestination.delete()
+                    budget.inaccessibleCount += 1
+                }
+            }
+        } ?: run {
+            budget.inaccessibleCount += 1
+        }
+    }
+
+    private fun copySafDocument(sourceUri: Uri, destination: File, budget: SafMaterializationBudget) {
+        val input = contentResolver.openInputStream(sourceUri)
+            ?: throw java.io.IOException("Android could not read a selected document.")
+        input.use { source ->
+            FileOutputStream(destination).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = source.read(buffer)
+                    if (read <= 0) {
+                        break
+                    }
+                    budget.byteCount += read.toLong()
+                    if (budget.byteCount > maximumSafMaterializedBytes) {
+                        throw IllegalStateException("The selected folder is too large to scan safely.")
+                    }
+                    output.write(buffer, 0, read)
+                }
+            }
+        }
+    }
+
+    private fun discardAudioTreeMaterialization(stagingRootPath: String?) {
+        if (stagingRootPath.isNullOrBlank()) {
+            return
+        }
+        val stagingParent = File(cacheDir, safMaterializationDirectoryName).canonicalFile
+        val candidate = try {
+            File(stagingRootPath).canonicalFile
+        } catch (_: java.io.IOException) {
+            return
+        }
+        if (candidate.parentFile == stagingParent) {
+            candidate.deleteRecursively()
+        }
+    }
+
+    private fun isSafScanCandidate(name: String): Boolean {
+        val extension = name.substringAfterLast('.', "").lowercase()
+        return extension in safAudioExtensions || extension in safSidecarExtensions
+    }
+
+    private fun isSafAudioFile(name: String): Boolean {
+        return name.substringAfterLast('.', "").lowercase() in safAudioExtensions
+    }
+
+    private fun safFileName(value: String): String {
+        val sanitized = value.trim().replace('/', '_').replace('\\', '_')
+        return if (sanitized.isEmpty || sanitized == "." || sanitized == "..") {
+            "document"
+        } else {
+            sanitized
+        }
+    }
+
     private companion object {
         const val visualizerPermissionRequestCode = 7318
         const val audioLibraryPermissionRequestCode = 7319
+        const val safTreeRequestCode = 7320
+        const val safMaterializationDirectoryName = "aethertune_saf_imports"
+        const val maximumSafMaterializedFiles = 5000
+        const val maximumSafMaterializedBytes = 2L * 1024L * 1024L * 1024L
+        val safAudioExtensions = setOf(
+            "aac", "aif", "aifc", "aiff", "alac", "flac", "m4a", "m4b",
+            "m4r", "mp3", "oga", "ogg", "opus", "wav", "wave", "wma",
+        )
+        val safSidecarExtensions = setOf("cue", "lrc", "srt", "ttml", "txt", "vtt")
     }
 
     private fun dispatchLauncherShortcut(intent: Intent) {
@@ -334,6 +628,12 @@ class MainActivity : AudioServiceActivity() {
                 )
         }
     }
+}
+
+private class SafMaterializationBudget {
+    var fileCount = 0
+    var byteCount = 0L
+    var inaccessibleCount = 0
 }
 
 private class AetherTuneAudioVisualizer : EventChannel.StreamHandler {

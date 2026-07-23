@@ -28,6 +28,7 @@ import '../data/listenbrainz_scrobbling_store.dart';
 import '../data/local_diagnostic_log.dart';
 import '../data/local_folder_watch_store.dart';
 import '../data/local_library_provider.dart';
+import '../data/local_media_uri.dart';
 import '../data/local_folder_scanner.dart';
 import '../data/lrclib_lyrics_provider.dart';
 import '../data/lyrics_search_endpoint_settings_store.dart';
@@ -45,6 +46,7 @@ import '../data/podcast_subscription_refresh_worker.dart';
 import '../data/playlist_artwork_file_store.dart';
 import '../data/radio_browser_provider.dart';
 import '../data/self_hosted_provider_store.dart';
+import '../data/saf_tree_scanner.dart';
 import '../data/shared_smart_playlist_store.dart';
 import '../data/sponsorblock_segment_provider.dart';
 import '../data/spotify_metadata_provider.dart';
@@ -1836,16 +1838,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
-    if (Platform.isAndroid && !await _requestAndroidFolderImportAccess(context)) {
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-
-    final folderPath = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Import audio folder',
-    );
+    final folderPath = Platform.isAndroid
+        ? await _selectAndroidAudioTree(context)
+        : await FilePicker.getDirectoryPath(
+            dialogTitle: 'Import audio folder',
+          );
     if (!context.mounted || folderPath == null) {
       return;
     }
@@ -1855,7 +1852,7 @@ class _HomeScreenState extends State<HomeScreen> {
       AppLocalizations.of(context)!.scanningAudioFolder,
     );
     try {
-      final scanResult = await scanLocalFolderInBackground(
+      final scanResult = await scanLocalFolderWithSafSupportInBackground(
         folderPath,
         importedAt: DateTime.now(),
         onProgress: progress.update,
@@ -1884,13 +1881,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<bool> _requestAndroidFolderImportAccess(BuildContext context) async {
+  Future<String?> _selectAndroidAudioTree(BuildContext context) async {
     final approved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Allow audio-library access?'),
+        title: const Text('Choose an audio folder'),
         content: const Text(
-          'Folder import reads audio files plus matching lyric and chapter sidecars in the folder you choose. Android will show its audio and music permission next. This access is used only after you start an import; individual-file imports use the system picker without it.',
+          'Android will open its folder picker. AetherTune keeps read access only to the folder you choose, so it can refresh your audio files and matching lyric or chapter sidecars later. Individual-file imports remain separate.',
         ),
         actions: <Widget>[
           TextButton(
@@ -1899,33 +1896,26 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Continue'),
+            child: const Text('Choose folder'),
           ),
         ],
       ),
     );
     if (!context.mounted || approved != true) {
-      return false;
+      return null;
     }
-
-    final granted = await AndroidAudioLibraryAccess.request();
-    if (!context.mounted || granted) {
-      return granted;
+    final treeUri = await AndroidAudioLibraryAccess.selectPersistedAudioTree();
+    if (!context.mounted || treeUri != null) {
+      return treeUri;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text(
-          'Audio-library access was not granted. You can still import individual files instead.',
-        ),
-        action: SnackBarAction(
-          label: 'Settings',
-          onPressed: () => unawaited(
-            AndroidAudioLibraryAccess.openAppSettings(),
-          ),
+          'Android folder access was not selected. You can still import individual files instead.',
         ),
       ),
     );
-    return false;
+    return null;
   }
 
   Future<void> _refreshLocalLibraryMetadata() async {
@@ -1943,8 +1933,12 @@ class _HomeScreenState extends State<HomeScreen> {
               track.localPath!.isNotEmpty,
         )
         .map((track) => track.localPath!)
+        .where((localPath) => !isContentMediaUri(localPath))
         .toList(growable: false);
-    if (localFilePaths.isEmpty) {
+    final safRoots = library.watchedLocalFolderPaths
+        .where(isContentMediaUri)
+        .toList(growable: false);
+    if (localFilePaths.isEmpty && safRoots.isEmpty) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('No local audio files are available to refresh.'),
@@ -1959,11 +1953,26 @@ class _HomeScreenState extends State<HomeScreen> {
       'Refreshing local audio metadata...',
     );
     try {
-      final scanResult = await scanLocalFilesInBackground(
-        localFilePaths,
-        importedAt: DateTime.now(),
-        onProgress: progress.update,
-      );
+      final scanResults = <LocalFolderScanResult>[];
+      if (localFilePaths.isNotEmpty) {
+        scanResults.add(
+          await scanLocalFilesInBackground(
+            localFilePaths,
+            importedAt: DateTime.now(),
+            onProgress: progress.update,
+          ),
+        );
+      }
+      for (final safRoot in safRoots) {
+        scanResults.add(
+          await scanLocalFolderWithSafSupportInBackground(
+            safRoot,
+            importedAt: DateTime.now(),
+            onProgress: progress.update,
+          ),
+        );
+      }
+      final scanResult = _mergeLocalFolderScanResults(scanResults);
       await library.reconcileLocalTracks(
         scanResult.tracks,
         sidecarLyricsByTrackId: scanResult.sidecarLyricsByTrackId,
@@ -14718,6 +14727,35 @@ Future<void> _addScannedTracksToLibrary(
   for (final entry in scanResult.sidecarChaptersByTrackId.entries) {
     await library.setTrackChaptersIfAbsent(entry.key, entry.value);
   }
+}
+
+LocalFolderScanResult _mergeLocalFolderScanResults(
+  Iterable<LocalFolderScanResult> results,
+) {
+  final tracksById = <String, Track>{};
+  final sidecarLyrics = <String, String>{};
+  final embeddedLyrics = <String, String>{};
+  final sidecarChapters = <String, List<TrackChapter>>{};
+  var ignoredFileCount = 0;
+  var inaccessibleDirectoryCount = 0;
+  for (final result in results) {
+    for (final track in result.tracks) {
+      tracksById[track.id] = track;
+    }
+    sidecarLyrics.addAll(result.sidecarLyricsByTrackId);
+    embeddedLyrics.addAll(result.embeddedLyricsByTrackId);
+    sidecarChapters.addAll(result.sidecarChaptersByTrackId);
+    ignoredFileCount += result.ignoredFileCount;
+    inaccessibleDirectoryCount += result.inaccessibleDirectoryCount;
+  }
+  return LocalFolderScanResult(
+    tracks: List.unmodifiable(tracksById.values),
+    ignoredFileCount: ignoredFileCount,
+    inaccessibleDirectoryCount: inaccessibleDirectoryCount,
+    sidecarLyricsByTrackId: Map.unmodifiable(sidecarLyrics),
+    embeddedLyricsByTrackId: Map.unmodifiable(embeddedLyrics),
+    sidecarChaptersByTrackId: Map.unmodifiable(sidecarChapters),
+  );
 }
 
 String _folderImportErrorMessage(Object error) {

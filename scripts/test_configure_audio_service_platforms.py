@@ -172,6 +172,18 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 activity_source.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'Intent.ACTION_OPEN_DOCUMENT_TREE',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'takePersistableUriPermission',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'DocumentsContract.buildChildDocumentsUriUsingTree',
+                activity_source.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 'dev.aethertune/offline_cache_background',
                 activity_source.read_text(encoding="utf-8"),
             )

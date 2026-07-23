@@ -11,3 +11,10 @@ Uri localMediaUri(String locator) {
   }
   return Uri.file(locator);
 }
+
+bool isContentMediaUri(String locator) {
+  final parsed = Uri.tryParse(locator.trim());
+  return parsed != null &&
+      parsed.scheme.toLowerCase() == 'content' &&
+      parsed.host.isNotEmpty;
+}

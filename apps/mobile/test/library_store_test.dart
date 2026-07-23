@@ -2099,6 +2099,18 @@ void main() {
     expect(document, isNot(contains('file:///content%3A')));
   });
 
+  test('persists a granted Android content tree as a watched local root',
+      () async {
+    final store = LibraryStore();
+    await store.load();
+    const treeUri =
+        'content://com.android.providers.media.documents/tree/primary%3AMusic';
+
+    await store.watchLocalFolder(treeUri);
+
+    expect(store.watchedLocalFolderPaths, <String>[treeUri]);
+  });
+
   test('exports and imports Windows Media Player WPL playlists', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 2, 50),

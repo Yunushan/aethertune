@@ -10456,6 +10456,9 @@ class LibraryStore extends ChangeNotifier {
     if (trimmed.isEmpty) {
       throw const FormatException('Folder path is required.');
     }
+    if (isContentMediaUri(trimmed)) {
+      return Uri.parse(trimmed).toString();
+    }
     return path.normalize(path.absolute(trimmed));
   }
 
@@ -10480,6 +10483,10 @@ class LibraryStore extends ChangeNotifier {
     final localPath = track.localPath;
     if (track.sourceId != 'local' || localPath == null || localPath.isEmpty) {
       return false;
+    }
+    if (isContentMediaUri(rootPath)) {
+      return isContentMediaUri(localPath) &&
+          (localPath == rootPath || localPath.startsWith('$rootPath/'));
     }
     final normalized = path.normalize(path.absolute(localPath));
     return normalized == rootPath || path.isWithin(rootPath, normalized);

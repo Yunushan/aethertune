@@ -7,6 +7,8 @@ import 'package:path/path.dart' as path;
 import '../domain/lyrics_document.dart';
 import 'library_store.dart';
 import 'local_folder_scanner.dart';
+import 'local_media_uri.dart';
+import 'saf_tree_scanner.dart';
 
 typedef LocalFolderScan = Future<LocalFolderScanResult> Function(
   String rootPath, {
@@ -24,7 +26,7 @@ class LocalFolderWatchStore extends ChangeNotifier {
     LocalFolderScan? scanner,
     LocalFolderWatchStreamFactory? watchStreamFactory,
     this.debounce = const Duration(milliseconds: 750),
-  })  : _scanner = scanner ?? scanLocalFolderInBackground,
+  })  : _scanner = scanner ?? scanLocalFolderWithSafSupportInBackground,
         _watchStreamFactory = watchStreamFactory ?? _watchDirectory;
 
   final LocalFolderScan _scanner;
@@ -104,6 +106,11 @@ class LocalFolderWatchStore extends ChangeNotifier {
         continue;
       }
       try {
+        if (isContentMediaUri(root)) {
+          _subscriptions[root] = Stream<String>.empty().listen((_) {});
+          unawaited(refresh(root));
+          continue;
+        }
         _subscriptions[root] = _watchStreamFactory(root).listen(
               (changedPath) => _onFilesystemChange(root, changedPath),
               onError: (Object error, StackTrace _) {

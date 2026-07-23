@@ -60,4 +60,20 @@ void main() {
 
     expect(await AndroidAudioLibraryAccess.openAppSettings(), isFalse);
   });
+
+  test('accepts only persisted content URIs from the Android tree picker',
+      () async {
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async {
+        expect(call.method, 'selectAudioTree');
+        return 'content://com.android.providers.media.documents/tree/primary%3AMusic';
+      },
+    );
+
+    expect(
+      await AndroidAudioLibraryAccess.selectPersistedAudioTree(),
+      'content://com.android.providers.media.documents/tree/primary%3AMusic',
+    );
+  });
 }
