@@ -1,17 +1,31 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
 import '../../data/listen_together_store.dart';
 import '../../player/player_controller.dart';
+import 'desktop_background_work_policy.dart';
+
+typedef ListenTogetherSynchronizationRunner = Future<void> Function(
+  ListenTogetherStore session,
+  LibraryStore library,
+);
 
 /// Keeps an active shared session current while the app is in the foreground.
 class ListenTogetherForegroundSync extends StatefulWidget {
-  const ListenTogetherForegroundSync({super.key, required this.child});
+  ListenTogetherForegroundSync({
+    super.key,
+    required this.child,
+    this.runSynchronization,
+    TargetPlatform? platform,
+  }) : platform = platform ?? defaultTargetPlatform;
 
   final Widget child;
+  final ListenTogetherSynchronizationRunner? runSynchronization;
+  final TargetPlatform platform;
 
   @override
   State<ListenTogetherForegroundSync> createState() =>
@@ -38,7 +52,11 @@ class _ListenTogetherForegroundSyncState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed ||
+        shouldKeepBackgroundWorkInDesktopProcess(
+          platform: widget.platform,
+          state: state,
+        )) {
       _synchronize();
     }
   }
@@ -54,6 +72,11 @@ class _ListenTogetherForegroundSyncState
     final library = context.read<LibraryStore>();
     final player = context.read<PlayerController>();
     if (!library.loaded || library.offlineModeEnabled) {
+      return;
+    }
+    final runSynchronization = widget.runSynchronization;
+    if (runSynchronization != null) {
+      unawaited(_ignoreErrors(runSynchronization(session, library)));
       return;
     }
     if (session.hosting) {
