@@ -1941,7 +1941,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-    if (!mounted || approved != true) {
+    if (!context.mounted || approved != true) {
       return;
     }
 
@@ -1964,7 +1964,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       applied += 1;
     }
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
     final summary = <String>[
