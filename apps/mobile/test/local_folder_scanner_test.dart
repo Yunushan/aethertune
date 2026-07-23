@@ -129,6 +129,58 @@ void main() {
     },
   );
 
+  test('reports exact selected-file progress from the background isolate',
+      () async {
+    final firstPath = p.join(root.path, 'First.mp3');
+    final secondPath = p.join(root.path, 'Second.flac');
+    await File(firstPath).writeAsBytes(<int>[1, 2, 3]);
+    await File(secondPath).writeAsBytes(<int>[4, 5, 6]);
+
+    final updates = <LocalFolderScanProgress>[];
+    await scanLocalFilesInBackground(
+      <String>[firstPath, secondPath, firstPath],
+      onProgress: updates.add,
+    );
+
+    expect(
+      updates.map((update) => <Object?>[
+            update.phase,
+            update.completed,
+            update.total,
+          ]),
+      <List<Object?>>[
+        <Object?>[LocalFolderScanPhase.scanning, 0, 2],
+        <Object?>[LocalFolderScanPhase.scanning, 1, 2],
+        <Object?>[LocalFolderScanPhase.scanning, 2, 2],
+      ],
+    );
+  });
+
+  test('reports folder discovery before determinate file scanning', () async {
+    final nested = Directory(p.join(root.path, 'Nested'));
+    await nested.create();
+    await File(p.join(root.path, 'First.mp3')).writeAsBytes(<int>[1]);
+    await File(p.join(nested.path, 'Second.ogg')).writeAsBytes(<int>[2]);
+
+    final updates = <LocalFolderScanProgress>[];
+    await const LocalFolderScanner().scan(root.path, onProgress: updates.add);
+
+    expect(
+      updates.where((update) => update.phase == LocalFolderScanPhase.discovering)
+          .map((update) => update.completed),
+      <int>[1, 2],
+    );
+    expect(
+      updates.where((update) => update.phase == LocalFolderScanPhase.scanning)
+          .map((update) => <int>[update.completed, update.total!]),
+      <List<int>>[
+        <int>[0, 2],
+        <int>[1, 2],
+        <int>[2, 2],
+      ],
+    );
+  });
+
   test('associates matching LRC sidecar lyrics during folder scans', () async {
     final audioPath = p.join(root.path, 'Sidecar Artist - Sidecar Title.MP3');
     await File(audioPath).writeAsBytes(<int>[1, 2, 3]);

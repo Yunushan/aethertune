@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -51,6 +52,27 @@ final class LocalFolderScanResult {
   int get sidecarChaptersCount => sidecarChaptersByTrackId.length;
 }
 
+enum LocalFolderScanPhase { discovering, scanning }
+
+/// A truthful local-library import update. Folder scans discover candidates
+/// before scanning them, while an explicit file selection is ready to scan at
+/// once.
+final class LocalFolderScanProgress {
+  const LocalFolderScanProgress({
+    required this.phase,
+    required this.completed,
+    this.total,
+  });
+
+  final LocalFolderScanPhase phase;
+  final int completed;
+  final int? total;
+}
+
+typedef LocalFolderScanProgressListener = void Function(
+  LocalFolderScanProgress progress,
+);
+
 final class _LocalFileMetadata {
   const _LocalFileMetadata({
     required this.title,
@@ -102,9 +124,12 @@ final class _ScannedLocalTrack {
 Future<LocalFolderScanResult> scanLocalFolderInBackground(
   String rootPath, {
   DateTime? importedAt,
+  LocalFolderScanProgressListener? onProgress,
 }) {
-  return Isolate.run(
-    () => const LocalFolderScanner().scan(rootPath, importedAt: importedAt),
+  return _scanInBackground(
+    rootPath: rootPath,
+    importedAt: importedAt,
+    onProgress: onProgress,
   );
 }
 
@@ -113,14 +138,130 @@ Future<LocalFolderScanResult> scanLocalFolderInBackground(
 Future<LocalFolderScanResult> scanLocalFilesInBackground(
   Iterable<String> filePaths, {
   DateTime? importedAt,
+  LocalFolderScanProgressListener? onProgress,
 }) {
-  final selectedPaths = List<String>.unmodifiable(filePaths);
-  return Isolate.run(
-    () => const LocalFolderScanner().scanFiles(
-      selectedPaths,
-      importedAt: importedAt,
-    ),
+  return _scanInBackground(
+    filePaths: List<String>.unmodifiable(filePaths),
+    importedAt: importedAt,
+    onProgress: onProgress,
   );
+}
+
+Future<LocalFolderScanResult> _scanInBackground({
+  String? rootPath,
+  List<String>? filePaths,
+  DateTime? importedAt,
+  LocalFolderScanProgressListener? onProgress,
+}) async {
+  final responses = ReceivePort();
+  final isolateErrors = ReceivePort();
+  final completion = Completer<LocalFolderScanResult>();
+  late final StreamSubscription<dynamic> responseSubscription;
+  late final StreamSubscription<dynamic> errorSubscription;
+
+  responseSubscription = responses.listen((message) {
+    if (message is! Map) {
+      return;
+    }
+    switch (message['type']) {
+      case 'progress':
+        final phase = message['phase'] == 'discovering'
+            ? LocalFolderScanPhase.discovering
+            : LocalFolderScanPhase.scanning;
+        onProgress?.call(
+          LocalFolderScanProgress(
+            phase: phase,
+            completed: message['completed']! as int,
+            total: message['total'] as int?,
+          ),
+        );
+        return;
+      case 'result':
+        if (!completion.isCompleted) {
+          completion.complete(message['result']! as LocalFolderScanResult);
+        }
+        return;
+      case 'error':
+        if (!completion.isCompleted) {
+          completion.completeError(
+            StateError(message['error']! as String),
+            StackTrace.fromString(message['stack']! as String),
+          );
+        }
+        return;
+    }
+  });
+  errorSubscription = isolateErrors.listen((message) {
+    if (completion.isCompleted) {
+      return;
+    }
+    if (message is List<dynamic> && message.length >= 2) {
+      completion.completeError(
+        StateError(message.first.toString()),
+        StackTrace.fromString(message[1].toString()),
+      );
+      return;
+    }
+    completion.completeError(StateError(message.toString()));
+  });
+
+  Isolate? isolate;
+  try {
+    isolate = await Isolate.spawn<Map<String, Object?>>(
+      _runLocalScanInBackground,
+      <String, Object?>{
+        'replyTo': responses.sendPort,
+        'rootPath': rootPath,
+        'filePaths': filePaths,
+        'importedAt': importedAt,
+      },
+      onError: isolateErrors.sendPort,
+      errorsAreFatal: true,
+    );
+    return await completion.future;
+  } finally {
+    isolate?.kill(priority: Isolate.immediate);
+    await responseSubscription.cancel();
+    await errorSubscription.cancel();
+    responses.close();
+    isolateErrors.close();
+  }
+}
+
+Future<void> _runLocalScanInBackground(Map<String, Object?> request) async {
+  final replyTo = request['replyTo']! as SendPort;
+  final reportProgress = (LocalFolderScanProgress progress) {
+    replyTo.send(<String, Object?>{
+      'type': 'progress',
+      'phase': progress.phase.name,
+      'completed': progress.completed,
+      'total': progress.total,
+    });
+  };
+
+  try {
+    final importedAt = request['importedAt'] as DateTime?;
+    final rootPath = request['rootPath'] as String?;
+    final filePaths = request['filePaths'] as List<String>?;
+    final result = rootPath != null
+        ? await const LocalFolderScanner().scan(
+            rootPath,
+            importedAt: importedAt,
+            onProgress: reportProgress,
+          )
+        : await const LocalFolderScanner().scanFiles(
+            filePaths ?? const <String>[],
+            importedAt: importedAt,
+            onProgress: reportProgress,
+          );
+    replyTo.send(<String, Object?>{'type': 'result', 'result': result});
+  } on Object catch (error, stackTrace) {
+    replyTo.send(<String, Object?>{
+      'type': 'error',
+      'error': error.toString(),
+      'stack': stackTrace.toString(),
+    });
+  }
 }
 
 final class LocalFolderScanner {
@@ -133,6 +274,7 @@ final class LocalFolderScanner {
   Future<LocalFolderScanResult> scan(
     String rootPath, {
     DateTime? importedAt,
+    LocalFolderScanProgressListener? onProgress,
   }) async {
     final root = Directory(rootPath);
     if (!await root.exists()) {
@@ -143,8 +285,10 @@ final class LocalFolderScanner {
       rootPath: root.path,
       importedAt: importedAt ?? DateTime.now(),
       supportedExtensions: supportedExtensions,
+      onProgress: onProgress,
     );
-    await scanState.visit(root);
+    await scanState.discover(root);
+    await scanState.scanDiscoveredFiles();
 
     return scanState.toResult();
   }
@@ -152,11 +296,13 @@ final class LocalFolderScanner {
   Future<LocalFolderScanResult> scanFiles(
     Iterable<String> filePaths, {
     DateTime? importedAt,
+    LocalFolderScanProgressListener? onProgress,
   }) async {
     final scanState = _LocalFolderScanState(
       rootPath: '',
       importedAt: importedAt ?? DateTime.now(),
       supportedExtensions: supportedExtensions,
+      onProgress: onProgress,
     );
     final seenPaths = <String>{};
 
@@ -165,8 +311,9 @@ final class LocalFolderScanner {
       if (!seenPaths.add(normalizedPath.toLowerCase())) {
         continue;
       }
-      await scanState.scanFile(normalizedPath);
+      scanState.selectedPaths.add(normalizedPath);
     }
+    await scanState.scanSelectedFiles();
     await scanState.scanCueSidecarsForSelectedFiles();
 
     return scanState.toResult();
@@ -178,12 +325,17 @@ final class _LocalFolderScanState {
     required this.rootPath,
     required this.importedAt,
     required this.supportedExtensions,
+    this.onProgress,
   });
 
   final String rootPath;
   final DateTime importedAt;
   final Set<String> supportedExtensions;
+  final LocalFolderScanProgressListener? onProgress;
   final List<Track> tracks = <Track>[];
+  final List<String> discoveredPaths = <String>[];
+  final List<String> selectedPaths = <String>[];
+  final List<String> cuePaths = <String>[];
   final Map<String, String> sidecarLyricsByTrackId = <String, String>{};
   final Map<String, String> embeddedLyricsByTrackId = <String, String>{};
   final Map<String, List<TrackChapter>> sidecarChaptersByTrackId =
@@ -202,7 +354,7 @@ final class _LocalFolderScanState {
     );
   }
 
-  Future<void> visit(Directory directory) async {
+  Future<void> discover(Directory directory) async {
     final entries = await _listDirectory(directory);
     if (entries == null) {
       inaccessibleDirectoryCount += 1;
@@ -222,7 +374,7 @@ final class _LocalFolderScanState {
         continue;
       }
       if (entityType == FileSystemEntityType.directory) {
-        await visit(Directory(entry.path));
+        await discover(Directory(entry.path));
         continue;
       }
       if (entityType != FileSystemEntityType.file) {
@@ -240,7 +392,16 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      await scanFile(entry.path);
+      discoveredPaths.add(entry.path);
+      _reportDiscovering();
+    }
+  }
+
+  Future<void> scanDiscoveredFiles() async {
+    _reportScanning(0, discoveredPaths.length);
+    for (var index = 0; index < discoveredPaths.length; index += 1) {
+      await scanFile(discoveredPaths[index]);
+      _reportScanning(index + 1, discoveredPaths.length);
     }
 
     for (final cuePath in cuePaths) {
@@ -249,6 +410,33 @@ final class _LocalFolderScanState {
         sidecarChaptersByTrackId.putIfAbsent(entry.key, () => entry.value);
       }
     }
+  }
+
+  Future<void> scanSelectedFiles() async {
+    _reportScanning(0, selectedPaths.length);
+    for (var index = 0; index < selectedPaths.length; index += 1) {
+      await scanFile(selectedPaths[index]);
+      _reportScanning(index + 1, selectedPaths.length);
+    }
+  }
+
+  void _reportDiscovering() {
+    onProgress?.call(
+      LocalFolderScanProgress(
+        phase: LocalFolderScanPhase.discovering,
+        completed: discoveredPaths.length,
+      ),
+    );
+  }
+
+  void _reportScanning(int completed, int total) {
+    onProgress?.call(
+      LocalFolderScanProgress(
+        phase: LocalFolderScanPhase.scanning,
+        completed: completed,
+        total: total,
+      ),
+    );
   }
 
   Future<void> scanFile(String path) async {

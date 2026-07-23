@@ -1801,24 +1801,28 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    final progress = _showLocalImportProgress(
+      messenger,
+      scanningSelectedAudio,
+    );
     try {
-      _showLocalImportProgress(
-        messenger,
-        scanningSelectedAudio,
-      );
       final scanResult = await scanLocalFilesInBackground(
         filePaths,
         importedAt: DateTime.now(),
+        onProgress: progress.update,
       );
       await _addScannedTracksToLibrary(library, scanResult);
 
       if (!context.mounted) {
+        progress.dismiss();
         return;
       }
+      progress.dismiss();
       messenger.showSnackBar(
         SnackBar(content: Text(_selectedFilesImportSummary(scanResult))),
       );
     } on Object catch (error) {
+      progress.dismiss();
       if (!context.mounted) {
         return;
       }
@@ -1846,26 +1850,30 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    final progress = _showLocalImportProgress(
+      messenger,
+      AppLocalizations.of(context)!.scanningAudioFolder,
+    );
     try {
-      _showLocalImportProgress(
-        messenger,
-        AppLocalizations.of(context)!.scanningAudioFolder,
-      );
       final scanResult = await scanLocalFolderInBackground(
         folderPath,
         importedAt: DateTime.now(),
+        onProgress: progress.update,
       );
       await _addScannedTracksToLibrary(library, scanResult);
       await library.watchLocalFolder(folderPath);
 
       if (!context.mounted) {
+        progress.dismiss();
         return;
       }
 
+      progress.dismiss();
       messenger.showSnackBar(
         SnackBar(content: Text(_folderImportSummary(scanResult))),
       );
     } on Object catch (error) {
+      progress.dismiss();
       if (!context.mounted) {
         return;
       }
@@ -1940,14 +1948,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     setState(() => _isRefreshingLocalMetadata = true);
+    final progress = _showLocalImportProgress(
+      messenger,
+      'Refreshing local audio metadata...',
+    );
     try {
-      _showLocalImportProgress(
-        messenger,
-        'Refreshing local audio metadata...',
-      );
       final scanResult = await scanLocalFilesInBackground(
         localFilePaths,
         importedAt: DateTime.now(),
+        onProgress: progress.update,
       );
       await library.reconcileLocalTracks(
         scanResult.tracks,
@@ -1957,8 +1966,10 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (!mounted) {
+        progress.dismiss();
         return;
       }
+      progress.dismiss();
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -1969,6 +1980,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } on Object catch (error) {
+      progress.dismiss();
       if (!mounted) {
         return;
       }
@@ -14571,27 +14583,75 @@ String _folderImportSummary(LocalFolderScanResult result) {
   return details.join(' ');
 }
 
-void _showLocalImportProgress(
+_LocalImportProgressHandle _showLocalImportProgress(
   ScaffoldMessengerState messenger,
   String message,
 ) {
-  messenger.hideCurrentSnackBar();
+  final progress = ValueNotifier<LocalFolderScanProgress>(
+    const LocalFolderScanProgress(
+      phase: LocalFolderScanPhase.discovering,
+      completed: 0,
+    ),
+  );
+  messenger.removeCurrentSnackBar();
   messenger.showSnackBar(
     SnackBar(
       duration: const Duration(days: 1),
-      content: Row(
-        children: <Widget>[
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(message)),
-        ],
+      content: ValueListenableBuilder<LocalFolderScanProgress>(
+        valueListenable: progress,
+        builder: (context, value, child) {
+          final total = value.total;
+          final isDiscovering = value.phase == LocalFolderScanPhase.discovering;
+          final label = isDiscovering
+              ? '$message Finding audio files (${value.completed} found).'
+              : '$message ${value.completed} of $total files.';
+          final indicatorValue = isDiscovering || total == null || total == 0
+              ? null
+              : value.completed / total;
+          return Row(
+            children: <Widget>[
+              SizedBox(
+                width: 48,
+                child: LinearProgressIndicator(value: indicatorValue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(label)),
+            ],
+          );
+        },
       ),
     ),
   );
+  return _LocalImportProgressHandle(
+    progress: progress,
+    onDismiss: () => messenger.removeCurrentSnackBar(),
+  );
+}
+
+final class _LocalImportProgressHandle {
+  _LocalImportProgressHandle({
+    required this.progress,
+    required this.onDismiss,
+  });
+
+  final ValueNotifier<LocalFolderScanProgress> progress;
+  final VoidCallback onDismiss;
+  var _dismissed = false;
+
+  void update(LocalFolderScanProgress value) {
+    if (!_dismissed) {
+      progress.value = value;
+    }
+  }
+
+  void dismiss() {
+    if (_dismissed) {
+      return;
+    }
+    _dismissed = true;
+    onDismiss();
+    progress.dispose();
+  }
 }
 
 String _selectedFilesImportSummary(LocalFolderScanResult result) {
