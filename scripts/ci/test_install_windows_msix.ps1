@@ -51,18 +51,22 @@ try {
   )
   & $packageScript -BundlePath $bundle -OutputPath $packagePath -Version '0.1.0+1'
 
+  Write-Host 'Creating temporary MSIX signing certificate.'
   $certificate = New-SelfSignedCertificate `
     -Type Custom `
     -Subject 'CN=AetherTune' `
     -KeyUsage DigitalSignature `
+    -KeyExportPolicy Exportable `
     -CertStoreLocation 'Cert:\CurrentUser\My' `
     -TextExtension @(
       '2.5.29.19={text}ca=false',
       '2.5.29.37={text}1.3.6.1.5.5.7.3.3'
     )
   $password = ConvertTo-SecureString 'aethertune-ci-only' -AsPlainText -Force
+  Write-Host 'Exporting temporary MSIX signing certificate.'
   Export-Certificate -Cert $certificate -FilePath $certificatePath | Out-Null
   Export-PfxCertificate -Cert $certificate -FilePath $pfxPath -Password $password | Out-Null
+  Write-Host 'Adding temporary MSIX certificate trust.'
   Import-Certificate `
     -FilePath $certificatePath `
     -CertStoreLocation 'Cert:\CurrentUser\TrustedPeople' | Out-Null
@@ -74,6 +78,7 @@ try {
     -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
   $machineTrustInstalled = $true
 
+  Write-Host 'Signing temporary MSIX package.'
   $signTool = Find-SignTool
   & $signTool sign /fd SHA256 /f $pfxPath /p 'aethertune-ci-only' $packagePath
   if ($LASTEXITCODE -ne 0) {
@@ -84,7 +89,9 @@ try {
     throw "SignTool.exe verification failed with exit code $LASTEXITCODE."
   }
 
+  Write-Host 'Installing temporary signed MSIX package.'
   Add-AppxPackage -Path $packagePath
+  Write-Host 'Verifying installed MSIX package payload.'
   $installedPackage = Get-AppxPackage -Name AetherTune |
     Sort-Object Version -Descending |
     Select-Object -First 1
@@ -97,6 +104,7 @@ try {
     throw 'The installed AetherTune MSIX is missing the Flutter asset manifest.'
   }
 } finally {
+  Write-Host 'Cleaning up temporary MSIX install test state.'
   if ($null -ne $installedPackage) {
     Remove-AppxPackage -Package $installedPackage.PackageFullName `
       -ErrorAction SilentlyContinue

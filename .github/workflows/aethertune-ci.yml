@@ -193,6 +193,7 @@ jobs:
       - name: Test Windows ZIP packaging
         if: matrix.target == 'windows'
         shell: pwsh
+        timeout-minutes: 8
         run: |
           ./scripts/ci/test_package_windows_zip.ps1
           ./scripts/ci/test_package_windows_msix.ps1
