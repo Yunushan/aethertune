@@ -126,4 +126,21 @@ void main() {
     expect(fileUri!.isScheme('file'), isTrue);
     expect(streamUri, Uri.parse('https://stream.example.test/audio.mp3'));
   });
+
+  test('preserves granted Android content URIs for local playback', () async {
+    const provider = LocalLibraryProvider();
+    final contentUri = Uri.parse(
+      'content://com.android.providers.media.documents/document/audio%3A42',
+    );
+
+    final resolved = await provider.resolveStream(
+      Track(
+        id: 'saf-local',
+        title: 'SAF Local',
+        localPath: contentUri.toString(),
+      ),
+    );
+
+    expect(resolved, contentUri);
+  });
 }

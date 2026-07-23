@@ -2069,6 +2069,36 @@ void main() {
     );
   });
 
+  test('preserves Android content URIs when exporting XSPF playlists',
+      () async {
+    final store = LibraryStore(
+      clock: () => DateTime.utc(2026, 1, 4, 2, 46),
+    );
+    await store.load();
+    const contentUri =
+        'content://com.android.providers.media.documents/document/audio%3A42';
+    await store.addTracks(<Track>[
+      Track(
+        id: 'saf-track',
+        title: 'SAF track',
+        localPath: contentUri,
+        sourceId: 'local',
+      ),
+    ]);
+    final playlist = await store.createPlaylist(
+      'SAF XSPF',
+      trackIds: <String>['saf-track'],
+    );
+
+    final document = store.exportPlaylistDocument(
+      playlist.id,
+      format: PlaylistDocumentFormat.xspf,
+    );
+
+    expect(document, contains(contentUri));
+    expect(document, isNot(contains('file:///content%3A')));
+  });
+
   test('exports and imports Windows Media Player WPL playlists', () async {
     final store = LibraryStore(
       clock: () => DateTime.utc(2026, 1, 4, 2, 50),

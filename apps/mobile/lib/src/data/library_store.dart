@@ -23,6 +23,7 @@ import '../domain/track_bookmark.dart';
 import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 import '../domain/track_skip_segment.dart';
+import 'local_media_uri.dart';
 import 'sponsorblock_segment_provider.dart' as sponsor_block;
 
 enum LibrarySortMode { recentlyAdded, title, artist, album, rating }
@@ -7997,7 +7998,7 @@ class LibraryStore extends ChangeNotifier {
   String _xspfTrackLocation(Track track) {
     final localPath = track.localPath?.trim();
     if (localPath != null && localPath.isNotEmpty) {
-      return Uri.file(localPath).toString();
+      return localMediaUri(localPath).toString();
     }
     final streamUrl = track.streamUrl?.trim();
     if (streamUrl != null && streamUrl.isNotEmpty) {

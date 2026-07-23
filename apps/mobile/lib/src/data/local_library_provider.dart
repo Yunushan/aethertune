@@ -1,6 +1,7 @@
 import '../domain/music_source_provider.dart';
 import '../domain/search_matcher.dart';
 import '../domain/track.dart';
+import 'local_media_uri.dart';
 
 typedef LocalLibraryTrackSearch = List<Track> Function(String query);
 
@@ -86,7 +87,7 @@ class LocalLibraryProvider implements MusicSourceSearchPagingProvider {
 
     final localPath = track.localPath;
     if (localPath != null && localPath.trim().isNotEmpty) {
-      return Uri.file(localPath);
+      return localMediaUri(localPath);
     }
 
     return null;
