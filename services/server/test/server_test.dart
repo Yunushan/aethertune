@@ -447,6 +447,71 @@ void main() {
       expect((await _json(downloaded))['snapshot'], providerSnapshot);
     });
 
+    test('accepts a credential-free HTTPS lyrics search endpoint', () async {
+      final providerStore = MemoryLibrarySyncSnapshotStore();
+      final handler = createServerHandler(
+        syncAuthenticator: authenticator,
+        syncStore: store,
+        providerConfigurationStore: providerStore,
+      );
+      final providerSnapshot = <String, Object?>{
+        'format': 'aethertune.provider_configurations',
+        'version': 1,
+        'lyricsSearchEndpoint': <String, Object?>{
+          'format': 'aethertune.lyrics_search_endpoint',
+          'version': 1,
+          'endpoint': 'https://lyrics.example.test/api',
+        },
+      };
+
+      final uploaded = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/providers',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'desktop',
+            'snapshot': providerSnapshot,
+          },
+        ),
+      );
+
+      expect(uploaded.statusCode, 200);
+    });
+
+    test('rejects insecure or credential-bearing lyrics search endpoints',
+        () async {
+      final providerStore = MemoryLibrarySyncSnapshotStore();
+      final handler = createServerHandler(
+        syncAuthenticator: authenticator,
+        syncStore: store,
+        providerConfigurationStore: providerStore,
+      );
+      final response = await handler(
+        _request(
+          'PUT',
+          '/api/v1/sync/providers',
+          token: token,
+          jsonBody: <String, Object?>{
+            'baseRevision': 0,
+            'deviceId': 'desktop',
+            'snapshot': <String, Object?>{
+              'format': 'aethertune.provider_configurations',
+              'version': 1,
+              'lyricsSearchEndpoint': <String, Object?>{
+                'format': 'aethertune.lyrics_search_endpoint',
+                'version': 1,
+                'endpoint': 'https://person:secret@lyrics.example.test/api',
+              },
+            },
+          },
+        ),
+      );
+
+      expect(response.statusCode, 400);
+    });
+
     test('rejects insecure or credential-bearing self-hosted accounts',
         () async {
       final providerStore = MemoryLibrarySyncSnapshotStore();

@@ -987,6 +987,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 isRefreshingLocalMetadata: _isRefreshingLocalMetadata,
                 onRefreshLocalMetadata: _refreshLocalLibraryMetadata,
                 onClearLyricsSearchCache: () => _clearLyricsSearchCache(context),
+                onUploadLyricsSearchEndpointToSync: () =>
+                    _uploadLyricsSearchEndpointToSync(context),
+                onImportLyricsSearchEndpointFromSync: () =>
+                    _importLyricsSearchEndpointFromSync(context),
                 lyricsSearchCacheLifetime: _lyricsSearchCacheLifetime,
                 onLyricsSearchCacheLifetimeChanged: (retention) {
                   unawaited(_setLyricsSearchCacheLifetime(context, retention));
@@ -16970,13 +16974,109 @@ class _SourcesTabState extends State<_SourcesTab> {
       'version',
       'customCatalogs',
       'selfHostedAccounts',
+      'lyricsSearchEndpoint',
     };
     if (snapshot.keys.any((key) => !allowedKeys.contains(key)) ||
         snapshot['format'] != 'aethertune.provider_configurations' ||
         snapshot['version'] != 1 ||
         (snapshot['customCatalogs'] == null &&
-            snapshot['selfHostedAccounts'] == null)) {
+            snapshot['selfHostedAccounts'] == null &&
+            snapshot['lyricsSearchEndpoint'] == null)) {
       throw const FormatException('Remote provider configuration is invalid.');
+    }
+  }
+
+  Future<void> _uploadLyricsSearchEndpointToSync(
+    BuildContext context,
+  ) async {
+    final endpointSettings = context.read<LyricsSearchEndpointSettingsStore>();
+    if (!endpointSettings.isConfigured) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final document = endpointSettings.exportConfiguration();
+      final remote = await context
+          .read<LibrarySyncStore>()
+          .updateProviderConfiguration(
+            context.read<LibraryStore>(),
+            (remoteSnapshot) => _providerConfigurationWithSection(
+              remoteSnapshot,
+              section: 'lyricsSearchEndpoint',
+              document: document,
+            ),
+          );
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Lyrics search service uploaded at provider revision ${remote.revision}.',
+            ),
+          ),
+        );
+      }
+    } on LibrarySyncConflictException {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Provider settings changed remotely. Import them before uploading again.'),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not upload lyrics search service: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _importLyricsSearchEndpointFromSync(
+    BuildContext context,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final remote = await context
+          .read<LibrarySyncStore>()
+          .fetchProviderConfiguration(context.read<LibraryStore>());
+      final snapshot = remote.snapshot;
+      if (snapshot == null) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('No provider configuration is stored on this sync server.')),
+          );
+        }
+        return;
+      }
+      _validateProviderConfigurationRoot(snapshot);
+      final document = snapshot['lyricsSearchEndpoint'];
+      if (document is! Map) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('No lyrics search service is stored on this sync server.')),
+          );
+        }
+        return;
+      }
+      await context
+          .read<LyricsSearchEndpointSettingsStore>()
+          .importConfiguration(Map<String, Object?>.from(document));
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Lyrics search service imported from provider revision ${remote.revision}.',
+            ),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not import lyrics search service: $error')),
+        );
+      }
     }
   }
 
@@ -20028,6 +20128,8 @@ class _SettingsTab extends StatelessWidget {
     required this.isRefreshingLocalMetadata,
     this.onRefreshLocalMetadata,
     this.onClearLyricsSearchCache,
+    this.onUploadLyricsSearchEndpointToSync,
+    this.onImportLyricsSearchEndpointFromSync,
     required this.lyricsSearchCacheLifetime,
     this.onLyricsSearchCacheLifetimeChanged,
   });
@@ -20036,6 +20138,8 @@ class _SettingsTab extends StatelessWidget {
   final bool isRefreshingLocalMetadata;
   final Future<void> Function()? onRefreshLocalMetadata;
   final Future<void> Function()? onClearLyricsSearchCache;
+  final Future<void> Function()? onUploadLyricsSearchEndpointToSync;
+  final Future<void> Function()? onImportLyricsSearchEndpointFromSync;
   final Duration lyricsSearchCacheLifetime;
   final ValueChanged<Duration>? onLyricsSearchCacheLifetimeChanged;
 
@@ -20053,6 +20157,7 @@ class _SettingsTab extends StatelessWidget {
         context.watch<LyricsTranslationSettingsStore?>();
     final lyricsSearchEndpoint =
         context.watch<LyricsSearchEndpointSettingsStore?>();
+    final librarySync = context.watch<LibrarySyncStore?>();
     final listenBrainz = context.watch<ListenBrainzScrobblingStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
     final offlineQueue = library.offlineCacheQueue;
@@ -20359,6 +20464,37 @@ class _SettingsTab extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline),
                   )
                 : const Icon(Icons.chevron_right),
+          ),
+        if (lyricsSearchEndpoint?.isConfigured == true &&
+            librarySync?.isConfigured == true)
+          ListTile(
+            key: const Key('upload-lyrics-search-endpoint-to-sync'),
+            leading: const Icon(Icons.cloud_upload_outlined),
+            title: const Text('Upload lyrics search service'),
+            subtitle: const Text(
+              'Sends only the HTTPS endpoint to your sync server; cached lyrics stay local.',
+            ),
+            enabled: !library.offlineModeEnabled &&
+                onUploadLyricsSearchEndpointToSync != null,
+            onTap: !library.offlineModeEnabled &&
+                    onUploadLyricsSearchEndpointToSync != null
+                ? () => unawaited(onUploadLyricsSearchEndpointToSync!())
+                : null,
+          ),
+        if (librarySync?.isConfigured == true)
+          ListTile(
+            key: const Key('import-lyrics-search-endpoint-from-sync'),
+            leading: const Icon(Icons.cloud_download_outlined),
+            title: const Text('Import lyrics search service'),
+            subtitle: const Text(
+              'Replaces this device\'s configured service; no credentials are transferred.',
+            ),
+            enabled: !library.offlineModeEnabled &&
+                onImportLyricsSearchEndpointFromSync != null,
+            onTap: !library.offlineModeEnabled &&
+                    onImportLyricsSearchEndpointFromSync != null
+                ? () => unawaited(onImportLyricsSearchEndpointFromSync!())
+                : null,
           ),
         if (listenBrainz != null)
           ListTile(

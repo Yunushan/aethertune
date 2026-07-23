@@ -2040,12 +2040,14 @@ void _validateProviderConfigurationSnapshot(Map<String, Object?> snapshot) {
     'version',
     'customCatalogs',
     'selfHostedAccounts',
+    'lyricsSearchEndpoint',
   };
   if (snapshot.keys.any((key) => !allowedRootKeys.contains(key)) ||
       snapshot['format'] != 'aethertune.provider_configurations' ||
       snapshot['version'] != 1 ||
       (snapshot['customCatalogs'] == null &&
-          snapshot['selfHostedAccounts'] == null)) {
+          snapshot['selfHostedAccounts'] == null &&
+          snapshot['lyricsSearchEndpoint'] == null)) {
     throw const FormatException('Provider configuration is invalid.');
   }
   final rawCatalogDocument = snapshot['customCatalogs'];
@@ -2065,6 +2067,38 @@ void _validateProviderConfigurationSnapshot(Map<String, Object?> snapshot) {
         'Self-hosted account configuration is invalid.',
       )),
     );
+  }
+  final rawLyricsSearchEndpoint = snapshot['lyricsSearchEndpoint'];
+  if (rawLyricsSearchEndpoint != null) {
+    _validateLyricsSearchEndpointConfiguration(
+      Map<String, Object?>.from(_requireMap(
+        rawLyricsSearchEndpoint,
+        'Lyrics search endpoint configuration is invalid.',
+      )),
+    );
+  }
+}
+
+void _validateLyricsSearchEndpointConfiguration(Map<String, Object?> document) {
+  const allowedDocumentKeys = <String>{'format', 'version', 'endpoint'};
+  if (document.keys.any((key) => !allowedDocumentKeys.contains(key)) ||
+      document['format'] != 'aethertune.lyrics_search_endpoint' ||
+      document['version'] != 1) {
+    throw const FormatException('Lyrics search endpoint configuration is invalid.');
+  }
+  final endpoint = document['endpoint'];
+  if (endpoint is! String || endpoint.length > 2048) {
+    throw const FormatException('Lyrics search endpoint configuration is invalid.');
+  }
+  final uri = Uri.tryParse(endpoint);
+  if (uri == null ||
+      uri.scheme.toLowerCase() != 'https' ||
+      !uri.hasAuthority ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    throw const FormatException('Lyrics search endpoint URL is invalid.');
   }
 }
 

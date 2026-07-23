@@ -8,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// over cleartext transport.
 final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
   static const _endpointKey = 'aethertune.lyrics_search.endpoint.v1';
+  static const configurationDocumentFormat =
+      'aethertune.lyrics_search_endpoint';
+  static const configurationDocumentVersion = 1;
 
   Uri? _endpoint;
   bool _loaded = false;
@@ -17,6 +20,21 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
   String? get loadError => _loadError;
   Uri? get endpoint => _endpoint;
   bool get isConfigured => _endpoint != null;
+
+  /// Produces the portable section used by authenticated provider sync.
+  /// The endpoint is credential-free by construction and no cached searches
+  /// are included.
+  Map<String, Object?> exportConfiguration() {
+    final endpoint = _endpoint;
+    if (endpoint == null) {
+      throw StateError('Configure a lyrics search service before uploading it.');
+    }
+    return <String, Object?>{
+      'format': configurationDocumentFormat,
+      'version': configurationDocumentVersion,
+      'endpoint': endpoint.toString(),
+    };
+  }
 
   Future<void> load() async {
     if (_loaded) {
@@ -52,6 +70,18 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
     _endpoint = null;
     _loadError = null;
     notifyListeners();
+  }
+
+  /// Replaces this device's configured service with a validated synced value.
+  Future<void> importConfiguration(Map<String, Object?> document) async {
+    const allowedKeys = <String>{'format', 'version', 'endpoint'};
+    if (document.keys.any((key) => !allowedKeys.contains(key)) ||
+        document['format'] != configurationDocumentFormat ||
+        document['version'] != configurationDocumentVersion ||
+        document['endpoint'] is! String) {
+      throw const FormatException('Lyrics search endpoint configuration is invalid.');
+    }
+    await save(document['endpoint'] as String);
   }
 }
 

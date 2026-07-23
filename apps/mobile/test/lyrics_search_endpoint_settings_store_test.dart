@@ -45,4 +45,32 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('exports and imports only the validated endpoint configuration',
+      () async {
+    final source = LyricsSearchEndpointSettingsStore();
+    await source.load();
+    await source.save('https://lyrics.example.test/api');
+
+    final document = source.exportConfiguration();
+    expect(document, <String, Object?>{
+      'format': 'aethertune.lyrics_search_endpoint',
+      'version': 1,
+      'endpoint': 'https://lyrics.example.test/api',
+    });
+
+    final target = LyricsSearchEndpointSettingsStore();
+    await target.load();
+    await target.importConfiguration(document);
+    expect(target.endpoint, source.endpoint);
+
+    await expectLater(
+      target.importConfiguration(<String, Object?>{
+        'format': 'aethertune.lyrics_search_endpoint',
+        'version': 1,
+        'endpoint': 'http://lyrics.example.test',
+      }),
+      throwsFormatException,
+    );
+  });
 }

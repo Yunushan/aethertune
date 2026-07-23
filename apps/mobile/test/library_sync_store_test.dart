@@ -622,6 +622,11 @@ void main() {
         'version': 1,
         'catalogs': <Object?>[],
       },
+      'lyricsSearchEndpoint': <String, Object?>{
+        'format': 'aethertune.lyrics_search_endpoint',
+        'version': 1,
+        'endpoint': 'https://lyrics.example.test',
+      },
     };
     final gateway = _FakeSyncGateway(
       remote: const LibrarySyncRemoteSnapshot(revision: 0),
@@ -659,6 +664,10 @@ void main() {
     expect(
       gateway.pushedProviderSnapshots.single['customCatalogs'],
       remoteProviderSnapshot['customCatalogs'],
+    );
+    expect(
+      gateway.pushedProviderSnapshots.single['lyricsSearchEndpoint'],
+      remoteProviderSnapshot['lyricsSearchEndpoint'],
     );
     expect(
       gateway.pushedProviderSnapshots.single['selfHostedAccounts'],
