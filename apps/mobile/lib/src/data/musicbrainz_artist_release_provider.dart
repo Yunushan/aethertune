@@ -3,10 +3,11 @@ import 'dart:io';
 
 import 'musicbrainz_metadata_provider.dart';
 
-/// A bounded, explicit view of dated releases by locally followed artists.
+/// A bounded view of dated releases by locally followed artists.
 ///
 /// This is discovery metadata only. It does not resolve media, create a user
-/// account, or run in the background.
+/// account, or perform autonomous work unless an app surface explicitly
+/// invokes it after the user enables that behavior.
 final class MusicBrainzArtistReleaseProvider {
   MusicBrainzArtistReleaseProvider({
     MusicBrainzResponseLoader? loader,

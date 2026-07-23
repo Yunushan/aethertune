@@ -20485,6 +20485,21 @@ class _SettingsTab extends StatelessWidget {
           ),
         if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
           SwitchListTile(
+            key: const Key('desktop-artist-release-refresh'),
+            secondary: const Icon(Icons.new_releases_outlined),
+            title: const Text('Refresh followed artists in tray'),
+            subtitle: const Text(
+              'While minimized, check MusicBrainz at most daily using up to four followed artist names.',
+            ),
+            value: library.desktopArtistReleaseRefreshEnabled,
+            onChanged: library.offlineModeEnabled
+                ? null
+                : (enabled) => unawaited(
+                    library.setDesktopArtistReleaseRefreshEnabled(enabled),
+                  ),
+          ),
+        if (!kIsWeb && supportsDesktopTray(defaultTargetPlatform))
+          SwitchListTile(
             key: const Key('desktop-tray-action-previous'),
             secondary: const Icon(Icons.skip_previous_outlined),
             title: Text(localizations.desktopTrayPrevious),

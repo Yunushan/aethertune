@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,6 +78,7 @@ void main() {
     await library.addTracks(<Track>[_track('mira')]);
     await library.setArtistFollowed('Mira', true);
     await library.setOfflineModeEnabled(true);
+    await library.setDesktopArtistReleaseRefreshEnabled(true);
     var calls = 0;
     final provider = MusicBrainzArtistReleaseProvider(
       limiter: _instantLimiter(),
@@ -90,7 +92,12 @@ void main() {
       ChangeNotifierProvider<LibraryStore>.value(
         value: library,
         child: MaterialApp(
-          home: Scaffold(body: ArtistReleaseUpdatesShelf(provider: provider)),
+          home: Scaffold(
+            body: ArtistReleaseUpdatesShelf(
+              provider: provider,
+              platform: TargetPlatform.windows,
+            ),
+          ),
         ),
       ),
     );
@@ -104,8 +111,107 @@ void main() {
           .onPressed,
       isNull,
     );
+    await _sendLifecycleState(tester, AppLifecycleState.hidden);
+    await tester.pump();
     expect(calls, 0);
   });
+
+  testWidgets('refreshes opted-in releases when a desktop enters the tray', (
+    tester,
+  ) async {
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[_track('mira')]);
+    await library.setArtistFollowed('Mira', true);
+    await library.setDesktopArtistReleaseRefreshEnabled(true);
+    var calls = 0;
+    final provider = MusicBrainzArtistReleaseProvider(
+      limiter: _instantLimiter(),
+      loader: (uri, _) async {
+        calls += 1;
+        if (uri.path.endsWith('/artist')) {
+          return '{"artists":[{"id":"11111111-1111-1111-1111-111111111111","name":"Mira"}]}';
+        }
+        return '{"release-groups":[]}';
+      },
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<LibraryStore>.value(
+        value: library,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ArtistReleaseUpdatesShelf(
+              provider: provider,
+              platform: TargetPlatform.windows,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(calls, 0);
+    await _sendLifecycleState(tester, AppLifecycleState.hidden);
+    await tester.pumpAndSettle();
+
+    expect(calls, 2);
+    expect(
+      find.text('No dated album, EP, or single updates found'),
+      findsOneWidget,
+    );
+
+    await _sendLifecycleState(tester, AppLifecycleState.hidden);
+    await tester.pump();
+    expect(calls, 2);
+  });
+
+  testWidgets('does not refresh automatically on a mobile lifecycle change', (
+    tester,
+  ) async {
+    final library = LibraryStore();
+    await library.load();
+    await library.addTracks(<Track>[_track('mira')]);
+    await library.setArtistFollowed('Mira', true);
+    await library.setDesktopArtistReleaseRefreshEnabled(true);
+    var calls = 0;
+    final provider = MusicBrainzArtistReleaseProvider(
+      limiter: _instantLimiter(),
+      loader: (_, _) async {
+        calls += 1;
+        return '{}';
+      },
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<LibraryStore>.value(
+        value: library,
+        child: MaterialApp(
+          home: Scaffold(
+            body: ArtistReleaseUpdatesShelf(
+              provider: provider,
+              platform: TargetPlatform.android,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _sendLifecycleState(tester, AppLifecycleState.hidden);
+    await tester.pump();
+
+    expect(calls, 0);
+  });
+}
+
+Future<void> _sendLifecycleState(
+  WidgetTester tester,
+  AppLifecycleState state,
+) async {
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    'flutter/lifecycle',
+    const StringCodec().encodeMessage(state.toString()),
+    (_) {},
+  );
 }
 
 MusicBrainzRequestLimiter _instantLimiter() {

@@ -1408,6 +1408,8 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.desktop_queue_pane_width.v1';
   static const _desktopMinimizeToTrayKey =
       'aethertune.desktop_minimize_to_tray.v1';
+  static const _desktopArtistReleaseRefreshKey =
+      'aethertune.desktop_artist_release_refresh.v1';
   static const _desktopTrayTransportActionsKey =
       'aethertune.desktop_tray_transport_actions.v1';
   static const _desktopDensityPreferenceKey =
@@ -1473,6 +1475,7 @@ class LibraryStore extends ChangeNotifier {
   AppLanguagePreference _languagePreference = AppLanguagePreference.system;
   double _desktopQueuePaneWidth = defaultDesktopQueuePaneWidth;
   bool _desktopMinimizeToTray = false;
+  bool _desktopArtistReleaseRefreshEnabled = false;
   Set<DesktopTrayTransportAction> _desktopTrayTransportActions =
       Set<DesktopTrayTransportAction>.of(defaultDesktopTrayTransportActions);
   DesktopDensityPreference _desktopDensityPreference =
@@ -1570,6 +1573,8 @@ class LibraryStore extends ChangeNotifier {
   AppLanguagePreference get languagePreference => _languagePreference;
   double get desktopQueuePaneWidth => _desktopQueuePaneWidth;
   bool get desktopMinimizeToTray => _desktopMinimizeToTray;
+  bool get desktopArtistReleaseRefreshEnabled =>
+      _desktopArtistReleaseRefreshEnabled;
   Set<DesktopTrayTransportAction> get desktopTrayTransportActions =>
       Set<DesktopTrayTransportAction>.unmodifiable(_desktopTrayTransportActions);
   DesktopDensityPreference get desktopDensityPreference =>
@@ -1857,6 +1862,8 @@ class LibraryStore extends ChangeNotifier {
     );
     _desktopMinimizeToTray =
         prefs.getBool(_desktopMinimizeToTrayKey) ?? false;
+    _desktopArtistReleaseRefreshEnabled =
+        prefs.getBool(_desktopArtistReleaseRefreshKey) ?? false;
     _desktopTrayTransportActions = desktopTrayTransportActionsFromStorage(
       prefs.getStringList(_desktopTrayTransportActionsKey),
     );
@@ -3504,6 +3511,16 @@ class LibraryStore extends ChangeNotifier {
     }
 
     _sortOfflineCacheQueue();
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> setDesktopArtistReleaseRefreshEnabled(bool enabled) async {
+    if (_desktopArtistReleaseRefreshEnabled == enabled) {
+      return;
+    }
+
+    _desktopArtistReleaseRefreshEnabled = enabled;
     await _save();
     notifyListeners();
   }
@@ -10426,6 +10443,10 @@ class LibraryStore extends ChangeNotifier {
     );
     await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
     await prefs.setBool(_desktopMinimizeToTrayKey, _desktopMinimizeToTray);
+    await prefs.setBool(
+      _desktopArtistReleaseRefreshKey,
+      _desktopArtistReleaseRefreshEnabled,
+    );
     await prefs.setStringList(
       _desktopTrayTransportActionsKey,
       desktopTrayTransportActionsToStorage(_desktopTrayTransportActions),

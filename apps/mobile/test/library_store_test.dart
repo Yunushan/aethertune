@@ -4218,6 +4218,7 @@ void main() {
       LibraryStore.defaultDesktopQueuePaneWidth,
     );
     expect(firstStore.desktopMinimizeToTray, isFalse);
+    expect(firstStore.desktopArtistReleaseRefreshEnabled, isFalse);
     expect(
       firstStore.desktopTrayTransportActions,
       defaultDesktopTrayTransportActions,
@@ -4245,6 +4246,7 @@ void main() {
     await firstStore.setLanguagePreference(AppLanguagePreference.arabic);
     await firstStore.setDesktopQueuePaneWidth(410);
     await firstStore.setDesktopMinimizeToTray(true);
+    await firstStore.setDesktopArtistReleaseRefreshEnabled(true);
     await firstStore.setDesktopTrayTransportActionEnabled(
       DesktopTrayTransportAction.next,
       false,
@@ -4270,6 +4272,7 @@ void main() {
     expect(firstStore.languagePreference, AppLanguagePreference.arabic);
     expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.desktopMinimizeToTray, isTrue);
+    expect(firstStore.desktopArtistReleaseRefreshEnabled, isTrue);
     expect(
       firstStore.desktopTrayTransportActions,
       <DesktopTrayTransportAction>{
@@ -4306,6 +4309,7 @@ void main() {
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
     expect(secondStore.desktopQueuePaneWidth, 410);
     expect(secondStore.desktopMinimizeToTray, isTrue);
+    expect(secondStore.desktopArtistReleaseRefreshEnabled, isTrue);
     expect(
       secondStore.desktopTrayTransportActions,
       <DesktopTrayTransportAction>{

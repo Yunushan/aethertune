@@ -1,25 +1,32 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/library_store.dart';
 import '../../data/musicbrainz_artist_release_provider.dart';
+import 'desktop_background_work_policy.dart';
 
 typedef ArtistReleaseDetailsOpener = Future<bool> Function(Uri uri);
 
-/// An explicitly refreshed, metadata-only release shelf for locally followed
-/// artists. No request is sent when the shelf is first shown.
+/// A metadata-only release shelf for locally followed artists.
+///
+/// No request is sent when the shelf is first shown. On desktop only, an
+/// explicitly enabled tray preference can refresh the shelf at most daily
+/// while the resident process remains hidden or minimized.
 final class ArtistReleaseUpdatesShelf extends StatefulWidget {
-  const ArtistReleaseUpdatesShelf({
+  ArtistReleaseUpdatesShelf({
     required this.provider,
     this.openDetails = _openMusicBrainzDetails,
+    TargetPlatform? platform,
     super.key,
-  });
+  }) : platform = platform ?? defaultTargetPlatform;
 
   final MusicBrainzArtistReleaseProvider provider;
   final ArtistReleaseDetailsOpener openDetails;
+  final TargetPlatform platform;
 
   @override
   State<ArtistReleaseUpdatesShelf> createState() =>
@@ -27,10 +34,39 @@ final class ArtistReleaseUpdatesShelf extends StatefulWidget {
 }
 
 final class _ArtistReleaseUpdatesShelfState
-    extends State<ArtistReleaseUpdatesShelf> {
+    extends State<ArtistReleaseUpdatesShelf> with WidgetsBindingObserver {
+  static const _automaticRefreshInterval = Duration(days: 1);
+  static const _automaticRefreshCheckInterval = Duration(minutes: 15);
+
   MusicBrainzArtistReleaseFeed? _feed;
   bool _loading = false;
   int _requestSerial = 0;
+  Timer? _automaticRefreshTimer;
+  AppLifecycleState? _lifecycleState;
+  DateTime? _lastAutomaticRefreshAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _automaticRefreshTimer = Timer.periodic(
+      _automaticRefreshCheckInterval,
+      (_) => _refreshAutomaticallyIfDue(),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _automaticRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
+    _refreshAutomaticallyIfDue();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +164,33 @@ final class _ArtistReleaseUpdatesShelfState
       _feed = feed;
       _loading = false;
     });
+  }
+
+  void _refreshAutomaticallyIfDue() {
+    final lifecycleState = _lifecycleState;
+    if (!mounted ||
+        lifecycleState == null ||
+        !shouldKeepBackgroundWorkInDesktopProcess(
+          platform: widget.platform,
+          state: lifecycleState,
+        )) {
+      return;
+    }
+    final library = context.read<LibraryStore>();
+    if (!library.desktopArtistReleaseRefreshEnabled ||
+        library.offlineModeEnabled ||
+        _loading ||
+        library.followedArtists.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    final lastRefresh = _lastAutomaticRefreshAt;
+    if (lastRefresh != null &&
+        now.difference(lastRefresh) < _automaticRefreshInterval) {
+      return;
+    }
+    _lastAutomaticRefreshAt = now;
+    unawaited(_refresh());
   }
 
   Future<void> _showReleaseDetails(MusicBrainzArtistRelease release) async {
