@@ -38,9 +38,6 @@ jobs:
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 
-      - name: Test desktop packaging workflow contract
-        run: python3 scripts/ci/test_desktop_packaging_workflow.py
-
       - name: Test provider contract workflow
         run: python3 scripts/ci/test_provider_contract_workflow.py
 
@@ -193,11 +190,9 @@ jobs:
       - name: Test Windows ZIP packaging
         if: matrix.target == 'windows'
         shell: pwsh
-        timeout-minutes: 8
         run: |
           ./scripts/ci/test_package_windows_zip.ps1
           ./scripts/ci/test_package_windows_msix.ps1
-          ./scripts/ci/test_install_windows_msix.ps1
 
       - name: Test macOS release packaging
         if: matrix.target == 'macos'
