@@ -82,11 +82,11 @@
 - [x] Basic M4A metadata atom scanner
 - [x] Basic WAV RIFF INFO metadata scanner
 - [x] Basic AIFF NAME/AUTH and ID3 metadata scanner
-- [ ] Rich embedded audio tag scanner
+- [x] Rich embedded audio tag scanner (artwork, lyrics, ratings, ReplayGain, chapters, and rich fields across ID3v2/APEv2, FLAC/Ogg/Opus, M4A/M4B, WAV/AIFF, and WMA)
 - [x] Stored metadata editor
 - [x] Duplicate resolver scaffold
 - [x] File-hash duplicate matching
-- [ ] Audio fingerprint duplicate matching
+- [x] Tag-independent audio payload fingerprint duplicate matching (MP3/FLAC/Ogg/WAV/AIFF/MP4; not cross-encoding acoustic recognition)
 - [x] Recently played
 - [x] Local play counts
 - [x] Local stats recap
