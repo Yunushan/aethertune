@@ -324,6 +324,39 @@ Future<void> _retryListenBrainzPending(BuildContext context) async {
   );
 }
 
+Future<void> _setListenBrainzBackgroundRetry(
+  BuildContext context,
+  bool enabled,
+) async {
+  final store = context.read<ListenBrainzScrobblingStore?>();
+  if (store == null || !store.isConfigured) {
+    return;
+  }
+  try {
+    await store.setBackgroundRetryEnabled(enabled);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled
+              ? 'Pending ListenBrainz listens can retry in Android and iOS background passes.'
+              : 'Background ListenBrainz retries disabled.',
+        ),
+      ),
+    );
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update ListenBrainz background retries.'),
+        ),
+      );
+    }
+  }
+}
+
 Future<void> _importListenBrainzHistory(BuildContext context) async {
   final store = context.read<ListenBrainzScrobblingStore?>();
   final library = context.read<LibraryStore>();
@@ -20780,6 +20813,20 @@ class _SettingsTab extends StatelessWidget {
                   ? null
                   : () => unawaited(_retryListenBrainzPending(context)),
             ),
+        if (listenBrainz?.isConfigured == true)
+          SwitchListTile(
+            key: const Key('listenbrainz-background-retry'),
+            secondary: const Icon(Icons.schedule_outlined),
+            title: const Text('Retry pending listens in background'),
+            subtitle: const Text(
+              'Disabled by default. Android and iOS may retry saved listen metadata after you leave the app; Offline mode and paused history stop it.',
+            ),
+            value: listenBrainz!.backgroundRetryEnabled,
+            onChanged: listenBrainz.submitting
+                ? null
+                : (enabled) =>
+                      unawaited(_setListenBrainzBackgroundRetry(context, enabled)),
+          ),
         if (listenBrainz?.isConfigured == true)
           ListTile(
             key: const Key('listenbrainz-import-history'),

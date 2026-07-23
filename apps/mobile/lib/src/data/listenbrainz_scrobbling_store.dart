@@ -9,6 +9,23 @@ import 'provider_credential_vault.dart';
 
 typedef ListenBrainzClientFactory = ListenBrainzClient Function(String token);
 
+/// Whether a persisted ListenBrainz retry is allowed to run in a native
+/// background pass. The caller supplies library privacy state because it is
+/// intentionally owned by [LibraryStore], not this credential-scoped store.
+bool shouldRetryListenBrainzInBackground({
+  required bool isConfigured,
+  required bool backgroundRetryEnabled,
+  required bool hasPendingListens,
+  required bool offlineModeEnabled,
+  required bool pauseListeningHistory,
+}) {
+  return isConfigured &&
+      backgroundRetryEnabled &&
+      hasPendingListens &&
+      !offlineModeEnabled &&
+      !pauseListeningHistory;
+}
+
 /// Stores only the user token in the credential vault and submits completed,
 /// user-opted-in listens. Tokens never enter preferences, backups, or logs.
 final class ListenBrainzScrobblingStore extends ChangeNotifier {
@@ -22,6 +39,8 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
 
   static const _credentialId = 'listenbrainz-user-token';
   static const _pendingPreferencesKey = 'aethertune.listenbrainz.pending.v1';
+  static const _backgroundRetryPreferencesKey =
+      'aethertune.listenbrainz.background-retry.v1';
   static const _pendingDocumentVersion = 1;
   static const _maximumPendingListens = 100;
   static const _pendingRetention = Duration(days: 30);
@@ -39,6 +58,7 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
   String? _lastError;
   bool _loaded = false;
   bool _submitting = false;
+  bool _backgroundRetryEnabled = false;
 
   bool get loaded => _loaded;
   bool get isConfigured => (_token ?? '').isNotEmpty;
@@ -46,6 +66,7 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
   String? get lastError => _lastError;
   bool get submitting => _submitting;
   int get pendingListenCount => _pendingListens.length;
+  bool get backgroundRetryEnabled => _backgroundRetryEnabled;
 
   Future<void> load() async {
     if (_loaded) {
@@ -63,6 +84,15 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     } on Object {
       _pendingListens.clear();
       _lastError ??= 'Pending ListenBrainz submissions could not be loaded.';
+    }
+    try {
+      _backgroundRetryEnabled =
+          (await SharedPreferences.getInstance()).getBool(
+            _backgroundRetryPreferencesKey,
+          ) ??
+          false;
+    } on Object {
+      _backgroundRetryEnabled = false;
     }
     _loaded = true;
     notifyListeners();
@@ -89,7 +119,26 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     _submittedListenKeys.clear();
     _submittingListenKeys.clear();
     _pendingListens.clear();
+    _backgroundRetryEnabled = false;
     await _clearPendingListens();
+    await _clearBackgroundRetryPreference();
+    notifyListeners();
+  }
+
+  /// Allows a native Android or iOS scheduler pass to retry pending listens.
+  /// This remains disabled by default and never causes a retry during load.
+  Future<void> setBackgroundRetryEnabled(bool enabled) async {
+    if (enabled && !isConfigured) {
+      throw StateError('Connect ListenBrainz before enabling background retry.');
+    }
+    if (_backgroundRetryEnabled == enabled) {
+      return;
+    }
+    await (await SharedPreferences.getInstance()).setBool(
+      _backgroundRetryPreferencesKey,
+      enabled,
+    );
+    _backgroundRetryEnabled = enabled;
     notifyListeners();
   }
 
@@ -154,10 +203,10 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     }
   }
 
-  /// Retries failed completed-listen submissions after an explicit user action.
+  /// Retries failed completed-listen submissions.
   ///
-  /// This is deliberately foreground-only: loading the app never sends a
-  /// pending listen without the user's request.
+  /// Foreground retries are always explicit. Native background callers must
+  /// first verify the separate user opt-in and library privacy policy.
   Future<int> retryPendingListens() async {
     final token = _token;
     if (token == null || _pendingListens.isEmpty || _submitting) {
@@ -263,6 +312,12 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
 
   Future<void> _clearPendingListens() async {
     await (await SharedPreferences.getInstance()).remove(_pendingPreferencesKey);
+  }
+
+  Future<void> _clearBackgroundRetryPreference() async {
+    await (await SharedPreferences.getInstance()).remove(
+      _backgroundRetryPreferencesKey,
+    );
   }
 
   void _enqueuePending(_PendingListen pending) {

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
+import '../../data/listenbrainz_scrobbling_store.dart';
 import '../../data/offline_cache_background_scheduler.dart';
 import '../../data/offline_cache_queue_worker.dart';
 import '../../data/self_hosted_provider_store.dart';
@@ -109,9 +110,17 @@ class _OfflineCacheForegroundWorkerState
 
   Future<void> _syncBackgroundJob(LibraryStore library) async {
     try {
+      final listenBrainz = context.read<ListenBrainzScrobblingStore?>();
+      final canRetryListenBrainz = listenBrainz != null &&
+          shouldRetryListenBrainzInBackground(
+            isConfigured: listenBrainz.isConfigured,
+            backgroundRetryEnabled: listenBrainz.backgroundRetryEnabled,
+            hasPendingListens: listenBrainz.pendingListenCount > 0,
+            offlineModeEnabled: library.offlineModeEnabled,
+            pauseListeningHistory: library.pauseListeningHistory,
+          );
       if (!library.loaded ||
           _appInForeground ||
-          !library.automaticOfflineQueueEnabled ||
           library.offlineModeEnabled) {
         await widget.backgroundScheduler.cancel();
         return;
@@ -120,13 +129,16 @@ class _OfflineCacheForegroundWorkerState
       final podcastDelay = library.nextPodcastSubscriptionRefreshDelay(
         DateTime.now(),
       );
-      if (!library.hasPendingOfflineCacheWork && podcastDelay == null) {
+      final hasAutomaticOfflineWork =
+          library.automaticOfflineQueueEnabled &&
+          (library.hasPendingOfflineCacheWork || podcastDelay != null);
+      if (!hasAutomaticOfflineWork && !canRetryListenBrainz) {
         await widget.backgroundScheduler.cancel();
         return;
       }
 
       await widget.backgroundScheduler.schedule(
-        minimumLatency: library.hasPendingOfflineCacheWork
+        minimumLatency: library.hasPendingOfflineCacheWork || canRetryListenBrainz
             ? null
             : podcastDelay,
       );

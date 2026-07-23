@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'library_store.dart';
+import 'listenbrainz_scrobbling_store.dart';
 import 'offline_cache_background_scheduler.dart';
 import 'offline_cache_queue_worker.dart';
 import 'podcast_subscription_refresh_worker.dart';
@@ -22,6 +23,18 @@ Future<void> runOfflineCacheBackgroundQueue() async {
   try {
     final library = LibraryStore();
     await library.load();
+    final listenBrainz = ListenBrainzScrobblingStore();
+    await listenBrainz.load();
+    final canRetryListenBrainz = shouldRetryListenBrainzInBackground(
+      isConfigured: listenBrainz.isConfigured,
+      backgroundRetryEnabled: listenBrainz.backgroundRetryEnabled,
+      hasPendingListens: listenBrainz.pendingListenCount > 0,
+      offlineModeEnabled: library.offlineModeEnabled,
+      pauseListeningHistory: library.pauseListeningHistory,
+    );
+    if (canRetryListenBrainz) {
+      await listenBrainz.retryPendingListens();
+    }
     if (library.automaticOfflineQueueEnabled && !library.offlineModeEnabled) {
       podcastReport = await refreshDuePodcastSubscriptionsInBackground(
         library,
@@ -35,10 +48,18 @@ Future<void> runOfflineCacheBackgroundQueue() async {
       );
       await worker.processPending(library);
     }
-    hasPendingWork =
+    final hasOfflineCacheWork =
         library.automaticOfflineQueueEnabled &&
         !library.offlineModeEnabled &&
         library.hasPendingOfflineCacheWork;
+    hasPendingWork = hasOfflineCacheWork ||
+        shouldRetryListenBrainzInBackground(
+          isConfigured: listenBrainz.isConfigured,
+          backgroundRetryEnabled: listenBrainz.backgroundRetryEnabled,
+          hasPendingListens: listenBrainz.pendingListenCount > 0,
+          offlineModeEnabled: library.offlineModeEnabled,
+          pauseListeningHistory: library.pauseListeningHistory,
+        );
     if (!hasPendingWork &&
         library.automaticOfflineQueueEnabled &&
         !library.offlineModeEnabled) {

@@ -137,6 +137,91 @@ void main() {
     expect(retryClient.submitted.single.track.streamUrl, isNull);
   });
 
+  test('keeps background retry opt-in separate and clears it on disconnect',
+      () async {
+    final vault = _MemoryVault();
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => _FakeListenBrainzClient(),
+    );
+
+    await store.load();
+    expect(store.backgroundRetryEnabled, isFalse);
+    await expectLater(
+      store.setBackgroundRetryEnabled(true),
+      throwsA(isA<StateError>()),
+    );
+
+    await store.configure('token');
+    await store.setBackgroundRetryEnabled(true);
+    expect(store.backgroundRetryEnabled, isTrue);
+
+    final restored = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => _FakeListenBrainzClient(),
+    );
+    await restored.load();
+    expect(restored.backgroundRetryEnabled, isTrue);
+
+    await restored.remove();
+    expect(restored.backgroundRetryEnabled, isFalse);
+    expect(
+      (await SharedPreferences.getInstance()).getBool(
+        'aethertune.listenbrainz.background-retry.v1',
+      ),
+      isNull,
+    );
+  });
+
+  test('background retry policy needs opt-in and every privacy gate', () {
+    bool eligible({
+      bool isConfigured = true,
+      bool backgroundRetryEnabled = true,
+      bool hasPendingListens = true,
+      bool offlineModeEnabled = false,
+      bool pauseListeningHistory = false,
+    }) {
+      return shouldRetryListenBrainzInBackground(
+        isConfigured: isConfigured,
+        backgroundRetryEnabled: backgroundRetryEnabled,
+        hasPendingListens: hasPendingListens,
+        offlineModeEnabled: offlineModeEnabled,
+        pauseListeningHistory: pauseListeningHistory,
+      );
+    }
+
+    expect(eligible(), isTrue);
+    expect(eligible(isConfigured: false), isFalse);
+    expect(eligible(backgroundRetryEnabled: false), isFalse);
+    expect(eligible(hasPendingListens: false), isFalse);
+    expect(eligible(offlineModeEnabled: true), isFalse);
+    expect(eligible(pauseListeningHistory: true), isFalse);
+  });
+
+  test('loading an opted-in queue does not submit it', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.listenbrainz.background-retry.v1': true,
+      'aethertune.listenbrainz.pending.v1': '''
+{"version":1,"listens":[
+  {"title":"Signal","artist":"Aether","durationMs":120000,"startedAt":"2026-07-17T12:00:00.000Z"}
+]}
+''',
+    });
+    final client = _FakeListenBrainzClient();
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: _MemoryVault()
+        ..values['listenbrainz-user-token'] = 'token',
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 7, 18),
+    );
+
+    await store.load();
+
+    expect(store.backgroundRetryEnabled, isTrue);
+    expect(store.pendingListenCount, 1);
+    expect(client.submitted, isEmpty);
+  });
+
   test('drops expired pending listens during load', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'aethertune.listenbrainz.pending.v1': '''
