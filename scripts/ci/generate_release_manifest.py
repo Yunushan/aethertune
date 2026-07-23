@@ -20,6 +20,7 @@ ARTIFACT_DETAILS = {
     "aethertune-server-linux-x64": ("linux", "server-executable"),
     "aethertune-server-macos": ("macos", "server-executable"),
     "aethertune-server-windows-x64.exe": ("windows", "server-executable"),
+    "aethertune-windows-x64.msix": ("windows", "unsigned-msix-installer"),
     "aethertune-windows-x64.zip": ("windows", "portable-archive"),
 }
 
