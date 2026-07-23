@@ -15242,6 +15242,23 @@ class _SourcesTabState extends State<_SourcesTab> {
               icon: const Icon(Icons.add_link_outlined),
               label: const Text('Add JSON catalog'),
             ),
+            OutlinedButton.icon(
+              key: const Key('export-custom-catalogs'),
+              onPressed: customCatalogs?.loaded == true &&
+                      customCatalogs!.definitions.isNotEmpty
+                  ? () => unawaited(_exportCustomCatalogConfiguration(context))
+                  : null,
+              icon: const Icon(Icons.file_upload_outlined),
+              label: const Text('Export catalogs'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('import-custom-catalogs'),
+              onPressed: customCatalogs?.loaded == true && !offlineModeEnabled
+                  ? () => unawaited(_importCustomCatalogConfigurationFile(context))
+                  : null,
+              icon: const Icon(Icons.file_download_outlined),
+              label: const Text('Import catalogs'),
+            ),
           ],
         ),
         if (customCatalogs == null || !customCatalogs.loaded) ...<Widget>[
@@ -16587,6 +16604,98 @@ class _SourcesTabState extends State<_SourcesTab> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Spotify disconnected.')),
     );
+  }
+
+  Future<void> _exportCustomCatalogConfiguration(
+    BuildContext context,
+  ) async {
+    final export = context.read<CustomCatalogStore>().exportConfiguration();
+    final messenger = ScaffoldMessenger.of(context);
+    const fileName = 'aethertune-custom-catalogs.json';
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(export.json));
+      final outputPath = await FilePicker.saveFile(
+        dialogTitle: 'Export custom catalogs',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const <String>['json'],
+        bytes: bytes,
+      );
+      if (outputPath == null || outputPath.isEmpty) {
+        return;
+      }
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(outputPath).writeAsBytes(bytes, flush: true);
+      }
+      if (!context.mounted) {
+        return;
+      }
+      final skipped = export.skippedInsecureCatalogCount;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exported ${export.exportedCatalogCount} '
+            '${export.exportedCatalogCount == 1 ? 'catalog' : 'catalogs'}'
+            '${skipped == 0 ? '.' : '; skipped $skipped HTTP catalog${skipped == 1 ? '' : 's'}.'}',
+          ),
+        ),
+      );
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not export catalogs: $error')),
+      );
+    }
+  }
+
+  Future<void> _importCustomCatalogConfigurationFile(
+    BuildContext context,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const <String>['json'],
+      );
+      final files = result?.files;
+      if (files == null || files.isEmpty) {
+        return;
+      }
+      final document = utf8.decode(await files.first.readAsBytes());
+      if (!context.mounted) {
+        return;
+      }
+      final imported = await context
+          .read<CustomCatalogStore>()
+          .importConfiguration(document);
+      if (!context.mounted) {
+        return;
+      }
+      final parts = <String>[
+        '${imported.importedCatalogCount} imported',
+        if (imported.skippedExistingCatalogCount > 0)
+          '${imported.skippedExistingCatalogCount} already configured',
+        if (imported.skippedInsecureCatalogCount > 0)
+          '${imported.skippedInsecureCatalogCount} HTTP catalog${imported.skippedInsecureCatalogCount == 1 ? '' : 's'} skipped',
+      ];
+      messenger.showSnackBar(
+        SnackBar(content: Text('Catalog configuration: ${parts.join(', ')}.')),
+      );
+    } on FormatException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } on Exception catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not import catalogs: $error')),
+      );
+    }
   }
 
   Future<void> _editCustomCatalog(

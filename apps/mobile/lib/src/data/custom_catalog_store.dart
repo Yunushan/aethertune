@@ -10,6 +10,28 @@ import 'custom_catalog_provider.dart';
 final class CustomCatalogStore extends ChangeNotifier {
   static const _preferencesKey = 'aethertune.custom_catalogs.v1';
   static const maxCatalogs = 20;
+  static const configurationDocumentFormat = 'aethertune.custom_catalogs';
+  static const configurationDocumentVersion = 1;
+  static const _maximumConfigurationBytes = 64 * 1024;
+
+  /// Only HTTPS definitions can leave the device. Local HTTP consent is not
+  /// portable because another network may route the hostname differently.
+  CustomCatalogConfigurationExport exportConfiguration() {
+    final exportable = _definitions
+        .where((definition) => definition.catalogUri.scheme == 'https')
+        .toList(growable: false);
+    return CustomCatalogConfigurationExport(
+      json: jsonEncode(<String, Object?>{
+        'format': configurationDocumentFormat,
+        'version': configurationDocumentVersion,
+        'catalogs': exportable
+            .map((definition) => definition.toJson())
+            .toList(growable: false),
+      }),
+      exportedCatalogCount: exportable.length,
+      skippedInsecureCatalogCount: _definitions.length - exportable.length,
+    );
+  }
 
   final List<CustomCatalogDefinition> _definitions =
       <CustomCatalogDefinition>[];
@@ -88,6 +110,88 @@ final class CustomCatalogStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<CustomCatalogConfigurationImportResult> importConfiguration(
+    String document,
+  ) async {
+    if (utf8.encode(document).length > _maximumConfigurationBytes) {
+      throw const FormatException('Custom catalog configuration is too large.');
+    }
+    final decoded = jsonDecode(document);
+    if (decoded is! Map) {
+      throw const FormatException('Custom catalog configuration is invalid.');
+    }
+    final root = Map<String, Object?>.from(decoded);
+    if (root['format'] != configurationDocumentFormat ||
+        root['version'] != configurationDocumentVersion) {
+      throw const FormatException(
+        'This is not a supported custom catalog configuration.',
+      );
+    }
+    final rawCatalogs = root['catalogs'];
+    if (rawCatalogs is! List || rawCatalogs.length > maxCatalogs) {
+      throw const FormatException(
+        'Custom catalog configuration has an invalid catalog list.',
+      );
+    }
+
+    final candidates = <CustomCatalogDefinition>[];
+    final documentIds = <String>{};
+    var skippedInsecureCatalogCount = 0;
+    for (final rawCatalog in rawCatalogs) {
+      if (rawCatalog is! Map) {
+        throw const FormatException(
+          'Custom catalog configuration contains an invalid catalog.',
+        );
+      }
+      final definition = CustomCatalogDefinition.fromJson(
+        Map<String, Object?>.from(rawCatalog),
+      );
+      if (!documentIds.add(definition.id)) {
+        throw const FormatException(
+          'Custom catalog configuration contains duplicate catalogs.',
+        );
+      }
+      if (definition.catalogUri.scheme != 'https') {
+        skippedInsecureCatalogCount += 1;
+        continue;
+      }
+      candidates.add(definition);
+    }
+
+    if (!_loaded) {
+      await load();
+    }
+    final existingIds = _definitions.map((definition) => definition.id).toSet();
+    final imports = candidates
+        .where((definition) => !existingIds.contains(definition.id))
+        .toList(growable: false);
+    if (_definitions.length + imports.length > maxCatalogs) {
+      throw StateError('AetherTune supports at most $maxCatalogs custom catalogs.');
+    }
+    final result = CustomCatalogConfigurationImportResult(
+      importedCatalogCount: imports.length,
+      skippedExistingCatalogCount: candidates.length - imports.length,
+      skippedInsecureCatalogCount: skippedInsecureCatalogCount,
+    );
+    if (imports.isEmpty) {
+      return result;
+    }
+    final previous = List<CustomCatalogDefinition>.from(_definitions);
+    try {
+      _definitions
+        ..addAll(imports)
+        ..sort((left, right) => left.name.compareTo(right.name));
+      await _persist();
+    } on Object {
+      _definitions
+        ..clear()
+        ..addAll(previous);
+      rethrow;
+    }
+    notifyListeners();
+    return result;
+  }
+
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -95,4 +199,28 @@ final class CustomCatalogStore extends ChangeNotifier {
       jsonEncode(_definitions.map((definition) => definition.toJson()).toList()),
     );
   }
+}
+
+final class CustomCatalogConfigurationExport {
+  const CustomCatalogConfigurationExport({
+    required this.json,
+    required this.exportedCatalogCount,
+    required this.skippedInsecureCatalogCount,
+  });
+
+  final String json;
+  final int exportedCatalogCount;
+  final int skippedInsecureCatalogCount;
+}
+
+final class CustomCatalogConfigurationImportResult {
+  const CustomCatalogConfigurationImportResult({
+    required this.importedCatalogCount,
+    required this.skippedExistingCatalogCount,
+    required this.skippedInsecureCatalogCount,
+  });
+
+  final int importedCatalogCount;
+  final int skippedExistingCatalogCount;
+  final int skippedInsecureCatalogCount;
 }

@@ -262,4 +262,67 @@ void main() {
     await restored.remove(definition.id);
     expect(restored.definitions, isEmpty);
   });
+
+  test('moves only credential-free HTTPS catalog definitions between devices',
+      () async {
+    final source = CustomCatalogStore();
+    await source.load();
+    await source.save(
+      CustomCatalogDefinition.create(
+        id: 'catalog-https',
+        name: 'HTTPS catalog',
+        catalogUrl: 'https://catalog.example.test/music.json',
+        mediaDomains: const <String>['cdn.example.test'],
+        allowInsecureHttp: false,
+      ),
+    );
+    await source.save(
+      CustomCatalogDefinition.create(
+        id: 'catalog-http',
+        name: 'LAN catalog',
+        catalogUrl: 'http://192.168.1.20/music.json',
+        mediaDomains: const <String>['192.168.1.20'],
+        allowInsecureHttp: true,
+      ),
+    );
+
+    final export = source.exportConfiguration();
+    expect(export.exportedCatalogCount, 1);
+    expect(export.skippedInsecureCatalogCount, 1);
+    expect(export.json, contains('catalog-https'));
+    expect(export.json, isNot(contains('catalog-http')));
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final destination = CustomCatalogStore();
+    await destination.load();
+    final imported = await destination.importConfiguration(export.json);
+    expect(imported.importedCatalogCount, 1);
+    expect(destination.definitions.single.id, 'catalog-https');
+
+    final repeated = await destination.importConfiguration(export.json);
+    expect(repeated.importedCatalogCount, 0);
+    expect(repeated.skippedExistingCatalogCount, 1);
+  });
+
+  test('rejects malformed custom catalog configuration documents', () async {
+    final store = CustomCatalogStore();
+    await store.load();
+
+    await expectLater(
+      store.importConfiguration('{"format":"unknown"}'),
+      throwsA(isA<FormatException>()),
+    );
+    await expectLater(
+      store.importConfiguration(
+        '{"format":"aethertune.custom_catalogs","version":1,'
+        '"catalogs":[{"version":1,"id":"catalog-dupe",'
+        '"name":"One","catalogUrl":"https://one.example/music.json",'
+        '"mediaDomains":[],"allowInsecureHttp":false},'
+        '{"version":1,"id":"catalog-dupe","name":"Two",'
+        '"catalogUrl":"https://two.example/music.json",'
+        '"mediaDomains":[],"allowInsecureHttp":false}]}',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
