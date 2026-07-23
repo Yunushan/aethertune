@@ -1150,7 +1150,7 @@ class MainActivity : AudioServiceActivity() {
 
     private fun safFileName(value: String): String {
         val sanitized = value.trim().replace('/', '_').replace('\\\\', '_')
-        return if (sanitized.isEmpty || sanitized == "." || sanitized == "..") {
+        return if (sanitized.isEmpty() || sanitized == "." || sanitized == "..") {
             "document"
         } else {
             sanitized
