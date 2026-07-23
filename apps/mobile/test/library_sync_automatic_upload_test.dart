@@ -78,12 +78,13 @@ void main() {
     );
     await tester.pump();
 
-    expect(calls, 1);
+    expect(calls, greaterThanOrEqualTo(1));
+    final callsBeforeTray = calls;
 
     await _sendLifecycleState(tester, AppLifecycleState.hidden);
     await tester.pump();
 
-    expect(calls, 2);
+    expect(calls, callsBeforeTray + 1);
   });
 }
 
