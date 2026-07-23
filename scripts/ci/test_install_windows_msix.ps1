@@ -73,7 +73,7 @@ try {
   Import-Certificate `
     -FilePath $certificatePath `
     -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
-  & certutil.exe -addstore TrustedPeople $certificatePath | Out-Null
+  & certutil.exe -addstore -f TrustedPeople $certificatePath | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw 'The temporary machine trusted-people certificate could not be added.'
   }
