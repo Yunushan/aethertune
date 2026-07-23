@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,8 +36,8 @@ void main() {
           ChangeNotifierProvider<LibraryStore>.value(value: library),
           ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
         ],
-        child: const MaterialApp(
-          home: LibrarySyncAutomaticUpload(child: SizedBox()),
+        child: MaterialApp(
+          home: LibrarySyncAutomaticUpload(child: const SizedBox()),
         ),
       ),
     );
@@ -47,6 +48,54 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });
+
+  testWidgets('runs opted-in uploads when a desktop window enters the tray', (
+    tester,
+  ) async {
+    final library = LibraryStore();
+    final sync = LibrarySyncStore(credentialVault: _SyncVault());
+    await library.load();
+    await sync.load();
+    var calls = 0;
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+        ],
+        child: MaterialApp(
+          home: LibrarySyncAutomaticUpload(
+            platform: TargetPlatform.windows,
+            runUpload: (_, _, _) async {
+              calls += 1;
+              return false;
+            },
+            child: const SizedBox(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(calls, 1);
+
+    await _sendLifecycleState(tester, AppLifecycleState.hidden);
+    await tester.pump();
+
+    expect(calls, 2);
+  });
+}
+
+Future<void> _sendLifecycleState(
+  WidgetTester tester,
+  AppLifecycleState state,
+) async {
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    'flutter/lifecycle',
+    const StringCodec().encodeMessage(state.toString()),
+    (_) {},
+  );
 }
 
 LibrarySyncAccount _account() {

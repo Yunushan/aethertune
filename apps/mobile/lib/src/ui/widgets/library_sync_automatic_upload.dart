@@ -6,11 +6,25 @@ import 'package:provider/provider.dart';
 import '../../data/library_store.dart';
 import '../../data/library_sync_store.dart';
 import '../../player/player_controller.dart';
+import 'desktop_background_work_policy.dart';
+
+typedef AutomaticLibraryUploadRunner = Future<bool> Function(
+  LibraryStore library,
+  LibrarySyncStore sync,
+  PlayerController? player,
+);
 
 class LibrarySyncAutomaticUpload extends StatefulWidget {
-  const LibrarySyncAutomaticUpload({super.key, required this.child});
+  LibrarySyncAutomaticUpload({
+    super.key,
+    required this.child,
+    this.runUpload,
+    TargetPlatform? platform,
+  }) : platform = platform ?? defaultTargetPlatform;
 
   final Widget child;
+  final AutomaticLibraryUploadRunner? runUpload;
+  final TargetPlatform platform;
 
   @override
   State<LibrarySyncAutomaticUpload> createState() =>
@@ -38,7 +52,11 @@ class _LibrarySyncAutomaticUploadState extends State<LibrarySyncAutomaticUpload>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed ||
+        shouldKeepBackgroundWorkInDesktopProcess(
+          platform: widget.platform,
+          state: state,
+        )) {
       _runIfDue();
     }
   }
@@ -51,6 +69,11 @@ class _LibrarySyncAutomaticUploadState extends State<LibrarySyncAutomaticUpload>
     final sync = context.read<LibrarySyncStore>();
     final player = context.read<PlayerController?>();
     if (!library.loaded || !sync.loaded) {
+      return;
+    }
+    final runUpload = widget.runUpload;
+    if (runUpload != null) {
+      unawaited(runUpload(library, sync, player));
       return;
     }
     unawaited(sync.uploadAutomaticallyIfDue(library, player: player));
