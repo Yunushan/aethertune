@@ -97,7 +97,7 @@ Authenticated providers return metadata-only `Track` objects from search and cat
 
 ## Audius open music source
 
-`AudiusProvider` calls the documented read-only tracks search endpoint with bounded `query`, `offset`, and `limit` parameters. It rejects unlisted and stream-gated records, invalid identifiers, duplicate records, and non-HTTPS or credential-bearing artwork; every retained track resolves only through the documented Audius stream endpoint at playback time. The source declares search, type-ahead, artwork, stream resolution, and direct playback, but no credential, cache, download, account, or mutation capability. Sources displays its disclosure and the usual unified-search continuation; Offline mode omits it before any request is made.
+`AudiusProvider` calls the documented read-only tracks search endpoint with bounded `query`, `offset`, and `limit` parameters, plus its public trending endpoint with a bounded `limit`. It rejects unlisted and stream-gated records, invalid identifiers, duplicate records, and non-HTTPS or credential-bearing artwork; every retained track resolves only through the documented Audius stream endpoint at playback time. The source declares search, type-ahead, artwork, stream resolution, and direct playback, but no credential, cache, download, account, or mutation capability. Sources displays its disclosure and the usual unified-search continuation; Home offers a user-triggered six-track trending shelf. Offline mode omits the source before any request is made.
 
 ## Jamendo official music source
 

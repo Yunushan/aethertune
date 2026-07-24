@@ -17,9 +17,11 @@ final class AudiusProvider
         MusicSourceSearchSuggestionProvider {
   AudiusProvider({
     Uri? searchUri,
+    Uri? trendingUri,
     Uri? streamBaseUri,
     AudiusResponseLoader? loader,
   }) : searchUri = searchUri ?? _defaultSearchUri,
+       trendingUri = trendingUri ?? _defaultTrendingUri,
        streamBaseUri = streamBaseUri ?? _defaultStreamBaseUri,
        _loader = loader ?? _loadAudiusJson;
 
@@ -29,8 +31,12 @@ final class AudiusProvider
   static final Uri _defaultStreamBaseUri = Uri.parse(
     'https://api.audius.co/v1/tracks/',
   );
+  static final Uri _defaultTrendingUri = Uri.parse(
+    'https://api.audius.co/v1/tracks/trending',
+  );
 
   final Uri searchUri;
+  final Uri trendingUri;
   final Uri streamBaseUri;
   final AudiusResponseLoader _loader;
 
@@ -64,6 +70,23 @@ final class AudiusProvider
   @override
   Future<List<Track>> search(String query) async {
     return (await searchPage(query)).tracks;
+  }
+
+  /// Returns a bounded public trending list in Audius's server-defined order.
+  Future<List<Track>> fetchTrending({int limit = 6}) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final requestedLimit = limit.clamp(1, 50);
+    return parseAudiusTracksResponse(
+      await _loader(
+        trendingUri.replace(
+          queryParameters: <String, String>{
+            'limit': requestedLimit.toString(),
+          },
+        ),
+      ),
+    );
   }
 
   @override

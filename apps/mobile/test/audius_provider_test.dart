@@ -26,6 +26,22 @@ void main() {
     expect(page.nextCursor, '2');
   });
 
+  test('loads a bounded server-ordered trending list', () async {
+    Uri? requested;
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requested = uri;
+        return _response(<String>['trending']);
+      },
+    );
+
+    final tracks = await provider.fetchTrending(limit: 6);
+
+    expect(requested?.path, '/v1/tracks/trending');
+    expect(requested?.queryParameters['limit'], '6');
+    expect(tracks.single.id, 'audius:trending');
+  });
+
   test('rejects gated, unlisted, malformed, and unsafe artwork records', () {
     final tracks = parseAudiusTracksResponse('''
       {"data":[

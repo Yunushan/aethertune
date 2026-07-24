@@ -4525,6 +4525,7 @@ class _HomeTabState extends State<_HomeTab> {
 
   late final InternetArchiveProvider _archiveProvider;
   late final RadioBrowserProvider _radioProvider;
+  final AudiusProvider _audiusProvider = AudiusProvider();
   final MusicBrainzArtistReleaseProvider _artistReleaseProvider =
       MusicBrainzArtistReleaseProvider();
   LibraryChartRange _chartRange = LibraryChartRange.thirtyDays;
@@ -4619,6 +4620,8 @@ class _HomeTabState extends State<_HomeTab> {
         Text('Home', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
         _PopularRadioStationsShelf(provider: _radioProvider),
+        const SizedBox(height: 12),
+        _AudiusTrendingShelf(provider: _audiusProvider),
         const SizedBox(height: 12),
         if (providerCatalogs.isNotEmpty) ...<Widget>[
           _ProviderHomeDiscovery(
@@ -5661,6 +5664,189 @@ String _spotifyAlbumSubtitle(SpotifySavedAlbum album) {
 String _spotifyPlaylistSubtitle(SpotifySavedPlaylist playlist) {
   final count = playlist.totalTracks;
   return '${playlist.ownerName} - $count ${count == 1 ? 'track' : 'tracks'}';
+}
+
+final class _AudiusTrendingShelf extends StatefulWidget {
+  const _AudiusTrendingShelf({required this.provider});
+
+  final AudiusProvider provider;
+
+  @override
+  State<_AudiusTrendingShelf> createState() => _AudiusTrendingShelfState();
+}
+
+final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
+  List<Track> _tracks = const <Track>[];
+  bool _loading = false;
+  bool _loaded = false;
+  bool _failed = false;
+  int _requestSerial = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final offline = library.offlineModeEnabled;
+    return Column(
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.trending_up_outlined),
+          title: const Text('Trending on Audius'),
+          subtitle: const Text('Public tracks in Audius server-defined order'),
+          trailing: IconButton.filled(
+            key: const Key('home-audius-trending-refresh'),
+            tooltip: 'Refresh Audius trending tracks',
+            onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+            icon: const Icon(Icons.refresh),
+          ),
+        ),
+        if (offline && !_loaded)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cloud_off_outlined),
+            title: Text('Offline mode'),
+          ),
+        if (_loading && !_loaded)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: LinearProgressIndicator(),
+          ),
+        if (_failed && !_loaded)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Audius trending tracks are unavailable'),
+            trailing: IconButton(
+              tooltip: 'Retry Audius trending tracks',
+              onPressed: _loading || offline
+                  ? null
+                  : () => unawaited(_refresh()),
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        for (final track in _tracks)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.graphic_eq_outlined),
+            title: Text(track.title),
+            subtitle: Text(track.artist),
+            onTap: offline ? null : () => unawaited(_playTrack(context, track)),
+            trailing: IconButton(
+              tooltip: library.tracks.any((saved) => saved.id == track.id)
+                  ? 'Saved to library'
+                  : 'Save track to library',
+              onPressed: offline
+                  ? null
+                  : () => unawaited(_saveTrack(context, track)),
+              icon: Icon(
+                library.tracks.any((saved) => saved.id == track.id)
+                    ? Icons.bookmark
+                    : Icons.bookmark_add_outlined,
+              ),
+            ),
+          ),
+        if (_loading && _loaded)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final request = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final tracks = await widget.provider.fetchTrending(limit: 6);
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _tracks = List<Track>.unmodifiable(tracks);
+        _loading = false;
+        _loaded = true;
+      });
+    } on Object {
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  Future<void> _playTrack(BuildContext context, Track selected) async {
+    if (context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final coordinator = ProviderSearchCoordinator(<MusicSourceProvider>[
+      widget.provider,
+    ]);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final queue = await Future.wait<Track>(
+        _tracks.map(coordinator.resolvePlayableTrack),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      final selectedTrack = queue.firstWhere(
+        (track) => track.id == selected.id,
+        orElse: () => selected,
+      );
+      if (!selectedTrack.isPlayable) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('No playable stream for ${selected.title}.')),
+        );
+        return;
+      }
+      await context.read<PlayerController>().playTrack(
+        selectedTrack,
+        queue: queue.where((track) => track.isPlayable).toList(growable: false),
+      );
+    } on Object {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not play ${selected.title}.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveTrack(BuildContext context, Track track) async {
+    final coordinator = ProviderSearchCoordinator(<MusicSourceProvider>[
+      widget.provider,
+    ]);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final resolved = await coordinator.resolvePlayableTrack(track);
+      if (!context.mounted) {
+        return;
+      }
+      await context.read<LibraryStore>().addTracks(<Track>[resolved]);
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('${resolved.title} saved to your library.')),
+      );
+    } on Object {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not save ${track.title}.')),
+        );
+      }
+    }
+  }
 }
 
 final class _PopularRadioStationsShelf extends StatefulWidget {
