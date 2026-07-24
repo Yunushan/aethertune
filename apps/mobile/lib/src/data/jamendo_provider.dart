@@ -143,7 +143,7 @@ final class JamendoProvider
     if (track.sourceId != id) {
       return null;
     }
-    final direct = _safeHttpsUri(track.streamUrl);
+    final direct = _safeHttpsUri(track.streamUrl ?? '');
     if (direct != null) {
       return direct;
     }
