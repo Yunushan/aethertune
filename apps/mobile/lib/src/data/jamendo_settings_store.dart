@@ -12,9 +12,13 @@ final class JamendoSettingsStore extends ChangeNotifier {
     ProviderCredentialVault? credentialVault,
     JamendoProviderFactory? providerFactory,
   }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
-       _providerFactory = providerFactory ?? JamendoProvider.new;
+       _providerFactory = providerFactory ?? _createProvider;
 
   static const _credentialId = 'jamendo-api-client-id';
+
+  static JamendoProvider _createProvider(String clientId) {
+    return JamendoProvider(clientId: clientId);
+  }
 
   final ProviderCredentialVault _credentialVault;
   final JamendoProviderFactory _providerFactory;

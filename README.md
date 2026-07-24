@@ -50,7 +50,7 @@
 
 **AetherTune** is a GitHub-ready project for a completely free and open-source music app, starting with a Flutter client targeting **Android, iOS, Linux, macOS, and Windows** plus a Dart server service. The project is designed to combine the best product ideas from apps such as Kreate, OpenTune, InnerTune, SimpMusic, ArchiveTune, Spotube, Echo Music, Namida, PipePipe, NewPipe, LibreTube, Musify, AuraMusic, Bloomee Tunes, Gyawun Music, Music You, Muzza, SoundPod, NouTube, Grayjay, OuterTune, ViTune, RiMusic, Harmony Music, YMusic, YouTube Music, Flow, and MetroList.
 
-The app is intentionally **provider-based**: the player, library, queue, cache, favorites, playlists, search, and UI are open-source core features, while source adapters can be added for legal sources such as local files, self-hosted servers, Internet Archive, Radio Browser, Jellyfin, Navidrome/Subsonic, podcasts, or other official APIs.
+The app is intentionally **provider-based**: the player, library, queue, cache, favorites, playlists, search, and UI are open-source core features, while source adapters can be added for legal sources such as local files, self-hosted servers, Jamendo, Internet Archive, Radio Browser, Jellyfin, Navidrome/Subsonic, podcasts, or other official APIs.
 
 Playback failures are handled locally: AetherTune skips to the next playable queue item by default, stops after every playable item in a looped queue has failed, and lets the listener disable that recovery in Options.
 

@@ -20,6 +20,7 @@ import '../data/android_system_downloads_exporter.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jamendo_settings_store.dart';
+import '../data/jamendo_provider.dart';
 import '../data/itunes_podcast_directory.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
@@ -15003,6 +15004,8 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
+enum _JamendoAction { configure, remove }
+
 enum _SpotifyAction {
   savedTracks,
   savedEpisodes,
@@ -15144,12 +15147,21 @@ class _SourcesTabState extends State<_SourcesTab> {
     final customCatalogs = context.watch<CustomCatalogStore?>();
     final librarySync = context.watch<LibrarySyncStore?>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
+    final jamendo = context.watch<JamendoSettingsStore?>();
     final youtubeProviders = youtubeData?.musicProviders ??
         const <MusicSourceProvider>[];
     YouTubeDataMetadataProvider? youtubeProvider;
     for (final candidate in youtubeProviders) {
       if (candidate is YouTubeDataMetadataProvider) {
         youtubeProvider = candidate;
+        break;
+      }
+    }
+    JamendoProvider? jamendoProvider;
+    for (final candidate in jamendo?.musicProviders ??
+        const <MusicSourceProvider>[]) {
+      if (candidate is JamendoProvider) {
+        jamendoProvider = candidate;
         break;
       }
     }
@@ -15357,6 +15369,75 @@ class _SourcesTabState extends State<_SourcesTab> {
             leading: const Icon(Icons.lock_outline),
             title: const Text('YouTube Data API unavailable'),
             subtitle: Text(youtubeData!.loadError!),
+          ),
+        ],
+        const SizedBox(height: 8),
+        _ProviderCard(
+          title: 'Jamendo API',
+          status: jamendo?.isConfigured == true ? 'Enabled' : 'Optional',
+          description: jamendo?.isConfigured == true
+              ? 'Official Jamendo music search and direct stream playback. Offline media stays unavailable.'
+              : 'Configure your Jamendo developer client ID for official music search and streaming.',
+          icon: Icons.music_note_outlined,
+          capabilities: jamendoProvider?.capabilities ??
+              const <MusicSourceCapability>{
+                MusicSourceCapability.metadataSearch,
+                MusicSourceCapability.streamResolution,
+                MusicSourceCapability.directPlayback,
+                MusicSourceCapability.artwork,
+              },
+          disclosure: jamendoProvider?.disclosure ??
+              const ProviderPrivacyDisclosure(
+                networkDomains: <String>[
+                  'api.jamendo.com',
+                  'usercontent.jamendo.com',
+                  '*.storage.jamendo.com',
+                ],
+              ),
+          actions: PopupMenuButton<_JamendoAction>(
+            tooltip: 'Manage Jamendo API',
+            onSelected: (action) {
+              if (action == _JamendoAction.configure) {
+                unawaited(_configureJamendo(context));
+              } else {
+                unawaited(_removeJamendo(context));
+              }
+            },
+            itemBuilder: (_) => <PopupMenuEntry<_JamendoAction>>[
+              PopupMenuItem<_JamendoAction>(
+                value: _JamendoAction.configure,
+                enabled: jamendo?.loaded == true && !offlineModeEnabled,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.key_outlined),
+                  title: Text(
+                    jamendo?.isConfigured == true
+                        ? 'Replace client ID'
+                        : 'Configure client ID',
+                  ),
+                ),
+              ),
+              PopupMenuItem<_JamendoAction>(
+                value: _JamendoAction.remove,
+                enabled: jamendo?.isConfigured == true,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.delete_outline),
+                  title: Text('Remove client ID'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (jamendo?.loaded != true) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ] else if (jamendo?.loadError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Jamendo API unavailable'),
+            subtitle: Text(jamendo!.loadError!),
           ),
         ],
         const SizedBox(height: 8),
@@ -16693,6 +16774,124 @@ class _SourcesTabState extends State<_SourcesTab> {
       MaterialPageRoute<void>(
         builder: (_) => SelfHostedBrowseScreen(provider: provider),
       ),
+    );
+  }
+
+  Future<void> _configureJamendo(BuildContext context) async {
+    final controller = TextEditingController();
+    try {
+      final clientId = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Configure Jamendo API'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Use a client ID from your own Jamendo developer application. Jamendo searches and streams returned public tracks; AetherTune does not cache or download them.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('jamendo-client-id'),
+                  controller: controller,
+                  obscureText: true,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  decoration: const InputDecoration(labelText: 'Jamendo client ID'),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || clientId == null) {
+        return;
+      }
+      final store = context.read<JamendoSettingsStore?>();
+      if (store == null) {
+        return;
+      }
+      await store.saveClientId(clientId);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Jamendo music search enabled.')),
+      );
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _removeJamendo(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove Jamendo client ID?'),
+        content: const Text(
+          'This disables Jamendo search and streaming on this device. Saved entries remain unchanged.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    final store = context.read<JamendoSettingsStore?>();
+    if (store == null) {
+      return;
+    }
+    await context.read<PlayerController>().removeTracksFromSource('jamendo');
+    await store.removeClientId();
+    if (!context.mounted) {
+      return;
+    }
+    _providerSearchRequestSerial += 1;
+    setState(() {
+      _providerSearchLoading = false;
+      _providerSearchLoadingMore = false;
+      _providerSearchResults.removeWhere(
+        (result) => result.providerId == 'jamendo',
+      );
+      _providerSearchErrors.removeWhere(
+        (error) => error.providerId == 'jamendo',
+      );
+      _providerSearchLoadMoreErrors.removeWhere(
+        (error) => error.providerId == 'jamendo',
+      );
+      _providerSearchContinuations.remove('jamendo');
+      _providerSearchFailedContinuations.remove('jamendo');
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Jamendo client ID removed.')),
     );
   }
 

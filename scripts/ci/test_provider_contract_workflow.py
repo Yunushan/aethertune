@@ -34,6 +34,10 @@ EXPECTED_PROVIDER_STEPS = {
         "test/internet_archive_item_screen_test.dart",
         "test/internet_archive_collection_screen_test.dart",
     ),
+    "Jamendo": (
+        "test/jamendo_provider_test.dart",
+        "test/jamendo_settings_store_test.dart",
+    ),
     "Custom Catalog": ("test/custom_catalog_provider_test.dart",),
     "Spotify metadata": (
         "test/spotify_metadata_provider_test.dart",

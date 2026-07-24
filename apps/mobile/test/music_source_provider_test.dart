@@ -10,6 +10,7 @@ import 'package:aethertune/aethertune_provider_sdk.dart' show
 import 'package:aethertune/src/data/custom_catalog_provider.dart';
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
+import 'package:aethertune/src/data/jamendo_provider.dart';
 import 'package:aethertune/src/data/jellyfin_provider.dart';
 import 'package:aethertune/src/data/local_library_provider.dart';
 import 'package:aethertune/src/data/podcast_rss_provider.dart';
@@ -69,6 +70,10 @@ void main() {
       const DemoSourceProvider(),
       InternetArchiveProvider(
         baseUri: Uri.parse('https://archive.example.test'),
+      ),
+      JamendoProvider(
+        clientId: 'client-id',
+        tracksUri: Uri.parse('https://jamendo.example.test/tracks/'),
       ),
       CustomCatalogProvider(
         CustomCatalogDefinition.create(
