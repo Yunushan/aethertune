@@ -138,14 +138,14 @@ void main() {
     expect(artistRequest.queryParameters['hasimage'], 'true');
     expect(artistRequest.queryParameters['namesearch'], isNull);
 
-    final albumRequest = requests.last;
+    final albumRequest = requests[1];
     expect(albumRequest.path, '/v3.0/albums/');
     expect(albumRequest.queryParameters['offset'], '1');
     expect(albumRequest.queryParameters['limit'], '1');
     expect(albumRequest.queryParameters['namesearch'], 'aurora');
     expect(albumRequest.queryParameters['type'], 'album single');
 
-    final playlistRequest = requests.last;
+    final playlistRequest = requests[2];
     expect(playlistRequest.path, '/v3.0/playlists/');
     expect(playlistRequest.queryParameters['offset'], '3');
     expect(playlistRequest.queryParameters['limit'], '1');
