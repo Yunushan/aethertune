@@ -63,6 +63,7 @@ final class SharedPreferencesJamendoChartCache implements JamendoChartCache {
         tracks: List<Track>.unmodifiable(tracks),
         savedAt: DateTime.fromMillisecondsSinceEpoch(
           savedAtMilliseconds.round(),
+          isUtc: true,
         ),
       );
     } on Object {
