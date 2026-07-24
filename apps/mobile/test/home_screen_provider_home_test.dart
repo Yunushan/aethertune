@@ -48,7 +48,7 @@ void main() {
       await _pumpHome(tester, fixture);
 
       expect(find.text('From your servers'), findsOneWidget);
-      expect(find.text('Your local feed is empty'), findsOneWidget);
+      expect(fixture.library.homeFeedSections(), isEmpty);
       expect(provider.browseCalls, isEmpty);
 
       await tester.tap(
@@ -92,7 +92,7 @@ void main() {
 
       expect(albumTile, findsNothing);
       expect(find.text('From your servers'), findsOneWidget);
-      expect(find.text('Your local feed is empty'), findsOneWidget);
+      expect(fixture.library.homeFeedSections(), isEmpty);
     },
   );
 
