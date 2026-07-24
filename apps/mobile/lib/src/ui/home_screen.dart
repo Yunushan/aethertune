@@ -4569,6 +4569,7 @@ class _HomeTabState extends State<_HomeTab> {
     final youtubeFollows = context.watch<YouTubeChannelFollowStore?>();
     final youtubeFollowedFeed =
         context.watch<YouTubeFollowedChannelFeedStore?>();
+    final jamendo = context.watch<JamendoSettingsStore?>();
     final spotify = context.watch<SpotifySettingsStore?>();
     final player = context.read<PlayerController>();
 
@@ -4614,6 +4615,14 @@ class _HomeTabState extends State<_HomeTab> {
         break;
       }
     }
+    JamendoProvider? jamendoProvider;
+    for (final provider in jamendo?.musicProviders ??
+        const <MusicSourceProvider>[]) {
+      if (provider is JamendoProvider) {
+        jamendoProvider = provider;
+        break;
+      }
+    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: <Widget>[
@@ -4655,6 +4664,10 @@ class _HomeTabState extends State<_HomeTab> {
         const SizedBox(height: 12),
         _AudiusTrendingShelf(provider: _audiusProvider),
         const SizedBox(height: 12),
+        if (jamendoProvider != null) ...<Widget>[
+          _JamendoPopularShelf(provider: jamendoProvider),
+          const SizedBox(height: 12),
+        ],
         if (library.followedArtists.isNotEmpty) ...<Widget>[
           ArtistReleaseUpdatesShelf(provider: _artistReleaseProvider),
           const SizedBox(height: 12),
@@ -5804,6 +5817,180 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
         ),
       ),
     );
+  }
+
+  Future<void> _playTrack(BuildContext context, Track selected) async {
+    if (context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final coordinator = ProviderSearchCoordinator(<MusicSourceProvider>[
+      widget.provider,
+    ]);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final queue = await Future.wait<Track>(
+        _tracks.map(coordinator.resolvePlayableTrack),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      final selectedTrack = queue.firstWhere(
+        (track) => track.id == selected.id,
+        orElse: () => selected,
+      );
+      if (!selectedTrack.isPlayable) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('No playable stream for ${selected.title}.')),
+        );
+        return;
+      }
+      await context.read<PlayerController>().playTrack(
+        selectedTrack,
+        queue: queue.where((track) => track.isPlayable).toList(growable: false),
+      );
+    } on Object {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not play ${selected.title}.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveTrack(BuildContext context, Track track) async {
+    final coordinator = ProviderSearchCoordinator(<MusicSourceProvider>[
+      widget.provider,
+    ]);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final resolved = await coordinator.resolvePlayableTrack(track);
+      if (!context.mounted) {
+        return;
+      }
+      await context.read<LibraryStore>().addTracks(<Track>[resolved]);
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('${resolved.title} saved to your library.')),
+      );
+    } on Object {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not save ${track.title}.')),
+        );
+      }
+    }
+  }
+}
+
+final class _JamendoPopularShelf extends StatefulWidget {
+  const _JamendoPopularShelf({required this.provider});
+
+  final JamendoProvider provider;
+
+  @override
+  State<_JamendoPopularShelf> createState() => _JamendoPopularShelfState();
+}
+
+final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
+  List<Track> _tracks = const <Track>[];
+  bool _loading = false;
+  bool _loaded = false;
+  bool _failed = false;
+  int _requestSerial = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final offline = library.offlineModeEnabled;
+    return Column(
+      children: <Widget>[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.workspace_premium_outlined),
+          title: const Text('Popular on Jamendo'),
+          subtitle: const Text('Public tracks ranked by Jamendo popularity'),
+          trailing: IconButton.filled(
+            key: const Key('home-jamendo-popular-refresh'),
+            tooltip: 'Refresh popular Jamendo tracks',
+            onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+            icon: const Icon(Icons.refresh),
+          ),
+        ),
+        if (_loading && !_loaded)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: LinearProgressIndicator(),
+          ),
+        if (_failed && !_loaded)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.error_outline),
+            title: const Text('Popular Jamendo tracks are unavailable'),
+            trailing: IconButton(
+              tooltip: 'Retry popular Jamendo tracks',
+              onPressed:
+                  _loading || offline ? null : () => unawaited(_refresh()),
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        for (final track in _tracks)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.graphic_eq_outlined),
+            title: Text(track.title),
+            subtitle: Text(track.artist),
+            onTap: offline ? null : () => unawaited(_playTrack(context, track)),
+            trailing: IconButton(
+              tooltip: library.tracks.any((saved) => saved.id == track.id)
+                  ? 'Saved to library'
+                  : 'Save track to library',
+              onPressed: offline ? null : () => unawaited(_saveTrack(context, track)),
+              icon: Icon(
+                library.tracks.any((saved) => saved.id == track.id)
+                    ? Icons.bookmark
+                    : Icons.bookmark_add_outlined,
+              ),
+            ),
+          ),
+        if (_loading && _loaded)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (_loading || context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final request = ++_requestSerial;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final tracks = await widget.provider.fetchPopular(limit: 6);
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _tracks = List<Track>.unmodifiable(tracks);
+        _loading = false;
+        _loaded = true;
+      });
+    } on Object {
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
   }
 
   Future<void> _playTrack(BuildContext context, Track selected) async {

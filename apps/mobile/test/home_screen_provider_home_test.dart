@@ -11,6 +11,8 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
+import 'package:aethertune/src/data/jamendo_provider.dart';
+import 'package:aethertune/src/data/jamendo_settings_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/data/self_hosted_provider_store.dart';
@@ -394,6 +396,65 @@ void main() {
     );
   });
 
+  testWidgets('loads configured Jamendo popularity discovery explicitly on Home', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1200);
+    addTearDown(tester.view.reset);
+
+    final fixture = await _HomeFixture.create(
+      provider: _FakeProviderHomeCatalog(),
+    );
+    addTearDown(fixture.dispose);
+    Uri? requestedUri;
+    final jamendo = JamendoSettingsStore(
+      credentialVault: _MemoryCredentialVault(),
+      providerFactory: (clientId) => JamendoProvider(
+        clientId: clientId,
+        loader: (uri) async {
+          requestedUri = uri;
+          return _popularJamendoTracks;
+        },
+      ),
+    );
+    await jamendo.load();
+    await jamendo.saveClientId('client-id');
+    addTearDown(jamendo.dispose);
+
+    await _pumpHome(tester, fixture, jamendo: jamendo);
+
+    expect(find.text('Popular on Jamendo'), findsOneWidget);
+    expect(requestedUri, isNull);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedUri!.path, '/v3.0/tracks/');
+    expect(requestedUri!.queryParameters['client_id'], 'client-id');
+    expect(requestedUri!.queryParameters['limit'], '6');
+    expect(requestedUri!.queryParameters['order'], 'popularity_total');
+    expect(requestedUri!.queryParameters['groupby'], 'artist_id');
+    expect(find.text('Home Jamendo track'), findsOneWidget);
+    await tester.tap(find.byTooltip('Save track to library').first);
+    await tester.pumpAndSettle();
+    expect(fixture.library.tracks.single.isPlayable, isTrue);
+
+    await fixture.library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(
+              const ValueKey<String>('home-jamendo-popular-refresh'),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('loads followed YouTube channel metadata explicitly on Home', (
     tester,
   ) async {
@@ -590,6 +651,7 @@ Future<void> _pumpHome(
   YouTubeChannelFollowStore? youtubeFollows,
   YouTubeFollowedChannelFeedStore? youtubeFollowedFeed,
   SpotifySettingsStore? spotify,
+  JamendoSettingsStore? jamendo,
   InternetArchiveProvider? internetArchiveProvider,
   RadioBrowserProvider? radioBrowserProvider,
 }) async {
@@ -619,6 +681,8 @@ Future<void> _pumpHome(
           ),
         if (spotify != null)
           ChangeNotifierProvider<SpotifySettingsStore>.value(value: spotify),
+        if (jamendo != null)
+          ChangeNotifierProvider<JamendoSettingsStore>.value(value: jamendo),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -751,6 +815,20 @@ const _popularArchiveItemMetadata = '''
       "length": "120"
     }
   ]
+}
+''';
+
+const _popularJamendoTracks = '''
+{
+  "headers": {"status": "success", "code": 0},
+  "results": [{
+    "id": "81",
+    "name": "Home Jamendo track",
+    "artist_name": "Open Artist",
+    "album_name": "Open Signals",
+    "duration": "180",
+    "audio": "https://stream.example.test/home-jamendo.mp3"
+  }]
 }
 ''';
 

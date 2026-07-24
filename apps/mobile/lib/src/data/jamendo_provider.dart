@@ -122,6 +122,7 @@ final class JamendoProvider
     ],
     dataSent: <String>[
       'search query and pagination offset',
+      'public popularity discovery limit',
       'public artist or album browse pagination',
       'explicit public artist or album catalog search query and pagination',
       'public artist or album identifier',
@@ -368,6 +369,33 @@ final class JamendoProvider
       }
     }
     return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
+  }
+
+  /// Returns a bounded, public chart ordered by Jamendo popularity.
+  ///
+  /// The API documents `groupby=artist_id` for chart presentation, so a
+  /// refresh does not fill the small Home shelf with one artist's catalog.
+  Future<List<Track>> fetchPopular({int limit = 6}) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final requestedLimit = limit.clamp(1, 50);
+    return parseJamendoTracksResponse(
+      await _loader(
+        tracksUri.replace(
+          queryParameters: <String, String>{
+            'client_id': _clientId,
+            'format': 'json',
+            'limit': requestedLimit.toString(),
+            'order': 'popularity_total',
+            'groupby': 'artist_id',
+            'type': 'single albumtrack',
+            'audioformat': 'mp32',
+            'imagesize': '300',
+          },
+        ),
+      ),
+    );
   }
 
   @override

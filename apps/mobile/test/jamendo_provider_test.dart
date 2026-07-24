@@ -28,6 +28,30 @@ void main() {
     expect(page.tracks.first.streamUrl, 'https://stream.example.test/1.mp3');
   });
 
+  test('loads a bounded artist-grouped public popularity chart', () async {
+    Uri? requested;
+    final provider = JamendoProvider(
+      clientId: 'client-id',
+      loader: (uri) async {
+        requested = uri;
+        return _response(<String>['1', '2']);
+      },
+    );
+
+    final tracks = await provider.fetchPopular(limit: 2);
+
+    expect(tracks.map((track) => track.id), <String>['jamendo:1', 'jamendo:2']);
+    expect(requested?.path, '/v3.0/tracks/');
+    expect(requested?.queryParameters['client_id'], 'client-id');
+    expect(requested?.queryParameters['limit'], '2');
+    expect(requested?.queryParameters['order'], 'popularity_total');
+    expect(requested?.queryParameters['groupby'], 'artist_id');
+    expect(requested?.queryParameters['type'], 'single albumtrack');
+    expect(requested?.queryParameters['audioformat'], 'mp32');
+    expect(requested?.queryParameters['search'], isNull);
+    await expectLater(provider.fetchPopular(limit: 0), throwsArgumentError);
+  });
+
   test('validates Jamendo payloads and rejects unsafe media URLs', () {
     final tracks = parseJamendoTracksResponse('''
       {"headers":{"status":"success","code":0},"results":[
