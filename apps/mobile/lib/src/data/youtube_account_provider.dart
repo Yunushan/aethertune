@@ -45,12 +45,11 @@ final class YouTubeAccountProvider {
     return parseYouTubeDataPlaylistPage(
       await _responseLoader(
         playlistsUri.replace(
-          queryParameters: <String, String>{
-            'part': 'snippet,contentDetails',
-            'mine': 'true',
-            'maxResults': _limit(limit).toString(),
-            if (normalizedCursor != null) 'pageToken': normalizedCursor,
-          },
+          queryParameters: _queryParameters(
+            cursor: normalizedCursor,
+            part: 'snippet,contentDetails',
+            limit: limit,
+          ),
         ),
         _requireAccessToken(accessToken),
       ),
@@ -66,13 +65,12 @@ final class YouTubeAccountProvider {
     return parseYouTubeDataChannelPage(
       await _responseLoader(
         subscriptionsUri.replace(
-          queryParameters: <String, String>{
-            'part': 'snippet',
-            'mine': 'true',
-            'order': 'alphabetical',
-            'maxResults': _limit(limit).toString(),
-            if (normalizedCursor != null) 'pageToken': normalizedCursor,
-          },
+          queryParameters: _queryParameters(
+            cursor: normalizedCursor,
+            part: 'snippet',
+            limit: limit,
+            order: 'alphabetical',
+          ),
         ),
         _requireAccessToken(accessToken),
       ),
@@ -85,6 +83,26 @@ int _limit(int value) {
     throw ArgumentError.value(value, 'limit', 'Must be positive.');
   }
   return value.clamp(1, 50);
+}
+
+Map<String, String> _queryParameters({
+  required String? cursor,
+  required String part,
+  required int limit,
+  String? order,
+}) {
+  final parameters = <String, String>{
+    'part': part,
+    'mine': 'true',
+    'maxResults': _limit(limit).toString(),
+  };
+  if (order != null) {
+    parameters['order'] = order;
+  }
+  if (cursor != null) {
+    parameters['pageToken'] = cursor;
+  }
+  return parameters;
 }
 
 String? _normalizeCursor(String? value) {
