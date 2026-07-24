@@ -23,12 +23,17 @@ void main() {
           '/youtube/v3/playlists' => '''
             {"items":[{"id":"playlist-1","snippet":{"title":"My account mix","channelTitle":"Aether Radio"}}]}
           ''',
-          '/youtube/v3/subscriptions' => '{"items":[]}',
+          '/youtube/v3/subscriptions' => '''
+            {"items":[{"id":"subscription-1","snippet":{"title":"Orbit Channel","resourceId":{"channelId":"channel-1"}}}]}
+          ''',
           '/youtube/v3/playlistItems' => '''
             {"items":[
               {"snippet":{"title":"Account Signal","channelTitle":"Aether Radio","resourceId":{"videoId":"video-1"}}},
               {"snippet":{"title":"Account Signal","channelTitle":"Aether Radio","resourceId":{"videoId":"video-1"}}}
             ]}
+          ''',
+          '/youtube/v3/search' => '''
+            {"items":[{"id":{"videoId":"video-2"},"snippet":{"title":"Subscription Signal","channelTitle":"Orbit Channel"}}]}
           ''',
           _ => throw StateError('Unexpected endpoint: $uri'),
         };
@@ -59,5 +64,17 @@ void main() {
       library.playlists.single.trackIds.first,
       library.playlists.single.trackIds.last,
     );
+
+    await tester.tap(find.text('Subscriptions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Orbit Channel'), findsOneWidget);
+    await tester.tap(find.text('Orbit Channel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Subscription Signal'), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow), findsNothing);
+
+    await tester.tap(find.byTooltip('Save metadata to library'));
+    await tester.pumpAndSettle();
+    expect(library.tracks.map((track) => track.title), contains('Subscription Signal'));
   });
 }

@@ -278,7 +278,13 @@ final class _YouTubeAccountSubscriptionsTabState
             title: Text(channel.title),
             subtitle: channel.description == null
                 ? null
-                : Text(channel.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
+                : Text(
+                    channel.description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openChannel(context, channel),
           ),
         if (_loading && _channels.isNotEmpty) ...<Widget>[
           const SizedBox(height: 12),
@@ -344,6 +350,183 @@ final class _YouTubeAccountSubscriptionsTabState
         _error = error.toString();
       });
     }
+  }
+
+  void _openChannel(BuildContext context, YouTubeDataChannel channel) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeAccountChannelVideosScreen(
+          provider: widget.provider,
+          channel: channel,
+        ),
+      ),
+    );
+  }
+}
+
+/// Bounded recent metadata from one subscription channel.
+final class YouTubeAccountChannelVideosScreen extends StatefulWidget {
+  const YouTubeAccountChannelVideosScreen({
+    super.key,
+    required this.provider,
+    required this.channel,
+  });
+
+  final YouTubeAccountProvider provider;
+  final YouTubeDataChannel channel;
+
+  @override
+  State<YouTubeAccountChannelVideosScreen> createState() =>
+      _YouTubeAccountChannelVideosScreenState();
+}
+
+final class _YouTubeAccountChannelVideosScreenState
+    extends State<YouTubeAccountChannelVideosScreen> {
+  List<YouTubeDataChannelVideo> _videos = const <YouTubeDataChannelVideo>[];
+  String? _nextCursor;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load(reset: true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final library = context.watch<LibraryStore>();
+    final offlineModeEnabled = library.offlineModeEnabled;
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.channel.title)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          const Text(
+            'Recent subscription-channel metadata is read-only. Saving an entry does not enable YouTube playback or downloads.',
+          ),
+          if (offlineModeEnabled && _videos.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: ListTile(
+                leading: Icon(Icons.cloud_off_outlined),
+                title: Text('Offline mode is on'),
+                subtitle: Text('Turn it off to load channel metadata.'),
+              ),
+            ),
+          if (_loading && _videos.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          if (_error != null && _videos.isEmpty)
+            _YouTubeAccountErrorTile(
+              title: 'Could not load subscription channel metadata',
+              error: _error!,
+              tooltip: 'Retry subscription channel metadata',
+              enabled: !_loading && !offlineModeEnabled,
+              onRetry: () => unawaited(_load(reset: true)),
+            ),
+          if (!_loading && _error == null && _videos.isEmpty && !offlineModeEnabled)
+            const ListTile(
+              leading: Icon(Icons.video_library_outlined),
+              title: Text('No channel videos found'),
+            ),
+          for (final video in _videos)
+            ListTile(
+              leading: TrackArtwork(artworkUri: video.track.artworkUri),
+              title: Text(video.track.title),
+              subtitle: Text(video.track.artist),
+              trailing: IconButton(
+                tooltip: library.tracks.any(
+                  (saved) => saved.id == video.track.id,
+                )
+                    ? 'Saved to library'
+                    : 'Save metadata to library',
+                onPressed: () => unawaited(_saveTrack(video.track)),
+                icon: Icon(
+                  library.tracks.any((saved) => saved.id == video.track.id)
+                      ? Icons.bookmark
+                      : Icons.bookmark_add_outlined,
+                ),
+              ),
+            ),
+          if (_loading && _videos.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+          ],
+          if (_error != null && _videos.isNotEmpty)
+            _YouTubeAccountErrorTile(
+              title: 'Could not load more subscription channel metadata',
+              error: _error!,
+              tooltip: 'Retry subscription channel page',
+              enabled: !_loading && !offlineModeEnabled,
+              onRetry: () => unawaited(_load(reset: false)),
+            ),
+          if (_videos.isNotEmpty && _nextCursor != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _loading || offlineModeEnabled
+                    ? null
+                    : () => unawaited(_load(reset: false)),
+                icon: const Icon(Icons.expand_more),
+                label: const Text('Load more channel videos'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _load({required bool reset}) async {
+    if (_loading || (!reset && _nextCursor == null)) {
+      return;
+    }
+    if (context.read<LibraryStore>().offlineModeEnabled) {
+      setState(() => _error = 'Offline mode is on.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      if (reset) {
+        _videos = const <YouTubeDataChannelVideo>[];
+        _nextCursor = null;
+      }
+    });
+    try {
+      final page = await widget.provider.loadChannelVideosPage(
+        widget.channel.id,
+        cursor: reset ? null : _nextCursor,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _videos = reset ? page.videos : _mergeChannelVideos(_videos, page.videos);
+        _nextCursor = page.nextPageToken;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _error = error.toString();
+      });
+    }
+  }
+
+  Future<void> _saveTrack(Track track) async {
+    await context.read<LibraryStore>().addTracks(<Track>[track]);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${track.title} metadata saved to your library.')),
+    );
   }
 }
 
@@ -578,6 +761,18 @@ List<Track> _mergeTracks(List<Track> current, List<Track> incoming) {
     ...current,
     for (final track in incoming)
       if (ids.add(track.id)) track,
+  ];
+}
+
+List<YouTubeDataChannelVideo> _mergeChannelVideos(
+  List<YouTubeDataChannelVideo> current,
+  List<YouTubeDataChannelVideo> incoming,
+) {
+  final ids = current.map((video) => video.track.id).toSet();
+  return <YouTubeDataChannelVideo>[
+    ...current,
+    for (final video in incoming)
+      if (ids.add(video.track.id)) video,
   ];
 }
 

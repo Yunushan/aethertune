@@ -18,10 +18,12 @@ final class YouTubeAccountProvider {
     required YouTubeAccessTokenReader accessTokenReader,
     Uri? playlistsUri,
     Uri? subscriptionsUri,
+    Uri? searchUri,
     YouTubeAccountResponseLoader? responseLoader,
   }) : _accessTokenReader = accessTokenReader,
        playlistsUri = playlistsUri ?? _defaultPlaylistsUri,
        subscriptionsUri = subscriptionsUri ?? _defaultSubscriptionsUri,
+       searchUri = searchUri ?? _defaultSearchUri,
        _responseLoader = responseLoader ?? _loadAuthorizedJson;
 
   static final Uri _defaultPlaylistsUri = Uri.parse(
@@ -30,11 +32,15 @@ final class YouTubeAccountProvider {
   static final Uri _defaultSubscriptionsUri = Uri.parse(
     'https://www.googleapis.com/youtube/v3/subscriptions',
   );
+  static final Uri _defaultSearchUri = Uri.parse(
+    'https://www.googleapis.com/youtube/v3/search',
+  );
 
   final YouTubeAccessTokenReader _accessTokenReader;
   final YouTubeAccountResponseLoader _responseLoader;
   final Uri playlistsUri;
   final Uri subscriptionsUri;
+  final Uri searchUri;
 
   Future<YouTubeDataPlaylistPage> loadMyPlaylistsPage({
     String? cursor,
@@ -98,6 +104,36 @@ final class YouTubeAccountProvider {
             part: 'snippet,contentDetails',
             limit: limit,
             extra: <String, String>{'playlistId': normalizedPlaylistId},
+          ),
+        ),
+        _requireAccessToken(accessToken),
+      ),
+    );
+  }
+
+  Future<YouTubeDataChannelVideosPage> loadChannelVideosPage(
+    String channelId, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final normalizedChannelId = channelId.trim();
+    if (normalizedChannelId.isEmpty) {
+      throw const FormatException('Select a YouTube channel first.');
+    }
+    final normalizedCursor = _normalizeCursor(cursor);
+    final accessToken = await _accessTokenReader();
+    return parseYouTubeDataChannelVideosPage(
+      await _responseLoader(
+        searchUri.replace(
+          queryParameters: _queryParameters(
+            cursor: normalizedCursor,
+            part: 'snippet',
+            limit: limit,
+            order: 'date',
+            extra: <String, String>{
+              'channelId': normalizedChannelId,
+              'type': 'video',
+            },
           ),
         ),
         _requireAccessToken(accessToken),

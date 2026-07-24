@@ -71,4 +71,32 @@ void main() {
     expect(requestedUri!.queryParameters['maxResults'], '50');
     expect(page.tracks.single.externalId, 'video-1');
   });
+
+  test('loads the newest metadata for an account subscription channel', () async {
+    Uri? requestedUri;
+    final provider = YouTubeAccountProvider(
+      accessTokenReader: () async => 'access-token',
+      responseLoader: (uri, accessToken) async {
+        requestedUri = uri;
+        expect(accessToken, 'access-token');
+        return '''
+          {"items":[{"id":{"videoId":"video-2"},"snippet":{"title":"Subscription Signal","channelTitle":"Mira"}}]}
+        ''';
+      },
+    );
+
+    final page = await provider.loadChannelVideosPage(
+      ' channel-1 ',
+      cursor: ' next ',
+      limit: 99,
+    );
+
+    expect(requestedUri!.path, '/youtube/v3/search');
+    expect(requestedUri!.queryParameters['channelId'], 'channel-1');
+    expect(requestedUri!.queryParameters['type'], 'video');
+    expect(requestedUri!.queryParameters['order'], 'date');
+    expect(requestedUri!.queryParameters['pageToken'], 'next');
+    expect(requestedUri!.queryParameters['maxResults'], '50');
+    expect(page.videos.single.track.externalId, 'video-2');
+  });
 }
