@@ -461,11 +461,7 @@ void main() {
       find.byKey(const ValueKey<String>('home-jamendo-language')),
     );
     await tester.pumpAndSettle();
-    final languageField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextFormField &&
-          widget.decoration?.labelText == 'Two-letter language code',
-    );
+    final languageField = find.byType(TextFormField);
     await tester.enterText(languageField, 'TR');
     await tester.tap(find.text('Apply').last);
     await tester.pumpAndSettle();
