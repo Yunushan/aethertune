@@ -706,8 +706,12 @@ YouTubeDataChannelVideo? _channelVideoFromSearchItem(
 
 YouTubeDataChannel? _channelFromSearchItem(Map<String, Object?> json) {
   final id = json['id'] as Map<dynamic, dynamic>?;
-  final channelId = _nonEmptyString(id?['channelId']);
   final snippet = json['snippet'] as Map<dynamic, dynamic>?;
+  final resourceId = snippet?['resourceId'] as Map<dynamic, dynamic>?;
+  final channelId =
+      _nonEmptyString(id?['channelId']) ??
+      _nonEmptyString(resourceId?['channelId']) ??
+      _nonEmptyString(json['id']);
   final title = _nonEmptyString(snippet?['title']);
   if (channelId == null || title == null || snippet == null) {
     return null;
@@ -722,7 +726,8 @@ YouTubeDataChannel? _channelFromSearchItem(Map<String, Object?> json) {
 
 YouTubeDataPlaylist? _playlistFromSearchItem(Map<String, Object?> json) {
   final id = json['id'] as Map<dynamic, dynamic>?;
-  final playlistId = _nonEmptyString(id?['playlistId']);
+  final playlistId =
+      _nonEmptyString(id?['playlistId']) ?? _nonEmptyString(json['id']);
   final snippet = json['snippet'] as Map<dynamic, dynamic>?;
   final title = _nonEmptyString(snippet?['title']);
   if (playlistId == null || title == null || snippet == null) {
