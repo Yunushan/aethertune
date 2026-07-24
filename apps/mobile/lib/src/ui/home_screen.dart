@@ -6058,61 +6058,58 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
   }
 
   Future<void> _editLyricsLanguage() async {
-    final controller = TextEditingController(text: _lyricsLanguageCode ?? '');
-    try {
-      final value = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Lyrics language'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 2,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              labelText: 'Two-letter language code',
-              hintText: 'EN',
-            ),
+    var draft = _lyricsLanguageCode ?? '';
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lyrics language'),
+        content: TextFormField(
+          initialValue: draft,
+          autofocus: true,
+          maxLength: 2,
+          textCapitalization: TextCapitalization.characters,
+          onChanged: (value) => draft = value,
+          decoration: const InputDecoration(
+            labelText: 'Two-letter language code',
+            hintText: 'EN',
           ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(''),
-              child: const Text('Clear'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-              child: const Text('Apply'),
-            ),
-          ],
         ),
-      );
-      if (!mounted || value == null) {
-        return;
-      }
-      final normalized = value.trim().toLowerCase();
-      if (normalized.isNotEmpty && !RegExp(r'^[a-z]{2}$').hasMatch(normalized)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a two-letter language code.')),
-        );
-        return;
-      }
-      if (_lyricsLanguageCode == (normalized.isEmpty ? null : normalized)) {
-        return;
-      }
-      _requestSerial += 1;
-      setState(() {
-        _lyricsLanguageCode = normalized.isEmpty ? null : normalized;
-        _tracks = const <Track>[];
-        _loaded = false;
-        _failed = false;
-      });
-    } finally {
-      controller.dispose();
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(''),
+            child: const Text('Clear'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(draft),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || value == null) {
+      return;
     }
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isNotEmpty && !RegExp(r'^[a-z]{2}$').hasMatch(normalized)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a two-letter language code.')),
+      );
+      return;
+    }
+    if (_lyricsLanguageCode == (normalized.isEmpty ? null : normalized)) {
+      return;
+    }
+    _requestSerial += 1;
+    setState(() {
+      _lyricsLanguageCode = normalized.isEmpty ? null : normalized;
+      _tracks = const <Track>[];
+      _loaded = false;
+      _failed = false;
+    });
   }
 
   Future<void> _playTrack(BuildContext context, Track selected) async {

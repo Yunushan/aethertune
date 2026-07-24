@@ -463,7 +463,7 @@ void main() {
     await tester.pumpAndSettle();
     final languageField = find.byWidgetPredicate(
       (widget) =>
-          widget is TextField &&
+          widget is TextFormField &&
           widget.decoration?.labelText == 'Two-letter language code',
     );
     await tester.enterText(languageField, 'TR');
