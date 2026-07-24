@@ -45,11 +45,16 @@ EXPECTED_PROVIDER_STEPS = {
         "test/spotify_oauth_client_test.dart",
         "test/spotify_oauth_flow_test.dart",
     ),
-    "YouTube Data metadata": (
+    "YouTube Data and account metadata": (
         "test/youtube_data_metadata_provider_test.dart",
         "test/youtube_music_chart_screen_test.dart",
         "test/youtube_public_playlists_screen_test.dart",
         "test/youtube_followed_channel_feed_screen_test.dart",
+        "test/youtube_account_provider_test.dart",
+        "test/youtube_oauth_client_test.dart",
+        "test/youtube_oauth_flow_test.dart",
+        "test/youtube_account_settings_store_test.dart",
+        "test/youtube_account_library_screen_test.dart",
     ),
     "Jellyfin": ("test/jellyfin_provider_test.dart",),
     "Navidrome and Subsonic": ("test/subsonic_provider_test.dart",),

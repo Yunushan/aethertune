@@ -49,6 +49,7 @@ final class YouTubeAccountProvider {
             cursor: normalizedCursor,
             part: 'snippet,contentDetails',
             limit: limit,
+            mine: true,
           ),
         ),
         _requireAccessToken(accessToken),
@@ -70,6 +71,33 @@ final class YouTubeAccountProvider {
             part: 'snippet',
             limit: limit,
             order: 'alphabetical',
+            mine: true,
+          ),
+        ),
+        _requireAccessToken(accessToken),
+      ),
+    );
+  }
+
+  Future<YouTubeDataPlaylistItemsPage> loadPlaylistItemsPage(
+    String playlistId, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final normalizedPlaylistId = playlistId.trim();
+    if (normalizedPlaylistId.isEmpty) {
+      throw const FormatException('Select a YouTube playlist first.');
+    }
+    final normalizedCursor = _normalizeCursor(cursor);
+    final accessToken = await _accessTokenReader();
+    return parseYouTubeDataPlaylistItemsPage(
+      await _responseLoader(
+        playlistsUri.resolve('playlistItems').replace(
+          queryParameters: _queryParameters(
+            cursor: normalizedCursor,
+            part: 'snippet,contentDetails',
+            limit: limit,
+            extra: <String, String>{'playlistId': normalizedPlaylistId},
           ),
         ),
         _requireAccessToken(accessToken),
@@ -89,13 +117,18 @@ Map<String, String> _queryParameters({
   required String? cursor,
   required String part,
   required int limit,
+  bool mine = false,
   String? order,
+  Map<String, String> extra = const <String, String>{},
 }) {
   final parameters = <String, String>{
     'part': part,
-    'mine': 'true',
     'maxResults': _limit(limit).toString(),
+    ...extra,
   };
+  if (mine) {
+    parameters['mine'] = 'true';
+  }
   if (order != null) {
     parameters['order'] = order;
   }

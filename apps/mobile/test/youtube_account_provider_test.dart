@@ -45,4 +45,30 @@ void main() {
     expect(requestedUri!.queryParameters['maxResults'], '6');
     expect(page.channels.single.id, 'channel-1');
   });
+
+  test('loads account playlist metadata with a bounded continuation', () async {
+    Uri? requestedUri;
+    final provider = YouTubeAccountProvider(
+      accessTokenReader: () async => 'access-token',
+      responseLoader: (uri, accessToken) async {
+        requestedUri = uri;
+        expect(accessToken, 'access-token');
+        return '''
+          {"items":[{"snippet":{"resourceId":{"videoId":"video-1"},"title":"Account track","channelTitle":"Mira"}}]}
+        ''';
+      },
+    );
+
+    final page = await provider.loadPlaylistItemsPage(
+      ' playlist-1 ',
+      cursor: ' next ',
+      limit: 99,
+    );
+
+    expect(requestedUri!.path, '/youtube/v3/playlistItems');
+    expect(requestedUri!.queryParameters['playlistId'], 'playlist-1');
+    expect(requestedUri!.queryParameters['pageToken'], 'next');
+    expect(requestedUri!.queryParameters['maxResults'], '50');
+    expect(page.tracks.single.externalId, 'video-1');
+  });
 }

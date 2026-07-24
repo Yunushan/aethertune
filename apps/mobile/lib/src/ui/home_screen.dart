@@ -62,6 +62,8 @@ import '../data/wav_riff_info_writer.dart';
 import '../data/youtube_channel_follow_store.dart';
 import '../data/youtube_followed_channel_feed.dart';
 import '../data/youtube_followed_channel_feed_store.dart';
+import '../data/youtube_account_settings_store.dart';
+import '../data/youtube_account_provider.dart';
 import '../data/youtube_data_settings_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/backup_file_document.dart';
@@ -114,6 +116,7 @@ import 'spotify_top_artists_screen.dart';
 import 'youtube_music_chart_screen.dart';
 import 'youtube_channel_follow_screen.dart';
 import 'youtube_followed_channel_feed_screen.dart';
+import 'youtube_account_library_screen.dart';
 import 'youtube_public_playlists_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/listening_recap_card.dart';
@@ -15566,6 +15569,8 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
+enum _YouTubeAccountAction { library, configure, remove }
+
 enum _JamendoAction { browseCollections, configure, remove }
 
 enum _AudiusAction { browseCollections }
@@ -15712,6 +15717,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     final customCatalogs = context.watch<CustomCatalogStore?>();
     final librarySync = context.watch<LibrarySyncStore?>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
+    final youtubeAccount = context.watch<YouTubeAccountSettingsStore?>();
+    final YouTubeAccountProvider? youtubeAccountProvider =
+        youtubeAccount?.accountProvider;
     final jamendo = context.watch<JamendoSettingsStore?>();
     final youtubeProviders = youtubeData?.musicProviders ??
         const <MusicSourceProvider>[];
@@ -16046,6 +16054,101 @@ class _SourcesTabState extends State<_SourcesTab> {
             leading: const Icon(Icons.lock_outline),
             title: const Text('Jamendo API unavailable'),
             subtitle: Text(jamendo!.loadError!),
+          ),
+        ],
+        const SizedBox(height: 8),
+        _ProviderCard(
+          title: 'YouTube account library',
+          status: youtubeAccount?.isConfigured == true &&
+                  youtubeAccount?.desktopOAuthSupported == true
+              ? 'Enabled'
+              : youtubeAccount?.desktopOAuthSupported == true
+              ? 'Optional'
+              : 'Desktop only',
+          description: youtubeAccount?.desktopOAuthSupported == true
+              ? youtubeAccount?.isConfigured == true
+                    ? 'Browses your own playlists and subscriptions through read-only official API access. Playback and offline media are unavailable.'
+                    : 'Connect a user-owned Google OAuth desktop client to browse your own playlist and subscription metadata.'
+              : 'Google loopback OAuth is available only in the desktop app. Mobile does not offer this sign-in path.',
+          icon: Icons.account_circle_outlined,
+          capabilities: const <MusicSourceCapability>{
+            MusicSourceCapability.metadataSearch,
+            MusicSourceCapability.artwork,
+            MusicSourceCapability.authentication,
+            MusicSourceCapability.subscriptions,
+          },
+          disclosure: const ProviderPrivacyDisclosure(
+            networkDomains: <String>[
+              'accounts.google.com',
+              'oauth2.googleapis.com',
+              'www.googleapis.com',
+              'i.ytimg.com',
+            ],
+            requiresUserCredentials: true,
+          ),
+          actions: PopupMenuButton<_YouTubeAccountAction>(
+            tooltip: 'Manage YouTube account library',
+            onSelected: (action) {
+              switch (action) {
+                case _YouTubeAccountAction.library:
+                  if (youtubeAccountProvider != null) {
+                    _openYouTubeAccountLibrary(context, youtubeAccountProvider);
+                  }
+                  break;
+                case _YouTubeAccountAction.configure:
+                  unawaited(_configureYouTubeAccount(context));
+                  break;
+                case _YouTubeAccountAction.remove:
+                  unawaited(_removeYouTubeAccount(context));
+                  break;
+              }
+            },
+            itemBuilder: (_) => <PopupMenuEntry<_YouTubeAccountAction>>[
+              PopupMenuItem<_YouTubeAccountAction>(
+                value: _YouTubeAccountAction.library,
+                enabled: youtubeAccountProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.video_library_outlined),
+                  title: Text('My playlists and subscriptions'),
+                ),
+              ),
+              PopupMenuItem<_YouTubeAccountAction>(
+                value: _YouTubeAccountAction.configure,
+                enabled: youtubeAccount?.loaded == true &&
+                    youtubeAccount?.desktopOAuthSupported == true &&
+                    !offlineModeEnabled,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.login_outlined),
+                  title: Text(
+                    youtubeAccount?.isConfigured == true
+                        ? 'Replace account connection'
+                        : 'Connect account',
+                  ),
+                ),
+              ),
+              PopupMenuItem<_YouTubeAccountAction>(
+                value: _YouTubeAccountAction.remove,
+                enabled: youtubeAccount?.isConfigured == true,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.logout_outlined),
+                  title: Text('Disconnect account'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (youtubeAccount?.loaded != true) ...<Widget>[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ] else if (youtubeAccount?.loadError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('YouTube account library unavailable'),
+            subtitle: Text(youtubeAccount!.loadError!),
           ),
         ],
         const SizedBox(height: 8),
@@ -17673,6 +17776,162 @@ class _SourcesTabState extends State<_SourcesTab> {
         builder: (_) => YouTubePublicPlaylistsScreen(provider: provider),
       ),
     );
+  }
+
+  void _openYouTubeAccountLibrary(
+    BuildContext context,
+    YouTubeAccountProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeAccountLibraryScreen(provider: provider),
+      ),
+    );
+  }
+
+  Future<void> _configureYouTubeAccount(BuildContext context) async {
+    final clientIdController = TextEditingController();
+    String? validationError;
+    try {
+      final clientId = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Connect YouTube account library'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'AetherTune uses Google Authorization Code with PKCE and a temporary loopback callback. Create your own Google OAuth desktop client and add http://127.0.0.1 as an authorized redirect URI without a port.',
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'The connection reads playlist, playlist-item, and subscription metadata only. It does not play, download, cache, upload, or change YouTube content.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const Key('youtube-account-client-id'),
+                      controller: clientIdController,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Google OAuth desktop client ID',
+                      ),
+                      onSubmitted: (value) {
+                        if (value.trim().isEmpty) {
+                          setDialogState(
+                            () => validationError =
+                                'Enter a Google OAuth desktop client ID.',
+                          );
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(value);
+                      },
+                    ),
+                    if (validationError != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final value = clientIdController.text.trim();
+                  if (value.isEmpty) {
+                    setDialogState(
+                      () => validationError =
+                          'Enter a Google OAuth desktop client ID.',
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(value);
+                },
+                child: const Text('Authorize'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!context.mounted || clientId == null) {
+        return;
+      }
+      final store = context.read<YouTubeAccountSettingsStore?>();
+      if (store == null) {
+        return;
+      }
+      await store.connect(clientId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('YouTube account library enabled.')),
+        );
+      }
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } on StateError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      clientIdController.dispose();
+    }
+  }
+
+  Future<void> _removeYouTubeAccount(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Disconnect YouTube account library?'),
+        content: const Text(
+          'This removes the YouTube access and refresh tokens from this device. Saved metadata entries remain unchanged.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    final store = context.read<YouTubeAccountSettingsStore?>();
+    if (store == null) {
+      return;
+    }
+    await store.remove();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('YouTube account library disconnected.')),
+      );
+    }
   }
 
   Future<void> _removeYouTubeData(BuildContext context) async {

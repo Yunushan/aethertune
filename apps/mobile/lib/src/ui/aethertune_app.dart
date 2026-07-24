@@ -21,6 +21,7 @@ import '../data/custom_catalog_store.dart';
 import '../data/podcast_chapter_host_policy.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/spotify_settings_store.dart';
+import '../data/youtube_account_settings_store.dart';
 import '../data/youtube_data_settings_store.dart';
 import '../data/jamendo_settings_store.dart';
 import '../data/youtube_channel_follow_store.dart';
@@ -82,6 +83,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
         ChangeNotifierProvider<YouTubeDataSettingsStore>(
           create: (_) => YouTubeDataSettingsStore()..load(),
+        ),
+        ChangeNotifierProvider<YouTubeAccountSettingsStore>(
+          create: (_) => YouTubeAccountSettingsStore()..load(),
         ),
         ChangeNotifierProvider<JamendoSettingsStore>(
           create: (_) => JamendoSettingsStore()..load(),
