@@ -143,7 +143,7 @@ final class AudiusProvider
         ? streamBaseUri.path
         : '${streamBaseUri.path}/';
     return streamBaseUri.replace(
-      path: '${basePath}${Uri.encodeComponent(externalId)}/stream',
+      path: '$basePath${Uri.encodeComponent(externalId)}/stream',
     );
   }
 }
