@@ -156,6 +156,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   final List<MusicCatalogCollection> _additionalCollections =
       <MusicCatalogCollection>[];
   String _query = '';
+  String _remoteSearchQuery = '';
+  Future<MusicCatalogCollectionPage>? _remoteSearchRequest;
   bool _playlistMutationInProgress = false;
   bool _albumFavoriteMutationInProgress = false;
   final Map<String, bool> _remoteAlbumFavoriteOverrides = <String, bool>{};
@@ -171,6 +173,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.request, widget.request)) {
       _additionalCollections.clear();
+      _remoteSearchQuery = '';
+      _remoteSearchRequest = null;
       _loadingMore = false;
       _loadMoreError = null;
       _hasMoreOverride = null;
@@ -184,10 +188,28 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     super.dispose();
   }
 
+  MusicCatalogCollectionSearchProvider? get _collectionSearchProvider {
+    final provider = widget.provider;
+    if (provider is! MusicCatalogCollectionSearchProvider ||
+        !provider.searchableCollectionKinds.contains(widget.kind)) {
+      return null;
+    }
+    return provider;
+  }
+
+  Future<MusicCatalogCollectionPage> get _activeRequest {
+    return _remoteSearchRequest ?? widget.request;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final remoteSearchProvider = _collectionSearchProvider;
+    final isRemoteSearch = _remoteSearchRequest != null;
+    final onRefresh = isRemoteSearch
+        ? () => _searchRemoteCollections(_remoteSearchQuery)
+        : widget.onRefresh;
     return FutureBuilder<MusicCatalogCollectionPage>(
-      future: widget.request,
+      future: _activeRequest,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
@@ -195,7 +217,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         if (snapshot.hasError) {
           return _CatalogErrorState(
             error: snapshot.error!,
-            onRetry: widget.onRefresh,
+            onRetry: onRefresh,
           );
         }
         final page = snapshot.data!;
@@ -232,7 +254,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
             : null;
         final library = context.watch<LibraryStore>();
         final normalizedQuery = _query.trim().toLowerCase();
-        final visible = normalizedQuery.isEmpty
+        final visible = normalizedQuery.isEmpty || isRemoteSearch
             ? collections
             : collections
                 .where(
@@ -282,20 +304,44 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                       key: Key('catalog-filter-${widget.kind.name}'),
                       controller: _filterController,
                       decoration: InputDecoration(
-                        labelText: 'Filter ${_kindPlural(widget.kind)}',
+                        labelText: remoteSearchProvider == null
+                            ? 'Filter ${_kindPlural(widget.kind)}'
+                            : 'Search ${_kindPlural(widget.kind)}',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _query.isEmpty
                             ? null
-                            : IconButton(
-                                tooltip: 'Clear filter',
-                                onPressed: () {
-                                  _filterController.clear();
-                                  setState(() => _query = '');
-                                },
-                                icon: const Icon(Icons.clear),
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  if (remoteSearchProvider != null)
+                                    IconButton(
+                                      key: Key(
+                                        'catalog-search-${widget.kind.name}',
+                                      ),
+                                      tooltip:
+                                          'Search ${_kindPlural(widget.kind).toLowerCase()}',
+                                      onPressed: () => unawaited(
+                                        _searchRemoteCollections(_query),
+                                      ),
+                                      icon: const Icon(Icons.manage_search),
+                                    ),
+                                  IconButton(
+                                    tooltip: 'Clear filter',
+                                    onPressed: _clearSearch,
+                                    icon: const Icon(Icons.clear),
+                                  ),
+                                ],
                               ),
                       ),
                       onChanged: (value) => setState(() => _query = value),
+                      onSubmitted: remoteSearchProvider == null
+                          ? null
+                          : (value) => unawaited(
+                              _searchRemoteCollections(value),
+                            ),
+                      textInputAction: remoteSearchProvider == null
+                          ? TextInputAction.done
+                          : TextInputAction.search,
                     ),
                   ],
                 );
@@ -522,28 +568,84 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     );
   }
 
+  void _clearSearch() {
+    _filterController.clear();
+    setState(() {
+      _query = '';
+      _remoteSearchQuery = '';
+      _remoteSearchRequest = null;
+      _additionalCollections.clear();
+      _loadingMore = false;
+      _loadMoreError = null;
+      _hasMoreOverride = null;
+      _nextOffsetOverride = null;
+    });
+  }
+
+  Future<void> _searchRemoteCollections(String query) async {
+    final provider = _collectionSearchProvider;
+    final normalized = query.trim();
+    if (provider == null ||
+        normalized.isEmpty ||
+        context.read<LibraryStore>().offlineModeEnabled) {
+      return;
+    }
+    final request = provider.searchCollectionsPage(
+      widget.kind,
+      normalized,
+      limit: _catalogPageSize,
+    );
+    setState(() {
+      _query = normalized;
+      _remoteSearchQuery = normalized;
+      _remoteSearchRequest = request;
+      _additionalCollections.clear();
+      _loadingMore = false;
+      _loadMoreError = null;
+      _hasMoreOverride = null;
+      _nextOffsetOverride = null;
+    });
+    try {
+      await request;
+    } on Object {
+      // FutureBuilder renders the provider's redacted error and retry action.
+    }
+  }
+
   Future<void> _loadMore(
     List<MusicCatalogCollection> existingCollections, {
     required int nextOffset,
   }) async {
     final provider = widget.provider;
-    if (_loadingMore ||
-        provider is! MusicCatalogPagingProvider ||
-        !provider.pagedCollectionKinds.contains(widget.kind)) {
+    final remoteSearchProvider = _remoteSearchQuery.isEmpty
+        ? null
+        : _collectionSearchProvider;
+    final canLoadMore = remoteSearchProvider != null ||
+        (provider is MusicCatalogPagingProvider &&
+            provider.pagedCollectionKinds.contains(widget.kind));
+    if (_loadingMore || !canLoadMore) {
       return;
     }
     setState(() {
       _loadingMore = true;
       _loadMoreError = null;
     });
-    final initialRequest = widget.request;
+    final initialRequest = _activeRequest;
     try {
-      final page = await provider.browseCollectionsPage(
-        widget.kind,
-        offset: nextOffset,
-        limit: _catalogPageSize,
-      );
-      if (!mounted || !identical(initialRequest, widget.request)) {
+      final page = remoteSearchProvider != null
+          ? await remoteSearchProvider.searchCollectionsPage(
+              widget.kind,
+              _remoteSearchQuery,
+              offset: nextOffset,
+              limit: _catalogPageSize,
+            )
+          : await (provider as MusicCatalogPagingProvider)
+                .browseCollectionsPage(
+                  widget.kind,
+                  offset: nextOffset,
+                  limit: _catalogPageSize,
+                );
+      if (!mounted || !identical(initialRequest, _activeRequest)) {
         return;
       }
       final knownIds = existingCollections
@@ -561,7 +663,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         _loadingMore = false;
       });
     } on Object catch (error) {
-      if (!mounted || !identical(initialRequest, widget.request)) {
+      if (!mounted || !identical(initialRequest, _activeRequest)) {
         return;
       }
       setState(() {

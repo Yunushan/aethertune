@@ -20,6 +20,7 @@ typedef AudiusBinaryLoader = Future<Uint8List> Function(
 /// durable per-track license grant.
 final class AudiusProvider
     implements
+        MusicCatalogCollectionSearchProvider,
         MusicCatalogPagingProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
@@ -28,6 +29,9 @@ final class AudiusProvider
     Uri? trendingUri,
     Uri? trendingPlaylistsUri,
     Uri? playlistsBaseUri,
+    Uri? playlistsSearchUri,
+    Uri? usersSearchUri,
+    Uri? usersBaseUri,
     Uri? streamBaseUri,
     AudiusResponseLoader? loader,
     AudiusBinaryLoader? artworkLoader,
@@ -36,6 +40,9 @@ final class AudiusProvider
        trendingPlaylistsUri =
            trendingPlaylistsUri ?? _defaultTrendingPlaylistsUri,
        playlistsBaseUri = playlistsBaseUri ?? _defaultPlaylistsBaseUri,
+       playlistsSearchUri = playlistsSearchUri ?? _defaultPlaylistsSearchUri,
+       usersSearchUri = usersSearchUri ?? _defaultUsersSearchUri,
+       usersBaseUri = usersBaseUri ?? _defaultUsersBaseUri,
        streamBaseUri = streamBaseUri ?? _defaultStreamBaseUri,
        _loader = loader ?? _loadAudiusJson,
        _artworkLoader = artworkLoader ?? loadProviderImageBytes;
@@ -55,11 +62,23 @@ final class AudiusProvider
   static final Uri _defaultPlaylistsBaseUri = Uri.parse(
     'https://api.audius.co/v1/playlists/',
   );
+  static final Uri _defaultPlaylistsSearchUri = Uri.parse(
+    'https://api.audius.co/v1/playlists/search',
+  );
+  static final Uri _defaultUsersSearchUri = Uri.parse(
+    'https://api.audius.co/v1/users/search',
+  );
+  static final Uri _defaultUsersBaseUri = Uri.parse(
+    'https://api.audius.co/v1/users/',
+  );
 
   final Uri searchUri;
   final Uri trendingUri;
   final Uri trendingPlaylistsUri;
   final Uri playlistsBaseUri;
+  final Uri playlistsSearchUri;
+  final Uri usersSearchUri;
+  final Uri usersBaseUri;
   final Uri streamBaseUri;
   final AudiusResponseLoader _loader;
   final AudiusBinaryLoader _artworkLoader;
@@ -94,9 +113,65 @@ final class AudiusProvider
       'search query and pagination offset',
       'public trending album or playlist pagination',
       'public album or playlist identifier',
+      'explicit public artist, album, or playlist search query and pagination',
+      'public artist identifier',
       'public artwork URL',
     ],
   );
+
+  @override
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+        MusicCatalogCollectionKind.album,
+        MusicCatalogCollectionKind.playlist,
+      };
+
+  @override
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
+    if (!searchableCollectionKinds.contains(kind)) {
+      throw UnsupportedError('Audius does not expose $kind search.');
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[],
+        nextOffset: 0,
+        hasMore: false,
+      );
+    }
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final requestedLimit = limit.clamp(1, 50);
+    final uri = (kind == MusicCatalogCollectionKind.artist
+            ? usersSearchUri
+            : playlistsSearchUri)
+        .replace(
+          queryParameters: <String, String>{
+            'query': normalizedQuery,
+            'offset': offset.toString(),
+            'limit': requestedLimit.toString(),
+          },
+        );
+    final response = kind == MusicCatalogCollectionKind.artist
+        ? _parseAudiusArtistsResponse(await _loader(uri))
+        : _parseAudiusCollectionsResponse(await _loader(uri), kind);
+    final canContinue = response.resultCount == requestedLimit;
+    return MusicCatalogCollectionPage(
+      collections: response.collections,
+      nextOffset: canContinue ? offset + response.resultCount : offset,
+      hasMore: canContinue,
+    );
+  }
 
   @override
   Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
@@ -158,20 +233,24 @@ final class AudiusProvider
   Future<MusicCatalogDetail> loadCollection(
     MusicCatalogCollection collection,
   ) async {
-    if (!pagedCollectionKinds.contains(collection.kind)) {
+    if (!searchableCollectionKinds.contains(collection.kind)) {
       throw UnsupportedError('Audius collection type is not supported.');
     }
     final collectionId = collection.id.trim();
     if (!_isAudiusId(collectionId)) {
       throw ArgumentError.value(collection.id, 'collection.id', 'Is invalid.');
     }
-    final basePath = playlistsBaseUri.path.endsWith('/')
-        ? playlistsBaseUri.path
-        : '${playlistsBaseUri.path}/';
+    final baseUri = collection.kind == MusicCatalogCollectionKind.artist
+        ? usersBaseUri
+        : playlistsBaseUri;
+    final basePath = baseUri.path.endsWith('/')
+        ? baseUri.path
+        : '${baseUri.path}/';
+    final detailPath = '$basePath${Uri.encodeComponent(collectionId)}/tracks';
     final response = _parseAudiusTracksResponse(
       await _loader(
-        playlistsBaseUri.replace(
-          path: '$basePath${Uri.encodeComponent(collectionId)}/tracks',
+        baseUri.replace(
+          path: detailPath,
           queryParameters: const <String, String>{'limit': '100'},
         ),
       ),
@@ -386,6 +465,51 @@ _AudiusCollectionsResponse _parseAudiusCollectionsResponse(
   }
   return _AudiusCollectionsResponse(
     collections: List<MusicCatalogCollection>.unmodifiable(collections),
+    resultCount: data.length,
+  );
+}
+
+_AudiusCollectionsResponse _parseAudiusArtistsResponse(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('Audius response must be an object.');
+  }
+  final data = decoded.cast<String, Object?>()['data'];
+  if (data is! List<dynamic>) {
+    throw const FormatException('Audius response is missing artist data.');
+  }
+
+  final artists = <MusicCatalogCollection>[];
+  final seen = <String>{};
+  for (final raw in data.whereType<Map<dynamic, dynamic>>()) {
+    final value = raw.cast<String, Object?>();
+    final id = _stringValue(value['id']);
+    final handle = _stringValue(value['handle']);
+    final title = _firstNonEmpty(<String>[
+      _stringValue(value['name']),
+      handle,
+    ]);
+    if (value['is_deactivated'] == true ||
+        !_isAudiusId(id) ||
+        title.isEmpty ||
+        !seen.add(id)) {
+      continue;
+    }
+    final trackCount = _integerValue(value['track_count']) ?? 0;
+    final artwork = _artworkUri(value['profile_picture']);
+    artists.add(
+      MusicCatalogCollection(
+        id: id,
+        title: title,
+        kind: MusicCatalogCollectionKind.artist,
+        subtitle: handle.isEmpty || handle == title ? '' : '@$handle',
+        itemCount: trackCount < 0 ? 0 : trackCount,
+        artworkId: artwork?.toString(),
+      ),
+    );
+  }
+  return _AudiusCollectionsResponse(
+    collections: List<MusicCatalogCollection>.unmodifiable(artists),
     resultCount: data.length,
   );
 }

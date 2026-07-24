@@ -84,6 +84,78 @@ void main() {
     expect(playlists.collections.single.itemCount, 2);
   });
 
+  test('searches bounded public Audius artists and named collections', () async {
+    final requests = <Uri>[];
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requests.add(uri);
+        if (uri.path == '/v1/users/search') {
+          return '''
+            {"data":[
+              {"id":"artist_1","name":"Open Artist","handle":"open-artist","track_count":12,"profile_picture":{"480x480":"https://art.example.test/artist.jpg"}},
+              {"id":"inactive","name":"Inactive","is_deactivated":true}
+            ]}
+          ''';
+        }
+        return '''
+          {"data":[
+            {"id":"album_1","playlist_name":"Open Album","is_album":true},
+            {"id":"playlist_1","playlist_name":"Open Playlist","is_album":false}
+          ]}
+        ''';
+      },
+    );
+
+    final artists = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      'open',
+      offset: 3,
+      limit: 2,
+    );
+    final playlists = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.playlist,
+      'open',
+      limit: 2,
+    );
+
+    expect(requests.first.path, '/v1/users/search');
+    expect(requests.first.queryParameters, <String, String>{
+      'query': 'open',
+      'offset': '3',
+      'limit': '2',
+    });
+    expect(artists.collections.single.title, 'Open Artist');
+    expect(artists.collections.single.subtitle, '@open-artist');
+    expect(artists.collections.single.itemCount, 12);
+    expect(artists.collections.single.artworkId, 'https://art.example.test/artist.jpg');
+    expect(artists.hasMore, isTrue);
+    expect(artists.nextOffset, 5);
+    expect(requests.last.path, '/v1/playlists/search');
+    expect(playlists.collections.single.title, 'Open Playlist');
+  });
+
+  test('loads bounded public tracks for a searched Audius artist', () async {
+    Uri? requested;
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requested = uri;
+        return '{"data":[{"id":"public","title":"Artist track"}]}';
+      },
+    );
+
+    final detail = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'artist_1',
+        title: 'Open Artist',
+        kind: MusicCatalogCollectionKind.artist,
+      ),
+    );
+
+    expect(requested?.path, '/v1/users/artist_1/tracks');
+    expect(requested?.queryParameters['limit'], '100');
+    expect(detail.tracks.single.album, 'Open Artist');
+  });
+
   test('loads a bounded public collection detail and filters unavailable tracks',
       () async {
     Uri? requested;

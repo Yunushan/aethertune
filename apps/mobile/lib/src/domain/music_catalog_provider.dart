@@ -92,6 +92,21 @@ abstract interface class MusicCatalogPagingProvider
   });
 }
 
+/// Optional extension for catalog providers with documented remote collection
+/// search. Callers must make searches explicit and retain provider-owned
+/// pagination rather than issuing network requests for every text change.
+abstract interface class MusicCatalogCollectionSearchProvider
+    implements MusicCatalogProvider {
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds;
+
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  });
+}
+
 /// Optional extension for providers with a documented radio or similar-items
 /// endpoint.
 abstract interface class MusicCatalogRadioProvider

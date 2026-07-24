@@ -503,6 +503,50 @@ void main() {
     ]);
   });
 
+  testWidgets('searches remote catalog collections only after explicit submit', (
+    tester,
+  ) async {
+    final provider = _FakeCollectionSearchProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.artist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search Artists'), findsOneWidget);
+    expect(provider.searchCalls, isEmpty);
+    await tester.enterText(
+      find.byKey(const Key('catalog-filter-artist')),
+      'ambient',
+    );
+    await tester.pump();
+    expect(provider.searchCalls, isEmpty);
+
+    await tester.tap(find.byKey(const Key('catalog-search-artist')));
+    await tester.pumpAndSettle();
+
+    expect(provider.searchCalls, <String>['artist:ambient:0:100']);
+    expect(find.text('Remote Ambient Artist'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('catalog-load-more-artist')));
+    await tester.pumpAndSettle();
+
+    expect(provider.searchCalls, <String>[
+      'artist:ambient:0:100',
+      'artist:ambient:1:100',
+    ]);
+    expect(find.text('Remote Second Artist'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'keeps local artist following distinct from server artist favorites', (
     tester,
@@ -1213,6 +1257,58 @@ class _FakePagedCatalogProvider extends _FakeCatalogProvider
       nextOffset: 2,
       hasMore: false,
       totalCount: 2,
+    );
+  }
+}
+
+class _FakeCollectionSearchProvider extends _FakeCatalogProvider
+    implements MusicCatalogCollectionSearchProvider {
+  final List<String> searchCalls = <String>[];
+
+  @override
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+      };
+
+  @override
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
+    searchCalls.add('${kind.name}:$query:$offset:$limit');
+    if (kind != MusicCatalogCollectionKind.artist || query != 'ambient') {
+      return const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[],
+        nextOffset: 0,
+        hasMore: false,
+      );
+    }
+    if (offset == 0) {
+      return const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[
+          MusicCatalogCollection(
+            id: 'remote-artist-1',
+            title: 'Remote Ambient Artist',
+            kind: MusicCatalogCollectionKind.artist,
+          ),
+        ],
+        nextOffset: 1,
+        hasMore: true,
+      );
+    }
+    return const MusicCatalogCollectionPage(
+      collections: <MusicCatalogCollection>[
+        MusicCatalogCollection(
+          id: 'remote-artist-2',
+          title: 'Remote Second Artist',
+          kind: MusicCatalogCollectionKind.artist,
+        ),
+      ],
+      nextOffset: 2,
+      hasMore: false,
     );
   }
 }

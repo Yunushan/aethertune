@@ -5698,7 +5698,7 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
             children: <Widget>[
               IconButton(
                 key: const Key('home-audius-browse'),
-                tooltip: 'Browse Audius albums and playlists',
+                tooltip: 'Browse Audius artists, albums, and playlists',
                 onPressed: offline ? null : () => _browseCollections(context),
                 icon: const Icon(Icons.explore_outlined),
               ),
@@ -5797,6 +5797,7 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
         builder: (_) => SelfHostedBrowseScreen(
           provider: widget.provider,
           collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.artist,
             MusicCatalogCollectionKind.album,
             MusicCatalogCollectionKind.playlist,
           ],
@@ -15487,7 +15488,7 @@ class _SourcesTabState extends State<_SourcesTab> {
                 child: const ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.explore_outlined),
-                  title: Text('Browse public albums and playlists'),
+                  title: Text('Browse public artists, albums, and playlists'),
                 ),
               ),
             ],
@@ -17256,6 +17257,7 @@ class _SourcesTabState extends State<_SourcesTab> {
         builder: (_) => SelfHostedBrowseScreen(
           provider: _audiusProvider,
           collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.artist,
             MusicCatalogCollectionKind.album,
             MusicCatalogCollectionKind.playlist,
           ],
