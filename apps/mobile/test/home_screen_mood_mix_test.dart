@@ -88,7 +88,7 @@ void main() {
 
     expect(
       find.textContaining('Because of a recent addition'),
-      findsNWidgets(2),
+      findsOneWidget,
     );
 
     final focusMix = find.text('Focus mix').first;
