@@ -91,13 +91,14 @@ void main() {
       findsOneWidget,
     );
 
-    final focusMix = find.text('Focus mix').first;
-    await Scrollable.ensureVisible(
-      tester.element(focusMix),
-      alignment: 0.2,
+    final focusMix = find.text('Focus mix');
+    await tester.scrollUntilVisible(
+      focusMix,
+      240,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    await tester.tap(focusMix);
+    await tester.tap(focusMix.first);
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Play mix'), findsOneWidget);
