@@ -18,6 +18,7 @@ final class JamendoCachedChart {
 abstract interface class JamendoChartCache {
   Future<JamendoCachedChart?> read(String key);
   Future<void> write(String key, List<Track> tracks);
+  Future<void> clear();
 }
 
 final class SharedPreferencesJamendoChartCache implements JamendoChartCache {
@@ -88,6 +89,18 @@ final class SharedPreferencesJamendoChartCache implements JamendoChartCache {
         'tracks': safeTracks,
       }),
     );
+  }
+
+  @override
+  Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(_prefix))
+        .toList(growable: false);
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 }
 

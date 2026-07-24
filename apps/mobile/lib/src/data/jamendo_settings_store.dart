@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/music_source_provider.dart';
+import 'jamendo_chart_cache.dart';
 import 'jamendo_provider.dart';
 import 'provider_credential_vault.dart';
 
@@ -11,8 +12,10 @@ final class JamendoSettingsStore extends ChangeNotifier {
   JamendoSettingsStore({
     ProviderCredentialVault? credentialVault,
     JamendoProviderFactory? providerFactory,
+    JamendoChartCache? chartCache,
   }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
-       _providerFactory = providerFactory ?? _createProvider;
+       _providerFactory = providerFactory ?? _createProvider,
+       _chartCache = chartCache ?? SharedPreferencesJamendoChartCache();
 
   static const _credentialId = 'jamendo-api-client-id';
 
@@ -22,6 +25,7 @@ final class JamendoSettingsStore extends ChangeNotifier {
 
   final ProviderCredentialVault _credentialVault;
   final JamendoProviderFactory _providerFactory;
+  final JamendoChartCache _chartCache;
   String? _clientId;
   JamendoProvider? _provider;
   bool _loaded = false;
@@ -69,6 +73,7 @@ final class JamendoSettingsStore extends ChangeNotifier {
 
   Future<void> removeClientId() async {
     await _credentialVault.delete(_credentialId);
+    await _chartCache.clear();
     _clientId = null;
     _provider = null;
     _loadError = null;

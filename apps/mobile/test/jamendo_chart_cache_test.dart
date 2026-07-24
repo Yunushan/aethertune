@@ -78,4 +78,18 @@ void main() {
     expect(cached.isExpired(DateTime.utc(2026, 7, 24, 12)), isFalse);
     expect(cached.isExpired(DateTime.utc(2026, 7, 24, 12, 0, 1)), isTrue);
   });
+
+  test('clears every chart entry without touching unrelated preferences', () async {
+    final cache = SharedPreferencesJamendoChartCache();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('aethertune.jamendo.chart.v1.popular.all', '{}');
+    await prefs.setString('aethertune.jamendo.chart.v1.jazz.tr', '{}');
+    await prefs.setString('aethertune.theme.v1', 'dark');
+
+    await cache.clear();
+
+    expect(prefs.getString('aethertune.jamendo.chart.v1.popular.all'), isNull);
+    expect(prefs.getString('aethertune.jamendo.chart.v1.jazz.tr'), isNull);
+    expect(prefs.getString('aethertune.theme.v1'), 'dark');
+  });
 }

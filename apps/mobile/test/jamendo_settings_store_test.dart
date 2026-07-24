@@ -1,12 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:aethertune/src/data/jamendo_chart_cache.dart';
 import 'package:aethertune/src/data/jamendo_settings_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
+import 'package:aethertune/src/domain/track.dart';
 
 void main() {
   test('stores the Jamendo client ID only in the credential vault', () async {
     final vault = _MemoryCredentialVault();
-    final store = JamendoSettingsStore(credentialVault: vault);
+    final cache = _MemoryChartCache();
+    final store = JamendoSettingsStore(
+      credentialVault: vault,
+      chartCache: cache,
+    );
 
     await store.load();
     expect(store.isConfigured, isFalse);
@@ -17,13 +23,17 @@ void main() {
     expect(vault.values['jamendo-api-client-id'], 'client-id');
     expect(store.musicProviders.single.id, 'jamendo');
 
-    final loadedAgain = JamendoSettingsStore(credentialVault: vault);
+    final loadedAgain = JamendoSettingsStore(
+      credentialVault: vault,
+      chartCache: cache,
+    );
     await loadedAgain.load();
     expect(loadedAgain.isConfigured, isTrue);
 
     await loadedAgain.removeClientId();
     expect(loadedAgain.isConfigured, isFalse);
     expect(vault.values, isEmpty);
+    expect(cache.clearCount, 1);
   });
 
   test('reports unavailable secure storage and rejects blank client IDs',
@@ -40,6 +50,21 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+}
+
+final class _MemoryChartCache implements JamendoChartCache {
+  int clearCount = 0;
+
+  @override
+  Future<void> clear() async {
+    clearCount += 1;
+  }
+
+  @override
+  Future<JamendoCachedChart?> read(String key) async => null;
+
+  @override
+  Future<void> write(String key, List<Track> tracks) async {}
 }
 
 final class _MemoryCredentialVault implements ProviderCredentialVault {
