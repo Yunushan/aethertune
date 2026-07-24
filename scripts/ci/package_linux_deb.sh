@@ -44,7 +44,9 @@ Categories=AudioVideo;Audio;Player;
 StartupNotify=true
 EOF
 
-mkdir -p "$(dirname "$output_path")"
+output_directory="$(dirname "$output_path")"
+mkdir -p "$output_directory"
+output_path="$(cd "$output_directory" && pwd)/$(basename "$output_path")"
 dpkg-deb --build --root-owner-group -Zgzip "$package_root" "$output_path"
 dpkg-deb --info "$output_path" >/dev/null
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'

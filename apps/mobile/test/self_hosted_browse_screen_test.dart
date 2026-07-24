@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:aethertune/src/data/jellyfin_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
@@ -547,6 +548,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('submits an explicit Jellyfin catalog search only on request', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _jellyfinCatalogSearchJson;
+      },
+    );
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.artist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    expect(requests.single.queryParameters['SearchTerm'], isNull);
+    await tester.enterText(
+      find.byKey(const Key('catalog-filter-artist')),
+      'mira',
+    );
+    await tester.pump();
+    expect(requests, hasLength(1));
+
+    await tester.tap(find.byKey(const Key('catalog-search-artist')));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(2));
+    expect(requests.last.path, '/jellyfin/Artists');
+    expect(requests.last.queryParameters['SearchTerm'], 'mira');
+    expect(requests.last.queryParameters['StartIndex'], '0');
+    expect(requests.last.queryParameters['Limit'], '100');
+    expect(find.text('Mira Sol'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'keeps local artist following distinct from server artist favorites', (
     tester,
@@ -853,6 +903,20 @@ Widget _testApp({
     ),
   );
 }
+
+const _jellyfinCatalogSearchJson = '''
+{
+  "StartIndex": 0,
+  "TotalRecordCount": 1,
+  "Items": [
+    {
+      "Id": "artist-mira",
+      "Name": "Mira Sol",
+      "RecursiveItemCount": 2
+    }
+  ]
+}
+''';
 
 class _FakeCatalogProvider
     implements

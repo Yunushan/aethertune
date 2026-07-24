@@ -321,6 +321,83 @@ void main() {
     expect(requests, hasLength(3));
   });
 
+  test('searches Jellyfin catalog collections with explicit bounded queries',
+      () async {
+    final requests = <Uri>[];
+    final provider = JellyfinProvider(
+      baseUri: Uri.parse('https://media.example.test/jellyfin'),
+      userId: 'user-1',
+      apiKey: 'api-secret',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        if (uri.path.endsWith('/Artists')) {
+          return _jellyfinArtistPageJson;
+        }
+        return switch (uri.queryParameters['IncludeItemTypes']) {
+          'MusicAlbum' => _jellyfinAlbumPageJson,
+          'Playlist' => _jellyfinPlaylistPageJson,
+          _ => throw StateError('Unexpected request: $uri'),
+        };
+      },
+    );
+
+    final artists = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      '  aether  ',
+      offset: 2,
+      limit: 1,
+    );
+    final albums = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.album,
+      'aether',
+      offset: 2,
+      limit: 1,
+    );
+    final playlists = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.playlist,
+      'aether',
+      offset: 2,
+      limit: 1,
+    );
+
+    expect(provider, isA<MusicCatalogCollectionSearchProvider>());
+    expect(
+      provider.searchableCollectionKinds,
+      MusicCatalogCollectionKind.values.toSet(),
+    );
+    expect(artists.collections.single.id, 'artist-page');
+    expect(albums.collections.single.id, 'album-page');
+    expect(playlists.collections.single.id, 'playlist-page');
+    expect(
+      requests.every(
+        (request) =>
+            request.queryParameters['SearchTerm'] == 'aether' &&
+            request.queryParameters['StartIndex'] == '2' &&
+            request.queryParameters['Limit'] == '1' &&
+            request.queryParameters['EnableTotalRecordCount'] == 'true' &&
+            request.queryParameters['api_key'] == 'api-secret',
+      ),
+      isTrue,
+    );
+    expect(requests.first.path, '/jellyfin/Artists');
+    expect(requests[1].path, '/jellyfin/Users/user-1/Items');
+
+    final empty = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      '   ',
+    );
+    expect(empty.collections, isEmpty);
+    expect(requests, hasLength(3));
+    await expectLater(
+      provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        'aether',
+        offset: -1,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('loads Jellyfin home discovery album shelves with bounded ordering',
       () async {
     final requests = <Uri>[];

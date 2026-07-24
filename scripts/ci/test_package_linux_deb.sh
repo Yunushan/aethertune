@@ -20,3 +20,14 @@ if [[ ! -s "$package" ]]; then
   echo "Expected Linux Debian package at $package." >&2
   exit 1
 fi
+
+relative_package="release/aethertune-linux-x64.deb"
+(
+  cd "$workspace"
+  bash "$package_script" "$bundle" "$relative_package" '0.0.1'
+)
+
+if [[ ! -s "$workspace/$relative_package" ]]; then
+  echo "Expected Linux Debian package at $workspace/$relative_package." >&2
+  exit 1
+fi

@@ -19,6 +19,7 @@ typedef JellyfinMutationLoader = Future<void> Function(
 class JellyfinProvider
     implements
         MusicCatalogDiscoveryPagingProvider,
+        MusicCatalogCollectionSearchProvider,
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
@@ -92,6 +93,7 @@ class JellyfinProvider
           'Jellyfin user identifier',
           'audio search query',
           'audio search suggestion query',
+          'explicit artist, album, or playlist catalog search query',
           'artist, album, and playlist browse identifiers',
           'Home discovery list selection and result limit',
           'radio seed item identifier and result limit',
@@ -361,6 +363,83 @@ class JellyfinProvider
           ),
         ),
       ));
+  }
+
+  @override
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+        MusicCatalogCollectionKind.album,
+        MusicCatalogCollectionKind.playlist,
+      };
+
+  @override
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  }) {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return Future<MusicCatalogCollectionPage>.value(
+        const MusicCatalogCollectionPage(
+          collections: <MusicCatalogCollection>[],
+          nextOffset: 0,
+          hasMore: false,
+        ),
+      );
+    }
+    if (offset < 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 500);
+    return _guardRequest(() async {
+      final pageParameters = <String, String>{
+        'SearchTerm': normalizedQuery,
+        'StartIndex': offset.toString(),
+        'Limit': boundedLimit.toString(),
+        'EnableTotalRecordCount': 'true',
+      };
+      final uri = switch (kind) {
+        MusicCatalogCollectionKind.artist => _requestUri(
+            '/Artists',
+            <String, String>{
+              'UserId': userId,
+              'IncludeItemTypes': 'Audio',
+              'SortBy': 'SortName',
+              'SortOrder': 'Ascending',
+              'Fields': 'Genres,RecursiveItemCount',
+              'EnableImages': 'true',
+              'EnableImageTypes': 'Primary',
+              'ImageTypeLimit': '1',
+              'EnableUserData': 'true',
+              ...pageParameters,
+            },
+          ),
+        MusicCatalogCollectionKind.album => _itemsUri(
+            itemType: 'MusicAlbum',
+            extra: pageParameters,
+          ),
+        MusicCatalogCollectionKind.playlist => _itemsUri(
+            itemType: 'Playlist',
+            extra: pageParameters,
+          ),
+      };
+      return parseJellyfinCollectionPageResponse(
+        await _requestLoader(uri),
+        kind,
+        requestOffset: offset,
+        requestLimit: boundedLimit,
+      );
+    });
   }
 
   @override
