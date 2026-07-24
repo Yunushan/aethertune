@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../data/library_store.dart';
 import '../data/youtube_account_provider.dart';
+import '../data/youtube_channel_follow_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/track.dart';
 import 'widgets/track_artwork.dart';
@@ -67,6 +68,7 @@ final class _YouTubeAccountPlaylistsTabState
   @override
   Widget build(BuildContext context) {
     final offlineModeEnabled = context.watch<LibraryStore>().offlineModeEnabled;
+    final follows = context.watch<YouTubeChannelFollowStore?>();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
@@ -283,7 +285,30 @@ final class _YouTubeAccountSubscriptionsTabState
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  tooltip: follows?.isFollowed(channel.id) == true
+                      ? 'Unfollow locally'
+                      : 'Follow locally',
+                  onPressed: follows == null
+                      ? null
+                      : () => unawaited(
+                          follows.setFollowed(
+                            channel,
+                            !follows.isFollowed(channel.id),
+                          ),
+                        ),
+                  icon: Icon(
+                    follows?.isFollowed(channel.id) == true
+                        ? Icons.person_remove_outlined
+                        : Icons.person_add_alt_1_outlined,
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
             onTap: () => _openChannel(context, channel),
           ),
         if (_loading && _channels.isNotEmpty) ...<Widget>[

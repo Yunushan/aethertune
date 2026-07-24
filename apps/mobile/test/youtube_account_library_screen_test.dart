@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/youtube_account_provider.dart';
+import 'package:aethertune/src/data/youtube_channel_follow_store.dart';
 import 'package:aethertune/src/ui/youtube_account_library_screen.dart';
 
 void main() {
@@ -15,6 +16,9 @@ void main() {
     final library = LibraryStore();
     await library.load();
     addTearDown(library.dispose);
+    final follows = YouTubeChannelFollowStore();
+    await follows.load();
+    addTearDown(follows.dispose);
     final provider = YouTubeAccountProvider(
       accessTokenReader: () async => 'access-token',
       responseLoader: (uri, accessToken) async {
@@ -43,7 +47,12 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<LibraryStore>.value(
         value: library,
-        child: MaterialApp(home: YouTubeAccountLibraryScreen(provider: provider)),
+        child: ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
+          value: follows,
+          child: MaterialApp(
+            home: YouTubeAccountLibraryScreen(provider: provider),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -70,6 +79,9 @@ void main() {
     await tester.tap(find.text('Subscriptions'));
     await tester.pumpAndSettle();
     expect(find.text('Orbit Channel'), findsOneWidget);
+    await tester.tap(find.byTooltip('Follow locally'));
+    await tester.pumpAndSettle();
+    expect(follows.isFollowed('channel-1'), isTrue);
     await tester.tap(find.text('Orbit Channel'));
     await tester.pumpAndSettle();
     expect(find.text('Subscription Signal'), findsOneWidget);
