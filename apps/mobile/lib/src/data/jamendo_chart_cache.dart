@@ -32,7 +32,9 @@ final class SharedPreferencesJamendoChartCache implements JamendoChartCache {
 
   @override
   Future<JamendoCachedChart?> read(String key) async {
-    final raw = (await SharedPreferences.getInstance()).getString('$_prefix$key');
+    final prefs = await SharedPreferences.getInstance();
+    final preferenceKey = '$_prefix$key';
+    final raw = prefs.getString(preferenceKey);
     if (raw == null || raw.isEmpty) {
       return null;
     }
@@ -60,13 +62,18 @@ final class SharedPreferencesJamendoChartCache implements JamendoChartCache {
       if (tracks.isEmpty) {
         return null;
       }
-      return JamendoCachedChart(
+      final cached = JamendoCachedChart(
         tracks: List<Track>.unmodifiable(tracks),
         savedAt: DateTime.fromMillisecondsSinceEpoch(
           savedAtMilliseconds.round(),
           isUtc: true,
         ),
       );
+      if (cached.isExpired(_clock())) {
+        await prefs.remove(preferenceKey);
+        return null;
+      }
+      return cached;
     } on Object {
       return null;
     }

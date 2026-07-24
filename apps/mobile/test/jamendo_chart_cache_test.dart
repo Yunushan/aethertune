@@ -92,4 +92,28 @@ void main() {
     expect(prefs.getString('aethertune.jamendo.chart.v1.jazz.tr'), isNull);
     expect(prefs.getString('aethertune.theme.v1'), 'dark');
   });
+
+  test('removes expired chart records instead of retaining them indefinitely',
+      () async {
+    final writingCache = SharedPreferencesJamendoChartCache(
+      clock: () => DateTime.utc(2026, 7, 23),
+    );
+    await writingCache.write('popular.all', <Track>[
+      Track(
+        id: 'jamendo:7',
+        title: 'Expired public track',
+        duration: const Duration(minutes: 3),
+        sourceId: 'jamendo',
+        externalId: '7',
+      ),
+    ]);
+
+    final readingCache = SharedPreferencesJamendoChartCache(
+      clock: () => DateTime.utc(2026, 7, 24, 0, 0, 1),
+    );
+    expect(await readingCache.read('popular.all'), isNull);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('aethertune.jamendo.chart.v1.popular.all'), isNull);
+  });
 }
