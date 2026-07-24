@@ -4621,8 +4621,6 @@ class _HomeTabState extends State<_HomeTab> {
         const SizedBox(height: 12),
         _PopularRadioStationsShelf(provider: _radioProvider),
         const SizedBox(height: 12),
-        _AudiusTrendingShelf(provider: _audiusProvider),
-        const SizedBox(height: 12),
         if (providerCatalogs.isNotEmpty) ...<Widget>[
           _ProviderHomeDiscovery(
             providerCount: providerCatalogs.length,
@@ -4654,6 +4652,8 @@ class _HomeTabState extends State<_HomeTab> {
           const SizedBox(height: 12),
         ],
         _PopularInternetArchiveShelf(provider: _archiveProvider),
+        const SizedBox(height: 12),
+        _AudiusTrendingShelf(provider: _audiusProvider),
         const SizedBox(height: 12),
         if (library.followedArtists.isNotEmpty) ...<Widget>[
           ArtistReleaseUpdatesShelf(provider: _artistReleaseProvider),
@@ -5700,12 +5700,6 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
             icon: const Icon(Icons.refresh),
           ),
         ),
-        if (offline && !_loaded)
-          const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.cloud_off_outlined),
-            title: Text('Offline mode'),
-          ),
         if (_loading && !_loaded)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
