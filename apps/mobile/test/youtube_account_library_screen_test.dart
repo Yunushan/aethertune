@@ -65,6 +65,8 @@ void main() {
       library.playlists.single.trackIds.last,
     );
 
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Subscriptions'));
     await tester.pumpAndSettle();
     expect(find.text('Orbit Channel'), findsOneWidget);
