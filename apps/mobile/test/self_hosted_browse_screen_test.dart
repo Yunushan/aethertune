@@ -645,6 +645,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('opens a Jamendo artist into its documented album catalog', (
+    tester,
+  ) async {
+    final provider = JamendoProvider(
+      clientId: 'client-id',
+      loader: (uri) async {
+        if (uri.path.endsWith('/artists/albums/')) {
+          return _jamendoArtistAlbumsJson;
+        }
+        if (uri.path.endsWith('/artists/')) {
+          return _jamendoCatalogSearchJson;
+        }
+        throw StateError('Unexpected request: $uri');
+      },
+    );
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.artist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mira Sol'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aurora Rooms'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'keeps local artist following distinct from server artist favorites', (
     tester,
@@ -971,6 +1008,20 @@ const _jamendoCatalogSearchJson = '''
   "headers":{"status":"success","code":0,"results_fullcount":1},
   "results":[
     {"id":"41","name":"Mira Sol","joindate":"2020-01-01"}
+  ]
+}
+''';
+
+const _jamendoArtistAlbumsJson = '''
+{
+  "headers":{"status":"success","code":0},
+  "results":[
+    {
+      "id":"41","name":"Mira Sol",
+      "albums":[
+        {"id":"42","name":"Aurora Rooms","releasedate":"2026-01-01"}
+      ]
+    }
   ]
 }
 ''';

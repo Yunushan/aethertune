@@ -148,7 +148,7 @@ void main() {
     );
   });
 
-  test('loads nested Jamendo artist and album tracks with safe artwork',
+  test('loads nested Jamendo artist albums and album tracks with safe artwork',
       () async {
     final requests = <Uri>[];
     final artworkRequests = <Uri>[];
@@ -156,9 +156,10 @@ void main() {
       clientId: 'client-id',
       loader: (uri) async {
         requests.add(uri);
-        return uri.path.endsWith('/artists/tracks/')
-            ? _artistTracksResponse
-            : _albumTracksResponse;
+        if (uri.path.endsWith('/artists/albums/')) {
+          return _artistAlbumsResponse;
+        }
+        return _albumTracksResponse;
       },
       artworkLoader: (uri, headers) async {
         artworkRequests.add(uri);
@@ -185,9 +186,9 @@ void main() {
       'https://art.example.test/mira.jpg',
     );
 
-    expect(artist.tracks.single.title, 'Northern Lights');
-    expect(artist.tracks.single.artist, 'Mira Sol');
-    expect(artist.tracks.single.album, 'Aurora Rooms');
+    expect(artist.collections.single.title, 'Aurora Rooms');
+    expect(artist.collections.single.subtitle, 'Mira Sol · 2026-01-01');
+    expect(artist.tracks, isEmpty);
     expect(album.tracks.single.title, 'Window Signal');
     expect(album.tracks.single.artist, 'Mira Sol');
     expect(album.tracks.single.album, 'Aurora Rooms');
@@ -196,11 +197,11 @@ void main() {
     expect(artworkRequests.single.host, 'art.example.test');
 
     final artistRequest = requests.first;
-    expect(artistRequest.path, '/v3.0/artists/tracks/');
+    expect(artistRequest.path, '/v3.0/artists/albums/');
     expect(artistRequest.queryParameters['id'], '41');
     expect(artistRequest.queryParameters['limit'], '100');
-    expect(artistRequest.queryParameters['track_type'], 'single albumtrack');
-    expect(artistRequest.queryParameters['audioformat'], 'mp32');
+    expect(artistRequest.queryParameters['imagesize'], '300');
+    expect(artistRequest.queryParameters['audioformat'], isNull);
     final albumRequest = requests.last;
     expect(albumRequest.path, '/v3.0/albums/tracks/');
     expect(albumRequest.queryParameters['id'], '42');
@@ -236,14 +237,14 @@ const _albumCatalogResponse = '''
 }
 ''';
 
-const _artistTracksResponse = '''
+const _artistAlbumsResponse = '''
 {
   "headers":{"status":"success","code":0},
   "results":[
     {
       "id":"41","name":"Mira Sol","image":"https://art.example.test/mira.jpg",
-      "tracks":[
-        {"id":"71","name":"Northern Lights","album_name":"Aurora Rooms","duration":180,"audio":"https://stream.example.test/71.mp3"}
+      "albums":[
+        {"id":"42","name":"Aurora Rooms","releasedate":"2026-01-01","image":"https://art.example.test/aurora.jpg"}
       ]
     }
   ]

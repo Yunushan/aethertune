@@ -30,6 +30,7 @@ final class JamendoProvider
     Uri? streamUri,
     Uri? artistsUri,
     Uri? albumsUri,
+    Uri? artistAlbumsUri,
     Uri? artistTracksUri,
     Uri? albumTracksUri,
     JamendoResponseLoader? loader,
@@ -39,6 +40,7 @@ final class JamendoProvider
        streamUri = streamUri ?? _defaultStreamUri,
        artistsUri = artistsUri ?? _defaultArtistsUri,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
+       artistAlbumsUri = artistAlbumsUri ?? _defaultArtistAlbumsUri,
        artistTracksUri = artistTracksUri ?? _defaultArtistTracksUri,
        albumTracksUri = albumTracksUri ?? _defaultAlbumTracksUri,
        _loader = loader ?? _loadJamendoJson,
@@ -56,6 +58,9 @@ final class JamendoProvider
   static final Uri _defaultAlbumsUri = Uri.parse(
     'https://api.jamendo.com/v3.0/albums/',
   );
+  static final Uri _defaultArtistAlbumsUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/artists/albums/',
+  );
   static final Uri _defaultArtistTracksUri = Uri.parse(
     'https://api.jamendo.com/v3.0/artists/tracks/',
   );
@@ -68,6 +73,7 @@ final class JamendoProvider
   final Uri streamUri;
   final Uri artistsUri;
   final Uri albumsUri;
+  final Uri artistAlbumsUri;
   final Uri artistTracksUri;
   final Uri albumTracksUri;
   final JamendoResponseLoader _loader;
@@ -216,6 +222,29 @@ final class JamendoProvider
       throw ArgumentError.value(collection.id, 'collection.id', 'Is invalid.');
     }
     final isArtist = collection.kind == MusicCatalogCollectionKind.artist;
+    if (isArtist) {
+      final albums = _parseJamendoNestedAlbums(
+        _parseJamendoResponse(
+          await _loader(
+            artistAlbumsUri.replace(
+              queryParameters: <String, String>{
+                'client_id': _clientId,
+                'format': 'json',
+                'id': collectionId,
+                'limit': '100',
+                'imagesize': '300',
+              },
+            ),
+          ),
+        ).results,
+      );
+      if (albums.isNotEmpty) {
+        return MusicCatalogDetail(
+          collection: collection,
+          collections: albums,
+        );
+      }
+    }
     final response = _parseJamendoResponse(
       await _loader(
         (isArtist ? artistTracksUri : albumTracksUri).replace(
@@ -557,6 +586,45 @@ List<Track> _parseJamendoNestedTracks(
     }
   }
   return List<Track>.unmodifiable(tracks);
+}
+
+List<MusicCatalogCollection> _parseJamendoNestedAlbums(
+  Iterable<Map<String, Object?>> results,
+) {
+  final albums = <MusicCatalogCollection>[];
+  final seen = <String>{};
+  for (final artist in results) {
+    final artistName = _stringValue(artist['name']);
+    final rawAlbums = artist['albums'];
+    if (rawAlbums is! List<dynamic>) {
+      continue;
+    }
+    for (final raw in rawAlbums.whereType<Map<dynamic, dynamic>>()) {
+      final album = raw.cast<String, Object?>();
+      final id = _stringValue(album['id']);
+      final title = _stringValue(album['name']);
+      if (!RegExp(r'^\d+$').hasMatch(id) ||
+          title.isEmpty ||
+          !seen.add(id) ||
+          albums.length >= 100) {
+        continue;
+      }
+      final artwork = _safeHttpsUri(_stringValue(album['image']));
+      albums.add(
+        MusicCatalogCollection(
+          id: id,
+          title: title,
+          kind: MusicCatalogCollectionKind.album,
+          subtitle: _joinNonEmpty(<String>[
+            artistName,
+            _stringValue(album['releasedate']),
+          ]),
+          artworkId: artwork?.toString(),
+        ),
+      );
+    }
+  }
+  return List<MusicCatalogCollection>.unmodifiable(albums);
 }
 
 int _parseOffset(String? cursor) {
