@@ -13,6 +13,26 @@ typedef JamendoBinaryLoader = Future<Uint8List> Function(
   Map<String, String> headers,
 );
 
+enum JamendoFeaturedGenre {
+  lounge('lounge', 'Lounge'),
+  classical('classical', 'Classical'),
+  electronic('electronic', 'Electronic'),
+  jazz('jazz', 'Jazz'),
+  pop('pop', 'Pop'),
+  hiphop('hiphop', 'Hip-hop'),
+  relaxation('relaxation', 'Relaxation'),
+  rock('rock', 'Rock'),
+  songwriter('songwriter', 'Songwriter'),
+  world('world', 'World'),
+  metal('metal', 'Metal'),
+  soundtrack('soundtrack', 'Soundtrack');
+
+  const JamendoFeaturedGenre(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+}
+
 /// Official Jamendo read API adapter using a client ID supplied by the user.
 ///
 /// Stream URLs are returned only for playback. The adapter deliberately does
@@ -375,7 +395,10 @@ final class JamendoProvider
   ///
   /// The API documents `groupby=artist_id` for chart presentation, so a
   /// refresh does not fill the small Home shelf with one artist's catalog.
-  Future<List<Track>> fetchPopular({int limit = 6}) async {
+  Future<List<Track>> fetchPopular({
+    int limit = 6,
+    JamendoFeaturedGenre? featuredGenre,
+  }) async {
     if (limit <= 0) {
       throw ArgumentError.value(limit, 'limit', 'Must be positive.');
     }
@@ -387,8 +410,11 @@ final class JamendoProvider
             'client_id': _clientId,
             'format': 'json',
             'limit': requestedLimit.toString(),
-            'order': 'popularity_total',
             'groupby': 'artist_id',
+            if (featuredGenre == null) 'order': 'popularity_total',
+            if (featuredGenre != null) 'featured': '1',
+            if (featuredGenre != null) 'tags': featuredGenre.apiValue,
+            if (featuredGenre != null) 'boost': 'popularity_total',
             'type': 'single albumtrack',
             'audioformat': 'mp32',
             'imagesize': '300',

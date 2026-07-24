@@ -441,6 +441,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(fixture.library.tracks.single.isPlayable, isTrue);
 
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-jamendo-genre-menu')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Jazz').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Featured Jazz tracks from Jamendo'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
+    );
+    await tester.pumpAndSettle();
+    expect(requestedUri!.queryParameters['featured'], '1');
+    expect(requestedUri!.queryParameters['tags'], 'jazz');
+    expect(requestedUri!.queryParameters['boost'], 'popularity_total');
+    expect(requestedUri!.queryParameters['order'], isNull);
+
     await fixture.library.setOfflineModeEnabled(true);
     await tester.pumpAndSettle();
     expect(

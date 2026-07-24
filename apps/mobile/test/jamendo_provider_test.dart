@@ -52,6 +52,26 @@ void main() {
     await expectLater(provider.fetchPopular(limit: 0), throwsArgumentError);
   });
 
+  test('loads a documented featured-genre chart with a popularity boost',
+      () async {
+    Uri? requested;
+    final provider = JamendoProvider(
+      clientId: 'client-id',
+      loader: (uri) async {
+        requested = uri;
+        return _response(<String>['1']);
+      },
+    );
+
+    await provider.fetchPopular(featuredGenre: JamendoFeaturedGenre.jazz);
+
+    expect(requested?.queryParameters['featured'], '1');
+    expect(requested?.queryParameters['tags'], 'jazz');
+    expect(requested?.queryParameters['boost'], 'popularity_total');
+    expect(requested?.queryParameters['groupby'], 'artist_id');
+    expect(requested?.queryParameters['order'], isNull);
+  });
+
   test('validates Jamendo payloads and rejects unsafe media URLs', () {
     final tracks = parseJamendoTracksResponse('''
       {"headers":{"status":"success","code":0},"results":[

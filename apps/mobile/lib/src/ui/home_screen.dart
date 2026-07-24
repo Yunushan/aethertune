@@ -5694,6 +5694,7 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
   bool _loaded = false;
   bool _failed = false;
   int _requestSerial = 0;
+  JamendoFeaturedGenre? _featuredGenre;
 
   @override
   Widget build(BuildContext context) {
@@ -5910,12 +5911,40 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.workspace_premium_outlined),
           title: const Text('Popular on Jamendo'),
-          subtitle: const Text('Public tracks ranked by Jamendo popularity'),
-          trailing: IconButton.filled(
-            key: const Key('home-jamendo-popular-refresh'),
-            tooltip: 'Refresh popular Jamendo tracks',
-            onPressed: _loading || offline ? null : () => unawaited(_refresh()),
-            icon: const Icon(Icons.refresh),
+          subtitle: Text(
+            _featuredGenre == null
+                ? 'Public tracks ranked by Jamendo popularity'
+                : 'Featured ${_featuredGenre!.label} tracks from Jamendo',
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              PopupMenuButton<String>(
+                key: const Key('home-jamendo-genre-menu'),
+                tooltip: 'Choose Jamendo featured genre',
+                enabled: !_loading && !offline,
+                onSelected: _selectFeaturedGenre,
+                itemBuilder: (context) => <PopupMenuEntry<String>>[
+                  const PopupMenuItem<String>(
+                    value: 'all',
+                    child: Text('All popular tracks'),
+                  ),
+                  for (final genre in JamendoFeaturedGenre.values)
+                    PopupMenuItem<String>(
+                      value: genre.apiValue,
+                      child: Text(genre.label),
+                    ),
+                ],
+                icon: const Icon(Icons.tune_outlined),
+              ),
+              IconButton.filled(
+                key: const Key('home-jamendo-popular-refresh'),
+                tooltip: 'Refresh popular Jamendo tracks',
+                onPressed:
+                    _loading || offline ? null : () => unawaited(_refresh()),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
           ),
         ),
         if (_loading && !_loaded)
@@ -5973,7 +6002,10 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
       _failed = false;
     });
     try {
-      final tracks = await widget.provider.fetchPopular(limit: 6);
+      final tracks = await widget.provider.fetchPopular(
+        limit: 6,
+        featuredGenre: _featuredGenre,
+      );
       if (!mounted || request != _requestSerial) {
         return;
       }
@@ -5991,6 +6023,24 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
         _failed = true;
       });
     }
+  }
+
+  void _selectFeaturedGenre(String selection) {
+    final genre = selection == 'all'
+        ? null
+        : JamendoFeaturedGenre.values.firstWhere(
+            (genre) => genre.apiValue == selection,
+          );
+    if (_featuredGenre == genre) {
+      return;
+    }
+    _requestSerial += 1;
+    setState(() {
+      _featuredGenre = genre;
+      _tracks = const <Track>[];
+      _loaded = false;
+      _failed = false;
+    });
   }
 
   Future<void> _playTrack(BuildContext context, Track selected) async {
