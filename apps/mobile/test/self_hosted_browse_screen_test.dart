@@ -474,6 +474,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('can limit catalog tabs to a provider public surface', (
+    tester,
+  ) async {
+    final provider = _FakeCatalogProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.album,
+          MusicCatalogCollectionKind.playlist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Artists'), findsNothing);
+    expect(find.text('Albums'), findsOneWidget);
+    expect(find.text('Playlists'), findsOneWidget);
+    expect(provider.browseCalls, <MusicCatalogCollectionKind>[
+      MusicCatalogCollectionKind.album,
+      MusicCatalogCollectionKind.playlist,
+    ]);
+  });
+
   testWidgets(
       'keeps local artist following distinct from server artist favorites', (
     tester,
@@ -765,13 +794,19 @@ Widget _testApp({
   required MusicCatalogProvider provider,
   required LibraryStore library,
   required PlayerController player,
+  List<MusicCatalogCollectionKind>? collectionKinds,
 }) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<LibraryStore>.value(value: library),
       ChangeNotifierProvider<PlayerController>.value(value: player),
     ],
-    child: MaterialApp(home: SelfHostedBrowseScreen(provider: provider)),
+    child: MaterialApp(
+      home: SelfHostedBrowseScreen(
+        provider: provider,
+        collectionKinds: collectionKinds ?? MusicCatalogCollectionKind.values,
+      ),
+    ),
   );
 }
 

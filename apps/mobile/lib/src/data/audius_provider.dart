@@ -1,10 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import 'provider_binary_loader.dart';
 
 typedef AudiusResponseLoader = Future<String> Function(Uri uri);
+typedef AudiusBinaryLoader = Future<Uint8List> Function(
+  Uri uri,
+  Map<String, String> headers,
+);
 
 /// Read-only public Audius adapter for search and stream resolution.
 ///
@@ -13,17 +20,25 @@ typedef AudiusResponseLoader = Future<String> Function(Uri uri);
 /// durable per-track license grant.
 final class AudiusProvider
     implements
+        MusicCatalogPagingProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
   AudiusProvider({
     Uri? searchUri,
     Uri? trendingUri,
+    Uri? trendingPlaylistsUri,
+    Uri? playlistsBaseUri,
     Uri? streamBaseUri,
     AudiusResponseLoader? loader,
+    AudiusBinaryLoader? artworkLoader,
   }) : searchUri = searchUri ?? _defaultSearchUri,
        trendingUri = trendingUri ?? _defaultTrendingUri,
+       trendingPlaylistsUri =
+           trendingPlaylistsUri ?? _defaultTrendingPlaylistsUri,
+       playlistsBaseUri = playlistsBaseUri ?? _defaultPlaylistsBaseUri,
        streamBaseUri = streamBaseUri ?? _defaultStreamBaseUri,
-       _loader = loader ?? _loadAudiusJson;
+       _loader = loader ?? _loadAudiusJson,
+       _artworkLoader = artworkLoader ?? loadProviderImageBytes;
 
   static final Uri _defaultSearchUri = Uri.parse(
     'https://api.audius.co/v1/tracks/search',
@@ -34,11 +49,20 @@ final class AudiusProvider
   static final Uri _defaultTrendingUri = Uri.parse(
     'https://api.audius.co/v1/tracks/trending',
   );
+  static final Uri _defaultTrendingPlaylistsUri = Uri.parse(
+    'https://api.audius.co/v1/playlists/trending',
+  );
+  static final Uri _defaultPlaylistsBaseUri = Uri.parse(
+    'https://api.audius.co/v1/playlists/',
+  );
 
   final Uri searchUri;
   final Uri trendingUri;
+  final Uri trendingPlaylistsUri;
+  final Uri playlistsBaseUri;
   final Uri streamBaseUri;
   final AudiusResponseLoader _loader;
+  final AudiusBinaryLoader _artworkLoader;
 
   @override
   String get id => 'audius';
@@ -58,14 +82,122 @@ final class AudiusProvider
         MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
+        MusicSourceCapability.libraryBrowse,
+        MusicSourceCapability.playlists,
         MusicSourceCapability.artwork,
       };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
     networkDomains: <String>['api.audius.co'],
-    dataSent: <String>['search query and pagination offset'],
+    dataSent: <String>[
+      'search query and pagination offset',
+      'public trending album or playlist pagination',
+      'public album or playlist identifier',
+      'public artwork URL',
+    ],
   );
+
+  @override
+  Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.album,
+        MusicCatalogCollectionKind.playlist,
+      };
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) async {
+    if (!pagedCollectionKinds.contains(kind)) {
+      return const <MusicCatalogCollection>[];
+    }
+    return (await browseCollectionsPage(kind)).collections;
+  }
+
+  /// Returns a bounded public, server-ordered Audius collection page.
+  ///
+  /// Audius exposes albums through the playlist API with `is_album` set. This
+  /// keeps album and playlist browsing on the documented public endpoint.
+  @override
+  Future<MusicCatalogCollectionPage> browseCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
+    if (!pagedCollectionKinds.contains(kind)) {
+      throw UnsupportedError('Audius does not expose public $kind browsing.');
+    }
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final requestedLimit = limit.clamp(1, 50);
+    final response = _parseAudiusCollectionsResponse(
+      await _loader(
+        trendingPlaylistsUri.replace(
+          queryParameters: <String, String>{
+            'offset': offset.toString(),
+            'limit': requestedLimit.toString(),
+          },
+        ),
+      ),
+      kind,
+    );
+    final canContinue = response.resultCount == requestedLimit;
+    return MusicCatalogCollectionPage(
+      collections: response.collections,
+      nextOffset: canContinue ? offset + response.resultCount : offset,
+      hasMore: canContinue,
+    );
+  }
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) async {
+    if (!pagedCollectionKinds.contains(collection.kind)) {
+      throw UnsupportedError('Audius collection type is not supported.');
+    }
+    final collectionId = collection.id.trim();
+    if (!_isAudiusId(collectionId)) {
+      throw ArgumentError.value(collection.id, 'collection.id', 'Is invalid.');
+    }
+    final basePath = playlistsBaseUri.path.endsWith('/')
+        ? playlistsBaseUri.path
+        : '${playlistsBaseUri.path}/';
+    final response = _parseAudiusTracksResponse(
+      await _loader(
+        playlistsBaseUri.replace(
+          path: '$basePath${Uri.encodeComponent(collectionId)}/tracks',
+          queryParameters: const <String, String>{'limit': '100'},
+        ),
+      ),
+    );
+    return MusicCatalogDetail(
+      collection: collection,
+      tracks: List<Track>.unmodifiable(
+        response.tracks
+            .map((track) => track.copyWith(album: collection.title))
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) async {
+    final uri = _safeHttpsUri(artworkId);
+    if (uri == null) {
+      return null;
+    }
+    return _artworkLoader(uri, const <String, String>{});
+  }
 
   @override
   Future<List<Track>> search(String query) async {
@@ -185,6 +317,79 @@ final class _AudiusTracksResponse {
   final int resultCount;
 }
 
+final class _AudiusCollectionsResponse {
+  const _AudiusCollectionsResponse({
+    required this.collections,
+    required this.resultCount,
+  });
+
+  final List<MusicCatalogCollection> collections;
+  final int resultCount;
+}
+
+_AudiusCollectionsResponse _parseAudiusCollectionsResponse(
+  String jsonText,
+  MusicCatalogCollectionKind requestedKind,
+) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('Audius response must be an object.');
+  }
+  final data = decoded.cast<String, Object?>()['data'];
+  if (data is! List<dynamic>) {
+    throw const FormatException('Audius response is missing collection data.');
+  }
+
+  final collections = <MusicCatalogCollection>[];
+  final seen = <String>{};
+  for (final raw in data.whereType<Map<dynamic, dynamic>>()) {
+    final value = raw.cast<String, Object?>();
+    final id = _stringValue(value['id']);
+    final isAlbum = value['is_album'] == true;
+    final kind = isAlbum
+        ? MusicCatalogCollectionKind.album
+        : MusicCatalogCollectionKind.playlist;
+    final title = _firstNonEmpty(<String>[
+      _stringValue(value['playlist_name']),
+      _stringValue(value['name']),
+    ]);
+    if (kind != requestedKind ||
+        !_isPublicCollection(value) ||
+        !_isAudiusId(id) ||
+        title.isEmpty ||
+        !seen.add(id)) {
+      continue;
+    }
+    final user = value['user'];
+    final userData = user is Map<dynamic, dynamic>
+        ? user.cast<String, Object?>()
+        : const <String, Object?>{};
+    final owner = _firstNonEmpty(<String>[
+      _stringValue(userData['name']),
+      _stringValue(userData['handle']),
+    ]);
+    final contents = value['playlist_contents'];
+    final itemCount = contents is List<dynamic>
+        ? contents.length
+        : _integerValue(value['track_count']) ?? 0;
+    final artwork = _artworkUri(value['artwork']);
+    collections.add(
+      MusicCatalogCollection(
+        id: id,
+        title: title,
+        kind: kind,
+        subtitle: owner,
+        itemCount: itemCount < 0 ? 0 : itemCount,
+        artworkId: artwork?.toString(),
+      ),
+    );
+  }
+  return _AudiusCollectionsResponse(
+    collections: List<MusicCatalogCollection>.unmodifiable(collections),
+    resultCount: data.length,
+  );
+}
+
 _AudiusTracksResponse _parseAudiusTracksResponse(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
@@ -242,6 +447,14 @@ _AudiusTracksResponse _parseAudiusTracksResponse(String jsonText) {
 
 bool _isPublicTrack(Map<String, Object?> value) {
   return value['is_stream_gated'] != true && value['is_unlisted'] != true;
+}
+
+bool _isPublicCollection(Map<String, Object?> value) {
+  return value['is_private'] != true && value['is_unlisted'] != true;
+}
+
+bool _isAudiusId(String value) {
+  return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(value);
 }
 
 Uri? _artworkUri(Object? value) {

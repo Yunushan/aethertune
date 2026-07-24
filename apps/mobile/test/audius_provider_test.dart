@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethertune/src/data/audius_provider.dart';
+import 'package:aethertune/src/domain/music_catalog_provider.dart';
 
 void main() {
   test('searches Audius with bounded offset paging', () async {
@@ -40,6 +43,96 @@ void main() {
     expect(requested?.path, '/v1/tracks/trending');
     expect(requested?.queryParameters['limit'], '6');
     expect(tracks.single.id, 'audius:trending');
+  });
+
+  test('browses bounded public trending albums and playlists', () async {
+    final requests = <Uri>[];
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requests.add(uri);
+        return '''
+          {"data":[
+            {"id":"album_1","playlist_name":"Open Album","is_album":true,"playlist_contents":[{}],"user":{"name":"Album Artist"},"artwork":{"480x480":"https://art.example.test/album.jpg"}},
+            {"id":"playlist_1","playlist_name":"Open Playlist","is_album":false,"playlist_contents":[{},{}],"user":{"handle":"curator"}},
+            {"id":"private_1","playlist_name":"Private","is_album":false,"is_private":true},
+            {"id":"unlisted_1","playlist_name":"Unlisted","is_album":true,"is_unlisted":true}
+          ]}
+        ''';
+      },
+    );
+
+    final albums = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.album,
+      offset: 2,
+      limit: 4,
+    );
+    final playlists = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.playlist,
+      limit: 4,
+    );
+
+    expect(requests.first.path, '/v1/playlists/trending');
+    expect(requests.first.queryParameters['offset'], '2');
+    expect(requests.first.queryParameters['limit'], '4');
+    expect(albums.collections.single.title, 'Open Album');
+    expect(albums.collections.single.itemCount, 1);
+    expect(albums.collections.single.artworkId, 'https://art.example.test/album.jpg');
+    expect(albums.hasMore, isTrue);
+    expect(albums.nextOffset, 6);
+    expect(playlists.collections.single.title, 'Open Playlist');
+    expect(playlists.collections.single.subtitle, 'curator');
+    expect(playlists.collections.single.itemCount, 2);
+  });
+
+  test('loads a bounded public collection detail and filters unavailable tracks',
+      () async {
+    Uri? requested;
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requested = uri;
+        return '''
+          {"data":[
+            {"id":"public","title":"Public track"},
+            {"id":"gated","title":"Gated track","is_stream_gated":true}
+          ]}
+        ''';
+      },
+    );
+
+    final detail = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: 'playlist_1',
+        title: 'Open Playlist',
+        kind: MusicCatalogCollectionKind.playlist,
+      ),
+    );
+
+    expect(requested?.path, '/v1/playlists/playlist_1/tracks');
+    expect(requested?.queryParameters['limit'], '100');
+    expect(detail.tracks, hasLength(1));
+    expect(detail.tracks.single.album, 'Open Playlist');
+  });
+
+  test('loads only validated https Audius collection artwork', () async {
+    Uri? requested;
+    final provider = AudiusProvider(
+      artworkLoader: (uri, headers) async {
+        requested = uri;
+        expect(headers, isEmpty);
+        return Uint8List.fromList(<int>[1, 2, 3]);
+      },
+    );
+
+    expect(
+      await provider.loadArtwork('http://art.example.test/cover.jpg'),
+      isNull,
+    );
+    final artwork = await provider.loadArtwork(
+      'https://art.example.test/cover.jpg',
+    );
+
+    expect(requested, Uri.parse('https://art.example.test/cover.jpg'));
+    expect(artwork, Uint8List.fromList(<int>[1, 2, 3]));
   });
 
   test('rejects gated, unlisted, malformed, and unsafe artwork records', () {

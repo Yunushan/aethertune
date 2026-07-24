@@ -5693,11 +5693,24 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
           leading: const Icon(Icons.trending_up_outlined),
           title: const Text('Trending on Audius'),
           subtitle: const Text('Public tracks in Audius server-defined order'),
-          trailing: IconButton.filled(
-            key: const Key('home-audius-trending-refresh'),
-            tooltip: 'Refresh Audius trending tracks',
-            onPressed: _loading || offline ? null : () => unawaited(_refresh()),
-            icon: const Icon(Icons.refresh),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconButton(
+                key: const Key('home-audius-browse'),
+                tooltip: 'Browse Audius albums and playlists',
+                onPressed: offline ? null : () => _browseCollections(context),
+                icon: const Icon(Icons.explore_outlined),
+              ),
+              IconButton.filled(
+                key: const Key('home-audius-trending-refresh'),
+                tooltip: 'Refresh Audius trending tracks',
+                onPressed: _loading || offline
+                    ? null
+                    : () => unawaited(_refresh()),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
           ),
         ),
         if (_loading && !_loaded)
@@ -5776,6 +5789,20 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
         _failed = true;
       });
     }
+  }
+
+  void _browseCollections(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SelfHostedBrowseScreen(
+          provider: widget.provider,
+          collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.album,
+            MusicCatalogCollectionKind.playlist,
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _playTrack(BuildContext context, Track selected) async {
@@ -15187,6 +15214,8 @@ enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
 enum _JamendoAction { configure, remove }
 
+enum _AudiusAction { browseCollections }
+
 enum _SpotifyAction {
   savedTracks,
   savedEpisodes,
@@ -15444,6 +15473,25 @@ class _SourcesTabState extends State<_SourcesTab> {
           icon: Icons.graphic_eq_outlined,
           capabilities: _audiusProvider.capabilities,
           disclosure: _audiusProvider.disclosure,
+          actions: PopupMenuButton<_AudiusAction>(
+            tooltip: 'Browse Audius',
+            onSelected: (action) {
+              if (action == _AudiusAction.browseCollections) {
+                _openAudiusCollections(context);
+              }
+            },
+            itemBuilder: (_) => <PopupMenuEntry<_AudiusAction>>[
+              PopupMenuItem<_AudiusAction>(
+                value: _AudiusAction.browseCollections,
+                enabled: !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.explore_outlined),
+                  title: Text('Browse public albums and playlists'),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         Text(
@@ -17198,6 +17246,20 @@ class _SourcesTabState extends State<_SourcesTab> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => YouTubeMusicChartScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openAudiusCollections(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SelfHostedBrowseScreen(
+          provider: _audiusProvider,
+          collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.album,
+            MusicCatalogCollectionKind.playlist,
+          ],
+        ),
       ),
     );
   }

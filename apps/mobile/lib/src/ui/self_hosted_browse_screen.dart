@@ -12,14 +12,22 @@ import '../player/player_controller.dart';
 import 'widgets/track_artwork.dart';
 
 const int _catalogPageSize = 100;
+const List<MusicCatalogCollectionKind> _defaultCatalogCollectionKinds =
+    <MusicCatalogCollectionKind>[
+      MusicCatalogCollectionKind.artist,
+      MusicCatalogCollectionKind.album,
+      MusicCatalogCollectionKind.playlist,
+    ];
 
 class SelfHostedBrowseScreen extends StatefulWidget {
   const SelfHostedBrowseScreen({
     required this.provider,
+    this.collectionKinds = _defaultCatalogCollectionKinds,
     super.key,
-  });
+  }) : assert(collectionKinds.length > 0);
 
   final MusicCatalogProvider provider;
+  final List<MusicCatalogCollectionKind> collectionKinds;
 
   @override
   State<SelfHostedBrowseScreen> createState() =>
@@ -38,7 +46,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
     final offline = context.watch<LibraryStore>().offlineModeEnabled;
     if (!offline && !_requestsStarted) {
       _requestsStarted = true;
-      for (final kind in MusicCatalogCollectionKind.values) {
+      for (final kind in widget.collectionKinds) {
         _requests[kind] = _browseInitialPage(kind);
       }
     }
@@ -48,15 +56,14 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
   Widget build(BuildContext context) {
     final offline = context.watch<LibraryStore>().offlineModeEnabled;
     return DefaultTabController(
-      length: MusicCatalogCollectionKind.values.length,
+      length: widget.collectionKinds.length,
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.provider.name),
-          bottom: const TabBar(
+          bottom: TabBar(
             tabs: <Widget>[
-              Tab(icon: Icon(Icons.people_outline), text: 'Artists'),
-              Tab(icon: Icon(Icons.album_outlined), text: 'Albums'),
-              Tab(icon: Icon(Icons.queue_music_outlined), text: 'Playlists'),
+              for (final kind in widget.collectionKinds)
+                Tab(icon: Icon(_collectionIcon(kind)), text: _kindPlural(kind)),
             ],
           ),
         ),
@@ -64,7 +71,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
             ? const _CatalogOfflineState()
             : TabBarView(
                 children: <Widget>[
-                  for (final kind in MusicCatalogCollectionKind.values)
+                  for (final kind in widget.collectionKinds)
                     _CatalogCollectionList(
                       key: ValueKey<MusicCatalogCollectionKind>(kind),
                       provider: widget.provider,
