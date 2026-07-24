@@ -68,7 +68,6 @@ final class _YouTubeAccountPlaylistsTabState
   @override
   Widget build(BuildContext context) {
     final offlineModeEnabled = context.watch<LibraryStore>().offlineModeEnabled;
-    final follows = context.watch<YouTubeChannelFollowStore?>();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
@@ -235,6 +234,7 @@ final class _YouTubeAccountSubscriptionsTabState
   @override
   Widget build(BuildContext context) {
     final offlineModeEnabled = context.watch<LibraryStore>().offlineModeEnabled;
+    final follows = context.watch<YouTubeChannelFollowStore?>();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
