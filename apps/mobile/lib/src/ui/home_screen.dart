@@ -5694,7 +5694,6 @@ final class _AudiusTrendingShelfState extends State<_AudiusTrendingShelf> {
   bool _loaded = false;
   bool _failed = false;
   int _requestSerial = 0;
-  JamendoFeaturedGenre? _featuredGenre;
 
   @override
   Widget build(BuildContext context) {
@@ -5900,6 +5899,7 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
   bool _loaded = false;
   bool _failed = false;
   int _requestSerial = 0;
+  JamendoFeaturedGenre? _featuredGenre;
 
   @override
   Widget build(BuildContext context) {
