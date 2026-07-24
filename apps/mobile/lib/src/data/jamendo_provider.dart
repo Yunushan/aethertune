@@ -381,7 +381,7 @@ final class JamendoProvider
         'imagesize': '300',
         if (isArtist) 'hasimage': 'true',
         if (!isArtist) 'type': 'album single',
-        if (query != null) 'namesearch': query,
+        'namesearch': ?query,
       },
     );
   }
