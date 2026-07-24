@@ -63,13 +63,21 @@ void main() {
       },
     );
 
-    await provider.fetchPopular(featuredGenre: JamendoFeaturedGenre.jazz);
+    await provider.fetchPopular(
+      featuredGenre: JamendoFeaturedGenre.jazz,
+      lyricsLanguageCode: ' TR ',
+    );
 
     expect(requested?.queryParameters['featured'], '1');
     expect(requested?.queryParameters['tags'], 'jazz');
     expect(requested?.queryParameters['boost'], 'popularity_total');
     expect(requested?.queryParameters['groupby'], 'artist_id');
     expect(requested?.queryParameters['order'], isNull);
+    expect(requested?.queryParameters['lang'], 'tr');
+    await expectLater(
+      provider.fetchPopular(lyricsLanguageCode: 'tur'),
+      throwsArgumentError,
+    );
   });
 
   test('validates Jamendo payloads and rejects unsafe media URLs', () {

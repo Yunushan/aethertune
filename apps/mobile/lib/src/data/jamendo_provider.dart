@@ -398,11 +398,13 @@ final class JamendoProvider
   Future<List<Track>> fetchPopular({
     int limit = 6,
     JamendoFeaturedGenre? featuredGenre,
+    String? lyricsLanguageCode,
   }) async {
     if (limit <= 0) {
       throw ArgumentError.value(limit, 'limit', 'Must be positive.');
     }
     final requestedLimit = limit.clamp(1, 50);
+    final normalizedLanguageCode = _normalizeLanguageCode(lyricsLanguageCode);
     return parseJamendoTracksResponse(
       await _loader(
         tracksUri.replace(
@@ -415,6 +417,7 @@ final class JamendoProvider
             if (featuredGenre != null) 'featured': '1',
             if (featuredGenre != null) 'tags': featuredGenre.apiValue,
             if (featuredGenre != null) 'boost': 'popularity_total',
+            'lang': ?normalizedLanguageCode,
             'type': 'single albumtrack',
             'audioformat': 'mp32',
             'imagesize': '300',
@@ -489,6 +492,21 @@ final class JamendoProvider
       },
     );
   }
+}
+
+String? _normalizeLanguageCode(String? value) {
+  final normalized = value?.trim().toLowerCase() ?? '';
+  if (normalized.isEmpty) {
+    return null;
+  }
+  if (!RegExp(r'^[a-z]{2}$').hasMatch(normalized)) {
+    throw ArgumentError.value(
+      value,
+      'lyricsLanguageCode',
+      'Must be a two-letter language code.',
+    );
+  }
+  return normalized;
 }
 
 List<Track> parseJamendoTracksResponse(String jsonText) {

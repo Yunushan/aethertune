@@ -457,6 +457,25 @@ void main() {
     expect(requestedUri!.queryParameters['boost'], 'popularity_total');
     expect(requestedUri!.queryParameters['order'], isNull);
 
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-jamendo-language')),
+    );
+    await tester.pumpAndSettle();
+    final languageField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == 'Two-letter language code',
+    );
+    await tester.enterText(languageField, 'TR');
+    await tester.tap(find.text('Apply').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Featured Jazz tracks from Jamendo / Lyrics: TR'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
+    );
+    await tester.pumpAndSettle();
+    expect(requestedUri!.queryParameters['lang'], 'tr');
+
     await fixture.library.setOfflineModeEnabled(true);
     await tester.pumpAndSettle();
     expect(

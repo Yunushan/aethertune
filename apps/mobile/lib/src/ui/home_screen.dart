@@ -5900,6 +5900,7 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
   bool _failed = false;
   int _requestSerial = 0;
   JamendoFeaturedGenre? _featuredGenre;
+  String? _lyricsLanguageCode;
 
   @override
   Widget build(BuildContext context) {
@@ -5912,9 +5913,13 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
           leading: const Icon(Icons.workspace_premium_outlined),
           title: const Text('Popular on Jamendo'),
           subtitle: Text(
-            _featuredGenre == null
-                ? 'Public tracks ranked by Jamendo popularity'
-                : 'Featured ${_featuredGenre!.label} tracks from Jamendo',
+            <String>[
+              _featuredGenre == null
+                  ? 'Public tracks ranked by Jamendo popularity'
+                  : 'Featured ${_featuredGenre!.label} tracks from Jamendo',
+              if (_lyricsLanguageCode != null)
+                'Lyrics: ${_lyricsLanguageCode!.toUpperCase()}',
+            ].join(' / '),
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -5936,6 +5941,14 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
                     ),
                 ],
                 icon: const Icon(Icons.tune_outlined),
+              ),
+              IconButton(
+                key: const Key('home-jamendo-language'),
+                tooltip: 'Filter Jamendo tracks by lyrics language',
+                onPressed: _loading || offline
+                    ? null
+                    : () => unawaited(_editLyricsLanguage()),
+                icon: const Icon(Icons.language_outlined),
               ),
               IconButton.filled(
                 key: const Key('home-jamendo-popular-refresh'),
@@ -6005,6 +6018,7 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
       final tracks = await widget.provider.fetchPopular(
         limit: 6,
         featuredGenre: _featuredGenre,
+        lyricsLanguageCode: _lyricsLanguageCode,
       );
       if (!mounted || request != _requestSerial) {
         return;
@@ -6041,6 +6055,64 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
       _loaded = false;
       _failed = false;
     });
+  }
+
+  Future<void> _editLyricsLanguage() async {
+    final controller = TextEditingController(text: _lyricsLanguageCode ?? '');
+    try {
+      final value = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Lyrics language'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 2,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Two-letter language code',
+              hintText: 'EN',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(''),
+              child: const Text('Clear'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || value == null) {
+        return;
+      }
+      final normalized = value.trim().toLowerCase();
+      if (normalized.isNotEmpty && !RegExp(r'^[a-z]{2}$').hasMatch(normalized)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a two-letter language code.')),
+        );
+        return;
+      }
+      if (_lyricsLanguageCode == (normalized.isEmpty ? null : normalized)) {
+        return;
+      }
+      _requestSerial += 1;
+      setState(() {
+        _lyricsLanguageCode = normalized.isEmpty ? null : normalized;
+        _tracks = const <Track>[];
+        _loaded = false;
+        _failed = false;
+      });
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _playTrack(BuildContext context, Track selected) async {
