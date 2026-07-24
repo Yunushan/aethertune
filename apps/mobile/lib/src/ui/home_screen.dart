@@ -17,6 +17,7 @@ import '../data/custom_catalog_provider.dart';
 import '../data/custom_catalog_store.dart';
 import '../data/android_audio_library_access.dart';
 import '../data/android_system_downloads_exporter.dart';
+import '../data/audius_provider.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/jamendo_settings_store.dart';
@@ -15041,6 +15042,7 @@ class _SourcesTab extends StatefulWidget {
 class _SourcesTabState extends State<_SourcesTab> {
   final _provider = const DemoSourceProvider();
   late final InternetArchiveProvider _archiveProvider;
+  final AudiusProvider _audiusProvider = AudiusProvider();
   late final ItunesPodcastDirectory _podcastDirectory;
   final _providerSearchController = TextEditingController();
   final _archiveSearchController = TextEditingController();
@@ -15254,6 +15256,14 @@ class _SourcesTabState extends State<_SourcesTab> {
           icon: Icons.archive_outlined,
           capabilities: _archiveProvider.capabilities,
           disclosure: _archiveProvider.disclosure,
+        ),
+        _ProviderCard(
+          title: _audiusProvider.name,
+          status: 'Enabled',
+          description: _audiusProvider.description,
+          icon: Icons.graphic_eq_outlined,
+          capabilities: _audiusProvider.capabilities,
+          disclosure: _audiusProvider.disclosure,
         ),
         const SizedBox(height: 16),
         Text(
@@ -18287,6 +18297,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _provider,
       _radioProvider,
       _archiveProvider,
+      _audiusProvider,
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
       ...?context.read<JamendoSettingsStore?>()?.musicProviders,
       ...?context.read<SpotifySettingsStore?>()?.musicProviders,

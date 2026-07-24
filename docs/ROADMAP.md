@@ -175,6 +175,8 @@
 - [x] Internet Archive direct file private cache storage
 - [x] Internet Archive facet suggestion UI and collection filter chips
 - [x] Internet Archive dedicated collection detail pages
+- [x] Audius public track search and deferred stream provider
+- [x] Audius gated/unlisted filtering and stream-only offline policy
 - [x] Jamendo official track search and direct stream provider
 - [x] Jamendo secure user-owned client ID configuration and offline-permission denial
 - [x] Spotify official saved-track metadata browse and local-library save

@@ -113,6 +113,9 @@ jobs:
       - name: Provider contract - Internet Archive
         run: cd apps/mobile && flutter test test/internet_archive_provider_test.dart test/internet_archive_item_screen_test.dart test/internet_archive_collection_screen_test.dart
 
+      - name: Provider contract - Audius
+        run: cd apps/mobile && flutter test test/audius_provider_test.dart
+
       - name: Provider contract - Jamendo
         run: cd apps/mobile && flutter test test/jamendo_provider_test.dart test/jamendo_settings_store_test.dart
 
