@@ -98,6 +98,39 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
     return true;
   }
 
+  /// Adds valid public channel metadata in one durable device-local update.
+  ///
+  /// This never imports an account identity, credential, or remote feed.
+  Future<int> followAll(Iterable<YouTubeDataChannel> channels) async {
+    if (!_loaded) {
+      await load();
+    }
+    final next = <String, YouTubeChannelFollow>{
+      for (final follow in _follows) follow.id: follow,
+    };
+    var changed = 0;
+    for (final channel in channels) {
+      final follow = YouTubeChannelFollow.fromChannel(channel);
+      if (follow.id.isEmpty || follow.title.isEmpty) {
+        continue;
+      }
+      if (next[follow.id] != follow) {
+        next[follow.id] = follow;
+        changed += 1;
+      }
+    }
+    if (changed == 0) {
+      return 0;
+    }
+    _follows
+      ..clear()
+      ..addAll(next.values)
+      ..sort((a, b) => _compareText(a.title, b.title));
+    await _persist();
+    notifyListeners();
+    return changed;
+  }
+
   /// Exports only device-local public channel metadata for explicit transfer.
   ///
   /// The document intentionally omits Google credentials, YouTube account

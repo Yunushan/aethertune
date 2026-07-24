@@ -241,6 +241,15 @@ final class _YouTubeAccountSubscriptionsTabState
         const Text(
           'Subscriptions are shown as read-only channel metadata. AetherTune does not alter subscriptions.',
         ),
+        if (_channels.isNotEmpty && follows != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => unawaited(_followAll(follows)),
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: const Text('Follow all locally'),
+            ),
+          ),
         if (offlineModeEnabled && _channels.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 12),
@@ -383,6 +392,22 @@ final class _YouTubeAccountSubscriptionsTabState
         builder: (_) => YouTubeAccountChannelVideosScreen(
           provider: widget.provider,
           channel: channel,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _followAll(YouTubeChannelFollowStore follows) async {
+    final changed = await follows.followAll(_channels);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          changed == 0
+              ? 'Every subscription is already followed locally.'
+              : 'Added $changed subscription${changed == 1 ? '' : 's'} to local Following.',
         ),
       ),
     );

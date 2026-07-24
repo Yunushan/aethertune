@@ -129,4 +129,26 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('follows account channels in one device-local update', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final store = YouTubeChannelFollowStore();
+    await store.load();
+    addTearDown(store.dispose);
+
+    expect(
+      await store.followAll(const <YouTubeDataChannel>[
+        YouTubeDataChannel(id: 'channel-2', title: 'Orbit'),
+        YouTubeDataChannel(id: 'channel-1', title: 'Aether'),
+        YouTubeDataChannel(id: 'channel-1', title: 'Aether'),
+        YouTubeDataChannel(id: '', title: 'Ignored'),
+      ]),
+      2,
+    );
+    expect(store.follows.map((follow) => follow.id), <String>[
+      'channel-1',
+      'channel-2',
+    ]);
+    expect(await store.followAll(const <YouTubeDataChannel>[]), 0);
+  });
 }

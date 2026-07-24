@@ -79,9 +79,11 @@ void main() {
     await tester.tap(find.text('Subscriptions'));
     await tester.pumpAndSettle();
     expect(find.text('Orbit Channel'), findsOneWidget);
-    await tester.tap(find.byTooltip('Follow locally'));
+    expect(find.text('Follow all locally'), findsOneWidget);
+    await tester.tap(find.text('Follow all locally'));
     await tester.pumpAndSettle();
     expect(follows.isFollowed('channel-1'), isTrue);
+    expect(find.byTooltip('Unfollow locally'), findsOneWidget);
     await tester.tap(find.text('Orbit Channel'));
     await tester.pumpAndSettle();
     expect(find.text('Subscription Signal'), findsOneWidget);
