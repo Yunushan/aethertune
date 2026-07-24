@@ -19,6 +19,7 @@ import '../data/android_audio_library_access.dart';
 import '../data/android_system_downloads_exporter.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
+import '../data/jamendo_settings_store.dart';
 import '../data/itunes_podcast_directory.dart';
 import '../data/jellyfin_provider.dart';
 import '../data/library_store.dart';
@@ -18088,6 +18089,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _radioProvider,
       _archiveProvider,
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
+      ...?context.read<JamendoSettingsStore?>()?.musicProviders,
       ...?context.read<SpotifySettingsStore?>()?.musicProviders,
       ...context.read<SelfHostedProviderStore>().musicProviders,
       ...?context.read<CustomCatalogStore?>()?.musicProviders,
