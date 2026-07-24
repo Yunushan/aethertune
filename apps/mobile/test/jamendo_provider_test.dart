@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:aethertune/src/data/jamendo_provider.dart';
+import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -70,6 +73,140 @@ void main() {
 
     expect(await provider.resolveStream(track), isNull);
   });
+
+  test('browses and explicitly searches bounded Jamendo artists and albums',
+      () async {
+    final requests = <Uri>[];
+    final provider = JamendoProvider(
+      clientId: 'client-id',
+      loader: (uri) async {
+        requests.add(uri);
+        return uri.path.endsWith('/artists/')
+            ? _artistCatalogResponse
+            : _albumCatalogResponse;
+      },
+    );
+
+    final artists = await provider.browseCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      offset: 2,
+      limit: 2,
+    );
+    final albums = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.album,
+      '  aurora  ',
+      offset: 1,
+      limit: 1,
+    );
+
+    expect(provider, isA<MusicCatalogCollectionSearchProvider>());
+    expect(provider.pagedCollectionKinds, <MusicCatalogCollectionKind>{
+      MusicCatalogCollectionKind.artist,
+      MusicCatalogCollectionKind.album,
+    });
+    expect(artists.collections.single.title, 'Mira Sol');
+    expect(artists.nextOffset, 3);
+    expect(artists.totalCount, 4);
+    expect(artists.hasMore, isTrue);
+    expect(albums.collections.single.title, 'Aurora Rooms');
+    expect(albums.collections.single.subtitle, 'Mira Sol · 2026-01-01');
+    expect(albums.nextOffset, 2);
+    expect(albums.totalCount, 2);
+    expect(albums.hasMore, isFalse);
+
+    final artistRequest = requests.first;
+    expect(artistRequest.path, '/v3.0/artists/');
+    expect(artistRequest.queryParameters['client_id'], 'client-id');
+    expect(artistRequest.queryParameters['offset'], '2');
+    expect(artistRequest.queryParameters['limit'], '2');
+    expect(artistRequest.queryParameters['fullcount'], 'true');
+    expect(artistRequest.queryParameters['order'], 'popularity_total');
+    expect(artistRequest.queryParameters['hasimage'], 'true');
+    expect(artistRequest.queryParameters['namesearch'], isNull);
+
+    final albumRequest = requests.last;
+    expect(albumRequest.path, '/v3.0/albums/');
+    expect(albumRequest.queryParameters['offset'], '1');
+    expect(albumRequest.queryParameters['limit'], '1');
+    expect(albumRequest.queryParameters['namesearch'], 'aurora');
+    expect(albumRequest.queryParameters['type'], 'album single');
+
+    final empty = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      '  ',
+    );
+    expect(empty.collections, isEmpty);
+    expect(requests, hasLength(2));
+    await expectLater(
+      provider.browseCollectionsPage(MusicCatalogCollectionKind.playlist),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      provider.browseCollectionsPage(MusicCatalogCollectionKind.artist,
+          offset: -1),
+      throwsArgumentError,
+    );
+  });
+
+  test('loads nested Jamendo artist and album tracks with safe artwork',
+      () async {
+    final requests = <Uri>[];
+    final artworkRequests = <Uri>[];
+    final provider = JamendoProvider(
+      clientId: 'client-id',
+      loader: (uri) async {
+        requests.add(uri);
+        return uri.path.endsWith('/artists/tracks/')
+            ? _artistTracksResponse
+            : _albumTracksResponse;
+      },
+      artworkLoader: (uri, headers) async {
+        artworkRequests.add(uri);
+        expect(headers, isEmpty);
+        return Uint8List.fromList(<int>[1, 2, 3]);
+      },
+    );
+
+    final artist = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: '41',
+        title: 'Mira Sol',
+        kind: MusicCatalogCollectionKind.artist,
+      ),
+    );
+    final album = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: '42',
+        title: 'Aurora Rooms',
+        kind: MusicCatalogCollectionKind.album,
+      ),
+    );
+    final bytes = await provider.loadArtwork(
+      'https://art.example.test/mira.jpg',
+    );
+
+    expect(artist.tracks.single.title, 'Northern Lights');
+    expect(artist.tracks.single.artist, 'Mira Sol');
+    expect(artist.tracks.single.album, 'Aurora Rooms');
+    expect(album.tracks.single.title, 'Window Signal');
+    expect(album.tracks.single.artist, 'Mira Sol');
+    expect(album.tracks.single.album, 'Aurora Rooms');
+    expect(album.tracks.single.streamUrl, 'https://stream.example.test/72.mp3');
+    expect(bytes, orderedEquals(<int>[1, 2, 3]));
+    expect(artworkRequests.single.host, 'art.example.test');
+
+    final artistRequest = requests.first;
+    expect(artistRequest.path, '/v3.0/artists/tracks/');
+    expect(artistRequest.queryParameters['id'], '41');
+    expect(artistRequest.queryParameters['limit'], '100');
+    expect(artistRequest.queryParameters['track_type'], 'single albumtrack');
+    expect(artistRequest.queryParameters['audioformat'], 'mp32');
+    final albumRequest = requests.last;
+    expect(albumRequest.path, '/v3.0/albums/tracks/');
+    expect(albumRequest.queryParameters['id'], '42');
+    expect(albumRequest.queryParameters['track_type'], isNull);
+    expect(await provider.loadArtwork('http://art.example.test/unsafe.jpg'), isNull);
+  });
 }
 
 String _response(List<String> ids) {
@@ -80,3 +217,49 @@ String _response(List<String> ids) {
       .join(',');
   return '{"headers":{"status":"success","code":0},"results":[$rows]}';
 }
+
+const _artistCatalogResponse = '''
+{
+  "headers":{"status":"success","code":0,"results_fullcount":"4"},
+  "results":[
+    {"id":"41","name":"Mira Sol","joindate":"2020-01-01","image":"https://art.example.test/mira.jpg"}
+  ]
+}
+''';
+
+const _albumCatalogResponse = '''
+{
+  "headers":{"status":"success","code":0,"results_fullcount":2},
+  "results":[
+    {"id":"42","name":"Aurora Rooms","artist_name":"Mira Sol","releasedate":"2026-01-01","image":"https://art.example.test/aurora.jpg"}
+  ]
+}
+''';
+
+const _artistTracksResponse = '''
+{
+  "headers":{"status":"success","code":0},
+  "results":[
+    {
+      "id":"41","name":"Mira Sol","image":"https://art.example.test/mira.jpg",
+      "tracks":[
+        {"id":"71","name":"Northern Lights","album_name":"Aurora Rooms","duration":180,"audio":"https://stream.example.test/71.mp3"}
+      ]
+    }
+  ]
+}
+''';
+
+const _albumTracksResponse = '''
+{
+  "headers":{"status":"success","code":0},
+  "results":[
+    {
+      "id":"42","name":"Aurora Rooms","artist_name":"Mira Sol","image":"https://art.example.test/aurora.jpg",
+      "tracks":[
+        {"id":"72","name":"Window Signal","duration":200,"audio":"https://stream.example.test/72.mp3"}
+      ]
+    }
+  ]
+}
+''';

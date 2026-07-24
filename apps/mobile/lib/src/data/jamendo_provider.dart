@@ -1,10 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
+import 'provider_binary_loader.dart';
 
 typedef JamendoResponseLoader = Future<String> Function(Uri uri);
+typedef JamendoBinaryLoader = Future<Uint8List> Function(
+  Uri uri,
+  Map<String, String> headers,
+);
 
 /// Official Jamendo read API adapter using a client ID supplied by the user.
 ///
@@ -13,17 +20,29 @@ typedef JamendoResponseLoader = Future<String> Function(Uri uri);
 /// track, while the common offline policy is provider-wide.
 final class JamendoProvider
     implements
+        MusicCatalogCollectionSearchProvider,
+        MusicCatalogPagingProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
   JamendoProvider({
     required String clientId,
     Uri? tracksUri,
     Uri? streamUri,
+    Uri? artistsUri,
+    Uri? albumsUri,
+    Uri? artistTracksUri,
+    Uri? albumTracksUri,
     JamendoResponseLoader? loader,
+    JamendoBinaryLoader? artworkLoader,
   }) : _clientId = _requireClientId(clientId),
        tracksUri = tracksUri ?? _defaultTracksUri,
        streamUri = streamUri ?? _defaultStreamUri,
-       _loader = loader ?? _loadJamendoJson;
+       artistsUri = artistsUri ?? _defaultArtistsUri,
+       albumsUri = albumsUri ?? _defaultAlbumsUri,
+       artistTracksUri = artistTracksUri ?? _defaultArtistTracksUri,
+       albumTracksUri = albumTracksUri ?? _defaultAlbumTracksUri,
+       _loader = loader ?? _loadJamendoJson,
+       _artworkLoader = artworkLoader ?? loadProviderImageBytes;
 
   static final Uri _defaultTracksUri = Uri.parse(
     'https://api.jamendo.com/v3.0/tracks/',
@@ -31,11 +50,28 @@ final class JamendoProvider
   static final Uri _defaultStreamUri = Uri.parse(
     'https://api.jamendo.com/v3.0/tracks/file/',
   );
+  static final Uri _defaultArtistsUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/artists/',
+  );
+  static final Uri _defaultAlbumsUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/albums/',
+  );
+  static final Uri _defaultArtistTracksUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/artists/tracks/',
+  );
+  static final Uri _defaultAlbumTracksUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/albums/tracks/',
+  );
 
   final String _clientId;
   final Uri tracksUri;
   final Uri streamUri;
+  final Uri artistsUri;
+  final Uri albumsUri;
+  final Uri artistTracksUri;
+  final Uri albumTracksUri;
   final JamendoResponseLoader _loader;
+  final JamendoBinaryLoader _artworkLoader;
 
   @override
   String get id => 'jamendo';
@@ -55,6 +91,7 @@ final class JamendoProvider
         MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.streamResolution,
         MusicSourceCapability.directPlayback,
+        MusicSourceCapability.libraryBrowse,
         MusicSourceCapability.artwork,
       };
 
@@ -67,9 +104,155 @@ final class JamendoProvider
     ],
     dataSent: <String>[
       'search query and pagination offset',
+      'public artist or album browse pagination',
+      'explicit public artist or album catalog search query and pagination',
+      'public artist or album identifier',
+      'public artwork URL',
       'user-configured Jamendo developer client ID',
     ],
   );
+
+  @override
+  Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+        MusicCatalogCollectionKind.album,
+      };
+
+  @override
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
+      pagedCollectionKinds;
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) async {
+    return (await browseCollectionsPage(kind)).collections;
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> browseCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    int offset = 0,
+    int limit = 100,
+  }) {
+    return _loadCollectionsPage(kind, offset: offset, limit: limit);
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  }) {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return Future<MusicCatalogCollectionPage>.value(
+        const MusicCatalogCollectionPage(
+          collections: <MusicCatalogCollection>[],
+          nextOffset: 0,
+          hasMore: false,
+        ),
+      );
+    }
+    return _loadCollectionsPage(
+      kind,
+      query: normalizedQuery,
+      offset: offset,
+      limit: limit,
+    );
+  }
+
+  Future<MusicCatalogCollectionPage> _loadCollectionsPage(
+    MusicCatalogCollectionKind kind, {
+    String? query,
+    required int offset,
+    required int limit,
+  }) async {
+    if (!pagedCollectionKinds.contains(kind)) {
+      throw UnsupportedError('Jamendo does not expose public $kind browsing.');
+    }
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final requestedLimit = limit.clamp(1, 200);
+    final response = _parseJamendoResponse(
+      await _loader(
+        _catalogRequestUri(
+          kind,
+          query: query,
+          offset: offset,
+          limit: requestedLimit,
+        ),
+      ),
+    );
+    final collections = _parseJamendoCollections(response.results, kind);
+    final resultCount = response.results.length;
+    final nextOffset = offset + resultCount;
+    final hasMore = response.fullCount == null
+        ? resultCount == requestedLimit
+        : nextOffset < response.fullCount!;
+    return MusicCatalogCollectionPage(
+      collections: collections,
+      nextOffset: nextOffset,
+      hasMore: hasMore,
+      totalCount: response.fullCount,
+    );
+  }
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) async {
+    if (!pagedCollectionKinds.contains(collection.kind)) {
+      throw UnsupportedError('Jamendo collection type is not supported.');
+    }
+    final collectionId = collection.id.trim();
+    if (!RegExp(r'^\d+$').hasMatch(collectionId)) {
+      throw ArgumentError.value(collection.id, 'collection.id', 'Is invalid.');
+    }
+    final isArtist = collection.kind == MusicCatalogCollectionKind.artist;
+    final response = _parseJamendoResponse(
+      await _loader(
+        (isArtist ? artistTracksUri : albumTracksUri).replace(
+          queryParameters: <String, String>{
+            'client_id': _clientId,
+            'format': 'json',
+            'id': collectionId,
+            'limit': '100',
+            'imagesize': '300',
+            'audioformat': 'mp32',
+            if (isArtist) 'track_type': 'single albumtrack',
+          },
+        ),
+      ),
+    );
+    return MusicCatalogDetail(
+      collection: collection,
+      tracks: _parseJamendoNestedTracks(
+        response.results,
+        fallbackArtist: isArtist ? collection.title : '',
+        fallbackAlbum: isArtist ? '' : collection.title,
+      ),
+    );
+  }
+
+  @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) async {
+    final uri = _safeHttpsUri(artworkId);
+    if (uri == null) {
+      return null;
+    }
+    return _artworkLoader(uri, const <String, String>{});
+  }
 
   @override
   Future<List<Track>> search(String query) async {
@@ -179,9 +362,46 @@ final class JamendoProvider
       },
     );
   }
+
+  Uri _catalogRequestUri(
+    MusicCatalogCollectionKind kind, {
+    String? query,
+    required int offset,
+    required int limit,
+  }) {
+    final isArtist = kind == MusicCatalogCollectionKind.artist;
+    return (isArtist ? artistsUri : albumsUri).replace(
+      queryParameters: <String, String>{
+        'client_id': _clientId,
+        'format': 'json',
+        'offset': offset.toString(),
+        'limit': limit.toString(),
+        'fullcount': 'true',
+        'order': 'popularity_total',
+        'imagesize': '300',
+        if (isArtist) 'hasimage': 'true',
+        if (!isArtist) 'type': 'album single',
+        if (query != null) 'namesearch': query,
+      },
+    );
+  }
 }
 
 List<Track> parseJamendoTracksResponse(String jsonText) {
+  return _parseJamendoTracks(_parseJamendoResponse(jsonText).results);
+}
+
+final class _JamendoResponse {
+  const _JamendoResponse({
+    required this.results,
+    this.fullCount,
+  });
+
+  final List<Map<String, Object?>> results;
+  final int? fullCount;
+}
+
+_JamendoResponse _parseJamendoResponse(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
     throw const FormatException('Jamendo response must be an object.');
@@ -205,39 +425,136 @@ List<Track> parseJamendoTracksResponse(String jsonText) {
     throw const FormatException('Jamendo response is missing results.');
   }
 
+  return _JamendoResponse(
+    results: results
+        .whereType<Map<dynamic, dynamic>>()
+        .map((value) => value.cast<String, Object?>())
+        .toList(growable: false),
+    fullCount: _integerValue(headerMap['results_fullcount']),
+  );
+}
+
+List<Track> _parseJamendoTracks(Iterable<Map<String, Object?>> results) {
   final tracks = <Track>[];
   final seen = <String>{};
-  for (final raw in results.whereType<Map<dynamic, dynamic>>()) {
-    final value = raw.cast<String, Object?>();
-    final externalId = _stringValue(value['id']);
-    final title = _stringValue(value['name']);
-    if (!RegExp(r'^\d+$').hasMatch(externalId) ||
-        title.isEmpty ||
-        !seen.add(externalId)) {
+  for (final value in results) {
+    final track = _parseJamendoTrack(value);
+    if (track == null || !seen.add(track.externalId!)) {
       continue;
     }
-    final durationSeconds = _integerValue(value['duration']) ?? 0;
-    final artwork =
-        _safeHttpsUri(_stringValue(value['image'])) ??
-        _safeHttpsUri(_stringValue(value['album_image']));
-    tracks.add(
-      Track(
-        id: 'jamendo:$externalId',
+    tracks.add(track);
+  }
+  return List<Track>.unmodifiable(tracks);
+}
+
+Track? _parseJamendoTrack(
+  Map<String, Object?> value, {
+  String fallbackArtist = '',
+  String fallbackAlbum = '',
+  String fallbackArtwork = '',
+}) {
+  final externalId = _stringValue(value['id']);
+  final title = _stringValue(value['name']);
+  if (!RegExp(r'^\d+$').hasMatch(externalId) || title.isEmpty) {
+    return null;
+  }
+  final durationSeconds = _integerValue(value['duration']) ?? 0;
+  final artwork =
+      _safeHttpsUri(_stringValue(value['image'])) ??
+      _safeHttpsUri(_stringValue(value['album_image'])) ??
+      _safeHttpsUri(fallbackArtwork);
+  final artist = _firstNonEmpty(<String>[
+    _stringValue(value['artist_name']),
+    fallbackArtist,
+    'Unknown Artist',
+  ]);
+  final album = _firstNonEmpty(<String>[
+    _stringValue(value['album_name']),
+    fallbackAlbum,
+    'Single',
+  ]);
+  return Track(
+    id: 'jamendo:$externalId',
+    title: title,
+    artist: artist,
+    album: album,
+    duration: Duration(seconds: durationSeconds < 0 ? 0 : durationSeconds),
+    artworkUri: artwork,
+    artworkSourceUri: artwork,
+    streamUrl: _safeHttpsUri(_stringValue(value['audio']))?.toString(),
+    sourceId: 'jamendo',
+    externalId: externalId,
+  );
+}
+
+List<MusicCatalogCollection> _parseJamendoCollections(
+  Iterable<Map<String, Object?>> results,
+  MusicCatalogCollectionKind kind,
+) {
+  final collections = <MusicCatalogCollection>[];
+  final seen = <String>{};
+  for (final value in results) {
+    final id = _stringValue(value['id']);
+    final title = _stringValue(value['name']);
+    if (!RegExp(r'^\d+$').hasMatch(id) || title.isEmpty || !seen.add(id)) {
+      continue;
+    }
+    final subtitle = kind == MusicCatalogCollectionKind.artist
+        ? _stringValue(value['joindate']).isEmpty
+            ? ''
+            : 'Joined ${_stringValue(value['joindate'])}'
+        : _joinNonEmpty(<String>[
+            _stringValue(value['artist_name']),
+            _stringValue(value['releasedate']),
+          ]);
+    final artwork = _safeHttpsUri(_stringValue(value['image']));
+    collections.add(
+      MusicCatalogCollection(
+        id: id,
         title: title,
-        artist: _stringValue(value['artist_name']).isEmpty
-            ? 'Unknown Artist'
-            : _stringValue(value['artist_name']),
-        album: _stringValue(value['album_name']).isEmpty
-            ? 'Single'
-            : _stringValue(value['album_name']),
-        duration: Duration(seconds: durationSeconds < 0 ? 0 : durationSeconds),
-        artworkUri: artwork,
-        artworkSourceUri: artwork,
-        streamUrl: _safeHttpsUri(_stringValue(value['audio']))?.toString(),
-        sourceId: 'jamendo',
-        externalId: externalId,
+        kind: kind,
+        subtitle: subtitle,
+        artworkId: artwork?.toString(),
       ),
     );
+  }
+  return List<MusicCatalogCollection>.unmodifiable(collections);
+}
+
+List<Track> _parseJamendoNestedTracks(
+  Iterable<Map<String, Object?>> results, {
+  required String fallbackArtist,
+  required String fallbackAlbum,
+}) {
+  final tracks = <Track>[];
+  final seen = <String>{};
+  for (final parent in results) {
+    final parentArtist = _firstNonEmpty(<String>[
+      _stringValue(parent['artist_name']),
+      fallbackArtist,
+      _stringValue(parent['name']),
+    ]);
+    final parentAlbum = _firstNonEmpty(<String>[
+      _stringValue(parent['album_name']),
+      fallbackAlbum,
+      _stringValue(parent['name']),
+    ]);
+    final parentArtwork = _stringValue(parent['image']);
+    final rawTracks = parent['tracks'];
+    if (rawTracks is! List<dynamic>) {
+      continue;
+    }
+    for (final raw in rawTracks.whereType<Map<dynamic, dynamic>>()) {
+      final track = _parseJamendoTrack(
+        raw.cast<String, Object?>(),
+        fallbackArtist: parentArtist,
+        fallbackAlbum: parentAlbum,
+        fallbackArtwork: parentArtwork,
+      );
+      if (track != null && seen.add(track.externalId!)) {
+        tracks.add(track);
+      }
+    }
   }
   return List<Track>.unmodifiable(tracks);
 }
@@ -266,6 +583,23 @@ String _requireClientId(String value) {
 }
 
 String _stringValue(Object? value) => value?.toString().trim() ?? '';
+
+String _firstNonEmpty(Iterable<String> values) {
+  for (final value in values) {
+    final normalized = value.trim();
+    if (normalized.isNotEmpty) {
+      return normalized;
+    }
+  }
+  return '';
+}
+
+String _joinNonEmpty(Iterable<String> values) {
+  return values
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .join(' · ');
+}
 
 int? _integerValue(Object? value) {
   if (value is num) {

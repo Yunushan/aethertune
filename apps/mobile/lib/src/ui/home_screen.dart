@@ -15213,7 +15213,7 @@ enum _CustomCatalogAction { edit, remove }
 
 enum _YouTubeDataAction { musicChart, channels, playlists, configure, remove }
 
-enum _JamendoAction { configure, remove }
+enum _JamendoAction { browseCollections, configure, remove }
 
 enum _AudiusAction { browseCollections }
 
@@ -15636,13 +15636,29 @@ class _SourcesTabState extends State<_SourcesTab> {
           actions: PopupMenuButton<_JamendoAction>(
             tooltip: 'Manage Jamendo API',
             onSelected: (action) {
-              if (action == _JamendoAction.configure) {
-                unawaited(_configureJamendo(context));
-              } else {
-                unawaited(_removeJamendo(context));
+              switch (action) {
+                case _JamendoAction.browseCollections:
+                  if (jamendoProvider != null) {
+                    _openJamendoCollections(context, jamendoProvider);
+                  }
+                  break;
+                case _JamendoAction.configure:
+                  unawaited(_configureJamendo(context));
+                  break;
+                case _JamendoAction.remove:
+                  unawaited(_removeJamendo(context));
               }
             },
             itemBuilder: (_) => <PopupMenuEntry<_JamendoAction>>[
+              PopupMenuItem<_JamendoAction>(
+                value: _JamendoAction.browseCollections,
+                enabled: jamendoProvider != null && !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.explore_outlined),
+                  title: Text('Browse artists and albums'),
+                ),
+              ),
               PopupMenuItem<_JamendoAction>(
                 value: _JamendoAction.configure,
                 enabled: jamendo?.loaded == true && !offlineModeEnabled,
@@ -17012,6 +17028,23 @@ class _SourcesTabState extends State<_SourcesTab> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SelfHostedBrowseScreen(provider: provider),
+      ),
+    );
+  }
+
+  void _openJamendoCollections(
+    BuildContext context,
+    JamendoProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SelfHostedBrowseScreen(
+          provider: provider,
+          collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.artist,
+            MusicCatalogCollectionKind.album,
+          ],
+        ),
       ),
     );
   }
