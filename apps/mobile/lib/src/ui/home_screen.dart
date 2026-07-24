@@ -20,6 +20,7 @@ import '../data/android_system_downloads_exporter.dart';
 import '../data/audius_provider.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
+import '../data/jamendo_chart_cache.dart';
 import '../data/jamendo_settings_store.dart';
 import '../data/jamendo_provider.dart';
 import '../data/itunes_podcast_directory.dart';
@@ -5895,12 +5896,25 @@ final class _JamendoPopularShelf extends StatefulWidget {
 
 final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
   List<Track> _tracks = const <Track>[];
+  late final JamendoChartCache _chartCache;
   bool _loading = false;
   bool _loaded = false;
   bool _failed = false;
   int _requestSerial = 0;
   JamendoFeaturedGenre? _featuredGenre;
   String? _lyricsLanguageCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _chartCache = SharedPreferencesJamendoChartCache();
+    unawaited(_restoreCachedChart());
+  }
+
+  String get _chartCacheKey => jamendoChartCacheKey(
+    genre: _featuredGenre?.apiValue,
+    lyricsLanguageCode: _lyricsLanguageCode,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -6010,6 +6024,7 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
       return;
     }
     final request = ++_requestSerial;
+    final cacheKey = _chartCacheKey;
     setState(() {
       _loading = true;
       _failed = false;
@@ -6028,6 +6043,7 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
         _loading = false;
         _loaded = true;
       });
+      unawaited(_storeCachedChart(cacheKey, tracks));
     } on Object {
       if (!mounted || request != _requestSerial) {
         return;
@@ -6055,6 +6071,7 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
       _loaded = false;
       _failed = false;
     });
+    unawaited(_restoreCachedChart());
   }
 
   Future<void> _editLyricsLanguage() async {
@@ -6110,6 +6127,36 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
       _loaded = false;
       _failed = false;
     });
+    unawaited(_restoreCachedChart());
+  }
+
+  Future<void> _restoreCachedChart() async {
+    final request = _requestSerial;
+    final cacheKey = _chartCacheKey;
+    try {
+      final cached = await _chartCache.read(cacheKey);
+      if (!mounted ||
+          request != _requestSerial ||
+          cached == null ||
+          cached.isExpired(DateTime.now())) {
+        return;
+      }
+      setState(() {
+        _tracks = cached.tracks;
+        _loaded = true;
+        _failed = false;
+      });
+    } on Object {
+      // A corrupt local chart must never prevent the Home screen from loading.
+    }
+  }
+
+  Future<void> _storeCachedChart(String key, List<Track> tracks) async {
+    try {
+      await _chartCache.write(key, tracks);
+    } on Object {
+      // The current public result remains usable when device storage is full.
+    }
   }
 
   Future<void> _playTrack(BuildContext context, Track selected) async {
