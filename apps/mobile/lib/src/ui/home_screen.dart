@@ -17043,6 +17043,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           collectionKinds: const <MusicCatalogCollectionKind>[
             MusicCatalogCollectionKind.artist,
             MusicCatalogCollectionKind.album,
+            MusicCatalogCollectionKind.playlist,
           ],
         ),
       ),

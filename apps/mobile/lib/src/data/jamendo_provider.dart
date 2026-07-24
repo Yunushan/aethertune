@@ -30,9 +30,11 @@ final class JamendoProvider
     Uri? streamUri,
     Uri? artistsUri,
     Uri? albumsUri,
+    Uri? playlistsUri,
     Uri? artistAlbumsUri,
     Uri? artistTracksUri,
     Uri? albumTracksUri,
+    Uri? playlistTracksUri,
     JamendoResponseLoader? loader,
     JamendoBinaryLoader? artworkLoader,
   }) : _clientId = _requireClientId(clientId),
@@ -40,9 +42,11 @@ final class JamendoProvider
        streamUri = streamUri ?? _defaultStreamUri,
        artistsUri = artistsUri ?? _defaultArtistsUri,
        albumsUri = albumsUri ?? _defaultAlbumsUri,
+       playlistsUri = playlistsUri ?? _defaultPlaylistsUri,
        artistAlbumsUri = artistAlbumsUri ?? _defaultArtistAlbumsUri,
        artistTracksUri = artistTracksUri ?? _defaultArtistTracksUri,
        albumTracksUri = albumTracksUri ?? _defaultAlbumTracksUri,
+       playlistTracksUri = playlistTracksUri ?? _defaultPlaylistTracksUri,
        _loader = loader ?? _loadJamendoJson,
        _artworkLoader = artworkLoader ?? loadProviderImageBytes;
 
@@ -58,6 +62,9 @@ final class JamendoProvider
   static final Uri _defaultAlbumsUri = Uri.parse(
     'https://api.jamendo.com/v3.0/albums/',
   );
+  static final Uri _defaultPlaylistsUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/playlists/',
+  );
   static final Uri _defaultArtistAlbumsUri = Uri.parse(
     'https://api.jamendo.com/v3.0/artists/albums/',
   );
@@ -67,15 +74,20 @@ final class JamendoProvider
   static final Uri _defaultAlbumTracksUri = Uri.parse(
     'https://api.jamendo.com/v3.0/albums/tracks/',
   );
+  static final Uri _defaultPlaylistTracksUri = Uri.parse(
+    'https://api.jamendo.com/v3.0/playlists/tracks/',
+  );
 
   final String _clientId;
   final Uri tracksUri;
   final Uri streamUri;
   final Uri artistsUri;
   final Uri albumsUri;
+  final Uri playlistsUri;
   final Uri artistAlbumsUri;
   final Uri artistTracksUri;
   final Uri albumTracksUri;
+  final Uri playlistTracksUri;
   final JamendoResponseLoader _loader;
   final JamendoBinaryLoader _artworkLoader;
 
@@ -123,6 +135,7 @@ final class JamendoProvider
       const <MusicCatalogCollectionKind>{
         MusicCatalogCollectionKind.artist,
         MusicCatalogCollectionKind.album,
+        MusicCatalogCollectionKind.playlist,
       };
 
   @override
@@ -247,7 +260,12 @@ final class JamendoProvider
     }
     final response = _parseJamendoResponse(
       await _loader(
-        (isArtist ? artistTracksUri : albumTracksUri).replace(
+        (isArtist
+                ? artistTracksUri
+                : collection.kind == MusicCatalogCollectionKind.playlist
+                ? playlistTracksUri
+                : albumTracksUri)
+            .replace(
           queryParameters: <String, String>{
             'client_id': _clientId,
             'format': 'json',
@@ -255,7 +273,9 @@ final class JamendoProvider
             'limit': '100',
             'imagesize': '300',
             'audioformat': 'mp32',
-            if (isArtist) 'track_type': 'single albumtrack',
+            if (isArtist ||
+                collection.kind == MusicCatalogCollectionKind.playlist)
+              'track_type': 'single albumtrack',
           },
         ),
       ),
@@ -399,17 +419,18 @@ final class JamendoProvider
     required int limit,
   }) {
     final isArtist = kind == MusicCatalogCollectionKind.artist;
-    return (isArtist ? artistsUri : albumsUri).replace(
+    final isPlaylist = kind == MusicCatalogCollectionKind.playlist;
+    return (isArtist ? artistsUri : isPlaylist ? playlistsUri : albumsUri).replace(
       queryParameters: <String, String>{
         'client_id': _clientId,
         'format': 'json',
         'offset': offset.toString(),
         'limit': limit.toString(),
         'fullcount': 'true',
-        'order': 'popularity_total',
-        'imagesize': '300',
+        'order': isPlaylist ? 'creationdate_desc' : 'popularity_total',
+        if (!isPlaylist) 'imagesize': '300',
         if (isArtist) 'hasimage': 'true',
-        if (!isArtist) 'type': 'album single',
+        if (!isArtist && !isPlaylist) 'type': 'album single',
         'namesearch': ?query,
       },
     );
@@ -528,14 +549,20 @@ List<MusicCatalogCollection> _parseJamendoCollections(
     if (!RegExp(r'^\d+$').hasMatch(id) || title.isEmpty || !seen.add(id)) {
       continue;
     }
-    final subtitle = kind == MusicCatalogCollectionKind.artist
-        ? _stringValue(value['joindate']).isEmpty
-            ? ''
-            : 'Joined ${_stringValue(value['joindate'])}'
-        : _joinNonEmpty(<String>[
-            _stringValue(value['artist_name']),
-            _stringValue(value['releasedate']),
-          ]);
+    final subtitle = switch (kind) {
+      MusicCatalogCollectionKind.artist => _stringValue(value['joindate'])
+              .isEmpty
+          ? ''
+          : 'Joined ${_stringValue(value['joindate'])}',
+      MusicCatalogCollectionKind.album => _joinNonEmpty(<String>[
+          _stringValue(value['artist_name']),
+          _stringValue(value['releasedate']),
+        ]),
+      MusicCatalogCollectionKind.playlist => _joinNonEmpty(<String>[
+          _stringValue(value['user_name']),
+          _stringValue(value['creationdate']),
+        ]),
+    };
     final artwork = _safeHttpsUri(_stringValue(value['image']));
     collections.add(
       MusicCatalogCollection(

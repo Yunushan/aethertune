@@ -682,6 +682,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('opens a Jamendo public playlist into its tracks', (tester) async {
+    final provider = JamendoProvider(
+      clientId: 'client-id',
+      loader: (uri) async {
+        if (uri.path.endsWith('/playlists/tracks/')) {
+          return _jamendoPlaylistTracksJson;
+        }
+        if (uri.path.endsWith('/playlists/')) {
+          return _jamendoPlaylistCatalogJson;
+        }
+        throw StateError('Unexpected request: $uri');
+      },
+    );
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.playlist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Night Drive'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Road Signal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'keeps local artist following distinct from server artist favorites', (
     tester,
@@ -1020,6 +1055,29 @@ const _jamendoArtistAlbumsJson = '''
       "id":"41","name":"Mira Sol",
       "albums":[
         {"id":"42","name":"Aurora Rooms","releasedate":"2026-01-01"}
+      ]
+    }
+  ]
+}
+''';
+
+const _jamendoPlaylistCatalogJson = '''
+{
+  "headers":{"status":"success","code":0,"results_fullcount":1},
+  "results":[
+    {"id":"43","name":"Night Drive","user_name":"Mira Sol","creationdate":"2026-02-01"}
+  ]
+}
+''';
+
+const _jamendoPlaylistTracksJson = '''
+{
+  "headers":{"status":"success","code":0},
+  "results":[
+    {
+      "id":"43","name":"Night Drive","user_name":"Mira Sol",
+      "tracks":[
+        {"id":"73","name":"Road Signal","artist_name":"Mira Sol","duration":190,"audio":"https://stream.example.test/73.mp3"}
       ]
     }
   ]

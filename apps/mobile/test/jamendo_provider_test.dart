@@ -74,16 +74,20 @@ void main() {
     expect(await provider.resolveStream(track), isNull);
   });
 
-  test('browses and explicitly searches bounded Jamendo artists and albums',
+  test('browses and explicitly searches bounded Jamendo catalog collections',
       () async {
     final requests = <Uri>[];
     final provider = JamendoProvider(
       clientId: 'client-id',
       loader: (uri) async {
         requests.add(uri);
-        return uri.path.endsWith('/artists/')
-            ? _artistCatalogResponse
-            : _albumCatalogResponse;
+        if (uri.path.endsWith('/artists/')) {
+          return _artistCatalogResponse;
+        }
+        if (uri.path.endsWith('/albums/')) {
+          return _albumCatalogResponse;
+        }
+        return _playlistCatalogResponse;
       },
     );
 
@@ -98,11 +102,18 @@ void main() {
       offset: 1,
       limit: 1,
     );
+    final playlists = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.playlist,
+      '  night  ',
+      offset: 3,
+      limit: 1,
+    );
 
     expect(provider, isA<MusicCatalogCollectionSearchProvider>());
     expect(provider.pagedCollectionKinds, <MusicCatalogCollectionKind>{
       MusicCatalogCollectionKind.artist,
       MusicCatalogCollectionKind.album,
+      MusicCatalogCollectionKind.playlist,
     });
     expect(artists.collections.single.title, 'Mira Sol');
     expect(artists.nextOffset, 3);
@@ -113,6 +124,9 @@ void main() {
     expect(albums.nextOffset, 2);
     expect(albums.totalCount, 2);
     expect(albums.hasMore, isFalse);
+    expect(playlists.collections.single.title, 'Night Drive');
+    expect(playlists.collections.single.subtitle, 'Mira Sol · 2026-02-01');
+    expect(playlists.nextOffset, 4);
 
     final artistRequest = requests.first;
     expect(artistRequest.path, '/v3.0/artists/');
@@ -131,15 +145,24 @@ void main() {
     expect(albumRequest.queryParameters['namesearch'], 'aurora');
     expect(albumRequest.queryParameters['type'], 'album single');
 
+    final playlistRequest = requests.last;
+    expect(playlistRequest.path, '/v3.0/playlists/');
+    expect(playlistRequest.queryParameters['offset'], '3');
+    expect(playlistRequest.queryParameters['limit'], '1');
+    expect(playlistRequest.queryParameters['namesearch'], 'night');
+    expect(playlistRequest.queryParameters['order'], 'creationdate_desc');
+    expect(playlistRequest.queryParameters['imagesize'], isNull);
+
     final empty = await provider.searchCollectionsPage(
       MusicCatalogCollectionKind.artist,
       '  ',
     );
     expect(empty.collections, isEmpty);
-    expect(requests, hasLength(2));
+    expect(requests, hasLength(3));
     await expectLater(
-      provider.browseCollectionsPage(MusicCatalogCollectionKind.playlist),
-      throwsUnsupportedError,
+      provider.browseCollectionsPage(MusicCatalogCollectionKind.playlist,
+          offset: -1),
+      throwsArgumentError,
     );
     await expectLater(
       provider.browseCollectionsPage(MusicCatalogCollectionKind.artist,
@@ -158,6 +181,9 @@ void main() {
         requests.add(uri);
         if (uri.path.endsWith('/artists/albums/')) {
           return _artistAlbumsResponse;
+        }
+        if (uri.path.endsWith('/playlists/tracks/')) {
+          return _playlistTracksResponse;
         }
         return _albumTracksResponse;
       },
@@ -182,6 +208,13 @@ void main() {
         kind: MusicCatalogCollectionKind.album,
       ),
     );
+    final playlist = await provider.loadCollection(
+      const MusicCatalogCollection(
+        id: '43',
+        title: 'Night Drive',
+        kind: MusicCatalogCollectionKind.playlist,
+      ),
+    );
     final bytes = await provider.loadArtwork(
       'https://art.example.test/mira.jpg',
     );
@@ -193,6 +226,8 @@ void main() {
     expect(album.tracks.single.artist, 'Mira Sol');
     expect(album.tracks.single.album, 'Aurora Rooms');
     expect(album.tracks.single.streamUrl, 'https://stream.example.test/72.mp3');
+    expect(playlist.tracks.single.title, 'Road Signal');
+    expect(playlist.tracks.single.album, 'Night Drive');
     expect(bytes, orderedEquals(<int>[1, 2, 3]));
     expect(artworkRequests.single.host, 'art.example.test');
 
@@ -202,10 +237,14 @@ void main() {
     expect(artistRequest.queryParameters['limit'], '100');
     expect(artistRequest.queryParameters['imagesize'], '300');
     expect(artistRequest.queryParameters['audioformat'], isNull);
-    final albumRequest = requests.last;
+    final albumRequest = requests[1];
     expect(albumRequest.path, '/v3.0/albums/tracks/');
     expect(albumRequest.queryParameters['id'], '42');
     expect(albumRequest.queryParameters['track_type'], isNull);
+    final playlistRequest = requests[2];
+    expect(playlistRequest.path, '/v3.0/playlists/tracks/');
+    expect(playlistRequest.queryParameters['id'], '43');
+    expect(playlistRequest.queryParameters['track_type'], 'single albumtrack');
     expect(await provider.loadArtwork('http://art.example.test/unsafe.jpg'), isNull);
   });
 }
@@ -237,6 +276,15 @@ const _albumCatalogResponse = '''
 }
 ''';
 
+const _playlistCatalogResponse = '''
+{
+  "headers":{"status":"success","code":0,"results_fullcount":4},
+  "results":[
+    {"id":"43","name":"Night Drive","user_name":"Mira Sol","creationdate":"2026-02-01"}
+  ]
+}
+''';
+
 const _artistAlbumsResponse = '''
 {
   "headers":{"status":"success","code":0},
@@ -259,6 +307,20 @@ const _albumTracksResponse = '''
       "id":"42","name":"Aurora Rooms","artist_name":"Mira Sol","image":"https://art.example.test/aurora.jpg",
       "tracks":[
         {"id":"72","name":"Window Signal","duration":200,"audio":"https://stream.example.test/72.mp3"}
+      ]
+    }
+  ]
+}
+''';
+
+const _playlistTracksResponse = '''
+{
+  "headers":{"status":"success","code":0},
+  "results":[
+    {
+      "id":"43","name":"Night Drive","user_name":"Mira Sol",
+      "tracks":[
+        {"id":"73","name":"Road Signal","artist_name":"Mira Sol","duration":190,"audio":"https://stream.example.test/73.mp3"}
       ]
     }
   ]
