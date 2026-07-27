@@ -75,8 +75,7 @@ void main() {
             widget is TextField &&
             widget.decoration?.labelText == 'Search library and providers',
       );
-      final scrollable = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(searchField, 300, scrollable: scrollable);
+      await _scrollSourcesUntilPresent(tester, searchField);
       await tester.enterText(searchField, 'aether');
       await tester.tap(find.byTooltip('Search library and providers'));
       await tester.pumpAndSettle();
@@ -87,66 +86,42 @@ void main() {
           'provider-search-result-paged-test-first-provider-result',
         ),
       );
-      await tester.scrollUntilVisible(
-        firstResult,
-        300,
-        scrollable: scrollable,
-      );
+      await _scrollSourcesUntilPresent(tester, firstResult);
       expect(find.text('First Provider Result'), findsOneWidget);
 
       final loadMore = find.byKey(
         const ValueKey<String>('provider-search-load-more'),
       );
-      await tester.scrollUntilVisible(loadMore, 300, scrollable: scrollable);
-      final providerSearchOffset = tester
-          .state<ScrollableState>(scrollable)
-          .position
-          .pixels;
+      await _scrollSourcesUntilPresent(tester, loadMore);
       await library.setOfflineModeEnabled(true);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(loadMore, 300, scrollable: scrollable);
+      await _scrollSourcesUntilPresent(tester, loadMore);
       expect(tester.widget<OutlinedButton>(loadMore).onPressed, isNull);
       expect(provider.calls, <String>['aether|initial|8']);
 
       await library.setOfflineModeEnabled(false);
       await tester.pumpAndSettle();
-      tester
-          .state<ScrollableState>(scrollable)
-          .position
-          .jumpTo(providerSearchOffset);
-      await tester.pumpAndSettle();
+      await _scrollSourcesUntilPresent(tester, loadMore);
       expect(loadMore, findsOneWidget);
       expect(tester.widget<OutlinedButton>(loadMore).onPressed, isNotNull);
       await tester.tap(loadMore);
       await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        firstResult,
-        -300,
-        scrollable: scrollable,
-      );
+      await _scrollSourcesUntilPresent(tester, firstResult, reverse: true);
       expect(find.text('First Provider Result'), findsOneWidget);
       final loadMoreError = find.byKey(
         const ValueKey<String>(
           'provider-search-load-more-error-paged-test',
         ),
       );
-      await tester.scrollUntilVisible(
-        loadMoreError,
-        300,
-        scrollable: scrollable,
-      );
+      await _scrollSourcesUntilPresent(tester, loadMoreError);
       expect(loadMoreError, findsOneWidget);
       expect(find.text('Second Provider Result'), findsNothing);
 
       final retry = find.byKey(
         const ValueKey<String>('provider-search-load-more-retry'),
       );
-      await tester.drag(scrollable, const Offset(0, -200));
-      await tester.pumpAndSettle();
-      expect(retry, findsOneWidget);
-      await tester.ensureVisible(retry);
-      await tester.pumpAndSettle();
+      await _scrollSourcesUntilPresent(tester, retry);
       await tester.tap(retry);
       await tester.pumpAndSettle();
 
@@ -155,17 +130,9 @@ void main() {
           'provider-search-result-paged-test-second-provider-result',
         ),
       );
-      await tester.scrollUntilVisible(
-        firstResult,
-        -300,
-        scrollable: scrollable,
-      );
+      await _scrollSourcesUntilPresent(tester, firstResult, reverse: true);
       expect(find.text('First Provider Result'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        secondResult,
-        300,
-        scrollable: scrollable,
-      );
+      await _scrollSourcesUntilPresent(tester, secondResult);
       expect(find.text('Second Provider Result'), findsOneWidget);
       expect(loadMore, findsNothing);
       expect(retry, findsNothing);
@@ -229,8 +196,7 @@ void main() {
           widget is TextField &&
           widget.decoration?.labelText == 'Search library and providers',
     );
-    final scrollable = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(searchField, 300, scrollable: scrollable);
+    await _scrollSourcesUntilPresent(tester, searchField);
     await tester.enterText(searchField, 'mi');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
@@ -239,7 +205,7 @@ void main() {
     final suggestion = find.byKey(
       const ValueKey<String>('provider-search-suggestion-suggested-Mira Sol'),
     );
-    await tester.scrollUntilVisible(suggestion, 100, scrollable: scrollable);
+    await _scrollSourcesUntilPresent(tester, suggestion);
     expect(suggestion, findsOneWidget);
     await tester.tap(suggestion);
     await tester.pumpAndSettle();
@@ -254,10 +220,10 @@ void main() {
           widget.decoration?.labelText == 'Search library and providers',
       skipOffstage: false,
     );
-    await tester.scrollUntilVisible(
+    await _scrollSourcesUntilPresent(
+      tester,
       offlineSearchField,
-      -300,
-      scrollable: scrollable,
+      reverse: true,
     );
     await tester.enterText(offlineSearchField, 'offline');
     await tester.pump(const Duration(milliseconds: 400));
@@ -326,9 +292,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final scrollable = find.byType(Scrollable).first;
     final query = find.byKey(const Key('podcast-directory-query'));
-    await tester.scrollUntilVisible(query, 300, scrollable: scrollable);
+    await _scrollSourcesUntilPresent(tester, query);
     await tester.enterText(query, 'ae');
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
@@ -350,7 +315,7 @@ void main() {
         'podcast-directory-subscribe-https://feeds.example.test/aether.xml',
       ),
     );
-    await tester.scrollUntilVisible(subscribe, 200, scrollable: scrollable);
+    await _scrollSourcesUntilPresent(tester, subscribe);
     await tester.tap(subscribe);
     await tester.pumpAndSettle();
 
@@ -382,7 +347,7 @@ void main() {
 
     await library.setOfflineModeEnabled(true);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(query, -300, scrollable: scrollable);
+    await _scrollSourcesUntilPresent(tester, query, reverse: true);
     expect(
       tester.widget<IconButton>(
         find.byKey(const Key('podcast-directory-search')),
@@ -392,6 +357,27 @@ void main() {
     expect(directoryRequests, hasLength(2));
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _scrollSourcesUntilPresent(
+  WidgetTester tester,
+  Finder target, {
+  bool reverse = false,
+}) async {
+  final sourcesList = find.byKey(const Key('sources-scroll-view'));
+  for (var attempt = 0; attempt < 40; attempt++) {
+    if (target.evaluate().isNotEmpty) {
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.drag(
+      sourcesList,
+      Offset(0, reverse ? 400 : -400),
+    );
+    await tester.pump();
+  }
+  expect(target, findsOneWidget);
 }
 
 const _podcastDirectoryResponse = '''

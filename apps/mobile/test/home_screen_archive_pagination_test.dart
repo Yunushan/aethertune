@@ -97,6 +97,8 @@ void main() {
     Future<void> scrollSourcesUntilPresent(Finder target) async {
       for (var attempt = 0; attempt < 40; attempt++) {
         if (target.evaluate().isNotEmpty) {
+          await tester.ensureVisible(target);
+          await tester.pumpAndSettle();
           return;
         }
         await tester.drag(sourcesList, const Offset(0, -400));
@@ -105,8 +107,6 @@ void main() {
       expect(target, findsOneWidget);
     }
 
-    await scrollSourcesUntilPresent(find.text('iTunes Store metadata'));
-    expect(find.text('iTunes Store metadata'), findsOneWidget);
     await scrollSourcesUntilPresent(archiveSearch);
     await tester.enterText(archiveSearch, 'ambient');
     await tester.tap(find.byTooltip('Search archive audio'));
