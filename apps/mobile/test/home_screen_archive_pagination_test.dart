@@ -92,16 +92,27 @@ void main() {
       (widget) =>
           widget is TextField && widget.decoration?.labelText == 'Archive search',
     );
-    await tester.ensureVisible(archiveSearch);
-    await tester.pumpAndSettle();
+    final sourcesList = find.byKey(const Key('sources-scroll-view'));
+
+    Future<void> scrollSourcesUntilPresent(Finder target) async {
+      for (var attempt = 0; attempt < 40; attempt++) {
+        if (target.evaluate().isNotEmpty) {
+          return;
+        }
+        await tester.drag(sourcesList, const Offset(0, -400));
+        await tester.pump();
+      }
+      expect(target, findsOneWidget);
+    }
+
+    await scrollSourcesUntilPresent(archiveSearch);
     await tester.enterText(archiveSearch, 'ambient');
     await tester.tap(find.byTooltip('Search archive audio'));
     await tester.pumpAndSettle();
 
     expect(find.text('Archive first'), findsOneWidget);
     final loadMore = find.textContaining('Load more archive results');
-    await tester.ensureVisible(loadMore);
-    await tester.pumpAndSettle();
+    await scrollSourcesUntilPresent(loadMore);
     await tester.tap(loadMore);
     await tester.pumpAndSettle();
 
