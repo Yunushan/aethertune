@@ -10,6 +10,7 @@ import 'package:aethertune/aethertune_provider_sdk.dart' show
 import 'package:aethertune/src/data/custom_catalog_provider.dart';
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
+import 'package:aethertune/src/data/itunes_metadata_provider.dart';
 import 'package:aethertune/src/data/audius_provider.dart';
 import 'package:aethertune/src/data/jamendo_provider.dart';
 import 'package:aethertune/src/data/jellyfin_provider.dart';
@@ -72,6 +73,7 @@ void main() {
       const DemoSourceProvider(),
       AudiusProvider(),
       MusicBrainzMetadataProvider(),
+      ItunesMetadataProvider(),
       InternetArchiveProvider(
         baseUri: Uri.parse('https://archive.example.test'),
       ),
@@ -228,6 +230,7 @@ void main() {
       SpotifyMetadataProvider(accessTokenReader: () async => 'access-token'),
       YouTubeDataMetadataProvider(apiKey: 'google-cloud-key'),
       MusicBrainzMetadataProvider(),
+      ItunesMetadataProvider(),
     ];
 
     for (final provider in providers) {

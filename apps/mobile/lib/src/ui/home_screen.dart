@@ -20,6 +20,7 @@ import '../data/android_system_downloads_exporter.dart';
 import '../data/audius_provider.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
+import '../data/itunes_metadata_provider.dart';
 import '../data/jamendo_chart_cache.dart';
 import '../data/jamendo_settings_store.dart';
 import '../data/jamendo_provider.dart';
@@ -682,6 +683,7 @@ final _aetherTuneNavigationDestinations = <_AetherTuneNavigationDestination>[
 final _playlistArtworkFileStore = PlaylistArtworkFileStore();
 final _trackArtworkFileStore = TrackArtworkFileStore();
 final _musicBrainzMetadataProvider = MusicBrainzMetadataProvider();
+final _itunesMetadataProvider = ItunesMetadataProvider();
 const _platformTextShareService = SharePlusTextShareService();
 
 List<NavigationDestination> _navigationBarDestinations(
@@ -15864,6 +15866,14 @@ class _SourcesTabState extends State<_SourcesTab> {
           capabilities: _musicBrainzMetadataProvider.capabilities,
           disclosure: _musicBrainzMetadataProvider.disclosure,
         ),
+        _ProviderCard(
+          title: _itunesMetadataProvider.name,
+          status: 'Enabled',
+          description: _itunesMetadataProvider.description,
+          icon: Icons.storefront_outlined,
+          capabilities: _itunesMetadataProvider.capabilities,
+          disclosure: _itunesMetadataProvider.disclosure,
+        ),
         const SizedBox(height: 16),
         Text(
           'Official APIs',
@@ -19198,6 +19208,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _archiveProvider,
       _audiusProvider,
       _musicBrainzMetadataProvider,
+      _itunesMetadataProvider,
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
       ...?context.read<JamendoSettingsStore?>()?.musicProviders,
       ...?context.read<SpotifySettingsStore?>()?.musicProviders,

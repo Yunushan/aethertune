@@ -105,6 +105,8 @@ void main() {
       expect(target, findsOneWidget);
     }
 
+    await scrollSourcesUntilPresent(find.text('iTunes Store metadata'));
+    expect(find.text('iTunes Store metadata'), findsOneWidget);
     await scrollSourcesUntilPresent(archiveSearch);
     await tester.enterText(archiveSearch, 'ambient');
     await tester.tap(find.byTooltip('Search archive audio'));
