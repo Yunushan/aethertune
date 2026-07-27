@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:aethertune/src/data/audius_provider.dart';
 import 'package:aethertune/src/data/jellyfin_provider.dart';
 import 'package:aethertune/src/data/jamendo_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
@@ -692,6 +693,58 @@ void main() {
     expect(requests.last.queryParameters['SearchTerm'], 'mira');
     expect(requests.last.queryParameters['StartIndex'], '0');
     expect(requests.last.queryParameters['Limit'], '100');
+    expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('suggests Audius artists before an explicit search', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requests.add(uri);
+        return '''
+          {"data":[
+            {"id":"artist-1","name":"Mira Sol","handle":"mira-sol"}
+          ]}
+        ''';
+      },
+    );
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.artist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requests, isEmpty);
+    await tester.enterText(
+      find.byKey(const Key('catalog-filter-artist')),
+      'mira',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    expect(requests.single.path, '/v1/users/search');
+    expect(requests.single.queryParameters['query'], 'mira');
+    expect(requests.single.queryParameters['offset'], '0');
+    expect(requests.single.queryParameters['limit'], '8');
+
+    await tester.tap(find.byKey(const Key('catalog-search-artist')));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(2));
+    expect(requests.last.queryParameters['limit'], '100');
     expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
