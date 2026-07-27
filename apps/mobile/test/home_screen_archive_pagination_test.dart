@@ -97,8 +97,6 @@ void main() {
     Future<void> scrollSourcesUntilPresent(Finder target) async {
       for (var attempt = 0; attempt < 40; attempt++) {
         if (target.evaluate().isNotEmpty) {
-          await tester.ensureVisible(target);
-          await tester.pumpAndSettle();
           return;
         }
         await tester.drag(sourcesList, const Offset(0, -400));

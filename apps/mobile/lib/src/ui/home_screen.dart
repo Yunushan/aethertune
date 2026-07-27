@@ -15866,14 +15866,6 @@ class _SourcesTabState extends State<_SourcesTab> {
           capabilities: _musicBrainzMetadataProvider.capabilities,
           disclosure: _musicBrainzMetadataProvider.disclosure,
         ),
-        _ProviderCard(
-          title: _itunesMetadataProvider.name,
-          status: 'Enabled',
-          description: _itunesMetadataProvider.description,
-          icon: Icons.storefront_outlined,
-          capabilities: _itunesMetadataProvider.capabilities,
-          disclosure: _itunesMetadataProvider.disclosure,
-        ),
         const SizedBox(height: 16),
         Text(
           'Official APIs',
@@ -17481,6 +17473,15 @@ class _SourcesTabState extends State<_SourcesTab> {
             title: Text(track.title),
             subtitle: Text('${track.artist} · ${track.album}'),
           ),
+        const SizedBox(height: 16),
+        _ProviderCard(
+          title: _itunesMetadataProvider.name,
+          status: 'Enabled',
+          description: _itunesMetadataProvider.description,
+          icon: Icons.storefront_outlined,
+          capabilities: _itunesMetadataProvider.capabilities,
+          disclosure: _itunesMetadataProvider.disclosure,
+        ),
       ],
     );
   }
