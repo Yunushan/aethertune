@@ -160,8 +160,14 @@ void main() {
       offset: 3,
       limit: 1,
     );
+    final suggestions = await provider.suggestCollections(
+      MusicCatalogCollectionKind.album,
+      '  aurora  ',
+      limit: 99,
+    );
 
     expect(provider, isA<MusicCatalogCollectionSearchProvider>());
+    expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
     expect(provider.pagedCollectionKinds, <MusicCatalogCollectionKind>{
       MusicCatalogCollectionKind.artist,
       MusicCatalogCollectionKind.album,
@@ -179,6 +185,7 @@ void main() {
     expect(playlists.collections.single.title, 'Night Drive');
     expect(playlists.collections.single.subtitle, 'Mira Sol · 2026-02-01');
     expect(playlists.nextOffset, 4);
+    expect(suggestions.single.title, 'Aurora Rooms');
 
     final artistRequest = requests.first;
     expect(artistRequest.path, '/v3.0/artists/');
@@ -205,12 +212,18 @@ void main() {
     expect(playlistRequest.queryParameters['order'], 'creationdate_desc');
     expect(playlistRequest.queryParameters['imagesize'], isNull);
 
+    final suggestionRequest = requests[3];
+    expect(suggestionRequest.path, '/v3.0/albums/');
+    expect(suggestionRequest.queryParameters['offset'], '0');
+    expect(suggestionRequest.queryParameters['limit'], '10');
+    expect(suggestionRequest.queryParameters['namesearch'], 'aurora');
+
     final empty = await provider.searchCollectionsPage(
       MusicCatalogCollectionKind.artist,
       '  ',
     );
     expect(empty.collections, isEmpty);
-    expect(requests, hasLength(3));
+    expect(requests, hasLength(4));
     await expectLater(
       provider.browseCollectionsPage(MusicCatalogCollectionKind.playlist,
           offset: -1),

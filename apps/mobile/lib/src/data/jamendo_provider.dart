@@ -41,6 +41,7 @@ enum JamendoFeaturedGenre {
 final class JamendoProvider
     implements
         MusicCatalogCollectionSearchProvider,
+        MusicCatalogCollectionSuggestionProvider,
         MusicCatalogPagingProvider,
         MusicSourceSearchPagingProvider,
         MusicSourceSearchSuggestionProvider {
@@ -164,6 +165,10 @@ final class JamendoProvider
       pagedCollectionKinds;
 
   @override
+  Set<MusicCatalogCollectionKind> get suggestionCollectionKinds =>
+      pagedCollectionKinds;
+
+  @override
   Future<List<MusicCatalogCollection>> browseCollections(
     MusicCatalogCollectionKind kind,
   ) async {
@@ -202,6 +207,23 @@ final class JamendoProvider
       offset: offset,
       limit: limit,
     );
+  }
+
+  @override
+  Future<List<MusicCatalogCollection>> suggestCollections(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final page = await searchCollectionsPage(
+      kind,
+      query,
+      limit: limit.clamp(1, 10),
+    );
+    return page.collections;
   }
 
   Future<MusicCatalogCollectionPage> _loadCollectionsPage(
