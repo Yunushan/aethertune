@@ -92,7 +92,10 @@ void main() {
       (widget) =>
           widget is TextField && widget.decoration?.labelText == 'Archive search',
     );
-    final sourcesScrollable = find.byKey(const Key('sources-scroll-view'));
+    final sourcesScrollable = find.descendant(
+      of: find.byKey(const Key('sources-scroll-view')),
+      matching: find.byType(Scrollable),
+    );
     await tester.scrollUntilVisible(
       archiveSearch,
       300,
