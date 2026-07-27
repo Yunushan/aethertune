@@ -20,6 +20,7 @@ class JellyfinProvider
     implements
         MusicCatalogDiscoveryPagingProvider,
         MusicCatalogCollectionSearchProvider,
+        MusicCatalogCollectionSuggestionProvider,
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
@@ -372,6 +373,26 @@ class JellyfinProvider
         MusicCatalogCollectionKind.album,
         MusicCatalogCollectionKind.playlist,
       };
+
+  @override
+  Set<MusicCatalogCollectionKind> get suggestionCollectionKinds =>
+      searchableCollectionKinds;
+
+  @override
+  Future<List<MusicCatalogCollection>> suggestCollections(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    return (await searchCollectionsPage(
+      kind,
+      query,
+      limit: limit.clamp(1, 10),
+    )).collections;
+  }
 
   @override
   Future<MusicCatalogCollectionPage> searchCollectionsPage(

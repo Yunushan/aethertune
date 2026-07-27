@@ -396,6 +396,30 @@ void main() {
       ),
       throwsArgumentError,
     );
+
+    final suggestions = await provider.suggestCollections(
+      MusicCatalogCollectionKind.playlist,
+      ' aether ',
+      limit: 99,
+    );
+    expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
+    expect(
+      provider.suggestionCollectionKinds,
+      MusicCatalogCollectionKind.values.toSet(),
+    );
+    expect(suggestions.single.id, 'playlist-page');
+    expect(requests.last.path, '/jellyfin/Users/user-1/Items');
+    expect(requests.last.queryParameters['SearchTerm'], 'aether');
+    expect(requests.last.queryParameters['StartIndex'], '0');
+    expect(requests.last.queryParameters['Limit'], '10');
+    await expectLater(
+      provider.suggestCollections(
+        MusicCatalogCollectionKind.artist,
+        'aether',
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('loads Jellyfin home discovery album shelves with bounded ordering',
