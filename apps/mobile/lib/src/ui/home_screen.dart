@@ -15668,6 +15668,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   bool _providerSearchLoadingMore = false;
   bool _providerSearchSuggestionsLoading = false;
   bool _providerSearchLocalOnly = false;
+  String? _providerSearchSourceFilterId;
   int _providerSearchRequestSerial = 0;
   int _providerSearchSuggestionRequestSerial = 0;
   Timer? _providerSearchSuggestionDebounce;
@@ -15762,6 +15763,41 @@ class _SourcesTabState extends State<_SourcesTab> {
     final selfHostedActionsEnabled = selfHosted.loaded &&
         selfHosted.loadError == null &&
         !offlineModeEnabled;
+    final providerSearchSources = _providerSearchSourceFacets();
+    final selectedProviderSearchSourceId =
+        providerSearchSources.containsKey(_providerSearchSourceFilterId)
+        ? _providerSearchSourceFilterId
+        : null;
+    final visibleProviderSearchResults = _providerSearchResults
+        .where(
+          (result) =>
+              selectedProviderSearchSourceId == null ||
+              result.providerId == selectedProviderSearchSourceId,
+        )
+        .toList(growable: false);
+    final visibleProviderSearchErrors = _providerSearchErrors
+        .where(
+          (error) =>
+              selectedProviderSearchSourceId == null ||
+              error.providerId == selectedProviderSearchSourceId,
+        )
+        .toList(growable: false);
+    final visibleProviderSearchLoadMoreErrors = _providerSearchLoadMoreErrors
+        .where(
+          (error) =>
+              selectedProviderSearchSourceId == null ||
+              error.providerId == selectedProviderSearchSourceId,
+        )
+        .toList(growable: false);
+    final visibleProviderSearchContinuations = _filterProviderContinuations(
+      _providerSearchContinuations,
+      selectedProviderSearchSourceId,
+    );
+    final visibleProviderSearchFailedContinuations =
+        _filterProviderContinuations(
+          _providerSearchFailedContinuations,
+          selectedProviderSearchSourceId,
+        );
 
     return ListView(
       key: const Key('sources-scroll-view'),
@@ -16799,7 +16835,42 @@ class _SourcesTabState extends State<_SourcesTab> {
             subtitle: Text(_providerSearchMessage!),
           ),
         ],
-        for (final error in _providerSearchErrors) ...<Widget>[
+        if (providerSearchSources.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Semantics(
+            label: 'Filter provider search results by source',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                ChoiceChip(
+                  key: const ValueKey<String>('provider-search-source-all'),
+                  label: const Text('All sources'),
+                  selected: selectedProviderSearchSourceId == null,
+                  onSelected: (_) {
+                    setState(() => _providerSearchSourceFilterId = null);
+                  },
+                ),
+                for (final source in providerSearchSources.entries)
+                  ChoiceChip(
+                    key: ValueKey<String>(
+                      'provider-search-source-${source.key}',
+                    ),
+                    label: Text(source.value),
+                    selected: source.key == selectedProviderSearchSourceId,
+                    onSelected: (selected) {
+                      setState(
+                        () => _providerSearchSourceFilterId = selected
+                            ? source.key
+                            : null,
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+        for (final error in visibleProviderSearchErrors) ...<Widget>[
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.warning_amber_outlined),
@@ -16807,22 +16878,28 @@ class _SourcesTabState extends State<_SourcesTab> {
             subtitle: Text(error.message),
           ),
         ],
-        if (_providerSearchResults.isEmpty &&
+        if (visibleProviderSearchResults.isEmpty &&
             !_providerSearchLoading &&
             _providerSearchMessage == null &&
-            _providerSearchErrors.isEmpty) ...<Widget>[
+            visibleProviderSearchErrors.isEmpty) ...<Widget>[
           const SizedBox(height: 8),
-          const ListTile(
+          ListTile(
             leading: Icon(Icons.public),
-            title: Text('No search results loaded'),
+            title: Text(
+              selectedProviderSearchSourceId == null
+                  ? 'No search results loaded'
+                  : 'No results from ${providerSearchSources[selectedProviderSearchSourceId]}',
+            ),
             subtitle: Text(
-              'Search Local Library, Demo Provider, Radio Browser, and Internet Archive.',
+              selectedProviderSearchSourceId == null
+                  ? 'Search Local Library, Demo Provider, Radio Browser, and Internet Archive.'
+                  : 'Choose All sources to see retained results from every provider.',
             ),
           ),
         ],
-        if (_providerSearchResults.isNotEmpty) ...<Widget>[
+        if (visibleProviderSearchResults.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
-          for (final result in _providerSearchResults)
+          for (final result in visibleProviderSearchResults)
             ListTile(
               key: ValueKey<String>(
                 'provider-search-result-${result.providerId}-${result.track.id}',
@@ -16875,7 +16952,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             key: ValueKey<String>('provider-search-load-more-progress'),
           ),
         ],
-        for (final error in _providerSearchLoadMoreErrors) ...<Widget>[
+        for (final error in visibleProviderSearchLoadMoreErrors) ...<Widget>[
           const SizedBox(height: 8),
           ListTile(
             key: ValueKey<String>(
@@ -16887,8 +16964,8 @@ class _SourcesTabState extends State<_SourcesTab> {
           ),
         ],
         if (!_providerSearchLoadingMore &&
-            _providerSearchLoadMoreErrors.isNotEmpty &&
-            _providerSearchFailedContinuations.isNotEmpty) ...<Widget>[
+            visibleProviderSearchLoadMoreErrors.isNotEmpty &&
+            visibleProviderSearchFailedContinuations.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.center,
@@ -16900,8 +16977,7 @@ class _SourcesTabState extends State<_SourcesTab> {
                   ? null
                   : () => unawaited(
                         _continueProviderCatalogSearch(
-                          continuations:
-                              _providerSearchFailedContinuations,
+                          continuations: visibleProviderSearchFailedContinuations,
                         ),
                       ),
               icon: const Icon(Icons.refresh),
@@ -16909,8 +16985,8 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
           ),
         ] else if (!_providerSearchLoadingMore &&
-            _providerSearchLoadMoreErrors.isEmpty &&
-            _providerSearchContinuations.isNotEmpty) ...<Widget>[
+            visibleProviderSearchLoadMoreErrors.isEmpty &&
+            visibleProviderSearchContinuations.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.center,
@@ -16918,7 +16994,11 @@ class _SourcesTabState extends State<_SourcesTab> {
               key: const ValueKey<String>('provider-search-load-more'),
               onPressed: offlineModeEnabled && !_providerSearchLocalOnly
                   ? null
-                  : () => unawaited(_continueProviderCatalogSearch()),
+                  : () => unawaited(
+                        _continueProviderCatalogSearch(
+                          continuations: visibleProviderSearchContinuations,
+                        ),
+                      ),
               icon: const Icon(Icons.expand_more),
               label: const Text('Load more provider results'),
             ),
@@ -19349,6 +19429,49 @@ class _SourcesTabState extends State<_SourcesTab> {
     ];
   }
 
+  Map<String, String> _providerSearchSourceFacets() {
+    final sources = <String, String>{};
+    void add(String providerId, String providerName) {
+      if (providerId.trim().isNotEmpty && providerName.trim().isNotEmpty) {
+        sources.putIfAbsent(providerId, () => providerName);
+      }
+    }
+
+    for (final result in _providerSearchResults) {
+      add(result.providerId, result.providerName);
+    }
+    for (final error in _providerSearchErrors) {
+      add(error.providerId, error.providerName);
+    }
+    for (final error in _providerSearchLoadMoreErrors) {
+      add(error.providerId, error.providerName);
+    }
+    final ordered = sources.entries.toList(growable: false)
+      ..sort(
+        (left, right) => left.value.toLowerCase().compareTo(
+          right.value.toLowerCase(),
+        ),
+      );
+    return Map<String, String>.unmodifiable(
+      <String, String>{
+        for (final source in ordered) source.key: source.value,
+      },
+    );
+  }
+
+  Map<String, String> _filterProviderContinuations(
+    Map<String, String> continuations,
+    String? providerId,
+  ) {
+    if (providerId == null) {
+      return continuations;
+    }
+    final cursor = continuations[providerId];
+    return cursor == null
+        ? const <String, String>{}
+        : <String, String>{providerId: cursor};
+  }
+
   ProviderSearchCoordinator get _providerSearchCoordinator {
     return _providerSearchCoordinatorFor();
   }
@@ -19504,6 +19627,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (query.isEmpty) {
       setState(() {
         _providerSearchQuery = '';
+        _providerSearchSourceFilterId = null;
         _providerSearchResults = <ProviderSearchResult>[];
         _providerSearchErrors = <ProviderSearchError>[];
         _providerSearchLoadMoreErrors = <ProviderSearchError>[];
@@ -19522,6 +19646,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     setState(() {
       _providerSearchQuery = query;
       _providerSearchLocalOnly = localOnly;
+      _providerSearchSourceFilterId = null;
       _providerSearchLoading = true;
       _providerSearchLoadingMore = false;
       _providerSearchSuggestionsLoading = false;
