@@ -152,7 +152,9 @@ before a search when needed, and Disconnect deletes the whole record.
 
 The provider sends search queries and OAuth bearer tokens only to
 `api.spotify.com`, lists `accounts.spotify.com` and `api.spotify.com` in its
-disclosure, and returns neutral metadata-only tracks. It uses bounded
+disclosure, and returns neutral metadata-only tracks. Bounded type-ahead uses
+Spotify's combined artist, album, and track search response, while submitted
+search remains track metadata only. It uses bounded
 `offset`/`limit` pagination for saved tracks, episodes, shows, albums, playlists, and the
 documented new-release album catalog; users can
 also browse their Spotify-reported recently played track metadata through the
@@ -174,7 +176,7 @@ audio, cache/download media, write Spotify data, or use undocumented endpoints.
 The user must configure the loopback redirect allowed by Spotify for their
 developer app before connecting.
 
-Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [Get User's Saved Episodes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes), [Get User's Saved Shows](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-shows), [Get Show Episodes](https://developer.spotify.com/documentation/web-api/reference/get-a-shows-episodes), [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played), [Get User's Top Items](https://developer.spotify.com/documentation/web-api/reference/get-users-top-artists-and-tracks), [Get Followed Artists](https://developer.spotify.com/documentation/web-api/reference/get-followed), and [Get New Releases](https://developer.spotify.com/documentation/web-api/reference/get-new-releases).
+Official references: [Spotify authorization overview](https://developer.spotify.com/documentation/web-api/concepts/authorization), [Authorization Code with PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow), [redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [Search for Item](https://developer.spotify.com/documentation/web-api/reference/search), [Get User's Saved Episodes](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-episodes), [Get User's Saved Shows](https://developer.spotify.com/documentation/web-api/reference/get-users-saved-shows), [Get Show Episodes](https://developer.spotify.com/documentation/web-api/reference/get-a-shows-episodes), [Get Recently Played Tracks](https://developer.spotify.com/documentation/web-api/reference/get-recently-played), [Get User's Top Items](https://developer.spotify.com/documentation/web-api/reference/get-users-top-artists-and-tracks), [Get Followed Artists](https://developer.spotify.com/documentation/web-api/reference/get-followed), and [Get New Releases](https://developer.spotify.com/documentation/web-api/reference/get-new-releases).
 
 ## LRCLIB lyrics foundation
 

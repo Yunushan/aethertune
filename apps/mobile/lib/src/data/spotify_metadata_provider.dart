@@ -189,30 +189,22 @@ final class SpotifyMetadataProvider
     if (normalizedQuery.isEmpty) {
       return const <MusicSourceSearchSuggestion>[];
     }
-
-    final page = await searchPage(normalizedQuery, limit: limit.clamp(1, 50));
-    final seen = <String>{};
-    final suggestions = <MusicSourceSearchSuggestion>[];
-    for (final track in page.tracks) {
-      final value = track.title.trim();
-      if (value.isEmpty || !seen.add(value.toLowerCase())) {
-        continue;
-      }
-      final subtitleParts = <String>[track.artist, track.album]
-          .where((part) => part.trim().isNotEmpty)
-          .toList(growable: false);
-      suggestions.add(
-        MusicSourceSearchSuggestion(
-          value: value,
-          kind: MusicSourceSearchSuggestionKind.track,
-          subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(' - '),
+    final boundedLimit = limit.clamp(1, 10);
+    final token = await _accessTokenReader();
+    return parseSpotifySearchSuggestions(
+      await _searchLoader(
+        searchUri.replace(
+          queryParameters: <String, String>{
+            'q': normalizedQuery,
+            'type': 'artist,album,track',
+            'limit': boundedLimit.toString(),
+            'offset': '0',
+          },
         ),
-      );
-      if (suggestions.length == limit) {
-        break;
-      }
-    }
-    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
+        token,
+      ),
+      limit: boundedLimit,
+    );
   }
 
   @override
@@ -828,6 +820,86 @@ SpotifySearchPage parseSpotifySearchPage(String jsonText) {
     offset: _nonNegativeInt(tracksJson['offset']) ?? 0,
     total: _nonNegativeInt(tracksJson['total']) ?? 0,
   );
+}
+
+List<MusicSourceSearchSuggestion> parseSpotifySearchSuggestions(
+  String jsonText, {
+  required int limit,
+}) {
+  if (limit <= 0) {
+    throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+  }
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Spotify search response must be a map.');
+  }
+  final root = Map<String, Object?>.from(decoded);
+  final suggestions = <MusicSourceSearchSuggestion>[];
+  final seen = <String>{};
+
+  void add(
+    String? value,
+    MusicSourceSearchSuggestionKind kind, {
+    String? subtitle,
+  }) {
+    final normalizedValue = value?.trim() ?? '';
+    if (normalizedValue.isEmpty || suggestions.length == limit) {
+      return;
+    }
+    final key = '${kind.name}:${normalizedValue.toLowerCase()}';
+    if (!seen.add(key)) {
+      return;
+    }
+    final normalizedSubtitle = subtitle?.trim();
+    suggestions.add(
+      MusicSourceSearchSuggestion(
+        value: normalizedValue,
+        kind: kind,
+        subtitle: normalizedSubtitle == null || normalizedSubtitle.isEmpty
+            ? null
+            : normalizedSubtitle,
+      ),
+    );
+  }
+
+  void addItems(
+    String responseKey,
+    MusicSourceSearchSuggestionKind kind, {
+    String? Function(Map<String, Object?> item)? subtitleFor,
+  }) {
+    final container = root[responseKey];
+    if (container is! Map) {
+      return;
+    }
+    final items = container['items'];
+    if (items is! List) {
+      return;
+    }
+    for (final rawItem in items.whereType<Map>()) {
+      final item = Map<String, Object?>.from(rawItem);
+      add(_nonEmpty(item['name']), kind, subtitle: subtitleFor?.call(item));
+    }
+  }
+
+  addItems('artists', MusicSourceSearchSuggestionKind.artist);
+  addItems(
+    'albums',
+    MusicSourceSearchSuggestionKind.album,
+    subtitleFor: (album) => _spotifyArtistNames(album['artists']),
+  );
+  addItems(
+    'tracks',
+    MusicSourceSearchSuggestionKind.track,
+    subtitleFor: (track) {
+      final artist = _spotifyArtistNames(track['artists']);
+      final album = track['album'];
+      final albumName = album is Map ? _nonEmpty(album['name']) : null;
+      return <String?>[artist, albumName]
+          .whereType<String>()
+          .join(' - ');
+    },
+  );
+  return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
 }
 
 SpotifySavedTracksPage parseSpotifySavedTracksPage(String jsonText) {
