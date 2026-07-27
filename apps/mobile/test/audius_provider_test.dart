@@ -134,6 +134,63 @@ void main() {
     expect(playlists.collections.single.title, 'Open Playlist');
   });
 
+  test('suggests bounded public Audius artists and collections', () async {
+    final requests = <Uri>[];
+    final provider = AudiusProvider(
+      loader: (uri) async {
+        requests.add(uri);
+        if (uri.path == '/v1/users/search') {
+          return '''
+            {"data":[
+              {"id":"artist_1","name":"Open Artist","handle":"open-artist"}
+            ]}
+          ''';
+        }
+        return '''
+          {"data":[
+            {"id":"album_1","playlist_name":"Open Album","is_album":true}
+          ]}
+        ''';
+      },
+    );
+
+    expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
+    expect(
+      provider.suggestionCollectionKinds,
+      containsAll(MusicCatalogCollectionKind.values),
+    );
+
+    final artists = await provider.suggestCollections(
+      MusicCatalogCollectionKind.artist,
+      ' open ',
+      limit: 99,
+    );
+    final albums = await provider.suggestCollections(
+      MusicCatalogCollectionKind.album,
+      'open',
+      limit: 1,
+    );
+
+    expect(artists.single.title, 'Open Artist');
+    expect(requests.first.path, '/v1/users/search');
+    expect(requests.first.queryParameters, <String, String>{
+      'query': 'open',
+      'offset': '0',
+      'limit': '10',
+    });
+    expect(albums.single.title, 'Open Album');
+    expect(requests.last.path, '/v1/playlists/search');
+    expect(requests.last.queryParameters['limit'], '1');
+    expect(
+      () => provider.suggestCollections(
+        MusicCatalogCollectionKind.artist,
+        'open',
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('loads bounded public tracks for a searched Audius artist', () async {
     Uri? requested;
     final provider = AudiusProvider(
