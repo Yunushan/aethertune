@@ -21,6 +21,7 @@ import '../data/audius_provider.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/itunes_metadata_provider.dart';
+import '../data/itunes_metadata_settings_store.dart';
 import '../data/jamendo_chart_cache.dart';
 import '../data/jamendo_settings_store.dart';
 import '../data/jamendo_provider.dart';
@@ -15577,6 +15578,8 @@ enum _JamendoAction { browseCollections, configure, remove }
 
 enum _AudiusAction { browseCollections }
 
+enum _ItunesAction { chooseStorefront }
+
 enum _SpotifyAction {
   savedTracks,
   savedEpisodes,
@@ -15723,6 +15726,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     final YouTubeAccountProvider? youtubeAccountProvider =
         youtubeAccount?.accountProvider;
     final jamendo = context.watch<JamendoSettingsStore?>();
+    final itunes = context.watch<ItunesMetadataSettingsStore?>();
+    final itunesProvider = itunes?.provider ?? _itunesMetadataProvider;
+    final itunesStatus =
+        'Enabled - ${itunes?.storefront ?? itunesProvider.country.toUpperCase()}';
     final youtubeProviders = youtubeData?.musicProviders ??
         const <MusicSourceProvider>[];
     YouTubeDataMetadataProvider? youtubeProvider;
@@ -17475,12 +17482,30 @@ class _SourcesTabState extends State<_SourcesTab> {
           ),
         const SizedBox(height: 16),
         _ProviderCard(
-          title: _itunesMetadataProvider.name,
-          status: 'Enabled',
-          description: _itunesMetadataProvider.description,
+          title: itunesProvider.name,
+          status: itunesStatus,
+          description: itunesProvider.description,
           icon: Icons.storefront_outlined,
-          capabilities: _itunesMetadataProvider.capabilities,
-          disclosure: _itunesMetadataProvider.disclosure,
+          capabilities: itunesProvider.capabilities,
+          disclosure: itunesProvider.disclosure,
+          actions: PopupMenuButton<_ItunesAction>(
+            tooltip: 'Manage iTunes Store metadata',
+            onSelected: (action) {
+              if (action == _ItunesAction.chooseStorefront) {
+                unawaited(_configureItunesStorefront(context));
+              }
+            },
+            itemBuilder: (_) => const <PopupMenuEntry<_ItunesAction>>[
+              PopupMenuItem<_ItunesAction>(
+                value: _ItunesAction.chooseStorefront,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.public_outlined),
+                  title: Text('Choose storefront'),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -17524,6 +17549,110 @@ class _SourcesTabState extends State<_SourcesTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _configureItunesStorefront(BuildContext context) async {
+    final store = context.read<ItunesMetadataSettingsStore?>();
+    if (store == null) {
+      return;
+    }
+    final controller = TextEditingController(text: store.storefront);
+    try {
+      final storefront = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Choose iTunes Store storefront'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Use a two-letter ISO country code. This changes only '
+                  'future public metadata searches; no account or media '
+                  'access is used.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('itunes-storefront'),
+                  controller: controller,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  maxLength: 2,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.allow(RegExp('[a-zA-Z]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Storefront',
+                    counterText: '',
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (value) =>
+                      Navigator.of(dialogContext).pop(value),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || storefront == null) {
+        return;
+      }
+      final previousStorefront = store.storefront;
+      await store.setStorefront(storefront);
+      if (!context.mounted || store.storefront == previousStorefront) {
+        return;
+      }
+      _providerSearchRequestSerial += 1;
+      _providerSearchSuggestionRequestSerial += 1;
+      setState(() {
+        _providerSearchLoading = false;
+        _providerSearchLoadingMore = false;
+        _providerSearchSuggestionsLoading = false;
+        _providerSearchResults.removeWhere(
+          (result) => result.providerId == 'itunes-metadata',
+        );
+        _providerSearchErrors.removeWhere(
+          (error) => error.providerId == 'itunes-metadata',
+        );
+        _providerSearchLoadMoreErrors.removeWhere(
+          (error) => error.providerId == 'itunes-metadata',
+        );
+        _providerSearchSuggestions.removeWhere(
+          (suggestion) => suggestion.providerId == 'itunes-metadata',
+        );
+        _providerSearchContinuations.remove('itunes-metadata');
+        _providerSearchFailedContinuations.remove('itunes-metadata');
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'iTunes Store metadata searches now use ${store.storefront}.',
+          ),
+        ),
+      );
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _configureJamendo(BuildContext context) async {
@@ -19201,6 +19330,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (localOnly) {
       return <MusicSourceProvider>[localLibraryProvider];
     }
+    final itunes = context.read<ItunesMetadataSettingsStore?>();
 
     return <MusicSourceProvider>[
       localLibraryProvider,
@@ -19209,7 +19339,8 @@ class _SourcesTabState extends State<_SourcesTab> {
       _archiveProvider,
       _audiusProvider,
       _musicBrainzMetadataProvider,
-      _itunesMetadataProvider,
+      ...(itunes?.musicProviders ??
+          <MusicSourceProvider>[_itunesMetadataProvider]),
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
       ...?context.read<JamendoSettingsStore?>()?.musicProviders,
       ...?context.read<SpotifySettingsStore?>()?.musicProviders,

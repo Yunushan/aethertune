@@ -18,6 +18,7 @@ import '../data/local_folder_watch_store.dart';
 import '../data/lyrics_search_endpoint_settings_store.dart';
 import '../data/lyrics_translation_settings_store.dart';
 import '../data/custom_catalog_store.dart';
+import '../data/itunes_metadata_settings_store.dart';
 import '../data/podcast_chapter_host_policy.dart';
 import '../data/self_hosted_provider_store.dart';
 import '../data/spotify_settings_store.dart';
@@ -89,6 +90,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ),
         ChangeNotifierProvider<JamendoSettingsStore>(
           create: (_) => JamendoSettingsStore()..load(),
+        ),
+        ChangeNotifierProvider<ItunesMetadataSettingsStore>(
+          create: (_) => ItunesMetadataSettingsStore()..load(),
         ),
         ChangeNotifierProvider<YouTubeChannelFollowStore>(
           create: (_) => YouTubeChannelFollowStore()..load(),

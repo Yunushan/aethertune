@@ -109,6 +109,23 @@ after the app backgrounds. It schedules the next due RSS deadline, retries a
 failed feed after one hour, and keeps cache retries resumable and private-cache-
 only; iOS and desktop schedulers remain roadmap work.
 
+## iTunes Store metadata source
+
+`ItunesMetadataProvider` uses Apple's public iTunes Search API only for song
+metadata. Sources lets the listener choose and persist a two-letter ISO
+storefront; that credential-free preference rebuilds the adapter and removes
+only existing iTunes unified-search rows and type-ahead when it changes. Each
+explicit or bounded type-ahead request sends the query, selected storefront,
+and AetherTune User-Agent to `itunes.apple.com`, requests only
+`media=music`, `entity=song`, and `explicit=No`, and passes through the shared
+three-second request limiter. The adapter validates/deduplicates stable song
+IDs and returns non-playable metadata only. Preview URLs and artwork are
+intentionally excluded because the app does not render Apple's required
+promotional treatment; playback, cache, download, account, and credential
+capabilities are not declared.
+
+Official references: [iTunes Search API search parameters](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/Searching.html) and [iTunes Search API overview](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/).
+
 ## YouTube Data API metadata source
 
 `YouTubeDataMetadataProvider` is an optional, metadata-only adapter for the documented YouTube Data API `search.list` endpoint. Sources accepts a user-owned, app-restricted Google Cloud API key and stores it only through `ProviderCredentialVault`; the key is excluded from regular preferences, queues, backups, and sync documents. Search sends the query and configured key to `www.googleapis.com`, returns neutral video title/channel metadata plus HTTPS thumbnail artwork, and supports the API's opaque `nextPageToken` continuation. Submitted searches also make one bounded `videos.list` request containing only the selected public video IDs to enrich duration metadata; type-ahead never makes that detail request. The adapter declares only `metadataSearch`, `searchSuggestions`, and `artwork`, returns no stream URI, and never declares playback, offline cache, downloads, authentication, playlists, or account access. The UI states these boundaries and displays the YouTube Terms URL during setup. It must not be treated as a YouTube Music or OuterTune playback provider.

@@ -15,6 +15,7 @@ EXPECTED_PROVIDER_STEPS = {
         "test/music_source_provider_test.dart",
         "test/musicbrainz_metadata_provider_test.dart",
         "test/itunes_metadata_provider_test.dart",
+        "test/itunes_metadata_settings_store_test.dart",
         "test/provider_search_test.dart",
         "test/provider_home_feed_test.dart",
     ),
