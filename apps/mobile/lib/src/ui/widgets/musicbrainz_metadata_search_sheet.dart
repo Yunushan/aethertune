@@ -148,7 +148,7 @@ class _MusicBrainzMetadataSearchSheetState
       _error = null;
     });
     try {
-      final results = await widget.provider.search(
+      final results = await widget.provider.searchMetadata(
         title: widget.track.title,
         artist: widget.track.artist,
         album: widget.track.album,

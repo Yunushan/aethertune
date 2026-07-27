@@ -14,7 +14,7 @@ void main() {
       limiter: MusicBrainzRequestLimiter(),
     );
 
-    final results = await provider.search(
+    final results = await provider.searchMetadata(
       title: 'Aether Song',
       artist: 'Mira Sol',
       album: 'Night Signal',
@@ -90,10 +90,36 @@ void main() {
       loader: (_, _) async => _recordingResponse,
     );
 
-    await provider.search(title: 'First', artist: '', album: '');
-    await provider.search(title: 'Second', artist: '', album: '');
+    await provider.searchMetadata(title: 'First', artist: '', album: '');
+    await provider.searchMetadata(title: 'Second', artist: '', album: '');
 
     expect(delays, <Duration>[const Duration(seconds: 1)]);
+  });
+
+  test('maps unified search and type-ahead to non-playable recording metadata',
+      () async {
+    Uri? requestUri;
+    final provider = MusicBrainzMetadataProvider(
+      limiter: MusicBrainzRequestLimiter(),
+      loader: (uri, _) async {
+        requestUri = uri;
+        return _recordingResponse;
+      },
+    );
+
+    final page = await provider.searchPage('Aether Song', limit: 99);
+    final suggestions = await provider.suggest('Aether Song', limit: 1);
+
+    expect(requestUri!.queryParameters['query'], 'recording:"Aether Song"');
+    expect(requestUri!.queryParameters['limit'], '1');
+    expect(page.nextCursor, isNull);
+    expect(page.totalCount, 1);
+    expect(page.tracks.single.id, 'musicbrainz:11111111-1111-1111-1111-111111111111');
+    expect(page.tracks.single.externalId, '11111111-1111-1111-1111-111111111111');
+    expect(page.tracks.single.sourceId, 'musicbrainz-metadata');
+    expect(page.tracks.single.isPlayable, isFalse);
+    expect(suggestions.single.value, 'Aether Song');
+    expect(suggestions.single.subtitle, 'Mira Sol');
   });
 }
 

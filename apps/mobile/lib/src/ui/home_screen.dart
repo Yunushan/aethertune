@@ -15855,6 +15855,14 @@ class _SourcesTabState extends State<_SourcesTab> {
             ],
           ),
         ),
+        _ProviderCard(
+          title: _musicBrainzMetadataProvider.name,
+          status: 'Enabled',
+          description: _musicBrainzMetadataProvider.description,
+          icon: Icons.library_music_outlined,
+          capabilities: _musicBrainzMetadataProvider.capabilities,
+          disclosure: _musicBrainzMetadataProvider.disclosure,
+        ),
         const SizedBox(height: 16),
         Text(
           'Official APIs',
@@ -19188,6 +19196,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       _radioProvider,
       _archiveProvider,
       _audiusProvider,
+      _musicBrainzMetadataProvider,
       ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
       ...?context.read<JamendoSettingsStore?>()?.musicProviders,
       ...?context.read<SpotifySettingsStore?>()?.musicProviders,

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../domain/music_source_provider.dart';
+import '../domain/track.dart';
 typedef MusicBrainzResponseLoader = Future<String> Function(
   Uri uri,
   Map<String, String> headers,
@@ -46,9 +48,13 @@ final musicBrainzRequestLimiter = MusicBrainzRequestLimiter();
 
 /// Explicit, read-only metadata lookup through the public MusicBrainz API.
 ///
-/// Callers must show the disclosure and obtain a user action before invoking
-/// [search]. This adapter intentionally does not identify audio or upload files.
-final class MusicBrainzMetadataProvider {
+/// This adapter intentionally does not identify audio or upload files, and it
+/// never resolves media. Submitted source searches and type-ahead are both
+/// user-triggered and rate-limited through the shared MusicBrainz queue.
+final class MusicBrainzMetadataProvider
+    implements
+        MusicSourceSearchPagingProvider,
+        MusicSourceSearchSuggestionProvider {
   MusicBrainzMetadataProvider({
     MusicBrainzResponseLoader? loader,
     MusicBrainzRequestLimiter? limiter,
@@ -64,7 +70,102 @@ final class MusicBrainzMetadataProvider {
   final MusicBrainzResponseLoader _loader;
   final MusicBrainzRequestLimiter _limiter;
 
-  Future<List<MusicBrainzMetadataCandidate>> search({
+  @override
+  String get id => 'musicbrainz-metadata';
+
+  @override
+  String get name => 'MusicBrainz metadata';
+
+  @override
+  String get description =>
+      'Public MusicBrainz recording metadata search. It never uploads audio, '
+      'identifies local files, resolves playback, caches media, or downloads.';
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.searchSuggestions,
+      };
+
+  @override
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
+    networkDomains: <String>['musicbrainz.org'],
+    dataSent: <String>[
+      'submitted search query or selected track title, artist, and album',
+      'AetherTune versioned User-Agent',
+    ],
+  );
+
+  @override
+  Future<List<Track>> search(String query) async {
+    return (await searchPage(query)).tracks;
+  }
+
+  @override
+  Future<MusicSourceSearchPage> searchPage(
+    String query, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    if (cursor?.trim().isNotEmpty == true) {
+      return const MusicSourceSearchPage(tracks: <Track>[]);
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return const MusicSourceSearchPage(tracks: <Track>[]);
+    }
+    final candidates = await searchMetadata(
+      title: normalizedQuery,
+      artist: '',
+      album: '',
+      limit: limit.clamp(1, 25),
+    );
+    return MusicSourceSearchPage(
+      tracks: List<Track>.unmodifiable(
+        candidates.map(_trackFromCandidate),
+      ),
+      totalCount: candidates.length,
+    );
+  }
+
+  @override
+  Future<List<MusicSourceSearchSuggestion>> suggest(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    final page = await searchPage(query, limit: limit.clamp(1, 10));
+    final seen = <String>{};
+    final suggestions = <MusicSourceSearchSuggestion>[];
+    for (final track in page.tracks) {
+      final value = track.title.trim();
+      if (value.isEmpty || !seen.add(value.toLowerCase())) {
+        continue;
+      }
+      suggestions.add(
+        MusicSourceSearchSuggestion(
+          value: value,
+          kind: MusicSourceSearchSuggestionKind.track,
+          subtitle: track.artist,
+        ),
+      );
+      if (suggestions.length == limit) {
+        break;
+      }
+    }
+    return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
+  }
+
+  @override
+  Future<Uri?> resolveStream(Track track) async => null;
+
+  Future<List<MusicBrainzMetadataCandidate>> searchMetadata({
     required String title,
     required String artist,
     required String album,
@@ -103,6 +204,19 @@ final class MusicBrainzMetadataProvider {
       );
     });
   }
+}
+
+Track _trackFromCandidate(MusicBrainzMetadataCandidate candidate) {
+  return Track(
+    id: 'musicbrainz:${candidate.recordingId}',
+    externalId: candidate.recordingId,
+    sourceId: 'musicbrainz-metadata',
+    title: candidate.title,
+    artist: candidate.artist,
+    album: candidate.album,
+    genre: candidate.genre.isEmpty ? 'Unknown Genre' : candidate.genre,
+    duration: candidate.duration,
+  );
 }
 
 final class MusicBrainzMetadataCandidate {
