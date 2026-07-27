@@ -55,6 +55,8 @@ EXPECTED_PROVIDER_STEPS = {
         "test/youtube_oauth_flow_test.dart",
         "test/youtube_account_settings_store_test.dart",
         "test/youtube_account_library_screen_test.dart",
+        "test/youtube_account_following_feed_test.dart",
+        "test/youtube_account_following_feed_screen_test.dart",
     ),
     "Jellyfin": ("test/jellyfin_provider_test.dart",),
     "Navidrome and Subsonic": ("test/subsonic_provider_test.dart",),

@@ -126,7 +126,7 @@ jobs:
         run: cd apps/mobile && flutter test test/spotify_metadata_provider_test.dart test/spotify_oauth_client_test.dart test/spotify_oauth_flow_test.dart
 
       - name: Provider contract - YouTube Data and account metadata
-        run: cd apps/mobile && flutter test test/youtube_data_metadata_provider_test.dart test/youtube_music_chart_screen_test.dart test/youtube_public_playlists_screen_test.dart test/youtube_followed_channel_feed_screen_test.dart test/youtube_account_provider_test.dart test/youtube_oauth_client_test.dart test/youtube_oauth_flow_test.dart test/youtube_account_settings_store_test.dart test/youtube_account_library_screen_test.dart
+        run: cd apps/mobile && flutter test test/youtube_data_metadata_provider_test.dart test/youtube_music_chart_screen_test.dart test/youtube_public_playlists_screen_test.dart test/youtube_followed_channel_feed_screen_test.dart test/youtube_account_provider_test.dart test/youtube_oauth_client_test.dart test/youtube_oauth_flow_test.dart test/youtube_account_settings_store_test.dart test/youtube_account_library_screen_test.dart test/youtube_account_following_feed_test.dart test/youtube_account_following_feed_screen_test.dart
 
       - name: Provider contract - Jellyfin
         run: cd apps/mobile && flutter test test/jellyfin_provider_test.dart

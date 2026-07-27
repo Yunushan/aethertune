@@ -8,6 +8,7 @@ import '../data/youtube_account_provider.dart';
 import '../data/youtube_channel_follow_store.dart';
 import '../data/youtube_data_metadata_provider.dart';
 import '../domain/track.dart';
+import 'youtube_account_following_feed_screen.dart';
 import 'widgets/track_artwork.dart';
 
 /// Read-only playlists and subscriptions from a connected YouTube account.
@@ -241,6 +242,16 @@ final class _YouTubeAccountSubscriptionsTabState
         const Text(
           'Subscriptions are shown as read-only channel metadata. AetherTune does not alter subscriptions.',
         ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: offlineModeEnabled
+                ? null
+                : () => _openAccountFeed(context),
+            icon: const Icon(Icons.dynamic_feed_outlined),
+            label: const Text('View account feed'),
+          ),
+        ),
         if (_channels.isNotEmpty && follows != null)
           Align(
             alignment: Alignment.centerLeft,
@@ -392,6 +403,16 @@ final class _YouTubeAccountSubscriptionsTabState
         builder: (_) => YouTubeAccountChannelVideosScreen(
           provider: widget.provider,
           channel: channel,
+        ),
+      ),
+    );
+  }
+
+  void _openAccountFeed(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => YouTubeAccountFollowingFeedScreen(
+          provider: widget.provider,
         ),
       ),
     );
