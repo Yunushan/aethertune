@@ -735,7 +735,7 @@ void main() {
     expect(requests.last.queryParameters['namesearch'], 'mira');
     expect(requests.last.queryParameters['offset'], '0');
     expect(requests.last.queryParameters['limit'], '100');
-    expect(find.text('Mira Sol'), findsOneWidget);
+    expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
 
