@@ -689,7 +689,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('submits an explicit Jamendo artist search only on request', (
+  testWidgets('suggests Jamendo artists before an explicit search', (
     tester,
   ) async {
     final requests = <Uri>[];
@@ -721,13 +721,16 @@ void main() {
       find.byKey(const Key('catalog-filter-artist')),
       'mira',
     );
-    await tester.pump();
-    expect(requests, hasLength(1));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(requests, hasLength(2));
+    expect(requests.last.queryParameters['namesearch'], 'mira');
+    expect(requests.last.queryParameters['limit'], '8');
 
     await tester.tap(find.byKey(const Key('catalog-search-artist')));
     await tester.pumpAndSettle();
 
-    expect(requests, hasLength(2));
+    expect(requests, hasLength(3));
     expect(requests.last.path, '/v3.0/artists/');
     expect(requests.last.queryParameters['namesearch'], 'mira');
     expect(requests.last.queryParameters['offset'], '0');
