@@ -111,18 +111,23 @@ only; iOS and desktop schedulers remain roadmap work.
 
 ## iTunes Store metadata source
 
-`ItunesMetadataProvider` uses Apple's public iTunes Search API only for song
-metadata. Sources lets the listener choose and persist a two-letter ISO
-storefront; that credential-free preference rebuilds the adapter and removes
-only existing iTunes unified-search rows and type-ahead when it changes. Each
-explicit or bounded type-ahead request sends the query, selected storefront,
-and AetherTune User-Agent to `itunes.apple.com`, requests only
-`media=music`, `entity=song`, and `explicit=No`, and passes through the shared
-three-second request limiter. The adapter validates/deduplicates stable song
-IDs and returns non-playable metadata only. Preview URLs and artwork are
-intentionally excluded because the app does not render Apple's required
-promotional treatment; playback, cache, download, account, and credential
-capabilities are not declared.
+`ItunesMetadataProvider` uses Apple's public iTunes Search API for song
+metadata and user-submitted public album discovery. Sources lets the listener
+choose and persist a two-letter ISO storefront; that credential-free preference
+rebuilds the adapter and removes only existing iTunes unified-search rows and
+type-ahead when it changes. The album browser starts empty and sends no network
+request until a listener submits a term. That bounded request uses
+`media=music`, `entity=album`, and `explicit=No`; opening a result makes a
+bounded Lookup request with `entity=song`. Song searches and bounded type-ahead
+continue to use `entity=song`. Every request sends only the query where needed,
+selected storefront, and AetherTune User-Agent to `itunes.apple.com`, and
+passes through the shared three-second request limiter. The adapter
+validates/deduplicates stable song and album IDs, filters explicit rows, and
+returns bounded metadata. Preview URLs and artwork are intentionally excluded
+because the app does not render Apple's required promotional treatment. iTunes
+album tracks remain metadata-only: catalog playback controls are disabled, and
+playback, cache, download, account, and credential capabilities are not
+declared.
 
 Official references: [iTunes Search API search parameters](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/Searching.html) and [iTunes Search API overview](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/).
 

@@ -1024,6 +1024,7 @@ class _SelfHostedCollectionScreenState
   }
 
   Widget _buildTracks(List<Track> tracks) {
+    final playableTracks = tracks.where(_canPlay).toList(growable: false);
     final radioProvider = _radioProvider;
     final collectionRadioSeedKind = _radioSeedKind(widget.collection.kind);
     final canStartCollectionRadio = radioProvider != null &&
@@ -1073,7 +1074,9 @@ class _SelfHostedCollectionScreenState
                 children: <Widget>[
                   FilledButton.icon(
                     key: const Key('catalog-play-all'),
-                    onPressed: tracks.isEmpty ? null : () => _play(tracks.first, tracks),
+                    onPressed: playableTracks.isEmpty
+                        ? null
+                        : () => _play(playableTracks.first, playableTracks),
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Play all'),
                   ),
@@ -1135,7 +1138,7 @@ class _SelfHostedCollectionScreenState
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          onTap: () => _play(track, tracks),
+          onTap: _canPlay(track) ? () => _play(track, playableTracks) : null,
           trailing: PopupMenuButton<_CatalogTrackAction>(
             key: ValueKey<String>('catalog-track-actions-${track.id}'),
             enabled:
@@ -1151,8 +1154,12 @@ class _SelfHostedCollectionScreenState
               isRemoteFavorite,
             ),
             itemBuilder: (_) => <PopupMenuEntry<_CatalogTrackAction>>[
-              const PopupMenuItem<_CatalogTrackAction>(
+              PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.play,
+                enabled: track.isPlayable ||
+                    widget.provider.capabilities.contains(
+                      MusicSourceCapability.streamResolution,
+                    ),
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.play_arrow),
@@ -1531,6 +1538,13 @@ class _SelfHostedCollectionScreenState
         setState(() => _playlistMutationInProgress = false);
       }
     }
+  }
+
+  bool _canPlay(Track track) {
+    return track.isPlayable ||
+        widget.provider.capabilities.contains(
+          MusicSourceCapability.streamResolution,
+        );
   }
 
   Future<void> _setRemoteFavorite(

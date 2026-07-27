@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
 
@@ -58,13 +60,21 @@ final itunesRequestLimiter = ItunesRequestLimiter();
 final class ItunesMetadataProvider
     implements
         MusicSourceSearchPagingProvider,
-        MusicSourceSearchSuggestionProvider {
+        MusicSourceSearchSuggestionProvider,
+        MusicCatalogProvider,
+        MusicCatalogCollectionSearchProvider {
   ItunesMetadataProvider({
     Uri? searchUri,
+    Uri? lookupUri,
     String country = 'us',
     ItunesSearchResponseLoader? loader,
     ItunesRequestLimiter? limiter,
   }) : searchUri = searchUri ?? _defaultSearchUri,
+       lookupUri =
+           lookupUri ?? (searchUri ?? _defaultSearchUri).replace(
+             path: '/lookup',
+             query: null,
+           ),
        country = _normalizeCountry(country),
        _loader = loader ?? _loadItunesSearchResponse,
        _limiter = limiter ?? itunesRequestLimiter;
@@ -77,6 +87,7 @@ final class ItunesMetadataProvider
       'AetherTune/0.1 (https://github.com/Yunushan/aethertune)';
 
   final Uri searchUri;
+  final Uri lookupUri;
   final String country;
   final ItunesSearchResponseLoader _loader;
   final ItunesRequestLimiter _limiter;
@@ -89,22 +100,23 @@ final class ItunesMetadataProvider
 
   @override
   String get description =>
-      'Public iTunes Store song metadata search for the selected storefront. '
-      'It omits previews and artwork, and never provides playback, caching, '
-      'or downloads.';
+      'Public iTunes Store song and album metadata for the selected '
+      'storefront. It omits previews and artwork, and never provides '
+      'playback, caching, or downloads.';
 
   @override
   Set<MusicSourceCapability> get capabilities =>
       const <MusicSourceCapability>{
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.searchSuggestions,
+        MusicSourceCapability.libraryBrowse,
       };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
     networkDomains: <String>['itunes.apple.com'],
     dataSent: <String>[
-      'submitted search query or bounded type-ahead query',
+      'submitted song or album query, or bounded type-ahead query',
       'selected two-letter iTunes Store country',
       'AetherTune versioned User-Agent',
     ],
@@ -142,13 +154,10 @@ final class ItunesMetadataProvider
         'limit': boundedLimit.toString(),
       },
     );
-    final tracks = await _limiter.schedule(() async {
-      final response = await _loader(uri, <String, String>{
-        HttpHeaders.acceptHeader: 'application/json',
-        HttpHeaders.userAgentHeader: userAgent,
-      });
-      return parseItunesSongSearchResponse(response, limit: boundedLimit);
-    });
+    final tracks = parseItunesSongSearchResponse(
+      await _request(uri),
+      limit: boundedLimit,
+    );
     return MusicSourceSearchPage(
       tracks: tracks,
       totalCount: tracks.length,
@@ -187,6 +196,115 @@ final class ItunesMetadataProvider
 
   @override
   Future<Uri?> resolveStream(Track track) async => null;
+
+  @override
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
+      const <MusicCatalogCollectionKind>{MusicCatalogCollectionKind.album};
+
+  @override
+  Future<List<MusicCatalogCollection>> browseCollections(
+    MusicCatalogCollectionKind kind,
+  ) async {
+    // Apple's Search API requires a search term. The browser starts empty
+    // until the listener submits an album query instead of guessing one.
+    return const <MusicCatalogCollection>[];
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
+    if (kind != MusicCatalogCollectionKind.album) {
+      return const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[],
+        nextOffset: 0,
+        hasMore: false,
+      );
+    }
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'Must not be negative.');
+    }
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    if (offset > 0 || query.trim().isEmpty) {
+      return const MusicCatalogCollectionPage(
+        collections: <MusicCatalogCollection>[],
+        nextOffset: 0,
+        hasMore: false,
+      );
+    }
+    final boundedLimit = limit.clamp(1, 50);
+    final uri = searchUri.replace(
+      queryParameters: <String, String>{
+        'term': query.trim(),
+        'country': country,
+        'media': 'music',
+        'entity': 'album',
+        'explicit': 'No',
+        'limit': boundedLimit.toString(),
+      },
+    );
+    final collections = parseItunesAlbumSearchResponse(
+      await _request(uri),
+      limit: boundedLimit,
+    );
+    return MusicCatalogCollectionPage(
+      collections: collections,
+      nextOffset: collections.length,
+      hasMore: false,
+      totalCount: collections.length,
+    );
+  }
+
+  @override
+  Future<MusicCatalogDetail> loadCollection(
+    MusicCatalogCollection collection,
+  ) async {
+    if (collection.kind != MusicCatalogCollectionKind.album) {
+      throw ArgumentError.value(
+        collection.kind,
+        'collection.kind',
+        'Only iTunes albums can be loaded.',
+      );
+    }
+    final albumId = _itunesAlbumId(collection.id);
+    if (albumId == null) {
+      throw const FormatException('The iTunes album identifier is invalid.');
+    }
+    final uri = lookupUri.replace(
+      queryParameters: <String, String>{
+        'id': albumId,
+        'country': country,
+        'entity': 'song',
+        'explicit': 'No',
+        'limit': '50',
+      },
+    );
+    return MusicCatalogDetail(
+      collection: collection,
+      tracks: parseItunesSongSearchResponse(await _request(uri), limit: 50),
+    );
+  }
+
+  @override
+  Future<Uint8List?> loadArtwork(
+    String artworkId, {
+    String? version,
+    int maxWidth = 512,
+  }) async => null;
+
+  Future<String> _request(Uri uri) {
+    return _limiter.schedule(() {
+      return _loader(uri, <String, String>{
+        HttpHeaders.acceptHeader: 'application/json',
+        HttpHeaders.userAgentHeader: userAgent,
+      });
+    });
+  }
 }
 
 List<Track> parseItunesSongSearchResponse(
@@ -217,7 +335,10 @@ List<Track> parseItunesSongSearchResponse(
     }
     final trackId = _numericIdentifier(result['trackId']);
     final title = _value(result['trackName']);
-    if (trackId == null || title.isEmpty || !seen.add(trackId)) {
+    if (trackId == null ||
+        title.isEmpty ||
+        _isExplicit(result['trackExplicitness']) ||
+        !seen.add(trackId)) {
       continue;
     }
     tracks.add(
@@ -238,6 +359,54 @@ List<Track> parseItunesSongSearchResponse(
     );
   }
   return List<Track>.unmodifiable(tracks);
+}
+
+List<MusicCatalogCollection> parseItunesAlbumSearchResponse(
+  String jsonText, {
+  required int limit,
+}) {
+  if (limit <= 0) {
+    throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+  }
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map<dynamic, dynamic>) {
+    throw const FormatException('iTunes album response must be an object.');
+  }
+  final results = decoded['results'];
+  if (results is! List<dynamic>) {
+    return const <MusicCatalogCollection>[];
+  }
+
+  final albums = <MusicCatalogCollection>[];
+  final seen = <String>{};
+  for (final raw in results) {
+    if (raw is! Map<dynamic, dynamic> || albums.length == limit) {
+      continue;
+    }
+    final result = raw.cast<String, Object?>();
+    final collectionId = _numericIdentifier(result['collectionId']);
+    final title = _value(result['collectionName']);
+    final collectionType = _value(result['collectionType']).toLowerCase();
+    if (collectionId == null ||
+        title.isEmpty ||
+        collectionType != 'album' ||
+        _isExplicit(result['collectionExplicitness']) ||
+        !seen.add(collectionId)) {
+      continue;
+    }
+    final artist = _fallback(result['artistName'], 'Unknown Artist');
+    final year = _releaseYear(result['releaseDate']);
+    albums.add(
+      MusicCatalogCollection(
+        id: 'itunes-album:$collectionId',
+        title: title,
+        kind: MusicCatalogCollectionKind.album,
+        subtitle: year == null ? artist : '$artist / $year',
+        itemCount: _nonNegativeInt(result['trackCount']) ?? 0,
+      ),
+    );
+  }
+  return List<MusicCatalogCollection>.unmodifiable(albums);
 }
 
 String _normalizeCountry(String value) {
@@ -278,6 +447,16 @@ int? _releaseYear(Object? value) {
   final match = RegExp(r'^(\d{4})').firstMatch(_value(value));
   final year = match == null ? null : int.tryParse(match.group(1)!);
   return year == null || year < 1000 || year > 9999 ? null : year;
+}
+
+bool _isExplicit(Object? value) => _value(value).toLowerCase() == 'explicit';
+
+String? _itunesAlbumId(String value) {
+  const prefix = 'itunes-album:';
+  if (!value.startsWith(prefix)) {
+    return null;
+  }
+  return _numericIdentifier(value.substring(prefix.length));
 }
 
 Future<String> _loadItunesSearchResponse(

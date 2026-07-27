@@ -15578,7 +15578,7 @@ enum _JamendoAction { browseCollections, configure, remove }
 
 enum _AudiusAction { browseCollections }
 
-enum _ItunesAction { chooseStorefront }
+enum _ItunesAction { browseAlbums, chooseStorefront }
 
 enum _SpotifyAction {
   savedTracks,
@@ -17571,12 +17571,26 @@ class _SourcesTabState extends State<_SourcesTab> {
           actions: PopupMenuButton<_ItunesAction>(
             tooltip: 'Manage iTunes Store metadata',
             onSelected: (action) {
-              if (action == _ItunesAction.chooseStorefront) {
-                unawaited(_configureItunesStorefront(context));
+              switch (action) {
+                case _ItunesAction.browseAlbums:
+                  _openItunesAlbums(context, itunesProvider);
+                  break;
+                case _ItunesAction.chooseStorefront:
+                  unawaited(_configureItunesStorefront(context));
+                  break;
               }
             },
-            itemBuilder: (_) => const <PopupMenuEntry<_ItunesAction>>[
+            itemBuilder: (_) => <PopupMenuEntry<_ItunesAction>>[
               PopupMenuItem<_ItunesAction>(
+                value: _ItunesAction.browseAlbums,
+                enabled: !offlineModeEnabled,
+                child: const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.album_outlined),
+                  title: Text('Browse public albums'),
+                ),
+              ),
+              const PopupMenuItem<_ItunesAction>(
                 value: _ItunesAction.chooseStorefront,
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -17625,6 +17639,22 @@ class _SourcesTabState extends State<_SourcesTab> {
             MusicCatalogCollectionKind.artist,
             MusicCatalogCollectionKind.album,
             MusicCatalogCollectionKind.playlist,
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openItunesAlbums(
+    BuildContext context,
+    ItunesMetadataProvider provider,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SelfHostedBrowseScreen(
+          provider: provider,
+          collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.album,
           ],
         ),
       ),

@@ -549,6 +549,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('metadata-only catalog details keep playback controls disabled', (
+    tester,
+  ) async {
+    final provider = _MetadataOnlyCatalogProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.album,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Blue Rooms'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<FilledButton>(find.byKey(const Key('catalog-play-all')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<ListTile>(find.byKey(const Key('catalog-track-track-song-1')))
+          .onTap,
+      isNull,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('catalog-track-actions-track-song-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<PopupMenuItem<dynamic>>(
+        find.widgetWithText(PopupMenuItem<dynamic>, 'Play'),
+      ).enabled,
+      isFalse,
+    );
+  });
+
   testWidgets('submits an explicit Jellyfin catalog search only on request', (
     tester,
   ) async {
@@ -1541,6 +1586,18 @@ class _FakeCollectionSearchProvider extends _FakeCatalogProvider
       hasMore: false,
     );
   }
+}
+
+class _MetadataOnlyCatalogProvider extends _FakeCatalogProvider {
+  @override
+  String get id => 'metadata-only-catalog';
+
+  @override
+  Set<MusicSourceCapability> get capabilities =>
+      const <MusicSourceCapability>{
+        MusicSourceCapability.metadataSearch,
+        MusicSourceCapability.libraryBrowse,
+      };
 }
 
 const _tinyPngBase64 =
