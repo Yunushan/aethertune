@@ -92,10 +92,11 @@ void main() {
       (widget) =>
           widget is TextField && widget.decoration?.labelText == 'Archive search',
     );
+    final sourcesScrollable = find.byKey(const Key('sources-scroll-view'));
     await tester.scrollUntilVisible(
       archiveSearch,
       300,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: sourcesScrollable,
     );
     await tester.enterText(archiveSearch, 'ambient');
     await tester.tap(find.byTooltip('Search archive audio'));
@@ -106,7 +107,7 @@ void main() {
     await tester.scrollUntilVisible(
       loadMore,
       300,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: sourcesScrollable,
     );
     await tester.tap(loadMore);
     await tester.pumpAndSettle();

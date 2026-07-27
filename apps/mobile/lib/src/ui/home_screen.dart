@@ -15755,6 +15755,7 @@ class _SourcesTabState extends State<_SourcesTab> {
         !offlineModeEnabled;
 
     return ListView(
+      key: const Key('sources-scroll-view'),
       padding: const EdgeInsets.all(16),
       children: <Widget>[
         Text(
