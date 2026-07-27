@@ -94,11 +94,8 @@ void main() {
     );
     final sourcesScrollable = find.descendant(
       of: find.byKey(const Key('sources-scroll-view')),
-      matching: find.byWidgetPredicate(
-        (widget) =>
-            widget is Scrollable && widget.axisDirection == AxisDirection.down,
-      ),
-    );
+      matching: find.byType(Scrollable),
+    ).first;
     await tester.scrollUntilVisible(
       archiveSearch,
       300,
