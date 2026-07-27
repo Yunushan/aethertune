@@ -586,12 +586,18 @@ void main() {
       find.byKey(const Key('catalog-track-actions-track-song-1')),
     );
     await tester.pumpAndSettle();
-    expect(
-      tester.widget<PopupMenuItem<dynamic>>(
-        find.widgetWithText(PopupMenuItem<dynamic>, 'Play'),
-      ).enabled,
-      isFalse,
-    );
+    final playItem = find.byWidgetPredicate((widget) {
+      if (widget is! PopupMenuItem<Object?>) {
+        return false;
+      }
+      final child = widget.child;
+      if (child is! ListTile) {
+        return false;
+      }
+      final title = child.title;
+      return title is Text && title.data == 'Play';
+    });
+    expect(tester.widget<PopupMenuItem<Object?>>(playItem).enabled, isFalse);
   });
 
   testWidgets('submits an explicit Jellyfin catalog search only on request', (
