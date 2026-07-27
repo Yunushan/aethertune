@@ -640,7 +640,7 @@ void main() {
     expect(tester.widget<PopupMenuItem<Object?>>(playItem).enabled, isFalse);
   });
 
-  testWidgets('submits an explicit Jellyfin catalog search only on request', (
+  testWidgets('suggests Jellyfin artists before an explicit search', (
     tester,
   ) async {
     final requests = <Uri>[];
@@ -674,18 +674,24 @@ void main() {
       find.byKey(const Key('catalog-filter-artist')),
       'mira',
     );
-    await tester.pump();
-    expect(requests, hasLength(1));
-
-    await tester.tap(find.byKey(const Key('catalog-search-artist')));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     expect(requests, hasLength(2));
     expect(requests.last.path, '/jellyfin/Artists');
     expect(requests.last.queryParameters['SearchTerm'], 'mira');
     expect(requests.last.queryParameters['StartIndex'], '0');
+    expect(requests.last.queryParameters['Limit'], '8');
+
+    await tester.tap(find.byKey(const Key('catalog-search-artist')));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(3));
+    expect(requests.last.path, '/jellyfin/Artists');
+    expect(requests.last.queryParameters['SearchTerm'], 'mira');
+    expect(requests.last.queryParameters['StartIndex'], '0');
     expect(requests.last.queryParameters['Limit'], '100');
-    expect(find.text('Mira Sol'), findsOneWidget);
+    expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
 
