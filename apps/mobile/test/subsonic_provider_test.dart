@@ -177,6 +177,79 @@ void main() {
     await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
   });
 
+  test('searches and suggests bounded Subsonic artists and albums', () async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'yunus',
+      password: 'secret',
+      saltGenerator: _fixedSaltGenerator,
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return _searchSuggestionsResponseJson;
+      },
+    );
+
+    final artists = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      ' aether ',
+      offset: 2,
+      limit: 1,
+    );
+    final albums = await provider.suggestCollections(
+      MusicCatalogCollectionKind.album,
+      'aether',
+      limit: 99,
+    );
+
+    expect(provider, isA<MusicCatalogCollectionSearchProvider>());
+    expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
+    expect(
+      provider.searchableCollectionKinds,
+      <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+        MusicCatalogCollectionKind.album,
+      },
+    );
+    expect(
+      provider.suggestionCollectionKinds,
+      provider.searchableCollectionKinds,
+    );
+    expect(artists.collections.single.title, 'Aether Artist');
+    expect(requests.first.path, '/navidrome/rest/search3.view');
+    expect(requests.first.queryParameters['query'], 'aether');
+    expect(requests.first.queryParameters['artistCount'], '1');
+    expect(requests.first.queryParameters['artistOffset'], '2');
+    expect(requests.first.queryParameters['albumCount'], '0');
+    expect(requests.first.queryParameters['songCount'], '0');
+    expect(albums.single.title, 'Aether Album');
+    expect(requests.last.queryParameters['artistCount'], '0');
+    expect(requests.last.queryParameters['albumCount'], '10');
+    expect(requests.last.queryParameters['albumOffset'], '0');
+    expect(requests.last.queryParameters['songCount'], '0');
+    final empty = await provider.searchCollectionsPage(
+      MusicCatalogCollectionKind.artist,
+      '   ',
+    );
+    expect(empty.collections, isEmpty);
+    expect(requests, hasLength(2));
+    await expectLater(
+      provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.playlist,
+        'aether',
+      ),
+      throwsUnsupportedError,
+    );
+    await expectLater(
+      provider.suggestCollections(
+        MusicCatalogCollectionKind.artist,
+        'aether',
+        limit: 0,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('redacts salted authentication tokens from provider errors', () async {
     final provider = SubsonicProvider(
       baseUri: Uri.parse('https://music.example.test'),

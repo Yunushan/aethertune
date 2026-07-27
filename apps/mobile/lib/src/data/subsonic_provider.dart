@@ -19,6 +19,8 @@ class SubsonicProvider
     implements
         MusicCatalogDiscoveryProvider,
         MusicCatalogDiscoveryPagingProvider,
+        MusicCatalogCollectionSearchProvider,
+        MusicCatalogCollectionSuggestionProvider,
         MusicCatalogPagingProvider,
         MusicCatalogRadioProvider,
         MusicPlaylistMutationProvider,
@@ -96,6 +98,7 @@ class SubsonicProvider
           'salted authentication token',
           'song search query',
           'audio search suggestion query',
+          'explicit artist or album catalog search query',
           'artist, album, and playlist browse identifiers',
           'Home discovery list selection and result limit',
           'radio seed item identifier and result limit',
@@ -232,6 +235,81 @@ class SubsonicProvider
       const <MusicCatalogCollectionKind>{
         MusicCatalogCollectionKind.album,
       };
+
+  @override
+  Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+        MusicCatalogCollectionKind.album,
+      };
+
+  @override
+  Set<MusicCatalogCollectionKind> get suggestionCollectionKinds =>
+      searchableCollectionKinds;
+
+  @override
+  Future<List<MusicCatalogCollection>> suggestCollections(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int limit = 8,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Limit must be positive.');
+    }
+    return (await searchCollectionsPage(
+      kind,
+      query,
+      limit: limit.clamp(1, 10),
+    )).collections;
+  }
+
+  @override
+  Future<MusicCatalogCollectionPage> searchCollectionsPage(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int offset = 0,
+    int limit = 100,
+  }) {
+    if (!searchableCollectionKinds.contains(kind)) {
+      return Future<MusicCatalogCollectionPage>.error(
+        UnsupportedError('Subsonic does not expose $kind catalog search.'),
+      );
+    }
+    if (offset < 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(offset, 'offset', 'Offset cannot be negative.'),
+      );
+    }
+    if (limit <= 0) {
+      return Future<MusicCatalogCollectionPage>.error(
+        ArgumentError.value(limit, 'limit', 'Limit must be positive.'),
+      );
+    }
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      return Future<MusicCatalogCollectionPage>.value(
+        const MusicCatalogCollectionPage(
+          collections: <MusicCatalogCollection>[],
+          nextOffset: 0,
+          hasMore: false,
+        ),
+      );
+    }
+    final boundedLimit = limit.clamp(1, 500);
+    return _guardRequest(() async => parseSubsonicSearchCollectionsResponse(
+          await _requestLoader(
+            _catalogSearchUri(
+              kind,
+              normalizedQuery,
+              offset: offset,
+              limit: boundedLimit,
+            ),
+          ),
+          kind: kind,
+          requestOffset: offset,
+          requestLimit: boundedLimit,
+        ));
+  }
 
   @override
   Future<MusicCatalogCollectionPage> browseCollectionsPage(
@@ -644,6 +722,27 @@ class SubsonicProvider
     );
   }
 
+  Uri _catalogSearchUri(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    required int offset,
+    required int limit,
+  }) {
+    final isArtist = kind == MusicCatalogCollectionKind.artist;
+    return _requestUri(
+      '/rest/search3.view',
+      <String, String>{
+        'query': query,
+        'artistCount': isArtist ? limit.toString() : '0',
+        'artistOffset': isArtist ? offset.toString() : '0',
+        'albumCount': isArtist ? '0' : limit.toString(),
+        'albumOffset': isArtist ? '0' : offset.toString(),
+        'songCount': '0',
+        'songOffset': '0',
+      },
+    );
+  }
+
   @override
   Future<void> setTrackFavorite(
     String trackId, {
@@ -892,6 +991,31 @@ List<MusicSourceSearchSuggestion> parseSubsonicSearchSuggestionsResponse(
     );
   }
   return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
+}
+
+MusicCatalogCollectionPage parseSubsonicSearchCollectionsResponse(
+  String jsonText, {
+  required MusicCatalogCollectionKind kind,
+  required int requestOffset,
+  required int requestLimit,
+}) {
+  final response = _subsonicResponse(jsonText);
+  final searchResult = response['searchResult3'];
+  final rawCollections = searchResult is Map<dynamic, dynamic>
+      ? _jsonList(
+          kind == MusicCatalogCollectionKind.artist
+              ? searchResult['artist']
+              : searchResult['album'],
+        )
+      : const <Object?>[];
+  final collections = _subsonicCollections(rawCollections, kind);
+  final nextOffset = requestOffset + rawCollections.length;
+  return MusicCatalogCollectionPage(
+    collections: List<MusicCatalogCollection>.unmodifiable(collections),
+    nextOffset: nextOffset,
+    hasMore:
+        rawCollections.isNotEmpty && rawCollections.length >= requestLimit,
+  );
 }
 
 List<MusicCatalogCollection> parseSubsonicArtistsResponse(String jsonText) {
