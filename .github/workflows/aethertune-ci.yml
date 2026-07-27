@@ -32,6 +32,9 @@ jobs:
       - name: Test Node 24 action pins
         run: python3 scripts/ci/test_actions_node24_contract.py
 
+      - name: Test Android dependency pin
+        run: python3 scripts/ci/test_android_dependency_pins.py
+
       - name: Test Android release artifact verifier
         run: python3 scripts/ci/test_verify_android_release_artifacts.py
 
