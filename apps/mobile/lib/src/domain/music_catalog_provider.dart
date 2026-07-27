@@ -107,6 +107,21 @@ abstract interface class MusicCatalogCollectionSearchProvider
   });
 }
 
+/// Optional bounded type-ahead for an explicit catalog search surface.
+///
+/// Suggestions never replace the caller's submitted collection search; a UI
+/// must still make the selected suggestion an explicit search request.
+abstract interface class MusicCatalogCollectionSuggestionProvider
+    implements MusicCatalogProvider {
+  Set<MusicCatalogCollectionKind> get suggestionCollectionKinds;
+
+  Future<List<MusicCatalogCollection>> suggestCollections(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int limit = 8,
+  });
+}
+
 /// Optional extension for providers with a documented radio or similar-items
 /// endpoint.
 abstract interface class MusicCatalogRadioProvider

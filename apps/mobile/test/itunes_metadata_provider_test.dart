@@ -178,6 +178,41 @@ void main() {
     expect(albums.single.subtitle, 'Mira Sol / 2024');
   });
 
+  test('suggests bounded non-explicit album metadata', () async {
+    Uri? request;
+    final provider = ItunesMetadataProvider(
+      country: 'TR',
+      limiter: _instantLimiter(),
+      loader: (uri, _) async {
+        request = uri;
+        return _albumResponse;
+      },
+    );
+
+    final suggestions = await provider.suggestCollections(
+      MusicCatalogCollectionKind.album,
+      'night',
+      limit: 99,
+    );
+
+    expect(request!.queryParameters, <String, String>{
+      'term': 'night',
+      'country': 'tr',
+      'media': 'music',
+      'entity': 'album',
+      'explicit': 'No',
+      'limit': '10',
+    });
+    expect(suggestions.single.title, 'Night Signal');
+    expect(
+      await provider.suggestCollections(
+        MusicCatalogCollectionKind.artist,
+        'night',
+      ),
+      isEmpty,
+    );
+  });
+
   test('serial limiter spaces explicit requests by three seconds', () async {
     var now = DateTime.utc(2026, 7, 27, 10);
     final delays = <Duration>[];

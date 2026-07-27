@@ -158,6 +158,10 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   String _query = '';
   String _remoteSearchQuery = '';
   Future<MusicCatalogCollectionPage>? _remoteSearchRequest;
+  Timer? _suggestionDebounce;
+  int _suggestionRequestSerial = 0;
+  bool _suggestionsLoading = false;
+  List<MusicCatalogCollection> _suggestions = <MusicCatalogCollection>[];
   bool _playlistMutationInProgress = false;
   bool _albumFavoriteMutationInProgress = false;
   final Map<String, bool> _remoteAlbumFavoriteOverrides = <String, bool>{};
@@ -175,6 +179,9 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       _additionalCollections.clear();
       _remoteSearchQuery = '';
       _remoteSearchRequest = null;
+      _suggestionDebounce?.cancel();
+      _suggestionsLoading = false;
+      _suggestions = <MusicCatalogCollection>[];
       _loadingMore = false;
       _loadMoreError = null;
       _hasMoreOverride = null;
@@ -184,6 +191,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
 
   @override
   void dispose() {
+    _suggestionDebounce?.cancel();
     _filterController.dispose();
     super.dispose();
   }
@@ -197,6 +205,15 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     return provider;
   }
 
+  MusicCatalogCollectionSuggestionProvider? get _collectionSuggestionProvider {
+    final provider = widget.provider;
+    if (provider is! MusicCatalogCollectionSuggestionProvider ||
+        !provider.suggestionCollectionKinds.contains(widget.kind)) {
+      return null;
+    }
+    return provider;
+  }
+
   Future<MusicCatalogCollectionPage> get _activeRequest {
     return _remoteSearchRequest ?? widget.request;
   }
@@ -204,6 +221,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   @override
   Widget build(BuildContext context) {
     final remoteSearchProvider = _collectionSearchProvider;
+    final collectionSuggestionProvider = _collectionSuggestionProvider;
     final isRemoteSearch = _remoteSearchRequest != null;
     final onRefresh = isRemoteSearch
         ? () => _searchRemoteCollections(_remoteSearchQuery)
@@ -333,7 +351,10 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                                 ],
                               ),
                       ),
-                      onChanged: (value) => setState(() => _query = value),
+                      onChanged: (value) {
+                        setState(() => _query = value);
+                        _scheduleCollectionSuggestions(value);
+                      },
                       onSubmitted: remoteSearchProvider == null
                           ? null
                           : (value) => unawaited(
@@ -343,6 +364,33 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                           ? TextInputAction.done
                           : TextInputAction.search,
                     ),
+                    if (collectionSuggestionProvider != null &&
+                        (_suggestionsLoading || _suggestions.isNotEmpty)) ...<Widget>[
+                      const SizedBox(height: 8),
+                      if (_suggestionsLoading)
+                        const LinearProgressIndicator(
+                          key: Key('catalog-search-suggestions-progress'),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: <Widget>[
+                            for (final suggestion in _suggestions)
+                              ActionChip(
+                                key: ValueKey<String>(
+                                  'catalog-search-suggestion-'
+                                  '${widget.kind.name}-${suggestion.id}',
+                                ),
+                                avatar: Icon(_collectionIcon(suggestion.kind)),
+                                label: Text(suggestion.title),
+                                onPressed: () => _selectCollectionSuggestion(
+                                  suggestion,
+                                ),
+                              ),
+                          ],
+                        ),
+                    ],
                   ],
                 );
               }
@@ -569,17 +617,88 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
   }
 
   void _clearSearch() {
+    _suggestionDebounce?.cancel();
+    _suggestionRequestSerial += 1;
     _filterController.clear();
     setState(() {
       _query = '';
       _remoteSearchQuery = '';
       _remoteSearchRequest = null;
+      _suggestionsLoading = false;
+      _suggestions = <MusicCatalogCollection>[];
       _additionalCollections.clear();
       _loadingMore = false;
       _loadMoreError = null;
       _hasMoreOverride = null;
       _nextOffsetOverride = null;
     });
+  }
+
+  void _scheduleCollectionSuggestions(String value) {
+    _suggestionDebounce?.cancel();
+    final requestSerial = ++_suggestionRequestSerial;
+    final query = value.trim();
+    final provider = _collectionSuggestionProvider;
+    if (provider == null ||
+        query.length < 2 ||
+        context.read<LibraryStore>().offlineModeEnabled) {
+      setState(() {
+        _suggestionsLoading = false;
+        _suggestions = <MusicCatalogCollection>[];
+      });
+      return;
+    }
+    setState(() {
+      _suggestionsLoading = true;
+      _suggestions = <MusicCatalogCollection>[];
+    });
+    _suggestionDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => unawaited(
+        _loadCollectionSuggestions(provider, query, requestSerial),
+      ),
+    );
+  }
+
+  Future<void> _loadCollectionSuggestions(
+    MusicCatalogCollectionSuggestionProvider provider,
+    String query,
+    int requestSerial,
+  ) async {
+    try {
+      final suggestions = await provider.suggestCollections(
+        widget.kind,
+        query,
+      );
+      if (!mounted || requestSerial != _suggestionRequestSerial) {
+        return;
+      }
+      setState(() {
+        _suggestionsLoading = false;
+        _suggestions = suggestions;
+      });
+    } on Object {
+      if (mounted && requestSerial == _suggestionRequestSerial) {
+        setState(() {
+          _suggestionsLoading = false;
+          _suggestions = <MusicCatalogCollection>[];
+        });
+      }
+    }
+  }
+
+  void _selectCollectionSuggestion(MusicCatalogCollection suggestion) {
+    _suggestionDebounce?.cancel();
+    _suggestionRequestSerial += 1;
+    _filterController
+      ..text = suggestion.title
+      ..selection = TextSelection.collapsed(offset: suggestion.title.length);
+    setState(() {
+      _query = suggestion.title;
+      _suggestionsLoading = false;
+      _suggestions = <MusicCatalogCollection>[];
+    });
+    unawaited(_searchRemoteCollections(suggestion.title));
   }
 
   Future<void> _searchRemoteCollections(String query) async {

@@ -549,6 +549,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('shows bounded collection suggestions before explicit search', (
+    tester,
+  ) async {
+    final provider = _FakeCollectionSearchProvider();
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.artist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('catalog-filter-artist')),
+      'ambient',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(provider.suggestionCalls, <String>['artist:ambient:8']);
+    expect(provider.searchCalls, isEmpty);
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>(
+          'catalog-search-suggestion-artist-suggested-ambient',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(provider.searchCalls, <String>['artist:ambient:0:100']);
+    expect(find.text('Remote Ambient Artist'), findsOneWidget);
+  });
+
   testWidgets('metadata-only catalog details keep playback controls disabled', (
     tester,
   ) async {
@@ -1543,14 +1583,43 @@ class _FakePagedCatalogProvider extends _FakeCatalogProvider
 }
 
 class _FakeCollectionSearchProvider extends _FakeCatalogProvider
-    implements MusicCatalogCollectionSearchProvider {
+    implements
+        MusicCatalogCollectionSearchProvider,
+        MusicCatalogCollectionSuggestionProvider {
   final List<String> searchCalls = <String>[];
+  final List<String> suggestionCalls = <String>[];
 
   @override
   Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
       const <MusicCatalogCollectionKind>{
         MusicCatalogCollectionKind.artist,
       };
+
+  @override
+  Set<MusicCatalogCollectionKind> get suggestionCollectionKinds =>
+      const <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.artist,
+      };
+
+  @override
+  Future<List<MusicCatalogCollection>> suggestCollections(
+    MusicCatalogCollectionKind kind,
+    String query, {
+    int limit = 8,
+  }) async {
+    suggestionCalls.add('${kind.name}:$query:$limit');
+    if (kind != MusicCatalogCollectionKind.artist || query != 'ambient') {
+      return const <MusicCatalogCollection>[];
+    }
+    return const <MusicCatalogCollection>[
+      MusicCatalogCollection(
+        id: 'suggested-ambient',
+        title: 'ambient',
+        kind: MusicCatalogCollectionKind.artist,
+        subtitle: 'Suggested artist',
+      ),
+    ];
+  }
 
   @override
   Future<MusicCatalogCollectionPage> searchCollectionsPage(

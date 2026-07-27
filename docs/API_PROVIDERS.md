@@ -116,10 +116,12 @@ metadata and user-submitted public album discovery. Sources lets the listener
 choose and persist a two-letter ISO storefront; that credential-free preference
 rebuilds the adapter and removes only existing iTunes unified-search rows and
 type-ahead when it changes. The album browser starts empty and sends no network
-request until a listener submits a term. That bounded request uses
-`media=music`, `entity=album`, and `explicit=No`; opening a result makes a
-bounded Lookup request with `entity=song`. Song searches and bounded type-ahead
-continue to use `entity=song`. Every request sends only the query where needed,
+request until a listener enters a term. After two characters, the browser can
+show up to ten bounded album suggestions; choosing one remains the explicit
+album search. Album searches use `media=music`, `entity=album`, and
+`explicit=No`; opening a result makes a bounded Lookup request with
+`entity=song`. Song searches and bounded type-ahead continue to use
+`entity=song`. Every request sends only the query where needed,
 selected storefront, and AetherTune User-Agent to `itunes.apple.com`, and
 passes through the shared three-second request limiter. The adapter
 validates/deduplicates stable song and album IDs, filters explicit rows, and
