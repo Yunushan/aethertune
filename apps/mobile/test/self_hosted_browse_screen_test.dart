@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aethertune/src/data/jellyfin_provider.dart';
 import 'package:aethertune/src/data/jamendo_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/data/subsonic_provider.dart';
 import 'package:aethertune/src/domain/music_catalog_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
@@ -741,6 +742,66 @@ void main() {
     expect(requests.last.queryParameters['namesearch'], 'mira');
     expect(requests.last.queryParameters['offset'], '0');
     expect(requests.last.queryParameters['limit'], '100');
+    expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('suggests Subsonic artists before an explicit search', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    final provider = SubsonicProvider(
+      baseUri: Uri.parse('https://music.example.test/navidrome'),
+      username: 'listener',
+      password: 'secret',
+      saltGenerator: () => 'fixed-salt',
+      requestLoader: (uri) async {
+        requests.add(uri);
+        return '''
+          {"subsonic-response":{"status":"ok","searchResult3":{
+            "artist":[{"id":"artist-1","name":"Mira Sol","albumCount":2}]
+          }}}
+        ''';
+      },
+    );
+    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        provider: provider,
+        library: LibraryStore(),
+        player: player,
+        collectionKinds: const <MusicCatalogCollectionKind>[
+          MusicCatalogCollectionKind.artist,
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    expect(requests.single.path, '/navidrome/rest/getArtists.view');
+    await tester.enterText(
+      find.byKey(const Key('catalog-filter-artist')),
+      'mira',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(2));
+    expect(requests.last.path, '/navidrome/rest/search3.view');
+    expect(requests.last.queryParameters['query'], 'mira');
+    expect(requests.last.queryParameters['artistCount'], '8');
+    expect(requests.last.queryParameters['artistOffset'], '0');
+    expect(requests.last.queryParameters['albumCount'], '0');
+    expect(requests.last.queryParameters['songCount'], '0');
+
+    await tester.tap(find.byKey(const Key('catalog-search-artist')));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(3));
+    expect(requests.last.queryParameters['artistCount'], '100');
+    expect(requests.last.queryParameters['artistOffset'], '0');
     expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
