@@ -744,7 +744,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requests, hasLength(2));
-    expect(requests.last.queryParameters['limit'], '100');
+    expect(requests.last.queryParameters['limit'], '50');
     expect(find.text('Mira Sol'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
