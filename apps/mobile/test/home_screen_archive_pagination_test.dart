@@ -92,26 +92,16 @@ void main() {
       (widget) =>
           widget is TextField && widget.decoration?.labelText == 'Archive search',
     );
-    final sourcesScrollable = find.descendant(
-      of: find.byKey(const Key('sources-scroll-view')),
-      matching: find.byType(Scrollable),
-    ).first;
-    await tester.scrollUntilVisible(
-      archiveSearch,
-      300,
-      scrollable: sourcesScrollable,
-    );
+    await tester.ensureVisible(archiveSearch);
+    await tester.pumpAndSettle();
     await tester.enterText(archiveSearch, 'ambient');
     await tester.tap(find.byTooltip('Search archive audio'));
     await tester.pumpAndSettle();
 
     expect(find.text('Archive first'), findsOneWidget);
     final loadMore = find.textContaining('Load more archive results');
-    await tester.scrollUntilVisible(
-      loadMore,
-      300,
-      scrollable: sourcesScrollable,
-    );
+    await tester.ensureVisible(loadMore);
+    await tester.pumpAndSettle();
     await tester.tap(loadMore);
     await tester.pumpAndSettle();
 
