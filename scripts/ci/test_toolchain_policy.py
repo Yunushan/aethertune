@@ -83,6 +83,8 @@ class ToolchainPolicyTest(unittest.TestCase):
         )
         self.assertIn("flutter create", bootstrap)
         self.assertIn("--no-pub", bootstrap)
+        self.assertIn("restore_manifests()", bootstrap)
+        self.assertIn('cp "$APP_DIR/pubspec.lock" "$PRESERVE_DIR/pubspec.lock"', bootstrap)
 
     def test_governance_audit_is_scheduled_and_fail_closed(self) -> None:
         workflow = (
