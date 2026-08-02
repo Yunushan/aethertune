@@ -106,6 +106,7 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("        -r\n        ./", workflow)
         self.assertIn("--allow-no-lockfiles", workflow)
         self.assertIn("--licenses=", workflow)
+        self.assertIn(",UNKNOWN", workflow)
 
 
 if __name__ == "__main__":
