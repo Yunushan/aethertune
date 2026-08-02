@@ -103,8 +103,7 @@ class DependencyLockPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn("fail-on-vuln: true", workflow)
-        self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
-        self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)
+        self.assertIn("        -r\n        ./", workflow)
         self.assertIn("--licenses=", workflow)
 
 
