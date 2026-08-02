@@ -22,8 +22,7 @@ class ArtworkPaletteBackdrop extends StatefulWidget {
   final Widget child;
 
   @override
-  State<ArtworkPaletteBackdrop> createState() =>
-      _ArtworkPaletteBackdropState();
+  State<ArtworkPaletteBackdrop> createState() => _ArtworkPaletteBackdropState();
 }
 
 class _ArtworkPaletteBackdropState extends State<ArtworkPaletteBackdrop> {

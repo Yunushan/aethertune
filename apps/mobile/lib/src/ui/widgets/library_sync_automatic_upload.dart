@@ -9,11 +9,12 @@ import '../../data/library_sync_store.dart';
 import '../../player/player_controller.dart';
 import 'desktop_background_work_policy.dart';
 
-typedef AutomaticLibraryUploadRunner = Future<bool> Function(
-  LibraryStore library,
-  LibrarySyncStore sync,
-  PlayerController? player,
-);
+typedef AutomaticLibraryUploadRunner =
+    Future<bool> Function(
+      LibraryStore library,
+      LibrarySyncStore sync,
+      PlayerController? player,
+    );
 
 class LibrarySyncAutomaticUpload extends StatefulWidget {
   LibrarySyncAutomaticUpload({

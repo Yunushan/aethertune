@@ -13,29 +13,31 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('returns persisted cached results without issuing a network request',
-      () async {
-    final cache = _MemorySearchCache();
-    var requests = 0;
-    final provider = LrcLibLyricsProvider(
-      searchCache: cache,
-      responseLoader: (uri, headers) async {
-        requests += 1;
-        return '[{"id":7,"trackName":"Cached Song","artistName":"Artist","plainLyrics":"Cached text"}]';
-      },
-    );
-    const query = LyricsSearchQuery(
-      keywords: 'cached song',
-      trackName: 'Cached Song',
-      artistName: 'Artist',
-    );
+  test(
+    'returns persisted cached results without issuing a network request',
+    () async {
+      final cache = _MemorySearchCache();
+      var requests = 0;
+      final provider = LrcLibLyricsProvider(
+        searchCache: cache,
+        responseLoader: (uri, headers) async {
+          requests += 1;
+          return '[{"id":7,"trackName":"Cached Song","artistName":"Artist","plainLyrics":"Cached text"}]';
+        },
+      );
+      const query = LyricsSearchQuery(
+        keywords: 'cached song',
+        trackName: 'Cached Song',
+        artistName: 'Artist',
+      );
 
-    await provider.search(query);
-    final cached = await provider.searchOffline(query);
+      await provider.search(query);
+      final cached = await provider.searchOffline(query);
 
-    expect(requests, 1);
-    expect(cached.single.trackName, 'Cached Song');
-  });
+      expect(requests, 1);
+      expect(cached.single.trackName, 'Cached Song');
+    },
+  );
 
   test('expires cached results after the configured lifetime', () async {
     final cache = _MemorySearchCache();
@@ -80,8 +82,10 @@ void main() {
     now = savedAt.add(const Duration(days: 2));
 
     await expectLater(provider.searchOffline(query), throwsStateError);
-    expect(() => provider.setCacheLifetime(const Duration(days: -1)),
-        throwsArgumentError);
+    expect(
+      () => provider.setCacheLifetime(const Duration(days: -1)),
+      throwsArgumentError,
+    );
   });
 
   test('persists a supported lyrics cache retention preference', () async {
@@ -98,19 +102,18 @@ void main() {
     );
   });
 
-  test('falls back to the default for an unsupported stored retention',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(
-      'aethertune.lrclib.search_cache_retention_days.v1',
-      2,
-    );
+  test(
+    'falls back to the default for an unsupported stored retention',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('aethertune.lrclib.search_cache_retention_days.v1', 2);
 
-    expect(
-      await LyricsSearchCacheSettingsStore().loadRetention(),
-      defaultLyricsSearchCacheLifetime,
-    );
-  });
+      expect(
+        await LyricsSearchCacheSettingsStore().loadRetention(),
+        defaultLyricsSearchCacheLifetime,
+      );
+    },
+  );
 
   test('clears every cached lyrics search on request', () async {
     final cache = _MemorySearchCache();
@@ -126,21 +129,26 @@ void main() {
     expect(cache.values, isEmpty);
   });
 
-  test('clears persisted cached searches without affecting a new search',
-      () async {
-    final provider = LrcLibLyricsProvider(
-      responseLoader: (uri, headers) async => _searchResponse,
-    );
-    const firstQuery = LyricsSearchQuery(keywords: 'signal');
-    const secondQuery = LyricsSearchQuery(keywords: 'other');
+  test(
+    'clears persisted cached searches without affecting a new search',
+    () async {
+      final provider = LrcLibLyricsProvider(
+        responseLoader: (uri, headers) async => _searchResponse,
+      );
+      const firstQuery = LyricsSearchQuery(keywords: 'signal');
+      const secondQuery = LyricsSearchQuery(keywords: 'other');
 
-    await provider.search(firstQuery);
-    await provider.clearCachedSearchResults();
+      await provider.search(firstQuery);
+      await provider.clearCachedSearchResults();
 
-    await expectLater(provider.searchOffline(firstQuery), throwsStateError);
-    await provider.search(secondQuery);
-    expect((await provider.searchOffline(secondQuery)).first.externalId, '42');
-  });
+      await expectLater(provider.searchOffline(firstQuery), throwsStateError);
+      await provider.search(secondQuery);
+      expect(
+        (await provider.searchOffline(secondQuery)).first.externalId,
+        '42',
+      );
+    },
+  );
 
   test('does not persist malformed provider responses', () async {
     final cache = _MemorySearchCache();
@@ -153,87 +161,92 @@ void main() {
     await expectLater(provider.search(query), throwsA(isA<FormatException>()));
     expect(cache.values, isEmpty);
   });
-  test('search uses the documented endpoint, disclosure, and user agent', () async {
-    Uri? capturedUri;
-    Map<String, String>? capturedHeaders;
-    final provider = LrcLibLyricsProvider(
-      baseUri: Uri.parse('https://lyrics.example.test/base'),
-      responseLoader: (uri, headers) async {
-        capturedUri = uri;
-        capturedHeaders = headers;
-        return _searchResponse;
-      },
-    );
+  test(
+    'search uses the documented endpoint, disclosure, and user agent',
+    () async {
+      Uri? capturedUri;
+      Map<String, String>? capturedHeaders;
+      final provider = LrcLibLyricsProvider(
+        baseUri: Uri.parse('https://lyrics.example.test/base'),
+        responseLoader: (uri, headers) async {
+          capturedUri = uri;
+          capturedHeaders = headers;
+          return _searchResponse;
+        },
+      );
 
-    final results = await provider.search(
-      const LyricsSearchQuery(
-        keywords: 'Signal Mira',
-        trackName: 'Signal',
-        artistName: 'Mira',
-        albumName: 'Dawn',
-        duration: Duration(seconds: 180),
-      ),
-    );
+      final results = await provider.search(
+        const LyricsSearchQuery(
+          keywords: 'Signal Mira',
+          trackName: 'Signal',
+          artistName: 'Mira',
+          albumName: 'Dawn',
+          duration: Duration(seconds: 180),
+        ),
+      );
 
-    expect(capturedUri!.path, '/base/api/search');
-    expect(capturedUri!.queryParameters, <String, String>{
-      'q': 'Signal Mira',
-    });
-    expect(capturedHeaders![HttpHeaders.acceptHeader], 'application/json');
-    expect(
-      capturedHeaders![HttpHeaders.userAgentHeader],
-      LrcLibLyricsProvider.userAgent,
-    );
-    expect(provider.disclosure.networkDomains, <String>['lyrics.example.test']);
-    expect(provider.disclosure.cachesMetadata, isTrue);
-    expect(provider.disclosure.requiresUserCredentials, isFalse);
-    expect(provider.disclosure.dataSent.single, contains('track title'));
+      expect(capturedUri!.path, '/base/api/search');
+      expect(capturedUri!.queryParameters, <String, String>{
+        'q': 'Signal Mira',
+      });
+      expect(capturedHeaders![HttpHeaders.acceptHeader], 'application/json');
+      expect(
+        capturedHeaders![HttpHeaders.userAgentHeader],
+        LrcLibLyricsProvider.userAgent,
+      );
+      expect(provider.disclosure.networkDomains, <String>[
+        'lyrics.example.test',
+      ]);
+      expect(provider.disclosure.cachesMetadata, isTrue);
+      expect(provider.disclosure.requiresUserCredentials, isFalse);
+      expect(provider.disclosure.dataSent.single, contains('track title'));
 
-    expect(results.map((result) => result.externalId), <String>['42', '7']);
-    expect(results.first.trackName, 'Signal');
-    expect(results.first.hasSyncedLyrics, isTrue);
-    expect(results.first.preferredLyrics, startsWith('[00:01.00]'));
-    expect(results.first.duration, const Duration(milliseconds: 180400));
-    expect(
-      results.first.sourceUri,
-      Uri.parse('https://lyrics.example.test/base/api/get/42'),
-    );
-  });
+      expect(results.map((result) => result.externalId), <String>['42', '7']);
+      expect(results.first.trackName, 'Signal');
+      expect(results.first.hasSyncedLyrics, isTrue);
+      expect(results.first.preferredLyrics, startsWith('[00:01.00]'));
+      expect(results.first.duration, const Duration(milliseconds: 180400));
+      expect(
+        results.first.sourceUri,
+        Uri.parse('https://lyrics.example.test/base/api/get/42'),
+      );
+    },
+  );
 
-  test('field search omits unknown metadata and parser deduplicates IDs', () async {
-    Uri? capturedUri;
-    final provider = LrcLibLyricsProvider(
-      responseLoader: (uri, headers) async {
-        capturedUri = uri;
-        return _searchResponse;
-      },
-    );
+  test(
+    'field search omits unknown metadata and parser deduplicates IDs',
+    () async {
+      Uri? capturedUri;
+      final provider = LrcLibLyricsProvider(
+        responseLoader: (uri, headers) async {
+          capturedUri = uri;
+          return _searchResponse;
+        },
+      );
 
-    final results = await provider.search(
-      const LyricsSearchQuery(
-        trackName: 'Signal',
-        artistName: 'Unknown Artist',
-        albumName: 'Unknown Album',
-      ),
-    );
+      final results = await provider.search(
+        const LyricsSearchQuery(
+          trackName: 'Signal',
+          artistName: 'Unknown Artist',
+          albumName: 'Unknown Album',
+        ),
+      );
 
-    expect(capturedUri!.queryParameters, <String, String>{
-      'track_name': 'Signal',
-    });
-    expect(results, hasLength(2));
-    expect(results.last.instrumental, isTrue);
-    expect(results.last.isSelectable, isFalse);
-  });
+      expect(capturedUri!.queryParameters, <String, String>{
+        'track_name': 'Signal',
+      });
+      expect(results, hasLength(2));
+      expect(results.last.instrumental, isTrue);
+      expect(results.last.isSelectable, isFalse);
+    },
+  );
 
   test('rejects empty searches and malformed response shapes', () async {
     final provider = LrcLibLyricsProvider(
       responseLoader: (uri, headers) async => '{}',
     );
 
-    expect(
-      provider.search(const LyricsSearchQuery()),
-      throwsArgumentError,
-    );
+    expect(provider.search(const LyricsSearchQuery()), throwsArgumentError);
     expect(
       provider.search(const LyricsSearchQuery(keywords: 'signal')),
       throwsA(isA<FormatException>()),
@@ -242,8 +255,7 @@ void main() {
 }
 
 class _MemorySearchCache implements LrcLibSearchCache {
-  final Map<String, LrcLibCachedSearch> values =
-      <String, LrcLibCachedSearch>{};
+  final Map<String, LrcLibCachedSearch> values = <String, LrcLibCachedSearch>{};
 
   @override
   Future<LrcLibCachedSearch?> read(String key) async => values[key];

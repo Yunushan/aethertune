@@ -6,10 +6,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
-enum SharedPlaylistRole {
-  viewer,
-  editor,
-}
+enum SharedPlaylistRole { viewer, editor }
 
 const sharedPlaylistInviteLifetime = Duration(days: 7);
 const maxSharedPlaylistHistoryEntries = 25;
@@ -68,10 +65,8 @@ class SharedPlaylistRecord {
     'checksum': checksum,
     'document': document,
     'collaborators': collaborators.map(
-      (accountId, role) => MapEntry<String, String>(
-        accountId,
-        sharedPlaylistRoleToWire(role),
-      ),
+      (accountId, role) =>
+          MapEntry<String, String>(accountId, sharedPlaylistRoleToWire(role)),
     ),
     if (publicShareSecretHash != null)
       'publicShareSecretHash': publicShareSecretHash,
@@ -124,7 +119,9 @@ class SharedPlaylistRecord {
         .convert(utf8.encode(jsonEncode(parsedDocument)))
         .toString();
     if (canonicalChecksum != checksum) {
-      throw const FormatException('Stored shared playlist checksum is invalid.');
+      throw const FormatException(
+        'Stored shared playlist checksum is invalid.',
+      );
     }
     final parsedUpdatedAt = DateTime.tryParse(updatedAt)?.toUtc();
     if (parsedUpdatedAt == null) {
@@ -350,7 +347,10 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
           '.${target.uri.pathSegments.last}.${DateTime.now().microsecondsSinceEpoch}.tmp',
         ),
       );
-      await temporary.writeAsString(jsonEncode(saved.toStorageJson()), flush: true);
+      await temporary.writeAsString(
+        jsonEncode(saved.toStorageJson()),
+        flush: true,
+      );
       await temporary.rename(target.path);
       await _writeHistory(saved);
       return SharedPlaylistWriteResult.saved(saved);
@@ -399,7 +399,10 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
         '.${record.revision}.${DateTime.now().microsecondsSinceEpoch}.tmp',
       ),
     );
-    await temporary.writeAsString(jsonEncode(record.toStorageJson()), flush: true);
+    await temporary.writeAsString(
+      jsonEncode(record.toStorageJson()),
+      flush: true,
+    );
     await temporary.rename(target.path);
 
     final revisions = <File>[];
@@ -409,7 +412,8 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
       }
     }
     revisions.sort(
-      (left, right) => _historyRevision(right).compareTo(_historyRevision(left)),
+      (left, right) =>
+          _historyRevision(right).compareTo(_historyRevision(left)),
     );
     for (final stale in revisions.skip(maxSharedPlaylistHistoryEntries)) {
       await stale.delete();
@@ -698,12 +702,16 @@ void _validatePortableSharedPlaylistDocument(Map<String, Object?> document) {
   }
   for (final value in tracks) {
     if (value is! Map) {
-      throw const FormatException('Shared playlist track references are invalid.');
+      throw const FormatException(
+        'Shared playlist track references are invalid.',
+      );
     }
     final reference = Map<String, Object?>.from(value);
     const referenceFields = <String>{'title', 'artist', 'album', 'durationMs'};
     if (reference.keys.any((key) => !referenceFields.contains(key))) {
-      throw const FormatException('Shared playlist track references are invalid.');
+      throw const FormatException(
+        'Shared playlist track references are invalid.',
+      );
     }
     for (final field in <String>['title', 'artist', 'album']) {
       final text = reference[field];
@@ -711,14 +719,18 @@ void _validatePortableSharedPlaylistDocument(Map<String, Object?> document) {
           text != text.trim() ||
           text.isEmpty ||
           text.length > 160) {
-        throw const FormatException('Shared playlist track references are invalid.');
+        throw const FormatException(
+          'Shared playlist track references are invalid.',
+        );
       }
     }
     final durationMilliseconds = reference['durationMs'];
     if (durationMilliseconds is! int ||
         durationMilliseconds < 0 ||
         durationMilliseconds > 86400000) {
-      throw const FormatException('Shared playlist track references are invalid.');
+      throw const FormatException(
+        'Shared playlist track references are invalid.',
+      );
     }
   }
 }
@@ -729,7 +741,9 @@ void _validateSharedSmartPlaylistDocument(Map<String, Object?> document) {
   const allowed = <String>{'version', 'kind', 'name', 'rule'};
   if (document.keys.any((key) => !allowed.contains(key)) ||
       document['kind'] != 'smart') {
-    throw const FormatException('Shared smart playlists contain unsupported fields.');
+    throw const FormatException(
+      'Shared smart playlists contain unsupported fields.',
+    );
   }
   final name = document['name'];
   final rawRule = document['rule'];
@@ -763,16 +777,12 @@ void _validateSharedSmartPlaylistRule(Map<String, Object?> rule) {
   if (rule.keys.any((key) => !allowed.contains(key))) {
     throw const FormatException('Shared smart playlist rule is invalid.');
   }
-  for (final key in <String>[
-    'query',
-    'sourceId',
-    'artist',
-    'album',
-    'genre',
-  ]) {
+  for (final key in <String>['query', 'sourceId', 'artist', 'album', 'genre']) {
     final value = rule[key] ?? '';
     if (value is! String || value != value.trim() || value.length > 512) {
-      throw const FormatException('Shared smart playlist text rule is invalid.');
+      throw const FormatException(
+        'Shared smart playlist text rule is invalid.',
+      );
     }
   }
   for (final key in <String>[
@@ -783,7 +793,9 @@ void _validateSharedSmartPlaylistRule(Map<String, Object?> rule) {
   ]) {
     final value = rule[key] ?? 0;
     if (value is! int || value < 0 || value > 315360000) {
-      throw const FormatException('Shared smart playlist numeric rule is invalid.');
+      throw const FormatException(
+        'Shared smart playlist numeric rule is invalid.',
+      );
     }
   }
   final favoritesOnly = rule['favoritesOnly'] ?? false;
@@ -835,7 +847,9 @@ void _validateSharedSmartPlaylistGroup(Object? raw, {required int depth}) {
   }
   for (final rawRule in rules) {
     if (rawRule is! Map) {
-      throw const FormatException('Shared smart playlist group rule is invalid.');
+      throw const FormatException(
+        'Shared smart playlist group rule is invalid.',
+      );
     }
     final rule = Map<String, Object?>.from(rawRule);
     if (rule.keys.any((key) => key != 'field' && key != 'value') ||
@@ -856,7 +870,9 @@ void _validateSharedSmartPlaylistGroup(Object? raw, {required int depth}) {
           'minimumPlayCount',
           'minimumDaysSinceLastPlayed',
         }.contains(rule['field'])) {
-      throw const FormatException('Shared smart playlist group rule is invalid.');
+      throw const FormatException(
+        'Shared smart playlist group rule is invalid.',
+      );
     }
   }
   for (final child in groups) {
@@ -900,9 +916,13 @@ SharedPlaylistRecord _newSharedPlaylistRecord({
     revision: revision,
     updatedAt: updatedAt.toUtc(),
     updatedByDevice: deviceId.trim(),
-    checksum: sha256.convert(utf8.encode(jsonEncode(copiedDocument))).toString(),
+    checksum: sha256
+        .convert(utf8.encode(jsonEncode(copiedDocument)))
+        .toString(),
     document: Map<String, Object?>.unmodifiable(copiedDocument),
-    collaborators: Map<String, SharedPlaylistRole>.unmodifiable(copiedCollaborators),
+    collaborators: Map<String, SharedPlaylistRole>.unmodifiable(
+      copiedCollaborators,
+    ),
     publicShareSecretHash: publicShareSecretHash,
   );
 }

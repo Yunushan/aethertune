@@ -8,7 +8,8 @@ bool supportsPlatformAudioRoutePicker(TargetPlatform platform) {
 }
 
 Future<bool> showPlatformAudioRoutePicker({TargetPlatform? platform}) async {
-  if (kIsWeb || !supportsPlatformAudioRoutePicker(platform ?? defaultTargetPlatform)) {
+  if (kIsWeb ||
+      !supportsPlatformAudioRoutePicker(platform ?? defaultTargetPlatform)) {
     return false;
   }
 

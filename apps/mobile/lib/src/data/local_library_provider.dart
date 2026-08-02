@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import '../domain/music_source_provider.dart';
 import '../domain/search_matcher.dart';
 import '../domain/track.dart';
@@ -28,9 +31,9 @@ class LocalLibraryProvider implements MusicSourceSearchPagingProvider {
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.directPlayback,
-      };
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.directPlayback,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
@@ -106,15 +109,12 @@ int _localSearchOffset(String? cursor) {
 }
 
 bool _trackMatchesQuery(Track track, SearchQuery query) {
-  return searchFieldsMatch(
-    <String>[
-      track.title,
-      track.artist,
-      track.album,
-      track.genre,
-      track.sourceId,
-      track.localPath ?? '',
-    ],
-    query,
-  );
+  return searchFieldsMatch(<String>[
+    track.title,
+    track.artist,
+    track.album,
+    track.genre,
+    track.sourceId,
+    track.localPath ?? '',
+  ], query);
 }

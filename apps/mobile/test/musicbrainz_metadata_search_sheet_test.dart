@@ -30,7 +30,10 @@ void main() {
     );
 
     expect(requests, 0);
-    expect(find.textContaining('Audio files and library paths are never sent'), findsOneWidget);
+    expect(
+      find.textContaining('Audio files and library paths are never sent'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const Key('musicbrainz-metadata-search')));
     await tester.pumpAndSettle();
@@ -63,12 +66,17 @@ void main() {
     );
 
     expect(
-      tester.widget<FilledButton>(
-        find.byKey(const Key('musicbrainz-metadata-search')),
-      ).onPressed,
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('musicbrainz-metadata-search')),
+          )
+          .onPressed,
       isNull,
     );
-    expect(find.textContaining('No MusicBrainz request can be made'), findsOneWidget);
+    expect(
+      find.textContaining('No MusicBrainz request can be made'),
+      findsOneWidget,
+    );
     expect(requests, 0);
   });
 }

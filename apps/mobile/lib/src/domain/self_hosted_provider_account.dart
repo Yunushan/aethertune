@@ -142,7 +142,9 @@ SelfHostedProviderAccount validateSelfHostedProviderAccount(
     );
   }
   return account.copyWith(
-    name: account.name.trim().isEmpty ? account.kind.label : account.name.trim(),
+    name: account.name.trim().isEmpty
+        ? account.kind.label
+        : account.name.trim(),
     baseUri: normalizedUri,
     identity: account.identity.trim(),
   );

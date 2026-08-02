@@ -42,3 +42,32 @@ class AndroidReleaseArtifactsTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "AssetManifest.bin"):
                 verify_android_release_artifacts(apk, aab)
+
+    def test_requires_signatures_for_production_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            apk = directory / "app-release.apk"
+            aab = directory / "app-release.aab"
+            write_archive(apk, REQUIRED_APK_ENTRIES)
+            write_archive(aab, REQUIRED_AAB_ENTRIES)
+
+            with self.assertRaisesRegex(ValueError, "signing signature"):
+                verify_android_release_artifacts(
+                    apk,
+                    aab,
+                    require_signing=True,
+                )
+
+            signed_entries_apk = REQUIRED_APK_ENTRIES | {"META-INF/CERT.RSA"}
+            signed_entries_aab = REQUIRED_AAB_ENTRIES | {"META-INF/CERT.RSA"}
+            write_archive(apk, signed_entries_apk)
+            write_archive(aab, signed_entries_aab)
+            verify_android_release_artifacts(
+                apk,
+                aab,
+                require_signing=True,
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

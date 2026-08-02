@@ -23,8 +23,13 @@ class LibrarySyncAccount {
   Uri get listenTogetherEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'listen-together', 'session']);
 
-  Uri get listenTogetherInviteIssueEndpointUri =>
-      _endpointUri(<String>['api', 'v1', 'listen-together', 'session', 'invite']);
+  Uri get listenTogetherInviteIssueEndpointUri => _endpointUri(<String>[
+    'api',
+    'v1',
+    'listen-together',
+    'session',
+    'invite',
+  ]);
 
   Uri listenTogetherInviteEndpointUri(String inviteCode) => _endpointUri(
     <String>['api', 'v1', 'listen-together', 'invites', inviteCode],
@@ -47,16 +52,14 @@ class LibrarySyncAccount {
   Uri sharedPlaylistCollaboratorEndpointUri(
     String playlistId,
     String collaboratorId,
-  ) => _endpointUri(
-    <String>[
-      'api',
-      'v1',
-      'shared-playlists',
-      playlistId,
-      'collaborators',
-      collaboratorId,
-    ],
-  );
+  ) => _endpointUri(<String>[
+    'api',
+    'v1',
+    'shared-playlists',
+    playlistId,
+    'collaborators',
+    collaboratorId,
+  ]);
 
   Uri sharedPlaylistInviteEndpointUri(String inviteCode) => _endpointUri(
     <String>['api', 'v1', 'shared-playlist-invites', inviteCode],
@@ -67,9 +70,13 @@ class LibrarySyncAccount {
   );
 
   Uri publicSmartPlaylistEndpointUri(String playlistId, String secret) =>
-      _endpointUri(
-        <String>['api', 'v1', 'public-smart-playlists', playlistId, secret],
-      );
+      _endpointUri(<String>[
+        'api',
+        'v1',
+        'public-smart-playlists',
+        playlistId,
+        secret,
+      ]);
 
   Uri get profileEndpointUri =>
       _endpointUri(<String>['api', 'v1', 'auth', 'profile']);
@@ -79,10 +86,11 @@ class LibrarySyncAccount {
   Uri publicProfileEndpointUri(String accountId) =>
       _endpointUri(<String>['api', 'v1', 'public-profiles', accountId]);
 
-  Uri publicProfileDiscoveryEndpointUri(String query) =>
-      _endpointUri(<String>['api', 'v1', 'public-profiles']).replace(
-        queryParameters: <String, String>{'q': query},
-      );
+  Uri publicProfileDiscoveryEndpointUri(String query) => _endpointUri(<String>[
+    'api',
+    'v1',
+    'public-profiles',
+  ]).replace(queryParameters: <String, String>{'q': query});
 
   Uri publicProfilePageUri(String accountId) => publicProfileEndpointUri(
     accountId,

@@ -40,23 +40,17 @@ void main() {
   });
 
   test('exposes supported fade duration options and labels', () {
-    expect(
-      sleepTimerFadeDurationOptions,
-      const <Duration>[
-        Duration(seconds: 10),
-        Duration(seconds: 30),
-        Duration(minutes: 1),
-        Duration(minutes: 2),
-      ],
-    );
+    expect(sleepTimerFadeDurationOptions, const <Duration>[
+      Duration(seconds: 10),
+      Duration(seconds: 30),
+      Duration(minutes: 1),
+      Duration(minutes: 2),
+    ]);
     expect(
       sleepTimerFadeDurationLabel(const Duration(seconds: 10)),
       '10 seconds',
     );
-    expect(
-      sleepTimerFadeDurationLabel(const Duration(minutes: 1)),
-      '1 minute',
-    );
+    expect(sleepTimerFadeDurationLabel(const Duration(minutes: 1)), '1 minute');
     expect(
       sleepTimerFadeDurationLabel(const Duration(minutes: 2)),
       '2 minutes',

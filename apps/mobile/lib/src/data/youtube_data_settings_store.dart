@@ -5,9 +5,8 @@ import '../domain/music_source_provider.dart';
 import 'provider_credential_vault.dart';
 import 'youtube_data_metadata_provider.dart';
 
-typedef YouTubeDataProviderFactory = YouTubeDataMetadataProvider Function(
-  String apiKey,
-);
+typedef YouTubeDataProviderFactory =
+    YouTubeDataMetadataProvider Function(String apiKey);
 
 /// Holds the optional, user-owned API key outside regular app preferences.
 final class YouTubeDataSettingsStore extends ChangeNotifier {
@@ -38,9 +37,7 @@ final class YouTubeDataSettingsStore extends ChangeNotifier {
     if (apiKey == null || apiKey.isEmpty) {
       return const <MusicSourceProvider>[];
     }
-    return <MusicSourceProvider>[
-      _provider ??= _providerFactory(apiKey),
-    ];
+    return <MusicSourceProvider>[_provider ??= _providerFactory(apiKey)];
   }
 
   Future<void> load() async {

@@ -29,24 +29,24 @@ void main() {
 
     expect(subscriptions, hasLength(2));
     expect(subscriptions.first.title, 'Duplicate');
-    expect(subscriptions.first.feedUrl, 'https://feeds.example.test/aether.xml');
+    expect(
+      subscriptions.first.feedUrl,
+      'https://feeds.example.test/aether.xml',
+    );
     expect(subscriptions.last.title, 'Second Feed');
     expect(subscriptions.last.feedUrl, 'https://feeds.example.test/second.xml');
   });
 
   test('exports podcast subscriptions as OPML and parses them back', () {
-    final opml = exportPodcastOpml(
-      <PodcastSubscription>[
-        PodcastSubscription(
-          id: 'one',
-          feedUrl: 'https://feeds.example.test/aether.xml',
-          title: 'Aether & Radio',
-          description: 'Open feed',
-          author: 'Aether Hosts',
-        ),
-      ],
-      exportedAt: DateTime.utc(2026, 7, 7),
-    );
+    final opml = exportPodcastOpml(<PodcastSubscription>[
+      PodcastSubscription(
+        id: 'one',
+        feedUrl: 'https://feeds.example.test/aether.xml',
+        title: 'Aether & Radio',
+        description: 'Open feed',
+        author: 'Aether Hosts',
+      ),
+    ], exportedAt: DateTime.utc(2026, 7, 7));
 
     expect(opml, contains('AetherTune Podcast Subscriptions'));
     expect(opml, contains('https://feeds.example.test/aether.xml'));
@@ -59,9 +59,6 @@ void main() {
   });
 
   test('rejects invalid OPML XML', () {
-    expect(
-      () => parsePodcastOpml('<opml>'),
-      throwsA(anything),
-    );
+    expect(() => parsePodcastOpml('<opml>'), throwsA(anything));
   });
 }

@@ -19,8 +19,8 @@ class DemoSourceProvider implements MusicSourceSearchPagingProvider {
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-      };
+    MusicSourceCapability.metadataSearch,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
@@ -81,12 +81,14 @@ class DemoSourceProvider implements MusicSourceSearchPagingProvider {
       return all;
     }
 
-    return all.where((track) {
-      return track.title.toLowerCase().contains(normalized) ||
-          track.artist.toLowerCase().contains(normalized) ||
-          track.album.toLowerCase().contains(normalized) ||
-          track.genre.toLowerCase().contains(normalized);
-    }).toList(growable: false);
+    return all
+        .where((track) {
+          return track.title.toLowerCase().contains(normalized) ||
+              track.artist.toLowerCase().contains(normalized) ||
+              track.album.toLowerCase().contains(normalized) ||
+              track.genre.toLowerCase().contains(normalized);
+        })
+        .toList(growable: false);
   }
 
   @override

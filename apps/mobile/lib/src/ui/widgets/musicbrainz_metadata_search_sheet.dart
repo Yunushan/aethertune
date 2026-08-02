@@ -113,7 +113,8 @@ class _MusicBrainzMetadataSearchSheetState
       return _MetadataSearchMessage(
         icon: Icons.manage_search_outlined,
         title: 'Ready to search',
-        message: 'Search only when the displayed metadata describes this track.',
+        message:
+            'Search only when the displayed metadata describes this track.',
         actionLabel: 'Search MusicBrainz',
         onAction: widget.offlineModeEnabled ? null : _search,
       );
@@ -126,7 +127,11 @@ class _MusicBrainzMetadataSearchSheetState
         return ListTile(
           key: Key('musicbrainz-metadata-result-${result.recordingId}'),
           leading: const Icon(Icons.library_music_outlined),
-          title: Text(result.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(
+            result.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: Text(
             _subtitle(result),
             maxLines: 2,

@@ -184,6 +184,7 @@ release builders require the Visual C++ ATL component used by the plugin.
 `services/server` is a Dart package with a Shelf-compatible request handler. It exposes:
 
 - `GET /health`
+- `GET /ready`
 - `GET /api/v1/info`
 - `GET /api/v1/metrics` (aggregate process state only)
 - `GET /api/v1/tracks`

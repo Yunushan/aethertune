@@ -10,12 +10,14 @@ import 'local_folder_scanner.dart';
 import 'local_media_uri.dart';
 import 'saf_tree_scanner.dart';
 
-typedef LocalFolderScan = Future<LocalFolderScanResult> Function(
-  String rootPath, {
-  DateTime? importedAt,
-});
+typedef LocalFolderScan =
+    Future<LocalFolderScanResult> Function(
+      String rootPath, {
+      DateTime? importedAt,
+    });
 
-typedef LocalFolderWatchStreamFactory = Stream<String> Function(String rootPath);
+typedef LocalFolderWatchStreamFactory =
+    Stream<String> Function(String rootPath);
 
 /// Keeps user-selected local folders reconciled after filesystem changes.
 ///
@@ -26,8 +28,8 @@ class LocalFolderWatchStore extends ChangeNotifier {
     LocalFolderScan? scanner,
     LocalFolderWatchStreamFactory? watchStreamFactory,
     this.debounce = const Duration(milliseconds: 750),
-  })  : _scanner = scanner ?? scanLocalFolderWithSafSupportInBackground,
-        _watchStreamFactory = watchStreamFactory ?? _watchDirectory;
+  }) : _scanner = scanner ?? scanLocalFolderWithSafSupportInBackground,
+       _watchStreamFactory = watchStreamFactory ?? _watchDirectory;
 
   final LocalFolderScan _scanner;
   final LocalFolderWatchStreamFactory _watchStreamFactory;
@@ -54,7 +56,8 @@ class LocalFolderWatchStore extends ChangeNotifier {
 
   Future<void> refresh(String rootPath) async {
     final library = _library;
-    if (library == null || !library.watchedLocalFolderPaths.contains(rootPath)) {
+    if (library == null ||
+        !library.watchedLocalFolderPaths.contains(rootPath)) {
       return;
     }
     if (_refreshingRoots.contains(rootPath)) {
@@ -112,12 +115,12 @@ class LocalFolderWatchStore extends ChangeNotifier {
           continue;
         }
         _subscriptions[root] = _watchStreamFactory(root).listen(
-              (changedPath) => _onFilesystemChange(root, changedPath),
-              onError: (Object error, StackTrace _) {
-                _errorsByRoot[root] = _safeErrorMessage(error);
-                notifyListeners();
-              },
-            );
+          (changedPath) => _onFilesystemChange(root, changedPath),
+          onError: (Object error, StackTrace _) {
+            _errorsByRoot[root] = _safeErrorMessage(error);
+            notifyListeners();
+          },
+        );
         unawaited(refresh(root));
       } on Object catch (error) {
         _errorsByRoot[root] = _safeErrorMessage(error);
@@ -166,9 +169,7 @@ class LocalFolderWatchStore extends ChangeNotifier {
 }
 
 Stream<String> _watchDirectory(String rootPath) {
-  return Directory(rootPath)
-      .watch(recursive: true)
-      .map((event) => event.path);
+  return Directory(rootPath).watch(recursive: true).map((event) => event.path);
 }
 
 String _safeErrorMessage(Object error) {

@@ -15,81 +15,82 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('configures native equalizer, volume boost, and spatial controls', (
-    tester,
-  ) async {
-    final engine = _WidgetAudioEffectsEngine();
-    final player = PlayerController(audioEngine: engine);
-    addTearDown(player.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AnimatedBuilder(
-            animation: player,
-            builder: (context, _) => AudioEffectsSettingsTile(player: player),
+  testWidgets(
+    'configures native equalizer, volume boost, and spatial controls',
+    (tester) async {
+      final engine = _WidgetAudioEffectsEngine();
+      final player = PlayerController(audioEngine: engine);
+      addTearDown(player.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AnimatedBuilder(
+              animation: player,
+              builder: (context, _) => AudioEffectsSettingsTile(player: player),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.text('Off'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('audio-effects-settings-tile')),
-    );
-    await tester.pumpAndSettle();
+      expect(find.text('Off'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('audio-effects-settings-tile')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Equalizer'), findsOneWidget);
-    expect(find.text('Volume boost'), findsOneWidget);
-    expect(find.text('Spatial audio'), findsOneWidget);
-    expect(find.text('60 Hz'), findsOneWidget);
+      expect(find.text('Equalizer'), findsOneWidget);
+      expect(find.text('Volume boost'), findsOneWidget);
+      expect(find.text('Spatial audio'), findsOneWidget);
+      expect(find.text('60 Hz'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('equalizer-enabled-switch')),
-    );
-    await tester.pumpAndSettle();
-    expect(engine.equalizerEnabledValue, isTrue);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('equalizer-enabled-switch')),
+      );
+      await tester.pumpAndSettle();
+      expect(engine.equalizerEnabledValue, isTrue);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('equalizer-preset-dropdown')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Bass boost').last);
-    await tester.pumpAndSettle();
-    expect(
-      engine.equalizerProfileValue.preset,
-      PlaybackEqualizerPreset.bassBoost,
-    );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('equalizer-preset-dropdown')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bass boost').last);
+      await tester.pumpAndSettle();
+      expect(
+        engine.equalizerProfileValue.preset,
+        PlaybackEqualizerPreset.bassBoost,
+      );
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('loudness-enhancer-enabled-switch')),
-    );
-    await tester.pumpAndSettle();
-    expect(engine.loudnessEnhancerEnabledValue, isTrue);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('loudness-enhancer-enabled-switch')),
+      );
+      await tester.pumpAndSettle();
+      expect(engine.loudnessEnhancerEnabledValue, isTrue);
 
-    final virtualizerSwitch = find.byKey(
-      const ValueKey<String>('virtualizer-enabled-switch'),
-    );
-    await tester.ensureVisible(virtualizerSwitch);
-    await tester.pumpAndSettle();
-    await tester.tap(virtualizerSwitch);
-    await tester.pumpAndSettle();
-    expect(engine.virtualizerEnabledValue, isTrue);
+      final virtualizerSwitch = find.byKey(
+        const ValueKey<String>('virtualizer-enabled-switch'),
+      );
+      await tester.ensureVisible(virtualizerSwitch);
+      await tester.pumpAndSettle();
+      await tester.tap(virtualizerSwitch);
+      await tester.pumpAndSettle();
+      expect(engine.virtualizerEnabledValue, isTrue);
 
-    final spatialSliderFinder = find.byKey(
-      const ValueKey<String>('virtualizer-strength-slider'),
-    );
-    await tester.ensureVisible(spatialSliderFinder);
-    final spatialSlider = tester.widget<Slider>(spatialSliderFinder);
-    spatialSlider.onChangeEnd!(650);
-    await tester.pumpAndSettle();
-    expect(engine.virtualizerStrengthValue, 650);
+      final spatialSliderFinder = find.byKey(
+        const ValueKey<String>('virtualizer-strength-slider'),
+      );
+      await tester.ensureVisible(spatialSliderFinder);
+      final spatialSlider = tester.widget<Slider>(spatialSliderFinder);
+      spatialSlider.onChangeEnd!(650);
+      await tester.pumpAndSettle();
+      expect(engine.virtualizerStrengthValue, 650);
 
-    await tester.tap(find.text('Close'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Bass boost'), findsOneWidget);
-    expect(find.textContaining('Volume boost'), findsOneWidget);
-    expect(find.textContaining('Spatial audio'), findsOneWidget);
-  });
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Bass boost'), findsOneWidget);
+      expect(find.textContaining('Volume boost'), findsOneWidget);
+      expect(find.textContaining('Spatial audio'), findsOneWidget);
+    },
+  );
 }
 
 class _WidgetAudioEffectsEngine

@@ -44,12 +44,12 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final video = File('${directory.path}${Platform.pathSeparator}show.mp4');
     await video.writeAsBytes(<int>[0]);
-    await File('${directory.path}${Platform.pathSeparator}show.vtt').writeAsString(
-      'WEBVTT\n\n00:00.000 --> 00:01.000\nHello',
-    );
-    await File('${directory.path}${Platform.pathSeparator}show.srt').writeAsString(
-      '1\n00:00:00,000 --> 00:00:01,000\nFallback',
-    );
+    await File(
+      '${directory.path}${Platform.pathSeparator}show.vtt',
+    ).writeAsString('WEBVTT\n\n00:00.000 --> 00:01.000\nHello');
+    await File(
+      '${directory.path}${Platform.pathSeparator}show.srt',
+    ).writeAsString('1\n00:00:00,000 --> 00:00:01,000\nFallback');
 
     final document = await loadLocalVideoCaptionSidecar(video.uri);
 
@@ -57,20 +57,25 @@ void main() {
     expect(document?.text, contains('Hello'));
   });
 
-  test('skips malformed sidecars and falls back to the next valid file', () async {
-    final directory = await Directory.systemTemp.createTemp('aethertune-video');
-    addTearDown(() => directory.delete(recursive: true));
-    final video = File('${directory.path}${Platform.pathSeparator}show.mp4');
-    await video.writeAsBytes(<int>[0]);
-    await File('${directory.path}${Platform.pathSeparator}show.vtt').writeAsString(
-      'WEBVTT\n\nNo timestamped cue',
-    );
-    await File('${directory.path}${Platform.pathSeparator}show.srt').writeAsString(
-      '1\n00:00:00,000 --> 00:00:01,000\nFallback',
-    );
+  test(
+    'skips malformed sidecars and falls back to the next valid file',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'aethertune-video',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final video = File('${directory.path}${Platform.pathSeparator}show.mp4');
+      await video.writeAsBytes(<int>[0]);
+      await File(
+        '${directory.path}${Platform.pathSeparator}show.vtt',
+      ).writeAsString('WEBVTT\n\nNo timestamped cue');
+      await File(
+        '${directory.path}${Platform.pathSeparator}show.srt',
+      ).writeAsString('1\n00:00:00,000 --> 00:00:01,000\nFallback');
 
-    final document = await loadLocalVideoCaptionSidecar(video.uri);
+      final document = await loadLocalVideoCaptionSidecar(video.uri);
 
-    expect(document?.text, contains('Fallback'));
-  });
+      expect(document?.text, contains('Fallback'));
+    },
+  );
 }

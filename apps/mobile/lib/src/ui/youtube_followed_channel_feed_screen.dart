@@ -15,10 +15,7 @@ import 'widgets/track_artwork.dart';
 /// A refresh issues one bounded official request for each followed public
 /// channel. It is intentionally not a background subscription service.
 final class YouTubeFollowedChannelFeedScreen extends StatefulWidget {
-  const YouTubeFollowedChannelFeedScreen({
-    super.key,
-    required this.provider,
-  });
+  const YouTubeFollowedChannelFeedScreen({super.key, required this.provider});
 
   final YouTubeDataMetadataProvider provider;
 
@@ -105,8 +102,12 @@ final class _YouTubeFollowedChannelFeedScreenState
               padding: const EdgeInsets.only(top: 12),
               child: ListTile(
                 leading: const Icon(Icons.error_outline),
-                title: Text('${feedStore.lastFailedChannelCount} followed channel(s) could not refresh'),
-                subtitle: const Text('Other public channel results are still shown.'),
+                title: Text(
+                  '${feedStore.lastFailedChannelCount} followed channel(s) could not refresh',
+                ),
+                subtitle: const Text(
+                  'Other public channel results are still shown.',
+                ),
               ),
             ),
           for (final item in feedStore.items)
@@ -115,7 +116,8 @@ final class _YouTubeFollowedChannelFeedScreenState
               title: Text(item.track.title),
               subtitle: Text(item.subtitle),
               trailing: IconButton(
-                tooltip: library.tracks.any((saved) => saved.id == item.track.id)
+                tooltip:
+                    library.tracks.any((saved) => saved.id == item.track.id)
                     ? 'Saved to library'
                     : 'Save metadata to library',
                 onPressed: () => unawaited(_saveTrack(item.track)),

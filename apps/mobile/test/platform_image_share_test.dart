@@ -25,10 +25,8 @@ void main() {
 
   test('rejects empty data and unsafe PNG names', () {
     expect(
-      () => PlatformImageShareRequest(
-        bytes: Uint8List(0),
-        fileName: 'share.png',
-      ),
+      () =>
+          PlatformImageShareRequest(bytes: Uint8List(0), fileName: 'share.png'),
       throwsArgumentError,
     );
     expect(

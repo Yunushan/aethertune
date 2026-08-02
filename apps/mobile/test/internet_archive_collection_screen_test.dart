@@ -8,7 +8,9 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/ui/internet_archive_collection_screen.dart';
 
 void main() {
-  testWidgets('browses a paginated Internet Archive collection', (tester) async {
+  testWidgets('browses a paginated Internet Archive collection', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final library = LibraryStore();
     await library.load();
@@ -17,7 +19,10 @@ void main() {
     final provider = InternetArchiveProvider(
       limit: 1,
       searchLoader: (uri) async {
-        expect(uri.queryParameters['q'], contains('collection:(opensource_audio)'));
+        expect(
+          uri.queryParameters['q'],
+          contains('collection:(opensource_audio)'),
+        );
         final page = int.parse(uri.queryParameters['page']!);
         requestedPages.add(page);
         return page == 1 ? _searchPage('first') : _searchPage('second');

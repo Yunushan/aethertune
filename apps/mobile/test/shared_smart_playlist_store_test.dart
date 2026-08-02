@@ -102,66 +102,68 @@ void main() {
     expect(rule['value'], 'aethertune-source-kind:custom-catalog');
   });
 
-  test('evaluates portable source selectors against the recipient library',
-      () async {
-    final hostLibrary = LibraryStore();
-    await hostLibrary.load();
-    await hostLibrary.addTracks(<Track>[
-      Track(
-        id: 'host-jellyfin',
-        title: 'Host track',
-        localPath: '/music/host.mp3',
+  test(
+    'evaluates portable source selectors against the recipient library',
+    () async {
+      final hostLibrary = LibraryStore();
+      await hostLibrary.load();
+      await hostLibrary.addTracks(<Track>[
+        Track(
+          id: 'host-jellyfin',
+          title: 'Host track',
+          localPath: '/music/host.mp3',
+          sourceId: 'self-hosted-jellyfin-host-account',
+        ),
+      ]);
+      final hostLocal = await hostLibrary.createCustomSmartPlaylist(
+        name: 'Shared Jellyfin library',
         sourceId: 'self-hosted-jellyfin-host-account',
-      ),
-    ]);
-    final hostLocal = await hostLibrary.createCustomSmartPlaylist(
-      name: 'Shared Jellyfin library',
-      sourceId: 'self-hosted-jellyfin-host-account',
-    );
-    final hostGateway = _FakeSharedSmartPlaylistGateway();
-    final hostStore = SharedSmartPlaylistStore(
-      gatewayFactory: () => hostGateway,
-    );
-    await hostStore.load();
-    await hostStore.host(hostLibrary, hostLocal);
+      );
+      final hostGateway = _FakeSharedSmartPlaylistGateway();
+      final hostStore = SharedSmartPlaylistStore(
+        gatewayFactory: () => hostGateway,
+      );
+      await hostStore.load();
+      await hostStore.host(hostLibrary, hostLocal);
 
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    final recipientLibrary = LibraryStore();
-    await recipientLibrary.load();
-    await recipientLibrary.addTracks(<Track>[
-      Track(
-        id: 'recipient-jellyfin',
-        title: 'Recipient track',
-        localPath: '/music/recipient.mp3',
-        sourceId: 'self-hosted-jellyfin-recipient-account',
-      ),
-      Track(
-        id: 'recipient-subsonic',
-        title: 'Other provider track',
-        localPath: '/music/other.mp3',
-        sourceId: 'self-hosted-subsonic-recipient-account',
-      ),
-    ]);
-    final recipientStore = SharedSmartPlaylistStore(
-      gatewayFactory: () => _FakeSharedSmartPlaylistGateway(
-        joinName: hostLocal.name,
-        joinRule: hostGateway.createdRule!,
-      ),
-    );
-    await recipientStore.load();
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final recipientLibrary = LibraryStore();
+      await recipientLibrary.load();
+      await recipientLibrary.addTracks(<Track>[
+        Track(
+          id: 'recipient-jellyfin',
+          title: 'Recipient track',
+          localPath: '/music/recipient.mp3',
+          sourceId: 'self-hosted-jellyfin-recipient-account',
+        ),
+        Track(
+          id: 'recipient-subsonic',
+          title: 'Other provider track',
+          localPath: '/music/other.mp3',
+          sourceId: 'self-hosted-subsonic-recipient-account',
+        ),
+      ]);
+      final recipientStore = SharedSmartPlaylistStore(
+        gatewayFactory: () => _FakeSharedSmartPlaylistGateway(
+          joinName: hostLocal.name,
+          joinRule: hostGateway.createdRule!,
+        ),
+      );
+      await recipientStore.load();
 
-    final binding = await recipientStore.joinInvite(
-      'BBBBBBBBBBBBBBBBBBBBBBBB',
-      recipientLibrary,
-    );
+      final binding = await recipientStore.joinInvite(
+        'BBBBBBBBBBBBBBBBBBBBBBBB',
+        recipientLibrary,
+      );
 
-    expect(
-      recipientLibrary
-          .tracksForCustomSmartPlaylist(binding.localSmartPlaylistId)
-          .map((track) => track.id),
-      <String>['recipient-jellyfin'],
-    );
-  });
+      expect(
+        recipientLibrary
+            .tracksForCustomSmartPlaylist(binding.localSmartPlaylistId)
+            .map((track) => track.id),
+        <String>['recipient-jellyfin'],
+      );
+    },
+  );
 
   test('joins a shared smart definition as a local dynamic playlist', () async {
     final library = LibraryStore();
@@ -194,137 +196,143 @@ void main() {
       link.uri.toString(),
       'https://sync.example.test/public/${_FakeSharedSmartPlaylistGateway.id}',
     );
-    expect(
-      store.bindingForLocalSmartPlaylist(local.id)?.revision,
-      2,
-    );
+    expect(store.bindingForLocalSmartPlaylist(local.id)?.revision, 2);
     await store.revokePublicLink(
       store.bindingForLocalSmartPlaylist(local.id)!,
       library,
     );
-    expect(
-      store.bindingForLocalSmartPlaylist(local.id)?.revision,
-      3,
-    );
+    expect(store.bindingForLocalSmartPlaylist(local.id)?.revision, 3);
   });
 
-  test('imports a public smart playlist without creating a private binding',
-      () async {
-    final library = LibraryStore();
-    await library.load();
-    final store = SharedSmartPlaylistStore();
-    await store.load();
-    final document = <String, Object?>{
-      'version': 2,
-      'kind': 'smart',
-      'name': 'Public jazz',
-      'rule': _rule(),
-    };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
-
-    final imported = await store.importPublicLink(
-      'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
-      library,
-      httpExecutor: (method, uri, {required headers, body}) async {
-        expect(method, 'GET');
-        expect(headers, <String, String>{'accept': 'application/json'});
-        expect(body, isNull);
-        return LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: jsonEncode(<String, Object?>{
-            'revision': 4,
-            'checksum': checksum,
-            'playlist': document,
-          }),
-        );
-      },
-    );
-
-    expect(imported.name, 'Public jazz');
-    expect(imported.artist, 'Mira');
-    expect(imported.sortMode, CustomSmartPlaylistSortMode.title);
-    expect(imported.ruleGroups.single.rules.single.value, 'Jazz');
-    expect(store.bindings, isEmpty);
-  });
-
-  test('securely subscribes, refreshes, and unsubscribes public smart rules',
-      () async {
-    final library = LibraryStore();
-    await library.load();
-    final vault = _MemoryCredentialVault();
-    final store = SharedSmartPlaylistStore(publicLinkVault: vault);
-    await store.load();
-    var revision = 4;
-    var artist = 'Mira';
-    Future<LibrarySyncHttpResponse> executor(
-      String method,
-      Uri uri, {
-      required Map<String, String> headers,
-      String? body,
-    }) async {
-      final rule = Map<String, Object?>.from(_rule())..['artist'] = artist;
+  test(
+    'imports a public smart playlist without creating a private binding',
+    () async {
+      final library = LibraryStore();
+      await library.load();
+      final store = SharedSmartPlaylistStore();
+      await store.load();
       final document = <String, Object?>{
         'version': 2,
         'kind': 'smart',
-        'name': 'Subscribed jazz',
-        'rule': rule,
+        'name': 'Public jazz',
+        'rule': _rule(),
       };
       final checksum = sha256
           .convert(utf8.encode(jsonEncode(document)))
           .toString();
-      return LibrarySyncHttpResponse(
-        statusCode: 200,
-        body: jsonEncode(<String, Object?>{
-          'revision': revision,
-          'checksum': checksum,
-          'playlist': document,
-        }),
+
+      final imported = await store.importPublicLink(
+        'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+        library,
+        httpExecutor: (method, uri, {required headers, body}) async {
+          expect(method, 'GET');
+          expect(headers, <String, String>{'accept': 'application/json'});
+          expect(body, isNull);
+          return LibrarySyncHttpResponse(
+            statusCode: 200,
+            body: jsonEncode(<String, Object?>{
+              'revision': 4,
+              'checksum': checksum,
+              'playlist': document,
+            }),
+          );
+        },
       );
-    }
 
-    final subscription = await store.subscribeToPublicLink(
-      'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
-      library,
-      httpExecutor: executor,
-    );
+      expect(imported.name, 'Public jazz');
+      expect(imported.artist, 'Mira');
+      expect(imported.sortMode, CustomSmartPlaylistSortMode.title);
+      expect(imported.ruleGroups.single.rules.single.value, 'Jazz');
+      expect(store.bindings, isEmpty);
+    },
+  );
 
-    expect(store.publicSubscriptions, <PublicSmartPlaylistSubscription>[subscription]);
-    expect(vault.values.values.single, contains('BBBBBBBBBBBBBBBBBBBBBBBB'));
-    final rawMetadata = (await SharedPreferences.getInstance()).getString(
-      'aethertune.shared_smart_playlists.v1',
-    );
-    expect(rawMetadata, isNot(contains('BBBBBBBBBBBBBBBBBBBBBBBB')));
+  test(
+    'securely subscribes, refreshes, and unsubscribes public smart rules',
+    () async {
+      final library = LibraryStore();
+      await library.load();
+      final vault = _MemoryCredentialVault();
+      final store = SharedSmartPlaylistStore(publicLinkVault: vault);
+      await store.load();
+      var revision = 4;
+      var artist = 'Mira';
+      Future<LibrarySyncHttpResponse> executor(
+        String method,
+        Uri uri, {
+        required Map<String, String> headers,
+        String? body,
+      }) async {
+        final rule = Map<String, Object?>.from(_rule())..['artist'] = artist;
+        final document = <String, Object?>{
+          'version': 2,
+          'kind': 'smart',
+          'name': 'Subscribed jazz',
+          'rule': rule,
+        };
+        final checksum = sha256
+            .convert(utf8.encode(jsonEncode(document)))
+            .toString();
+        return LibrarySyncHttpResponse(
+          statusCode: 200,
+          body: jsonEncode(<String, Object?>{
+            'revision': revision,
+            'checksum': checksum,
+            'playlist': document,
+          }),
+        );
+      }
 
-    final restoredStore = SharedSmartPlaylistStore(publicLinkVault: vault);
-    await restoredStore.load();
-    expect(restoredStore.publicSubscriptions, hasLength(1));
-    expect(restoredStore.publicSubscriptions.single.id, subscription.id);
-    expect(
-      restoredStore.publicSubscriptions.single.localSmartPlaylistId,
-      subscription.localSmartPlaylistId,
-    );
+      final subscription = await store.subscribeToPublicLink(
+        'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
+        library,
+        httpExecutor: executor,
+      );
 
-    revision = 5;
-    artist = 'Nia';
-    final refreshed = await restoredStore.refreshPublicSubscription(
-      subscription,
-      library,
-      httpExecutor: executor,
-    );
-    expect(refreshed.revision, 5);
-    expect(
-      library.customSmartPlaylistById(subscription.localSmartPlaylistId)?.artist,
-      'Nia',
-    );
+      expect(store.publicSubscriptions, <PublicSmartPlaylistSubscription>[
+        subscription,
+      ]);
+      expect(vault.values.values.single, contains('BBBBBBBBBBBBBBBBBBBBBBBB'));
+      final rawMetadata = (await SharedPreferences.getInstance()).getString(
+        'aethertune.shared_smart_playlists.v1',
+      );
+      expect(rawMetadata, isNot(contains('BBBBBBBBBBBBBBBBBBBBBBBB')));
 
-    await restoredStore.unsubscribeFromPublicLink(refreshed);
-    expect(restoredStore.publicSubscriptions, isEmpty);
-    expect(vault.values, isEmpty);
-    expect(
-      library.customSmartPlaylistById(subscription.localSmartPlaylistId)?.name,
-      'Subscribed jazz',
-    );
-  });
+      final restoredStore = SharedSmartPlaylistStore(publicLinkVault: vault);
+      await restoredStore.load();
+      expect(restoredStore.publicSubscriptions, hasLength(1));
+      expect(restoredStore.publicSubscriptions.single.id, subscription.id);
+      expect(
+        restoredStore.publicSubscriptions.single.localSmartPlaylistId,
+        subscription.localSmartPlaylistId,
+      );
+
+      revision = 5;
+      artist = 'Nia';
+      final refreshed = await restoredStore.refreshPublicSubscription(
+        subscription,
+        library,
+        httpExecutor: executor,
+      );
+      expect(refreshed.revision, 5);
+      expect(
+        library
+            .customSmartPlaylistById(subscription.localSmartPlaylistId)
+            ?.artist,
+        'Nia',
+      );
+
+      await restoredStore.unsubscribeFromPublicLink(refreshed);
+      expect(restoredStore.publicSubscriptions, isEmpty);
+      expect(vault.values, isEmpty);
+      expect(
+        library
+            .customSmartPlaylistById(subscription.localSmartPlaylistId)
+            ?.name,
+        'Subscribed jazz',
+      );
+    },
+  );
 }
 
 class _MemoryCredentialVault implements ProviderCredentialVault {
@@ -361,16 +369,21 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
     required Map<String, Object?> rule,
   }) async {
     createdRule = rule;
-    return _remote(name: name, rule: rule, role: SharedPlaylistAccessRole.owner);
+    return _remote(
+      name: name,
+      rule: rule,
+      role: SharedPlaylistAccessRole.owner,
+    );
   }
 
   @override
-  Future<SharedPlaylistRemote> joinSharedPlaylistInvite(String inviteCode) async =>
-      _remote(
-        name: joinName,
-        rule: joinRule ?? _rule(),
-        role: SharedPlaylistAccessRole.viewer,
-      );
+  Future<SharedPlaylistRemote> joinSharedPlaylistInvite(
+    String inviteCode,
+  ) async => _remote(
+    name: joinName,
+    rule: joinRule ?? _rule(),
+    role: SharedPlaylistAccessRole.viewer,
+  );
 
   @override
   Future<SharedPlaylistRemote> fetchSharedPlaylist(String playlistId) async =>
@@ -387,17 +400,16 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
     required String name,
     required Map<String, Object?> rule,
   }) async =>
-       _remote(name: name, rule: rule, role: SharedPlaylistAccessRole.editor);
+      _remote(name: name, rule: rule, role: SharedPlaylistAccessRole.editor);
 
   @override
   Future<SharedSmartPlaylistPublicLink> issueSharedSmartPlaylistPublicLink({
     required String playlistId,
     required int baseRevision,
-  }) async =>
-      SharedSmartPlaylistPublicLink(
-        uri: Uri.parse('https://sync.example.test/public/$id'),
-        revision: baseRevision + 1,
-      );
+  }) async => SharedSmartPlaylistPublicLink(
+    uri: Uri.parse('https://sync.example.test/public/$id'),
+    revision: baseRevision + 1,
+  );
 
   @override
   Future<int> revokeSharedSmartPlaylistPublicLink({
@@ -409,12 +421,11 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
   Future<SharedPlaylistInvitation> issueSharedPlaylistInvite({
     required String playlistId,
     required SharedPlaylistAccessRole role,
-  }) async =>
-      SharedPlaylistInvitation(
-        code: 'BBBBBBBBBBBBBBBBBBBBBBBB',
-        role: role,
-        expiresAt: DateTime.utc(2026, 7, 27),
-      );
+  }) async => SharedPlaylistInvitation(
+    code: 'BBBBBBBBBBBBBBBBBBBBBBBB',
+    role: role,
+    expiresAt: DateTime.utc(2026, 7, 27),
+  );
 
   @override
   Future<SharedPlaylistRemote> createSharedPlaylist({
@@ -459,16 +470,15 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
     required String name,
     required Map<String, Object?> rule,
     required SharedPlaylistAccessRole role,
-  }) =>
-      SharedPlaylistRemote(
-        id: id,
-        revision: 1,
-        role: role,
-        name: name,
-        trackIds: const <String>[],
-        kind: SharedPlaylistKind.smart,
-        smartPlaylist: SharedSmartPlaylistDocument(name: name, rule: rule),
-      );
+  }) => SharedPlaylistRemote(
+    id: id,
+    revision: 1,
+    role: role,
+    name: name,
+    trackIds: const <String>[],
+    kind: SharedPlaylistKind.smart,
+    smartPlaylist: SharedSmartPlaylistDocument(name: name, rule: rule),
+  );
 }
 
 Map<String, Object?> _rule() => <String, Object?>{

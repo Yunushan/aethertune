@@ -21,7 +21,7 @@ For server development:
 
 ```bash
 cd services/server
-dart pub get
+dart pub get --enforce-lockfile
 dart run bin/server.dart
 ```
 

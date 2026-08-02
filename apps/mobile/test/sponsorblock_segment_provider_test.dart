@@ -22,7 +22,8 @@ void main() {
 
   test('rejects malformed response shapes', () {
     expect(
-      () => parseSponsorBlockSegments('{}', maximum: const Duration(minutes: 1)),
+      () =>
+          parseSponsorBlockSegments('{}', maximum: const Duration(minutes: 1)),
       throwsA(isA<FormatException>()),
     );
   });

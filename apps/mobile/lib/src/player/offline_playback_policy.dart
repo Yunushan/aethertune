@@ -15,7 +15,10 @@ String offlinePlaybackBlockedMessage(Track track) {
   return 'Offline mode is on. ${track.title} needs a network stream.';
 }
 
-bool offlineModeAllowsPlayback(Track track, {required bool offlineModeEnabled}) {
+bool offlineModeAllowsPlayback(
+  Track track, {
+  required bool offlineModeEnabled,
+}) {
   if (!track.isPlayable) {
     return false;
   }

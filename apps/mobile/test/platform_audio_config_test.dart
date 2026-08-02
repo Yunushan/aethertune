@@ -54,15 +54,18 @@ void main() {
       expect(activity, contains(action));
     }
     final shortcuts = XmlDocument.parse(
-      File('android/app/src/main/res/xml/aethertune_launcher_shortcuts.xml')
-          .readAsStringSync(),
+      File(
+        'android/app/src/main/res/xml/aethertune_launcher_shortcuts.xml',
+      ).readAsStringSync(),
     );
     final shortcutElements = shortcuts.findAllElements('shortcut').toList();
     expect(
       shortcutElements
           .map(
-            (element) =>
-                element.getAttribute('shortcutId', namespace: _androidNamespace),
+            (element) => element.getAttribute(
+              'shortcutId',
+              namespace: _androidNamespace,
+            ),
           )
           .toSet(),
       <String?>{'previous', 'play_pause', 'next'},
@@ -106,7 +109,8 @@ void main() {
     final entries = document.findAllElements('dict').first.childElements;
     final elements = entries.toList(growable: false);
     final keyIndex = elements.indexWhere(
-      (element) => element.name.local == 'key' &&
+      (element) =>
+          element.name.local == 'key' &&
           element.innerText == 'UIBackgroundModes',
     );
     expect(keyIndex, greaterThanOrEqualTo(0));
@@ -117,12 +121,12 @@ void main() {
   });
 
   test('generated iOS wrapper targets iOS 14 for Darwin plugins', () {
-    final project =
-        File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
-    final targets = RegExp(r'IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);')
-        .allMatches(project)
-        .map((match) => match.group(1))
-        .toSet();
+    final project = File(
+      'ios/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    final targets = RegExp(
+      r'IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);',
+    ).allMatches(project).map((match) => match.group(1)).toSet();
     expect(targets, <String?>{'14.0'});
 
     final frameworkInfo = XmlDocument.parse(
@@ -154,8 +158,9 @@ void main() {
       );
     }
 
-    final project =
-        File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+    final project = File(
+      'ios/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
     expect(
       project,
       contains('CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;'),
@@ -171,8 +176,7 @@ Set<String?> _componentNames(XmlDocument document, String elementName) {
   return document
       .findAllElements(elementName)
       .map(
-        (element) =>
-            element.getAttribute('name', namespace: _androidNamespace),
+        (element) => element.getAttribute('name', namespace: _androidNamespace),
       )
       .toSet();
 }

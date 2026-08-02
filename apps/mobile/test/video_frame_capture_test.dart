@@ -13,10 +13,7 @@ void main() {
   });
 
   test('rejects unavailable or empty screenshots', () async {
-    await expectLater(
-      captureVideoFramePng(() async => null),
-      throwsStateError,
-    );
+    await expectLater(captureVideoFramePng(() async => null), throwsStateError);
     await expectLater(
       captureVideoFramePng(() async => Uint8List(0)),
       throwsStateError,

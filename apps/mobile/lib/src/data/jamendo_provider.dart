@@ -8,10 +8,8 @@ import '../domain/track.dart';
 import 'provider_binary_loader.dart';
 
 typedef JamendoResponseLoader = Future<String> Function(Uri uri);
-typedef JamendoBinaryLoader = Future<Uint8List> Function(
-  Uri uri,
-  Map<String, String> headers,
-);
+typedef JamendoBinaryLoader =
+    Future<Uint8List> Function(Uri uri, Map<String, String> headers);
 
 enum JamendoFeaturedGenre {
   lounge('lounge', 'Lounge'),
@@ -124,15 +122,14 @@ final class JamendoProvider
       'Jamendo developer client ID.';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.directPlayback,
-        MusicSourceCapability.libraryBrowse,
-        MusicSourceCapability.artwork,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.directPlayback,
+    MusicSourceCapability.libraryBrowse,
+    MusicSourceCapability.artwork,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
@@ -295,10 +292,7 @@ final class JamendoProvider
         ).results,
       );
       if (albums.isNotEmpty) {
-        return MusicCatalogDetail(
-          collection: collection,
-          collections: albums,
-        );
+        return MusicCatalogDetail(collection: collection, collections: albums);
       }
     }
     final response = _parseJamendoResponse(
@@ -309,18 +303,18 @@ final class JamendoProvider
                 ? playlistTracksUri
                 : albumTracksUri)
             .replace(
-          queryParameters: <String, String>{
-            'client_id': _clientId,
-            'format': 'json',
-            'id': collectionId,
-            'limit': '100',
-            'imagesize': '300',
-            'audioformat': 'mp32',
-            if (isArtist ||
-                collection.kind == MusicCatalogCollectionKind.playlist)
-              'track_type': 'single albumtrack',
-          },
-        ),
+              queryParameters: <String, String>{
+                'client_id': _clientId,
+                'format': 'json',
+                'id': collectionId,
+                'limit': '100',
+                'imagesize': '300',
+                'audioformat': 'mp32',
+                if (isArtist ||
+                    collection.kind == MusicCatalogCollectionKind.playlist)
+                  'track_type': 'single albumtrack',
+              },
+            ),
       ),
     );
     return MusicCatalogDetail(
@@ -499,20 +493,25 @@ final class JamendoProvider
   }) {
     final isArtist = kind == MusicCatalogCollectionKind.artist;
     final isPlaylist = kind == MusicCatalogCollectionKind.playlist;
-    return (isArtist ? artistsUri : isPlaylist ? playlistsUri : albumsUri).replace(
-      queryParameters: <String, String>{
-        'client_id': _clientId,
-        'format': 'json',
-        'offset': offset.toString(),
-        'limit': limit.toString(),
-        'fullcount': 'true',
-        'order': isPlaylist ? 'creationdate_desc' : 'popularity_total',
-        if (!isPlaylist) 'imagesize': '300',
-        if (isArtist) 'hasimage': 'true',
-        if (!isArtist && !isPlaylist) 'type': 'album single',
-        'namesearch': ?query,
-      },
-    );
+    return (isArtist
+            ? artistsUri
+            : isPlaylist
+            ? playlistsUri
+            : albumsUri)
+        .replace(
+          queryParameters: <String, String>{
+            'client_id': _clientId,
+            'format': 'json',
+            'offset': offset.toString(),
+            'limit': limit.toString(),
+            'fullcount': 'true',
+            'order': isPlaylist ? 'creationdate_desc' : 'popularity_total',
+            if (!isPlaylist) 'imagesize': '300',
+            if (isArtist) 'hasimage': 'true',
+            if (!isArtist && !isPlaylist) 'type': 'album single',
+            'namesearch': ?query,
+          },
+        );
   }
 }
 
@@ -536,10 +535,7 @@ List<Track> parseJamendoTracksResponse(String jsonText) {
 }
 
 final class _JamendoResponse {
-  const _JamendoResponse({
-    required this.results,
-    this.fullCount,
-  });
+  const _JamendoResponse({required this.results, this.fullCount});
 
   final List<Map<String, Object?>> results;
   final int? fullCount;
@@ -644,18 +640,18 @@ List<MusicCatalogCollection> _parseJamendoCollections(
       continue;
     }
     final subtitle = switch (kind) {
-      MusicCatalogCollectionKind.artist => _stringValue(value['joindate'])
-              .isEmpty
-          ? ''
-          : 'Joined ${_stringValue(value['joindate'])}',
+      MusicCatalogCollectionKind.artist =>
+        _stringValue(value['joindate']).isEmpty
+            ? ''
+            : 'Joined ${_stringValue(value['joindate'])}',
       MusicCatalogCollectionKind.album => _joinNonEmpty(<String>[
-          _stringValue(value['artist_name']),
-          _stringValue(value['releasedate']),
-        ]),
+        _stringValue(value['artist_name']),
+        _stringValue(value['releasedate']),
+      ]),
       MusicCatalogCollectionKind.playlist => _joinNonEmpty(<String>[
-          _stringValue(value['user_name']),
-          _stringValue(value['creationdate']),
-        ]),
+        _stringValue(value['user_name']),
+        _stringValue(value['creationdate']),
+      ]),
     };
     final artwork = _safeHttpsUri(_stringValue(value['image']));
     collections.add(
@@ -755,7 +751,11 @@ int _parseOffset(String? cursor) {
   }
   final value = int.tryParse(normalized);
   if (value == null || value < 0) {
-    throw ArgumentError.value(cursor, 'cursor', 'Must be a non-negative offset.');
+    throw ArgumentError.value(
+      cursor,
+      'cursor',
+      'Must be a non-negative offset.',
+    );
   }
   return value;
 }
@@ -766,7 +766,11 @@ String _requireClientId(String value) {
     throw ArgumentError.value(value, 'clientId', 'Must be 1-256 characters.');
   }
   if (normalized.contains(RegExp(r'[\r\n]'))) {
-    throw ArgumentError.value(value, 'clientId', 'Must not contain line breaks.');
+    throw ArgumentError.value(
+      value,
+      'clientId',
+      'Must not contain line breaks.',
+    );
   }
   return normalized;
 }
@@ -811,7 +815,9 @@ Uri? _safeHttpsUri(String value) {
 Future<String> _loadJamendoJson(Uri uri) async {
   final client = HttpClient();
   try {
-    final request = await client.getUrl(uri).timeout(const Duration(seconds: 15));
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 15));
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     final response = await request.close();
     final body = await utf8.decoder.bind(response).join();

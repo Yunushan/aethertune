@@ -27,7 +27,9 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
   Map<String, Object?> exportConfiguration() {
     final endpoint = _endpoint;
     if (endpoint == null) {
-      throw StateError('Configure a lyrics search service before uploading it.');
+      throw StateError(
+        'Configure a lyrics search service before uploading it.',
+      );
     }
     return <String, Object?>{
       'format': configurationDocumentFormat,
@@ -55,7 +57,9 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
   Future<void> save(String endpoint) async {
     final parsed = _parseEndpoint(endpoint);
     if (parsed == null) {
-      throw const FormatException('Enter an HTTPS LRCLIB-compatible service URL.');
+      throw const FormatException(
+        'Enter an HTTPS LRCLIB-compatible service URL.',
+      );
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_endpointKey, parsed.toString());
@@ -79,7 +83,9 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
         document['format'] != configurationDocumentFormat ||
         document['version'] != configurationDocumentVersion ||
         document['endpoint'] is! String) {
-      throw const FormatException('Lyrics search endpoint configuration is invalid.');
+      throw const FormatException(
+        'Lyrics search endpoint configuration is invalid.',
+      );
     }
     await save(document['endpoint'] as String);
   }

@@ -16,14 +16,14 @@ final class CustomCatalogDefinition {
     required Iterable<String> mediaDomains,
     required this.allowInsecureHttp,
     String description = '',
-  })  : id = _normalizeId(id),
-        name = _normalizeName(name),
-        catalogUri = _normalizeCatalogUri(
-          catalogUri,
-          allowInsecureHttp: allowInsecureHttp,
-        ),
-        mediaDomains = _normalizeDomains(mediaDomains, catalogUri.host),
-        description = _normalizeDescription(description);
+  }) : id = _normalizeId(id),
+       name = _normalizeName(name),
+       catalogUri = _normalizeCatalogUri(
+         catalogUri,
+         allowInsecureHttp: allowInsecureHttp,
+       ),
+       mediaDomains = _normalizeDomains(mediaDomains, catalogUri.host),
+       description = _normalizeDescription(description);
 
   factory CustomCatalogDefinition.create({
     required String name,
@@ -128,7 +128,8 @@ String _normalizeId(String value) {
 
 String _normalizeName(String value) {
   final normalized = value.trim();
-  if (normalized.isEmpty || normalized.length > _maximumCustomCatalogNameLength) {
+  if (normalized.isEmpty ||
+      normalized.length > _maximumCustomCatalogNameLength) {
     throw const FormatException('Catalog name must be 1-80 characters.');
   }
   return normalized;
@@ -151,10 +152,7 @@ Uri _normalizeCatalogUri(Uri value, {required bool allowInsecureHttp}) {
   return value.replace(fragment: '');
 }
 
-bool _isSupportedRemoteUri(
-  Uri uri, {
-  required bool allowInsecureHttp,
-}) {
+bool _isSupportedRemoteUri(Uri uri, {required bool allowInsecureHttp}) {
   final scheme = uri.scheme.toLowerCase();
   return uri.hasAuthority &&
       uri.host.isNotEmpty &&
@@ -191,7 +189,9 @@ List<String> _normalizeDomains(Iterable<String> values, String catalogHost) {
   }
   domains.remove(catalogHost.toLowerCase());
   if (domains.length > _maximumCustomCatalogDomains) {
-    throw const FormatException('A catalog can declare at most 12 media domains.');
+    throw const FormatException(
+      'A catalog can declare at most 12 media domains.',
+    );
   }
   return List<String>.unmodifiable(domains.toList()..sort());
 }

@@ -22,61 +22,61 @@ void main() {
     }
   });
 
-  test('recursively imports supported audio files with folder metadata', () async {
-    final albumOne = Directory(p.join(root.path, 'Album One'));
-    final discOne = Directory(p.join(albumOne.path, 'Disc 1'));
-    await discOne.create(recursive: true);
-    await Directory(p.join(root.path, 'Artwork')).create();
-    await File(p.join(albumOne.path, '01 Alpha.MP3')).writeAsBytes(<int>[1]);
-    await File(
-      p.join(discOne.path, '02 Local Artist - Beta.flac'),
-    ).writeAsBytes(<int>[2]);
-    await File(
-      p.join(root.path, 'Loose Artist - Loose Track.m4a'),
-    ).writeAsBytes(<int>[3]);
-    await File(p.join(root.path, 'cover.jpg')).writeAsBytes(<int>[4]);
-    await File(p.join(root.path, 'notes.txt')).writeAsString('not audio');
+  test(
+    'recursively imports supported audio files with folder metadata',
+    () async {
+      final albumOne = Directory(p.join(root.path, 'Album One'));
+      final discOne = Directory(p.join(albumOne.path, 'Disc 1'));
+      await discOne.create(recursive: true);
+      await Directory(p.join(root.path, 'Artwork')).create();
+      await File(p.join(albumOne.path, '01 Alpha.MP3')).writeAsBytes(<int>[1]);
+      await File(
+        p.join(discOne.path, '02 Local Artist - Beta.flac'),
+      ).writeAsBytes(<int>[2]);
+      await File(
+        p.join(root.path, 'Loose Artist - Loose Track.m4a'),
+      ).writeAsBytes(<int>[3]);
+      await File(p.join(root.path, 'cover.jpg')).writeAsBytes(<int>[4]);
+      await File(p.join(root.path, 'notes.txt')).writeAsString('not audio');
 
-    final result = await const LocalFolderScanner().scan(
-      root.path,
-      importedAt: DateTime.utc(2026, 2, 1),
-    );
+      final result = await const LocalFolderScanner().scan(
+        root.path,
+        importedAt: DateTime.utc(2026, 2, 1),
+      );
 
-    expect(result.ignoredFileCount, 2);
-    expect(result.inaccessibleDirectoryCount, 0);
-    expect(
-      result.tracks.map((track) => track.title),
-      <String>['Alpha', 'Beta', 'Loose Track'],
-    );
-    expect(
-      result.tracks.map((track) => track.album),
-      <String>[
+      expect(result.ignoredFileCount, 2);
+      expect(result.inaccessibleDirectoryCount, 0);
+      expect(result.tracks.map((track) => track.title), <String>[
+        'Alpha',
+        'Beta',
+        'Loose Track',
+      ]);
+      expect(result.tracks.map((track) => track.album), <String>[
         'Album One',
         p.join('Album One', 'Disc 1'),
         p.basename(root.path),
-      ],
-    );
-    expect(
-      result.tracks.map((track) => track.artist),
-      <String>['Local Folder', 'Local Artist', 'Loose Artist'],
-    );
-    expect(
-      result.tracks.map((track) => track.addedAt).toSet(),
-      <DateTime>{DateTime.utc(2026, 2, 1)},
-    );
-    expect(
-      result.tracks.map((track) => track.sourceId).toSet(),
-      <String>{'local'},
-    );
-    expect(
-      result.tracks.map((track) => track.contentHash),
-      everyElement(isNotEmpty),
-    );
-    expect(
-      result.tracks.first.id,
-      Track.stableLocalId(p.join(albumOne.path, '01 Alpha.MP3')),
-    );
-  });
+      ]);
+      expect(result.tracks.map((track) => track.artist), <String>[
+        'Local Folder',
+        'Local Artist',
+        'Loose Artist',
+      ]);
+      expect(result.tracks.map((track) => track.addedAt).toSet(), <DateTime>{
+        DateTime.utc(2026, 2, 1),
+      });
+      expect(result.tracks.map((track) => track.sourceId).toSet(), <String>{
+        'local',
+      });
+      expect(
+        result.tracks.map((track) => track.contentHash),
+        everyElement(isNotEmpty),
+      );
+      expect(
+        result.tracks.first.id,
+        Track.stableLocalId(p.join(albumOne.path, '01 Alpha.MP3')),
+      );
+    },
+  );
 
   test(
     'scans selected files with metadata, sidecars, and deduplication',
@@ -87,33 +87,30 @@ void main() {
       final secondPath = p.join(secondDirectory.path, '02 Second.mp3');
       await File(firstPath).writeAsBytes(<int>[1, 2, 3]);
       await File(secondPath).writeAsBytes(<int>[4, 5, 6]);
-      await File(p.setExtension(firstPath, '.lrc')).writeAsString(
-        '[00:01.00]Selected lyric',
-      );
+      await File(
+        p.setExtension(firstPath, '.lrc'),
+      ).writeAsString('[00:01.00]Selected lyric');
 
-      final result = await scanLocalFilesInBackground(
-        <String>[
-          firstPath,
-          secondPath,
-          firstPath,
-          p.join(root.path, 'notes.txt'),
-        ],
-        importedAt: DateTime.utc(2026, 2, 1),
-      );
+      final result = await scanLocalFilesInBackground(<String>[
+        firstPath,
+        secondPath,
+        firstPath,
+        p.join(root.path, 'notes.txt'),
+      ], importedAt: DateTime.utc(2026, 2, 1));
 
       expect(result.ignoredFileCount, 1);
-      expect(
-        result.tracks.map((track) => track.title),
-        <String>['First', 'Second'],
-      );
-      expect(
-        result.tracks.map((track) => track.artist),
-        <String>['Selected Artist', 'Local Folder'],
-      );
-      expect(
-        result.tracks.map((track) => track.album),
-        <String>[p.basename(root.path), 'Second Album'],
-      );
+      expect(result.tracks.map((track) => track.title), <String>[
+        'First',
+        'Second',
+      ]);
+      expect(result.tracks.map((track) => track.artist), <String>[
+        'Selected Artist',
+        'Local Folder',
+      ]);
+      expect(result.tracks.map((track) => track.album), <String>[
+        p.basename(root.path),
+        'Second Album',
+      ]);
       expect(
         result.tracks.map((track) => track.contentHash),
         everyElement(isNotEmpty),
@@ -122,39 +119,39 @@ void main() {
         result.sidecarLyricsByTrackId[Track.stableLocalId(firstPath)],
         '[00:01.00]Selected lyric',
       );
-      expect(
-        result.tracks.map((track) => track.addedAt).toSet(),
-        <DateTime>{DateTime.utc(2026, 2, 1)},
-      );
+      expect(result.tracks.map((track) => track.addedAt).toSet(), <DateTime>{
+        DateTime.utc(2026, 2, 1),
+      });
     },
   );
 
-  test('reports exact selected-file progress from the background isolate',
-      () async {
-    final firstPath = p.join(root.path, 'First.mp3');
-    final secondPath = p.join(root.path, 'Second.flac');
-    await File(firstPath).writeAsBytes(<int>[1, 2, 3]);
-    await File(secondPath).writeAsBytes(<int>[4, 5, 6]);
+  test(
+    'reports exact selected-file progress from the background isolate',
+    () async {
+      final firstPath = p.join(root.path, 'First.mp3');
+      final secondPath = p.join(root.path, 'Second.flac');
+      await File(firstPath).writeAsBytes(<int>[1, 2, 3]);
+      await File(secondPath).writeAsBytes(<int>[4, 5, 6]);
 
-    final updates = <LocalFolderScanProgress>[];
-    await scanLocalFilesInBackground(
-      <String>[firstPath, secondPath, firstPath],
-      onProgress: updates.add,
-    );
+      final updates = <LocalFolderScanProgress>[];
+      await scanLocalFilesInBackground(<String>[
+        firstPath,
+        secondPath,
+        firstPath,
+      ], onProgress: updates.add);
 
-    expect(
-      updates.map((update) => <Object?>[
-            update.phase,
-            update.completed,
-            update.total,
-          ]),
-      <List<Object?>>[
-        <Object?>[LocalFolderScanPhase.scanning, 0, 2],
-        <Object?>[LocalFolderScanPhase.scanning, 1, 2],
-        <Object?>[LocalFolderScanPhase.scanning, 2, 2],
-      ],
-    );
-  });
+      expect(
+        updates.map(
+          (update) => <Object?>[update.phase, update.completed, update.total],
+        ),
+        <List<Object?>>[
+          <Object?>[LocalFolderScanPhase.scanning, 0, 2],
+          <Object?>[LocalFolderScanPhase.scanning, 1, 2],
+          <Object?>[LocalFolderScanPhase.scanning, 2, 2],
+        ],
+      );
+    },
+  );
 
   test('reports folder discovery before determinate file scanning', () async {
     final nested = Directory(p.join(root.path, 'Nested'));
@@ -166,12 +163,14 @@ void main() {
     await const LocalFolderScanner().scan(root.path, onProgress: updates.add);
 
     expect(
-      updates.where((update) => update.phase == LocalFolderScanPhase.discovering)
+      updates
+          .where((update) => update.phase == LocalFolderScanPhase.discovering)
           .map((update) => update.completed),
       <int>[1, 2],
     );
     expect(
-      updates.where((update) => update.phase == LocalFolderScanPhase.scanning)
+      updates
+          .where((update) => update.phase == LocalFolderScanPhase.scanning)
           .map((update) => <int>[update.completed, update.total!]),
       <List<int>>[
         <int>[0, 2],
@@ -184,33 +183,30 @@ void main() {
   test('associates matching LRC sidecar lyrics during folder scans', () async {
     final audioPath = p.join(root.path, 'Sidecar Artist - Sidecar Title.MP3');
     await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
-    await File('${p.withoutExtension(audioPath)}.LRC').writeAsString(
-      '\ufeff[00:01.00]First line\r\n[00:02.50]Second line\r\n',
-    );
+    await File(
+      '${p.withoutExtension(audioPath)}.LRC',
+    ).writeAsString('\ufeff[00:01.00]First line\r\n[00:02.50]Second line\r\n');
     await File(p.join(root.path, 'notes.txt')).writeAsString('not sidecar');
 
     final result = await const LocalFolderScanner().scan(root.path);
 
     expect(result.ignoredFileCount, 1);
     expect(result.sidecarLyricsCount, 1);
-    expect(
-      result.sidecarLyricsByTrackId,
-      <String, String>{
-        Track.stableLocalId(audioPath):
-            '[00:01.00]First line\n[00:02.50]Second line',
-      },
-    );
+    expect(result.sidecarLyricsByTrackId, <String, String>{
+      Track.stableLocalId(audioPath):
+          '[00:01.00]First line\n[00:02.50]Second line',
+    });
   });
 
   test('prefers LRC sidecar lyrics over matching TXT lyrics', () async {
     final audioPath = p.join(root.path, 'Sidecar Artist - Sidecar Title.flac');
     await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
-    await File(p.setExtension(audioPath, '.txt')).writeAsString(
-      'Plain sidecar lyrics',
-    );
-    await File(p.setExtension(audioPath, '.lrc')).writeAsString(
-      '[00:03.00]Synced sidecar lyrics',
-    );
+    await File(
+      p.setExtension(audioPath, '.txt'),
+    ).writeAsString('Plain sidecar lyrics');
+    await File(
+      p.setExtension(audioPath, '.lrc'),
+    ).writeAsString('[00:03.00]Synced sidecar lyrics');
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -221,34 +217,36 @@ void main() {
     );
   });
 
-  test('associates SRT sidecars and skips malformed higher-priority files',
-      () async {
-    final audioPath = p.join(root.path, 'Timed Artist - Timed Title.ogg');
-    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
-    await File(p.setExtension(audioPath, '.ttml')).writeAsString(
-      '<tt><body><div><p begin="1s">Broken',
-    );
-    await File(p.setExtension(audioPath, '.SRT')).writeAsString('''
+  test(
+    'associates SRT sidecars and skips malformed higher-priority files',
+    () async {
+      final audioPath = p.join(root.path, 'Timed Artist - Timed Title.ogg');
+      await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+      await File(
+        p.setExtension(audioPath, '.ttml'),
+      ).writeAsString('<tt><body><div><p begin="1s">Broken');
+      await File(p.setExtension(audioPath, '.SRT')).writeAsString('''
 1
 00:00:01,000 --> 00:00:02,000
 Timed sidecar
 ''');
 
-    final result = await const LocalFolderScanner().scan(root.path);
+      final result = await const LocalFolderScanner().scan(root.path);
 
-    expect(result.ignoredFileCount, 0);
-    expect(
-      result.sidecarLyricsByTrackId[Track.stableLocalId(audioPath)],
-      '1\n00:00:01,000 --> 00:00:02,000\nTimed sidecar',
-    );
-  });
+      expect(result.ignoredFileCount, 0);
+      expect(
+        result.sidecarLyricsByTrackId[Track.stableLocalId(audioPath)],
+        '1\n00:00:01,000 --> 00:00:02,000\nTimed sidecar',
+      );
+    },
+  );
 
   test('falls back to matching TXT sidecar lyrics', () async {
     final audioPath = p.join(root.path, 'Plain Artist - Plain Title.wav');
     await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
-    await File(p.setExtension(audioPath, '.txt')).writeAsString(
-      'First plain line\r\nSecond plain line',
-    );
+    await File(
+      p.setExtension(audioPath, '.txt'),
+    ).writeAsString('First plain line\r\nSecond plain line');
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -302,175 +300,178 @@ First caption
     },
   );
 
-  test('derives matching audio payload fingerprints despite tag changes',
-      () async {
-    const audioPayload = <int>[0xff, 0xfb, 0x90, 0x64, 0x11, 0x22, 0x33];
-    final mp3First = <int>[
-      ..._id3v2Prefix(<int>[1, 2, 3]),
-      ...audioPayload,
-      ..._id3v1Tail(4),
-    ];
-    final mp3Second = <int>[
-      ..._id3v2Prefix(<int>[9, 8, 7]),
-      ...audioPayload,
-      ..._id3v1Tail(6),
-    ];
-    final flacFirst = <int>[
-      ...'fLaC'.codeUnits,
-      0x80,
-      0,
-      0,
-      3,
-      1,
-      2,
-      3,
-      ...audioPayload,
-    ];
-    final flacSecond = <int>[
-      ...'fLaC'.codeUnits,
-      0x80,
-      0,
-      0,
-      4,
-      9,
-      8,
-      7,
-      6,
-      ...audioPayload,
-    ];
-    final wavFirst = <int>[
-      ...'RIFF'.codeUnits,
-      0,
-      0,
-      0,
-      0,
-      ...'WAVE'.codeUnits,
-      ..._riffChunk('LIST', <int>[1, 2, 3, 4]),
-      ..._riffChunk('data', audioPayload),
-    ];
-    final wavSecond = <int>[
-      ...'RIFF'.codeUnits,
-      0,
-      0,
-      0,
-      0,
-      ...'WAVE'.codeUnits,
-      ..._riffChunk('LIST', <int>[9, 8, 7, 6, 5]),
-      ..._riffChunk('data', audioPayload),
-    ];
-    final mp4First = <int>[
-      ..._mp4Atom('ftyp', <int>[1, 2, 3, 4]),
-      ..._mp4Atom('moov', <int>[1, 2, 3]),
-      ..._mp4Atom('mdat', audioPayload),
-    ];
-    final mp4Second = <int>[
-      ..._mp4Atom('ftyp', <int>[1, 2, 3, 4]),
-      ..._mp4Atom('moov', <int>[9, 8, 7, 6]),
-      ..._mp4Atom('mdat', audioPayload),
-    ];
-    final aiffFirst = <int>[
-      ...'FORM'.codeUnits,
-      0,
-      0,
-      0,
-      0,
-      ...'AIFF'.codeUnits,
-      ..._aiffChunk('NAME', <int>[1, 2, 3]),
-      ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
-    ];
-    final aiffSecond = <int>[
-      ...'FORM'.codeUnits,
-      0,
-      0,
-      0,
-      0,
-      ...'AIFF'.codeUnits,
-      ..._aiffChunk('NAME', <int>[9, 8, 7, 6]),
-      ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
-    ];
-    final oggFirst = <int>[
-      ..._oggPage(
-        <int>[...'OpusHead'.codeUnits],
-        serial: 1,
-        sequence: 0,
-        bos: true,
-      ),
-      ..._oggPage(
-        <int>[...'OpusTags'.codeUnits, 1, 2, 3],
-        serial: 1,
-        sequence: 1,
-      ),
-      ..._oggPage(audioPayload, serial: 1, sequence: 2),
-    ];
-    final oggSecond = <int>[
-      ..._oggPage(
-        <int>[...'OpusHead'.codeUnits],
-        serial: 2,
-        sequence: 0,
-        bos: true,
-      ),
-      ..._oggPage(
-        <int>[...'OpusTags'.codeUnits, 9, 8, 7],
-        serial: 2,
-        sequence: 1,
-      ),
-      ..._oggPage(audioPayload, serial: 2, sequence: 2),
-    ];
+  test(
+    'derives matching audio payload fingerprints despite tag changes',
+    () async {
+      const audioPayload = <int>[0xff, 0xfb, 0x90, 0x64, 0x11, 0x22, 0x33];
+      final mp3First = <int>[
+        ..._id3v2Prefix(<int>[1, 2, 3]),
+        ...audioPayload,
+        ..._id3v1Tail(4),
+      ];
+      final mp3Second = <int>[
+        ..._id3v2Prefix(<int>[9, 8, 7]),
+        ...audioPayload,
+        ..._id3v1Tail(6),
+      ];
+      final flacFirst = <int>[
+        ...'fLaC'.codeUnits,
+        0x80,
+        0,
+        0,
+        3,
+        1,
+        2,
+        3,
+        ...audioPayload,
+      ];
+      final flacSecond = <int>[
+        ...'fLaC'.codeUnits,
+        0x80,
+        0,
+        0,
+        4,
+        9,
+        8,
+        7,
+        6,
+        ...audioPayload,
+      ];
+      final wavFirst = <int>[
+        ...'RIFF'.codeUnits,
+        0,
+        0,
+        0,
+        0,
+        ...'WAVE'.codeUnits,
+        ..._riffChunk('LIST', <int>[1, 2, 3, 4]),
+        ..._riffChunk('data', audioPayload),
+      ];
+      final wavSecond = <int>[
+        ...'RIFF'.codeUnits,
+        0,
+        0,
+        0,
+        0,
+        ...'WAVE'.codeUnits,
+        ..._riffChunk('LIST', <int>[9, 8, 7, 6, 5]),
+        ..._riffChunk('data', audioPayload),
+      ];
+      final mp4First = <int>[
+        ..._mp4Atom('ftyp', <int>[1, 2, 3, 4]),
+        ..._mp4Atom('moov', <int>[1, 2, 3]),
+        ..._mp4Atom('mdat', audioPayload),
+      ];
+      final mp4Second = <int>[
+        ..._mp4Atom('ftyp', <int>[1, 2, 3, 4]),
+        ..._mp4Atom('moov', <int>[9, 8, 7, 6]),
+        ..._mp4Atom('mdat', audioPayload),
+      ];
+      final aiffFirst = <int>[
+        ...'FORM'.codeUnits,
+        0,
+        0,
+        0,
+        0,
+        ...'AIFF'.codeUnits,
+        ..._aiffChunk('NAME', <int>[1, 2, 3]),
+        ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
+      ];
+      final aiffSecond = <int>[
+        ...'FORM'.codeUnits,
+        0,
+        0,
+        0,
+        0,
+        ...'AIFF'.codeUnits,
+        ..._aiffChunk('NAME', <int>[9, 8, 7, 6]),
+        ..._aiffChunk('SSND', <int>[0, 0, 0, 0, 0, 0, 0, 0, ...audioPayload]),
+      ];
+      final oggFirst = <int>[
+        ..._oggPage(
+          <int>[...'OpusHead'.codeUnits],
+          serial: 1,
+          sequence: 0,
+          bos: true,
+        ),
+        ..._oggPage(
+          <int>[...'OpusTags'.codeUnits, 1, 2, 3],
+          serial: 1,
+          sequence: 1,
+        ),
+        ..._oggPage(audioPayload, serial: 1, sequence: 2),
+      ];
+      final oggSecond = <int>[
+        ..._oggPage(
+          <int>[...'OpusHead'.codeUnits],
+          serial: 2,
+          sequence: 0,
+          bos: true,
+        ),
+        ..._oggPage(
+          <int>[...'OpusTags'.codeUnits, 9, 8, 7],
+          serial: 2,
+          sequence: 1,
+        ),
+        ..._oggPage(audioPayload, serial: 2, sequence: 2),
+      ];
 
-    expect(
-      localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
-      localAudioPayloadFingerprint(mp3Second, extension: '.mp3'),
-    );
-    expect(
-      localAudioPayloadFingerprint(flacFirst, extension: '.flac'),
-      localAudioPayloadFingerprint(flacSecond, extension: '.flac'),
-    );
-    expect(
-      localAudioPayloadFingerprint(wavFirst, extension: '.wav'),
-      localAudioPayloadFingerprint(wavSecond, extension: '.wav'),
-    );
-    expect(
-      localAudioPayloadFingerprint(mp4First, extension: '.m4a'),
-      localAudioPayloadFingerprint(mp4Second, extension: '.m4a'),
-    );
-    expect(
-      localAudioPayloadFingerprint(aiffFirst, extension: '.aiff'),
-      localAudioPayloadFingerprint(aiffSecond, extension: '.aiff'),
-    );
-    expect(
-      localAudioPayloadFingerprint(oggFirst, extension: '.opus'),
-      localAudioPayloadFingerprint(oggSecond, extension: '.opus'),
-    );
-    expect(
-      localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
-      startsWith('audio-payload-fnv64-v1:mp3-'),
-    );
-    expect(
-      localAudioPayloadFingerprint(
-        <int>[..._id3v2Prefix(<int>[1, 2, 3]), 0xff, 0xfb, 0x90, 0x65],
-        extension: '.mp3',
-      ),
-      isNot(localAudioPayloadFingerprint(mp3First, extension: '.mp3')),
-    );
+      expect(
+        localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
+        localAudioPayloadFingerprint(mp3Second, extension: '.mp3'),
+      );
+      expect(
+        localAudioPayloadFingerprint(flacFirst, extension: '.flac'),
+        localAudioPayloadFingerprint(flacSecond, extension: '.flac'),
+      );
+      expect(
+        localAudioPayloadFingerprint(wavFirst, extension: '.wav'),
+        localAudioPayloadFingerprint(wavSecond, extension: '.wav'),
+      );
+      expect(
+        localAudioPayloadFingerprint(mp4First, extension: '.m4a'),
+        localAudioPayloadFingerprint(mp4Second, extension: '.m4a'),
+      );
+      expect(
+        localAudioPayloadFingerprint(aiffFirst, extension: '.aiff'),
+        localAudioPayloadFingerprint(aiffSecond, extension: '.aiff'),
+      );
+      expect(
+        localAudioPayloadFingerprint(oggFirst, extension: '.opus'),
+        localAudioPayloadFingerprint(oggSecond, extension: '.opus'),
+      );
+      expect(
+        localAudioPayloadFingerprint(mp3First, extension: '.mp3'),
+        startsWith('audio-payload-fnv64-v1:mp3-'),
+      );
+      expect(
+        localAudioPayloadFingerprint(<int>[
+          ..._id3v2Prefix(<int>[1, 2, 3]),
+          0xff,
+          0xfb,
+          0x90,
+          0x65,
+        ], extension: '.mp3'),
+        isNot(localAudioPayloadFingerprint(mp3First, extension: '.mp3')),
+      );
 
-    await File(p.join(root.path, 'Retagged first.mp3')).writeAsBytes(mp3First);
-    await File(p.join(root.path, 'Retagged second.mp3')).writeAsBytes(mp3Second);
-    final scanned = await const LocalFolderScanner().scan(root.path);
-    final firstTrack = scanned.tracks.singleWhere(
-      (track) => p.basename(track.localPath ?? '') == 'Retagged first.mp3',
-    );
-    final secondTrack = scanned.tracks.singleWhere(
-      (track) => p.basename(track.localPath ?? '') == 'Retagged second.mp3',
-    );
-    expect(
-      firstTrack.contentHash,
-      isNot(secondTrack.contentHash),
-    );
-    expect(
-      firstTrack.audioFingerprint,
-      secondTrack.audioFingerprint,
-    );
-  });
+      await File(
+        p.join(root.path, 'Retagged first.mp3'),
+      ).writeAsBytes(mp3First);
+      await File(
+        p.join(root.path, 'Retagged second.mp3'),
+      ).writeAsBytes(mp3Second);
+      final scanned = await const LocalFolderScanner().scan(root.path);
+      final firstTrack = scanned.tracks.singleWhere(
+        (track) => p.basename(track.localPath ?? '') == 'Retagged first.mp3',
+      );
+      final secondTrack = scanned.tracks.singleWhere(
+        (track) => p.basename(track.localPath ?? '') == 'Retagged second.mp3',
+      );
+      expect(firstTrack.contentHash, isNot(secondTrack.contentHash));
+      expect(firstTrack.audioFingerprint, secondTrack.audioFingerprint);
+    },
+  );
 
   test('keeps dashed song titles after parsed local artists', () async {
     await File(
@@ -487,18 +488,16 @@ First caption
     final albumFolder = Directory(p.join(root.path, 'Filename Album'));
     await albumFolder.create();
     final taggedFile = File(p.join(albumFolder.path, '99 messy-name.mp3'));
-    await taggedFile.writeAsBytes(
-      <int>[
-        1,
-        2,
-        3,
-        ..._id3v1Tag(
-          title: 'Tagged Title',
-          artist: 'Tagged Artist',
-          album: 'Tagged Album',
-        ),
-      ],
-    );
+    await taggedFile.writeAsBytes(<int>[
+      1,
+      2,
+      3,
+      ..._id3v1Tag(
+        title: 'Tagged Title',
+        artist: 'Tagged Artist',
+        album: 'Tagged Album',
+      ),
+    ]);
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -511,24 +510,22 @@ First caption
     final albumFolder = Directory(p.join(root.path, 'Filename Album'));
     await albumFolder.create();
     final taggedFile = File(p.join(albumFolder.path, '99 messy-name.mp3'));
-    await taggedFile.writeAsBytes(
-      <int>[
-        ..._id3v23Tag(
-          title: 'ID3v2 Title',
-          artist: 'ID3v2 Artist',
-          album: 'ID3v2 Album',
-          genre: 'Dream Pop',
-        ),
-        1,
-        2,
-        3,
-        ..._id3v1Tag(
-          title: 'ID3v1 Title',
-          artist: 'ID3v1 Artist',
-          album: 'ID3v1 Album',
-        ),
-      ],
-    );
+    await taggedFile.writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'ID3v2 Title',
+        artist: 'ID3v2 Artist',
+        album: 'ID3v2 Album',
+        genre: 'Dream Pop',
+      ),
+      1,
+      2,
+      3,
+      ..._id3v1Tag(
+        title: 'ID3v1 Title',
+        artist: 'ID3v1 Artist',
+        album: 'ID3v1 Album',
+      ),
+    ]);
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -538,11 +535,12 @@ First caption
     expect(result.tracks.single.genre, 'Dream Pop');
   });
 
-  test('imports bounded CUE chapter markers for a referenced local file',
-      () async {
-    final audioPath = p.join(root.path, 'Long form.mp3');
-    await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
-    await File(p.join(root.path, 'Long form.cue')).writeAsString('''
+  test(
+    'imports bounded CUE chapter markers for a referenced local file',
+    () async {
+      final audioPath = p.join(root.path, 'Long form.mp3');
+      await File(audioPath).writeAsBytes(<int>[1, 2, 3]);
+      await File(p.join(root.path, 'Long form.cue')).writeAsString('''
 FILE "Long form.mp3" MP3
   TRACK 01 AUDIO
     TITLE "Opening"
@@ -553,39 +551,38 @@ FILE "Long form.mp3" MP3
   TRACK 03 AUDIO
     INDEX 00 02:00:00
 ''');
-    await File(p.join(root.path, 'outside.cue')).writeAsString('''
+      await File(p.join(root.path, 'outside.cue')).writeAsString('''
 FILE "../private.mp3" MP3
   TRACK 01 AUDIO
     TITLE "Ignored"
     INDEX 01 00:00:00
 ''');
 
-    final result = await const LocalFolderScanner().scan(root.path);
+      final result = await const LocalFolderScanner().scan(root.path);
 
-    expect(result.ignoredFileCount, 0);
-    expect(result.sidecarChaptersCount, 1);
-    final chapters =
-        result.sidecarChaptersByTrackId[Track.stableLocalId(audioPath)]!;
-    expect(chapters.map((chapter) => chapter.title), <String>[
-      'Opening',
-      'Middle',
-    ]);
-    expect(
-      chapters.map((chapter) => chapter.start),
-      <Duration>[
+      expect(result.ignoredFileCount, 0);
+      expect(result.sidecarChaptersCount, 1);
+      final chapters =
+          result.sidecarChaptersByTrackId[Track.stableLocalId(audioPath)]!;
+      expect(chapters.map((chapter) => chapter.title), <String>[
+        'Opening',
+        'Middle',
+      ]);
+      expect(chapters.map((chapter) => chapter.start), <Duration>[
         Duration.zero,
         const Duration(minutes: 1, seconds: 2, milliseconds: 493),
-      ],
-    );
-  });
+      ]);
+    },
+  );
 
-  test('imports CUE chapters only for explicitly selected local files',
-      () async {
-    final selectedPath = p.join(root.path, 'Selected.mp3');
-    final unselectedPath = p.join(root.path, 'Unselected.mp3');
-    await File(selectedPath).writeAsBytes(<int>[1, 2, 3]);
-    await File(unselectedPath).writeAsBytes(<int>[4, 5, 6]);
-    await File(p.join(root.path, 'Album chapters.cue')).writeAsString('''
+  test(
+    'imports CUE chapters only for explicitly selected local files',
+    () async {
+      final selectedPath = p.join(root.path, 'Selected.mp3');
+      final unselectedPath = p.join(root.path, 'Unselected.mp3');
+      await File(selectedPath).writeAsBytes(<int>[1, 2, 3]);
+      await File(unselectedPath).writeAsBytes(<int>[4, 5, 6]);
+      await File(p.join(root.path, 'Album chapters.cue')).writeAsString('''
 FILE "Selected.mp3" MP3
   TRACK 01 AUDIO
     TITLE "Selected opening"
@@ -596,21 +593,23 @@ FILE "Unselected.mp3" MP3
     INDEX 01 00:00:00
 ''');
 
-    final result = await scanLocalFilesInBackground(<String>[selectedPath]);
+      final result = await scanLocalFilesInBackground(<String>[selectedPath]);
 
-    expect(result.tracks, hasLength(1));
-    expect(result.sidecarChaptersCount, 1);
-    expect(
-      result.sidecarChaptersByTrackId.keys,
-      unorderedEquals(<String>[Track.stableLocalId(selectedPath)]),
-    );
-    expect(
-      result.sidecarChaptersByTrackId[Track.stableLocalId(selectedPath)]!
-          .single
-          .title,
-      'Selected opening',
-    );
-  });
+      expect(result.tracks, hasLength(1));
+      expect(result.sidecarChaptersCount, 1);
+      expect(
+        result.sidecarChaptersByTrackId.keys,
+        unorderedEquals(<String>[Track.stableLocalId(selectedPath)]),
+      );
+      expect(
+        result
+            .sidecarChaptersByTrackId[Track.stableLocalId(selectedPath)]!
+            .single
+            .title,
+        'Selected opening',
+      );
+    },
+  );
 
   test('scans folders in a background isolate', () async {
     await File(p.join(root.path, '01 Background.mp3')).writeAsBytes(<int>[1]);
@@ -625,10 +624,9 @@ FILE "Unselected.mp3" MP3
   });
 
   test('imports ID3 POPM and Vorbis embedded ratings', () async {
-    await File(p.join(root.path, 'popm.mp3')).writeAsBytes(<int>[
-      ..._id3v23Tag(popularimeterRating: 196),
-      1,
-    ]);
+    await File(
+      p.join(root.path, 'popm.mp3'),
+    ).writeAsBytes(<int>[..._id3v23Tag(popularimeterRating: 196), 1]);
     await File(p.join(root.path, 'five-stars.flac')).writeAsBytes(
       _flacWithVorbisComments(<String, List<String>>{
         'RATING': <String>['100'],
@@ -650,98 +648,95 @@ FILE "Unselected.mp3" MP3
     expect(ratingsByTitle['four-stars'], 4);
   });
 
-  test('reads album artist year and track number across local tag formats',
-      () async {
-    await File(p.join(root.path, 'mp3.mp3')).writeAsBytes(<int>[
-      ..._id3v23Tag(
-        title: 'MP3 Song',
-        albumArtist: 'MP3 Album Artist',
-        releaseDate: '2024-04-05',
-        trackNumber: '2/10',
-      ),
-      1,
-    ]);
-    await File(p.join(root.path, 'flac.flac')).writeAsBytes(
-      _flacWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['FLAC Song'],
-        'ALBUMARTIST': <String>['FLAC Album Artist'],
-        'DATE': <String>['2023-11-01'],
-        'TRACKNUMBER': <String>['3'],
-      }),
-    );
-    await File(p.join(root.path, 'ogg.ogg')).writeAsBytes(
-      _oggWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['Ogg Song'],
-        'ALBUMARTIST': <String>['Ogg Album Artist'],
-        'YEAR': <String>['2022'],
-        'TRACKNUMBER': <String>['4/9'],
-      }),
-    );
-    await File(p.join(root.path, 'opus.opus')).writeAsBytes(
-      _oggWithVorbisComments(
-        <String, List<String>>{
+  test(
+    'reads album artist year and track number across local tag formats',
+    () async {
+      await File(p.join(root.path, 'mp3.mp3')).writeAsBytes(<int>[
+        ..._id3v23Tag(
+          title: 'MP3 Song',
+          albumArtist: 'MP3 Album Artist',
+          releaseDate: '2024-04-05',
+          trackNumber: '2/10',
+        ),
+        1,
+      ]);
+      await File(p.join(root.path, 'flac.flac')).writeAsBytes(
+        _flacWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['FLAC Song'],
+          'ALBUMARTIST': <String>['FLAC Album Artist'],
+          'DATE': <String>['2023-11-01'],
+          'TRACKNUMBER': <String>['3'],
+        }),
+      );
+      await File(p.join(root.path, 'ogg.ogg')).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['Ogg Song'],
+          'ALBUMARTIST': <String>['Ogg Album Artist'],
+          'YEAR': <String>['2022'],
+          'TRACKNUMBER': <String>['4/9'],
+        }),
+      );
+      await File(p.join(root.path, 'opus.opus')).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
           'TITLE': <String>['Opus Song'],
           'ALBUMARTIST': <String>['Opus Album Artist'],
           'DATE': <String>['2021'],
           'TRACKNUMBER': <String>['5'],
-        },
-        opus: true,
-      ),
-    );
-    await File(p.join(root.path, 'm4a.m4a')).writeAsBytes(
-      _m4aWithMetadata(
-        title: 'M4A Song',
-        albumArtist: 'M4A Album Artist',
-        releaseDate: '2020-06-12',
-        trackNumber: 6,
-      ),
-    );
-    await File(p.join(root.path, 'wav.wav')).writeAsBytes(
-      _wavWithInfoTags(<String, String>{
-        'INAM': 'WAV Song',
-        'ICRD': '2019',
-        'ITRK': '7',
-      }),
-    );
+        }, opus: true),
+      );
+      await File(p.join(root.path, 'm4a.m4a')).writeAsBytes(
+        _m4aWithMetadata(
+          title: 'M4A Song',
+          albumArtist: 'M4A Album Artist',
+          releaseDate: '2020-06-12',
+          trackNumber: 6,
+        ),
+      );
+      await File(p.join(root.path, 'wav.wav')).writeAsBytes(
+        _wavWithInfoTags(<String, String>{
+          'INAM': 'WAV Song',
+          'ICRD': '2019',
+          'ITRK': '7',
+        }),
+      );
 
-    final result = await const LocalFolderScanner().scan(root.path);
-    final tracksByTitle = <String, Track>{
-      for (final track in result.tracks) track.title: track,
-    };
+      final result = await const LocalFolderScanner().scan(root.path);
+      final tracksByTitle = <String, Track>{
+        for (final track in result.tracks) track.title: track,
+      };
 
-    expect(tracksByTitle['MP3 Song']!.albumArtist, 'MP3 Album Artist');
-    expect(tracksByTitle['MP3 Song']!.year, 2024);
-    expect(tracksByTitle['MP3 Song']!.trackNumber, 2);
-    expect(tracksByTitle['FLAC Song']!.albumArtist, 'FLAC Album Artist');
-    expect(tracksByTitle['FLAC Song']!.year, 2023);
-    expect(tracksByTitle['FLAC Song']!.trackNumber, 3);
-    expect(tracksByTitle['Ogg Song']!.albumArtist, 'Ogg Album Artist');
-    expect(tracksByTitle['Ogg Song']!.year, 2022);
-    expect(tracksByTitle['Ogg Song']!.trackNumber, 4);
-    expect(tracksByTitle['Opus Song']!.albumArtist, 'Opus Album Artist');
-    expect(tracksByTitle['Opus Song']!.year, 2021);
-    expect(tracksByTitle['Opus Song']!.trackNumber, 5);
-    expect(tracksByTitle['M4A Song']!.albumArtist, 'M4A Album Artist');
-    expect(tracksByTitle['M4A Song']!.year, 2020);
-    expect(tracksByTitle['M4A Song']!.trackNumber, 6);
-    expect(tracksByTitle['WAV Song']!.albumArtist, isNull);
-    expect(tracksByTitle['WAV Song']!.year, 2019);
-    expect(tracksByTitle['WAV Song']!.trackNumber, 7);
-  });
+      expect(tracksByTitle['MP3 Song']!.albumArtist, 'MP3 Album Artist');
+      expect(tracksByTitle['MP3 Song']!.year, 2024);
+      expect(tracksByTitle['MP3 Song']!.trackNumber, 2);
+      expect(tracksByTitle['FLAC Song']!.albumArtist, 'FLAC Album Artist');
+      expect(tracksByTitle['FLAC Song']!.year, 2023);
+      expect(tracksByTitle['FLAC Song']!.trackNumber, 3);
+      expect(tracksByTitle['Ogg Song']!.albumArtist, 'Ogg Album Artist');
+      expect(tracksByTitle['Ogg Song']!.year, 2022);
+      expect(tracksByTitle['Ogg Song']!.trackNumber, 4);
+      expect(tracksByTitle['Opus Song']!.albumArtist, 'Opus Album Artist');
+      expect(tracksByTitle['Opus Song']!.year, 2021);
+      expect(tracksByTitle['Opus Song']!.trackNumber, 5);
+      expect(tracksByTitle['M4A Song']!.albumArtist, 'M4A Album Artist');
+      expect(tracksByTitle['M4A Song']!.year, 2020);
+      expect(tracksByTitle['M4A Song']!.trackNumber, 6);
+      expect(tracksByTitle['WAV Song']!.albumArtist, isNull);
+      expect(tracksByTitle['WAV Song']!.year, 2019);
+      expect(tracksByTitle['WAV Song']!.trackNumber, 7);
+    },
+  );
 
   test('extracts ID3v2 embedded artwork for MP3 files', () async {
-    await File(p.join(root.path, 'cover-track.mp3')).writeAsBytes(
-      <int>[
-        ..._id3v23Tag(
-          title: 'Artwork Title',
-          artist: 'Artwork Artist',
-          artworkBytes: _tinyPngBytes,
-        ),
-        1,
-        2,
-        3,
-      ],
-    );
+    await File(p.join(root.path, 'cover-track.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'Artwork Title',
+        artist: 'Artwork Artist',
+        artworkBytes: _tinyPngBytes,
+      ),
+      1,
+      2,
+      3,
+    ]);
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -753,22 +748,20 @@ FILE "Unselected.mp3" MP3
   });
 
   test('prefers an ID3v2 front cover over earlier artwork frames', () async {
-    await File(p.join(root.path, 'id3-front-cover.mp3')).writeAsBytes(
-      <int>[
-        ..._id3v23Tag(
-          title: 'ID3 Covers',
-          artworkBytes: _tinyJpegBytes,
-          artworkPictureType: 4,
-          artworkMimeType: 'image/jpeg',
-          additionalArtworkFrames: <List<int>>[
-            _id3v23PictureFrame(_tinyPngBytes),
-          ],
-        ),
-        1,
-        2,
-        3,
-      ],
-    );
+    await File(p.join(root.path, 'id3-front-cover.mp3')).writeAsBytes(<int>[
+      ..._id3v23Tag(
+        title: 'ID3 Covers',
+        artworkBytes: _tinyJpegBytes,
+        artworkPictureType: 4,
+        artworkMimeType: 'image/jpeg',
+        additionalArtworkFrames: <List<int>>[
+          _id3v23PictureFrame(_tinyPngBytes),
+        ],
+      ),
+      1,
+      2,
+      3,
+    ]);
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -868,9 +861,9 @@ FILE "Unselected.mp3" MP3
       2,
       3,
     ]);
-    await File(p.setExtension(audioPath, '.lrc')).writeAsString(
-      '[00:02.00]Sidecar lyrics',
-    );
+    await File(
+      p.setExtension(audioPath, '.lrc'),
+    ).writeAsString('[00:02.00]Sidecar lyrics');
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -899,59 +892,58 @@ FILE "Unselected.mp3" MP3
     expect(result.embeddedLyricsByTrackId, isEmpty);
   });
 
-  test('extracts embedded lyrics from FLAC, Ogg, Opus, and M4A metadata',
-      () async {
-    final flacPath = p.join(root.path, 'flac-lyrics.flac');
-    final oggPath = p.join(root.path, 'ogg-lyrics.ogg');
-    final opusPath = p.join(root.path, 'opus-lyrics.opus');
-    final m4aPath = p.join(root.path, 'm4a-lyrics.m4a');
-    await File(flacPath).writeAsBytes(
-      _flacWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['FLAC lyrics'],
-        'LYRICS': <String>['FLAC first\r\nFLAC second'],
-      }),
-    );
-    await File(oggPath).writeAsBytes(
-      _oggWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['Ogg lyrics'],
-        'UNSYNCEDLYRICS': <String>['Ogg first\nOgg second'],
-      }),
-    );
-    await File(opusPath).writeAsBytes(
-      _oggWithVorbisComments(
-        <String, List<String>>{
+  test(
+    'extracts embedded lyrics from FLAC, Ogg, Opus, and M4A metadata',
+    () async {
+      final flacPath = p.join(root.path, 'flac-lyrics.flac');
+      final oggPath = p.join(root.path, 'ogg-lyrics.ogg');
+      final opusPath = p.join(root.path, 'opus-lyrics.opus');
+      final m4aPath = p.join(root.path, 'm4a-lyrics.m4a');
+      await File(flacPath).writeAsBytes(
+        _flacWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['FLAC lyrics'],
+          'LYRICS': <String>['FLAC first\r\nFLAC second'],
+        }),
+      );
+      await File(oggPath).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['Ogg lyrics'],
+          'UNSYNCEDLYRICS': <String>['Ogg first\nOgg second'],
+        }),
+      );
+      await File(opusPath).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
           'TITLE': <String>['Opus lyrics'],
           'LYRICS': <String>['Opus first\nOpus second'],
-        },
-        opus: true,
-      ),
-    );
-    await File(m4aPath).writeAsBytes(
-      _m4aWithMetadata(
-        title: 'M4A lyrics',
-        lyrics: 'M4A first\r\nM4A second',
-      ),
-    );
+        }, opus: true),
+      );
+      await File(m4aPath).writeAsBytes(
+        _m4aWithMetadata(
+          title: 'M4A lyrics',
+          lyrics: 'M4A first\r\nM4A second',
+        ),
+      );
 
-    final result = await const LocalFolderScanner().scan(root.path);
+      final result = await const LocalFolderScanner().scan(root.path);
 
-    expect(
-      result.embeddedLyricsByTrackId[Track.stableLocalId(flacPath)],
-      'FLAC first\nFLAC second',
-    );
-    expect(
-      result.embeddedLyricsByTrackId[Track.stableLocalId(oggPath)],
-      'Ogg first\nOgg second',
-    );
-    expect(
-      result.embeddedLyricsByTrackId[Track.stableLocalId(opusPath)],
-      'Opus first\nOpus second',
-    );
-    expect(
-      result.embeddedLyricsByTrackId[Track.stableLocalId(m4aPath)],
-      'M4A first\nM4A second',
-    );
-  });
+      expect(
+        result.embeddedLyricsByTrackId[Track.stableLocalId(flacPath)],
+        'FLAC first\nFLAC second',
+      );
+      expect(
+        result.embeddedLyricsByTrackId[Track.stableLocalId(oggPath)],
+        'Ogg first\nOgg second',
+      );
+      expect(
+        result.embeddedLyricsByTrackId[Track.stableLocalId(opusPath)],
+        'Opus first\nOpus second',
+      );
+      expect(
+        result.embeddedLyricsByTrackId[Track.stableLocalId(m4aPath)],
+        'M4A first\nM4A second',
+      );
+    },
+  );
 
   test('reads ReplayGain from ID3v2 user text metadata', () async {
     await File(p.join(root.path, 'loud.mp3')).writeAsBytes(<int>[
@@ -986,22 +978,13 @@ FILE "Unselected.mp3" MP3
     expect(result.tracks.single.replayGainAlbumPeak, 1.1);
   });
 
-  test('reads EBU R128 gain tags from supported metadata containers',
-      () async {
+  test('reads EBU R128 gain tags from supported metadata containers', () async {
     await File(p.join(root.path, 'r128.mp3')).writeAsBytes(<int>[
       ..._id3v23Tag(
         title: 'ID3 R128',
         additionalFrames: <List<int>>[
-          _id3v23UserTextFrame(
-            'R128_TRACK_GAIN',
-            '-720',
-            _id3v2EncodingUtf8,
-          ),
-          _id3v23UserTextFrame(
-            'R128_ALBUM_GAIN',
-            '-315',
-            _id3v2EncodingUtf8,
-          ),
+          _id3v23UserTextFrame('R128_TRACK_GAIN', '-720', _id3v2EncodingUtf8),
+          _id3v23UserTextFrame('R128_ALBUM_GAIN', '-315', _id3v2EncodingUtf8),
         ],
       ),
       1,
@@ -1075,29 +1058,24 @@ FILE "Unselected.mp3" MP3
 
   test('reads Ogg Vorbis and Opus comment metadata', () async {
     await File(p.join(root.path, 'vorbis.ogg')).writeAsBytes(
-      _oggWithVorbisComments(
-        <String, List<String>>{
-          'TITLE': <String>['Ogg Title'],
-          'ARTIST': <String>['Ogg Artist'],
-          'ALBUM': <String>['Ogg Album'],
-          'GENRE': <String>['Shoegaze'],
-          'REPLAYGAIN_TRACK_GAIN': <String>['-7.20 dB'],
-          'REPLAYGAIN_ALBUM_GAIN': <String>['-5.20 dB'],
-          'REPLAYGAIN_TRACK_PEAK': <String>['0.95'],
-          'REPLAYGAIN_ALBUM_PEAK': <String>['1.1'],
-        },
-      ),
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Ogg Title'],
+        'ARTIST': <String>['Ogg Artist'],
+        'ALBUM': <String>['Ogg Album'],
+        'GENRE': <String>['Shoegaze'],
+        'REPLAYGAIN_TRACK_GAIN': <String>['-7.20 dB'],
+        'REPLAYGAIN_ALBUM_GAIN': <String>['-5.20 dB'],
+        'REPLAYGAIN_TRACK_PEAK': <String>['0.95'],
+        'REPLAYGAIN_ALBUM_PEAK': <String>['1.1'],
+      }),
     );
     await File(p.join(root.path, 'spoken.opus')).writeAsBytes(
-      _oggWithVorbisComments(
-        <String, List<String>>{
-          'TITLE': <String>['Opus Title'],
-          'ARTIST': <String>['Opus Artist'],
-          'ALBUM': <String>['Opus Album'],
-          'GENRE': <String>['Spoken Word'],
-        },
-        opus: true,
-      ),
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Opus Title'],
+        'ARTIST': <String>['Opus Artist'],
+        'ALBUM': <String>['Opus Album'],
+        'GENRE': <String>['Spoken Word'],
+      }, opus: true),
     );
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -1117,84 +1095,72 @@ FILE "Unselected.mp3" MP3
     expect(tracksByTitle['Opus Title']!.genre, 'Spoken Word');
   });
 
-  test('imports Vorbis chapter comments for FLAC, Ogg, and Opus files',
-      () async {
-    await File(p.join(root.path, 'chapters.flac')).writeAsBytes(
-      _flacWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['FLAC chapters'],
-        'CHAPTER001': <String>['00:00:00.000'],
-        'CHAPTER001NAME': <String>['FLAC opening'],
-        'CHAPTER002': <String>['00:01:02.500'],
-        'CHAPTER002NAME': <String>['FLAC second'],
-      }),
-    );
-    await File(p.join(root.path, 'chapters.ogg')).writeAsBytes(
-      _oggWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['Ogg chapters'],
-        'CHAPTER001': <String>['00:00:42'],
-        'CHAPTER001NAME': <String>['Ogg answer'],
-        'CHAPTER002': <String>['not a timestamp'],
-      }),
-    );
-    await File(p.join(root.path, 'chapters.opus')).writeAsBytes(
-      _oggWithVorbisComments(
-        <String, List<String>>{
+  test(
+    'imports Vorbis chapter comments for FLAC, Ogg, and Opus files',
+    () async {
+      await File(p.join(root.path, 'chapters.flac')).writeAsBytes(
+        _flacWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['FLAC chapters'],
+          'CHAPTER001': <String>['00:00:00.000'],
+          'CHAPTER001NAME': <String>['FLAC opening'],
+          'CHAPTER002': <String>['00:01:02.500'],
+          'CHAPTER002NAME': <String>['FLAC second'],
+        }),
+      );
+      await File(p.join(root.path, 'chapters.ogg')).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['Ogg chapters'],
+          'CHAPTER001': <String>['00:00:42'],
+          'CHAPTER001NAME': <String>['Ogg answer'],
+          'CHAPTER002': <String>['not a timestamp'],
+        }),
+      );
+      await File(p.join(root.path, 'chapters.opus')).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
           'TITLE': <String>['Opus chapters'],
           'CHAPTER1': <String>['01:02.250'],
           'CHAPTER1NAME': <String>['Opus short timestamp'],
-        },
-        opus: true,
-      ),
-    );
+        }, opus: true),
+      );
 
-    final result = await const LocalFolderScanner().scan(root.path);
-    final tracks = <String, Track>{
-      for (final track in result.tracks) track.title: track,
-    };
+      final result = await const LocalFolderScanner().scan(root.path);
+      final tracks = <String, Track>{
+        for (final track in result.tracks) track.title: track,
+      };
 
-    expect(
-      tracks['FLAC chapters']!.chapters.map((chapter) => chapter.title),
-      <String>['FLAC opening', 'FLAC second'],
-    );
-    expect(
-      tracks['FLAC chapters']!.chapters[1].start,
-      const Duration(minutes: 1, seconds: 2, milliseconds: 500),
-    );
-    expect(tracks['Ogg chapters']!.chapters, hasLength(1));
-    expect(
-      tracks['Ogg chapters']!.chapters.single.start,
-      const Duration(seconds: 42),
-    );
-    expect(
-      tracks['Opus chapters']!.chapters.single.start,
-      const Duration(minutes: 1, seconds: 2, milliseconds: 250),
-    );
-    expect(
-      tracks['Opus chapters']!.chapters.single.title,
-      'Opus short timestamp',
-    );
-  });
+      expect(
+        tracks['FLAC chapters']!.chapters.map((chapter) => chapter.title),
+        <String>['FLAC opening', 'FLAC second'],
+      );
+      expect(
+        tracks['FLAC chapters']!.chapters[1].start,
+        const Duration(minutes: 1, seconds: 2, milliseconds: 500),
+      );
+      expect(tracks['Ogg chapters']!.chapters, hasLength(1));
+      expect(
+        tracks['Ogg chapters']!.chapters.single.start,
+        const Duration(seconds: 42),
+      );
+      expect(
+        tracks['Opus chapters']!.chapters.single.start,
+        const Duration(minutes: 1, seconds: 2, milliseconds: 250),
+      );
+      expect(
+        tracks['Opus chapters']!.chapters.single.title,
+        'Opus short timestamp',
+      );
+    },
+  );
 
   test('extracts embedded Ogg Vorbis comment artwork', () async {
-    final artwork = <int>[
-      0x89,
-      0x50,
-      0x4e,
-      0x47,
-      0x0d,
-      0x0a,
-      0x1a,
-      0x0a,
-    ];
+    final artwork = <int>[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
     await File(p.join(root.path, 'cover.ogg')).writeAsBytes(
-      _oggWithVorbisComments(
-        <String, List<String>>{
-          'TITLE': <String>['Ogg cover'],
-          'METADATA_BLOCK_PICTURE': <String>[
-            base64.encode(_flacPictureBlock(artwork)),
-          ],
-        },
-      ),
+      _oggWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Ogg cover'],
+        'METADATA_BLOCK_PICTURE': <String>[
+          base64.encode(_flacPictureBlock(artwork)),
+        ],
+      }),
     );
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -1208,12 +1174,9 @@ FILE "Unselected.mp3" MP3
 
   test('extracts FLAC picture block artwork', () async {
     await File(p.join(root.path, 'picture.flac')).writeAsBytes(
-      _flacWithVorbisComments(
-        <String, List<String>>{
-          'TITLE': <String>['Picture Title'],
-        },
-        artworkBytes: _tinyPngBytes,
-      ),
+      _flacWithVorbisComments(<String, List<String>>{
+        'TITLE': <String>['Picture Title'],
+      }, artworkBytes: _tinyPngBytes),
     );
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -1225,44 +1188,48 @@ FILE "Unselected.mp3" MP3
     );
   });
 
-  test('prefers FLAC and Ogg front covers over earlier picture entries',
-      () async {
-    await File(p.join(root.path, 'front-cover.flac')).writeAsBytes(
-      _flacWithVorbisComments(
-        <String, List<String>>{'TITLE': <String>['FLAC Covers']},
-        artworkBytes: _tinyJpegBytes,
-        artworkPictureType: 4,
-        artworkMimeType: 'image/jpeg',
-        additionalPictureBlocks: <List<int>>[
-          _flacPictureBlock(_tinyPngBytes),
-        ],
-      ),
-    );
-    await File(p.join(root.path, 'front-cover.ogg')).writeAsBytes(
-      _oggWithVorbisComments(<String, List<String>>{
-        'TITLE': <String>['Ogg Covers'],
-        'METADATA_BLOCK_PICTURE': <String>[
-          base64Encode(
-            _flacPictureBlock(
-              _tinyJpegBytes,
-              pictureType: 4,
-              mimeType: 'image/jpeg',
+  test(
+    'prefers FLAC and Ogg front covers over earlier picture entries',
+    () async {
+      await File(p.join(root.path, 'front-cover.flac')).writeAsBytes(
+        _flacWithVorbisComments(
+          <String, List<String>>{
+            'TITLE': <String>['FLAC Covers'],
+          },
+          artworkBytes: _tinyJpegBytes,
+          artworkPictureType: 4,
+          artworkMimeType: 'image/jpeg',
+          additionalPictureBlocks: <List<int>>[
+            _flacPictureBlock(_tinyPngBytes),
+          ],
+        ),
+      );
+      await File(p.join(root.path, 'front-cover.ogg')).writeAsBytes(
+        _oggWithVorbisComments(<String, List<String>>{
+          'TITLE': <String>['Ogg Covers'],
+          'METADATA_BLOCK_PICTURE': <String>[
+            base64Encode(
+              _flacPictureBlock(
+                _tinyJpegBytes,
+                pictureType: 4,
+                mimeType: 'image/jpeg',
+              ),
             ),
-          ),
-          base64Encode(_flacPictureBlock(_tinyPngBytes)),
-        ],
-      }),
-    );
+            base64Encode(_flacPictureBlock(_tinyPngBytes)),
+          ],
+        }),
+      );
 
-    final result = await const LocalFolderScanner().scan(root.path);
-    final tracks = <String, Track>{
-      for (final track in result.tracks) track.title: track,
-    };
-    final expected = 'data:image/png;base64,${base64Encode(_tinyPngBytes)}';
+      final result = await const LocalFolderScanner().scan(root.path);
+      final tracks = <String, Track>{
+        for (final track in result.tracks) track.title: track,
+      };
+      final expected = 'data:image/png;base64,${base64Encode(_tinyPngBytes)}';
 
-    expect(tracks['FLAC Covers']!.artworkUri.toString(), expected);
-    expect(tracks['Ogg Covers']!.artworkUri.toString(), expected);
-  });
+      expect(tracks['FLAC Covers']!.artworkUri.toString(), expected);
+      expect(tracks['Ogg Covers']!.artworkUri.toString(), expected);
+    },
+  );
 
   test('merges partial FLAC Vorbis comments with filename metadata', () async {
     await File(
@@ -1374,10 +1341,7 @@ FILE "Unselected.mp3" MP3
       ..._mp4Atom('ftyp', 'M4A '.codeUnits),
       ..._mp4Atom(
         'moov',
-        _mp4Atom(
-          'udta',
-          _mp4Atom('chpl', <int>[0, 0, 0, 0, 1, 0, 0, 0]),
-        ),
+        _mp4Atom('udta', _mp4Atom('chpl', <int>[0, 0, 0, 0, 1, 0, 0, 0])),
       ),
       ..._mp4Atom('mdat', <int>[0, 1, 2]),
     ]);
@@ -1550,10 +1514,7 @@ FILE "Unselected.mp3" MP3
 
   test('extracts M4A cover artwork atoms', () async {
     await File(p.join(root.path, 'cover.m4a')).writeAsBytes(
-      _m4aWithMetadata(
-        title: 'Cover Atom',
-        artworkBytes: _tinyPngBytes,
-      ),
+      _m4aWithMetadata(title: 'Cover Atom', artworkBytes: _tinyPngBytes),
     );
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -1585,10 +1546,7 @@ FILE "Unselected.mp3" MP3
     await File(
       p.join(root.path, '10 Filename Artist - Filename Title.m4a'),
     ).writeAsBytes(
-      _m4aWithMetadata(
-        album: 'M4A Album Only',
-        genre: 'Alternative',
-      ),
+      _m4aWithMetadata(album: 'M4A Album Only', genre: 'Alternative'),
     );
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -1619,13 +1577,10 @@ FILE "Unselected.mp3" MP3
 
   test('reads WAV RIFF INFO metadata after a data chunk', () async {
     await File(p.join(root.path, '11 data-before-info.wav')).writeAsBytes(
-      _wavWithInfoTags(
-        <String, String>{
-          'INAM': 'Late WAV Title',
-          'IART': 'Late WAV Artist',
-        },
-        leadingDataBytes: 17,
-      ),
+      _wavWithInfoTags(<String, String>{
+        'INAM': 'Late WAV Title',
+        'IART': 'Late WAV Artist',
+      }, leadingDataBytes: 17),
     );
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -1638,10 +1593,7 @@ FILE "Unselected.mp3" MP3
     final audioPath = p.join(root.path, 'id3-in-wav.wav');
     await File(audioPath).writeAsBytes(
       _wavWithInfoTags(
-        <String, String>{
-          'IART': 'INFO Artist',
-          'IPRD': 'INFO Album',
-        },
+        <String, String>{'IART': 'INFO Artist', 'IPRD': 'INFO Album'},
         id3Tag: _id3v23Tag(
           title: 'ID3 WAV Title',
           artworkBytes: _tinyPngBytes,
@@ -1680,23 +1632,26 @@ FILE "Unselected.mp3" MP3
     );
   });
 
-  test('merges partial WAV RIFF INFO metadata with filename metadata', () async {
-    await File(
-      p.join(root.path, '12 Filename Artist - Filename Title.wav'),
-    ).writeAsBytes(
-      _wavWithInfoTags(<String, String>{
-        'IPRD': 'WAV Album Only',
-        'IGNR': 'Downtempo',
-      }),
-    );
+  test(
+    'merges partial WAV RIFF INFO metadata with filename metadata',
+    () async {
+      await File(
+        p.join(root.path, '12 Filename Artist - Filename Title.wav'),
+      ).writeAsBytes(
+        _wavWithInfoTags(<String, String>{
+          'IPRD': 'WAV Album Only',
+          'IGNR': 'Downtempo',
+        }),
+      );
 
-    final result = await const LocalFolderScanner().scan(root.path);
+      final result = await const LocalFolderScanner().scan(root.path);
 
-    expect(result.tracks.single.title, 'Filename Title');
-    expect(result.tracks.single.artist, 'Filename Artist');
-    expect(result.tracks.single.album, 'WAV Album Only');
-    expect(result.tracks.single.genre, 'Downtempo');
-  });
+      expect(result.tracks.single.title, 'Filename Title');
+      expect(result.tracks.single.artist, 'Filename Artist');
+      expect(result.tracks.single.album, 'WAV Album Only');
+      expect(result.tracks.single.genre, 'Downtempo');
+    },
+  );
 
   test('falls back to filename metadata when ID3v1 tags are empty', () async {
     await File(
@@ -1713,12 +1668,7 @@ FILE "Unselected.mp3" MP3
   test('merges partial ID3v1 tags with filename metadata', () async {
     await File(
       p.join(root.path, '05 Filename Artist - Filename Title.mp3'),
-    ).writeAsBytes(<int>[
-      1,
-      2,
-      3,
-      ..._id3v1Tag(album: 'Tagged Album Only'),
-    ]);
+    ).writeAsBytes(<int>[1, 2, 3, ..._id3v1Tag(album: 'Tagged Album Only')]);
 
     final result = await const LocalFolderScanner().scan(root.path);
 
@@ -1728,8 +1678,9 @@ FILE "Unselected.mp3" MP3
   });
 
   test('prefers standard AIFF NAME and AUTH metadata', () async {
-    await File(p.join(root.path, '13 Filename Artist - Filename Title.aiff'))
-        .writeAsBytes(
+    await File(
+      p.join(root.path, '13 Filename Artist - Filename Title.aiff'),
+    ).writeAsBytes(
       _aiffWithTextTags(<String, String>{
         'NAME': 'AIFF Title',
         'AUTH': 'AIFF Artist',
@@ -1781,23 +1732,25 @@ FILE "Unselected.mp3" MP3
   });
 
   test('imports AIFF and WAVE extension aliases', () async {
-    await File(p.join(root.path, 'alias.aif')).writeAsBytes(
-      _aiffWithTextTags(<String, String>{'NAME': 'AIF Title'}),
-    );
+    await File(
+      p.join(root.path, 'alias.aif'),
+    ).writeAsBytes(_aiffWithTextTags(<String, String>{'NAME': 'AIF Title'}));
     await File(p.join(root.path, 'compressed.aifc')).writeAsBytes(
-      _aiffWithTextTags(
-        <String, String>{'NAME': 'AIFC Title'},
-        formType: 'AIFC',
-      ),
+      _aiffWithTextTags(<String, String>{
+        'NAME': 'AIFC Title',
+      }, formType: 'AIFC'),
     );
-    await File(p.join(root.path, 'alias.wave')).writeAsBytes(
-      _wavWithInfoTags(<String, String>{'INAM': 'WAVE Title'}),
-    );
+    await File(
+      p.join(root.path, 'alias.wave'),
+    ).writeAsBytes(_wavWithInfoTags(<String, String>{'INAM': 'WAVE Title'}));
 
     final result = await const LocalFolderScanner().scan(root.path);
     final titles = result.tracks.map((track) => track.title).toSet();
 
-    expect(titles, containsAll(<String>['AIF Title', 'AIFC Title', 'WAVE Title']));
+    expect(
+      titles,
+      containsAll(<String>['AIF Title', 'AIFC Title', 'WAVE Title']),
+    );
   });
 
   test('extracts ID3v2 lyric-labelled comment frames only', () async {
@@ -1837,7 +1790,10 @@ FILE "Unselected.mp3" MP3
     await File(audioPath).writeAsBytes(<int>[
       ..._id3v23Tag(
         title: 'Synced Lyrics',
-        synchronizedLyrics: <int, String>{1200: 'First line', 61500: 'Second line'},
+        synchronizedLyrics: <int, String>{
+          1200: 'First line',
+          61500: 'Second line',
+        },
       ),
       1,
     ]);
@@ -1852,7 +1808,10 @@ FILE "Unselected.mp3" MP3
   });
 
   test('imports bounded APEv2 text metadata before trailing ID3v1', () async {
-    final audioPath = p.join(root.path, '99 Filename Artist - Filename Title.mp3');
+    final audioPath = p.join(
+      root.path,
+      '99 Filename Artist - Filename Title.mp3',
+    );
     await File(audioPath).writeAsBytes(<int>[
       1,
       2,
@@ -1905,10 +1864,9 @@ FILE "Unselected.mp3" MP3
       1,
       2,
       3,
-      ..._apev2Tag(
-        <String, String>{'TITLE': 'APE Cover'},
-        coverArtworkBytes: _tinyPngBytes,
-      ),
+      ..._apev2Tag(<String, String>{
+        'TITLE': 'APE Cover',
+      }, coverArtworkBytes: _tinyPngBytes),
     ]);
 
     final result = await const LocalFolderScanner().scan(root.path);
@@ -2068,11 +2026,7 @@ List<int> _id3v23Tag({
     if (unsynchronizedLyrics.isNotEmpty)
       ..._id3v23UnsynchronizedLyricsFrame(unsynchronizedLyrics, encoding),
     if (commentLyrics.isNotEmpty)
-      ..._id3v23CommentFrame(
-        commentLyrics,
-        commentDescription,
-        encoding,
-      ),
+      ..._id3v23CommentFrame(commentLyrics, commentDescription, encoding),
     if (synchronizedLyrics.isNotEmpty)
       ..._id3v23SynchronizedLyricsFrame(synchronizedLyrics, encoding),
     if (popularimeterRating != null)
@@ -2205,10 +2159,7 @@ List<int> _id3v23PictureFrame(
 }
 
 List<int> _id3v23TextFrame(String id, String value, int encoding) {
-  final payload = <int>[
-    encoding,
-    ..._id3v2EncodedText(value, encoding),
-  ];
+  final payload = <int>[encoding, ..._id3v2EncodedText(value, encoding)];
 
   return <int>[
     ...id.codeUnits,
@@ -2219,11 +2170,7 @@ List<int> _id3v23TextFrame(String id, String value, int encoding) {
   ];
 }
 
-List<int> _id3v23UserTextFrame(
-  String description,
-  String value,
-  int encoding,
-) {
+List<int> _id3v23UserTextFrame(String description, String value, int encoding) {
   final terminator = encoding == _id3v2EncodingUtf16
       ? const <int>[0, 0]
       : const <int>[0];
@@ -2426,7 +2373,11 @@ List<int> _oggPage(
   }
   lacingValues.add(packet.length % 255);
   if (lacingValues.length > 255) {
-    throw ArgumentError.value(packet.length, 'packet', 'Packet has too many segments.');
+    throw ArgumentError.value(
+      packet.length,
+      'packet',
+      'Packet has too many segments.',
+    );
   }
 
   return <int>[
@@ -2540,7 +2491,11 @@ List<int> _wmaWithMetadata({
 }
 
 List<int> _asfObject(List<int> guid, List<int> payload) {
-  return <int>[...guid, ..._uint64LittleEndianSize(24 + payload.length), ...payload];
+  return <int>[
+    ...guid,
+    ..._uint64LittleEndianSize(24 + payload.length),
+    ...payload,
+  ];
 }
 
 List<int> _asfContentDescription({
@@ -2576,9 +2531,17 @@ List<int> _asfExtendedField(String name, Object value) {
     String text => _utf16Le('$text\u0000'),
     int number => _uint32LittleEndianSize(number),
     List<int> bytes => bytes,
-    _ => throw ArgumentError.value(value, 'value', 'Unsupported ASF test value.'),
+    _ => throw ArgumentError.value(
+      value,
+      'value',
+      'Unsupported ASF test value.',
+    ),
   };
-  final valueType = value is int ? 3 : value is List<int> ? 1 : 0;
+  final valueType = value is int
+      ? 3
+      : value is List<int>
+      ? 1
+      : 0;
   return <int>[
     ..._uint16LittleEndianSize(nameBytes.length),
     ...nameBytes,
@@ -2737,8 +2700,7 @@ List<int> _m4aWithMetadata({
     if (album.isNotEmpty) ..._m4aTextItem(_m4aAlbumAtomType, album),
     if (albumArtist.isNotEmpty)
       ..._m4aTextItem(_m4aAlbumArtistAtomType, albumArtist),
-    if (releaseDate.isNotEmpty)
-      ..._m4aTextItem(_m4aDateAtomType, releaseDate),
+    if (releaseDate.isNotEmpty) ..._m4aTextItem(_m4aDateAtomType, releaseDate),
     if (trackNumber != null) ..._m4aTrackNumberItem(trackNumber),
     if (genre.isNotEmpty) ..._m4aTextItem(_m4aGenreAtomType, genre),
     if (lyrics.isNotEmpty) ..._m4aTextItem(_m4aLyricsAtomType, lyrics),
@@ -2751,25 +2713,16 @@ List<int> _m4aWithMetadata({
         name: 'REPLAYGAIN_ALBUM_GAIN',
       ),
     if (r128TrackGain.isNotEmpty)
-      ..._m4aReplayGainFreeformItem(
-        r128TrackGain,
-        name: 'R128_TRACK_GAIN',
-      ),
+      ..._m4aReplayGainFreeformItem(r128TrackGain, name: 'R128_TRACK_GAIN'),
     if (r128AlbumGain.isNotEmpty)
-      ..._m4aReplayGainFreeformItem(
-        r128AlbumGain,
-        name: 'R128_ALBUM_GAIN',
-      ),
+      ..._m4aReplayGainFreeformItem(r128AlbumGain, name: 'R128_ALBUM_GAIN'),
   ];
   final ilst = _mp4Atom('ilst', items);
   final meta = _mp4Atom('meta', <int>[0, 0, 0, 0, ...ilst]);
-  final udta = _mp4Atom(
-    'udta',
-    <int>[
-      ...meta,
-      if (chapters.isNotEmpty) ..._m4aChapterList(chapters),
-    ],
-  );
+  final udta = _mp4Atom('udta', <int>[
+    ...meta,
+    if (chapters.isNotEmpty) ..._m4aChapterList(chapters),
+  ]);
   final moov = _mp4Atom('moov', udta);
   final ftyp = _mp4Atom('ftyp', 'M4A '.codeUnits);
 
@@ -2785,7 +2738,11 @@ List<int> _m4aChapterList(List<_M4aChapter> chapters) {
   for (final chapter in chapters) {
     final title = utf8.encode(chapter.title);
     if (title.length > 255) {
-      throw ArgumentError.value(chapter, 'chapters', 'Chapter title is too long.');
+      throw ArgumentError.value(
+        chapter,
+        'chapters',
+        'Chapter title is too long.',
+      );
     }
     payload
       ..addAll(_uint64Size(chapter.start.inMicroseconds * 10))
@@ -2798,58 +2755,35 @@ List<int> _m4aChapterList(List<_M4aChapter> chapters) {
 List<int> _m4aTextItem(List<int> atomType, String value) {
   return _mp4AtomBytes(
     atomType,
-    _mp4Atom(
-      'data',
-      <int>[
-        ..._uint32Size(1),
-        0,
-        0,
-        0,
-        0,
-        ...value.codeUnits,
-      ],
-    ),
+    _mp4Atom('data', <int>[..._uint32Size(1), 0, 0, 0, 0, ...value.codeUnits]),
   );
 }
 
 List<int> _m4aArtworkItem(List<int> artworkBytes) {
   return _mp4Atom(
     'covr',
-    _mp4Atom(
-      'data',
-      <int>[
-        ..._uint32Size(14),
-        0,
-        0,
-        0,
-        0,
-        ...artworkBytes,
-      ],
-    ),
+    _mp4Atom('data', <int>[..._uint32Size(14), 0, 0, 0, 0, ...artworkBytes]),
   );
 }
 
 List<int> _m4aTrackNumberItem(int trackNumber) {
   return _mp4Atom(
     'trkn',
-    _mp4Atom(
-      'data',
-      <int>[
-        ..._uint32Size(0),
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        (trackNumber >> 8) & 0xff,
-        trackNumber & 0xff,
-        0,
-        0,
-        0,
-        0,
-      ],
-    ),
+    _mp4Atom('data', <int>[
+      ..._uint32Size(0),
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      (trackNumber >> 8) & 0xff,
+      trackNumber & 0xff,
+      0,
+      0,
+      0,
+      0,
+    ]),
   );
 }
 
@@ -2857,30 +2791,18 @@ List<int> _m4aReplayGainFreeformItem(
   String value, {
   String name = 'REPLAYGAIN_TRACK_GAIN',
 }) {
-  return _mp4Atom(
-    '----',
-    <int>[
-      ..._mp4Atom(
-        'mean',
-        <int>[0, 0, 0, 0, ...'com.apple.iTunes'.codeUnits],
-      ),
-      ..._mp4Atom(
-        'name',
-        <int>[0, 0, 0, 0, ...name.codeUnits],
-      ),
-      ..._mp4Atom(
-        'data',
-        <int>[
-          ..._uint32Size(1),
-          0,
-          0,
-          0,
-          0,
-          ...value.codeUnits,
-        ],
-      ),
-    ],
-  );
+  return _mp4Atom('----', <int>[
+    ..._mp4Atom('mean', <int>[0, 0, 0, 0, ...'com.apple.iTunes'.codeUnits]),
+    ..._mp4Atom('name', <int>[0, 0, 0, 0, ...name.codeUnits]),
+    ..._mp4Atom('data', <int>[
+      ..._uint32Size(1),
+      0,
+      0,
+      0,
+      0,
+      ...value.codeUnits,
+    ]),
+  ]);
 }
 
 List<int> _mp4Atom(String type, List<int> payload) {
@@ -2892,7 +2814,12 @@ List<int> _id3v2Prefix(List<int> payload) {
   return <int>[0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, payload.length, ...payload];
 }
 
-List<int> _id3v1Tail(int fill) => <int>[0x54, 0x41, 0x47, ...List<int>.filled(125, fill)];
+List<int> _id3v1Tail(int fill) => <int>[
+  0x54,
+  0x41,
+  0x47,
+  ...List<int>.filled(125, fill),
+];
 
 List<int> _riffChunk(String type, List<int> payload) {
   final length = payload.length;
@@ -2921,11 +2848,7 @@ List<int> _aiffChunk(String type, List<int> payload) {
 }
 
 List<int> _mp4AtomBytes(List<int> type, List<int> payload) {
-  return <int>[
-    ..._uint32Size(payload.length + 8),
-    ...type,
-    ...payload,
-  ];
+  return <int>[..._uint32Size(payload.length + 8), ...type, ...payload];
 }
 
 const _m4aTitleAtomType = <int>[0xa9, 0x6e, 0x61, 0x6d];
@@ -2936,16 +2859,58 @@ const _m4aDateAtomType = <int>[0xa9, 0x64, 0x61, 0x79];
 const _m4aGenreAtomType = <int>[0xa9, 0x67, 0x65, 0x6e];
 const _m4aLyricsAtomType = <int>[0xa9, 0x6c, 0x79, 0x72];
 const _asfHeaderObjectGuid = <int>[
-  0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
-  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+  0x30,
+  0x26,
+  0xb2,
+  0x75,
+  0x8e,
+  0x66,
+  0xcf,
+  0x11,
+  0xa6,
+  0xd9,
+  0x00,
+  0xaa,
+  0x00,
+  0x62,
+  0xce,
+  0x6c,
 ];
 const _asfContentDescriptionObjectGuid = <int>[
-  0x33, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
-  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+  0x33,
+  0x26,
+  0xb2,
+  0x75,
+  0x8e,
+  0x66,
+  0xcf,
+  0x11,
+  0xa6,
+  0xd9,
+  0x00,
+  0xaa,
+  0x00,
+  0x62,
+  0xce,
+  0x6c,
 ];
 const _asfExtendedContentDescriptionObjectGuid = <int>[
-  0x40, 0xa4, 0xd0, 0xd2, 0x07, 0xe3, 0xd2, 0x11,
-  0x97, 0xf0, 0x00, 0xa0, 0xc9, 0x5e, 0xa8, 0x50,
+  0x40,
+  0xa4,
+  0xd0,
+  0xd2,
+  0x07,
+  0xe3,
+  0xd2,
+  0x11,
+  0x97,
+  0xf0,
+  0x00,
+  0xa0,
+  0xc9,
+  0x5e,
+  0xa8,
+  0x50,
 ];
 
 final class _M4aChapter {

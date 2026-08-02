@@ -30,13 +30,12 @@ class SelfHostedBrowseScreen extends StatefulWidget {
   final List<MusicCatalogCollectionKind> collectionKinds;
 
   @override
-  State<SelfHostedBrowseScreen> createState() =>
-      _SelfHostedBrowseScreenState();
+  State<SelfHostedBrowseScreen> createState() => _SelfHostedBrowseScreenState();
 }
 
 class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
   final Map<MusicCatalogCollectionKind, Future<MusicCatalogCollectionPage>>
-      _requests =
+  _requests =
       <MusicCatalogCollectionKind, Future<MusicCatalogCollectionPage>>{};
   bool _requestsStarted = false;
 
@@ -104,10 +103,7 @@ class _SelfHostedBrowseScreenState extends State<SelfHostedBrowseScreen> {
     final provider = widget.provider;
     if (provider is MusicCatalogPagingProvider &&
         provider.pagedCollectionKinds.contains(kind)) {
-      return provider.browseCollectionsPage(
-        kind,
-        limit: _catalogPageSize,
-      );
+      return provider.browseCollectionsPage(kind, limit: _catalogPageSize);
     }
     final collections = await provider.browseCollections(kind);
     return MusicCatalogCollectionPage(
@@ -147,8 +143,7 @@ class _CatalogCollectionList extends StatefulWidget {
   final ValueChanged<MusicCatalogCollection> onOpen;
 
   @override
-  State<_CatalogCollectionList> createState() =>
-      _CatalogCollectionListState();
+  State<_CatalogCollectionList> createState() => _CatalogCollectionListState();
 }
 
 class _CatalogCollectionListState extends State<_CatalogCollectionList> {
@@ -233,10 +228,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return _CatalogErrorState(
-            error: snapshot.error!,
-            onRetry: onRefresh,
-          );
+          return _CatalogErrorState(error: snapshot.error!, onRetry: onRefresh);
         }
         final page = snapshot.data!;
         final collections = _mergeCatalogCollections(
@@ -245,7 +237,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         );
         final hasMore = _hasMoreOverride ?? page.hasMore;
         final nextOffset = _nextOffsetOverride ?? page.nextOffset;
-        final playlistMutator = widget.provider.capabilities.contains(
+        final playlistMutator =
+            widget.provider.capabilities.contains(
                   MusicSourceCapability.playlistMutation,
                 ) &&
                 widget.provider is MusicPlaylistMutationProvider
@@ -253,17 +246,17 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
             : null;
         final canMutatePlaylists =
             widget.kind == MusicCatalogCollectionKind.playlist &&
-                playlistMutator != null;
-        final albumFavoriteMutator = widget.kind ==
-                    MusicCatalogCollectionKind.album &&
+            playlistMutator != null;
+        final albumFavoriteMutator =
+            widget.kind == MusicCatalogCollectionKind.album &&
                 widget.provider.capabilities.contains(
                   MusicSourceCapability.albumFavoriteMutation,
                 ) &&
                 widget.provider is MusicAlbumFavoriteMutationProvider
             ? widget.provider as MusicAlbumFavoriteMutationProvider
             : null;
-        final artistFavoriteMutator = widget.kind ==
-                    MusicCatalogCollectionKind.artist &&
+        final artistFavoriteMutator =
+            widget.kind == MusicCatalogCollectionKind.artist &&
                 widget.provider.capabilities.contains(
                   MusicSourceCapability.artistFavoriteMutation,
                 ) &&
@@ -275,14 +268,16 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         final visible = normalizedQuery.isEmpty || isRemoteSearch
             ? collections
             : collections
-                .where(
-                  (collection) =>
-                      collection.title.toLowerCase().contains(normalizedQuery) ||
-                      collection.subtitle
-                          .toLowerCase()
-                          .contains(normalizedQuery),
-                )
-                .toList(growable: false);
+                  .where(
+                    (collection) =>
+                        collection.title.toLowerCase().contains(
+                          normalizedQuery,
+                        ) ||
+                        collection.subtitle.toLowerCase().contains(
+                          normalizedQuery,
+                        ),
+                  )
+                  .toList(growable: false);
         final showEmpty = visible.isEmpty;
         final contentCount = showEmpty ? 1 : visible.length;
         final showContinuation =
@@ -357,15 +352,15 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                       },
                       onSubmitted: remoteSearchProvider == null
                           ? null
-                          : (value) => unawaited(
-                              _searchRemoteCollections(value),
-                            ),
+                          : (value) =>
+                                unawaited(_searchRemoteCollections(value)),
                       textInputAction: remoteSearchProvider == null
                           ? TextInputAction.done
                           : TextInputAction.search,
                     ),
                     if (collectionSuggestionProvider != null &&
-                        (_suggestionsLoading || _suggestions.isNotEmpty)) ...<Widget>[
+                        (_suggestionsLoading ||
+                            _suggestions.isNotEmpty)) ...<Widget>[
                       const SizedBox(height: 8),
                       if (_suggestionsLoading)
                         const LinearProgressIndicator(
@@ -384,9 +379,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                                 ),
                                 avatar: Icon(_collectionIcon(suggestion.kind)),
                                 label: Text(suggestion.title),
-                                onPressed: () => _selectCollectionSuggestion(
-                                  suggestion,
-                                ),
+                                onPressed: () =>
+                                    _selectCollectionSuggestion(suggestion),
                               ),
                           ],
                         ),
@@ -415,10 +409,10 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                   isArtist && library.isArtistFollowed(collection.title);
               final isRemoteAlbumFavorite =
                   _remoteAlbumFavoriteOverrides[collection.id] ??
-                      collection.isFavorite;
+                  collection.isFavorite;
               final isRemoteArtistFavorite =
                   _remoteArtistFavoriteOverrides[collection.id] ??
-                      collection.isFavorite;
+                  collection.isFavorite;
               return ListTile(
                 key: ValueKey<String>(
                   'catalog-${collection.kind.name}-${collection.id}',
@@ -431,13 +425,13 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                   loadProviderArtwork: collection.artworkId == null
                       ? null
                       : (maxWidth) => widget.provider.loadArtwork(
-                            collection.artworkId!,
-                            version: collection.artworkVersion,
-                            maxWidth: maxWidth,
-                          ),
+                          collection.artworkId!,
+                          version: collection.artworkVersion,
+                          maxWidth: maxWidth,
+                        ),
                   fallbackIcon: _collectionIcon(collection.kind),
-                  borderRadius: collection.kind ==
-                          MusicCatalogCollectionKind.artist
+                  borderRadius:
+                      collection.kind == MusicCatalogCollectionKind.artist
                       ? 22
                       : 8,
                 ),
@@ -487,12 +481,12 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                               onPressed: _artistFavoriteMutationInProgress
                                   ? null
                                   : () => unawaited(
-                                        _setRemoteArtistFavorite(
-                                          artistFavoriteMutator,
-                                          collection,
-                                          isRemoteArtistFavorite,
-                                        ),
+                                      _setRemoteArtistFavorite(
+                                        artistFavoriteMutator,
+                                        collection,
+                                        isRemoteArtistFavorite,
                                       ),
+                                    ),
                               icon: Icon(
                                 isRemoteArtistFavorite
                                     ? Icons.favorite
@@ -513,25 +507,25 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                           playlistMutator,
                           collection,
                         ),
-                        itemBuilder: (_) => const <
-                            PopupMenuEntry<_CatalogPlaylistAction>>[
-                          PopupMenuItem<_CatalogPlaylistAction>(
-                            value: _CatalogPlaylistAction.rename,
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(Icons.edit_outlined),
-                              title: Text('Rename'),
-                            ),
-                          ),
-                          PopupMenuItem<_CatalogPlaylistAction>(
-                            value: _CatalogPlaylistAction.delete,
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(Icons.delete_outline),
-                              title: Text('Delete'),
-                            ),
-                          ),
-                        ],
+                        itemBuilder: (_) =>
+                            const <PopupMenuEntry<_CatalogPlaylistAction>>[
+                              PopupMenuItem<_CatalogPlaylistAction>(
+                                value: _CatalogPlaylistAction.rename,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.edit_outlined),
+                                  title: Text('Rename'),
+                                ),
+                              ),
+                              PopupMenuItem<_CatalogPlaylistAction>(
+                                value: _CatalogPlaylistAction.delete,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.delete_outline),
+                                  title: Text('Delete'),
+                                ),
+                              ),
+                            ],
                       )
                     : albumFavoriteMutator != null
                     ? IconButton(
@@ -544,12 +538,12 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
                         onPressed: _albumFavoriteMutationInProgress
                             ? null
                             : () => unawaited(
-                                  _setRemoteAlbumFavorite(
-                                    albumFavoriteMutator,
-                                    collection,
-                                    isRemoteAlbumFavorite,
-                                  ),
+                                _setRemoteAlbumFavorite(
+                                  albumFavoriteMutator,
+                                  collection,
+                                  isRemoteAlbumFavorite,
                                 ),
+                              ),
                         icon: Icon(
                           isRemoteAlbumFavorite
                               ? Icons.favorite
@@ -588,13 +582,14 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
         key: Key('catalog-load-more-error-${widget.kind.name}'),
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.warning_amber_outlined),
-        title: Text('Could not load more ${_kindPlural(widget.kind).toLowerCase()}.'),
+        title: Text(
+          'Could not load more ${_kindPlural(widget.kind).toLowerCase()}.',
+        ),
         subtitle: Text(error.toString()),
         trailing: TextButton.icon(
           key: Key('catalog-load-more-retry-${widget.kind.name}'),
-          onPressed: () => unawaited(
-            _loadMore(existingCollections, nextOffset: nextOffset),
-          ),
+          onPressed: () =>
+              unawaited(_loadMore(existingCollections, nextOffset: nextOffset)),
           icon: const Icon(Icons.refresh),
           label: const Text('Retry'),
         ),
@@ -607,9 +602,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       alignment: Alignment.center,
       child: OutlinedButton.icon(
         key: Key('catalog-load-more-${widget.kind.name}'),
-        onPressed: () => unawaited(
-          _loadMore(existingCollections, nextOffset: nextOffset),
-        ),
+        onPressed: () =>
+            unawaited(_loadMore(existingCollections, nextOffset: nextOffset)),
         icon: const Icon(Icons.expand_more),
         label: Text('Load more ${_kindPlural(widget.kind).toLowerCase()}'),
       ),
@@ -654,9 +648,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     });
     _suggestionDebounce = Timer(
       const Duration(milliseconds: 350),
-      () => unawaited(
-        _loadCollectionSuggestions(provider, query, requestSerial),
-      ),
+      () =>
+          unawaited(_loadCollectionSuggestions(provider, query, requestSerial)),
     );
   }
 
@@ -666,10 +659,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     int requestSerial,
   ) async {
     try {
-      final suggestions = await provider.suggestCollections(
-        widget.kind,
-        query,
-      );
+      final suggestions = await provider.suggestCollections(widget.kind, query);
       if (!mounted || requestSerial != _suggestionRequestSerial) {
         return;
       }
@@ -739,7 +729,8 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
     final remoteSearchProvider = _remoteSearchQuery.isEmpty
         ? null
         : _collectionSearchProvider;
-    final canLoadMore = remoteSearchProvider != null ||
+    final canLoadMore =
+        remoteSearchProvider != null ||
         (provider is MusicCatalogPagingProvider &&
             provider.pagedCollectionKinds.contains(widget.kind));
     if (_loadingMore || !canLoadMore) {
@@ -849,9 +840,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete remote playlist?'),
-        content: Text(
-          'Delete ${playlist.title} from ${widget.provider.name}?',
-        ),
+        content: Text('Delete ${playlist.title} from ${widget.provider.name}?'),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -887,16 +876,16 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(successMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
     } on Object catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) {
         setState(() => _playlistMutationInProgress = false);
@@ -922,9 +911,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       if (!mounted) {
         return;
       }
-      setState(
-        () => _remoteAlbumFavoriteOverrides[album.id] = nextFavorite,
-      );
+      setState(() => _remoteAlbumFavoriteOverrides[album.id] = nextFavorite);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -936,9 +923,9 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       );
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -965,9 +952,7 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       if (!mounted) {
         return;
       }
-      setState(
-        () => _remoteArtistFavoriteOverrides[artist.id] = nextFavorite,
-      );
+      setState(() => _remoteArtistFavoriteOverrides[artist.id] = nextFavorite);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -979,9 +964,9 @@ class _CatalogCollectionListState extends State<_CatalogCollectionList> {
       );
     } on Object catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -1067,7 +1052,8 @@ class _SelfHostedCollectionScreenState
   Widget _buildNestedCollections(List<MusicCatalogCollection> collections) {
     final radioProvider = _radioProvider;
     final radioSeedKind = _radioSeedKind(widget.collection.kind);
-    final canStartRadio = radioProvider != null &&
+    final canStartRadio =
+        radioProvider != null &&
         radioSeedKind != null &&
         radioProvider.radioSeedKinds.contains(radioSeedKind) &&
         widget.collection.id.trim().isNotEmpty;
@@ -1075,12 +1061,12 @@ class _SelfHostedCollectionScreenState
     final visible = normalizedQuery.isEmpty
         ? collections
         : collections
-            .where(
-              (collection) =>
-                  collection.title.toLowerCase().contains(normalizedQuery) ||
-                  collection.subtitle.toLowerCase().contains(normalizedQuery),
-            )
-            .toList(growable: false);
+              .where(
+                (collection) =>
+                    collection.title.toLowerCase().contains(normalizedQuery) ||
+                    collection.subtitle.toLowerCase().contains(normalizedQuery),
+              )
+              .toList(growable: false);
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: visible.isEmpty ? 2 : visible.length + 1,
@@ -1119,15 +1105,16 @@ class _SelfHostedCollectionScreenState
             loadProviderArtwork: collection.artworkId == null
                 ? null
                 : (maxWidth) => widget.provider.loadArtwork(
-                      collection.artworkId!,
-                      version: collection.artworkVersion,
-                      maxWidth: maxWidth,
-                    ),
+                    collection.artworkId!,
+                    version: collection.artworkVersion,
+                    maxWidth: maxWidth,
+                  ),
             fallbackIcon: _collectionIcon(collection.kind),
           ),
           title: Text(collection.title),
-          subtitle:
-              collection.subtitle.isEmpty ? null : Text(collection.subtitle),
+          subtitle: collection.subtitle.isEmpty
+              ? null
+              : Text(collection.subtitle),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push<void>(
             MaterialPageRoute<void>(
@@ -1146,15 +1133,16 @@ class _SelfHostedCollectionScreenState
     final playableTracks = tracks.where(_canPlay).toList(growable: false);
     final radioProvider = _radioProvider;
     final collectionRadioSeedKind = _radioSeedKind(widget.collection.kind);
-    final canStartCollectionRadio = radioProvider != null &&
+    final canStartCollectionRadio =
+        radioProvider != null &&
         collectionRadioSeedKind != null &&
         radioProvider.radioSeedKinds.contains(collectionRadioSeedKind) &&
         widget.collection.id.trim().isNotEmpty;
-    final canStartTrackRadio = radioProvider != null &&
-        radioProvider.radioSeedKinds.contains(
-          MusicCatalogRadioSeedKind.track,
-        );
-    final playlistMutator = widget.provider.capabilities.contains(
+    final canStartTrackRadio =
+        radioProvider != null &&
+        radioProvider.radioSeedKinds.contains(MusicCatalogRadioSeedKind.track);
+    final playlistMutator =
+        widget.provider.capabilities.contains(
               MusicSourceCapability.playlistMutation,
             ) &&
             widget.provider is MusicPlaylistMutationProvider
@@ -1162,8 +1150,9 @@ class _SelfHostedCollectionScreenState
         : null;
     final isMutablePlaylist =
         widget.collection.kind == MusicCatalogCollectionKind.playlist &&
-            playlistMutator != null;
-    final favoriteMutator = widget.provider.capabilities.contains(
+        playlistMutator != null;
+    final favoriteMutator =
+        widget.provider.capabilities.contains(
               MusicSourceCapability.favoriteMutation,
             ) &&
             widget.provider is MusicTrackFavoriteMutationProvider
@@ -1173,11 +1162,14 @@ class _SelfHostedCollectionScreenState
     final visible = normalizedQuery.isEmpty
         ? tracks
         : tracks
-            .where(
-              (track) => <String>[track.title, track.artist, track.album]
-                  .any((value) => value.toLowerCase().contains(normalizedQuery)),
-            )
-            .toList(growable: false);
+              .where(
+                (track) => <String>[
+                  track.title,
+                  track.artist,
+                  track.album,
+                ].any((value) => value.toLowerCase().contains(normalizedQuery)),
+              )
+              .toList(growable: false);
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: visible.isEmpty ? 2 : visible.length + 1,
@@ -1242,10 +1234,10 @@ class _SelfHostedCollectionScreenState
             loadProviderArtwork: track.providerArtworkId == null
                 ? null
                 : (maxWidth) => widget.provider.loadArtwork(
-                      track.providerArtworkId!,
-                      version: track.providerArtworkVersion,
-                      maxWidth: maxWidth,
-                    ),
+                    track.providerArtworkId!,
+                    version: track.providerArtworkVersion,
+                    maxWidth: maxWidth,
+                  ),
           ),
           title: Text(
             track.title,
@@ -1275,7 +1267,8 @@ class _SelfHostedCollectionScreenState
             itemBuilder: (_) => <PopupMenuEntry<_CatalogTrackAction>>[
               PopupMenuItem<_CatalogTrackAction>(
                 value: _CatalogTrackAction.play,
-                enabled: track.isPlayable ||
+                enabled:
+                    track.isPlayable ||
                     widget.provider.capabilities.contains(
                       MusicSourceCapability.streamResolution,
                     ),
@@ -1320,9 +1313,7 @@ class _SelfHostedCollectionScreenState
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      isRemoteFavorite
-                          ? Icons.favorite_border
-                          : Icons.favorite,
+                      isRemoteFavorite ? Icons.favorite_border : Icons.favorite,
                     ),
                     title: Text(
                       isRemoteFavorite
@@ -1360,8 +1351,8 @@ class _SelfHostedCollectionScreenState
                 ),
                 PopupMenuItem<_CatalogTrackAction>(
                   value: _CatalogTrackAction.moveDown,
-                  enabled: playlistIndex >= 0 &&
-                      playlistIndex < tracks.length - 1,
+                  enabled:
+                      playlistIndex >= 0 && playlistIndex < tracks.length - 1,
                   child: const ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.arrow_downward),
@@ -1405,15 +1396,12 @@ class _SelfHostedCollectionScreenState
       onPressed: _radioInProgress
           ? null
           : () => unawaited(
-                _startRadio(
-                  provider,
-                  MusicCatalogRadioSeed(
-                    kind: seedKind,
-                    id: widget.collection.id,
-                  ),
-                  label: label,
-                ),
+              _startRadio(
+                provider,
+                MusicCatalogRadioSeed(kind: seedKind, id: widget.collection.id),
+                label: label,
               ),
+            ),
       icon: _radioInProgress
           ? const SizedBox.square(
               dimension: 18,
@@ -1467,9 +1455,9 @@ class _SelfHostedCollectionScreenState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved ${tracks.length} track(s).')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Saved ${tracks.length} track(s).')));
   }
 
   Future<void> _save(Track track) async {
@@ -1477,9 +1465,9 @@ class _SelfHostedCollectionScreenState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved ${track.title}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Saved ${track.title}.')));
   }
 
   Future<void> _startRadio(
@@ -1515,16 +1503,13 @@ class _SelfHostedCollectionScreenState
         ?seedTrack,
         ...recommendations,
       ]);
-      if (recommendations.isEmpty ||
-          (seedTrack != null && queue.length == 1)) {
+      if (recommendations.isEmpty || (seedTrack != null && queue.length == 1)) {
         _showMessage('No radio tracks found for $label.');
         return;
       }
       await player.playTrack(queue.first, queue: queue);
       if (mounted) {
-        _showMessage(
-          'Started radio for $label with ${queue.length} track(s).',
-        );
+        _showMessage('Started radio for $label with ${queue.length} track(s).');
       }
     } on Object catch (error) {
       if (mounted) {
@@ -1537,30 +1522,31 @@ class _SelfHostedCollectionScreenState
     }
   }
 
-  Future<void> _queueOffline(
-    Track track,
-    OfflineMediaAction action,
-  ) async {
-    final coordinator = ProviderSearchCoordinator(
-      <MusicSourceProvider>[widget.provider],
-    );
+  Future<void> _queueOffline(Track track, OfflineMediaAction action) async {
+    final coordinator = ProviderSearchCoordinator(<MusicSourceProvider>[
+      widget.provider,
+    ]);
     final decision = coordinator.offlineDecision(track, action);
     if (!decision.isAllowed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(decision.reason)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(decision.reason)));
       return;
     }
     await context.read<LibraryStore>().queueOfflineCache(
-          track,
-          action,
-          decision,
-        );
+      track,
+      action,
+      decision,
+    );
     if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Queued ${action.label.toLowerCase()} for ${track.title}.')),
+      SnackBar(
+        content: Text(
+          'Queued ${action.label.toLowerCase()} for ${track.title}.',
+        ),
+      ),
     );
   }
 
@@ -1590,16 +1576,14 @@ class _SelfHostedCollectionScreenState
                   shrinkWrap: true,
                   padding: const EdgeInsets.only(bottom: 12),
                   children: <Widget>[
-                    const ListTile(
-                      title: Text('Add to remote playlist'),
-                    ),
+                    const ListTile(title: Text('Add to remote playlist')),
                     ListTile(
                       key: const Key('remote-playlist-create-with-track'),
                       leading: const Icon(Icons.playlist_add),
                       title: const Text('New playlist'),
-                      onTap: () => Navigator.of(sheetContext).pop(
-                        _newRemotePlaylistSelection,
-                      ),
+                      onTap: () => Navigator.of(
+                        sheetContext,
+                      ).pop(_newRemotePlaylistSelection),
                     ),
                     for (final playlist in playlists)
                       ListTile(
@@ -1630,19 +1614,13 @@ class _SelfHostedCollectionScreenState
         if (name == null) {
           return;
         }
-        await playlistMutator.createPlaylist(
-          name,
-          trackIds: <String>[trackId],
-        );
+        await playlistMutator.createPlaylist(name, trackIds: <String>[trackId]);
         if (mounted) {
           _showMessage('Created $name with ${track.title}.');
         }
         return;
       }
-      await playlistMutator.addPlaylistTracks(
-        selection,
-        <String>[trackId],
-      );
+      await playlistMutator.addPlaylistTracks(selection, <String>[trackId]);
       if (!mounted) {
         return;
       }
@@ -1678,10 +1656,7 @@ class _SelfHostedCollectionScreenState
     final nextFavorite = !isFavorite;
     setState(() => _favoriteMutationInProgress = true);
     try {
-      await favoriteMutator.setTrackFavorite(
-        trackId,
-        isFavorite: nextFavorite,
-      );
+      await favoriteMutator.setTrackFavorite(trackId, isFavorite: nextFavorite);
       if (!mounted) {
         return;
       }
@@ -1722,10 +1697,8 @@ class _SelfHostedCollectionScreenState
     final moved = trackIds.removeAt(fromIndex);
     trackIds.insert(toIndex, moved);
     await _runDetailPlaylistMutation(
-      () => playlistMutator.replacePlaylistTracks(
-        widget.collection.id,
-        trackIds,
-      ),
+      () =>
+          playlistMutator.replacePlaylistTracks(widget.collection.id, trackIds),
       'Updated playlist order.',
     );
   }
@@ -1766,10 +1739,8 @@ class _SelfHostedCollectionScreenState
     }
     trackIds.removeAt(trackIndex);
     await _runDetailPlaylistMutation(
-      () => playlistMutator.replacePlaylistTracks(
-        widget.collection.id,
-        trackIds,
-      ),
+      () =>
+          playlistMutator.replacePlaylistTracks(widget.collection.id, trackIds),
       'Removed ${track.title}.',
     );
   }
@@ -1812,9 +1783,9 @@ class _SelfHostedCollectionScreenState
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _handleTrackAction(
@@ -1911,9 +1882,7 @@ enum _CatalogTrackAction {
   removeFromRemotePlaylist,
 }
 
-MusicCatalogRadioSeedKind? _radioSeedKind(
-  MusicCatalogCollectionKind kind,
-) {
+MusicCatalogRadioSeedKind? _radioSeedKind(MusicCatalogCollectionKind kind) {
   return switch (kind) {
     MusicCatalogCollectionKind.artist => MusicCatalogRadioSeedKind.artist,
     MusicCatalogCollectionKind.album => MusicCatalogRadioSeedKind.album,
@@ -2021,8 +1990,10 @@ List<MusicCatalogCollection> _mergeCatalogCollections(
 ) {
   final merged = <MusicCatalogCollection>[];
   final ids = <String>{};
-  for (final collection in <Iterable<MusicCatalogCollection>>[first, second]
-      .expand((collections) => collections)) {
+  for (final collection in <Iterable<MusicCatalogCollection>>[
+    first,
+    second,
+  ].expand((collections) => collections)) {
     final id = collection.id.trim();
     if (id.isEmpty || !ids.add('${collection.kind.name}|$id')) {
       continue;

@@ -108,7 +108,8 @@ class _OfflineCacheForegroundWorkerState
   Future<void> _syncBackgroundJob(LibraryStore library) async {
     try {
       final listenBrainz = context.read<ListenBrainzScrobblingStore?>();
-      final canRetryListenBrainz = listenBrainz != null &&
+      final canRetryListenBrainz =
+          listenBrainz != null &&
           shouldRetryListenBrainzInBackground(
             isConfigured: listenBrainz.isConfigured,
             backgroundRetryEnabled: listenBrainz.backgroundRetryEnabled,
@@ -116,9 +117,7 @@ class _OfflineCacheForegroundWorkerState
             offlineModeEnabled: library.offlineModeEnabled,
             pauseListeningHistory: library.pauseListeningHistory,
           );
-      if (!library.loaded ||
-          _appInForeground ||
-          library.offlineModeEnabled) {
+      if (!library.loaded || _appInForeground || library.offlineModeEnabled) {
         await widget.backgroundScheduler.cancel();
         return;
       }
@@ -135,7 +134,8 @@ class _OfflineCacheForegroundWorkerState
       }
 
       await widget.backgroundScheduler.schedule(
-        minimumLatency: library.hasPendingOfflineCacheWork || canRetryListenBrainz
+        minimumLatency:
+            library.hasPendingOfflineCacheWork || canRetryListenBrainz
             ? null
             : podcastDelay,
       );

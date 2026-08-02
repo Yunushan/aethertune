@@ -97,7 +97,9 @@ class LocalDiagnosticLog extends ChangeNotifier {
     return const JsonEncoder.withIndent('  ').convert(<String, Object?>{
       'format': 'aethertune-local-diagnostics',
       'version': 1,
-      'entries': _entries.map((entry) => entry.toJson()).toList(growable: false),
+      'entries': _entries
+          .map((entry) => entry.toJson())
+          .toList(growable: false),
       'privacy': 'Stored locally. Exported only by an explicit user action.',
     });
   }
@@ -156,11 +158,7 @@ class LocalDiagnosticEntry {
 String _sanitize(String value, int maximumLength) {
   var sanitized = value.trim();
   sanitized = sanitized.replaceAllMapped(
-    RegExp(
-      r'\bauthorization\s*[:=].*$',
-      caseSensitive: false,
-      multiLine: true,
-    ),
+    RegExp(r'\bauthorization\s*[:=].*$', caseSensitive: false, multiLine: true),
     (_) => 'authorization=[redacted]',
   );
   sanitized = sanitized.replaceAllMapped(

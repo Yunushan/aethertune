@@ -62,10 +62,7 @@ class _AetherTuneDeepLinkListenerState
   Widget build(BuildContext context) => widget.child;
 
   void _listen(Stream<Uri>? stream) {
-    _subscription = stream?.listen(
-      _enqueue,
-      onError: (_, _) {},
-    );
+    _subscription = stream?.listen(_enqueue, onError: (_, _) {});
   }
 
   void _enqueue(Uri uri) {
@@ -94,8 +91,9 @@ class _AetherTuneDeepLinkListenerState
             AetherTuneDeepLinkKind.playlist =>
               (await widget.library.importPlaylistLink(uri.toString())).name,
             AetherTuneDeepLinkKind.smartPlaylist =>
-              (await widget.library.importCustomSmartPlaylistLink(uri.toString()))
-                  .name,
+              (await widget.library.importCustomSmartPlaylistLink(
+                uri.toString(),
+              )).name,
           };
           if (!mounted) {
             return;
@@ -108,9 +106,9 @@ class _AetherTuneDeepLinkListenerState
           if (!mounted) {
             return;
           }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error.message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error.message)));
         }
       }
     } finally {

@@ -43,9 +43,9 @@ final class ProviderSearchCoordinator {
       return true;
     }
 
-    return providerFor(track.sourceId)?.capabilities.contains(
-          MusicSourceCapability.streamResolution,
-        ) ??
+    return providerFor(
+          track.sourceId,
+        )?.capabilities.contains(MusicSourceCapability.streamResolution) ??
         false;
   }
 
@@ -111,12 +111,10 @@ final class ProviderSearchCoordinator {
       );
     }
 
-    final outcomes = await Future.wait(
-      <Future<_ProviderSuggestionOutcome>>[
-        for (var index = 0; index < providers.length; index += 1)
-          _suggestProvider(providers[index], normalizedQuery, index),
-      ],
-    );
+    final outcomes = await Future.wait(<Future<_ProviderSuggestionOutcome>>[
+      for (var index = 0; index < providers.length; index += 1)
+        _suggestProvider(providers[index], normalizedQuery, index),
+    ]);
     final suggestions = <ProviderSearchSuggestion>[];
     final errors = <ProviderSearchError>[];
     for (final outcome in outcomes) {
@@ -196,8 +194,8 @@ final class ProviderSearchCoordinator {
     var providerIndex = 0;
     for (final provider in providers) {
       if (!provider.capabilities.contains(
-            MusicSourceCapability.metadataSearch,
-          )) {
+        MusicSourceCapability.metadataSearch,
+      )) {
         continue;
       }
       final cursor = continuations[provider.id];
@@ -221,18 +219,16 @@ final class ProviderSearchCoordinator {
     SearchQuery searchQuery,
     List<_ProviderSearchTarget> targets,
   ) async {
-    final outcomes = await Future.wait(
-      <Future<_ProviderSearchOutcome>>[
-        for (final target in targets)
-          _searchProvider(
-            target.provider,
-            query,
-            searchQuery,
-            target.providerIndex,
-            cursor: target.cursor,
-          ),
-      ],
-    );
+    final outcomes = await Future.wait(<Future<_ProviderSearchOutcome>>[
+      for (final target in targets)
+        _searchProvider(
+          target.provider,
+          query,
+          searchQuery,
+          target.providerIndex,
+          cursor: target.cursor,
+        ),
+    ]);
     final results = <ProviderSearchResult>[];
     final errors = <ProviderSearchError>[];
     final continuations = <String, String>{};
@@ -284,9 +280,9 @@ final class ProviderSearchCoordinator {
           nextCursor = page.nextCursor;
         }
       } else {
-        tracks = (await provider.search(query))
-            .take(maxResultsPerProvider)
-            .toList(growable: false);
+        tracks = (await provider.search(
+          query,
+        )).take(maxResultsPerProvider).toList(growable: false);
       }
       return _ProviderSearchOutcome(
         providerId: provider.id,
@@ -405,10 +401,7 @@ final class _ProviderSearchOutcome {
 }
 
 final class _ProviderSuggestionOutcome {
-  const _ProviderSuggestionOutcome({
-    required this.suggestions,
-    this.error,
-  });
+  const _ProviderSuggestionOutcome({required this.suggestions, this.error});
 
   final List<ProviderSearchSuggestion> suggestions;
   final ProviderSearchError? error;
@@ -457,8 +450,8 @@ int _compareProviderSearchResults(
   }
 
   return left.track.title.toLowerCase().compareTo(
-        right.track.title.toLowerCase(),
-      );
+    right.track.title.toLowerCase(),
+  );
 }
 
 List<ProviderSearchSuggestion> _deduplicateProviderSuggestions(
@@ -477,8 +470,8 @@ List<ProviderSearchSuggestion> _deduplicateProviderSuggestions(
         return providerCompare;
       }
       return left.suggestion.value.toLowerCase().compareTo(
-            right.suggestion.value.toLowerCase(),
-          );
+        right.suggestion.value.toLowerCase(),
+      );
     });
   return sorted;
 }
@@ -492,10 +485,6 @@ int _scoreTrack(Track track, SearchQuery query) {
   return score;
 }
 
-int _fieldScore(
-  String value,
-  SearchQuery query, {
-  required int exact,
-}) {
+int _fieldScore(String value, SearchQuery query, {required int exact}) {
   return searchTextScore(value, query, exact: exact);
 }

@@ -4,11 +4,7 @@ import 'package:aethertune/src/domain/artwork_crop.dart';
 
 void main() {
   test('normalizes unsafe artwork crop values and round-trips JSON', () {
-    final crop = ArtworkCrop.normalized(
-      alignmentX: 4,
-      alignmentY: -4,
-      zoom: 8,
-    );
+    final crop = ArtworkCrop.normalized(alignmentX: 4, alignmentY: -4, zoom: 8);
 
     expect(crop.alignmentX, 1);
     expect(crop.alignmentY, -1);

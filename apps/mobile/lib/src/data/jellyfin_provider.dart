@@ -10,11 +10,12 @@ import 'provider_binary_loader.dart';
 import 'provider_error.dart';
 
 typedef JellyfinRequestLoader = Future<String> Function(Uri requestUri);
-typedef JellyfinMutationLoader = Future<void> Function(
-  Uri requestUri,
-  String method,
-  Map<String, Object?>? jsonBody,
-);
+typedef JellyfinMutationLoader =
+    Future<void> Function(
+      Uri requestUri,
+      String method,
+      Map<String, Object?>? jsonBody,
+    );
 
 class JellyfinProvider
     implements
@@ -39,11 +40,11 @@ class JellyfinProvider
     JellyfinMutationLoader? mutationLoader,
     ProviderBinaryRequestLoader? artworkLoader,
     this.limit = 20,
-  })  : id = id ?? 'jellyfin-${Track.stableLocalId(baseUri.toString())}',
-        name = name ?? 'Jellyfin',
-        _requestLoader = requestLoader ?? _loadJellyfinJson,
-        _mutationLoader = mutationLoader ?? _loadJellyfinMutation,
-        _artworkLoader = artworkLoader ?? loadProviderImageBytes;
+  }) : id = id ?? 'jellyfin-${Track.stableLocalId(baseUri.toString())}',
+       name = name ?? 'Jellyfin',
+       _requestLoader = requestLoader ?? _loadJellyfinJson,
+       _mutationLoader = mutationLoader ?? _loadJellyfinMutation,
+       _artworkLoader = artworkLoader ?? loadProviderImageBytes;
 
   static const defaultCapabilities = <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
@@ -86,30 +87,30 @@ class JellyfinProvider
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: baseUri.host.isEmpty ? const <String>[] : <String>[
-          baseUri.host,
-        ],
-        dataSent: const <String>[
-          'API key credential',
-          'Jellyfin user identifier',
-          'audio search query',
-          'audio search suggestion query',
-          'explicit artist, album, or playlist catalog search query',
-          'artist, album, and playlist browse identifiers',
-          'Home discovery list selection and result limit',
-          'radio seed item identifier and result limit',
-          'playlist names, membership, and track order changes',
-          'favorite track changes',
-          'favorite album changes',
-          'favorite artist changes',
-          'audio item stream identifier',
-          'cover art item identifier',
-        ],
-        requiresUserCredentials: true,
-        cachesMetadata: true,
-        cachesMedia: true,
-        supportsDownloads: true,
-      );
+    networkDomains: baseUri.host.isEmpty
+        ? const <String>[]
+        : <String>[baseUri.host],
+    dataSent: const <String>[
+      'API key credential',
+      'Jellyfin user identifier',
+      'audio search query',
+      'audio search suggestion query',
+      'explicit artist, album, or playlist catalog search query',
+      'artist, album, and playlist browse identifiers',
+      'Home discovery list selection and result limit',
+      'radio seed item identifier and result limit',
+      'playlist names, membership, and track order changes',
+      'favorite track changes',
+      'favorite album changes',
+      'favorite artist changes',
+      'audio item stream identifier',
+      'cover art item identifier',
+    ],
+    requiresUserCredentials: true,
+    cachesMetadata: true,
+    cachesMedia: true,
+    supportsDownloads: true,
+  );
 
   @override
   Future<List<Track>> search(String query) {
@@ -160,11 +161,7 @@ class JellyfinProvider
     return _guardRequest(() async {
       return parseJellyfinSearchPageResponse(
         await _requestLoader(
-          _searchUri(
-            normalizedQuery,
-            offset: offset,
-            limit: boundedLimit,
-          ),
+          _searchUri(normalizedQuery, offset: offset, limit: boundedLimit),
         ),
         sourceId: id,
         requestOffset: offset,
@@ -177,14 +174,11 @@ class JellyfinProvider
     await _guardRequest(() async {
       parseJellyfinItemsResponse(
         await _requestLoader(
-          _requestUri(
-            '/Users/$userId/Items',
-            const <String, String>{
-              'Recursive': 'true',
-              'IncludeItemTypes': 'Audio',
-              'Limit': '1',
-            },
-          ),
+          _requestUri('/Users/$userId/Items', const <String, String>{
+            'Recursive': 'true',
+            'IncludeItemTypes': 'Audio',
+            'Limit': '1',
+          }),
         ),
       );
     });
@@ -196,32 +190,23 @@ class JellyfinProvider
   ) {
     return _guardRequest(() async {
       final uri = switch (kind) {
-        MusicCatalogCollectionKind.artist => _requestUri(
-            '/Artists',
-            <String, String>{
-              'UserId': userId,
-              'IncludeItemTypes': 'Audio',
-              'SortBy': 'SortName',
-              'SortOrder': 'Ascending',
-              'Fields': 'Genres,RecursiveItemCount',
-              'EnableImages': 'true',
-              'EnableImageTypes': 'Primary',
-              'ImageTypeLimit': '1',
-              'EnableUserData': 'true',
-              'Limit': '500',
-            },
-          ),
-        MusicCatalogCollectionKind.album => _itemsUri(
-            itemType: 'MusicAlbum',
-          ),
-        MusicCatalogCollectionKind.playlist => _itemsUri(
-            itemType: 'Playlist',
-          ),
+        MusicCatalogCollectionKind.artist =>
+          _requestUri('/Artists', <String, String>{
+            'UserId': userId,
+            'IncludeItemTypes': 'Audio',
+            'SortBy': 'SortName',
+            'SortOrder': 'Ascending',
+            'Fields': 'Genres,RecursiveItemCount',
+            'EnableImages': 'true',
+            'EnableImageTypes': 'Primary',
+            'ImageTypeLimit': '1',
+            'EnableUserData': 'true',
+            'Limit': '500',
+          }),
+        MusicCatalogCollectionKind.album => _itemsUri(itemType: 'MusicAlbum'),
+        MusicCatalogCollectionKind.playlist => _itemsUri(itemType: 'Playlist'),
       };
-      return parseJellyfinCollectionsResponse(
-        await _requestLoader(uri),
-        kind,
-      );
+      return parseJellyfinCollectionsResponse(await _requestLoader(uri), kind);
     });
   }
 
@@ -257,28 +242,26 @@ class JellyfinProvider
         'EnableTotalRecordCount': 'true',
       };
       final uri = switch (kind) {
-        MusicCatalogCollectionKind.artist => _requestUri(
-            '/Artists',
-            <String, String>{
-              'UserId': userId,
-              'IncludeItemTypes': 'Audio',
-              'SortBy': 'SortName',
-              'SortOrder': 'Ascending',
-              'Fields': 'Genres,RecursiveItemCount',
-              'EnableImages': 'true',
-              'EnableImageTypes': 'Primary',
-              'ImageTypeLimit': '1',
-              ...pageParameters,
-            },
-          ),
+        MusicCatalogCollectionKind.artist =>
+          _requestUri('/Artists', <String, String>{
+            'UserId': userId,
+            'IncludeItemTypes': 'Audio',
+            'SortBy': 'SortName',
+            'SortOrder': 'Ascending',
+            'Fields': 'Genres,RecursiveItemCount',
+            'EnableImages': 'true',
+            'EnableImageTypes': 'Primary',
+            'ImageTypeLimit': '1',
+            ...pageParameters,
+          }),
         MusicCatalogCollectionKind.album => _itemsUri(
-            itemType: 'MusicAlbum',
-            extra: pageParameters,
-          ),
+          itemType: 'MusicAlbum',
+          extra: pageParameters,
+        ),
         MusicCatalogCollectionKind.playlist => _itemsUri(
-            itemType: 'Playlist',
-            extra: pageParameters,
-          ),
+          itemType: 'Playlist',
+          extra: pageParameters,
+        ),
       };
       return parseJellyfinCollectionPageResponse(
         await _requestLoader(uri),
@@ -320,50 +303,50 @@ class JellyfinProvider
       );
     }
     if (pagedDiscoveryKinds.contains(kind)) {
-      return (await browseDiscoveryCollectionsPage(kind, limit: limit))
-          .collections;
+      return (await browseDiscoveryCollectionsPage(
+        kind,
+        limit: limit,
+      )).collections;
     }
     if (kind == MusicCatalogDiscoveryKind.favoriteArtists) {
       final boundedLimit = limit.clamp(1, 50);
-      return _guardRequest(() async => parseJellyfinCollectionsResponse(
-            await _requestLoader(
-              _requestUri(
-                '/Artists',
-                <String, String>{
-                  'UserId': userId,
-                  'Filters': 'IsFavorite',
-                  'SortBy': 'SortName',
-                  'SortOrder': 'Ascending',
-                  'Fields': 'Genres,RecursiveItemCount',
-                  'EnableImages': 'true',
-                  'EnableImageTypes': 'Primary',
-                  'ImageTypeLimit': '1',
-                  'EnableUserData': 'true',
-                  'Limit': boundedLimit.toString(),
-                },
-              ),
-            ),
-            MusicCatalogCollectionKind.artist,
-          ));
+      return _guardRequest(
+        () async => parseJellyfinCollectionsResponse(
+          await _requestLoader(
+            _requestUri('/Artists', <String, String>{
+              'UserId': userId,
+              'Filters': 'IsFavorite',
+              'SortBy': 'SortName',
+              'SortOrder': 'Ascending',
+              'Fields': 'Genres,RecursiveItemCount',
+              'EnableImages': 'true',
+              'EnableImageTypes': 'Primary',
+              'ImageTypeLimit': '1',
+              'EnableUserData': 'true',
+              'Limit': boundedLimit.toString(),
+            }),
+          ),
+          MusicCatalogCollectionKind.artist,
+        ),
+      );
     }
     final boundedLimit = limit.clamp(1, 50);
-    return _guardRequest(() async => parseJellyfinLatestCollectionsResponse(
+    return _guardRequest(
+      () async => parseJellyfinLatestCollectionsResponse(
         await _requestLoader(
-          _requestUri(
-            '/Items/Latest',
-            <String, String>{
-              'userId': userId,
-              'includeItemTypes': 'MusicAlbum',
-              'fields': 'Genres,RecursiveItemCount,ChildCount',
-              'enableImages': 'true',
-              'enableImageTypes': 'Primary',
-              'imageTypeLimit': '1',
-              'limit': boundedLimit.toString(),
-              'groupItems': 'false',
-            },
-          ),
+          _requestUri('/Items/Latest', <String, String>{
+            'userId': userId,
+            'includeItemTypes': 'MusicAlbum',
+            'fields': 'Genres,RecursiveItemCount,ChildCount',
+            'enableImages': 'true',
+            'enableImageTypes': 'Primary',
+            'imageTypeLimit': '1',
+            'limit': boundedLimit.toString(),
+            'groupItems': 'false',
+          }),
         ),
-      ));
+      ),
+    );
   }
 
   @override
@@ -430,29 +413,27 @@ class JellyfinProvider
         'EnableTotalRecordCount': 'true',
       };
       final uri = switch (kind) {
-        MusicCatalogCollectionKind.artist => _requestUri(
-            '/Artists',
-            <String, String>{
-              'UserId': userId,
-              'IncludeItemTypes': 'Audio',
-              'SortBy': 'SortName',
-              'SortOrder': 'Ascending',
-              'Fields': 'Genres,RecursiveItemCount',
-              'EnableImages': 'true',
-              'EnableImageTypes': 'Primary',
-              'ImageTypeLimit': '1',
-              'EnableUserData': 'true',
-              ...pageParameters,
-            },
-          ),
+        MusicCatalogCollectionKind.artist =>
+          _requestUri('/Artists', <String, String>{
+            'UserId': userId,
+            'IncludeItemTypes': 'Audio',
+            'SortBy': 'SortName',
+            'SortOrder': 'Ascending',
+            'Fields': 'Genres,RecursiveItemCount',
+            'EnableImages': 'true',
+            'EnableImageTypes': 'Primary',
+            'ImageTypeLimit': '1',
+            'EnableUserData': 'true',
+            ...pageParameters,
+          }),
         MusicCatalogCollectionKind.album => _itemsUri(
-            itemType: 'MusicAlbum',
-            extra: pageParameters,
-          ),
+          itemType: 'MusicAlbum',
+          extra: pageParameters,
+        ),
         MusicCatalogCollectionKind.playlist => _itemsUri(
-            itemType: 'Playlist',
-            extra: pageParameters,
-          ),
+          itemType: 'Playlist',
+          extra: pageParameters,
+        ),
       };
       return parseJellyfinCollectionPageResponse(
         await _requestLoader(uri),
@@ -485,41 +466,41 @@ class JellyfinProvider
       );
     }
     final boundedLimit = limit.clamp(1, 50);
-    return _guardRequest(() async => parseJellyfinCollectionPageResponse(
-          await _requestLoader(
-            _itemsUri(
-              itemType: 'MusicAlbum',
-              extra: <String, String>{
-                'StartIndex': offset.toString(),
-                'Limit': boundedLimit.toString(),
-                'EnableTotalRecordCount': 'true',
-                'SortBy': switch (kind) {
-                  MusicCatalogDiscoveryKind.frequentlyPlayed => 'PlayCount',
-                  MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
-                  MusicCatalogDiscoveryKind.random => 'Random',
-                  MusicCatalogDiscoveryKind.favorites => 'SortName',
-                  MusicCatalogDiscoveryKind.favoriteArtists => 'SortName',
-                  MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
-                },
-                'SortOrder': 'Descending',
-                if (kind == MusicCatalogDiscoveryKind.frequentlyPlayed ||
-                    kind == MusicCatalogDiscoveryKind.recentlyPlayed)
-                  'IsPlayed': 'true',
-                if (kind == MusicCatalogDiscoveryKind.favorites)
-                  'IsFavorite': 'true',
+    return _guardRequest(
+      () async => parseJellyfinCollectionPageResponse(
+        await _requestLoader(
+          _itemsUri(
+            itemType: 'MusicAlbum',
+            extra: <String, String>{
+              'StartIndex': offset.toString(),
+              'Limit': boundedLimit.toString(),
+              'EnableTotalRecordCount': 'true',
+              'SortBy': switch (kind) {
+                MusicCatalogDiscoveryKind.frequentlyPlayed => 'PlayCount',
+                MusicCatalogDiscoveryKind.recentlyPlayed => 'DatePlayed',
+                MusicCatalogDiscoveryKind.random => 'Random',
+                MusicCatalogDiscoveryKind.favorites => 'SortName',
+                MusicCatalogDiscoveryKind.favoriteArtists => 'SortName',
+                MusicCatalogDiscoveryKind.recentlyAdded => 'DateCreated',
               },
-            ),
+              'SortOrder': 'Descending',
+              if (kind == MusicCatalogDiscoveryKind.frequentlyPlayed ||
+                  kind == MusicCatalogDiscoveryKind.recentlyPlayed)
+                'IsPlayed': 'true',
+              if (kind == MusicCatalogDiscoveryKind.favorites)
+                'IsFavorite': 'true',
+            },
           ),
-          MusicCatalogCollectionKind.album,
-          requestOffset: offset,
-          requestLimit: boundedLimit,
-        ));
+        ),
+        MusicCatalogCollectionKind.album,
+        requestOffset: offset,
+        requestLimit: boundedLimit,
+      ),
+    );
   }
 
   @override
-  Future<MusicCatalogDetail> loadCollection(
-    MusicCatalogCollection collection,
-  ) {
+  Future<MusicCatalogDetail> loadCollection(MusicCatalogCollection collection) {
     return _guardRequest(() async {
       switch (collection.kind) {
         case MusicCatalogCollectionKind.artist:
@@ -545,30 +526,21 @@ class JellyfinProvider
               ),
             ),
           ).map((item) => item.toTrack(sourceId: id)).toList(growable: false);
-          return MusicCatalogDetail(
-            collection: collection,
-            tracks: tracks,
-          );
+          return MusicCatalogDetail(collection: collection, tracks: tracks);
         case MusicCatalogCollectionKind.playlist:
           final tracks = parseJellyfinItemsResponse(
             await _requestLoader(
-              _requestUri(
-                '/Playlists/${collection.id}/Items',
-                <String, String>{
-                  'UserId': userId,
-                  'Fields': 'Genres,MediaSources',
-                  'EnableImages': 'true',
-                  'EnableImageTypes': 'Primary',
-                  'ImageTypeLimit': '1',
-                  'Limit': '500',
-                },
-              ),
+              _requestUri('/Playlists/${collection.id}/Items', <String, String>{
+                'UserId': userId,
+                'Fields': 'Genres,MediaSources',
+                'EnableImages': 'true',
+                'EnableImageTypes': 'Primary',
+                'ImageTypeLimit': '1',
+                'Limit': '500',
+              }),
             ),
           ).map((item) => item.toTrack(sourceId: id)).toList(growable: false);
-          return MusicCatalogDetail(
-            collection: collection,
-            tracks: tracks,
-          );
+          return MusicCatalogDetail(collection: collection, tracks: tracks);
       }
     });
   }
@@ -578,10 +550,7 @@ class JellyfinProvider
       MusicCatalogRadioSeedKind.values.toSet();
 
   @override
-  Future<List<Track>> loadRadio(
-    MusicCatalogRadioSeed seed, {
-    int limit = 50,
-  }) {
+  Future<List<Track>> loadRadio(MusicCatalogRadioSeed seed, {int limit = 50}) {
     final normalizedId = seed.id.trim();
     if (normalizedId.isEmpty) {
       return Future<List<Track>>.error(
@@ -607,17 +576,14 @@ class JellyfinProvider
     return _guardRequest(() async {
       return parseJellyfinItemsResponse(
         await _requestLoader(
-          _requestUri(
-            endpoint,
-            <String, String>{
-              'userId': userId,
-              'limit': boundedLimit.toString(),
-              'fields': 'Genres',
-              'enableImages': 'true',
-              'enableImageTypes': 'Primary',
-              'imageTypeLimit': '1',
-            },
-          ),
+          _requestUri(endpoint, <String, String>{
+            'userId': userId,
+            'limit': boundedLimit.toString(),
+            'fields': 'Genres',
+            'enableImages': 'true',
+            'enableImageTypes': 'Primary',
+            'imageTypeLimit': '1',
+          }),
         ),
       ).map((item) => item.toTrack(sourceId: id)).toList(growable: false);
     });
@@ -635,11 +601,7 @@ class JellyfinProvider
     }
     return _guardRequest(
       () => _artworkLoader(
-        _artworkUri(
-          normalizedId,
-          version: version,
-          maxWidth: maxWidth,
-        ),
+        _artworkUri(normalizedId, version: version, maxWidth: maxWidth),
         <String, String>{'X-Emby-Token': apiKey},
       ),
     );
@@ -653,16 +615,13 @@ class JellyfinProvider
     final normalizedName = _requiredPlaylistName(name);
     final normalizedTrackIds = _playlistTrackIds(trackIds);
     return _guardRequest(
-      () => _mutationLoader(
-        _requestUri('/Playlists'),
-        'POST',
-        <String, Object?>{
-          'Name': normalizedName,
-          'Ids': normalizedTrackIds,
-          'UserId': userId,
-          'MediaType': 'Audio',
-        },
-      ),
+      () =>
+          _mutationLoader(_requestUri('/Playlists'), 'POST', <String, Object?>{
+            'Name': normalizedName,
+            'Ids': normalizedTrackIds,
+            'UserId': userId,
+            'MediaType': 'Audio',
+          }),
     );
   }
 
@@ -703,13 +662,10 @@ class JellyfinProvider
     }
     await _guardRequest(
       () => _mutationLoader(
-        _requestUri(
-          '/Playlists/$normalizedPlaylistId/Items',
-          <String, String>{
-            'ids': normalizedTrackIds.join(','),
-            'userId': userId,
-          },
-        ),
+        _requestUri('/Playlists/$normalizedPlaylistId/Items', <String, String>{
+          'ids': normalizedTrackIds.join(','),
+          'userId': userId,
+        }),
         'POST',
         null,
       ),
@@ -717,10 +673,7 @@ class JellyfinProvider
   }
 
   @override
-  Future<void> replacePlaylistTracks(
-    String playlistId,
-    List<String> trackIds,
-  ) {
+  Future<void> replacePlaylistTracks(String playlistId, List<String> trackIds) {
     final normalizedPlaylistId = _requiredPlaylistId(playlistId);
     final normalizedTrackIds = _playlistTrackIds(trackIds);
     return _guardRequest(
@@ -752,55 +705,39 @@ class JellyfinProvider
   }
 
   Uri streamUriFor(String itemId) {
-    return _requestUri(
-      '/Audio/$itemId/stream',
-      <String, String>{
-        'static': 'true',
-        'UserId': userId,
-      },
-    );
+    return _requestUri('/Audio/$itemId/stream', <String, String>{
+      'static': 'true',
+      'UserId': userId,
+    });
   }
 
-  Uri _searchUri(
-    String query, {
-    required int offset,
-    required int limit,
-  }) {
-    return _requestUri(
-      '/Users/$userId/Items',
-      <String, String>{
-        'Recursive': 'true',
-        'IncludeItemTypes': 'Audio',
-        'SearchTerm': query,
-        'Fields': 'Genres,MediaSources',
-        'EnableImages': 'true',
-        'EnableImageTypes': 'Primary',
-        'ImageTypeLimit': '1',
-        'StartIndex': offset.toString(),
-        'Limit': limit.toString(),
-        'EnableTotalRecordCount': 'true',
-        'EnableUserData': 'true',
-      },
-    );
+  Uri _searchUri(String query, {required int offset, required int limit}) {
+    return _requestUri('/Users/$userId/Items', <String, String>{
+      'Recursive': 'true',
+      'IncludeItemTypes': 'Audio',
+      'SearchTerm': query,
+      'Fields': 'Genres,MediaSources',
+      'EnableImages': 'true',
+      'EnableImageTypes': 'Primary',
+      'ImageTypeLimit': '1',
+      'StartIndex': offset.toString(),
+      'Limit': limit.toString(),
+      'EnableTotalRecordCount': 'true',
+      'EnableUserData': 'true',
+    });
   }
 
   Uri _searchHintsUri(String query, {required int limit}) {
-    return _requestUri(
-      '/Search/Hints',
-      <String, String>{
-        'SearchTerm': query,
-        'UserId': userId,
-        'IncludeItemTypes': 'Audio,MusicAlbum,MusicArtist',
-        'Limit': limit.toString(),
-      },
-    );
+    return _requestUri('/Search/Hints', <String, String>{
+      'SearchTerm': query,
+      'UserId': userId,
+      'IncludeItemTypes': 'Audio,MusicAlbum,MusicArtist',
+      'Limit': limit.toString(),
+    });
   }
 
   @override
-  Future<void> setTrackFavorite(
-    String trackId, {
-    required bool isFavorite,
-  }) {
+  Future<void> setTrackFavorite(String trackId, {required bool isFavorite}) {
     final normalizedTrackId = _requiredPlaylistId(trackId);
     return _guardRequest(
       () => _mutationLoader(
@@ -812,10 +749,7 @@ class JellyfinProvider
   }
 
   @override
-  Future<void> setAlbumFavorite(
-    String albumId, {
-    required bool isFavorite,
-  }) {
+  Future<void> setAlbumFavorite(String albumId, {required bool isFavorite}) {
     final normalizedAlbumId = _requiredPlaylistId(albumId);
     return _guardRequest(
       () => _mutationLoader(
@@ -842,24 +776,21 @@ class JellyfinProvider
     required String itemType,
     Map<String, String> extra = const <String, String>{},
   }) {
-    return _requestUri(
-      '/Users/$userId/Items',
-      <String, String>{
-        'Recursive': 'true',
-        'IncludeItemTypes': itemType,
-        'SortBy': itemType == 'Audio'
-            ? 'ParentIndexNumber,IndexNumber,SortName'
-            : 'SortName',
-        'SortOrder': 'Ascending',
-        'Fields': 'Genres,RecursiveItemCount,ChildCount',
-        'EnableImages': 'true',
-        'EnableImageTypes': 'Primary',
-        'ImageTypeLimit': '1',
-        'EnableUserData': 'true',
-        'Limit': '500',
-        ...extra,
-      },
-    );
+    return _requestUri('/Users/$userId/Items', <String, String>{
+      'Recursive': 'true',
+      'IncludeItemTypes': itemType,
+      'SortBy': itemType == 'Audio'
+          ? 'ParentIndexNumber,IndexNumber,SortName'
+          : 'SortName',
+      'SortOrder': 'Ascending',
+      'Fields': 'Genres,RecursiveItemCount,ChildCount',
+      'EnableImages': 'true',
+      'EnableImageTypes': 'Primary',
+      'ImageTypeLimit': '1',
+      'EnableUserData': 'true',
+      'Limit': '500',
+      ...extra,
+    });
   }
 
   Uri _artworkUri(
@@ -893,10 +824,7 @@ class JellyfinProvider
   ]) {
     return baseUri.replace(
       path: _joinUriPath(baseUri.path, endpointPath),
-      queryParameters: <String, String>{
-        'api_key': apiKey,
-        ...parameters,
-      },
+      queryParameters: <String, String>{'api_key': apiKey, ...parameters},
     );
   }
 
@@ -938,11 +866,7 @@ final class JellyfinAudioItem {
 
   bool get hasPrimaryImage => primaryImageTag.isNotEmpty;
 
-  Track toTrack({
-    required String sourceId,
-    Uri? streamUri,
-    Uri? artworkUri,
-  }) {
+  Track toTrack({required String sourceId, Uri? streamUri, Uri? artworkUri}) {
     return Track(
       id: Track.stableLocalId('$sourceId|$id'),
       title: title.isEmpty ? id : title,
@@ -952,8 +876,7 @@ final class JellyfinAudioItem {
       duration: duration,
       artworkUri: artworkUri,
       providerArtworkId: hasPrimaryImage ? id : null,
-      providerArtworkVersion:
-          hasPrimaryImage ? primaryImageTag : null,
+      providerArtworkVersion: hasPrimaryImage ? primaryImageTag : null,
       streamUrl: streamUri?.toString(),
       sourceId: sourceId,
       externalId: id,
@@ -999,7 +922,8 @@ MusicSourceSearchPage parseJellyfinSearchPageResponse(
       : reportedStart;
   final totalCount = _optionalNonNegativeInt(decoded['TotalRecordCount']);
   final nextOffset = startIndex + rawItems.length;
-  final hasMore = rawItems.isNotEmpty &&
+  final hasMore =
+      rawItems.isNotEmpty &&
       (totalCount == null
           ? rawItems.length >= requestLimit
           : nextOffset < totalCount);
@@ -1040,14 +964,13 @@ List<MusicSourceSearchSuggestion> parseJellyfinSearchHintsResponse(
         .join(', ');
     final album = (hint['Album'] as String? ?? '').trim();
     final subtitle = switch (kind) {
-      MusicSourceSearchSuggestionKind.track => artists.isNotEmpty
-          ? artists
-          : album.isEmpty
-          ? null
-          : album,
-      MusicSourceSearchSuggestionKind.album => artists.isEmpty
-          ? null
-          : artists,
+      MusicSourceSearchSuggestionKind.track =>
+        artists.isNotEmpty
+            ? artists
+            : album.isEmpty
+            ? null
+            : album,
+      MusicSourceSearchSuggestionKind.album => artists.isEmpty ? null : artists,
       MusicSourceSearchSuggestionKind.artist => null,
     };
     values.putIfAbsent(
@@ -1103,7 +1026,8 @@ MusicCatalogCollectionPage parseJellyfinCollectionPageResponse(
       : reportedStart;
   final totalCount = _optionalNonNegativeInt(decoded['TotalRecordCount']);
   final nextOffset = startIndex + rawItems.length;
-  final hasMore = rawItems.isNotEmpty &&
+  final hasMore =
+      rawItems.isNotEmpty &&
       (totalCount == null
           ? rawItems.length >= requestLimit
           : nextOffset < totalCount);
@@ -1129,10 +1053,7 @@ List<MusicCatalogCollection> parseJellyfinLatestCollectionsResponse(
       .whereType<Map<dynamic, dynamic>>()
       .map((item) => item.cast<String, Object?>())
       .map(
-        (item) => _jellyfinCollection(
-          item,
-          MusicCatalogCollectionKind.album,
-        ),
+        (item) => _jellyfinCollection(item, MusicCatalogCollectionKind.album),
       )
       .whereType<MusicCatalogCollection>()
       .toList(growable: false);
@@ -1149,9 +1070,7 @@ MusicCatalogCollection? _jellyfinCollection(
   final title = _stringValue(json['Name']);
   final artist = _artistName(json);
   final year = _intValue(json['ProductionYear']);
-  final itemCount = _intValue(
-    json['RecursiveItemCount'] ?? json['ChildCount'],
-  );
+  final itemCount = _intValue(json['RecursiveItemCount'] ?? json['ChildCount']);
   final primaryImageTag = _primaryImageTag(json);
   final subtitleParts = <String>[
     if (kind == MusicCatalogCollectionKind.album && artist.isNotEmpty) artist,
@@ -1263,17 +1182,19 @@ String _requiredPlaylistId(String playlistId) {
 }
 
 List<String> _playlistTrackIds(List<String> trackIds) {
-  return trackIds.map((trackId) {
-    final normalized = trackId.trim();
-    if (normalized.isEmpty) {
-      throw ArgumentError.value(
-        trackIds,
-        'trackIds',
-        'Playlist track IDs cannot be empty.',
-      );
-    }
-    return normalized;
-  }).toList(growable: false);
+  return trackIds
+      .map((trackId) {
+        final normalized = trackId.trim();
+        if (normalized.isEmpty) {
+          throw ArgumentError.value(
+            trackIds,
+            'trackIds',
+            'Playlist track IDs cannot be empty.',
+          );
+        }
+        return normalized;
+      })
+      .toList(growable: false);
 }
 
 String _artistName(Map<String, Object?> json) {
@@ -1324,10 +1245,9 @@ List<Object?> _jsonList(Object? value) {
 }
 
 List<String> _stringList(Object? value) {
-  return _jsonList(value)
-      .map(_stringValue)
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
+  return _jsonList(
+    value,
+  ).map(_stringValue).where((item) => item.isNotEmpty).toList(growable: false);
 }
 
 String _firstString(Object? value) {

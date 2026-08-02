@@ -97,9 +97,7 @@ void main() {
       ),
     );
 
-    final file = File(
-      p.join(manager.mediaDirectory.path, '${entry.id}.ogg'),
-    );
+    final file = File(p.join(manager.mediaDirectory.path, '${entry.id}.ogg'));
     expect(await file.exists(), isFalse);
     expect(await File('${file.path}.part').exists(), isFalse);
   });
@@ -162,77 +160,80 @@ void main() {
     }
   });
 
-  test('cancels an active HTTP cache while retaining a resumable partial file',
-      () async {
-    final firstChunkSent = Completer<void>();
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    server.listen((request) async {
-      try {
-        final startsAt = request.headers.value(HttpHeaders.rangeHeader) ==
-                'bytes=2-'
-            ? 2
-            : 0;
-        final bytes = <int>[1, 2, 3, 4, 5, 6, 7, 8]
-            .skip(startsAt)
-            .toList(growable: false);
-        request.response.headers.contentType = ContentType('audio', 'mpeg');
-        request.response.headers.contentLength = bytes.length;
-        if (startsAt > 0) {
-          request.response.statusCode = HttpStatus.partialContent;
+  test(
+    'cancels an active HTTP cache while retaining a resumable partial file',
+    () async {
+      final firstChunkSent = Completer<void>();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        try {
+          final startsAt =
+              request.headers.value(HttpHeaders.rangeHeader) == 'bytes=2-'
+              ? 2
+              : 0;
+          final bytes = <int>[
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+          ].skip(startsAt).toList(growable: false);
+          request.response.headers.contentType = ContentType('audio', 'mpeg');
+          request.response.headers.contentLength = bytes.length;
+          if (startsAt > 0) {
+            request.response.statusCode = HttpStatus.partialContent;
+          }
+          request.response.add(bytes.take(2).toList());
+          await request.response.flush();
+          firstChunkSent.complete();
+          await Future<void>.delayed(const Duration(seconds: 1));
+          request.response.add(bytes.skip(2).toList());
+          await request.response.close();
+        } on Object {
+          // The client deliberately closes the request after cancellation.
         }
-        request.response.add(bytes.take(2).toList());
-        await request.response.flush();
-        firstChunkSent.complete();
-        await Future<void>.delayed(const Duration(seconds: 1));
-        request.response.add(bytes.skip(2).toList());
-        await request.response.close();
-      } on Object {
-        // The client deliberately closes the request after cancellation.
+      });
+
+      try {
+        final entry = OfflineCacheEntry(
+          id: 'entry-cancel',
+          track: Track(
+            id: 'track-cancel',
+            title: 'Cancelable archive',
+            sourceId: 'internet-archive',
+            streamUrl: 'http://127.0.0.1:${server.port}/media/song.mp3',
+          ),
+          action: OfflineMediaAction.cache,
+          createdAt: DateTime.utc(2026, 1, 17),
+        );
+        final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+        await manager.mediaDirectory.create(recursive: true);
+        final partialFile = File(
+          p.join(manager.mediaDirectory.path, '${entry.id}.mp3.part'),
+        );
+        await partialFile.writeAsBytes(<int>[1, 2]);
+        final token = OfflineCacheCancellationToken();
+        final operation = manager.materialize(entry, cancellationToken: token);
+
+        await firstChunkSent.future;
+        token.cancel();
+
+        await expectLater(operation, throwsA(isA<OfflineCacheCancelled>()));
+        final completedFile = File(
+          p.join(manager.mediaDirectory.path, '${entry.id}.mp3'),
+        );
+        expect(await partialFile.exists(), isTrue);
+        expect(await partialFile.length(), greaterThan(0));
+        expect((await partialFile.readAsBytes()).take(2).toList(), <int>[1, 2]);
+        expect(await completedFile.exists(), isFalse);
+      } finally {
+        await server.close(force: true);
       }
-    });
-
-    try {
-      final entry = OfflineCacheEntry(
-        id: 'entry-cancel',
-        track: Track(
-          id: 'track-cancel',
-          title: 'Cancelable archive',
-          sourceId: 'internet-archive',
-          streamUrl: 'http://127.0.0.1:${server.port}/media/song.mp3',
-        ),
-        action: OfflineMediaAction.cache,
-        createdAt: DateTime.utc(2026, 1, 17),
-      );
-      final manager = OfflineCacheManager(cacheRoot: cacheRoot);
-      await manager.mediaDirectory.create(recursive: true);
-      final partialFile = File(
-        p.join(manager.mediaDirectory.path, '${entry.id}.mp3.part'),
-      );
-      await partialFile.writeAsBytes(<int>[1, 2]);
-      final token = OfflineCacheCancellationToken();
-      final operation = manager.materialize(
-        entry,
-        cancellationToken: token,
-      );
-
-      await firstChunkSent.future;
-      token.cancel();
-
-      await expectLater(operation, throwsA(isA<OfflineCacheCancelled>()));
-      final completedFile = File(
-        p.join(manager.mediaDirectory.path, '${entry.id}.mp3'),
-      );
-      expect(await partialFile.exists(), isTrue);
-      expect(await partialFile.length(), greaterThan(0));
-      expect(
-        (await partialFile.readAsBytes()).take(2).toList(),
-        <int>[1, 2],
-      );
-      expect(await completedFile.exists(), isFalse);
-    } finally {
-      await server.close(force: true);
-    }
-  });
+    },
+  );
 
   test('measures and evicts only private cached media', () async {
     final manager = OfflineCacheManager(cacheRoot: cacheRoot);
@@ -288,10 +289,7 @@ void main() {
     expect(usage.byteCount, 12);
     expect(usage.cachedEntryCount, 3);
 
-    final result = await manager.evictToSize(
-      entries: entries,
-      maxBytes: 5,
-    );
+    final result = await manager.evictToSize(entries: entries, maxBytes: 5);
 
     expect(result.bytesBefore, 12);
     expect(result.bytesAfter, 5);
@@ -337,56 +335,67 @@ void main() {
     expect(verified.file.path, cachedFile.path);
     expect(verified.byteCount, bytes.length);
     expect(verified.checksum, checksum);
-    expect(manager.exportDisplayName(entry), 'Archive Artist - Unsafe Song.ogg');
+    expect(
+      manager.exportDisplayName(entry),
+      'Archive Artist - Unsafe Song.ogg',
+    );
 
     final export = await manager.exportCachedMedia(
       entry: entry,
       destinationDirectory: exportDirectory,
     );
 
-    expect(p.basename(export.file.path), 'Archive Artist - Unsafe Song (2).ogg');
+    expect(
+      p.basename(export.file.path),
+      'Archive Artist - Unsafe Song (2).ogg',
+    );
     expect(export.byteCount, bytes.length);
     expect(export.checksum, checksum);
     expect(await export.file.readAsBytes(), bytes);
     expect(await cachedFile.exists(), isTrue);
   });
 
-  test('rejects public export for non-private or changed cache files', () async {
-    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
-    await manager.mediaDirectory.create(recursive: true);
-    final privateFile = File(p.join(manager.mediaDirectory.path, 'private.mp3'));
-    final externalFile = File(p.join(cacheRoot.path, 'external.mp3'));
-    await privateFile.writeAsBytes(<int>[1, 2, 3]);
-    await externalFile.writeAsBytes(<int>[1, 2, 3]);
-    final exportDirectory = Directory(p.join(cacheRoot.path, 'exports'));
+  test(
+    'rejects public export for non-private or changed cache files',
+    () async {
+      final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+      await manager.mediaDirectory.create(recursive: true);
+      final privateFile = File(
+        p.join(manager.mediaDirectory.path, 'private.mp3'),
+      );
+      final externalFile = File(p.join(cacheRoot.path, 'external.mp3'));
+      await privateFile.writeAsBytes(<int>[1, 2, 3]);
+      await externalFile.writeAsBytes(<int>[1, 2, 3]);
+      final exportDirectory = Directory(p.join(cacheRoot.path, 'exports'));
 
-    expect(
-      manager.exportCachedMedia(
-        entry: _cachedEntry(
-          'external',
-          'External cache',
-          externalFile.path,
-          updatedAt: DateTime.utc(2026, 1, 17),
+      expect(
+        manager.exportCachedMedia(
+          entry: _cachedEntry(
+            'external',
+            'External cache',
+            externalFile.path,
+            updatedAt: DateTime.utc(2026, 1, 17),
+          ),
+          destinationDirectory: exportDirectory,
         ),
-        destinationDirectory: exportDirectory,
-      ),
-      throwsA(isA<StateError>()),
-    );
-    expect(
-      manager.exportCachedMedia(
-        entry: _cachedEntry(
-          'changed',
-          'Changed cache',
-          privateFile.path,
-          updatedAt: DateTime.utc(2026, 1, 17),
-          cachedByteCount: 3,
-          cachedMediaChecksum: 'wrong-checksum',
+        throwsA(isA<StateError>()),
+      );
+      expect(
+        manager.exportCachedMedia(
+          entry: _cachedEntry(
+            'changed',
+            'Changed cache',
+            privateFile.path,
+            updatedAt: DateTime.utc(2026, 1, 17),
+            cachedByteCount: 3,
+            cachedMediaChecksum: 'wrong-checksum',
+          ),
+          destinationDirectory: exportDirectory,
         ),
-        destinationDirectory: exportDirectory,
-      ),
-      throwsA(isA<StateError>()),
-    );
-  });
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 
   test('enforces configured cache limit and marks evicted entries', () async {
     final manager = OfflineCacheManager(cacheRoot: cacheRoot);

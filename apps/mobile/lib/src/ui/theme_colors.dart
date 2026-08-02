@@ -60,19 +60,20 @@ ThemeData amoledThemeForAccent(
   ColorScheme? dynamicColorScheme,
   VisualDensity visualDensity = VisualDensity.standard,
 }) {
-  final colorScheme = darkColorSchemeForAccent(
-    accentColor,
-    dynamicColorScheme: dynamicColorScheme,
-  ).copyWith(
-    surface: Colors.black,
-    surfaceDim: Colors.black,
-    surfaceBright: const Color(0xFF181818),
-    surfaceContainerLowest: Colors.black,
-    surfaceContainerLow: const Color(0xFF050505),
-    surfaceContainer: const Color(0xFF090909),
-    surfaceContainerHigh: const Color(0xFF0E0E0E),
-    surfaceContainerHighest: const Color(0xFF151515),
-  );
+  final colorScheme =
+      darkColorSchemeForAccent(
+        accentColor,
+        dynamicColorScheme: dynamicColorScheme,
+      ).copyWith(
+        surface: Colors.black,
+        surfaceDim: Colors.black,
+        surfaceBright: const Color(0xFF181818),
+        surfaceContainerLowest: Colors.black,
+        surfaceContainerLow: const Color(0xFF050505),
+        surfaceContainer: const Color(0xFF090909),
+        surfaceContainerHigh: const Color(0xFF0E0E0E),
+        surfaceContainerHighest: const Color(0xFF151515),
+      );
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
@@ -88,9 +89,7 @@ ThemeData amoledThemeForAccent(
       backgroundColor: colorScheme.surfaceContainer,
       modalBackgroundColor: colorScheme.surfaceContainer,
     ),
-    popupMenuTheme: PopupMenuThemeData(
-      color: colorScheme.surfaceContainerHigh,
-    ),
+    popupMenuTheme: PopupMenuThemeData(color: colorScheme.surfaceContainerHigh),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colorScheme.surfaceContainerLow,

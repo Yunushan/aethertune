@@ -54,14 +54,17 @@ void main() {
     expect(library.tracks.single.title, 'Channel first');
     expect(library.tracks.single.isPlayable, isFalse);
 
-    await tester.tap(find.text('Load more public channel videos (1 remaining)'));
+    await tester.tap(
+      find.text('Load more public channel videos (1 remaining)'),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Channel second'), findsOneWidget);
     expect(cursors, <String?>[null, 'next']);
   });
 }
 
-String _channelVideoPage(String title, String id, String? nextPageToken) => '''
+String _channelVideoPage(String title, String id, String? nextPageToken) =>
+    '''
 {
   "nextPageToken": ${nextPageToken == null ? 'null' : '"$nextPageToken"'},
   "pageInfo": {"totalResults": 2},

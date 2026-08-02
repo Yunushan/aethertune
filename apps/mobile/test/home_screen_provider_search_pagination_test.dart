@@ -23,124 +23,8 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('filters retained provider search results without a new request', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
-    addTearDown(tester.view.reset);
-
-    final library = LibraryStore();
-    await library.load();
-    addTearDown(library.dispose);
-    final selfHosted = SelfHostedProviderStore();
-    await selfHosted.load();
-    addTearDown(selfHosted.dispose);
-    final sync = LibrarySyncStore();
-    await sync.load();
-    addTearDown(sync.dispose);
-    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
-    addTearDown(folderWatch.dispose);
-    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
-    addTearDown(player.dispose);
-    final alpha = _FacetSearchProvider(
-      id: 'alpha-test',
-      name: 'Alpha catalog',
-      title: 'Alpha Signal',
-    );
-    final beta = _FacetSearchProvider(
-      id: 'beta-test',
-      name: 'Beta catalog',
-      title: 'Beta Signal',
-    );
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<LibraryStore>.value(value: library),
-          ChangeNotifierProvider<SelfHostedProviderStore>.value(
-            value: selfHosted,
-          ),
-          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
-          ChangeNotifierProvider<LocalFolderWatchStore>.value(
-            value: folderWatch,
-          ),
-          ChangeNotifierProvider<PlayerController>.value(value: player),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: HomeScreen(
-            initialTab: 4,
-            providerSearchProviders: <MusicSourceProvider>[alpha, beta],
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final scrollable = find.byType(Scrollable).first;
-    final searchField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField &&
-          widget.decoration?.labelText == 'Search library and providers',
-    );
-    await tester.scrollUntilVisible(searchField, 300, scrollable: scrollable);
-    await tester.enterText(searchField, 'signal');
-    await tester.tap(find.byTooltip('Search library and providers'));
-    await tester.pumpAndSettle();
-
-    expect(alpha.calls, <String>['signal|initial']);
-    expect(beta.calls, <String>['signal|initial']);
-    final betaFacet = find.byKey(
-      const ValueKey<String>('provider-search-source-beta-test'),
-    );
-    await tester.scrollUntilVisible(betaFacet, 200, scrollable: scrollable);
-    expect(find.byKey(const ValueKey<String>('provider-search-source-all')),
-        findsOneWidget);
-    await tester.tap(betaFacet);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Alpha Signal'), findsNothing);
-    final betaResult = find.byKey(
-      const ValueKey<String>(
-        'provider-search-result-beta-test-beta-test-signal',
-      ),
-    );
-    await tester.scrollUntilVisible(betaResult, 200, scrollable: scrollable);
-    expect(find.text('Beta Signal'), findsOneWidget);
-    expect(alpha.calls, <String>['signal|initial']);
-    expect(beta.calls, <String>['signal|initial']);
-
-    final loadMore = find.byKey(
-      const ValueKey<String>('provider-search-load-more'),
-    );
-    await tester.scrollUntilVisible(loadMore, 200, scrollable: scrollable);
-    await tester.tap(loadMore);
-    await tester.pumpAndSettle();
-    expect(alpha.calls, <String>['signal|initial']);
-    expect(beta.calls, <String>['signal|initial', 'signal|next']);
-
-    final allSources = find.byKey(
-      const ValueKey<String>('provider-search-source-all'),
-    );
-    await tester.scrollUntilVisible(allSources, -200, scrollable: scrollable);
-    await tester.tap(allSources);
-    await tester.pumpAndSettle();
-
-    final alphaResult = find.byKey(
-      const ValueKey<String>(
-        'provider-search-result-alpha-test-alpha-test-signal',
-      ),
-    );
-    await tester.scrollUntilVisible(alphaResult, 200, scrollable: scrollable);
-    expect(find.text('Alpha Signal'), findsOneWidget);
-    expect(alpha.calls, <String>['signal|initial']);
-    expect(beta.calls, <String>['signal|initial', 'signal|next']);
-  });
-
   testWidgets(
-    'retains provider search results and retries the failed cursor',
+    'filters retained provider search results without a new request',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(390, 844);
@@ -159,7 +43,16 @@ void main() {
       addTearDown(folderWatch.dispose);
       final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
       addTearDown(player.dispose);
-      final provider = _PagedSearchProvider();
+      final alpha = _FacetSearchProvider(
+        id: 'alpha-test',
+        name: 'Alpha catalog',
+        title: 'Alpha Signal',
+      );
+      final beta = _FacetSearchProvider(
+        id: 'beta-test',
+        name: 'Beta catalog',
+        title: 'Beta Signal',
+      );
 
       await tester.pumpWidget(
         MultiProvider(
@@ -179,123 +72,211 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             home: HomeScreen(
               initialTab: 4,
-              providerSearchProviders: <MusicSourceProvider>[provider],
+              providerSearchProviders: <MusicSourceProvider>[alpha, beta],
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
 
+      final scrollable = find.byType(Scrollable).first;
       final searchField = find.byWidgetPredicate(
         (widget) =>
             widget is TextField &&
             widget.decoration?.labelText == 'Search library and providers',
       );
-      final scrollable = find.byType(Scrollable).first;
       await tester.scrollUntilVisible(searchField, 300, scrollable: scrollable);
-      await tester.enterText(searchField, 'aether');
+      await tester.enterText(searchField, 'signal');
       await tester.tap(find.byTooltip('Search library and providers'));
       await tester.pumpAndSettle();
 
-      expect(provider.calls, <String>['aether|initial|8']);
-      final firstResult = find.byKey(
+      expect(alpha.calls, <String>['signal|initial']);
+      expect(beta.calls, <String>['signal|initial']);
+      final betaFacet = find.byKey(
+        const ValueKey<String>('provider-search-source-beta-test'),
+      );
+      await tester.scrollUntilVisible(betaFacet, 200, scrollable: scrollable);
+      expect(
+        find.byKey(const ValueKey<String>('provider-search-source-all')),
+        findsOneWidget,
+      );
+      await tester.tap(betaFacet);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alpha Signal'), findsNothing);
+      final betaResult = find.byKey(
         const ValueKey<String>(
-          'provider-search-result-paged-test-first-provider-result',
+          'provider-search-result-beta-test-beta-test-signal',
         ),
       );
-      await tester.scrollUntilVisible(
-        firstResult,
-        300,
-        scrollable: scrollable,
-      );
-      expect(find.text('First Provider Result'), findsOneWidget);
+      await tester.scrollUntilVisible(betaResult, 200, scrollable: scrollable);
+      expect(find.text('Beta Signal'), findsOneWidget);
+      expect(alpha.calls, <String>['signal|initial']);
+      expect(beta.calls, <String>['signal|initial']);
 
       final loadMore = find.byKey(
         const ValueKey<String>('provider-search-load-more'),
       );
-      await tester.scrollUntilVisible(loadMore, 300, scrollable: scrollable);
-      final providerSearchOffset = tester
-          .state<ScrollableState>(scrollable)
-          .position
-          .pixels;
-      await library.setOfflineModeEnabled(true);
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(loadMore, 300, scrollable: scrollable);
-      expect(tester.widget<OutlinedButton>(loadMore).onPressed, isNull);
-      expect(provider.calls, <String>['aether|initial|8']);
-
-      await library.setOfflineModeEnabled(false);
-      await tester.pumpAndSettle();
-      tester
-          .state<ScrollableState>(scrollable)
-          .position
-          .jumpTo(providerSearchOffset);
-      await tester.pumpAndSettle();
-      expect(loadMore, findsOneWidget);
-      expect(tester.widget<OutlinedButton>(loadMore).onPressed, isNotNull);
+      await tester.scrollUntilVisible(loadMore, 200, scrollable: scrollable);
       await tester.tap(loadMore);
       await tester.pumpAndSettle();
+      expect(alpha.calls, <String>['signal|initial']);
+      expect(beta.calls, <String>['signal|initial', 'signal|next']);
 
-      await tester.scrollUntilVisible(
-        firstResult,
-        -300,
-        scrollable: scrollable,
+      final allSources = find.byKey(
+        const ValueKey<String>('provider-search-source-all'),
       );
-      expect(find.text('First Provider Result'), findsOneWidget);
-      final loadMoreError = find.byKey(
+      await tester.scrollUntilVisible(allSources, -200, scrollable: scrollable);
+      await tester.tap(allSources);
+      await tester.pumpAndSettle();
+
+      final alphaResult = find.byKey(
         const ValueKey<String>(
-          'provider-search-load-more-error-paged-test',
+          'provider-search-result-alpha-test-alpha-test-signal',
         ),
       );
-      await tester.scrollUntilVisible(
-        loadMoreError,
-        300,
-        scrollable: scrollable,
-      );
-      expect(loadMoreError, findsOneWidget);
-      expect(find.text('Second Provider Result'), findsNothing);
-
-      final retry = find.byKey(
-        const ValueKey<String>('provider-search-load-more-retry'),
-      );
-      await tester.drag(scrollable, const Offset(0, -200));
-      await tester.pumpAndSettle();
-      expect(retry, findsOneWidget);
-      await tester.ensureVisible(retry);
-      await tester.pumpAndSettle();
-      await tester.tap(retry);
-      await tester.pumpAndSettle();
-
-      final secondResult = find.byKey(
-        const ValueKey<String>(
-          'provider-search-result-paged-test-second-provider-result',
-        ),
-      );
-      await tester.scrollUntilVisible(
-        firstResult,
-        -300,
-        scrollable: scrollable,
-      );
-      expect(find.text('First Provider Result'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        secondResult,
-        300,
-        scrollable: scrollable,
-      );
-      expect(find.text('Second Provider Result'), findsOneWidget);
-      expect(loadMore, findsNothing);
-      expect(retry, findsNothing);
-      expect(provider.searchCalls, 0);
-      expect(provider.calls, <String>[
-        'aether|initial|8',
-        'aether|second|8',
-        'aether|second|8',
-      ]);
+      await tester.scrollUntilVisible(alphaResult, 200, scrollable: scrollable);
+      expect(find.text('Alpha Signal'), findsOneWidget);
+      expect(alpha.calls, <String>['signal|initial']);
+      expect(beta.calls, <String>['signal|initial', 'signal|next']);
     },
   );
 
-  testWidgets('uses a provider suggestion to launch unified search',
-      (tester) async {
+  testWidgets('retains provider search results and retries the failed cursor', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    final provider = _PagedSearchProvider();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(
+            initialTab: 4,
+            providerSearchProviders: <MusicSourceProvider>[provider],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final searchField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == 'Search library and providers',
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(searchField, 300, scrollable: scrollable);
+    await tester.enterText(searchField, 'aether');
+    await tester.tap(find.byTooltip('Search library and providers'));
+    await tester.pumpAndSettle();
+
+    expect(provider.calls, <String>['aether|initial|8']);
+    final firstResult = find.byKey(
+      const ValueKey<String>(
+        'provider-search-result-paged-test-first-provider-result',
+      ),
+    );
+    await tester.scrollUntilVisible(firstResult, 300, scrollable: scrollable);
+    expect(find.text('First Provider Result'), findsOneWidget);
+
+    final loadMore = find.byKey(
+      const ValueKey<String>('provider-search-load-more'),
+    );
+    await tester.scrollUntilVisible(loadMore, 300, scrollable: scrollable);
+    final providerSearchOffset = tester
+        .state<ScrollableState>(scrollable)
+        .position
+        .pixels;
+    await library.setOfflineModeEnabled(true);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(loadMore, 300, scrollable: scrollable);
+    expect(tester.widget<OutlinedButton>(loadMore).onPressed, isNull);
+    expect(provider.calls, <String>['aether|initial|8']);
+
+    await library.setOfflineModeEnabled(false);
+    await tester.pumpAndSettle();
+    tester
+        .state<ScrollableState>(scrollable)
+        .position
+        .jumpTo(providerSearchOffset);
+    await tester.pumpAndSettle();
+    expect(loadMore, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(loadMore).onPressed, isNotNull);
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(firstResult, -300, scrollable: scrollable);
+    expect(find.text('First Provider Result'), findsOneWidget);
+    final loadMoreError = find.byKey(
+      const ValueKey<String>('provider-search-load-more-error-paged-test'),
+    );
+    await tester.scrollUntilVisible(loadMoreError, 300, scrollable: scrollable);
+    expect(loadMoreError, findsOneWidget);
+    expect(find.text('Second Provider Result'), findsNothing);
+
+    final retry = find.byKey(
+      const ValueKey<String>('provider-search-load-more-retry'),
+    );
+    await tester.drag(scrollable, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(retry, findsOneWidget);
+    await tester.ensureVisible(retry);
+    await tester.pumpAndSettle();
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+
+    final secondResult = find.byKey(
+      const ValueKey<String>(
+        'provider-search-result-paged-test-second-provider-result',
+      ),
+    );
+    await tester.scrollUntilVisible(firstResult, -300, scrollable: scrollable);
+    expect(find.text('First Provider Result'), findsOneWidget);
+    await tester.scrollUntilVisible(secondResult, 300, scrollable: scrollable);
+    expect(find.text('Second Provider Result'), findsOneWidget);
+    expect(loadMore, findsNothing);
+    expect(retry, findsNothing);
+    expect(provider.searchCalls, 0);
+    expect(provider.calls, <String>[
+      'aether|initial|8',
+      'aether|second|8',
+      'aether|second|8',
+    ]);
+  });
+
+  testWidgets('uses a provider suggestion to launch unified search', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.reset);
@@ -381,8 +362,9 @@ void main() {
     expect(provider.suggestionQueries, <String>['mi']);
   });
 
-  testWidgets('finds a podcast directory result and subscribes to its RSS',
-      (tester) async {
+  testWidgets('finds a podcast directory result and subscribes to its RSS', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.reset);
@@ -472,7 +454,10 @@ void main() {
 
     expect(library.podcastSubscriptions, hasLength(1));
     expect(library.podcastSubscriptions.single.title, 'Aether Podcast');
-    expect(library.podcastSubscriptions.single.episodes.single.title, 'Aether Episode');
+    expect(
+      library.podcastSubscriptions.single.episodes.single.title,
+      'Aether Episode',
+    );
 
     await tester.tap(find.widgetWithText(SnackBarAction, 'Review'));
     await tester.pumpAndSettle();
@@ -485,9 +470,7 @@ void main() {
       'cdn.example.test',
     );
     expect(
-      find.byKey(
-        const Key('podcast-chapter-host-history-cdn.example.test'),
-      ),
+      find.byKey(const Key('podcast-chapter-host-history-cdn.example.test')),
       findsOneWidget,
     );
     await tester.tap(find.byTooltip('Revoke cdn.example.test'));
@@ -500,9 +483,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(query, -300, scrollable: scrollable);
     expect(
-      tester.widget<IconButton>(
-        find.byKey(const Key('podcast-directory-search')),
-      ).onPressed,
+      tester
+          .widget<IconButton>(find.byKey(const Key('podcast-directory-search')))
+          .onPressed,
       isNull,
     );
     expect(directoryRequests, hasLength(2));
@@ -555,12 +538,12 @@ final class _PagedSearchProvider implements MusicSourceSearchPagingProvider {
   String get description => name;
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{MusicSourceCapability.metadataSearch};
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+  };
 
   @override
-  ProviderPrivacyDisclosure get disclosure =>
-      const ProviderPrivacyDisclosure();
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
 
   @override
   Future<List<Track>> search(String query) async {
@@ -630,12 +613,12 @@ final class _FacetSearchProvider implements MusicSourceSearchPagingProvider {
   String get description => name;
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{MusicSourceCapability.metadataSearch};
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+  };
 
   @override
-  ProviderPrivacyDisclosure get disclosure =>
-      const ProviderPrivacyDisclosure();
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
 
   @override
   Future<List<Track>> search(String query) async {
@@ -681,15 +664,13 @@ final class _SuggestionSearchProvider
   String get description => name;
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+  };
 
   @override
-  ProviderPrivacyDisclosure get disclosure =>
-      const ProviderPrivacyDisclosure();
+  ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure();
 
   @override
   Future<List<Track>> search(String query) async {

@@ -20,6 +20,8 @@ class ReleaseManifestTest(unittest.TestCase):
             apk.write_bytes(b"android release")
             ios_archive = release_dir / "aethertune-ios-unsigned.zip"
             ios_archive.write_bytes(b"ios unsigned archive")
+            macos_archive = release_dir / "aethertune-macos.zip"
+            macos_archive.write_bytes(b"macos unsigned archive")
             sbom = release_dir / "aethertune-server.cdx.json"
             sbom.write_text("{}", encoding="utf-8")
             output = release_dir / "RELEASE_MANIFEST.json"
@@ -41,6 +43,13 @@ class ReleaseManifestTest(unittest.TestCase):
                         "size_bytes": len(b"ios unsigned archive"),
                     },
                     {
+                        "file": "aethertune-macos.zip",
+                        "kind": "app-archive",
+                        "platform": "macos",
+                        "sha256": hashlib.sha256(b"macos unsigned archive").hexdigest(),
+                        "size_bytes": len(b"macos unsigned archive"),
+                    },
+                    {
                         "file": "aethertune-server.cdx.json",
                         "kind": "cyclonedx-sbom",
                         "platform": "provenance",
@@ -58,3 +67,7 @@ class ReleaseManifestTest(unittest.TestCase):
                 manifest["artifacts"],
             )
             self.assertNotIn("RELEASE_MANIFEST.json", output.read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    unittest.main()

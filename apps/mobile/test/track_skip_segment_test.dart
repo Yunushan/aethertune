@@ -64,10 +64,9 @@ void main() {
       throwsA(isA<FormatException>()),
     );
     expect(
-      () => decodeTrackSkipSegmentDocumentBytes(
-        <int>[0xff],
-        fileName: 'segments.txt',
-      ),
+      () => decodeTrackSkipSegmentDocumentBytes(<int>[
+        0xff,
+      ], fileName: 'segments.txt'),
       throwsA(isA<FormatException>()),
     );
   });

@@ -18,8 +18,7 @@ class TrackQueueSnapshot {
     if (currentIndex != null &&
         currentIndex >= 0 &&
         currentIndex < tracks.length &&
-        (currentTrackId == null ||
-            tracks[currentIndex].id == currentTrackId)) {
+        (currentTrackId == null || tracks[currentIndex].id == currentTrackId)) {
       return tracks[currentIndex];
     }
     for (final track in tracks) {
@@ -51,7 +50,8 @@ class TrackQueueSnapshot {
 
     return TrackQueueSnapshot(
       currentTrackId: currentTrackId,
-      currentIndex: currentIndex is int &&
+      currentIndex:
+          currentIndex is int &&
               currentIndex >= 0 &&
               currentIndex < tracks.length &&
               (currentTrackId == null ||
@@ -77,10 +77,7 @@ class SavedTrackQueue {
   final String name;
   final TrackQueueSnapshot snapshot;
 
-  SavedTrackQueue copyWith({
-    String? name,
-    TrackQueueSnapshot? snapshot,
-  }) {
+  SavedTrackQueue copyWith({String? name, TrackQueueSnapshot? snapshot}) {
     return SavedTrackQueue(
       id: id,
       name: name ?? this.name,
@@ -168,7 +165,9 @@ class SavedTrackQueueCollection {
       }
     }
     if (queues.isEmpty || !ids.contains(activeQueueId)) {
-      throw const FormatException('Saved queue collection has no active queue.');
+      throw const FormatException(
+        'Saved queue collection has no active queue.',
+      );
     }
     return SavedTrackQueueCollection(
       activeQueueId: activeQueueId,
@@ -258,7 +257,8 @@ class TrackQueueReferenceSnapshot {
 
     return TrackQueueReferenceSnapshot(
       trackIds: List<String>.unmodifiable(trackIds),
-      currentTrackId: normalizedCurrentTrackId == null ||
+      currentTrackId:
+          normalizedCurrentTrackId == null ||
               normalizedCurrentTrackId.isEmpty ||
               !trackIds.contains(normalizedCurrentTrackId)
           ? null
@@ -286,7 +286,5 @@ List<T> moveQueueItem<T>(List<T> items, int fromIndex, int toIndex) {
 }
 
 List<Track> removeTrackFromQueueItems(List<Track> queue, String trackId) {
-  return queue
-      .where((track) => track.id != trackId)
-      .toList(growable: false);
+  return queue.where((track) => track.id != trackId).toList(growable: false);
 }

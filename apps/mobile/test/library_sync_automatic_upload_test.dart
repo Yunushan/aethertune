@@ -142,9 +142,7 @@ class _SyncGateway implements LibrarySyncGateway {
   }
 
   @override
-  Future<LibrarySyncRemoteSnapshot> delete({
-    required int baseRevision,
-  }) async {
+  Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision}) async {
     return LibrarySyncRemoteSnapshot(revision: baseRevision + 1);
   }
 }

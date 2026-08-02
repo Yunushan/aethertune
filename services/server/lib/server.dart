@@ -33,7 +33,9 @@ final class ServerRequestRateLimiter {
     this.window = const Duration(minutes: 1),
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {
-    if (maximumRequests <= 0 || maximumBuckets <= 0 || window <= Duration.zero) {
+    if (maximumRequests <= 0 ||
+        maximumBuckets <= 0 ||
+        window <= Duration.zero) {
       throw ArgumentError('Rate limit bounds must be positive.');
     }
   }
@@ -176,6 +178,7 @@ Handler createServerHandler({
   ListenTogetherInviteStore? listenTogetherInviteStore,
   SharedPlaylistStore? sharedPlaylistStore,
   SharedPlaylistInviteStore? sharedPlaylistInviteStore,
+  Future<bool> Function()? readinessCheck,
   ServerRequestLogger? requestLogger,
   ServerRequestRateLimiter? requestRateLimiter,
 }) {
@@ -187,18 +190,51 @@ Handler createServerHandler({
   final providerConfigurations =
       providerConfigurationStore ?? MemoryLibrarySyncSnapshotStore();
   final sessions = listenTogetherStore ?? MemoryLibrarySyncSnapshotStore();
-  final invites = listenTogetherInviteStore ?? MemoryListenTogetherInviteStore();
+  final invites =
+      listenTogetherInviteStore ?? MemoryListenTogetherInviteStore();
   final sharedPlaylists = sharedPlaylistStore ?? MemorySharedPlaylistStore();
   final sharedPlaylistInvites =
       sharedPlaylistInviteStore ?? MemorySharedPlaylistInviteStore();
   final startedAt = now().toUtc();
   var requestsTotal = 0;
-  final rateLimiter = requestRateLimiter ?? ServerRequestRateLimiter(clock: now);
+  var requestsRateLimited = 0;
+  var responses2xx = 0;
+  var responses3xx = 0;
+  var responses4xx = 0;
+  var responses5xx = 0;
+  var requestDurationMillisecondsTotal = 0;
+  final rateLimiter =
+      requestRateLimiter ?? ServerRequestRateLimiter(clock: now);
+  final checkReadiness = readinessCheck ?? () async => true;
+
+  void recordResponseMetrics({
+    required Response response,
+    required DateTime requestStartedAt,
+    required DateTime finishedAt,
+  }) {
+    final elapsed = finishedAt.difference(requestStartedAt);
+    requestDurationMillisecondsTotal += elapsed.isNegative
+        ? 0
+        : elapsed.inMilliseconds;
+    switch (response.statusCode ~/ 100) {
+      case 2:
+        responses2xx += 1;
+      case 3:
+        responses3xx += 1;
+      case 4:
+        responses4xx += 1;
+      case 5:
+        responses5xx += 1;
+    }
+  }
 
   Future<Response> route(Request request) async {
     if (request.url.path == 'api/v1/public-profiles' ||
         request.url.path.startsWith('api/v1/public-profiles/')) {
-      return _handlePublicProfile(request, managedAccounts: managedSyncAccounts);
+      return _handlePublicProfile(
+        request,
+        managedAccounts: managedSyncAccounts,
+      );
     }
     if (request.url.path.startsWith('api/v1/public-smart-playlists/')) {
       return _handlePublicSmartPlaylist(request, playlists: sharedPlaylists);
@@ -234,14 +270,29 @@ Handler createServerHandler({
         if (request.method != 'GET') {
           return _methodNotAllowed(request);
         }
-        return _jsonResponse(
-          200,
-          <String, Object?>{
-            'status': 'ok',
-            'service': 'aethertune-server',
-            'timestamp': now().toUtc().toIso8601String(),
-          },
-        );
+        return _jsonResponse(200, <String, Object?>{
+          'status': 'ok',
+          'service': 'aethertune-server',
+          'timestamp': now().toUtc().toIso8601String(),
+        });
+      case 'ready':
+        if (request.method != 'GET') {
+          return _methodNotAllowed(request);
+        }
+        try {
+          if (await checkReadiness()) {
+            return _jsonResponse(200, <String, Object?>{
+              'status': 'ready',
+              'service': 'aethertune-server',
+            });
+          }
+        } on Object {
+          // Readiness must fail closed without exposing filesystem details.
+        }
+        return _jsonResponse(503, <String, Object?>{
+          'status': 'not_ready',
+          'service': 'aethertune-server',
+        });
       case 'api/v1/metrics':
         if (request.method != 'GET') {
           return _methodNotAllowed(request);
@@ -253,56 +304,53 @@ Handler createServerHandler({
           }
         }
         final uptime = now().toUtc().difference(startedAt);
-        return _jsonResponse(
-          200,
-          <String, Object?>{
-            'service': 'aethertune-server',
-            'startedAt': startedAt.toIso8601String(),
-            'uptimeSeconds': uptime.isNegative ? 0 : uptime.inSeconds,
-            'requestsTotal': requestsTotal,
-            'librarySync': authenticator.isConfigured,
-            'providerConfigurationSync': authenticator.isConfigured,
-            'listenTogether': authenticator.isConfigured,
-            'sharedPlaylists': authenticator.isConfigured,
-          },
-        );
+        return _jsonResponse(200, <String, Object?>{
+          'service': 'aethertune-server',
+          'startedAt': startedAt.toIso8601String(),
+          'uptimeSeconds': uptime.isNegative ? 0 : uptime.inSeconds,
+          'requestsTotal': requestsTotal,
+          'requestsRateLimited': requestsRateLimited,
+          'responses2xx': responses2xx,
+          'responses3xx': responses3xx,
+          'responses4xx': responses4xx,
+          'responses5xx': responses5xx,
+          'requestDurationMillisecondsTotal': requestDurationMillisecondsTotal,
+          'librarySync': authenticator.isConfigured,
+          'providerConfigurationSync': authenticator.isConfigured,
+          'listenTogether': authenticator.isConfigured,
+          'sharedPlaylists': authenticator.isConfigured,
+        });
       case 'api/v1/info':
         if (request.method != 'GET') {
           return _methodNotAllowed(request);
         }
-        return _jsonResponse(
-          200,
-          <String, Object?>{
-            'name': 'AetherTune',
-            'service': 'aethertune-server',
-            'version': '0.3.0',
-            'librarySync': authenticator.isConfigured,
-            'providerConfigurationSync': authenticator.isConfigured,
-            'listenTogether': authenticator.isConfigured,
-            'sharedPlaylists': authenticator.isConfigured,
-            'managedAuthentication': managedSyncAccounts != null,
-            'supportedClients': <String>[
-              'android',
-              'ios',
-              'linux',
-              'macos',
-              'windows',
-            ],
-          },
-        );
+        return _jsonResponse(200, <String, Object?>{
+          'name': 'AetherTune',
+          'service': 'aethertune-server',
+          'version': '0.3.0',
+          'librarySync': authenticator.isConfigured,
+          'providerConfigurationSync': authenticator.isConfigured,
+          'listenTogether': authenticator.isConfigured,
+          'sharedPlaylists': authenticator.isConfigured,
+          'managedAuthentication': managedSyncAccounts != null,
+          'supportedClients': <String>[
+            'android',
+            'ios',
+            'linux',
+            'macos',
+            'windows',
+          ],
+        });
       case 'api/v1/tracks':
         if (request.method != 'GET') {
           return _methodNotAllowed(request);
         }
         final query = request.url.queryParameters['q'] ?? '';
-        return _jsonResponse(
-          200,
-          <String, Object?>{
-            'tracks': searchCatalog(query)
-                .map((track) => track.toJson())
-                .toList(growable: false),
-          },
-        );
+        return _jsonResponse(200, <String, Object?>{
+          'tracks': searchCatalog(
+            query,
+          ).map((track) => track.toJson()).toList(growable: false),
+        });
       case 'api/v1/auth/profile':
         return _handleAuthProfile(
           request,
@@ -375,13 +423,10 @@ Handler createServerHandler({
           now: now,
         );
       default:
-        return _jsonResponse(
-          404,
-          <String, Object?>{
-            'error': 'not_found',
-            'path': '/${request.url.path}',
-          },
-        );
+        return _jsonResponse(404, <String, Object?>{
+          'error': 'not_found',
+          'path': '/${request.url.path}',
+        });
     }
   }
 
@@ -391,6 +436,7 @@ Handler createServerHandler({
     try {
       final retryAfter = rateLimiter.check(request);
       if (retryAfter != null) {
+        requestsRateLimited += 1;
         final response = _jsonResponse(
           429,
           <String, Object?>{'error': 'rate_limited'},
@@ -405,6 +451,11 @@ Handler createServerHandler({
           requestStartedAt: requestStartedAt,
           finishedAt: now().toUtc(),
         );
+        recordResponseMetrics(
+          response: response,
+          requestStartedAt: requestStartedAt,
+          finishedAt: now().toUtc(),
+        );
         return response;
       }
       await _recordManagedDeviceActivity(
@@ -413,21 +464,33 @@ Handler createServerHandler({
         managedAccounts: managedSyncAccounts,
       );
       final response = await route(request);
+      final finishedAt = now().toUtc();
+      recordResponseMetrics(
+        response: response,
+        requestStartedAt: requestStartedAt,
+        finishedAt: finishedAt,
+      );
       _writeRequestLog(
         requestLogger,
         request: request,
         response: response,
         requestStartedAt: requestStartedAt,
-        finishedAt: now().toUtc(),
+        finishedAt: finishedAt,
       );
       return response;
     } on Object {
+      final finishedAt = now().toUtc();
+      recordResponseMetrics(
+        response: Response.internalServerError(),
+        requestStartedAt: requestStartedAt,
+        finishedAt: finishedAt,
+      );
       _writeRequestLog(
         requestLogger,
         request: request,
         response: Response.internalServerError(),
         requestStartedAt: requestStartedAt,
-        finishedAt: now().toUtc(),
+        finishedAt: finishedAt,
       );
       rethrow;
     }
@@ -543,10 +606,9 @@ Future<Response> _handleAuthProfile(
     return _methodNotAllowed(request);
   }
   if (!authenticator.isConfigured) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'sync_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'sync_not_configured',
+    });
   }
 
   final token = _bearerToken(request.headers['authorization'] ?? '');
@@ -554,13 +616,15 @@ Future<Response> _handleAuthProfile(
   if (accountId == null) {
     return _unauthorizedResponse();
   }
-  final candidatePrincipal =
-      token == null ? null : managedAccounts?.authenticatePrincipal(token);
+  final candidatePrincipal = token == null
+      ? null
+      : managedAccounts?.authenticatePrincipal(token);
   final principal = candidatePrincipal?.accountId == accountId
       ? candidatePrincipal
       : null;
-  final managedProfile =
-      principal == null ? null : managedAccounts?.account(principal.accountId);
+  final managedProfile = principal == null
+      ? null
+      : managedAccounts?.account(principal.accountId);
   if (request.method == 'GET') {
     return _jsonResponse(
       200,
@@ -572,10 +636,9 @@ Future<Response> _handleAuthProfile(
     );
   }
   if (managedAccounts == null || principal == null || managedProfile == null) {
-    return _jsonResponse(
-      409,
-      <String, Object?>{'error': 'profile_not_managed'},
-    );
+    return _jsonResponse(409, <String, Object?>{
+      'error': 'profile_not_managed',
+    });
   }
 
   try {
@@ -587,10 +650,12 @@ Future<Response> _handleAuthProfile(
     final hasDeviceName = body.containsKey('deviceName');
     final hasAvatarTone = body.containsKey('avatarTone');
     final hasPublicProfileEnabled = body.containsKey('publicProfileEnabled');
-    final hasPublicDisplayNameEnabled =
-        body.containsKey('publicDisplayNameEnabled');
-    final hasPublicAvatarToneEnabled =
-        body.containsKey('publicAvatarToneEnabled');
+    final hasPublicDisplayNameEnabled = body.containsKey(
+      'publicDisplayNameEnabled',
+    );
+    final hasPublicAvatarToneEnabled = body.containsKey(
+      'publicAvatarToneEnabled',
+    );
     if (!hasDisplayName &&
         !hasDeviceName &&
         !hasAvatarTone &&
@@ -607,8 +672,9 @@ Future<Response> _handleAuthProfile(
       displayName: hasDisplayName ? _requiredString(body, 'displayName') : null,
       deviceName: hasDeviceName ? _requiredString(body, 'deviceName') : null,
       avatarToneProvided: hasAvatarTone,
-      avatarTone:
-          hasAvatarTone ? _optionalAvatarTone(body['avatarTone']) : null,
+      avatarTone: hasAvatarTone
+          ? _optionalAvatarTone(body['avatarTone'])
+          : null,
       publicProfileEnabledProvided: hasPublicProfileEnabled,
       publicProfileEnabled: hasPublicProfileEnabled
           ? _requiredBool(body, 'publicProfileEnabled')
@@ -634,21 +700,15 @@ Future<Response> _handleAuthProfile(
       ),
     );
   } on _PayloadTooLarge catch (error) {
-    return _jsonResponse(
-      413,
-      <String, Object?>{
-        'error': 'payload_too_large',
-        'maxBytes': error.maxBytes,
-      },
-    );
+    return _jsonResponse(413, <String, Object?>{
+      'error': 'payload_too_large',
+      'maxBytes': error.maxBytes,
+    });
   } on FormatException catch (error) {
-    return _jsonResponse(
-      400,
-      <String, Object?>{
-        'error': 'invalid_auth_request',
-        'message': error.message,
-      },
-    );
+    return _jsonResponse(400, <String, Object?>{
+      'error': 'invalid_auth_request',
+      'message': error.message,
+    });
   }
 }
 
@@ -692,24 +752,27 @@ Future<Response> _handlePublicProfile(
       final profiles = managedAccounts.findPublicProfiles(
         request.url.queryParameters['q'] ?? '',
       );
-      return _jsonResponse(200, <String, Object?>{
-        'profiles': profiles
-            .map(
-              (profile) => <String, Object?>{
-                'id': profile.id,
-                'displayName': profile.displayName,
-                if (profile.publicAvatarToneEnabled &&
-                    profile.avatarTone != null)
-                  'avatarTone': profile.avatarTone,
-              },
-            )
-            .toList(growable: false),
-      }, headers: const <String, String>{'cache-control': 'no-store'});
-    } on FormatException {
       return _jsonResponse(
-        400,
-        <String, Object?>{'error': 'invalid_public_profile_query'},
+        200,
+        <String, Object?>{
+          'profiles': profiles
+              .map(
+                (profile) => <String, Object?>{
+                  'id': profile.id,
+                  'displayName': profile.displayName,
+                  if (profile.publicAvatarToneEnabled &&
+                      profile.avatarTone != null)
+                    'avatarTone': profile.avatarTone,
+                },
+              )
+              .toList(growable: false),
+        },
+        headers: const <String, String>{'cache-control': 'no-store'},
       );
+    } on FormatException {
+      return _jsonResponse(400, <String, Object?>{
+        'error': 'invalid_public_profile_query',
+      });
     }
   }
   if (segments.length != 4 ||
@@ -794,22 +857,18 @@ Future<Response> _handleManagedSyncAccounts(
     return rejection;
   }
   if (managedAccounts == null) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'managed_auth_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'managed_auth_not_configured',
+    });
   }
   if (request.method != 'GET') {
     return _methodNotAllowed(request);
   }
-  return _jsonResponse(
-    200,
-    <String, Object?>{
-      'accounts': managedAccounts.accounts
-          .map((account) => account.toJson())
-          .toList(growable: false),
-    },
-  );
+  return _jsonResponse(200, <String, Object?>{
+    'accounts': managedAccounts.accounts
+        .map((account) => account.toJson())
+        .toList(growable: false),
+  });
 }
 
 Future<Response> _handleManagedSyncTokens(
@@ -822,10 +881,9 @@ Future<Response> _handleManagedSyncTokens(
     return rejection;
   }
   if (managedAccounts == null) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'managed_auth_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'managed_auth_not_configured',
+    });
   }
   if (request.method != 'POST' && request.method != 'DELETE') {
     return _methodNotAllowed(request);
@@ -844,19 +902,15 @@ Future<Response> _handleManagedSyncTokens(
         tokenId: tokenId,
       );
       if (!revoked) {
-        return _jsonResponse(
-          404,
-          <String, Object?>{'error': 'managed_token_not_found'},
-        );
+        return _jsonResponse(404, <String, Object?>{
+          'error': 'managed_token_not_found',
+        });
       }
-      return _jsonResponse(
-        200,
-        <String, Object?>{
-          'revoked': true,
-          'accountId': accountId,
-          'tokenId': tokenId,
-        },
-      );
+      return _jsonResponse(200, <String, Object?>{
+        'revoked': true,
+        'accountId': accountId,
+        'tokenId': tokenId,
+      });
     }
 
     final displayName = _optionalString(body, 'displayName');
@@ -868,32 +922,23 @@ Future<Response> _handleManagedSyncTokens(
       deviceName: deviceName,
       replaceTokenId: replaceTokenId,
     );
-    return _jsonResponse(
-      201,
-      <String, Object?>{
-        'tokenType': 'Bearer',
-        'token': issued.token,
-        'account': issued.account.toJson(),
-        'device': issued.device.toJson(),
-        'replacedTokenId': issued.replacedTokenId,
-      },
-    );
+    return _jsonResponse(201, <String, Object?>{
+      'tokenType': 'Bearer',
+      'token': issued.token,
+      'account': issued.account.toJson(),
+      'device': issued.device.toJson(),
+      'replacedTokenId': issued.replacedTokenId,
+    });
   } on _PayloadTooLarge catch (error) {
-    return _jsonResponse(
-      413,
-      <String, Object?>{
-        'error': 'payload_too_large',
-        'maxBytes': error.maxBytes,
-      },
-    );
+    return _jsonResponse(413, <String, Object?>{
+      'error': 'payload_too_large',
+      'maxBytes': error.maxBytes,
+    });
   } on FormatException catch (error) {
-    return _jsonResponse(
-      400,
-      <String, Object?>{
-        'error': 'invalid_auth_request',
-        'message': error.message,
-      },
-    );
+    return _jsonResponse(400, <String, Object?>{
+      'error': 'invalid_auth_request',
+      'message': error.message,
+    });
   }
 }
 
@@ -907,10 +952,9 @@ Future<Response> _handleManagedRecoveryCodeIssue(
     return rejection;
   }
   if (managedAccounts == null) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'managed_auth_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'managed_auth_not_configured',
+    });
   }
   if (request.method != 'POST') {
     return _methodNotAllowed(request);
@@ -940,10 +984,9 @@ Future<Response> _handleManagedRecoveryRedemption(
   required ManagedSyncAccountRegistry? managedAccounts,
 }) async {
   if (managedAccounts == null) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'managed_auth_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'managed_auth_not_configured',
+    });
   }
   if (request.method != 'POST') {
     return _methodNotAllowed(request);
@@ -958,7 +1001,9 @@ Future<Response> _handleManagedRecoveryRedemption(
       deviceName: _requiredString(body, 'deviceName'),
     );
     if (issued == null) {
-      return _jsonResponse(401, <String, Object?>{'error': 'invalid_recovery_code'});
+      return _jsonResponse(401, <String, Object?>{
+        'error': 'invalid_recovery_code',
+      });
     }
     return _jsonResponse(201, <String, Object?>{
       'tokenType': 'Bearer',
@@ -979,10 +1024,9 @@ Response? _managedAuthAdminRejection(
   OperationsAuthenticator operations,
 ) {
   if (!operations.isConfigured) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'operations_auth_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'operations_auth_not_configured',
+    });
   }
   final token = _bearerToken(request.headers['authorization'] ?? '');
   if (token == null || !operations.authenticate(token)) {
@@ -1019,10 +1063,9 @@ Future<Response> _handleLibrarySync(
       _validateSyncSnapshot,
 }) async {
   if (!authenticator.isConfigured) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'sync_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'sync_not_configured',
+    });
   }
 
   final authorization = request.headers['authorization'] ?? '';
@@ -1057,8 +1100,9 @@ Future<Response> _handleLibrarySync(
         final snapshot = Map<String, Object?>.from(rawSnapshot);
         validateSnapshot(snapshot);
         final canonicalSnapshot = jsonEncode(snapshot);
-        final checksum =
-            sha256.convert(utf8.encode(canonicalSnapshot)).toString();
+        final checksum = sha256
+            .convert(utf8.encode(canonicalSnapshot))
+            .toString();
         final result = await snapshots.write(
           userId: userId,
           baseRevision: mutation.baseRevision,
@@ -1069,34 +1113,25 @@ Future<Response> _handleLibrarySync(
         );
         if (result.isConflict) {
           final current = result.snapshot;
-          return _jsonResponse(
-            409,
-            <String, Object?>{
-              'error': 'sync_conflict',
-              'currentRevision': current?.revision ?? 0,
-              'updatedAt': current?.updatedAt.toIso8601String(),
-              'updatedByDevice': current?.updatedByDevice,
-              'checksum': current?.checksum,
-            },
-          );
+          return _jsonResponse(409, <String, Object?>{
+            'error': 'sync_conflict',
+            'currentRevision': current?.revision ?? 0,
+            'updatedAt': current?.updatedAt.toIso8601String(),
+            'updatedByDevice': current?.updatedByDevice,
+            'checksum': current?.checksum,
+          });
         }
         return _jsonResponse(200, result.snapshot!.toMetadataJson());
       } on _PayloadTooLarge catch (error) {
-        return _jsonResponse(
-          413,
-          <String, Object?>{
-            'error': 'payload_too_large',
-            'maxBytes': error.maxBytes,
-          },
-        );
+        return _jsonResponse(413, <String, Object?>{
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
       } on FormatException catch (error) {
-        return _jsonResponse(
-          400,
-          <String, Object?>{
-            'error': 'invalid_sync_snapshot',
-            'message': error.message,
-          },
-        );
+        return _jsonResponse(400, <String, Object?>{
+          'error': 'invalid_sync_snapshot',
+          'message': error.message,
+        });
       }
     case 'DELETE':
       try {
@@ -1109,34 +1144,25 @@ Future<Response> _handleLibrarySync(
         );
         if (result.isConflict) {
           final current = result.snapshot;
-          return _jsonResponse(
-            409,
-            <String, Object?>{
-              'error': 'sync_conflict',
-              'currentRevision': current?.revision ?? 0,
-              'updatedAt': current?.updatedAt.toIso8601String(),
-              'updatedByDevice': current?.updatedByDevice,
-              'checksum': current?.checksum,
-            },
-          );
+          return _jsonResponse(409, <String, Object?>{
+            'error': 'sync_conflict',
+            'currentRevision': current?.revision ?? 0,
+            'updatedAt': current?.updatedAt.toIso8601String(),
+            'updatedByDevice': current?.updatedByDevice,
+            'checksum': current?.checksum,
+          });
         }
         return _jsonResponse(200, result.snapshot!.toMetadataJson());
       } on _PayloadTooLarge catch (error) {
-        return _jsonResponse(
-          413,
-          <String, Object?>{
-            'error': 'payload_too_large',
-            'maxBytes': error.maxBytes,
-          },
-        );
+        return _jsonResponse(413, <String, Object?>{
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
       } on FormatException catch (error) {
-        return _jsonResponse(
-          400,
-          <String, Object?>{
-            'error': 'invalid_sync_snapshot',
-            'message': error.message,
-          },
-        );
+        return _jsonResponse(400, <String, Object?>{
+          'error': 'invalid_sync_snapshot',
+          'message': error.message,
+        });
       }
     default:
       return _methodNotAllowed(request);
@@ -1152,10 +1178,9 @@ Future<Response> _handleLibrarySyncMetadata(
     return _methodNotAllowed(request);
   }
   if (!authenticator.isConfigured) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'sync_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'sync_not_configured',
+    });
   }
 
   final token = _bearerToken(request.headers['authorization'] ?? '');
@@ -1225,18 +1250,15 @@ Future<Response> _handleSharedPlaylistCollection(
     }
     throw StateError('Could not allocate a shared playlist.');
   } on _PayloadTooLarge catch (error) {
-    return _jsonResponse(
-      413,
-      <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
-    );
+    return _jsonResponse(413, <String, Object?>{
+      'error': 'payload_too_large',
+      'maxBytes': error.maxBytes,
+    });
   } on FormatException catch (error) {
-    return _jsonResponse(
-      400,
-      <String, Object?>{
-        'error': 'invalid_shared_playlist',
-        'message': error.message,
-      },
-    );
+    return _jsonResponse(400, <String, Object?>{
+      'error': 'invalid_shared_playlist',
+      'message': error.message,
+    });
   }
 }
 
@@ -1258,10 +1280,8 @@ Future<Response> _handleSharedPlaylistItem(
     return _jsonResponse(404, <String, Object?>{'error': 'not_found'});
   }
   final playlistId = segments[3];
-  final isInviteEndpoint =
-      segments.length == 5 && segments[4] == 'invites';
-  final isHistoryEndpoint =
-      segments.length == 5 && segments[4] == 'revisions';
+  final isInviteEndpoint = segments.length == 5 && segments[4] == 'invites';
+  final isHistoryEndpoint = segments.length == 5 && segments[4] == 'revisions';
   final isCollaboratorEndpoint =
       segments.length == 6 && segments[4] == 'collaborators';
   final isPublicLinkEndpoint =
@@ -1275,31 +1295,29 @@ Future<Response> _handleSharedPlaylistItem(
   }
   final record = await playlists.read(playlistId);
   if (record == null || record.roleFor(accountId) == null) {
-    return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_not_found'});
+    return _jsonResponse(404, <String, Object?>{
+      'error': 'shared_playlist_not_found',
+    });
   }
   if (isHistoryEndpoint) {
     if (request.method != 'GET') {
       return _methodNotAllowed(request);
     }
     final history = await playlists.readHistory(playlistId);
-    return _jsonResponse(
-      200,
-      <String, Object?>{
-        'revisions': history
-            .map(_sharedPlaylistRevisionResponse)
-            .toList(growable: false),
-      },
-    );
+    return _jsonResponse(200, <String, Object?>{
+      'revisions': history
+          .map(_sharedPlaylistRevisionResponse)
+          .toList(growable: false),
+    });
   }
   if (isPublicLinkEndpoint) {
     if (!record.isOwner(accountId)) {
       return _sharedPlaylistForbidden();
     }
     if (record.document['kind'] != 'smart') {
-      return _jsonResponse(
-        400,
-        <String, Object?>{'error': 'shared_playlist_not_smart'},
-      );
+      return _jsonResponse(400, <String, Object?>{
+        'error': 'shared_playlist_not_smart',
+      });
     }
     if (request.method != 'POST' && request.method != 'DELETE') {
       return _methodNotAllowed(request);
@@ -1327,28 +1345,22 @@ Future<Response> _handleSharedPlaylistItem(
         return _sharedPlaylistConflict(result.record);
       }
       final saved = result.record!;
-      return _jsonResponse(
-        200,
-        <String, Object?>{
-          if (secret != null) 'secret': secret,
-          'revoked': secret == null,
-          'revision': saved.revision,
-          'checksum': saved.checksum,
-        },
-      );
+      return _jsonResponse(200, <String, Object?>{
+        ...?secret == null ? null : <String, Object?>{'secret': secret},
+        'revoked': secret == null,
+        'revision': saved.revision,
+        'checksum': saved.checksum,
+      });
     } on _PayloadTooLarge catch (error) {
-      return _jsonResponse(
-        413,
-        <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
-      );
+      return _jsonResponse(413, <String, Object?>{
+        'error': 'payload_too_large',
+        'maxBytes': error.maxBytes,
+      });
     } on FormatException catch (error) {
-      return _jsonResponse(
-        400,
-        <String, Object?>{
-          'error': 'invalid_shared_playlist',
-          'message': error.message,
-        },
-      );
+      return _jsonResponse(400, <String, Object?>{
+        'error': 'invalid_shared_playlist',
+        'message': error.message,
+      });
     }
   }
   if (isInviteEndpoint) {
@@ -1357,16 +1369,16 @@ Future<Response> _handleSharedPlaylistItem(
     }
     if (request.method == 'DELETE') {
       final invalidated = await invites.invalidateForPlaylist(playlistId);
-      return _jsonResponse(
-        200,
-        <String, Object?>{'invalidated': invalidated},
-      );
+      return _jsonResponse(200, <String, Object?>{'invalidated': invalidated});
     }
     if (request.method != 'POST') {
       return _methodNotAllowed(request);
     }
     try {
-      final body = await _readBoundedJson(request, maxBytes: maxSharedPlaylistBytes);
+      final body = await _readBoundedJson(
+        request,
+        maxBytes: maxSharedPlaylistBytes,
+      );
       final role = sharedPlaylistRoleFromWire(body['role']);
       if (role == null) {
         throw const FormatException('Invite role must be viewer or editor.');
@@ -1377,27 +1389,21 @@ Future<Response> _handleSharedPlaylistItem(
         role: role,
         expiresAt: expiresAt,
       );
-      return _jsonResponse(
-        201,
-        <String, Object?>{
-          'inviteCode': code,
-          'role': sharedPlaylistRoleToWire(role),
-          'expiresAt': expiresAt.toIso8601String(),
-        },
-      );
+      return _jsonResponse(201, <String, Object?>{
+        'inviteCode': code,
+        'role': sharedPlaylistRoleToWire(role),
+        'expiresAt': expiresAt.toIso8601String(),
+      });
     } on _PayloadTooLarge catch (error) {
-      return _jsonResponse(
-        413,
-        <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
-      );
+      return _jsonResponse(413, <String, Object?>{
+        'error': 'payload_too_large',
+        'maxBytes': error.maxBytes,
+      });
     } on FormatException catch (error) {
-      return _jsonResponse(
-        400,
-        <String, Object?>{
-          'error': 'invalid_shared_playlist_invite',
-          'message': error.message,
-        },
-      );
+      return _jsonResponse(400, <String, Object?>{
+        'error': 'invalid_shared_playlist_invite',
+        'message': error.message,
+      });
     }
   }
   if (isCollaboratorEndpoint) {
@@ -1411,10 +1417,9 @@ Future<Response> _handleSharedPlaylistItem(
     if (collaboratorId.trim().isEmpty ||
         collaboratorId.length > 256 ||
         !record.collaborators.containsKey(collaboratorId)) {
-      return _jsonResponse(
-        404,
-        <String, Object?>{'error': 'shared_playlist_collaborator_not_found'},
-      );
+      return _jsonResponse(404, <String, Object?>{
+        'error': 'shared_playlist_collaborator_not_found',
+      });
     }
     try {
       final mutation = _syncMutationFields(
@@ -1436,20 +1441,20 @@ Future<Response> _handleSharedPlaylistItem(
       if (result.isConflict) {
         return _sharedPlaylistConflict(result.record);
       }
-      return _jsonResponse(200, _sharedPlaylistResponse(result.record!, accountId));
+      return _jsonResponse(
+        200,
+        _sharedPlaylistResponse(result.record!, accountId),
+      );
     } on _PayloadTooLarge catch (error) {
-      return _jsonResponse(
-        413,
-        <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
-      );
+      return _jsonResponse(413, <String, Object?>{
+        'error': 'payload_too_large',
+        'maxBytes': error.maxBytes,
+      });
     } on FormatException catch (error) {
-      return _jsonResponse(
-        400,
-        <String, Object?>{
-          'error': 'invalid_shared_playlist',
-          'message': error.message,
-        },
-      );
+      return _jsonResponse(400, <String, Object?>{
+        'error': 'invalid_shared_playlist',
+        'message': error.message,
+      });
     }
   }
   switch (request.method) {
@@ -1484,20 +1489,20 @@ Future<Response> _handleSharedPlaylistItem(
         if (result.isConflict) {
           return _sharedPlaylistConflict(result.record);
         }
-        return _jsonResponse(200, _sharedPlaylistResponse(result.record!, accountId));
+        return _jsonResponse(
+          200,
+          _sharedPlaylistResponse(result.record!, accountId),
+        );
       } on _PayloadTooLarge catch (error) {
-        return _jsonResponse(
-          413,
-          <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
-        );
+        return _jsonResponse(413, <String, Object?>{
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
       } on FormatException catch (error) {
-        return _jsonResponse(
-          400,
-          <String, Object?>{
-            'error': 'invalid_shared_playlist',
-            'message': error.message,
-          },
-        );
+        return _jsonResponse(400, <String, Object?>{
+          'error': 'invalid_shared_playlist',
+          'message': error.message,
+        });
       }
     case 'DELETE':
       if (!record.isOwner(accountId)) {
@@ -1516,18 +1521,15 @@ Future<Response> _handleSharedPlaylistItem(
         }
         return _jsonResponse(200, <String, Object?>{'deleted': true});
       } on _PayloadTooLarge catch (error) {
-        return _jsonResponse(
-          413,
-          <String, Object?>{'error': 'payload_too_large', 'maxBytes': error.maxBytes},
-        );
+        return _jsonResponse(413, <String, Object?>{
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
       } on FormatException catch (error) {
-        return _jsonResponse(
-          400,
-          <String, Object?>{
-            'error': 'invalid_shared_playlist',
-            'message': error.message,
-          },
-        );
+        return _jsonResponse(400, <String, Object?>{
+          'error': 'invalid_shared_playlist',
+          'message': error.message,
+        });
       }
     default:
       return _methodNotAllowed(request);
@@ -1553,11 +1555,15 @@ Future<Response> _handleSharedPlaylistInviteJoin(
   final code = request.url.pathSegments.last;
   final invite = await invites.consume(code);
   if (invite == null || !invite.expiresAt.isAfter(now().toUtc())) {
-    return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_invite_not_found'});
+    return _jsonResponse(404, <String, Object?>{
+      'error': 'shared_playlist_invite_not_found',
+    });
   }
   final record = await playlists.read(invite.playlistId);
   if (record == null) {
-    return _jsonResponse(404, <String, Object?>{'error': 'shared_playlist_invite_not_found'});
+    return _jsonResponse(404, <String, Object?>{
+      'error': 'shared_playlist_invite_not_found',
+    });
   }
   final existingRole = record.roleFor(accountId);
   if (existingRole != null) {
@@ -1616,16 +1622,13 @@ bool _constantTimeStringEquals(String left, String right) {
 }
 
 Response _sharedPlaylistConflict(SharedPlaylistRecord? record) {
-  return _jsonResponse(
-    409,
-    <String, Object?>{
-      'error': 'shared_playlist_conflict',
-      'currentRevision': record?.revision ?? 0,
-      'updatedAt': record?.updatedAt.toIso8601String(),
-      'updatedByDevice': record?.updatedByDevice,
-      'checksum': record?.checksum,
-    },
-  );
+  return _jsonResponse(409, <String, Object?>{
+    'error': 'shared_playlist_conflict',
+    'currentRevision': record?.revision ?? 0,
+    'updatedAt': record?.updatedAt.toIso8601String(),
+    'updatedByDevice': record?.updatedByDevice,
+    'checksum': record?.checksum,
+  });
 }
 
 Map<String, Object?> _sharedPlaylistResponse(
@@ -1633,7 +1636,9 @@ Map<String, Object?> _sharedPlaylistResponse(
   String accountId,
 ) {
   final isOwner = record.isOwner(accountId);
-  final role = isOwner ? 'owner' : sharedPlaylistRoleToWire(record.roleFor(accountId)!);
+  final role = isOwner
+      ? 'owner'
+      : sharedPlaylistRoleToWire(record.roleFor(accountId)!);
   return <String, Object?>{
     'id': record.id,
     'revision': record.revision,
@@ -1671,10 +1676,9 @@ Future<Response> _handleListenTogetherSession(
   required DateTime Function() now,
 }) async {
   if (!authenticator.isConfigured) {
-    return _jsonResponse(
-      503,
-      <String, Object?>{'error': 'sync_not_configured'},
-    );
+    return _jsonResponse(503, <String, Object?>{
+      'error': 'sync_not_configured',
+    });
   }
 
   final token = _bearerToken(request.headers['authorization'] ?? '');
@@ -1716,21 +1720,15 @@ Future<Response> _handleListenTogetherSession(
         }
         return _jsonResponse(200, result.snapshot!.toMetadataJson());
       } on _PayloadTooLarge catch (error) {
-        return _jsonResponse(
-          413,
-          <String, Object?>{
-            'error': 'payload_too_large',
-            'maxBytes': error.maxBytes,
-          },
-        );
+        return _jsonResponse(413, <String, Object?>{
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
       } on FormatException catch (error) {
-        return _jsonResponse(
-          400,
-          <String, Object?>{
-            'error': 'invalid_listen_together_session',
-            'message': error.message,
-          },
-        );
+        return _jsonResponse(400, <String, Object?>{
+          'error': 'invalid_listen_together_session',
+          'message': error.message,
+        });
       }
     case 'DELETE':
       try {
@@ -1751,21 +1749,15 @@ Future<Response> _handleListenTogetherSession(
         }
         return _jsonResponse(200, result.snapshot!.toMetadataJson());
       } on _PayloadTooLarge catch (error) {
-        return _jsonResponse(
-          413,
-          <String, Object?>{
-            'error': 'payload_too_large',
-            'maxBytes': error.maxBytes,
-          },
-        );
+        return _jsonResponse(413, <String, Object?>{
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
       } on FormatException catch (error) {
-        return _jsonResponse(
-          400,
-          <String, Object?>{
-            'error': 'invalid_listen_together_session',
-            'message': error.message,
-          },
-        );
+        return _jsonResponse(400, <String, Object?>{
+          'error': 'invalid_listen_together_session',
+          'message': error.message,
+        });
       }
     default:
       return _methodNotAllowed(request);
@@ -1812,7 +1804,8 @@ Future<Response> _handleListenTogetherInviteJoin(
   final code = request.url.pathSegments.last;
   final invite = await invites.lookup(code);
   final session = invite == null ? null : await sessions.read(invite.ownerId);
-  if (session?.snapshot == null || session!.revision != invite!.sessionRevision) {
+  if (session?.snapshot == null ||
+      session!.revision != invite!.sessionRevision) {
     return _jsonResponse(404, <String, Object?>{'error': 'invite_not_found'});
   }
   return _jsonResponse(200, _listenTogetherSessionResponse(session));
@@ -1830,16 +1823,13 @@ String? _authenticatedListenTogetherUser(
 }
 
 Response _listenTogetherConflict(LibrarySyncSnapshot? current) {
-  return _jsonResponse(
-    409,
-    <String, Object?>{
-      'error': 'listen_together_conflict',
-      'currentRevision': current?.revision ?? 0,
-      'updatedAt': current?.updatedAt.toIso8601String(),
-      'updatedByDevice': current?.updatedByDevice,
-      'checksum': current?.checksum,
-    },
-  );
+  return _jsonResponse(409, <String, Object?>{
+    'error': 'listen_together_conflict',
+    'currentRevision': current?.revision ?? 0,
+    'updatedAt': current?.updatedAt.toIso8601String(),
+    'updatedByDevice': current?.updatedByDevice,
+    'checksum': current?.checksum,
+  });
 }
 
 Map<String, Object?> _listenTogetherSessionResponse(
@@ -1878,7 +1868,9 @@ void _validateListenTogetherSession(Map<String, Object?> session) {
   }
   final trackIds = session['trackIds'];
   if (trackIds is! List || trackIds.length > 500) {
-    throw const FormatException('session trackIds must contain at most 500 IDs.');
+    throw const FormatException(
+      'session trackIds must contain at most 500 IDs.',
+    );
   }
   final normalizedIds = <String>[];
   for (final value in trackIds) {
@@ -1898,7 +1890,9 @@ void _validateListenTogetherSession(Map<String, Object?> session) {
       (currentTrackId is! String ||
           currentTrackId != currentTrackId.trim() ||
           !normalizedIds.contains(currentTrackId))) {
-    throw const FormatException('session currentTrackId must belong to trackIds.');
+    throw const FormatException(
+      'session currentTrackId must belong to trackIds.',
+    );
   }
   final currentIndex = session['currentIndex'];
   if (version == 2 &&
@@ -1989,9 +1983,10 @@ void _validateSyncSnapshot(Map<String, Object?> snapshot) {
 }
 
 String? _bearerToken(String authorization) {
-  final match = RegExp(r'^Bearer\s+([^\s]+)$', caseSensitive: false).firstMatch(
-    authorization.trim(),
-  );
+  final match = RegExp(
+    r'^Bearer\s+([^\s]+)$',
+    caseSensitive: false,
+  ).firstMatch(authorization.trim());
   return match?.group(1);
 }
 
@@ -2013,13 +2008,10 @@ List<CatalogTrack> searchCatalog(String query) {
 }
 
 Response _methodNotAllowed(Request request) {
-  return _jsonResponse(
-    405,
-    <String, Object?>{
-      'error': 'method_not_allowed',
-      'method': request.method,
-    },
-  );
+  return _jsonResponse(405, <String, Object?>{
+    'error': 'method_not_allowed',
+    'method': request.method,
+  });
 }
 
 Response _jsonResponse(
@@ -2053,28 +2045,34 @@ void _validateProviderConfigurationSnapshot(Map<String, Object?> snapshot) {
   final rawCatalogDocument = snapshot['customCatalogs'];
   if (rawCatalogDocument != null) {
     _validateCustomCatalogConfiguration(
-      Map<String, Object?>.from(_requireMap(
-        rawCatalogDocument,
-        'Custom catalog configuration is invalid.',
-      )),
+      Map<String, Object?>.from(
+        _requireMap(
+          rawCatalogDocument,
+          'Custom catalog configuration is invalid.',
+        ),
+      ),
     );
   }
   final rawAccountDocument = snapshot['selfHostedAccounts'];
   if (rawAccountDocument != null) {
     _validateSelfHostedAccountConfiguration(
-      Map<String, Object?>.from(_requireMap(
-        rawAccountDocument,
-        'Self-hosted account configuration is invalid.',
-      )),
+      Map<String, Object?>.from(
+        _requireMap(
+          rawAccountDocument,
+          'Self-hosted account configuration is invalid.',
+        ),
+      ),
     );
   }
   final rawLyricsSearchEndpoint = snapshot['lyricsSearchEndpoint'];
   if (rawLyricsSearchEndpoint != null) {
     _validateLyricsSearchEndpointConfiguration(
-      Map<String, Object?>.from(_requireMap(
-        rawLyricsSearchEndpoint,
-        'Lyrics search endpoint configuration is invalid.',
-      )),
+      Map<String, Object?>.from(
+        _requireMap(
+          rawLyricsSearchEndpoint,
+          'Lyrics search endpoint configuration is invalid.',
+        ),
+      ),
     );
   }
 }
@@ -2084,11 +2082,15 @@ void _validateLyricsSearchEndpointConfiguration(Map<String, Object?> document) {
   if (document.keys.any((key) => !allowedDocumentKeys.contains(key)) ||
       document['format'] != 'aethertune.lyrics_search_endpoint' ||
       document['version'] != 1) {
-    throw const FormatException('Lyrics search endpoint configuration is invalid.');
+    throw const FormatException(
+      'Lyrics search endpoint configuration is invalid.',
+    );
   }
   final endpoint = document['endpoint'];
   if (endpoint is! String || endpoint.length > 2048) {
-    throw const FormatException('Lyrics search endpoint configuration is invalid.');
+    throw const FormatException(
+      'Lyrics search endpoint configuration is invalid.',
+    );
   }
   final uri = Uri.tryParse(endpoint);
   if (uri == null ||
@@ -2172,7 +2174,9 @@ void _validateCustomCatalogConfiguration(Map<String, Object?> document) {
           !RegExp(r'^[a-z0-9.-]+$').hasMatch(domain) ||
           domain.startsWith('.') ||
           domain.endsWith('.')) {
-        throw const FormatException('Custom catalog media domains are invalid.');
+        throw const FormatException(
+          'Custom catalog media domains are invalid.',
+        );
       }
     }
   }
@@ -2183,7 +2187,9 @@ void _validateSelfHostedAccountConfiguration(Map<String, Object?> document) {
   if (document.keys.any((key) => !allowedDocumentKeys.contains(key)) ||
       document['format'] != 'aethertune.self_hosted_accounts' ||
       document['version'] != 1) {
-    throw const FormatException('Self-hosted account configuration is invalid.');
+    throw const FormatException(
+      'Self-hosted account configuration is invalid.',
+    );
   }
   final accounts = document['accounts'];
   if (accounts is! List || accounts.length > 32) {
@@ -2255,9 +2261,9 @@ Response _publicProfileHtmlResponse(ManagedSyncAccountProfile profile) {
   final displayName = profile.publicDisplayNameEnabled
       ? profile.displayName
       : 'AetherTune listener';
-  final escapedName = const HtmlEscape(HtmlEscapeMode.element).convert(
-    displayName,
-  );
+  final escapedName = const HtmlEscape(
+    HtmlEscapeMode.element,
+  ).convert(displayName);
   final initials = displayName
       .split(RegExp(r'\s+'))
       .where((part) => part.isNotEmpty)
@@ -2278,9 +2284,9 @@ Response _publicProfileHtmlResponse(ManagedSyncAccountProfile profile) {
     _ => '#455a64',
   };
   final avatarText = initials.isEmpty ? 'A' : initials;
-  final escapedAvatarText = const HtmlEscape(HtmlEscapeMode.element).convert(
-    avatarText,
-  );
+  final escapedAvatarText = const HtmlEscape(
+    HtmlEscapeMode.element,
+  ).convert(avatarText);
   return Response.ok(
     '<!doctype html><html lang="en"><head><meta charset="utf-8">'
     '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -2317,8 +2323,8 @@ class LibrarySyncSnapshot {
     required this.revision,
     required this.updatedAt,
     required this.updatedByDevice,
-  })  : checksum = null,
-        snapshot = null;
+  }) : checksum = null,
+       snapshot = null;
 
   final int revision;
   final DateTime updatedAt;
@@ -2336,10 +2342,7 @@ class LibrarySyncSnapshot {
   }
 
   Map<String, Object?> toResponseJson() {
-    return <String, Object?>{
-      ...toMetadataJson(),
-      'snapshot': snapshot,
-    };
+    return <String, Object?>{...toMetadataJson(), 'snapshot': snapshot};
   }
 
   Map<String, Object?> toStorageJson() => toResponseJson();
@@ -2370,8 +2373,9 @@ class LibrarySyncSnapshot {
       throw const FormatException('Stored sync snapshot is invalid.');
     }
     final snapshot = Map<String, Object?>.from(rawSnapshot);
-    final actualChecksum =
-        sha256.convert(utf8.encode(jsonEncode(snapshot))).toString();
+    final actualChecksum = sha256
+        .convert(utf8.encode(jsonEncode(snapshot)))
+        .toString();
     if (actualChecksum != checksum) {
       throw const FormatException(
         'Stored sync snapshot checksum does not match.',
@@ -2485,8 +2489,10 @@ class FileListenTogetherInviteStore implements ListenTogetherInviteStore {
       }
       final ownerId = decoded['ownerId'];
       final sessionRevision = decoded['sessionRevision'];
-      if (ownerId is! String || ownerId.isEmpty ||
-          sessionRevision is! int || sessionRevision <= 0) {
+      if (ownerId is! String ||
+          ownerId.isEmpty ||
+          sessionRevision is! int ||
+          sessionRevision <= 0) {
         return null;
       }
       return ListenTogetherInvite(
@@ -2646,10 +2652,7 @@ class FileLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
     });
   }
 
-  Future<void> _writeUnlocked(
-    String userId,
-    LibrarySyncSnapshot saved,
-  ) async {
+  Future<void> _writeUnlocked(String userId, LibrarySyncSnapshot saved) async {
     final directory = _userDirectory(userId);
     await directory.create(recursive: true);
     final finalFile = File(
@@ -2691,9 +2694,9 @@ class FileLibrarySyncSnapshotStore implements LibrarySyncSnapshotStore {
       if (entity is! File) {
         continue;
       }
-      final match = RegExp(r'^snapshot-(\d+)\.json$').firstMatch(
-        p.basename(entity.path),
-      );
+      final match = RegExp(
+        r'^snapshot-(\d+)\.json$',
+      ).firstMatch(p.basename(entity.path));
       final revision = int.tryParse(match?.group(1) ?? '');
       if (revision != null) {
         candidates.add((revision: revision, file: entity));

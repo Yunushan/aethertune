@@ -85,7 +85,10 @@ final class _YouTubeChannelVideosScreenState
                 icon: const Icon(Icons.refresh),
               ),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.ondemand_video_outlined),
               title: Text('No public videos found'),

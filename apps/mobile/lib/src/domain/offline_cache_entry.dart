@@ -83,7 +83,9 @@ final class OfflineCacheEntry {
   factory OfflineCacheEntry.fromJson(Map<String, Object?> json) {
     final rawTrack = json['track'];
     if (rawTrack is! Map) {
-      throw const FormatException('Offline cache entry track must be an object.');
+      throw const FormatException(
+        'Offline cache entry track must be an object.',
+      );
     }
 
     return OfflineCacheEntry(
@@ -102,7 +104,8 @@ final class OfflineCacheEntry {
   }
 
   static String stableIdFor(Track track, OfflineMediaAction action) {
-    final providerLocator = track.externalId ??
+    final providerLocator =
+        track.externalId ??
         track.streamUrl ??
         track.localPath ??
         '${track.artist}|${track.album}|${track.title}|${track.duration}';

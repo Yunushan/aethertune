@@ -111,37 +111,39 @@ void main() {
 
     final feed = await provider.fetchFeed();
 
-    expect(requestedUris, <Uri>[Uri.parse('https://feeds.example.test/chapters.json')]);
-    expect(feed.episodes.single.chapters.map((chapter) => chapter.title), <String>[
-      'Opening',
-      'Topic',
+    expect(requestedUris, <Uri>[
+      Uri.parse('https://feeds.example.test/chapters.json'),
     ]);
+    expect(
+      feed.episodes.single.chapters.map((chapter) => chapter.title),
+      <String>['Opening', 'Topic'],
+    );
     expect(
       feed.episodes.single.chapters[1].start,
       const Duration(seconds: 30, milliseconds: 500),
     );
   });
 
-  test('does not request external chapter URLs outside the feed origin', () async {
-    var chapterRequests = 0;
-    final provider = PodcastRssProvider(
-      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
-      feedLoader: (_) async => _crossOriginChapterPodcastFeed,
-      chapterLoader: (_) async {
-        chapterRequests += 1;
-        return '{}';
-      },
-    );
+  test(
+    'does not request external chapter URLs outside the feed origin',
+    () async {
+      var chapterRequests = 0;
+      final provider = PodcastRssProvider(
+        feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+        feedLoader: (_) async => _crossOriginChapterPodcastFeed,
+        chapterLoader: (_) async {
+          chapterRequests += 1;
+          return '{}';
+        },
+      );
 
-    final feed = await provider.fetchFeed();
+      final feed = await provider.fetchFeed();
 
-    expect(chapterRequests, 0);
-    expect(feed.episodes.single.chapters, isEmpty);
-    expect(
-      feed.unapprovedExternalChapterHosts,
-      <String>['cdn.example.test'],
-    );
-  });
+      expect(chapterRequests, 0);
+      expect(feed.episodes.single.chapters, isEmpty);
+      expect(feed.unapprovedExternalChapterHosts, <String>['cdn.example.test']);
+    },
+  );
 
   test('loads approved HTTPS external chapter URLs', () async {
     final requestedUris = <Uri>[];
@@ -162,7 +164,9 @@ void main() {
 
     final feed = await provider.fetchFeed();
 
-    expect(requestedUris, <Uri>[Uri.parse('https://cdn.example.test/chapters.json')]);
+    expect(requestedUris, <Uri>[
+      Uri.parse('https://cdn.example.test/chapters.json'),
+    ]);
     expect(
       feed.episodes.single.chapters.map((chapter) => chapter.title),
       <String>['Approved opening'],
@@ -170,39 +174,41 @@ void main() {
     expect(feed.unapprovedExternalChapterHosts, isEmpty);
   });
 
-  test('bounds approved external chapter documents to process-memory cache',
-      () async {
-    var now = DateTime.utc(2026, 7, 18, 12);
-    var chapterRequests = 0;
-    final cache = PodcastExternalChapterDocumentCache(clock: () => now);
+  test(
+    'bounds approved external chapter documents to process-memory cache',
+    () async {
+      var now = DateTime.utc(2026, 7, 18, 12);
+      var chapterRequests = 0;
+      final cache = PodcastExternalChapterDocumentCache(clock: () => now);
 
-    PodcastRssProvider provider() => PodcastRssProvider(
-      feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
-      feedLoader: (_) async => _crossOriginChapterPodcastFeed,
-      chapterLoader: (_) async {
-        chapterRequests += 1;
-        return '''
+      PodcastRssProvider provider() => PodcastRssProvider(
+        feedUri: Uri.parse('https://feeds.example.test/aether.xml'),
+        feedLoader: (_) async => _crossOriginChapterPodcastFeed,
+        chapterLoader: (_) async {
+          chapterRequests += 1;
+          return '''
           {"version":"1.2.0","chapters":[
             {"startTime":0,"title":"Cached opening"}
           ]}
         ''';
-      },
-      isExternalChapterUriApproved: (uri) =>
-          uri.host == 'cdn.example.test' && uri.scheme == 'https',
-      externalChapterDocumentCache: cache,
-    );
+        },
+        isExternalChapterUriApproved: (uri) =>
+            uri.host == 'cdn.example.test' && uri.scheme == 'https',
+        externalChapterDocumentCache: cache,
+      );
 
-    expect(
-      (await provider().fetchFeed()).episodes.single.chapters.single.title,
-      'Cached opening',
-    );
-    await provider().fetchFeed();
-    expect(chapterRequests, 1);
+      expect(
+        (await provider().fetchFeed()).episodes.single.chapters.single.title,
+        'Cached opening',
+      );
+      await provider().fetchFeed();
+      expect(chapterRequests, 1);
 
-    now = now.add(PodcastExternalChapterDocumentCache.maxAge);
-    await provider().fetchFeed();
-    expect(chapterRequests, 2);
-  });
+      now = now.add(PodcastExternalChapterDocumentCache.maxAge);
+      await provider().fetchFeed();
+      expect(chapterRequests, 2);
+    },
+  );
 
   test('rejects malformed external chapter documents', () {
     expect(
@@ -213,7 +219,10 @@ void main() {
 
   test('duration parser accepts common RSS formats', () {
     expect(parsePodcastDuration('3723'), const Duration(seconds: 3723));
-    expect(parsePodcastDuration('02:03'), const Duration(minutes: 2, seconds: 3));
+    expect(
+      parsePodcastDuration('02:03'),
+      const Duration(minutes: 2, seconds: 3),
+    );
     expect(
       parsePodcastDuration('01:02:03'),
       const Duration(hours: 1, minutes: 2, seconds: 3),

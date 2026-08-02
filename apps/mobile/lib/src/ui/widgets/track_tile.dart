@@ -41,8 +41,15 @@ class TrackTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final library = context.read<LibraryStore?>();
-    final canRate = library?.tracks.any((saved) => saved.id == track.id) ?? false;
+    LibraryStore? library;
+    try {
+      library = context.read<LibraryStore>();
+    } on ProviderNotFoundException {
+      // TrackTile is also used in catalog views without a library provider.
+      library = null;
+    }
+    final canRate =
+        library?.tracks.any((saved) => saved.id == track.id) ?? false;
     final baseSubtitle = '${track.artist} · ${track.album} · ${track.genre}';
     final detail = detailText?.trim();
     final subtitle = detail == null || detail.isEmpty
@@ -60,11 +67,20 @@ class TrackTile extends StatelessWidget {
       ),
       title: Row(
         children: <Widget>[
-          Expanded(child: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           if (track.rating > 0)
             Semantics(
               label: 'Rating ${track.rating} of 5',
-              child: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.star, size: 18)),
+              child: const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.star, size: 18),
+              ),
             ),
         ],
       ),
@@ -99,7 +115,7 @@ class TrackTile extends StatelessWidget {
               onFavorite();
               break;
             case _TrackAction.rate:
-              unawaited(_setRating(context));
+              unawaited(_setRating(context, library));
               break;
             case _TrackAction.addToPlaylist:
               onAddToPlaylist();
@@ -161,8 +177,12 @@ class TrackTile extends StatelessWidget {
             PopupMenuItem(
               value: _TrackAction.rate,
               child: ListTile(
-                leading: Icon(track.rating == 0 ? Icons.star_outline : Icons.star),
-                title: Text(track.rating == 0 ? 'Rate' : 'Rating: ${track.rating} of 5'),
+                leading: Icon(
+                  track.rating == 0 ? Icons.star_outline : Icons.star,
+                ),
+                title: Text(
+                  track.rating == 0 ? 'Rate' : 'Rating: ${track.rating} of 5',
+                ),
               ),
             ),
           const PopupMenuItem(
@@ -222,10 +242,7 @@ class TrackTile extends StatelessWidget {
     );
   }
 
-  Future<void> _enqueue(
-    BuildContext context, {
-    bool playNext = false,
-  }) async {
+  Future<void> _enqueue(BuildContext context, {bool playNext = false}) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await context.read<PlayerController>().enqueueTrack(
@@ -259,9 +276,11 @@ class TrackTile extends StatelessWidget {
     }
   }
 
-  Future<void> _setRating(BuildContext context) async {
-    final library = context.read<LibraryStore?>();
-    if (library == null || !library.tracks.any((saved) => saved.id == track.id)) return;
+  Future<void> _setRating(BuildContext context, LibraryStore? library) async {
+    if (library == null ||
+        !library.tracks.any((saved) => saved.id == track.id)) {
+      return;
+    }
     final rating = await showDialog<int>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -273,13 +292,21 @@ class TrackTile extends StatelessWidget {
               IconButton(
                 tooltip: '$value of 5',
                 onPressed: () => Navigator.of(dialogContext).pop(value),
-                icon: Icon(value <= track.rating ? Icons.star : Icons.star_outline),
+                icon: Icon(
+                  value <= track.rating ? Icons.star : Icons.star_outline,
+                ),
               ),
           ],
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(0), child: const Text('Clear')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(0),
+            child: const Text('Clear'),
+          ),
         ],
       ),
     );

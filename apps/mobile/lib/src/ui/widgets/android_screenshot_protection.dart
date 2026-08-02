@@ -16,7 +16,8 @@ class AndroidScreenshotProtection extends StatefulWidget {
       _AndroidScreenshotProtectionState();
 }
 
-class _AndroidScreenshotProtectionState extends State<AndroidScreenshotProtection> {
+class _AndroidScreenshotProtectionState
+    extends State<AndroidScreenshotProtection> {
   static const _channel = MethodChannel('dev.aethertune/screenshot_protection');
   bool? _applied;
 
@@ -26,9 +27,11 @@ class _AndroidScreenshotProtectionState extends State<AndroidScreenshotProtectio
     }
     _applied = enabled;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _channel.invokeMethod<void>('setEnabled', <String, Object?>{
-        'enabled': enabled,
-      }).catchError((_) {});
+      _channel
+          .invokeMethod<void>('setEnabled', <String, Object?>{
+            'enabled': enabled,
+          })
+          .catchError((_) {});
     });
   }
 

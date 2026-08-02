@@ -10,13 +10,10 @@ void main() {
 
     expect(provider.id, LocalLibraryProvider.providerId);
     expect(provider.name, 'Local Library');
-    expect(
-      provider.capabilities,
-      <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.directPlayback,
-      },
-    );
+    expect(provider.capabilities, <MusicSourceCapability>{
+      MusicSourceCapability.metadataSearch,
+      MusicSourceCapability.directPlayback,
+    });
     expect(provider.disclosure.isLocalOnly, isTrue);
     expect(provider.disclosure.usesNetwork, isFalse);
   });
@@ -48,10 +45,9 @@ void main() {
       (await provider.search('ambient')).map((track) => track.id),
       <String>['one'],
     );
-    expect(
-      (await provider.search('road')).map((track) => track.id),
-      <String>['two'],
-    );
+    expect((await provider.search('road')).map((track) => track.id), <String>[
+      'two',
+    ]);
     expect(
       (await provider.search('sea-glass')).map((track) => track.id),
       <String>['one'],
@@ -80,14 +76,12 @@ void main() {
       ],
     );
 
-    expect(
-      (await provider.search('ambent')).map((track) => track.id),
-      <String>['ambient'],
-    );
-    expect(
-      (await provider.search('mria')).map((track) => track.id),
-      <String>['ambient'],
-    );
+    expect((await provider.search('ambent')).map((track) => track.id), <String>[
+      'ambient',
+    ]);
+    expect((await provider.search('mria')).map((track) => track.id), <String>[
+      'ambient',
+    ]);
   });
 
   test('can delegate search to the library store search surface', () async {
@@ -109,11 +103,7 @@ void main() {
     const provider = LocalLibraryProvider();
 
     final fileUri = await provider.resolveStream(
-      Track(
-        id: 'local',
-        title: 'Local',
-        localPath: '/music/local.mp3',
-      ),
+      Track(id: 'local', title: 'Local', localPath: '/music/local.mp3'),
     );
     final streamUri = await provider.resolveStream(
       Track(

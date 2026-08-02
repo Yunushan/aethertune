@@ -76,14 +76,12 @@ class _FlacInputBlock {
 
 class _FlacOutputBlock {
   _FlacOutputBlock.source(_FlacInputBlock source)
-      : type = source.type,
-        source = source,
-        payload = null;
+    : type = source.type,
+      source = source,
+      payload = null;
 
-  _FlacOutputBlock.generated({
-    required this.type,
-    required this.payload,
-  }) : source = null;
+  _FlacOutputBlock.generated({required this.type, required this.payload})
+    : source = null;
 
   final int type;
   final _FlacInputBlock? source;
@@ -142,7 +140,9 @@ Future<_FlacWritePlan> _buildWritePlan(
     final length = _uint24(header, 1);
     final payloadOffset = offset + 4;
     if (payloadOffset + length > fileLength) {
-      throw const FormatException('FLAC metadata block exceeds the file length.');
+      throw const FormatException(
+        'FLAC metadata block exceeds the file length.',
+      );
     }
 
     final block = _FlacInputBlock(
@@ -158,10 +158,7 @@ Future<_FlacWritePlan> _buildWritePlan(
         throw const FormatException('FLAC Vorbis comments could not be read.');
       }
       comments.add(
-        _parseVorbisComments(
-          payload,
-          replaceChapters: chapters != null,
-        ),
+        _parseVorbisComments(payload, replaceChapters: chapters != null),
       );
     }
 
@@ -346,9 +343,13 @@ Future<void> _copyRange(
   await source.setPosition(start);
   var remaining = length;
   while (remaining > 0) {
-    final chunk = await source.read(remaining > 64 * 1024 ? 64 * 1024 : remaining);
+    final chunk = await source.read(
+      remaining > 64 * 1024 ? 64 * 1024 : remaining,
+    );
     if (chunk.isEmpty) {
-      throw const FileSystemException('FLAC file ended unexpectedly while copying.');
+      throw const FileSystemException(
+        'FLAC file ended unexpectedly while copying.',
+      );
     }
     await output.writeFrom(chunk);
     remaining -= chunk.length;
@@ -378,9 +379,9 @@ bool _isChapterComment(String comment) {
   if (separator <= 0) {
     return false;
   }
-  return RegExp(r'^CHAPTER\d{1,3}(?:NAME)?$').hasMatch(
-    comment.substring(0, separator).toUpperCase(),
-  );
+  return RegExp(
+    r'^CHAPTER\d{1,3}(?:NAME)?$',
+  ).hasMatch(comment.substring(0, separator).toUpperCase());
 }
 
 List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
@@ -389,10 +390,14 @@ List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
   }
   final normalized = TrackChapter.normalize(chapters);
   if (normalized.length > _maxVorbisChapters) {
-    throw const FormatException('FLAC chapter markers exceed the 255-item limit.');
+    throw const FormatException(
+      'FLAC chapter markers exceed the 255-item limit.',
+    );
   }
   if (normalized.any((chapter) => chapter.start.inHours > 999)) {
-    throw const FormatException('FLAC chapter markers exceed the 999-hour limit.');
+    throw const FormatException(
+      'FLAC chapter markers exceed the 999-hour limit.',
+    );
   }
   return normalized;
 }

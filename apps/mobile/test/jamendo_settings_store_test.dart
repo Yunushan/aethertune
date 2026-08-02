@@ -36,20 +36,19 @@ void main() {
     expect(cache.clearCount, 1);
   });
 
-  test('reports unavailable secure storage and rejects blank client IDs',
-      () async {
-    final store = JamendoSettingsStore(
-      credentialVault: _FailingCredentialVault(),
-    );
+  test(
+    'reports unavailable secure storage and rejects blank client IDs',
+    () async {
+      final store = JamendoSettingsStore(
+        credentialVault: _FailingCredentialVault(),
+      );
 
-    await store.load();
-    expect(store.loadError, isNotNull);
-    expect(store.isConfigured, isFalse);
-    expect(
-      () => store.saveClientId('  '),
-      throwsA(isA<FormatException>()),
-    );
-  });
+      await store.load();
+      expect(store.loadError, isNotNull);
+      expect(store.isConfigured, isFalse);
+      expect(() => store.saveClientId('  '), throwsA(isA<FormatException>()));
+    },
+  );
 }
 
 final class _MemoryChartCache implements JamendoChartCache {
@@ -86,10 +85,12 @@ final class _MemoryCredentialVault implements ProviderCredentialVault {
 
 final class _FailingCredentialVault implements ProviderCredentialVault {
   @override
-  Future<void> delete(String accountId) async => throw StateError('unavailable');
+  Future<void> delete(String accountId) async =>
+      throw StateError('unavailable');
 
   @override
-  Future<String?> read(String accountId) async => throw StateError('unavailable');
+  Future<String?> read(String accountId) async =>
+      throw StateError('unavailable');
 
   @override
   Future<void> write(String accountId, String secret) async =>

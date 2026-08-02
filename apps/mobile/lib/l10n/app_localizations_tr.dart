@@ -114,7 +114,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get desktopTrayMinimizeOnCloseDescription =>
-      "Çalma işlemini, Çıkış'ı seçene kadar sistem tepsisinde sürdürün.";
+      'Çalma işlemini, Çıkış\'ı seçene kadar sistem tepsisinde sürdürün.';
 
   @override
   String get desktopTrayPrevious => 'Tepsi menüsünde önceki';
@@ -147,16 +147,22 @@ class AppLocalizationsTr extends AppLocalizations {
   String get sleepTimerStopsAtEnd => 'Çalma bu parçanın sonunda durur.';
 
   @override
-  String sleepTimerStopsIn(String remaining) => 'Çalma $remaining sonra durur.';
+  String sleepTimerStopsIn(String remaining) {
+    return 'Çalma $remaining sonra durur.';
+  }
 
   @override
   String get sleepTimerLessThanOneMinute => '1 dakikadan az';
 
   @override
-  String sleepTimerMinutes(int count) => '$count dakika';
+  String sleepTimerMinutes(int count) {
+    return '$count dakika';
+  }
 
   @override
-  String sleepTimerHours(int count) => '$count saat';
+  String sleepTimerHours(int count) {
+    return '$count saat';
+  }
 
   @override
   String get targetLanguage => 'Hedef dil';
@@ -168,7 +174,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get translatedLyrics => 'Çevrilmiş şarkı sözleri';
 
   @override
-  String translatedLyricsForLanguage(String language) => 'Hedef dil: $language';
+  String translatedLyricsForLanguage(String language) {
+    return 'Hedef dil: $language';
+  }
 
   @override
   String get copyTranslatedLyrics => 'Çevrilmiş şarkı sözlerini kopyala';
@@ -177,6 +185,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get translatedLyricsCopied => 'Çevrilmiş şarkı sözleri kopyalandı.';
 
   @override
-  String couldNotTranslateLyrics(String error) =>
-      'Şarkı sözleri çevrilemedi: $error';
+  String couldNotTranslateLyrics(String error) {
+    return 'Şarkı sözleri çevrilemedi: $error';
+  }
 }

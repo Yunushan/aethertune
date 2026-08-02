@@ -61,9 +61,7 @@ void main() {
       expect(follows.isFollowed('channel-1'), isTrue);
       expect(find.text('Followed on this device'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const Key('youtube-channel-follow-import')),
-      );
+      await tester.tap(find.byKey(const Key('youtube-channel-follow-import')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('youtube-channel-follow-import-document')),
@@ -113,7 +111,9 @@ void main() {
             value: follows,
           ),
         ],
-        child: MaterialApp(home: YouTubeChannelFollowScreen(provider: provider)),
+        child: MaterialApp(
+          home: YouTubeChannelFollowScreen(provider: provider),
+        ),
       ),
     );
     await tester.enterText(
@@ -131,7 +131,8 @@ void main() {
   });
 }
 
-String _channelPage(String title, String id, String? nextPageToken) => '''
+String _channelPage(String title, String id, String? nextPageToken) =>
+    '''
 {
   "nextPageToken": ${nextPageToken == null ? 'null' : '"$nextPageToken"'},
   "pageInfo": {"totalResults": 2},

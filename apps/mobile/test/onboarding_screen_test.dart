@@ -51,29 +51,28 @@ void main() {
     expect(destination, 1);
   });
 
-  testWidgets(
-    'starts the direct local-library import handoff when available',
-    (tester) async {
-      var importStarted = false;
-      int? destination;
+  testWidgets('starts the direct local-library import handoff when available', (
+    tester,
+  ) async {
+    var importStarted = false;
+    int? destination;
 
-      await tester.pumpWidget(
-        _localizedOnboarding(
-          onFinished: (tab) async => destination = tab,
-          onImportLocalLibrary: () async {
-            importStarted = true;
-          },
-        ),
-      );
+    await tester.pumpWidget(
+      _localizedOnboarding(
+        onFinished: (tab) async => destination = tab,
+        onImportLocalLibrary: () async {
+          importStarted = true;
+        },
+      ),
+    );
 
-      expect(find.text('Import audio'), findsOneWidget);
-      await tester.tap(find.text('Import audio'));
-      await tester.pumpAndSettle();
+    expect(find.text('Import audio'), findsOneWidget);
+    await tester.tap(find.text('Import audio'));
+    await tester.pumpAndSettle();
 
-      expect(importStarted, isTrue);
-      expect(destination, isNull);
-    },
-  );
+    expect(importStarted, isTrue);
+    expect(destination, isNull);
+  });
 
   testWidgets('routes source setup to the Sources tab', (tester) async {
     int? destination;
@@ -154,8 +153,9 @@ void main() {
     expect(find.text('Kurulumu atla'), findsOneWidget);
   });
 
-  testWidgets('uses Arabic onboarding translations with RTL directionality',
-      (tester) async {
+  testWidgets('uses Arabic onboarding translations with RTL directionality', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _localizedOnboarding(
         locale: const Locale('ar'),

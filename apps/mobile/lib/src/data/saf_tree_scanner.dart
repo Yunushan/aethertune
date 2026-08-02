@@ -58,10 +58,9 @@ LocalFolderScanResult _rebindSafScanResult(
 ) {
   final sourceByStagedPath = <String, String>{
     for (final entry in materialization.sourceUriByRelativePath.entries)
-      path.normalize(path.absolute(path.join(
-        materialization.stagingRootPath,
-        entry.key,
-      ))): entry.value,
+      path.normalize(
+        path.absolute(path.join(materialization.stagingRootPath, entry.key)),
+      ): entry.value,
   };
   final reboundIdByScannedId = <String, String>{};
   final tracks = <Track>[];
@@ -71,7 +70,8 @@ LocalFolderScanResult _rebindSafScanResult(
       tracks.add(track);
       continue;
     }
-    final sourceUri = sourceByStagedPath[path.normalize(path.absolute(localPath))];
+    final sourceUri =
+        sourceByStagedPath[path.normalize(path.absolute(localPath))];
     if (sourceUri == null) {
       tracks.add(track);
       continue;

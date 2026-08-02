@@ -79,7 +79,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(importedKind, AetherTuneDeepLinkKind.playlist);
-    expect(target.playlists.where((item) => item.name == 'Shared mix'), hasLength(1));
+    expect(
+      target.playlists.where((item) => item.name == 'Shared mix'),
+      hasLength(1),
+    );
     expect(find.text('Imported Shared mix from shared link.'), findsOneWidget);
   });
 }

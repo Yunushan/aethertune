@@ -4,84 +4,85 @@ import 'package:aethertune/src/data/youtube_data_metadata_provider.dart';
 import 'package:aethertune/src/domain/music_source_provider.dart';
 
 void main() {
-  test('searches official video metadata without exposing a playable URI',
-      () async {
-    Uri? capturedUri;
-    final provider = YouTubeDataMetadataProvider(
-      apiKey: 'project-key',
-      searchLoader: (uri) async {
-        capturedUri = uri;
-        return _searchJson;
-      },
-    );
+  test(
+    'searches official video metadata without exposing a playable URI',
+    () async {
+      Uri? capturedUri;
+      final provider = YouTubeDataMetadataProvider(
+        apiKey: 'project-key',
+        searchLoader: (uri) async {
+          capturedUri = uri;
+          return _searchJson;
+        },
+      );
 
-    expect(
-      provider.capabilities,
-      const <MusicSourceCapability>{
+      expect(provider.capabilities, const <MusicSourceCapability>{
         MusicSourceCapability.metadataSearch,
         MusicSourceCapability.searchSuggestions,
         MusicSourceCapability.artwork,
-      },
-    );
-    expect(provider.disclosure.cachesMedia, isFalse);
-    expect(provider.disclosure.supportsDownloads, isFalse);
+      });
+      expect(provider.disclosure.cachesMedia, isFalse);
+      expect(provider.disclosure.supportsDownloads, isFalse);
 
-    final page = await provider.searchPage('  Aether song  ', limit: 75);
+      final page = await provider.searchPage('  Aether song  ', limit: 75);
 
-    expect(capturedUri!.host, 'www.googleapis.com');
-    expect(capturedUri!.path, '/youtube/v3/search');
-    expect(capturedUri!.queryParameters, <String, String>{
-      'part': 'snippet',
-      'type': 'video',
-      'q': 'Aether song',
-      'maxResults': '50',
-      'key': 'project-key',
-    });
-    expect(page.totalCount, 87);
-    expect(page.nextCursor, 'next-page');
-    expect(page.tracks, hasLength(1));
-    final track = page.tracks.single;
-    expect(track.title, 'Aether Session');
-    expect(track.artist, 'Aether Channel');
-    expect(track.album, 'YouTube');
-    expect(track.externalId, 'video-1');
-    expect(track.artworkUri, Uri.parse('https://i.ytimg.com/high.jpg'));
-    expect(track.isPlayable, isFalse);
-    expect(await provider.resolveStream(track), isNull);
-  });
+      expect(capturedUri!.host, 'www.googleapis.com');
+      expect(capturedUri!.path, '/youtube/v3/search');
+      expect(capturedUri!.queryParameters, <String, String>{
+        'part': 'snippet',
+        'type': 'video',
+        'q': 'Aether song',
+        'maxResults': '50',
+        'key': 'project-key',
+      });
+      expect(page.totalCount, 87);
+      expect(page.nextCursor, 'next-page');
+      expect(page.tracks, hasLength(1));
+      final track = page.tracks.single;
+      expect(track.title, 'Aether Session');
+      expect(track.artist, 'Aether Channel');
+      expect(track.album, 'YouTube');
+      expect(track.externalId, 'video-1');
+      expect(track.artworkUri, Uri.parse('https://i.ytimg.com/high.jpg'));
+      expect(track.isPlayable, isFalse);
+      expect(await provider.resolveStream(track), isNull);
+    },
+  );
 
-  test('enriches submitted search metadata with official video durations',
-      () async {
-    Uri? detailsUri;
-    final provider = YouTubeDataMetadataProvider(
-      apiKey: 'project-key',
-      enrichSearchDurations: true,
-      searchLoader: (_) async => _searchJson,
-      videosLoader: (uri) async {
-        detailsUri = uri;
-        return '''
+  test(
+    'enriches submitted search metadata with official video durations',
+    () async {
+      Uri? detailsUri;
+      final provider = YouTubeDataMetadataProvider(
+        apiKey: 'project-key',
+        enrichSearchDurations: true,
+        searchLoader: (_) async => _searchJson,
+        videosLoader: (uri) async {
+          detailsUri = uri;
+          return '''
           {"items":[
             {"id":"video-1","contentDetails":{"duration":"PT1H2M3.5S"}},
             {"id":"skip","contentDetails":{"duration":"P1M"}}
           ]}
         ''';
-      },
-    );
+        },
+      );
 
-    final page = await provider.searchPage('aether');
+      final page = await provider.searchPage('aether');
 
-    expect(detailsUri!.path, '/youtube/v3/videos');
-    expect(detailsUri!.queryParameters, <String, String>{
-      'part': 'contentDetails',
-      'id': 'video-1',
-      'key': 'project-key',
-    });
-    expect(
-      page.tracks.single.duration,
-      const Duration(hours: 1, minutes: 2, seconds: 3, milliseconds: 500),
-    );
-    expect(page.tracks.single.isPlayable, isFalse);
-  });
+      expect(detailsUri!.path, '/youtube/v3/videos');
+      expect(detailsUri!.queryParameters, <String, String>{
+        'part': 'contentDetails',
+        'id': 'video-1',
+        'key': 'project-key',
+      });
+      expect(
+        page.tracks.single.duration,
+        const Duration(hours: 1, minutes: 2, seconds: 3, milliseconds: 500),
+      );
+      expect(page.tracks.single.isPlayable, isFalse);
+    },
+  );
 
   test('keeps search rows when optional duration metadata fails', () async {
     var detailRequests = 0;
@@ -119,14 +120,15 @@ void main() {
     expect(parseYouTubeDataDuration('P367D'), isNull);
   });
 
-  test('passes page tokens, skips malformed entries, and avoids empty queries',
-      () async {
-    final requests = <Uri>[];
-    final provider = YouTubeDataMetadataProvider(
-      apiKey: 'project-key',
-      searchLoader: (uri) async {
-        requests.add(uri);
-        return '''
+  test(
+    'passes page tokens, skips malformed entries, and avoids empty queries',
+    () async {
+      final requests = <Uri>[];
+      final provider = YouTubeDataMetadataProvider(
+        apiKey: 'project-key',
+        searchLoader: (uri) async {
+          requests.add(uri);
+          return '''
           {
             "items": [
               {"id": {"videoId": "valid"}, "snippet": {"title": "Valid", "thumbnails": {"default": {"url": "http://not-secure.example/image.jpg"}}}},
@@ -134,26 +136,28 @@ void main() {
             ]
           }
         ''';
-      },
-    );
+        },
+      );
 
-    expect((await provider.searchPage('')).tracks, isEmpty);
-    expect(requests, isEmpty);
+      expect((await provider.searchPage('')).tracks, isEmpty);
+      expect(requests, isEmpty);
 
-    final page = await provider.searchPage('test', cursor: 'token', limit: 1);
-    expect(requests.single.queryParameters['pageToken'], 'token');
-    expect(page.tracks.single.title, 'Valid');
-    expect(page.tracks.single.artworkUri, isNull);
-  });
+      final page = await provider.searchPage('test', cursor: 'token', limit: 1);
+      expect(requests.single.queryParameters['pageToken'], 'token');
+      expect(page.tracks.single.title, 'Valid');
+      expect(page.tracks.single.artworkUri, isNull);
+    },
+  );
 
-  test('loads paginated official music-chart metadata without a stream',
-      () async {
-    Uri? capturedUri;
-    final provider = YouTubeDataMetadataProvider(
-      apiKey: 'project-key',
-      videosLoader: (uri) async {
-        capturedUri = uri;
-        return '''
+  test(
+    'loads paginated official music-chart metadata without a stream',
+    () async {
+      Uri? capturedUri;
+      final provider = YouTubeDataMetadataProvider(
+        apiKey: 'project-key',
+        videosLoader: (uri) async {
+          capturedUri = uri;
+          return '''
           {
             "nextPageToken": "chart-next",
             "pageInfo": {"totalResults": 2},
@@ -168,37 +172,41 @@ void main() {
             }]
           }
         ''';
-      },
-    );
+        },
+      );
 
-    final page = await provider.loadPopularMusicPage(
-      regionCode: ' tr ',
-      cursor: 'chart-cursor',
-      limit: 100,
-    );
+      final page = await provider.loadPopularMusicPage(
+        regionCode: ' tr ',
+        cursor: 'chart-cursor',
+        limit: 100,
+      );
 
-    expect(capturedUri!.path, '/youtube/v3/videos');
-    expect(capturedUri!.queryParameters, <String, String>{
-      'part': 'snippet,contentDetails',
-      'chart': 'mostPopular',
-      'videoCategoryId': '10',
-      'regionCode': 'TR',
-      'maxResults': '50',
-      'key': 'project-key',
-      'pageToken': 'chart-cursor',
-    });
-    expect(page.nextPageToken, 'chart-next');
-    expect(page.totalResults, 2);
-    expect(page.tracks.single.title, 'Chart Signal');
-    expect(page.tracks.single.externalId, 'chart-video');
-    expect(page.tracks.single.duration, const Duration(minutes: 3, seconds: 4));
-    expect(page.tracks.single.isPlayable, isFalse);
-    expect(await provider.resolveStream(page.tracks.single), isNull);
-    await expectLater(
-      provider.loadPopularMusicPage(regionCode: 'invalid'),
-      throwsArgumentError,
-    );
-  });
+      expect(capturedUri!.path, '/youtube/v3/videos');
+      expect(capturedUri!.queryParameters, <String, String>{
+        'part': 'snippet,contentDetails',
+        'chart': 'mostPopular',
+        'videoCategoryId': '10',
+        'regionCode': 'TR',
+        'maxResults': '50',
+        'key': 'project-key',
+        'pageToken': 'chart-cursor',
+      });
+      expect(page.nextPageToken, 'chart-next');
+      expect(page.totalResults, 2);
+      expect(page.tracks.single.title, 'Chart Signal');
+      expect(page.tracks.single.externalId, 'chart-video');
+      expect(
+        page.tracks.single.duration,
+        const Duration(minutes: 3, seconds: 4),
+      );
+      expect(page.tracks.single.isPlayable, isFalse);
+      expect(await provider.resolveStream(page.tracks.single), isNull);
+      await expectLater(
+        provider.loadPopularMusicPage(regionCode: 'invalid'),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('rejects unusable configuration and malformed API responses', () async {
     expect(() => YouTubeDataMetadataProvider(apiKey: ' '), throwsArgumentError);
@@ -244,7 +252,10 @@ void main() {
     expect(suggestions.last.value, 'Beyond');
     expect(await provider.suggest('  '), isEmpty);
     expect(requests, hasLength(1));
-    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
+    await expectLater(
+      provider.suggest('aether', limit: 0),
+      throwsArgumentError,
+    );
   });
 
   test('searches and pages public channel metadata only', () async {
@@ -329,7 +340,10 @@ void main() {
     expect(page.totalResults, 2);
     expect(page.tracks.single.title, 'Channel Signal');
     expect(page.tracks.single.artist, 'Aether Radio');
-    expect(page.videos.single.publishedAt, DateTime.utc(2026, 7, 17, 12, 34, 56));
+    expect(
+      page.videos.single.publishedAt,
+      DateTime.utc(2026, 7, 17, 12, 34, 56),
+    );
     expect(page.tracks.single.isPlayable, isFalse);
     expect(await provider.resolveStream(page.tracks.single), isNull);
     await expectLater(provider.loadChannelVideosPage(' '), throwsArgumentError);

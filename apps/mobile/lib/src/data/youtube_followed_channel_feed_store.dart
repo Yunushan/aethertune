@@ -108,11 +108,7 @@ final class YouTubeFollowedChannelFeedStore extends ChangeNotifier {
       if (feed.items.isNotEmpty || feed.failedChannelCount == 0) {
         _items
           ..clear()
-          ..addAll(
-            feed.items
-                .map(_sanitizeItem)
-                .take(_maxItems),
-          )
+          ..addAll(feed.items.map(_sanitizeItem).take(_maxItems))
           ..sort(_compareItems);
       }
       _lastRefreshedAt = DateTime.now().toUtc();
@@ -216,5 +212,7 @@ int _compareItems(
   final byTime = secondTime.compareTo(firstTime);
   return byTime != 0
       ? byTime
-      : first.track.title.toLowerCase().compareTo(second.track.title.toLowerCase());
+      : first.track.title.toLowerCase().compareTo(
+          second.track.title.toLowerCase(),
+        );
 }

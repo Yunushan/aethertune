@@ -215,11 +215,7 @@ class ListeningRecapCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Icon(
-                      Icons.music_note,
-                      color: palette.primary,
-                      size: 22,
-                    ),
+                    Icon(Icons.music_note, color: palette.primary, size: 22),
                     const SizedBox(width: 9),
                     Expanded(
                       child: Column(
@@ -264,7 +260,8 @@ class ListeningRecapCard extends StatelessWidget {
                 _RecapFactRow(
                   icon: Icons.album_outlined,
                   label: topAlbum == null ? 'Top genre' : 'Top album',
-                  value: topAlbum?.label ?? topGenre?.label ?? 'Not enough data',
+                  value:
+                      topAlbum?.label ?? topGenre?.label ?? 'Not enough data',
                   color: palette.tertiary,
                   labelColor: palette.muted,
                   valueColor: palette.foreground,
@@ -312,10 +309,7 @@ class _RecapMetric extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: labelColor, fontSize: 11),
-        ),
+        Text(label, style: TextStyle(color: labelColor, fontSize: 11)),
       ],
     );
   }
@@ -344,10 +338,7 @@ class _RecapFactRow extends StatelessWidget {
       children: <Widget>[
         Icon(icon, color: color, size: 17),
         const SizedBox(width: 8),
-        Text(
-          '$label:',
-          style: TextStyle(color: labelColor, fontSize: 12),
-        ),
+        Text('$label:', style: TextStyle(color: labelColor, fontSize: 12)),
         const SizedBox(width: 5),
         Expanded(
           child: Text(
@@ -371,9 +362,7 @@ List<Color> listeningRecapThemeSwatch(ListeningRecapVisualTheme theme) {
   return <Color>[palette.primary, palette.secondary, palette.tertiary];
 }
 
-_ListeningRecapPalette _listeningRecapPalette(
-  ListeningRecapVisualTheme theme,
-) {
+_ListeningRecapPalette _listeningRecapPalette(ListeningRecapVisualTheme theme) {
   switch (theme) {
     case ListeningRecapVisualTheme.midnight:
       return const _ListeningRecapPalette(

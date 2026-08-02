@@ -97,10 +97,7 @@ final class ProviderHomeFeedCoordinator {
 
     final results = await Future.wait<List<_ProviderHomeLoadResult>>(
       uniqueProviders.map(
-        (provider) => _loadProvider(
-          provider,
-          limitPerSection: limitPerSection,
-        ),
+        (provider) => _loadProvider(provider, limitPerSection: limitPerSection),
       ),
     );
     final sections = <ProviderHomeSection>[];
@@ -160,9 +157,9 @@ final class ProviderHomeFeedCoordinator {
         section: ProviderHomeSection(
           provider: provider,
           kind: MusicCatalogCollectionKind.album,
-          collections: List<MusicCatalogCollection>.unmodifiable(<
-            MusicCatalogCollection
-          >[...section.collections, ...additional]),
+          collections: List<MusicCatalogCollection>.unmodifiable(
+            <MusicCatalogCollection>[...section.collections, ...additional],
+          ),
           discoveryKind: discoveryKind,
           nextOffset: canContinue ? page.nextOffset : section.nextOffset,
           hasMore: canContinue,
@@ -200,11 +197,7 @@ final class ProviderHomeFeedCoordinator {
         return Future.wait<_ProviderHomeLoadResult>(
           <Future<_ProviderHomeLoadResult>>[
             for (final kind in discoveryKinds)
-              _loadDiscoverySection(
-                provider,
-                kind,
-                limit: limitPerSection,
-              ),
+              _loadDiscoverySection(provider, kind, limit: limitPerSection),
             _loadSection(
               provider,
               MusicCatalogCollectionKind.playlist,
@@ -290,10 +283,7 @@ final class ProviderHomeFeedCoordinator {
         );
       }
       final visible = _visibleCollections(
-        await provider.browseDiscoveryCollections(
-          discoveryKind,
-          limit: limit,
-        ),
+        await provider.browseDiscoveryCollections(discoveryKind, limit: limit),
         collectionKind,
         limit: limit,
       );
@@ -340,9 +330,8 @@ List<ProviderHomeSection> _followedArtistSections(
     }
     final collections = section.collections
         .where(
-          (collection) => followedKeys.contains(
-            collection.subtitle.trim().toLowerCase(),
-          ),
+          (collection) =>
+              followedKeys.contains(collection.subtitle.trim().toLowerCase()),
         )
         .toList(growable: false);
     if (collections.isEmpty) {

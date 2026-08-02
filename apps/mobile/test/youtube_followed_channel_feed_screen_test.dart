@@ -10,84 +10,97 @@ import 'package:aethertune/src/data/youtube_followed_channel_feed_store.dart';
 import 'package:aethertune/src/ui/youtube_followed_channel_feed_screen.dart';
 
 void main() {
-  testWidgets('refreshes followed public channel metadata manually and isolates failures', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    final library = LibraryStore();
-    final follows = YouTubeChannelFollowStore();
-    final followedFeed = YouTubeFollowedChannelFeedStore();
-    await Future.wait<void>(<Future<void>>[
-      library.load(),
-      follows.load(),
-      followedFeed.load(),
-    ]);
-    addTearDown(library.dispose);
-    addTearDown(follows.dispose);
-    addTearDown(followedFeed.dispose);
-    await follows.setFollowed(
-      const YouTubeDataChannel(id: 'channel-one', title: 'One'),
-      true,
-    );
-    await follows.setFollowed(
-      const YouTubeDataChannel(id: 'channel-two', title: 'Two'),
-      true,
-    );
-    await follows.setFollowed(
-      const YouTubeDataChannel(id: 'channel-three', title: 'Three'),
-      true,
-    );
-    final requests = <String>[];
-    final provider = YouTubeDataMetadataProvider(
-      apiKey: 'project-key',
-      searchLoader: (uri) async {
-        final channelId = uri.queryParameters['channelId']!;
-        requests.add(channelId);
-        return switch (channelId) {
-          'channel-one' => _channelPage('Earlier signal', 'one', '2026-07-01T00:00:00Z'),
-          'channel-two' => throw StateError('unavailable'),
-          _ => _channelPage('Latest signal', 'three', '2026-07-02T00:00:00Z'),
-        };
-      },
-    );
+  testWidgets(
+    'refreshes followed public channel metadata manually and isolates failures',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final library = LibraryStore();
+      final follows = YouTubeChannelFollowStore();
+      final followedFeed = YouTubeFollowedChannelFeedStore();
+      await Future.wait<void>(<Future<void>>[
+        library.load(),
+        follows.load(),
+        followedFeed.load(),
+      ]);
+      addTearDown(library.dispose);
+      addTearDown(follows.dispose);
+      addTearDown(followedFeed.dispose);
+      await follows.setFollowed(
+        const YouTubeDataChannel(id: 'channel-one', title: 'One'),
+        true,
+      );
+      await follows.setFollowed(
+        const YouTubeDataChannel(id: 'channel-two', title: 'Two'),
+        true,
+      );
+      await follows.setFollowed(
+        const YouTubeDataChannel(id: 'channel-three', title: 'Three'),
+        true,
+      );
+      final requests = <String>[];
+      final provider = YouTubeDataMetadataProvider(
+        apiKey: 'project-key',
+        searchLoader: (uri) async {
+          final channelId = uri.queryParameters['channelId']!;
+          requests.add(channelId);
+          return switch (channelId) {
+            'channel-one' => _channelPage(
+              'Earlier signal',
+              'one',
+              '2026-07-01T00:00:00Z',
+            ),
+            'channel-two' => throw StateError('unavailable'),
+            _ => _channelPage('Latest signal', 'three', '2026-07-02T00:00:00Z'),
+          };
+        },
+      );
 
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<LibraryStore>.value(value: library),
-          ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
-            value: follows,
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<LibraryStore>.value(value: library),
+            ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
+              value: follows,
+            ),
+            ChangeNotifierProvider<YouTubeFollowedChannelFeedStore>.value(
+              value: followedFeed,
+            ),
+          ],
+          child: MaterialApp(
+            home: YouTubeFollowedChannelFeedScreen(provider: provider),
           ),
-          ChangeNotifierProvider<YouTubeFollowedChannelFeedStore>.value(
-            value: followedFeed,
-          ),
-        ],
-        child: MaterialApp(
-          home: YouTubeFollowedChannelFeedScreen(provider: provider),
         ),
-      ),
-    );
-    expect(requests, isEmpty);
+      );
+      expect(requests, isEmpty);
 
-    await tester.tap(find.text('Refresh followed channels'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Refresh followed channels'));
+      await tester.pumpAndSettle();
 
-    expect(requests.toSet(), <String>{'channel-one', 'channel-two', 'channel-three'});
-    expect(find.text('1 followed channel(s) could not refresh'), findsOneWidget);
-    expect(find.byIcon(Icons.play_arrow), findsNothing);
-    expect(
-      tester.getTopLeft(find.text('Latest signal')).dy,
-      lessThan(tester.getTopLeft(find.text('Earlier signal')).dy),
-    );
+      expect(requests.toSet(), <String>{
+        'channel-one',
+        'channel-two',
+        'channel-three',
+      });
+      expect(
+        find.text('1 followed channel(s) could not refresh'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.play_arrow), findsNothing);
+      expect(
+        tester.getTopLeft(find.text('Latest signal')).dy,
+        lessThan(tester.getTopLeft(find.text('Earlier signal')).dy),
+      );
 
-    await tester.tap(find.byTooltip('Save metadata to library').first);
-    await tester.pumpAndSettle();
-    expect(library.tracks.single.title, 'Latest signal');
-    expect(library.tracks.single.isPlayable, isFalse);
-  });
+      await tester.tap(find.byTooltip('Save metadata to library').first);
+      await tester.pumpAndSettle();
+      expect(library.tracks.single.title, 'Latest signal');
+      expect(library.tracks.single.isPlayable, isFalse);
+    },
+  );
 }
 
-String _channelPage(String title, String id, String publishedAt) => '''
+String _channelPage(String title, String id, String publishedAt) =>
+    '''
 {
   "items": [{
     "id": {"videoId": "$id"},

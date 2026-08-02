@@ -1,6 +1,8 @@
 package dev.aethertune.aethertune
 
 import android.Manifest
+import android.app.PictureInPictureParams
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
@@ -11,18 +13,20 @@ import android.media.audiofx.Virtualizer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
-import android.view.WindowManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import kotlin.math.ln
 import kotlin.math.sqrt
 
@@ -45,30 +49,17 @@ class MainActivity : AudioServiceActivity() {
         dispatchLauncherShortcut(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        AetherTuneOfflineCacheJobService.cancel(applicationContext)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/audio_visualizer/bands",
         ).setStreamHandler(audioVisualizer)
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            "dev.aethertune/screenshot_protection",
-        ).setMethodCallHandler { call, result ->
-            if (call.method != "setEnabled") {
-                result.notImplemented()
-                return@setMethodCallHandler
-            }
-            if (call.argument<Boolean>("enabled") == true) {
-                window.setFlags(
-                    WindowManager.LayoutParams.FLAG_SECURE,
-                    WindowManager.LayoutParams.FLAG_SECURE,
-                )
-            } else {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            }
-            result.success(null)
-        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/audio_visualizer",
@@ -168,6 +159,16 @@ class MainActivity : AudioServiceActivity() {
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/video_picture_in_picture",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "enter") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            result.success(enterVideoPictureInPicture())
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "dev.aethertune/storage_access",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -190,6 +191,141 @@ class MainActivity : AudioServiceActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/offline_cache_background",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "schedule" -> result.success(
+                    AetherTuneOfflineCacheJobService.schedule(
+                        applicationContext,
+                        call.argument<Number>("minimumLatencyMilliseconds")?.toLong(),
+                    ),
+                )
+                "cancel" -> {
+                    AetherTuneOfflineCacheJobService.cancel(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.aethertune/system_downloads",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "exportVerifiedFile") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val sourcePath = call.argument<String>("sourcePath")
+            val displayName = call.argument<String>("displayName")
+            val byteCount = call.argument<Number>("byteCount")?.toLong()
+            val checksum = call.argument<String>("checksum")
+            if (sourcePath == null || displayName == null || byteCount == null || checksum == null) {
+                result.error("invalid_arguments", "Verified cache export arguments are required.", null)
+                return@setMethodCallHandler
+            }
+            try {
+                result.success(
+                    exportVerifiedFileToDownloads(
+                        sourcePath,
+                        displayName,
+                        byteCount,
+                        checksum,
+                    ),
+                )
+            } catch (error: Exception) {
+                result.error("export_failed", error.message, null)
+            }
+        }
+    }
+
+    private fun exportVerifiedFileToDownloads(
+        sourcePath: String,
+        requestedDisplayName: String,
+        expectedByteCount: Long,
+        expectedChecksum: String,
+    ): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return null
+        }
+        if (expectedByteCount < 0 || !expectedChecksum.matches(Regex("[a-f0-9]{8}"))) {
+            throw IllegalArgumentException("Verified cache metadata is invalid.")
+        }
+        val source = File(sourcePath)
+        if (!source.isFile) {
+            throw IOException("Verified cache file is missing.")
+        }
+        val displayName = requestedDisplayName
+            .replace(Regex("[\\/:*?\"<>|\\p{Cntrl}]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .ifEmpty { "aethertune-media" }
+            .take(100)
+        val extension = displayName.substringAfterLast('.', "")
+        val mimeType = if (extension.isEmpty()) {
+            "application/octet-stream"
+        } else {
+            android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(extension.lowercase())
+                ?: "application/octet-stream"
+        }
+        val resolver = contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(
+            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            values,
+        ) ?: throw IOException("Could not create a Downloads entry.")
+        try {
+            var written = 0L
+            var checksum = 0x811c9dc5L
+            source.inputStream().use { input ->
+                resolver.openOutputStream(uri, "w")?.use { output ->
+                    val buffer = ByteArray(32 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count <= 0) {
+                            break
+                        }
+                        output.write(buffer, 0, count)
+                        written += count.toLong()
+                        for (index in 0 until count) {
+                            checksum = ((checksum xor (buffer[index].toInt() and 0xff).toLong()) *
+                                0x01000193L) and 0xffffffffL
+                        }
+                    }
+                } ?: throw IOException("Could not open the Downloads entry.")
+            }
+            val actualChecksum = checksum.toString(16).padStart(8, '0')
+            if (written != expectedByteCount || actualChecksum != expectedChecksum) {
+                throw IOException("Verified cache changed before export completed.")
+            }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return uri.toString()
+        } catch (error: Exception) {
+            resolver.delete(uri, null, null)
+            throw error
+        }
+    }
+
+    private fun enterVideoPictureInPicture(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            !packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            return false
+        }
+        return try {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -262,34 +398,6 @@ class MainActivity : AudioServiceActivity() {
         result.success(granted && sessionId != null && audioVisualizer.start(sessionId))
     }
 
-    override fun onDestroy() {
-        audioVisualizer.stop()
-        audioVirtualizer.release()
-        super.onDestroy()
-    }
-
-    private fun startVisualizer(sessionId: Int, result: MethodChannel.Result) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
-                PackageManager.PERMISSION_GRANTED
-        ) {
-            if (pendingVisualizerResult != null ||
-                pendingAudioLibraryAccessResult != null
-            ) {
-                result.error("permission-request-active", "A visualizer permission request is active.", null)
-                return
-            }
-            pendingVisualizerResult = result
-            pendingVisualizerSessionId = sessionId
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                visualizerPermissionRequestCode,
-            )
-            return
-        }
-        result.success(audioVisualizer.start(sessionId))
-    }
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != safTreeRequestCode) {
@@ -317,6 +425,34 @@ class MainActivity : AudioServiceActivity() {
         } catch (_: SecurityException) {
             result.error("persist-access-denied", "Android could not retain folder access.", null)
         }
+    }
+
+    override fun onDestroy() {
+        audioVisualizer.stop()
+        audioVirtualizer.release()
+        super.onDestroy()
+    }
+
+    private fun startVisualizer(sessionId: Int, result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            if (pendingVisualizerResult != null ||
+                pendingAudioLibraryAccessResult != null
+            ) {
+                result.error("permission-request-active", "A visualizer permission request is active.", null)
+                return
+            }
+            pendingVisualizerResult = result
+            pendingVisualizerSessionId = sessionId
+            requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                visualizerPermissionRequestCode,
+            )
+            return
+        }
+        result.success(audioVisualizer.start(sessionId))
     }
 
     private fun requestAudioLibraryAccess(result: MethodChannel.Result) {
@@ -531,7 +667,7 @@ class MainActivity : AudioServiceActivity() {
                 } catch (_: SecurityException) {
                     childDestination.delete()
                     budget.inaccessibleCount += 1
-                } catch (_: java.io.IOException) {
+                } catch (_: IOException) {
                     childDestination.delete()
                     budget.inaccessibleCount += 1
                 }
@@ -543,7 +679,7 @@ class MainActivity : AudioServiceActivity() {
 
     private fun copySafDocument(sourceUri: Uri, destination: File, budget: SafMaterializationBudget) {
         val input = contentResolver.openInputStream(sourceUri)
-            ?: throw java.io.IOException("Android could not read a selected document.")
+            ?: throw IOException("Android could not read a selected document.")
         input.use { source ->
             FileOutputStream(destination).use { output ->
                 val buffer = ByteArray(64 * 1024)
@@ -569,7 +705,7 @@ class MainActivity : AudioServiceActivity() {
         val stagingParent = File(cacheDir, safMaterializationDirectoryName).canonicalFile
         val candidate = try {
             File(stagingRootPath).canonicalFile
-        } catch (_: java.io.IOException) {
+        } catch (_: IOException) {
             return
         }
         if (candidate.parentFile == stagingParent) {

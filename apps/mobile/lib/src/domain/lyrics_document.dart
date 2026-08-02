@@ -11,10 +11,7 @@ const supportedLyricsDocumentExtensions = <String>[
 ];
 
 class LyricsDocumentExport {
-  const LyricsDocumentExport({
-    required this.fileName,
-    required this.text,
-  });
+  const LyricsDocumentExport({required this.fileName, required this.text});
 
   final String fileName;
   final String text;
@@ -86,17 +83,16 @@ String lyricsDocumentExtensionForText(String plainText) {
   return parseSyncedLyricLines(plainText).isEmpty ? 'txt' : 'lrc';
 }
 
-String decodeLyricsDocumentBytes(
-  List<int> bytes, {
-  String? fileName,
-}) {
+String decodeLyricsDocumentBytes(List<int> bytes, {String? fileName}) {
   try {
     final decoded = utf8.decode(bytes, allowMalformed: false);
     final normalized = _normalizeLyricsDocumentText(decoded);
     if (_lyricsDocumentHasExtension(fileName, 'ttml') &&
         (!isTtmlLyricsDocument(normalized) ||
             parseSyncedLyricLines(normalized).isEmpty)) {
-      throw const FormatException('TTML lyrics must contain valid lyric lines.');
+      throw const FormatException(
+        'TTML lyrics must contain valid lyric lines.',
+      );
     }
     if (_lyricsDocumentHasExtension(fileName, 'srt') &&
         !isSrtLyricsDocument(normalized)) {
@@ -130,8 +126,10 @@ String _normalizeLyricsDocumentText(String value) {
 }
 
 String _safeLyricsFileNamePart(String value, {required String fallback}) {
-  final withoutInvalidCharacters =
-      value.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), ' ');
+  final withoutInvalidCharacters = value.replaceAll(
+    RegExp(r'[<>:"/\\|?*\x00-\x1F]'),
+    ' ',
+  );
   final withoutRepeatedWhitespace = withoutInvalidCharacters
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim()

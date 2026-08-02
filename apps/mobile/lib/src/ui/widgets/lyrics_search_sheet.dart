@@ -122,9 +122,7 @@ class _LyricsSearchSheetState extends State<LyricsSearchSheet> {
   Widget _buildResults(BuildContext context) {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(
-          key: Key('lyrics-search-loading'),
-        ),
+        child: CircularProgressIndicator(key: Key('lyrics-search-loading')),
       );
     }
     if (_error != null) {
@@ -193,14 +191,17 @@ class _LyricsSearchSheetState extends State<LyricsSearchSheet> {
     });
     try {
       final query = LyricsSearchQuery(
-          keywords: keywords,
-          trackName: widget.track.title,
-          artistName: widget.track.artist,
-          albumName: widget.track.album,
-          duration: widget.track.duration,
-        );
-      final results = widget.offlineOnly && widget.provider is OfflineLyricsProvider
-          ? await (widget.provider as OfflineLyricsProvider).searchOffline(query)
+        keywords: keywords,
+        trackName: widget.track.title,
+        artistName: widget.track.artist,
+        albumName: widget.track.album,
+        duration: widget.track.duration,
+      );
+      final results =
+          widget.offlineOnly && widget.provider is OfflineLyricsProvider
+          ? await (widget.provider as OfflineLyricsProvider).searchOffline(
+              query,
+            )
           : await widget.provider.search(query);
       if (!mounted) {
         return;

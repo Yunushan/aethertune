@@ -15,139 +15,150 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('persists watched roots and safely reconciles local folder scans',
-      () async {
-    const root = '/music/watched';
-    final normalizedRoot = p.normalize(p.absolute(root));
-    final store = LibraryStore(clock: () => DateTime.utc(2026, 7, 12));
-    await store.load();
-    await store.watchLocalFolder(root);
-    await store.watchLocalFolder('$root/');
+  test(
+    'persists watched roots and safely reconciles local folder scans',
+    () async {
+      const root = '/music/watched';
+      final normalizedRoot = p.normalize(p.absolute(root));
+      final store = LibraryStore(clock: () => DateTime.utc(2026, 7, 12));
+      await store.load();
+      await store.watchLocalFolder(root);
+      await store.watchLocalFolder('$root/');
 
-    final original = _track(
-      path: '$root/one.mp3',
-      title: 'Original title',
-      hash: 'old-hash',
-      artworkUri: Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
-      addedAt: DateTime.utc(2026, 1, 1),
-      chapters: List<TrackChapter>.unmodifiable(<TrackChapter>[
-        // ignore: prefer_const_constructors
-        TrackChapter(start: Duration(seconds: 30), title: 'Keep chapter'),
-      ]),
-    );
-    await store.addTracks(<Track>[original]);
-    await store.toggleFavorite(original.id);
-    await store.setLyrics(original.id, 'Manual lyrics');
-    await store.recordPlayback(original.id);
-    await store.recordPlaybackProgress(
-      original.id,
-      const Duration(seconds: 45),
-      const Duration(minutes: 4),
-    );
-    await store.setTrackPlaybackSpeed(original.id, 1.25);
-    final playlist = await store.createPlaylist(
-      'Keep watched state',
-      trackIds: <String>[original.id],
-    );
-    final privateArtwork = Uri.file('/private/manual-cover.png');
-    await store.updateTrackArtwork(original.id, privateArtwork);
+      final original = _track(
+        path: '$root/one.mp3',
+        title: 'Original title',
+        hash: 'old-hash',
+        artworkUri: Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
+        addedAt: DateTime.utc(2026, 1, 1),
+        chapters: List<TrackChapter>.unmodifiable(<TrackChapter>[
+          // ignore: prefer_const_constructors
+          TrackChapter(start: Duration(seconds: 30), title: 'Keep chapter'),
+        ]),
+      );
+      await store.addTracks(<Track>[original]);
+      await store.toggleFavorite(original.id);
+      await store.setLyrics(original.id, 'Manual lyrics');
+      await store.recordPlayback(original.id);
+      await store.recordPlaybackProgress(
+        original.id,
+        const Duration(seconds: 45),
+        const Duration(minutes: 4),
+      );
+      await store.setTrackPlaybackSpeed(original.id, 1.25);
+      final playlist = await store.createPlaylist(
+        'Keep watched state',
+        trackIds: <String>[original.id],
+      );
+      final privateArtwork = Uri.file('/private/manual-cover.png');
+      await store.updateTrackArtwork(original.id, privateArtwork);
 
-    final refreshed = _track(
-      path: '$root/one.mp3',
-      title: 'Rescanned title',
-      hash: 'new-hash',
-      artworkUri: Uri.parse('data:image/png;base64,cmVzY2FubmVk'),
-      addedAt: DateTime.utc(2026, 7, 12),
-      albumArtist: 'Rescanned album artist',
-      year: 2026,
-      trackNumber: 7,
-      duration: const Duration(minutes: 4, seconds: 12),
-      replayGainTrackDb: -6.5,
-      replayGainAlbumDb: -4.25,
-    );
-    final added = _track(
-      path: '$root/two.mp3',
-      title: 'Newly discovered',
-      hash: 'two-hash',
-    );
-    final embedded = _track(
-      path: '$root/three.mp3',
-      title: 'Embedded lyrics',
-      hash: 'three-hash',
-    );
-    await store.reconcileWatchedLocalFolder(
-      root,
-      tracks: <Track>[refreshed, added, embedded],
-      sidecarLyricsByTrackId: <String, String>{
-        original.id: 'Sidecar must not overwrite manual lyrics',
-        added.id: '[00:01.00]New sidecar lyrics',
-      },
-      embeddedLyricsByTrackId: <String, String>{
-        original.id: 'Embedded must not overwrite manual lyrics',
-        added.id: 'Embedded must not overwrite a sidecar',
-        embedded.id: 'Imported embedded lyric',
-      },
-      sidecarChaptersByTrackId: <String, List<TrackChapter>>{
-        original.id: <TrackChapter>[
-          TrackChapter(start: Duration.zero, title: 'Must not overwrite'),
-        ],
-        added.id: <TrackChapter>[
-          TrackChapter(start: Duration.zero, title: 'Imported CUE chapter'),
-        ],
-      },
-      pruneMissing: true,
-    );
+      final refreshed = _track(
+        path: '$root/one.mp3',
+        title: 'Rescanned title',
+        hash: 'new-hash',
+        artworkUri: Uri.parse('data:image/png;base64,cmVzY2FubmVk'),
+        addedAt: DateTime.utc(2026, 7, 12),
+        albumArtist: 'Rescanned album artist',
+        year: 2026,
+        trackNumber: 7,
+        duration: const Duration(minutes: 4, seconds: 12),
+        replayGainTrackDb: -6.5,
+        replayGainAlbumDb: -4.25,
+      );
+      final added = _track(
+        path: '$root/two.mp3',
+        title: 'Newly discovered',
+        hash: 'two-hash',
+      );
+      final embedded = _track(
+        path: '$root/three.mp3',
+        title: 'Embedded lyrics',
+        hash: 'three-hash',
+      );
+      await store.reconcileWatchedLocalFolder(
+        root,
+        tracks: <Track>[refreshed, added, embedded],
+        sidecarLyricsByTrackId: <String, String>{
+          original.id: 'Sidecar must not overwrite manual lyrics',
+          added.id: '[00:01.00]New sidecar lyrics',
+        },
+        embeddedLyricsByTrackId: <String, String>{
+          original.id: 'Embedded must not overwrite manual lyrics',
+          added.id: 'Embedded must not overwrite a sidecar',
+          embedded.id: 'Imported embedded lyric',
+        },
+        sidecarChaptersByTrackId: <String, List<TrackChapter>>{
+          original.id: <TrackChapter>[
+            TrackChapter(start: Duration.zero, title: 'Must not overwrite'),
+          ],
+          added.id: <TrackChapter>[
+            TrackChapter(start: Duration.zero, title: 'Imported CUE chapter'),
+          ],
+        },
+        pruneMissing: true,
+      );
 
-    final updated = store.tracks.firstWhere((track) => track.id == original.id);
-    expect(updated.title, 'Rescanned title');
-    expect(updated.albumArtist, 'Rescanned album artist');
-    expect(updated.year, 2026);
-    expect(updated.trackNumber, 7);
-    expect(updated.duration, const Duration(minutes: 4, seconds: 12));
-    expect(updated.replayGainTrackDb, -6.5);
-    expect(updated.replayGainAlbumDb, -4.25);
-    expect(updated.isFavorite, isTrue);
-    expect(updated.addedAt, DateTime.utc(2026, 1, 1));
-    expect(updated.artworkUri, privateArtwork);
-    expect(
-      updated.artworkSourceUri,
-      Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
-    );
-    expect(updated.artworkIsUserManaged, isTrue);
-    expect(updated.chapters.single.title, 'Keep chapter');
-    expect(store.lyricsForTrack(original.id)?.plainText, 'Manual lyrics');
-    expect(store.playbackHistory.single.trackId, original.id);
-    expect(
-      store.playbackProgressForTrack(original.id)?.position,
-      const Duration(seconds: 45),
-    );
-    expect(store.playbackSpeedForTrack(original.id), 1.25);
-    expect(store.playlistById(playlist.id)?.trackIds, <String>[original.id]);
-    expect(
-      store.lyricsForTrack(added.id)?.plainText,
-      '[00:01.00]New sidecar lyrics',
-    );
-    expect(store.lyricsForTrack(added.id)?.sourceId, 'sidecar');
-    expect(store.lyricsForTrack(embedded.id)?.plainText, 'Imported embedded lyric');
-    expect(store.lyricsForTrack(embedded.id)?.sourceId, 'embedded');
-    expect(
-      store.tracks.firstWhere((track) => track.id == added.id).chapters.single.title,
-      'Imported CUE chapter',
-    );
+      final updated = store.tracks.firstWhere(
+        (track) => track.id == original.id,
+      );
+      expect(updated.title, 'Rescanned title');
+      expect(updated.albumArtist, 'Rescanned album artist');
+      expect(updated.year, 2026);
+      expect(updated.trackNumber, 7);
+      expect(updated.duration, const Duration(minutes: 4, seconds: 12));
+      expect(updated.replayGainTrackDb, -6.5);
+      expect(updated.replayGainAlbumDb, -4.25);
+      expect(updated.isFavorite, isTrue);
+      expect(updated.addedAt, DateTime.utc(2026, 1, 1));
+      expect(updated.artworkUri, privateArtwork);
+      expect(
+        updated.artworkSourceUri,
+        Uri.parse('data:image/png;base64,b3JpZ2luYWw='),
+      );
+      expect(updated.artworkIsUserManaged, isTrue);
+      expect(updated.chapters.single.title, 'Keep chapter');
+      expect(store.lyricsForTrack(original.id)?.plainText, 'Manual lyrics');
+      expect(store.playbackHistory.single.trackId, original.id);
+      expect(
+        store.playbackProgressForTrack(original.id)?.position,
+        const Duration(seconds: 45),
+      );
+      expect(store.playbackSpeedForTrack(original.id), 1.25);
+      expect(store.playlistById(playlist.id)?.trackIds, <String>[original.id]);
+      expect(
+        store.lyricsForTrack(added.id)?.plainText,
+        '[00:01.00]New sidecar lyrics',
+      );
+      expect(store.lyricsForTrack(added.id)?.sourceId, 'sidecar');
+      expect(
+        store.lyricsForTrack(embedded.id)?.plainText,
+        'Imported embedded lyric',
+      );
+      expect(store.lyricsForTrack(embedded.id)?.sourceId, 'embedded');
+      expect(
+        store.tracks
+            .firstWhere((track) => track.id == added.id)
+            .chapters
+            .single
+            .title,
+        'Imported CUE chapter',
+      );
 
-    await store.reconcileWatchedLocalFolder(
-      root,
-      tracks: <Track>[refreshed],
-      sidecarLyricsByTrackId: const <String, String>{},
-      pruneMissing: true,
-    );
-    expect(store.tracks.map((track) => track.id), <String>[original.id]);
-    expect(store.lyricsForTrack(added.id), isNull);
+      await store.reconcileWatchedLocalFolder(
+        root,
+        tracks: <Track>[refreshed],
+        sidecarLyricsByTrackId: const <String, String>{},
+        pruneMissing: true,
+      );
+      expect(store.tracks.map((track) => track.id), <String>[original.id]);
+      expect(store.lyricsForTrack(added.id), isNull);
 
-    final restored = LibraryStore();
-    await restored.load();
-    expect(restored.watchedLocalFolderPaths, <String>[normalizedRoot]);
-  });
+      final restored = LibraryStore();
+      await restored.load();
+      expect(restored.watchedLocalFolderPaths, <String>[normalizedRoot]);
+    },
+  );
 
   test('does not prune a watched folder after an incomplete scan', () async {
     const root = '/music/protected';
@@ -223,111 +234,112 @@ void main() {
         store.lyricsForTrack(original.id)?.plainText,
         'Manual lyric remains authoritative',
       );
+      expect(store.tracks.map((track) => track.id), contains(unavailable.id));
+    },
+  );
+
+  test(
+    'adds a newly available audio fingerprint without a file-content change',
+    () async {
+      const root = '/music/fingerprint-upgrade';
+      final store = LibraryStore();
+      await store.load();
+      await store.watchLocalFolder(root);
+      final existing = _track(
+        path: '$root/song.mp3',
+        title: 'Existing scan',
+        hash: 'unchanged-file-hash',
+      );
+      await store.addTracks(<Track>[existing]);
+
+      await store.reconcileWatchedLocalFolder(
+        root,
+        tracks: <Track>[
+          _track(
+            path: '$root/song.mp3',
+            title: 'Existing scan',
+            hash: 'unchanged-file-hash',
+            audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
+          ),
+        ],
+        sidecarLyricsByTrackId: const <String, String>{},
+        pruneMissing: true,
+      );
+
       expect(
-        store.tracks.map((track) => track.id),
-        contains(unavailable.id),
+        store.tracks.single.audioFingerprint,
+        'audio-payload-fnv64-v1:mp3-1111222233334444',
       );
     },
   );
 
-  test('adds a newly available audio fingerprint without a file-content change',
-      () async {
-    const root = '/music/fingerprint-upgrade';
-    final store = LibraryStore();
-    await store.load();
-    await store.watchLocalFolder(root);
-    final existing = _track(
-      path: '$root/song.mp3',
-      title: 'Existing scan',
-      hash: 'unchanged-file-hash',
-    );
-    await store.addTracks(<Track>[existing]);
+  test(
+    'watches relevant changes, debounces rescans, and ignores artwork',
+    () async {
+      const root = '/music/live';
+      final normalizedRoot = p.normalize(p.absolute(root));
+      final changes = StreamController<String>.broadcast(sync: true);
+      var scanCount = 0;
+      final store = LibraryStore();
+      await store.load();
+      await store.watchLocalFolder(root);
+      final watcher = LocalFolderWatchStore(
+        debounce: Duration.zero,
+        watchStreamFactory: (_) => changes.stream,
+        scanner: (rootPath, {DateTime? importedAt}) async {
+          scanCount += 1;
+          return LocalFolderScanResult(
+            tracks: <Track>[
+              _track(
+                path: '$rootPath/scan-$scanCount.mp3',
+                title: 'Scan $scanCount',
+                hash: 'hash-$scanCount',
+              ),
+            ],
+            ignoredFileCount: 0,
+            inaccessibleDirectoryCount: 0,
+            sidecarLyricsByTrackId: const <String, String>{},
+          );
+        },
+      );
+      addTearDown(() async {
+        watcher.dispose();
+        await changes.close();
+      });
 
-    await store.reconcileWatchedLocalFolder(
-      root,
-      tracks: <Track>[
-        _track(
-          path: '$root/song.mp3',
-          title: 'Existing scan',
-          hash: 'unchanged-file-hash',
-          audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
-        ),
-      ],
-      sidecarLyricsByTrackId: const <String, String>{},
-      pruneMissing: true,
-    );
+      watcher.updateLibrary(store);
+      await _waitUntil(
+        () => scanCount == 1 && !watcher.isRefreshing(normalizedRoot),
+      );
+      expect(store.tracks.single.title, 'Scan 1');
 
-    expect(
-      store.tracks.single.audioFingerprint,
-      'audio-payload-fnv64-v1:mp3-1111222233334444',
-    );
-  });
+      changes.add('$root/cover.jpg');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect(scanCount, 1);
 
-  test('watches relevant changes, debounces rescans, and ignores artwork',
-      () async {
-    const root = '/music/live';
-    final normalizedRoot = p.normalize(p.absolute(root));
-    final changes = StreamController<String>.broadcast(sync: true);
-    var scanCount = 0;
-    final store = LibraryStore();
-    await store.load();
-    await store.watchLocalFolder(root);
-    final watcher = LocalFolderWatchStore(
-      debounce: Duration.zero,
-      watchStreamFactory: (_) => changes.stream,
-      scanner: (rootPath, {DateTime? importedAt}) async {
-        scanCount += 1;
-        return LocalFolderScanResult(
-          tracks: <Track>[
-            _track(
-              path: '$rootPath/scan-$scanCount.mp3',
-              title: 'Scan $scanCount',
-              hash: 'hash-$scanCount',
-            ),
-          ],
-          ignoredFileCount: 0,
-          inaccessibleDirectoryCount: 0,
-          sidecarLyricsByTrackId: const <String, String>{},
-        );
-      },
-    );
-    addTearDown(() async {
-      watcher.dispose();
-      await changes.close();
-    });
+      changes
+        ..add('$root/new-track.mp3')
+        ..add('$root/new-track.lrc');
+      await _waitUntil(
+        () => scanCount == 2 && !watcher.isRefreshing(normalizedRoot),
+      );
+      expect(store.tracks.single.title, 'Scan 2');
+      expect(watcher.errorFor(normalizedRoot), isNull);
+      expect(watcher.lastRefreshedAt(normalizedRoot), isNotNull);
 
-    watcher.updateLibrary(store);
-    await _waitUntil(
-      () => scanCount == 1 && !watcher.isRefreshing(normalizedRoot),
-    );
-    expect(store.tracks.single.title, 'Scan 1');
+      changes.add('$root/chapters.cue');
+      await _waitUntil(
+        () => scanCount == 3 && !watcher.isRefreshing(normalizedRoot),
+      );
+      expect(store.tracks.single.title, 'Scan 3');
 
-    changes.add('$root/cover.jpg');
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    expect(scanCount, 1);
-
-    changes
-      ..add('$root/new-track.mp3')
-      ..add('$root/new-track.lrc');
-    await _waitUntil(
-      () => scanCount == 2 && !watcher.isRefreshing(normalizedRoot),
-    );
-    expect(store.tracks.single.title, 'Scan 2');
-    expect(watcher.errorFor(normalizedRoot), isNull);
-    expect(watcher.lastRefreshedAt(normalizedRoot), isNotNull);
-
-    changes.add('$root/chapters.cue');
-    await _waitUntil(
-      () => scanCount == 3 && !watcher.isRefreshing(normalizedRoot),
-    );
-    expect(store.tracks.single.title, 'Scan 3');
-
-    await store.unwatchLocalFolder(root);
-    watcher.updateLibrary(store);
-    changes.add('$root/ignored-after-removal.mp3');
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    expect(scanCount, 3);
-  });
+      await store.unwatchLocalFolder(root);
+      watcher.updateLibrary(store);
+      changes.add('$root/ignored-after-removal.mp3');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect(scanCount, 3);
+    },
+  );
 }
 
 Track _track({

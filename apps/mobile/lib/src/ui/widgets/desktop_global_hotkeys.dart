@@ -12,10 +12,7 @@ bool supportsDesktopGlobalHotkeys(TargetPlatform platform) {
 }
 
 abstract interface class DesktopHotkeyRegistry {
-  Future<void> register(
-    HotKey hotKey, {
-    required HotKeyHandler keyDownHandler,
-  });
+  Future<void> register(HotKey hotKey, {required HotKeyHandler keyDownHandler});
 
   Future<void> unregister(HotKey hotKey);
 }

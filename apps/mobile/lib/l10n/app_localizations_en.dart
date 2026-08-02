@@ -144,33 +144,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sleepTimerActive => 'Sleep timer active';
 
   @override
-  String get sleepTimerStopsAtEnd =>
-      'Playback stops at the end of this track.';
+  String get sleepTimerStopsAtEnd => 'Playback stops at the end of this track.';
 
   @override
-  String sleepTimerStopsIn(String remaining) => 'Playback stops in $remaining.';
+  String sleepTimerStopsIn(String remaining) {
+    return 'Playback stops in $remaining.';
+  }
 
   @override
   String get sleepTimerLessThanOneMinute => 'Less than 1 minute';
 
   @override
   String sleepTimerMinutes(int count) {
-    return intl.Intl.plural(
+    String _temp0 = intl.Intl.pluralLogic(
       count,
-      one: '1 minute',
-      other: '$count minutes',
       locale: localeName,
+      other: '$count minutes',
+      one: '1 minute',
     );
+    return '$_temp0';
   }
 
   @override
   String sleepTimerHours(int count) {
-    return intl.Intl.plural(
+    String _temp0 = intl.Intl.pluralLogic(
       count,
-      one: '1 hour',
-      other: '$count hours',
       locale: localeName,
+      other: '$count hours',
+      one: '1 hour',
     );
+    return '$_temp0';
   }
 
   @override
@@ -183,8 +186,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translatedLyrics => 'Translated lyrics';
 
   @override
-  String translatedLyricsForLanguage(String language) =>
-      'Target language: $language';
+  String translatedLyricsForLanguage(String language) {
+    return 'Target language: $language';
+  }
 
   @override
   String get copyTranslatedLyrics => 'Copy translated lyrics';
@@ -193,6 +197,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translatedLyricsCopied => 'Translated lyrics copied.';
 
   @override
-  String couldNotTranslateLyrics(String error) =>
-      'Could not translate lyrics: $error';
+  String couldNotTranslateLyrics(String error) {
+    return 'Could not translate lyrics: $error';
+  }
 }

@@ -47,3 +47,8 @@ docs(readme): update Android build steps
 - [ ] The feature matrix is updated if a feature changed.
 - [ ] No proprietary assets or copyrighted media are included.
 - [ ] No terms-of-service circumvention or DRM bypass is included.
+
+Changes under `.github/workflows/`, `scripts/ci/`, or
+`services/server/deploy/` require the repository code owner review. Keep the
+main branch protected and require the relevant CI, dependency, and release
+checks before merging.

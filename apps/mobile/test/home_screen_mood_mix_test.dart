@@ -86,10 +86,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('Because of a recent addition'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Because of a recent addition'), findsOneWidget);
 
     final focusMix = find.text('Focus mix');
     await tester.scrollUntilVisible(
@@ -110,10 +107,10 @@ void main() {
 
     expect(library.playlists, hasLength(1));
     expect(library.playlists.single.name, 'Focus mix');
-    expect(
-      library.playlists.single.trackIds,
-      <String>['focus-one', 'focus-two'],
-    );
+    expect(library.playlists.single.trackIds, <String>[
+      'focus-one',
+      'focus-two',
+    ]);
     expect(find.text('Saved 2 tracks as Focus mix.'), findsOneWidget);
   });
 
@@ -259,10 +256,7 @@ void main() {
       'Use listening history in For you',
     );
     await tester.scrollUntilVisible(historyTile, 200);
-    await Scrollable.ensureVisible(
-      tester.element(historyTile),
-      alignment: 0.5,
-    );
+    await Scrollable.ensureVisible(tester.element(historyTile), alignment: 0.5);
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(historyTile).value, isTrue);
 
@@ -323,7 +317,10 @@ void main() {
 
     final settingsTile = find.byKey(const Key('lyrics-translation-settings'));
     await tester.scrollUntilVisible(settingsTile, 300);
-    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await Scrollable.ensureVisible(
+      tester.element(settingsTile),
+      alignment: 0.5,
+    );
     await tester.pumpAndSettle();
     await tester.tap(settingsTile);
     await tester.pumpAndSettle();
@@ -342,13 +339,17 @@ void main() {
     expect(translations.endpoint, Uri.parse('https://translate.example.test'));
     expect(translations.targetLanguage, 'tr');
     await tester.scrollUntilVisible(settingsTile, 300);
-    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await Scrollable.ensureVisible(
+      tester.element(settingsTile),
+      alignment: 0.5,
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('translate.example.test to tr'), findsOneWidget);
   });
 
-  testWidgets('configures a self-hosted lyrics search service from Options',
-      (tester) async {
+  testWidgets('configures a self-hosted lyrics search service from Options', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.reset);
@@ -374,9 +375,13 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider<LibraryStore>.value(value: library),
-          ChangeNotifierProvider<SelfHostedProviderStore>.value(value: selfHosted),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
           ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
-          ChangeNotifierProvider<LocalFolderWatchStore>.value(value: folderWatch),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
           ChangeNotifierProvider<PlayerController>.value(value: player),
           ChangeNotifierProvider<LyricsSearchEndpointSettingsStore>.value(
             value: endpoints,
@@ -395,7 +400,10 @@ void main() {
       const Key('lyrics-search-endpoint-settings'),
     );
     await tester.scrollUntilVisible(settingsTile, 300);
-    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await Scrollable.ensureVisible(
+      tester.element(settingsTile),
+      alignment: 0.5,
+    );
     await tester.pumpAndSettle();
     await tester.tap(settingsTile);
     await tester.pumpAndSettle();
@@ -409,109 +417,114 @@ void main() {
 
     expect(endpoints.endpoint, Uri.parse('https://lyrics.example.test'));
     await tester.scrollUntilVisible(settingsTile, 300);
-    await Scrollable.ensureVisible(tester.element(settingsTile), alignment: 0.5);
+    await Scrollable.ensureVisible(
+      tester.element(settingsTile),
+      alignment: 0.5,
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('lyrics.example.test'), findsOneWidget);
   });
 
-  testWidgets('finds and translates now playing lyrics without modifying source text',
-      (tester) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1200, 800);
-    addTearDown(() async {
-      await tester.pumpWidget(const SizedBox.shrink());
-      tester.view.reset();
-    });
+  testWidgets(
+    'finds and translates now playing lyrics without modifying source text',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        tester.view.reset();
+      });
 
-    final library = LibraryStore();
-    await library.load();
-    final track = Track(
-      id: 'translated-lyrics-track',
-      title: 'Signal',
-      artist: 'Mira',
-      localPath: '/music/signal.mp3',
-    );
-    await library.addTracks(<Track>[track]);
-    await library.setLyrics(
-      track.id,
-      '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
-    );
-    addTearDown(library.dispose);
-    final selfHosted = SelfHostedProviderStore();
-    await selfHosted.load();
-    addTearDown(selfHosted.dispose);
-    final sync = LibrarySyncStore();
-    await sync.load();
-    addTearDown(sync.dispose);
-    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
-    addTearDown(folderWatch.dispose);
-    final audio = _TestPlaybackAudioEngine();
-    final player = PlayerController(audioEngine: audio);
-    addTearDown(player.dispose);
-    final translator = _FakeLyricsTranslator();
-    final translations = LyricsTranslationSettingsStore(
-      credentialVault: _MemoryCredentialVault(),
-      translatorFactory: (_, _) => translator,
-    );
-    await translations.load();
-    await translations.save(
-      endpoint: 'https://translate.example.test',
-      targetLanguage: 'tr',
-    );
-    addTearDown(translations.dispose);
+      final library = LibraryStore();
+      await library.load();
+      final track = Track(
+        id: 'translated-lyrics-track',
+        title: 'Signal',
+        artist: 'Mira',
+        localPath: '/music/signal.mp3',
+      );
+      await library.addTracks(<Track>[track]);
+      await library.setLyrics(
+        track.id,
+        '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
+      );
+      addTearDown(library.dispose);
+      final selfHosted = SelfHostedProviderStore();
+      await selfHosted.load();
+      addTearDown(selfHosted.dispose);
+      final sync = LibrarySyncStore();
+      await sync.load();
+      addTearDown(sync.dispose);
+      final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+      addTearDown(folderWatch.dispose);
+      final audio = _TestPlaybackAudioEngine();
+      final player = PlayerController(audioEngine: audio);
+      addTearDown(player.dispose);
+      final translator = _FakeLyricsTranslator();
+      final translations = LyricsTranslationSettingsStore(
+        credentialVault: _MemoryCredentialVault(),
+        translatorFactory: (_, _) => translator,
+      );
+      await translations.load();
+      await translations.save(
+        endpoint: 'https://translate.example.test',
+        targetLanguage: 'tr',
+      );
+      addTearDown(translations.dispose);
 
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<LibraryStore>.value(value: library),
-          ChangeNotifierProvider<SelfHostedProviderStore>.value(
-            value: selfHosted,
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<LibraryStore>.value(value: library),
+            ChangeNotifierProvider<SelfHostedProviderStore>.value(
+              value: selfHosted,
+            ),
+            ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+            ChangeNotifierProvider<LocalFolderWatchStore>.value(
+              value: folderWatch,
+            ),
+            ChangeNotifierProvider<PlayerController>.value(value: player),
+            ChangeNotifierProvider<LyricsTranslationSettingsStore>.value(
+              value: translations,
+            ),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: HomeScreen(initialTab: 0),
           ),
-          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
-          ChangeNotifierProvider<LocalFolderWatchStore>.value(
-            value: folderWatch,
-          ),
-          ChangeNotifierProvider<PlayerController>.value(value: player),
-          ChangeNotifierProvider<LyricsTranslationSettingsStore>.value(
-            value: translations,
-          ),
-        ],
-        child: const MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: HomeScreen(initialTab: 0),
         ),
-      ),
-    );
-    await player.playTrack(track);
-    await tester.pumpAndSettle();
+      );
+      await player.playTrack(track);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Lyrics'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Find in lyrics'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('lyrics-find-input')),
-      'second',
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('lyric-search-result-2')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Lyrics'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Find in lyrics'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('lyrics-find-input')),
+        'second',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('lyric-search-result-2')));
+      await tester.pumpAndSettle();
 
-    expect(audio.lastSeekPosition, const Duration(seconds: 4));
+      expect(audio.lastSeekPosition, const Duration(seconds: 4));
 
-    await tester.tap(find.byTooltip('Lyrics actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Translate lyrics'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Lyrics actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Translate lyrics'));
+      await tester.pumpAndSettle();
 
-    expect(translator.calls, 1);
-    expect(translator.targetLanguage, 'tr');
-    expect(
-      library.lyricsForTrack(track.id)?.plainText,
-      '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
-    );
-  });
+      expect(translator.calls, 1);
+      expect(translator.targetLanguage, 'tr');
+      expect(
+        library.lyricsForTrack(track.id)?.plainText,
+        '[00:01.00]Original lyric line\n[00:04.00]Second lyric line',
+      );
+    },
+  );
 
   testWidgets('opens full artist and album pages with collection actions', (
     tester,
@@ -716,10 +729,9 @@ void main() {
       ),
     ]);
     await library.recordPlayback('recap-track');
-    final monthlyRecap = library.listeningRecaps(
-      period: LibraryRecapPeriod.month,
-      limit: 1,
-    ).single;
+    final monthlyRecap = library
+        .listeningRecaps(period: LibraryRecapPeriod.month, limit: 1)
+        .single;
     addTearDown(library.dispose);
 
     final selfHosted = SelfHostedProviderStore();
@@ -775,9 +787,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(
-        const ValueKey<String>('listening-recap-card-midnight'),
-      ),
+      find.byKey(const ValueKey<String>('listening-recap-card-midnight')),
       findsOneWidget,
     );
 
@@ -786,10 +796,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      library.listeningRecapVisualTheme,
-      ListeningRecapVisualTheme.signal,
-    );
+    expect(library.listeningRecapVisualTheme, ListeningRecapVisualTheme.signal);
     expect(
       find.byKey(const ValueKey<String>('listening-recap-card-signal')),
       findsOneWidget,
@@ -807,10 +814,7 @@ void main() {
       find.byKey(const ValueKey<String>('listening-recap-card-signal')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const Key('listening-recap-save-png')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('listening-recap-save-png')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

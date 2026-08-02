@@ -22,111 +22,110 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('retains Archive results after a failed continuation and retries', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'retains Archive results after a failed continuation and retries',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.reset);
 
-    final library = LibraryStore();
-    await library.load();
-    addTearDown(library.dispose);
-    final selfHosted = SelfHostedProviderStore();
-    await selfHosted.load();
-    addTearDown(selfHosted.dispose);
-    final sync = LibrarySyncStore();
-    await sync.load();
-    addTearDown(sync.dispose);
-    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
-    addTearDown(folderWatch.dispose);
-    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
-    addTearDown(player.dispose);
+      final library = LibraryStore();
+      await library.load();
+      addTearDown(library.dispose);
+      final selfHosted = SelfHostedProviderStore();
+      await selfHosted.load();
+      addTearDown(selfHosted.dispose);
+      final sync = LibrarySyncStore();
+      await sync.load();
+      addTearDown(sync.dispose);
+      final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+      addTearDown(folderWatch.dispose);
+      final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+      addTearDown(player.dispose);
 
-    var pageTwoAttempts = 0;
-    final provider = InternetArchiveProvider(
-      limit: 1,
-      searchLoader: (uri) async {
-        switch (uri.queryParameters['page']) {
-          case '1':
-            return _searchJson(<String>['first']);
-          case '2':
-            pageTwoAttempts += 1;
-            if (pageTwoAttempts == 1) {
-              throw StateError('Archive temporarily unavailable.');
-            }
-            return _searchJson(<String>['second']);
-          default:
-            throw StateError('Unexpected archive page.');
-        }
-      },
-      metadataLoader: (uri) async => _metadataJson(uri.pathSegments.last),
-    );
+      var pageTwoAttempts = 0;
+      final provider = InternetArchiveProvider(
+        limit: 1,
+        searchLoader: (uri) async {
+          switch (uri.queryParameters['page']) {
+            case '1':
+              return _searchJson(<String>['first']);
+            case '2':
+              pageTwoAttempts += 1;
+              if (pageTwoAttempts == 1) {
+                throw StateError('Archive temporarily unavailable.');
+              }
+              return _searchJson(<String>['second']);
+            default:
+              throw StateError('Unexpected archive page.');
+          }
+        },
+        metadataLoader: (uri) async => _metadataJson(uri.pathSegments.last),
+      );
 
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<LibraryStore>.value(value: library),
-          ChangeNotifierProvider<SelfHostedProviderStore>.value(
-            value: selfHosted,
-          ),
-          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
-          ChangeNotifierProvider<LocalFolderWatchStore>.value(
-            value: folderWatch,
-          ),
-          ChangeNotifierProvider<PlayerController>.value(value: player),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: HomeScreen(
-            initialTab: 4,
-            internetArchiveProvider: provider,
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<LibraryStore>.value(value: library),
+            ChangeNotifierProvider<SelfHostedProviderStore>.value(
+              value: selfHosted,
+            ),
+            ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+            ChangeNotifierProvider<LocalFolderWatchStore>.value(
+              value: folderWatch,
+            ),
+            ChangeNotifierProvider<PlayerController>.value(value: player),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: HomeScreen(initialTab: 4, internetArchiveProvider: provider),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final archiveSearch = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField && widget.decoration?.labelText == 'Archive search',
-    );
-    final sourcesList = find.byKey(const Key('sources-scroll-view'));
+      final archiveSearch = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Archive search',
+      );
+      final sourcesList = find.byKey(const Key('sources-scroll-view'));
 
-    Future<void> scrollSourcesUntilPresent(Finder target) async {
-      for (var attempt = 0; attempt < 40; attempt++) {
-        if (target.evaluate().isNotEmpty) {
-          return;
+      Future<void> scrollSourcesUntilPresent(Finder target) async {
+        for (var attempt = 0; attempt < 40; attempt++) {
+          if (target.evaluate().isNotEmpty) {
+            return;
+          }
+          await tester.drag(sourcesList, const Offset(0, -400));
+          await tester.pump();
         }
-        await tester.drag(sourcesList, const Offset(0, -400));
-        await tester.pump();
+        expect(target, findsOneWidget);
       }
-      expect(target, findsOneWidget);
-    }
 
-    await scrollSourcesUntilPresent(archiveSearch);
-    await tester.enterText(archiveSearch, 'ambient');
-    await tester.tap(find.byTooltip('Search archive audio'));
-    await tester.pumpAndSettle();
+      await scrollSourcesUntilPresent(archiveSearch);
+      await tester.enterText(archiveSearch, 'ambient');
+      await tester.tap(find.byTooltip('Search archive audio'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Archive first'), findsOneWidget);
-    final loadMore = find.textContaining('Load more archive results');
-    await scrollSourcesUntilPresent(loadMore);
-    await tester.tap(loadMore);
-    await tester.pumpAndSettle();
+      expect(find.text('Archive first'), findsOneWidget);
+      final loadMore = find.textContaining('Load more archive results');
+      await scrollSourcesUntilPresent(loadMore);
+      await tester.tap(loadMore);
+      await tester.pumpAndSettle();
 
-    expect(find.text('Archive first'), findsOneWidget);
-    expect(find.text('Could not load more archive audio'), findsOneWidget);
+      expect(find.text('Archive first'), findsOneWidget);
+      expect(find.text('Could not load more archive audio'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Retry loading archive results'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Retry loading archive results'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Archive first'), findsOneWidget);
-    expect(find.text('Archive second'), findsOneWidget);
-    expect(find.text('All 2 archive results loaded.'), findsOneWidget);
-    expect(pageTwoAttempts, 2);
-  });
+      expect(find.text('Archive first'), findsOneWidget);
+      expect(find.text('Archive second'), findsOneWidget);
+      expect(find.text('All 2 archive results loaded.'), findsOneWidget);
+      expect(pageTwoAttempts, 2);
+    },
+  );
 }
 
 String _searchJson(List<String> identifiers) {

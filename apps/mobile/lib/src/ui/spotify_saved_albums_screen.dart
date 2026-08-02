@@ -66,7 +66,10 @@ final class _SpotifySavedAlbumsScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _albums.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _albums.isEmpty &&
+              !offlineModeEnabled)
             ListTile(
               leading: const Icon(Icons.album_outlined),
               title: Text('No $_collection found'),
@@ -166,10 +169,8 @@ final class _SpotifySavedAlbumsScreenState
   void _openAlbum(SpotifySavedAlbum album) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifyAlbumTracksScreen(
-          provider: widget.provider,
-          album: album,
-        ),
+        builder: (_) =>
+            SpotifyAlbumTracksScreen(provider: widget.provider, album: album),
       ),
     );
   }
@@ -197,8 +198,10 @@ final class _SpotifySavedAlbumsScreenState
         : 'Load more $_collection';
   }
 
-  String get _collection => widget.newReleases ? 'new releases' : 'saved albums';
-  String get _title => widget.newReleases ? 'Spotify new releases' : 'Spotify saved albums';
+  String get _collection =>
+      widget.newReleases ? 'new releases' : 'saved albums';
+  String get _title =>
+      widget.newReleases ? 'Spotify new releases' : 'Spotify saved albums';
 
   String _albumSubtitle(SpotifySavedAlbum album) {
     final count = album.totalTracks;
@@ -264,7 +267,10 @@ final class _SpotifyAlbumTracksScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.music_note_outlined),
               title: Text('No album tracks found'),

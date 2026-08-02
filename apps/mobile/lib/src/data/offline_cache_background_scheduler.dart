@@ -11,12 +11,10 @@ const offlineCacheBackgroundChannel = MethodChannel(
 /// without the foreground Flutter activity. Other platforms deliberately
 /// remain no-ops until they gain an equivalent system scheduler.
 final class OfflineCacheBackgroundScheduler {
-  OfflineCacheBackgroundScheduler({
-    MethodChannel? channel,
-    bool? isSupported,
-  }) : _channel = channel ?? offlineCacheBackgroundChannel,
-       _isSupported =
-           isSupported ?? (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
+  OfflineCacheBackgroundScheduler({MethodChannel? channel, bool? isSupported})
+    : _channel = channel ?? offlineCacheBackgroundChannel,
+      _isSupported =
+          isSupported ?? (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
 
   final MethodChannel _channel;
   final bool _isSupported;
@@ -55,13 +53,10 @@ final class OfflineCacheBackgroundScheduler {
       return;
     }
 
-    await _channel.invokeMethod<void>(
-      'complete',
-      <String, Object>{
-        'hasPendingWork': hasPendingWork,
-        if (nextRunDelay != null)
-          'nextRunDelayMilliseconds': nextRunDelay.inMilliseconds,
-      },
-    );
+    await _channel.invokeMethod<void>('complete', <String, Object>{
+      'hasPendingWork': hasPendingWork,
+      if (nextRunDelay != null)
+        'nextRunDelayMilliseconds': nextRunDelay.inMilliseconds,
+    });
   }
 }

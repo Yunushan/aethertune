@@ -12,7 +12,9 @@ void main() {
   late Directory temporaryDirectory;
 
   setUp(() async {
-    temporaryDirectory = await Directory.systemTemp.createTemp('aethertune-m4a-');
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'aethertune-m4a-',
+    );
   });
 
   tearDown(() async {
@@ -52,29 +54,31 @@ void main() {
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
-  test('recovers a single interrupted replacement backup before writing',
-      () async {
-    final file = File('${temporaryDirectory.path}/recovery.m4a');
-    final backup = File('${file.path}.aethertune-123.backup');
-    await backup.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+  test(
+    'recovers a single interrupted replacement backup before writing',
+    () async {
+      final file = File('${temporaryDirectory.path}/recovery.m4a');
+      final backup = File('${file.path}.aethertune-123.backup');
+      await backup.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
 
-    await const M4aMetadataWriter().write(
-      path: file.path,
-      title: 'Recovered title',
-      artist: 'Artist',
-      album: 'Album',
-      genre: 'Rock',
-    );
+      await const M4aMetadataWriter().write(
+        path: file.path,
+        title: 'Recovered title',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Rock',
+      );
 
-    expect(await file.exists(), isTrue);
-    expect(await backup.exists(), isFalse);
-    final result = await const LocalFolderScanner().scan(
-      temporaryDirectory.path,
-      importedAt: DateTime.utc(2026, 1, 1),
-    );
-    expect(result.tracks.single.title, 'Recovered title');
-    expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
-  });
+      expect(await file.exists(), isTrue);
+      expect(await backup.exists(), isFalse);
+      final result = await const LocalFolderScanner().scan(
+        temporaryDirectory.path,
+        importedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(result.tracks.single.title, 'Recovered title');
+      expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
+    },
+  );
 
   test('writes M4B metadata that the scanner reads', () async {
     final file = File('${temporaryDirectory.path}/audiobook.m4b');
@@ -120,9 +124,9 @@ void main() {
       ],
     );
 
-    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
-        .tracks
-        .single;
+    final track = (await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+    )).tracks.single;
     expect(track.chapters.map((chapter) => chapter.title), <String>[
       'Opening',
       'Second part',
@@ -134,35 +138,38 @@ void main() {
     expect(_mdatPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
-  test('preserves embedded M4A chapters during normal metadata edits', () async {
-    final file = File('${temporaryDirectory.path}/preserved-chapters.m4a');
-    const writer = M4aMetadataWriter();
-    await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
-    await writer.write(
-      path: file.path,
-      title: 'Original',
-      artist: 'Narrator',
-      album: 'Audiobook',
-      genre: 'Spoken Word',
-      chapters: <TrackChapter>[
-        TrackChapter(start: Duration.zero, title: 'Opening'),
-      ],
-    );
-    await writer.write(
-      path: file.path,
-      title: 'Retitled',
-      artist: 'Narrator',
-      album: 'Audiobook',
-      genre: 'Spoken Word',
-    );
+  test(
+    'preserves embedded M4A chapters during normal metadata edits',
+    () async {
+      final file = File('${temporaryDirectory.path}/preserved-chapters.m4a');
+      const writer = M4aMetadataWriter();
+      await file.writeAsBytes(_m4aFile(audio: <int>[1, 2, 3]));
+      await writer.write(
+        path: file.path,
+        title: 'Original',
+        artist: 'Narrator',
+        album: 'Audiobook',
+        genre: 'Spoken Word',
+        chapters: <TrackChapter>[
+          TrackChapter(start: Duration.zero, title: 'Opening'),
+        ],
+      );
+      await writer.write(
+        path: file.path,
+        title: 'Retitled',
+        artist: 'Narrator',
+        album: 'Audiobook',
+        genre: 'Spoken Word',
+      );
 
-    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
-        .tracks
-        .single;
-    expect(track.title, 'Retitled');
-    expect(track.chapters, hasLength(1));
-    expect(track.chapters.single.title, 'Opening');
-  });
+      final track = (await const LocalFolderScanner().scan(
+        temporaryDirectory.path,
+      )).tracks.single;
+      expect(track.title, 'Retitled');
+      expect(track.chapters, hasLength(1));
+      expect(track.chapters.single.title, 'Opening');
+    },
+  );
 
   test('writes M4R metadata that the scanner reads', () async {
     final file = File('${temporaryDirectory.path}/ringtone.m4r');
@@ -241,145 +248,154 @@ void main() {
     expect(_containsBytes(bytes, customPayload), isTrue);
   });
 
-  test('clears optional M4A album fields without touching media bytes',
-      () async {
-    final file = File('${temporaryDirectory.path}/clear-fields.m4a');
-    await file.writeAsBytes(_m4aFile(audio: <int>[8, 7, 6]));
-    const writer = M4aMetadataWriter();
-    await writer.write(
-      path: file.path,
-      title: 'Track',
-      artist: 'Artist',
-      album: 'Album',
-      albumArtist: 'Album Artist',
-      year: 2024,
-      trackNumber: 3,
-      genre: 'Genre',
-    );
-
-    await writer.write(
-      path: file.path,
-      title: 'Track',
-      artist: 'Artist',
-      album: 'Album',
-      albumArtist: '',
-      year: 0,
-      trackNumber: 0,
-      genre: 'Genre',
-    );
-
-    final result = await const LocalFolderScanner().scan(
-      temporaryDirectory.path,
-      importedAt: DateTime.utc(2026, 1, 1),
-    );
-    final track = result.tracks.single;
-    expect(track.albumArtist, isNull);
-    expect(track.year, isNull);
-    expect(track.trackNumber, isNull);
-    expect(_mdatPayload(await file.readAsBytes()), <int>[8, 7, 6]);
-  });
-
-  test('replaces embedded M4A artwork and preserves text, audio, and custom metadata', () async {
-    final file = File('${temporaryDirectory.path}/cover.m4a');
-    final originalArtwork = <int>[0x89, 0x50, 0x4e, 0x47, 1];
-    final replacementArtwork = <int>[0xff, 0xd8, 0xff, 0xe0, 2];
-    final customPayload = <int>[0xca, 0xfe, 0xba, 0xbe];
-    await file.writeAsBytes(
-      _m4aFile(
-        audio: <int>[3, 4, 5],
-        title: 'Existing title',
-        artwork: originalArtwork,
-        customPayload: customPayload,
-      ),
-    );
-
-    await const M4aMetadataWriter().writeArtwork(
-      path: file.path,
-      artwork: Uint8List.fromList(replacementArtwork),
-    );
-
-    final bytes = await file.readAsBytes();
-    expect(_mdatPayload(bytes), <int>[3, 4, 5]);
-    expect(_containsBytes(bytes, originalArtwork), isFalse);
-    expect(_containsBytes(bytes, replacementArtwork), isTrue);
-    expect(_containsBytes(bytes, utf8.encode('Existing title')), isTrue);
-    expect(_containsBytes(bytes, customPayload), isTrue);
-
-    final result = await const LocalFolderScanner().scan(
-      temporaryDirectory.path,
-      importedAt: DateTime.utc(2026, 1, 1),
-    );
-    expect(result.tracks.single.artworkUri?.scheme, 'data');
-    expect(result.tracks.single.artworkUri.toString(), contains('image/jpeg'));
-  });
-
-  test('rejects unsupported or oversized M4A artwork without touching the file', () async {
-    final file = File('${temporaryDirectory.path}/invalid-cover.m4a');
-    final original = _m4aFile(audio: <int>[4, 5, 6]);
-    await file.writeAsBytes(original);
-
-    await expectLater(
-      const M4aMetadataWriter().writeArtwork(
+  test(
+    'clears optional M4A album fields without touching media bytes',
+    () async {
+      final file = File('${temporaryDirectory.path}/clear-fields.m4a');
+      await file.writeAsBytes(_m4aFile(audio: <int>[8, 7, 6]));
+      const writer = M4aMetadataWriter();
+      await writer.write(
         path: file.path,
-        artwork: Uint8List.fromList(<int>[0x47, 0x49, 0x46, 0x38]),
-      ),
-      throwsA(isA<FormatException>()),
-    );
-    await expectLater(
-      const M4aMetadataWriter().writeArtwork(
-        path: file.path,
-        artwork: Uint8List(maxM4aEmbeddedArtworkBytes + 1),
-      ),
-      throwsA(isA<FormatException>()),
-    );
-
-    expect(await file.readAsBytes(), original);
-  });
-
-  test('repairs front-loaded M4A stco and co64 offsets after a metadata rewrite', () async {
-    for (final useCo64 in <bool>[false, true]) {
-      final preliminary = _frontLoadedM4aFile(
-        audio: <int>[1, 2, 3],
-        chunkOffset: 0,
-        useCo64: useCo64,
-      );
-      final original = _frontLoadedM4aFile(
-        audio: <int>[1, 2, 3],
-        chunkOffset: _mdatPayloadStart(preliminary),
-        useCo64: useCo64,
-      );
-      final file = File(
-        '${temporaryDirectory.path}/${useCo64 ? 'co64' : 'stco'}-front-loaded.m4a',
-      );
-      await file.writeAsBytes(original);
-
-      await const M4aMetadataWriter().write(
-        path: file.path,
-        title: 'Front-loaded title',
+        title: 'Track',
         artist: 'Artist',
         album: 'Album',
-        genre: 'Rock',
+        albumArtist: 'Album Artist',
+        year: 2024,
+        trackNumber: 3,
+        genre: 'Genre',
       );
 
-      final bytes = await file.readAsBytes();
-      expect(_mdatPayload(bytes), <int>[1, 2, 3]);
-      expect(
-        _chunkOffset(bytes, useCo64: useCo64),
-        _mdatPayloadStart(bytes),
+      await writer.write(
+        path: file.path,
+        title: 'Track',
+        artist: 'Artist',
+        album: 'Album',
+        albumArtist: '',
+        year: 0,
+        trackNumber: 0,
+        genre: 'Genre',
       );
 
       final result = await const LocalFolderScanner().scan(
         temporaryDirectory.path,
         importedAt: DateTime.utc(2026, 1, 1),
       );
-      expect(
-        result.tracks.any(
-          (track) => track.title == 'Front-loaded title',
+      final track = result.tracks.single;
+      expect(track.albumArtist, isNull);
+      expect(track.year, isNull);
+      expect(track.trackNumber, isNull);
+      expect(_mdatPayload(await file.readAsBytes()), <int>[8, 7, 6]);
+    },
+  );
+
+  test(
+    'replaces embedded M4A artwork and preserves text, audio, and custom metadata',
+    () async {
+      final file = File('${temporaryDirectory.path}/cover.m4a');
+      final originalArtwork = <int>[0x89, 0x50, 0x4e, 0x47, 1];
+      final replacementArtwork = <int>[0xff, 0xd8, 0xff, 0xe0, 2];
+      final customPayload = <int>[0xca, 0xfe, 0xba, 0xbe];
+      await file.writeAsBytes(
+        _m4aFile(
+          audio: <int>[3, 4, 5],
+          title: 'Existing title',
+          artwork: originalArtwork,
+          customPayload: customPayload,
         ),
-        isTrue,
       );
-    }
-  });
+
+      await const M4aMetadataWriter().writeArtwork(
+        path: file.path,
+        artwork: Uint8List.fromList(replacementArtwork),
+      );
+
+      final bytes = await file.readAsBytes();
+      expect(_mdatPayload(bytes), <int>[3, 4, 5]);
+      expect(_containsBytes(bytes, originalArtwork), isFalse);
+      expect(_containsBytes(bytes, replacementArtwork), isTrue);
+      expect(_containsBytes(bytes, utf8.encode('Existing title')), isTrue);
+      expect(_containsBytes(bytes, customPayload), isTrue);
+
+      final result = await const LocalFolderScanner().scan(
+        temporaryDirectory.path,
+        importedAt: DateTime.utc(2026, 1, 1),
+      );
+      expect(result.tracks.single.artworkUri?.scheme, 'data');
+      expect(
+        result.tracks.single.artworkUri.toString(),
+        contains('image/jpeg'),
+      );
+    },
+  );
+
+  test(
+    'rejects unsupported or oversized M4A artwork without touching the file',
+    () async {
+      final file = File('${temporaryDirectory.path}/invalid-cover.m4a');
+      final original = _m4aFile(audio: <int>[4, 5, 6]);
+      await file.writeAsBytes(original);
+
+      await expectLater(
+        const M4aMetadataWriter().writeArtwork(
+          path: file.path,
+          artwork: Uint8List.fromList(<int>[0x47, 0x49, 0x46, 0x38]),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+      await expectLater(
+        const M4aMetadataWriter().writeArtwork(
+          path: file.path,
+          artwork: Uint8List(maxM4aEmbeddedArtworkBytes + 1),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+
+      expect(await file.readAsBytes(), original);
+    },
+  );
+
+  test(
+    'repairs front-loaded M4A stco and co64 offsets after a metadata rewrite',
+    () async {
+      for (final useCo64 in <bool>[false, true]) {
+        final preliminary = _frontLoadedM4aFile(
+          audio: <int>[1, 2, 3],
+          chunkOffset: 0,
+          useCo64: useCo64,
+        );
+        final original = _frontLoadedM4aFile(
+          audio: <int>[1, 2, 3],
+          chunkOffset: _mdatPayloadStart(preliminary),
+          useCo64: useCo64,
+        );
+        final file = File(
+          '${temporaryDirectory.path}/${useCo64 ? 'co64' : 'stco'}-front-loaded.m4a',
+        );
+        await file.writeAsBytes(original);
+
+        await const M4aMetadataWriter().write(
+          path: file.path,
+          title: 'Front-loaded title',
+          artist: 'Artist',
+          album: 'Album',
+          genre: 'Rock',
+        );
+
+        final bytes = await file.readAsBytes();
+        expect(_mdatPayload(bytes), <int>[1, 2, 3]);
+        expect(_chunkOffset(bytes, useCo64: useCo64), _mdatPayloadStart(bytes));
+
+        final result = await const LocalFolderScanner().scan(
+          temporaryDirectory.path,
+          importedAt: DateTime.utc(2026, 1, 1),
+        );
+        expect(
+          result.tracks.any((track) => track.title == 'Front-loaded title'),
+          isTrue,
+        );
+      }
+    },
+  );
 
   test('repairs chunk offsets for a final zero-sized M4A mdat atom', () async {
     for (final useCo64 in <bool>[false, true]) {
@@ -467,42 +483,44 @@ void main() {
     }
   });
 
-  test('leaves front-loaded M4A files with malformed chunk offsets untouched', () async {
-    final file = File('${temporaryDirectory.path}/malformed-front-loaded.m4a');
-    final original = _m4aFile(
-      audio: <int>[1, 2, 3],
-      mediaBeforeMoov: false,
-      extraMoovChildren: <int>[
-        ..._atom(
-          'trak',
-          _atom(
-            'mdia',
+  test(
+    'leaves front-loaded M4A files with malformed chunk offsets untouched',
+    () async {
+      final file = File(
+        '${temporaryDirectory.path}/malformed-front-loaded.m4a',
+      );
+      final original = _m4aFile(
+        audio: <int>[1, 2, 3],
+        mediaBeforeMoov: false,
+        extraMoovChildren: <int>[
+          ..._atom(
+            'trak',
             _atom(
-              'minf',
+              'mdia',
               _atom(
-                'stbl',
-                _atom('stco', <int>[0, 0, 0, 0, 0, 0, 0, 1]),
+                'minf',
+                _atom('stbl', _atom('stco', <int>[0, 0, 0, 0, 0, 0, 0, 1])),
               ),
             ),
           ),
+        ],
+      );
+      await file.writeAsBytes(original);
+
+      await expectLater(
+        const M4aMetadataWriter().write(
+          path: file.path,
+          title: 'Title',
+          artist: 'Artist',
+          album: 'Album',
+          genre: 'Rock',
         ),
-      ],
-    );
-    await file.writeAsBytes(original);
+        throwsA(isA<FormatException>()),
+      );
 
-    await expectLater(
-      const M4aMetadataWriter().write(
-        path: file.path,
-        title: 'Title',
-        artist: 'Artist',
-        album: 'Album',
-        genre: 'Rock',
-      ),
-      throwsA(isA<FormatException>()),
-    );
-
-    expect(await file.readAsBytes(), original);
-  });
+      expect(await file.readAsBytes(), original);
+    },
+  );
 
   test('leaves fragmented front-loaded M4A files untouched', () async {
     final file = File('${temporaryDirectory.path}/fragmented-front-loaded.m4a');
@@ -526,23 +544,25 @@ void main() {
     expect(await file.readAsBytes(), original);
   });
 
-  test('leaves front-loaded M4A files with unsupported co64 offsets untouched', () async {
-    final file = File('${temporaryDirectory.path}/large-co64-front-loaded.m4a');
-    final original = _m4aFile(
-      audio: <int>[1, 2, 3],
-      mediaBeforeMoov: false,
-      extraMoovChildren: <int>[
-        ..._atom(
-          'trak',
-          _atom(
-            'mdia',
+  test(
+    'leaves front-loaded M4A files with unsupported co64 offsets untouched',
+    () async {
+      final file = File(
+        '${temporaryDirectory.path}/large-co64-front-loaded.m4a',
+      );
+      final original = _m4aFile(
+        audio: <int>[1, 2, 3],
+        mediaBeforeMoov: false,
+        extraMoovChildren: <int>[
+          ..._atom(
+            'trak',
             _atom(
-              'minf',
+              'mdia',
               _atom(
-                'stbl',
+                'minf',
                 _atom(
-                  'co64',
-                  <int>[
+                  'stbl',
+                  _atom('co64', <int>[
                     0,
                     0,
                     0,
@@ -556,29 +576,29 @@ void main() {
                     0,
                     0,
                     0,
-                  ],
+                  ]),
                 ),
               ),
             ),
           ),
+        ],
+      );
+      await file.writeAsBytes(original);
+
+      await expectLater(
+        const M4aMetadataWriter().write(
+          path: file.path,
+          title: 'Title',
+          artist: 'Artist',
+          album: 'Album',
+          genre: 'Rock',
         ),
-      ],
-    );
-    await file.writeAsBytes(original);
+        throwsA(isA<FormatException>()),
+      );
 
-    await expectLater(
-      const M4aMetadataWriter().write(
-        path: file.path,
-        title: 'Title',
-        artist: 'Artist',
-        album: 'Album',
-        genre: 'Rock',
-      ),
-      throwsA(isA<FormatException>()),
-    );
-
-    expect(await file.readAsBytes(), original);
-  });
+      expect(await file.readAsBytes(), original);
+    },
+  );
 
   test('leaves malformed M4A metadata untouched', () async {
     final file = File('${temporaryDirectory.path}/malformed.m4a');
@@ -652,14 +672,22 @@ List<int> _frontLoadedM4aFile({
   bool extendedSizedMdat = false,
 }) {
   final chunkOffsetTable = useCo64
-      ? _atom(
-          'co64',
-          <int>[0, 0, 0, 0, ..._uint32Bytes(1), ..._uint64Bytes(chunkOffset)],
-        )
-      : _atom(
-          'stco',
-          <int>[0, 0, 0, 0, ..._uint32Bytes(1), ..._uint32Bytes(chunkOffset)],
-        );
+      ? _atom('co64', <int>[
+          0,
+          0,
+          0,
+          0,
+          ..._uint32Bytes(1),
+          ..._uint64Bytes(chunkOffset),
+        ])
+      : _atom('stco', <int>[
+          0,
+          0,
+          0,
+          0,
+          ..._uint32Bytes(1),
+          ..._uint32Bytes(chunkOffset),
+        ]);
   final file = _m4aFile(
     audio: audio,
     mediaBeforeMoov: false,
@@ -687,15 +715,7 @@ List<int> _frontLoadedM4aFile({
       ...audio,
     ];
   }
-  return <int>[
-    ...prefix,
-    0,
-    0,
-    0,
-    0,
-    ...'mdat'.codeUnits,
-    ...audio,
-  ];
+  return <int>[...prefix, 0, 0, 0, 0, ...'mdat'.codeUnits, ...audio];
 }
 
 List<int> _textItem(List<int> type, String value) {
@@ -730,16 +750,14 @@ List<int> _uint32Bytes(int value) {
 }
 
 List<int> _uint64Bytes(int value) {
-  return List<int>.generate(
-    8,
-    (index) => (value >> ((7 - index) * 8)) & 0xff,
-  );
+  return List<int>.generate(8, (index) => (value >> ((7 - index) * 8)) & 0xff);
 }
 
 List<int> _mdatPayload(List<int> bytes) {
   var offset = 0;
   while (offset + 8 <= bytes.length) {
-    final size = (bytes[offset] << 24) |
+    final size =
+        (bytes[offset] << 24) |
         (bytes[offset + 1] << 16) |
         (bytes[offset + 2] << 8) |
         bytes[offset + 3];
@@ -780,7 +798,8 @@ int _mdatPayloadStart(List<int> bytes) {
 int _chunkOffset(List<int> bytes, {required bool useCo64}) {
   final type = useCo64 ? 'co64' : 'stco';
   for (var offset = 4; offset + 16 <= bytes.length; offset += 1) {
-    if (ascii.decode(bytes.sublist(offset, offset + 4), allowInvalid: true) != type) {
+    if (ascii.decode(bytes.sublist(offset, offset + 4), allowInvalid: true) !=
+        type) {
       continue;
     }
     return useCo64 ? _uint64(bytes, offset + 12) : _uint32(bytes, offset + 12);

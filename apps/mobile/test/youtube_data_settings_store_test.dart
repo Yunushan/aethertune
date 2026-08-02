@@ -38,30 +38,29 @@ void main() {
     await store.load();
     expect(store.loadError, isNotNull);
     expect(store.isConfigured, isFalse);
-    expect(
-      () => store.saveApiKey('  '),
-      throwsA(isA<FormatException>()),
-    );
+    expect(() => store.saveApiKey('  '), throwsA(isA<FormatException>()));
   });
 
-  test('persists a validated official chart region independently of the key',
-      () async {
-    final vault = _MemoryCredentialVault();
-    final store = YouTubeDataSettingsStore(credentialVault: vault);
-    await store.load();
+  test(
+    'persists a validated official chart region independently of the key',
+    () async {
+      final vault = _MemoryCredentialVault();
+      final store = YouTubeDataSettingsStore(credentialVault: vault);
+      await store.load();
 
-    await store.setPreferredRegion(' tr ');
+      await store.setPreferredRegion(' tr ');
 
-    expect(store.preferredRegion, 'TR');
-    final restored = YouTubeDataSettingsStore(credentialVault: vault);
-    await restored.load();
-    expect(restored.preferredRegion, 'TR');
-    await expectLater(
-      restored.setPreferredRegion('turkiye'),
-      throwsA(isA<FormatException>()),
-    );
-    expect(restored.preferredRegion, 'TR');
-  });
+      expect(store.preferredRegion, 'TR');
+      final restored = YouTubeDataSettingsStore(credentialVault: vault);
+      await restored.load();
+      expect(restored.preferredRegion, 'TR');
+      await expectLater(
+        restored.setPreferredRegion('turkiye'),
+        throwsA(isA<FormatException>()),
+      );
+      expect(restored.preferredRegion, 'TR');
+    },
+  );
 }
 
 final class _MemoryCredentialVault implements ProviderCredentialVault {
@@ -83,10 +82,12 @@ final class _MemoryCredentialVault implements ProviderCredentialVault {
 
 final class _FailingCredentialVault implements ProviderCredentialVault {
   @override
-  Future<void> delete(String accountId) async => throw StateError('unavailable');
+  Future<void> delete(String accountId) async =>
+      throw StateError('unavailable');
 
   @override
-  Future<String?> read(String accountId) async => throw StateError('unavailable');
+  Future<String?> read(String accountId) async =>
+      throw StateError('unavailable');
 
   @override
   Future<void> write(String accountId, String secret) async =>

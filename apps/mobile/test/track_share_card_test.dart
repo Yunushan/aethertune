@@ -16,11 +16,16 @@ void main() {
       genre: 'Rock',
       localPath: '/music/night-spark.mp3',
     );
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: RepaintBoundary(key: boundaryKey, child: TrackShareCard(track: track)),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: boundaryKey,
+            child: TrackShareCard(track: track),
+          ),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(find.text('Night Spark'), findsOneWidget);
 

@@ -42,21 +42,19 @@ final class CustomCatalogProvider
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.directPlayback,
-        MusicSourceCapability.artwork,
-      };
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.directPlayback,
+    MusicSourceCapability.artwork,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: definition.declaredNetworkDomains,
-        dataSent: const <String>[
-          'catalog document request',
-        ],
-        cachesMetadata: false,
-      );
+    networkDomains: definition.declaredNetworkDomains,
+    dataSent: const <String>['catalog document request'],
+    cachesMetadata: false,
+  );
 
   @override
   Future<List<Track>> search(String query) => _matchingTracks(query);
@@ -130,12 +128,14 @@ final class CustomCatalogProvider
     if (normalizedQuery.isEmpty) {
       return tracks;
     }
-    return tracks.where((track) {
-      return track.title.toLowerCase().contains(normalizedQuery) ||
-          track.artist.toLowerCase().contains(normalizedQuery) ||
-          track.album.toLowerCase().contains(normalizedQuery) ||
-          track.genre.toLowerCase().contains(normalizedQuery);
-    }).toList(growable: false);
+    return tracks
+        .where((track) {
+          return track.title.toLowerCase().contains(normalizedQuery) ||
+              track.artist.toLowerCase().contains(normalizedQuery) ||
+              track.album.toLowerCase().contains(normalizedQuery) ||
+              track.genre.toLowerCase().contains(normalizedQuery);
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -175,14 +175,18 @@ List<Track> parseCustomCatalogTracks(
   final tracks = <Track>[];
   for (final rawTrack in rawTracks) {
     if (rawTrack is! Map) {
-      throw const ProviderRequestException('Catalog contains an invalid track.');
+      throw const ProviderRequestException(
+        'Catalog contains an invalid track.',
+      );
     }
     final track = _parseCustomCatalogTrack(
       Map<String, Object?>.from(rawTrack),
       definition,
     );
     if (!trackIds.add(track.id)) {
-      throw const ProviderRequestException('Catalog contains duplicate track IDs.');
+      throw const ProviderRequestException(
+        'Catalog contains duplicate track IDs.',
+      );
     }
     tracks.add(track);
   }
@@ -202,7 +206,9 @@ Track _parseCustomCatalogTrack(
   );
   final durationMs = json['durationMs'];
   if (durationMs != null &&
-      (durationMs is! int || durationMs < 0 || durationMs > 24 * 60 * 60 * 1000)) {
+      (durationMs is! int ||
+          durationMs < 0 ||
+          durationMs > 24 * 60 * 60 * 1000)) {
     throw const ProviderRequestException('Catalog track duration is invalid.');
   }
   return Track(
@@ -240,9 +246,15 @@ String? _optionalExpectedMediaChecksum(Object? value) {
   );
 }
 
-String _requiredText(Map<String, Object?> json, String key, {required int maximum}) {
+String _requiredText(
+  Map<String, Object?> json,
+  String key, {
+  required int maximum,
+}) {
   final value = json[key];
-  if (value is! String || value.trim().isEmpty || value.trim().length > maximum) {
+  if (value is! String ||
+      value.trim().isEmpty ||
+      value.trim().length > maximum) {
     throw ProviderRequestException('Catalog track $key is invalid.');
   }
   return value.trim();
@@ -292,14 +304,19 @@ Future<String> loadCustomCatalogJson(Uri catalogUri) async {
         'Catalog request failed with HTTP ${response.statusCode}.',
       );
     }
-    final contentType = response.headers.contentType?.mimeType.toLowerCase() ?? '';
+    final contentType =
+        response.headers.contentType?.mimeType.toLowerCase() ?? '';
     if (contentType != 'application/json' && !contentType.endsWith('+json')) {
-      throw const ProviderRequestException('Catalog response did not contain JSON.');
+      throw const ProviderRequestException(
+        'Catalog response did not contain JSON.',
+      );
     }
     final bytes = <int>[];
     await for (final chunk in response) {
       if (bytes.length + chunk.length > maxCustomCatalogBytes) {
-        throw const ProviderRequestException('Catalog response exceeded 2 MiB.');
+        throw const ProviderRequestException(
+          'Catalog response exceeded 2 MiB.',
+        );
       }
       bytes.addAll(chunk);
     }

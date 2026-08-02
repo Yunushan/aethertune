@@ -36,21 +36,23 @@ void main() {
     expect(vault.values, isEmpty);
   });
 
-  test('rejects invalid translation settings and reports unavailable vaults',
-      () async {
-    final store = LyricsTranslationSettingsStore(
-      credentialVault: _FailingCredentialVault(),
-    );
-    await store.load();
-    expect(store.loadError, isNotNull);
-    await expectLater(
-      store.save(
-        endpoint: 'https://translate.example.test',
-        targetLanguage: 'not-a-language',
-      ),
-      throwsFormatException,
-    );
-  });
+  test(
+    'rejects invalid translation settings and reports unavailable vaults',
+    () async {
+      final store = LyricsTranslationSettingsStore(
+        credentialVault: _FailingCredentialVault(),
+      );
+      await store.load();
+      expect(store.loadError, isNotNull);
+      await expectLater(
+        store.save(
+          endpoint: 'https://translate.example.test',
+          targetLanguage: 'not-a-language',
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 }
 
 final class _MemoryCredentialVault implements ProviderCredentialVault {
@@ -72,10 +74,12 @@ final class _MemoryCredentialVault implements ProviderCredentialVault {
 
 final class _FailingCredentialVault implements ProviderCredentialVault {
   @override
-  Future<void> delete(String accountId) async => throw StateError('unavailable');
+  Future<void> delete(String accountId) async =>
+      throw StateError('unavailable');
 
   @override
-  Future<String?> read(String accountId) async => throw StateError('unavailable');
+  Future<String?> read(String accountId) async =>
+      throw StateError('unavailable');
 
   @override
   Future<void> write(String accountId, String secret) async =>

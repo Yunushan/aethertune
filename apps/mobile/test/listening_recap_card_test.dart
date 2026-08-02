@@ -36,10 +36,7 @@ void main() {
     expect(find.text('Orion - 7 play(s)'), findsOneWidget);
 
     final capture = await tester.runAsync<List<int>>(() async {
-      final bytes = await captureListeningRecapPng(
-        boundaryKey,
-        pixelRatio: 1,
-      );
+      final bytes = await captureListeningRecapPng(boundaryKey, pixelRatio: 1);
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       final result = <int>[
@@ -74,10 +71,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Center(
-              child: ListeningRecapCard(
-                recap: recap,
-                visualTheme: visualTheme,
-              ),
+              child: ListeningRecapCard(recap: recap, visualTheme: visualTheme),
             ),
           ),
         ),

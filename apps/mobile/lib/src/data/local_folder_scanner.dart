@@ -69,9 +69,8 @@ final class LocalFolderScanProgress {
   final int? total;
 }
 
-typedef LocalFolderScanProgressListener = void Function(
-  LocalFolderScanProgress progress,
-);
+typedef LocalFolderScanProgressListener =
+    void Function(LocalFolderScanProgress progress);
 
 final class _LocalFileMetadata {
   const _LocalFileMetadata({
@@ -110,10 +109,7 @@ final class _LocalFileMetadata {
 }
 
 final class _ScannedLocalTrack {
-  const _ScannedLocalTrack({
-    required this.track,
-    this.embeddedLyrics,
-  });
+  const _ScannedLocalTrack({required this.track, this.embeddedLyrics});
 
   final Track track;
   final String? embeddedLyrics;
@@ -362,9 +358,8 @@ final class _LocalFolderScanState {
     }
 
     entries.sort(
-      (left, right) => left.path.toLowerCase().compareTo(
-            right.path.toLowerCase(),
-          ),
+      (left, right) =>
+          left.path.toLowerCase().compareTo(right.path.toLowerCase()),
     );
 
     for (final entry in entries) {
@@ -492,9 +487,8 @@ final class _LocalFolderScanState {
         continue;
       }
       entries.sort(
-        (left, right) => left.path.toLowerCase().compareTo(
-              right.path.toLowerCase(),
-            ),
+        (left, right) =>
+            left.path.toLowerCase().compareTo(right.path.toLowerCase()),
       );
       for (final entry in entries) {
         if (scannedCueCount >= _maxSelectedCueSidecars ||
@@ -927,10 +921,7 @@ final class _LocalFolderScanState {
     }
   }
 
-  _Apev2Comments? _apev2TextComments(
-    List<int> bytes,
-    int itemCount,
-  ) {
+  _Apev2Comments? _apev2TextComments(List<int> bytes, int itemCount) {
     var offset = 0;
     final comments = <String, List<String>>{};
     Uri? artworkUri;
@@ -942,10 +933,14 @@ final class _LocalFolderScanState {
       final flags = _uint32LittleEndian(bytes, offset + 4);
       offset += 8;
       final keyEnd = bytes.indexOf(0, offset);
-      if (keyEnd == -1 || keyEnd == offset || keyEnd - offset > _maxApev2KeyBytes) {
+      if (keyEnd == -1 ||
+          keyEnd == offset ||
+          keyEnd - offset > _maxApev2KeyBytes) {
         return null;
       }
-      final key = String.fromCharCodes(bytes.sublist(offset, keyEnd)).toUpperCase();
+      final key = String.fromCharCodes(
+        bytes.sublist(offset, keyEnd),
+      ).toUpperCase();
       offset = keyEnd + 1;
       if (valueLength < 0 || valueLength > bytes.length - offset) {
         return null;
@@ -1098,10 +1093,15 @@ final class _LocalFolderScanState {
         }
 
         final firstPacket = packets.first;
-        final isVorbis = _startsWithBytes(
-          firstPacket,
-          const <int>[1, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73],
-        );
+        final isVorbis = _startsWithBytes(firstPacket, const <int>[
+          1,
+          0x76,
+          0x6f,
+          0x72,
+          0x62,
+          0x69,
+          0x73,
+        ]);
         final isOpus = _startsWithAscii(firstPacket, 'OpusHead');
         if (!isVorbis && !isOpus) {
           return null;
@@ -1110,10 +1110,15 @@ final class _LocalFolderScanState {
         List<int>? commentBytes;
         for (final packet in packets.skip(1)) {
           if (isVorbis &&
-              _startsWithBytes(
-                packet,
-                const <int>[3, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73],
-              )) {
+              _startsWithBytes(packet, const <int>[
+                3,
+                0x76,
+                0x6f,
+                0x72,
+                0x62,
+                0x69,
+                0x73,
+              ])) {
             commentBytes = packet.sublist(7);
             break;
           }
@@ -1358,9 +1363,8 @@ final class _LocalFolderScanState {
       return null;
     }
 
-    if (tagBytes.length < (tagSize > _maxId3v2TagBytes
-        ? _maxId3v2TagBytes
-        : tagSize)) {
+    if (tagBytes.length <
+        (tagSize > _maxId3v2TagBytes ? _maxId3v2TagBytes : tagSize)) {
       return null;
     }
     final tagData = majorVersion == 2
@@ -1424,10 +1428,7 @@ final class _LocalFolderScanState {
     );
   }
 
-  _Id3v2TagData _id3v23Or24TagData(
-    List<int> bytes,
-    int majorVersion,
-  ) {
+  _Id3v2TagData _id3v23Or24TagData(List<int> bytes, int majorVersion) {
     final textFrames = <String, String>{};
     Uri? artworkUri;
     var hasFrontCover = false;
@@ -1466,8 +1467,7 @@ final class _LocalFolderScanState {
           bytes.sublist(offset, offset + frameSize),
         );
         if (picture != null &&
-            (artworkUri == null ||
-                (!hasFrontCover && picture.isFrontCover))) {
+            (artworkUri == null || (!hasFrontCover && picture.isFrontCover))) {
           artworkUri = picture.artworkUri;
           hasFrontCover = picture.isFrontCover;
         }
@@ -1576,8 +1576,7 @@ final class _LocalFolderScanState {
           bytes.sublist(offset, offset + frameSize),
         );
         if (picture != null &&
-            (artworkUri == null ||
-                (!hasFrontCover && picture.isFrontCover))) {
+            (artworkUri == null || (!hasFrontCover && picture.isFrontCover))) {
           artworkUri = picture.artworkUri;
           hasFrontCover = picture.isFrontCover;
         }
@@ -1802,7 +1801,8 @@ final class _LocalFolderScanState {
     final title = _firstVorbisComment(comments, 'TITLE') ?? '';
     final artist = _joinedVorbisComment(comments, 'ARTIST') ?? '';
     final album = _firstVorbisComment(comments, 'ALBUM');
-    final albumArtist = _joinedVorbisComment(comments, 'ALBUMARTIST') ??
+    final albumArtist =
+        _joinedVorbisComment(comments, 'ALBUMARTIST') ??
         _joinedVorbisComment(comments, 'ALBUM ARTIST');
     final year = _releaseYearFromText(
       _firstVorbisComment(comments, 'DATE') ??
@@ -1813,10 +1813,14 @@ final class _LocalFolderScanState {
     );
     final genre = _joinedVorbisComment(comments, 'GENRE');
     final replayGainTrackDb =
-        parseReplayGainDb(_firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN')) ??
+        parseReplayGainDb(
+          _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_GAIN'),
+        ) ??
         parseEbuR128GainDb(_firstVorbisComment(comments, 'R128_TRACK_GAIN'));
     final replayGainAlbumDb =
-        parseReplayGainDb(_firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN')) ??
+        parseReplayGainDb(
+          _firstVorbisComment(comments, 'REPLAYGAIN_ALBUM_GAIN'),
+        ) ??
         parseEbuR128GainDb(_firstVorbisComment(comments, 'R128_ALBUM_GAIN'));
     final replayGainTrackPeak = parseReplayGainPeak(
       _firstVorbisComment(comments, 'REPLAYGAIN_TRACK_PEAK'),
@@ -1886,8 +1890,8 @@ final class _LocalFolderScanState {
         continue;
       }
 
-      final title = _firstVorbisComment(comments, '${entry.key}NAME') ??
-          'Chapter $index';
+      final title =
+          _firstVorbisComment(comments, '${entry.key}NAME') ?? 'Chapter $index';
       try {
         chaptersByIndex[index] = TrackChapter(start: start, title: title);
       } on ArgumentError {
@@ -1982,8 +1986,9 @@ final class _LocalFolderScanState {
             objectGuid,
             _asfExtendedContentDescriptionObjectGuid,
           )) {
-            final extendedDescription =
-                _asfExtendedContentDescriptionMetadata(payload);
+            final extendedDescription = _asfExtendedContentDescriptionMetadata(
+              payload,
+            );
             fields.addAll(extendedDescription.fields);
             if (extendedDescription.artworkUri != null &&
                 (artworkUri == null ||
@@ -2090,8 +2095,7 @@ final class _LocalFolderScanState {
       if (name == 'WM/PICTURE') {
         final picture = _asfPictureArtwork(valueBytes, valueType);
         if (picture != null &&
-            (artworkUri == null ||
-                (!hasFrontCover && picture.isFrontCover))) {
+            (artworkUri == null || (!hasFrontCover && picture.isFrontCover))) {
           artworkUri = picture.artworkUri;
           hasFrontCover = picture.isFrontCover;
         }
@@ -2121,16 +2125,16 @@ final class _LocalFolderScanState {
       'WM/TRACKNUMBER' => 'trackNumber',
       'WM/GENRE' => 'genre',
       'WM/SHAREDUSERRATING' => 'rating',
-      'REPLAYGAIN_TRACK_GAIN' || 'WM/REPLAYGAIN_TRACK_GAIN' =>
-        'replayGainTrackDb',
-      'REPLAYGAIN_ALBUM_GAIN' || 'WM/REPLAYGAIN_ALBUM_GAIN' =>
-        'replayGainAlbumDb',
+      'REPLAYGAIN_TRACK_GAIN' ||
+      'WM/REPLAYGAIN_TRACK_GAIN' => 'replayGainTrackDb',
+      'REPLAYGAIN_ALBUM_GAIN' ||
+      'WM/REPLAYGAIN_ALBUM_GAIN' => 'replayGainAlbumDb',
       'R128_TRACK_GAIN' || 'WM/R128_TRACK_GAIN' => 'r128TrackGain',
       'R128_ALBUM_GAIN' || 'WM/R128_ALBUM_GAIN' => 'r128AlbumGain',
-      'REPLAYGAIN_TRACK_PEAK' || 'WM/REPLAYGAIN_TRACK_PEAK' =>
-        'replayGainTrackPeak',
-      'REPLAYGAIN_ALBUM_PEAK' || 'WM/REPLAYGAIN_ALBUM_PEAK' =>
-        'replayGainAlbumPeak',
+      'REPLAYGAIN_TRACK_PEAK' ||
+      'WM/REPLAYGAIN_TRACK_PEAK' => 'replayGainTrackPeak',
+      'REPLAYGAIN_ALBUM_PEAK' ||
+      'WM/REPLAYGAIN_ALBUM_PEAK' => 'replayGainAlbumPeak',
       _ => null,
     };
   }
@@ -2138,12 +2142,18 @@ final class _LocalFolderScanState {
   String? _asfPropertyValue(List<int> bytes, int valueType) {
     return switch (valueType) {
       _asfUnicodeValueType => _normalizeEmbeddedText(_decodeUtf16(bytes)),
-      _asfDwordValueType when bytes.length == 4 =>
-        _uint32LittleEndian(bytes, 0).toString(),
-      _asfQwordValueType when bytes.length == 8 =>
-        _uint64LittleEndian(bytes, 0).toString(),
-      _asfWordValueType when bytes.length == 2 =>
-        _uint16LittleEndian(bytes, 0).toString(),
+      _asfDwordValueType when bytes.length == 4 => _uint32LittleEndian(
+        bytes,
+        0,
+      ).toString(),
+      _asfQwordValueType when bytes.length == 8 => _uint64LittleEndian(
+        bytes,
+        0,
+      ).toString(),
+      _asfWordValueType when bytes.length == 2 => _uint16LittleEndian(
+        bytes,
+        0,
+      ).toString(),
       _ => null,
     };
   }
@@ -2382,8 +2392,8 @@ final class _LocalFolderScanState {
   Uri? _vorbisCommentArtworkUri(Map<String, List<String>> comments) {
     Uri? artworkUri;
     var hasFrontCover = false;
-    for (final picture in comments['METADATA_BLOCK_PICTURE'] ??
-        const <String>[]) {
+    for (final picture
+        in comments['METADATA_BLOCK_PICTURE'] ?? const <String>[]) {
       if (picture.isEmpty) {
         continue;
       }
@@ -2411,7 +2421,8 @@ final class _LocalFolderScanState {
       final bytes = base64.decode(coverArt);
       return _artworkDataUri(
         bytes,
-        mimeType: _firstVorbisComment(comments, 'COVERARTMIME') ??
+        mimeType:
+            _firstVorbisComment(comments, 'COVERARTMIME') ??
             _inferArtworkMimeType(bytes),
       );
     } on FormatException {
@@ -2647,9 +2658,11 @@ final class _LocalFolderScanState {
     final chapterCount = payload[offset];
     offset += 1;
     final chapters = <TrackChapter>[];
-    for (var index = 0;
-        index < chapterCount && index < _maxMp4Chapters;
-        index += 1) {
+    for (
+      var index = 0;
+      index < chapterCount && index < _maxMp4Chapters;
+      index += 1
+    ) {
       if (offset + 9 > payload.length) {
         return const <TrackChapter>[];
       }
@@ -2671,7 +2684,9 @@ final class _LocalFolderScanState {
       offset += titleLength;
       chapters.add(
         TrackChapter(
-          start: Duration(microseconds: timestamp ~/ _mp4ChapterTicksPerMicrosecond),
+          start: Duration(
+            microseconds: timestamp ~/ _mp4ChapterTicksPerMicrosecond,
+          ),
           title: title.isEmpty ? 'Chapter ${index + 1}' : title,
         ),
       );
@@ -2799,9 +2814,9 @@ final class _LocalFolderScanState {
         .take(length)
         .takeWhile((byte) => byte != 0)
         .toList(growable: false);
-    final text = String.fromCharCodes(rawBytes)
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final text = String.fromCharCodes(
+      rawBytes,
+    ).replaceAll(RegExp(r'\s+'), ' ').trim();
 
     return text;
   }
@@ -3011,14 +3026,8 @@ final class _LocalFolderScanState {
       0 => latin1.decode(_trimTrailingZeroBytes(payload)),
       1 => _decodeUtf16(payload, useBom: true),
       2 => _decodeUtf16(payload, bigEndian: true),
-      3 => utf8.decode(
-          _trimTrailingZeroBytes(payload),
-          allowMalformed: true,
-        ),
-      _ => utf8.decode(
-          _trimTrailingZeroBytes(payload),
-          allowMalformed: true,
-        ),
+      3 => utf8.decode(_trimTrailingZeroBytes(payload), allowMalformed: true),
+      _ => utf8.decode(_trimTrailingZeroBytes(payload), allowMalformed: true),
     };
   }
 
@@ -3086,9 +3095,7 @@ final class _LocalFolderScanState {
     if (name?.toUpperCase() != expectedKey) {
       return null;
     }
-    return parseGain(
-      _m4aDataAtomText(bytes, startOffset, endOffset),
-    );
+    return parseGain(_m4aDataAtomText(bytes, startOffset, endOffset));
   }
 
   String? _m4aFreeformHeaderText(List<int> payload) {
@@ -3148,10 +3155,7 @@ final class _LocalFolderScanState {
     }
 
     final encoding = bytes[0];
-    final imageFormat = latin1.decode(
-      bytes.sublist(1, 4),
-      allowInvalid: true,
-    );
+    final imageFormat = latin1.decode(bytes.sublist(1, 4), allowInvalid: true);
     final mimeType = switch (imageFormat.toUpperCase()) {
       'PNG' => 'image/png',
       'JPG' || 'JPEG' => 'image/jpeg',
@@ -3238,11 +3242,7 @@ final class _LocalFolderScanState {
           );
   }
 
-  Uri? _m4aDataAtomArtworkUri(
-    List<int> bytes,
-    int startOffset,
-    int endOffset,
-  ) {
+  Uri? _m4aDataAtomArtworkUri(List<int> bytes, int startOffset, int endOffset) {
     for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
       if (!_matchesAscii(atom.typeBytes, 'data')) {
         continue;
@@ -3298,9 +3298,7 @@ final class _LocalFolderScanState {
       return null;
     }
 
-    return Uri.parse(
-      'data:$normalizedMimeType;base64,${base64Encode(bytes)}',
-    );
+    return Uri.parse('data:$normalizedMimeType;base64,${base64Encode(bytes)}');
   }
 
   String? _inferArtworkMimeType(List<int> bytes) {
@@ -3476,10 +3474,7 @@ final class _LocalFolderScanState {
     return true;
   }
 
-  String? _firstVorbisComment(
-    Map<String, List<String>> comments,
-    String key,
-  ) {
+  String? _firstVorbisComment(Map<String, List<String>> comments, String key) {
     final values = comments[key];
     if (values == null || values.isEmpty) {
       return null;
@@ -3488,10 +3483,7 @@ final class _LocalFolderScanState {
     return values.first;
   }
 
-  String? _joinedVorbisComment(
-    Map<String, List<String>> comments,
-    String key,
-  ) {
+  String? _joinedVorbisComment(Map<String, List<String>> comments, String key) {
     final values = comments[key];
     if (values == null || values.isEmpty) {
       return null;
@@ -3548,11 +3540,7 @@ final class _LocalFolderScanState {
     return null;
   }
 
-  String? _m4aDataAtomText(
-    List<int> bytes,
-    int startOffset,
-    int endOffset,
-  ) {
+  String? _m4aDataAtomText(List<int> bytes, int startOffset, int endOffset) {
     for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
       if (!_matchesAscii(atom.typeBytes, 'data')) {
         continue;
@@ -3579,11 +3567,7 @@ final class _LocalFolderScanState {
     return null;
   }
 
-  String? _m4aDataAtomRawText(
-    List<int> bytes,
-    int startOffset,
-    int endOffset,
-  ) {
+  String? _m4aDataAtomRawText(List<int> bytes, int startOffset, int endOffset) {
     for (final atom in _mp4Atoms(bytes.sublist(startOffset, endOffset))) {
       if (!_matchesAscii(atom.typeBytes, 'data')) {
         continue;
@@ -3733,9 +3717,7 @@ final class _LocalFolderScanState {
       return 0;
     }
 
-    return (bytes[offset] << 16) |
-        (bytes[offset + 1] << 8) |
-        bytes[offset + 2];
+    return (bytes[offset] << 16) | (bytes[offset + 1] << 8) | bytes[offset + 2];
   }
 
   bool _matchesBytes(List<int> bytes, List<int> expected) {
@@ -3781,10 +3763,7 @@ String localFileContentHash(List<int> bytes) {
 /// containers. Unlike [localFileContentHash], embedded tag and container
 /// metadata changes do not affect this value. It is intentionally not an
 /// acoustic fingerprint: different encodes of the same recording do not match.
-String? localAudioPayloadFingerprint(
-  List<int> bytes, {
-  String? extension,
-}) {
+String? localAudioPayloadFingerprint(List<int> bytes, {String? extension}) {
   if (bytes.isEmpty) {
     return null;
   }
@@ -3801,16 +3780,24 @@ String? localAudioPayloadFingerprint(
   if (_payloadStartsWith(bytes, const <int>[0x46, 0x4f, 0x52, 0x4d]) &&
       bytes.length >= 12 &&
       (_payloadStartsWithAt(bytes, const <int>[0x41, 0x49, 0x46, 0x46], 8) ||
-          _payloadStartsWithAt(bytes, const <int>[0x41, 0x49, 0x46, 0x43], 8))) {
+          _payloadStartsWithAt(bytes, const <int>[
+            0x41,
+            0x49,
+            0x46,
+            0x43,
+          ], 8))) {
     return _aiffAudioPayloadFingerprint(bytes);
   }
   if (_payloadStartsWith(bytes, const <int>[0x4f, 0x67, 0x67, 0x53])) {
     return _oggAudioPayloadFingerprint(bytes);
   }
   if (_looksLikeMp4(bytes) ||
-      const <String>{'.m4a', '.m4b', '.m4r', '.alac'}.contains(
-        normalizedExtension,
-      )) {
+      const <String>{
+        '.m4a',
+        '.m4b',
+        '.m4r',
+        '.alac',
+      }.contains(normalizedExtension)) {
     return _mp4AudioPayloadFingerprint(bytes);
   }
   if (normalizedExtension == '.mp3' ||
@@ -3827,7 +3814,8 @@ String? _mp3AudioPayloadFingerprint(List<int> bytes) {
     if (bytes.length < 10) {
       return null;
     }
-    final tagSize = ((bytes[6] & 0x7f) << 21) |
+    final tagSize =
+        ((bytes[6] & 0x7f) << 21) |
         ((bytes[7] & 0x7f) << 14) |
         ((bytes[8] & 0x7f) << 7) |
         (bytes[9] & 0x7f);
@@ -3843,11 +3831,16 @@ String? _mp3AudioPayloadFingerprint(List<int> bytes) {
     end -= 128;
   }
   if (end >= 32 &&
-      _payloadStartsWithAt(
-        bytes,
-        const <int>[0x41, 0x50, 0x45, 0x54, 0x41, 0x47, 0x45, 0x58],
-        end - 32,
-      )) {
+      _payloadStartsWithAt(bytes, const <int>[
+        0x41,
+        0x50,
+        0x45,
+        0x54,
+        0x41,
+        0x47,
+        0x45,
+        0x58,
+      ], end - 32)) {
     final tagSize = _payloadUint32LittleEndian(bytes, end - 20);
     if (tagSize >= 32 && tagSize <= end - start) {
       end -= tagSize;
@@ -3862,7 +3855,8 @@ String? _flacAudioPayloadFingerprint(List<int> bytes) {
   var offset = 4;
   while (offset + 4 <= bytes.length) {
     final isLast = (bytes[offset] & 0x80) != 0;
-    final length = (bytes[offset + 1] << 16) |
+    final length =
+        (bytes[offset + 1] << 16) |
         (bytes[offset + 2] << 8) |
         bytes[offset + 3];
     offset += 4;
@@ -3887,13 +3881,17 @@ String? _riffAudioPayloadFingerprint(List<int> bytes) {
     if (length < 0 || length > bytes.length - payloadStart) {
       return null;
     }
-    if (_payloadStartsWithAt(bytes, const <int>[0x64, 0x61, 0x74, 0x61], offset)) {
+    if (_payloadStartsWithAt(bytes, const <int>[
+      0x64,
+      0x61,
+      0x74,
+      0x61,
+    ], offset)) {
       return length == 0
           ? null
-          : _payloadFingerprint(
-              'wav',
-              <List<int>>[bytes.sublist(payloadStart, payloadStart + length)],
-            );
+          : _payloadFingerprint('wav', <List<int>>[
+              bytes.sublist(payloadStart, payloadStart + length),
+            ]);
     }
     offset = payloadStart + length + (length.isOdd ? 1 : 0);
   }
@@ -3908,14 +3906,18 @@ String? _aiffAudioPayloadFingerprint(List<int> bytes) {
     if (length < 0 || length > bytes.length - payloadStart) {
       return null;
     }
-    if (_payloadStartsWithAt(bytes, const <int>[0x53, 0x53, 0x4e, 0x44], offset)) {
+    if (_payloadStartsWithAt(bytes, const <int>[
+      0x53,
+      0x53,
+      0x4e,
+      0x44,
+    ], offset)) {
       if (length <= 8) {
         return null;
       }
-      return _payloadFingerprint(
-        'aiff',
-        <List<int>>[bytes.sublist(payloadStart + 8, payloadStart + length)],
-      );
+      return _payloadFingerprint('aiff', <List<int>>[
+        bytes.sublist(payloadStart + 8, payloadStart + length),
+      ]);
     }
     offset = payloadStart + length + (length.isOdd ? 1 : 0);
   }
@@ -3928,7 +3930,12 @@ String? _oggAudioPayloadFingerprint(List<int> bytes) {
   var completedPackets = 0;
   var hashedAudioBytes = 0;
   while (offset + 27 <= bytes.length) {
-    if (!_payloadStartsWithAt(bytes, const <int>[0x4f, 0x67, 0x67, 0x53], offset)) {
+    if (!_payloadStartsWithAt(bytes, const <int>[
+      0x4f,
+      0x67,
+      0x67,
+      0x53,
+    ], offset)) {
       return null;
     }
     final segmentCount = bytes[offset + 26];
@@ -3972,7 +3979,12 @@ String? _mp4AudioPayloadFingerprint(List<int> bytes) {
     if (size < 8 || size > bytes.length - offset) {
       return null;
     }
-    if (_payloadStartsWithAt(bytes, const <int>[0x6d, 0x64, 0x61, 0x74], offset)) {
+    if (_payloadStartsWithAt(bytes, const <int>[
+      0x6d,
+      0x64,
+      0x61,
+      0x74,
+    ], offset)) {
       hash.addRange(bytes, offset + 8, offset + size);
       payloadBytes += size - 8;
     }
@@ -4040,10 +4052,7 @@ final class _PayloadFNV64 {
 }
 
 final class _LocalFileHashes {
-  const _LocalFileHashes({
-    required this.contentHash,
-    this.audioFingerprint,
-  });
+  const _LocalFileHashes({required this.contentHash, this.audioFingerprint});
 
   final String contentHash;
   final String? audioFingerprint;
@@ -4182,16 +4191,58 @@ const _asfQwordValueType = 4;
 const _asfWordValueType = 5;
 const _frontCoverPictureType = 3;
 const _asfHeaderObjectGuid = <int>[
-  0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
-  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+  0x30,
+  0x26,
+  0xb2,
+  0x75,
+  0x8e,
+  0x66,
+  0xcf,
+  0x11,
+  0xa6,
+  0xd9,
+  0x00,
+  0xaa,
+  0x00,
+  0x62,
+  0xce,
+  0x6c,
 ];
 const _asfContentDescriptionObjectGuid = <int>[
-  0x33, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11,
-  0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c,
+  0x33,
+  0x26,
+  0xb2,
+  0x75,
+  0x8e,
+  0x66,
+  0xcf,
+  0x11,
+  0xa6,
+  0xd9,
+  0x00,
+  0xaa,
+  0x00,
+  0x62,
+  0xce,
+  0x6c,
 ];
 const _asfExtendedContentDescriptionObjectGuid = <int>[
-  0x40, 0xa4, 0xd0, 0xd2, 0x07, 0xe3, 0xd2, 0x11,
-  0x97, 0xf0, 0x00, 0xa0, 0xc9, 0x5e, 0xa8, 0x50,
+  0x40,
+  0xa4,
+  0xd0,
+  0xd2,
+  0x07,
+  0xe3,
+  0xd2,
+  0x11,
+  0x97,
+  0xf0,
+  0x00,
+  0xa0,
+  0xc9,
+  0x5e,
+  0xa8,
+  0x50,
 ];
 const _sidecarLyricsExtensionsByPreference = <String>[
   '.ttml',
@@ -4220,7 +4271,9 @@ Map<String, List<TrackChapter>> _parseCueSheet(String document) {
       return;
     }
     final title = currentTitle?.trim();
-    chaptersByFile.putIfAbsent(file, () => <TrackChapter>[]).add(
+    chaptersByFile
+        .putIfAbsent(file, () => <TrackChapter>[])
+        .add(
           TrackChapter(
             start: start,
             title: title == null || title.isEmpty
@@ -4243,8 +4296,10 @@ Map<String, List<TrackChapter>> _parseCueSheet(String document) {
       continue;
     }
 
-    final fileMatch = RegExp(r'^FILE\s+(.+)$', caseSensitive: false)
-        .firstMatch(line);
+    final fileMatch = RegExp(
+      r'^FILE\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(line);
     if (fileMatch != null) {
       commitCurrentTrack();
       resetCurrentTrack();
@@ -4267,8 +4322,10 @@ Map<String, List<TrackChapter>> _parseCueSheet(String document) {
       continue;
     }
 
-    final titleMatch = RegExp(r'^TITLE\s+(.+)$', caseSensitive: false)
-        .firstMatch(line);
+    final titleMatch = RegExp(
+      r'^TITLE\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(line);
     if (titleMatch != null) {
       currentTitle = _cueTextValue(titleMatch.group(1)!);
       continue;

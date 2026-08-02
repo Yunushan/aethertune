@@ -7,25 +7,27 @@ import 'package:aethertune/src/data/provider_binary_loader.dart';
 import 'package:aethertune/src/data/provider_error.dart';
 
 void main() {
-  test('loads bounded image bytes and applies private request headers',
-      () async {
-    final capturedHeader = Completer<String?>();
-    final server = await _server((request) async {
-      capturedHeader.complete(request.headers.value('X-Test-Token'));
-      request.response.headers.contentType = ContentType('image', 'png');
-      request.response.add(<int>[1, 2, 3]);
-      await request.response.close();
-    });
-    addTearDown(() => server.close(force: true));
+  test(
+    'loads bounded image bytes and applies private request headers',
+    () async {
+      final capturedHeader = Completer<String?>();
+      final server = await _server((request) async {
+        capturedHeader.complete(request.headers.value('X-Test-Token'));
+        request.response.headers.contentType = ContentType('image', 'png');
+        request.response.add(<int>[1, 2, 3]);
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
 
-    final bytes = await loadProviderImageBytes(
-      _uri(server),
-      const <String, String>{'X-Test-Token': 'private-token'},
-    );
+      final bytes = await loadProviderImageBytes(
+        _uri(server),
+        const <String, String>{'X-Test-Token': 'private-token'},
+      );
 
-    expect(bytes, <int>[1, 2, 3]);
-    expect(await capturedHeader.future, 'private-token');
-  });
+      expect(bytes, <int>[1, 2, 3]);
+      expect(await capturedHeader.future, 'private-token');
+    },
+  );
 
   test('rejects non-image responses', () async {
     final server = await _server((request) async {

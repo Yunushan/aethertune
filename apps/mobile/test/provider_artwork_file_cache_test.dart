@@ -20,53 +20,55 @@ void main() {
     }
   });
 
-  test('writes format-aware private files and reuses matching artwork',
-      () async {
-    var rootLoads = 0;
-    final cache = ProviderArtworkFileCache(
-      cacheRootLoader: () async {
-        rootLoads += 1;
-        return cacheRoot;
-      },
-    );
-    final bytes = Uint8List.fromList(<int>[
-      0x89,
-      0x50,
-      0x4e,
-      0x47,
-      0x0d,
-      0x0a,
-      0x1a,
-      0x0a,
-      1,
-      2,
-      3,
-    ]);
+  test(
+    'writes format-aware private files and reuses matching artwork',
+    () async {
+      var rootLoads = 0;
+      final cache = ProviderArtworkFileCache(
+        cacheRootLoader: () async {
+          rootLoads += 1;
+          return cacheRoot;
+        },
+      );
+      final bytes = Uint8List.fromList(<int>[
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+        1,
+        2,
+        3,
+      ]);
 
-    final first = await cache.materialize(
-      sourceId: 'provider-1',
-      artworkId: 'cover-1',
-      version: 'v1',
-      bytes: bytes,
-    );
-    final stalePartial = File('${File.fromUri(first).path}.stale.part');
-    await stalePartial.writeAsBytes(<int>[9]);
-    final second = await cache.materialize(
-      sourceId: 'provider-1',
-      artworkId: 'cover-1',
-      version: 'v1',
-      bytes: bytes,
-    );
+      final first = await cache.materialize(
+        sourceId: 'provider-1',
+        artworkId: 'cover-1',
+        version: 'v1',
+        bytes: bytes,
+      );
+      final stalePartial = File('${File.fromUri(first).path}.stale.part');
+      await stalePartial.writeAsBytes(<int>[9]);
+      final second = await cache.materialize(
+        sourceId: 'provider-1',
+        artworkId: 'cover-1',
+        version: 'v1',
+        bytes: bytes,
+      );
 
-    expect(first, second);
-    expect(first.scheme, 'file');
-    expect(first.path, endsWith('.png'));
-    expect(await File.fromUri(first).readAsBytes(), bytes);
-    expect(first.toString(), isNot(contains('provider-1')));
-    expect(first.toString(), isNot(contains('cover-1')));
-    expect(await stalePartial.exists(), isFalse);
-    expect(rootLoads, 1);
-  });
+      expect(first, second);
+      expect(first.scheme, 'file');
+      expect(first.path, endsWith('.png'));
+      expect(await File.fromUri(first).readAsBytes(), bytes);
+      expect(first.toString(), isNot(contains('provider-1')));
+      expect(first.toString(), isNot(contains('cover-1')));
+      expect(await stalePartial.exists(), isFalse);
+      expect(rootLoads, 1);
+    },
+  );
 
   test('bounds file count while retaining the newly written file', () async {
     final cache = ProviderArtworkFileCache(

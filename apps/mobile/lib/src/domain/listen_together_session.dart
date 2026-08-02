@@ -18,18 +18,20 @@ class ListenTogetherSession {
   final bool playing;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'version': currentIndex == null ? legacyVersion : version,
-        'trackIds': trackIds,
-        'currentTrackId': currentTrackId,
-        if (currentIndex != null) 'currentIndex': currentIndex,
-        'positionMilliseconds': position.inMilliseconds,
-        'playing': playing,
-      };
+    'version': currentIndex == null ? legacyVersion : version,
+    'trackIds': trackIds,
+    'currentTrackId': currentTrackId,
+    if (currentIndex != null) 'currentIndex': currentIndex,
+    'positionMilliseconds': position.inMilliseconds,
+    'playing': playing,
+  };
 
   factory ListenTogetherSession.fromJson(Map<String, Object?> json) {
     final sessionVersion = json['version'];
     if (sessionVersion != legacyVersion && sessionVersion != version) {
-      throw const FormatException('Unsupported listen-together session version.');
+      throw const FormatException(
+        'Unsupported listen-together session version.',
+      );
     }
     final rawTrackIds = json['trackIds'];
     if (rawTrackIds is! List || rawTrackIds.length > maxTrackIds) {

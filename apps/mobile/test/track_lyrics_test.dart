@@ -14,20 +14,20 @@ void main() {
 Plain lyric line
 ''');
 
-    expect(
-      lines.map((line) => line.text),
-      <String>[
-        'Offset tag is ignored',
-        'Repeated chorus',
-        'Ten seconds',
-        'Repeated chorus',
-        'Minute mark',
-      ],
-    );
-    expect(
-      lines.map((line) => line.timestamp.inMilliseconds),
-      <int>[1000, 5000, 10500, 15200, 62345],
-    );
+    expect(lines.map((line) => line.text), <String>[
+      'Offset tag is ignored',
+      'Repeated chorus',
+      'Ten seconds',
+      'Repeated chorus',
+      'Minute mark',
+    ]);
+    expect(lines.map((line) => line.timestamp.inMilliseconds), <int>[
+      1000,
+      5000,
+      10500,
+      15200,
+      62345,
+    ]);
   });
 
   test('exposes parsed synced lines from track lyrics', () {
@@ -99,12 +99,14 @@ Plain lyric line
     ];
 
     expect(findLyricLineMatchIndices(lines, 'signal'), <int>[0, 2]);
-    expect(
-      findLyricLineMatchIndices(lines, 'SIGNAL', maximumResults: 1),
-      <int>[0],
-    );
+    expect(findLyricLineMatchIndices(lines, 'SIGNAL', maximumResults: 1), <int>[
+      0,
+    ]);
     expect(findLyricLineMatchIndices(lines, '   '), isEmpty);
-    expect(findLyricLineMatchIndices(lines, 'line', maximumResults: 0), isEmpty);
+    expect(
+      findLyricLineMatchIndices(lines, 'line', maximumResults: 0),
+      isEmpty,
+    );
   });
 
   test('parses TTML timed lines and word-level karaoke spans', () {
@@ -125,18 +127,30 @@ Plain lyric line
     expect(lines[0].timestamp, const Duration(seconds: 1));
     expect(lines[0].endTimestamp, const Duration(seconds: 3));
     expect(lines[0].words.map((word) => word.text), <String>['Hello', 'world']);
-    expect(
-      lines[0].words.map((word) => word.timestamp),
-      <Duration>[
-        const Duration(milliseconds: 1200),
-        const Duration(milliseconds: 1600),
-      ],
-    );
+    expect(lines[0].words.map((word) => word.timestamp), <Duration>[
+      const Duration(milliseconds: 1200),
+      const Duration(milliseconds: 1600),
+    ]);
     expect(lines[0].words[0].endTimestamp, const Duration(milliseconds: 1600));
     expect(lines[0].words[1].endTimestamp, const Duration(seconds: 2));
-    expect(syncedLyricWordIndexAt(lines[0].words, const Duration(milliseconds: 1300)), 0);
-    expect(syncedLyricWordIndexAt(lines[0].words, const Duration(milliseconds: 1700)), 1);
-    expect(syncedLyricWordIndexAt(lines[0].words, const Duration(seconds: 3)), -1);
+    expect(
+      syncedLyricWordIndexAt(
+        lines[0].words,
+        const Duration(milliseconds: 1300),
+      ),
+      0,
+    );
+    expect(
+      syncedLyricWordIndexAt(
+        lines[0].words,
+        const Duration(milliseconds: 1700),
+      ),
+      1,
+    );
+    expect(
+      syncedLyricWordIndexAt(lines[0].words, const Duration(seconds: 3)),
+      -1,
+    );
     expect(lines[1].text, 'Final line');
     expect(lines[1].timestamp, const Duration(milliseconds: 4500));
   });

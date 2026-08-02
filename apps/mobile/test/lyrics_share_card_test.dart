@@ -6,36 +6,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethertune/src/ui/widgets/lyrics_share_card.dart';
 
 void main() {
-  test('accepts only explicit user-managed local files as card backgrounds', () {
-    expect(
-      localLyricsShareCardBackgroundImageProvider(
-        artworkIsUserManaged: true,
-        artworkUri: Uri.file('/music/cover.png'),
-      ),
-      isA<FileImage>(),
-    );
-    expect(
-      localLyricsShareCardBackgroundImageProvider(
-        artworkIsUserManaged: false,
-        artworkUri: Uri.file('/music/cover.png'),
-      ),
-      isNull,
-    );
-    expect(
-      localLyricsShareCardBackgroundImageProvider(
-        artworkIsUserManaged: true,
-        artworkUri: Uri.parse('https://example.test/cover.png'),
-      ),
-      isNull,
-    );
-    expect(
-      localLyricsShareCardBackgroundImageProvider(
-        artworkIsUserManaged: true,
-        artworkUri: Uri.parse('data:image/png;base64,AA=='),
-      ),
-      isNull,
-    );
-  });
+  test(
+    'accepts only explicit user-managed local files as card backgrounds',
+    () {
+      expect(
+        localLyricsShareCardBackgroundImageProvider(
+          artworkIsUserManaged: true,
+          artworkUri: Uri.file('/music/cover.png'),
+        ),
+        isA<FileImage>(),
+      );
+      expect(
+        localLyricsShareCardBackgroundImageProvider(
+          artworkIsUserManaged: false,
+          artworkUri: Uri.file('/music/cover.png'),
+        ),
+        isNull,
+      );
+      expect(
+        localLyricsShareCardBackgroundImageProvider(
+          artworkIsUserManaged: true,
+          artworkUri: Uri.parse('https://example.test/cover.png'),
+        ),
+        isNull,
+      );
+      expect(
+        localLyricsShareCardBackgroundImageProvider(
+          artworkIsUserManaged: true,
+          artworkUri: Uri.parse('data:image/png;base64,AA=='),
+        ),
+        isNull,
+      );
+    },
+  );
 
   testWidgets('renders a fixed-size bounded lyrics share card', (tester) async {
     await tester.pumpWidget(

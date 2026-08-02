@@ -9,10 +9,8 @@ import '../../data/listen_together_store.dart';
 import '../../player/player_controller.dart';
 import 'desktop_background_work_policy.dart';
 
-typedef ListenTogetherSynchronizationRunner = Future<void> Function(
-  ListenTogetherStore session,
-  LibraryStore library,
-);
+typedef ListenTogetherSynchronizationRunner =
+    Future<void> Function(ListenTogetherStore session, LibraryStore library);
 
 /// Keeps an active shared session current while the app is in the foreground.
 class ListenTogetherForegroundSync extends StatefulWidget {
@@ -33,7 +31,8 @@ class ListenTogetherForegroundSync extends StatefulWidget {
 }
 
 class _ListenTogetherForegroundSyncState
-    extends State<ListenTogetherForegroundSync> with WidgetsBindingObserver {
+    extends State<ListenTogetherForegroundSync>
+    with WidgetsBindingObserver {
   Timer? _timer;
 
   @override

@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -8,8 +11,8 @@ import 'library_store.dart';
 import 'library_sync_client.dart';
 import 'provider_credential_vault.dart';
 
-typedef SharedSmartPlaylistGatewayFactory = SharedSmartPlaylistGateway
-    Function();
+typedef SharedSmartPlaylistGatewayFactory =
+    SharedSmartPlaylistGateway Function();
 
 class SharedSmartPlaylistBinding {
   const SharedSmartPlaylistBinding({
@@ -165,8 +168,7 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
        _publicLinkVault = publicLinkVault ?? SecureProviderCredentialVault();
 
   static const _metadataKey = 'aethertune.shared_smart_playlists.v1';
-  static const _publicLinkCredentialPrefix =
-      'public-smart-playlist-link.';
+  static const _publicLinkCredentialPrefix = 'public-smart-playlist-link.';
 
   SharedSmartPlaylistGatewayFactory? _gatewayFactory;
   final ProviderCredentialVault _publicLinkVault;
@@ -200,7 +202,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       return;
     }
     try {
-      final raw = (await SharedPreferences.getInstance()).getString(_metadataKey);
+      final raw = (await SharedPreferences.getInstance()).getString(
+        _metadataKey,
+      );
       if (raw != null && raw.trim().isNotEmpty) {
         _loadMetadata(jsonDecode(raw));
       }
@@ -224,8 +228,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     return null;
   }
 
-  PublicSmartPlaylistSubscription?
-  publicSubscriptionForLocalSmartPlaylist(String id) {
+  PublicSmartPlaylistSubscription? publicSubscriptionForLocalSmartPlaylist(
+    String id,
+  ) {
     for (final subscription in _publicSubscriptions) {
       if (subscription.localSmartPlaylistId == id) {
         return subscription;
@@ -259,7 +264,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       _requireOnline(library);
-      final remote = await _requireGateway().joinSharedPlaylistInvite(inviteCode);
+      final remote = await _requireGateway().joinSharedPlaylistInvite(
+        inviteCode,
+      );
       if (remote.kind != SharedPlaylistKind.smart) {
         throw const FormatException('That invite is for a manual playlist.');
       }
@@ -283,7 +290,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       _requireOnline(library);
-      final remote = await _requireGateway().fetchSharedPlaylist(binding.remoteId);
+      final remote = await _requireGateway().fetchSharedPlaylist(
+        binding.remoteId,
+      );
       await _applyRemote(binding, remote, library);
       return bindingForLocalSmartPlaylist(binding.localSmartPlaylistId)!;
     });
@@ -298,7 +307,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       if (!binding.canEdit) {
         throw StateError('This shared smart playlist is view-only.');
       }
-      final local = library.customSmartPlaylistById(binding.localSmartPlaylistId);
+      final local = library.customSmartPlaylistById(
+        binding.localSmartPlaylistId,
+      );
       if (local == null) {
         throw StateError('The linked local smart playlist no longer exists.');
       }
@@ -320,7 +331,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       if (!binding.isOwner) {
-        throw StateError('Only the shared smart playlist owner can create invites.');
+        throw StateError(
+          'Only the shared smart playlist owner can create invites.',
+        );
       }
       return _requireGateway().issueSharedPlaylistInvite(
         playlistId: binding.remoteId,
@@ -336,7 +349,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     return _runBusy(() async {
       _requireOnline(library);
       if (!binding.isOwner) {
-        throw StateError('Only the shared smart playlist owner can create public links.');
+        throw StateError(
+          'Only the shared smart playlist owner can create public links.',
+        );
       }
       final link = await _requireGateway().issueSharedSmartPlaylistPublicLink(
         playlistId: binding.remoteId,
@@ -354,12 +369,15 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     return _runBusy(() async {
       _requireOnline(library);
       if (!binding.isOwner) {
-        throw StateError('Only the shared smart playlist owner can revoke public links.');
+        throw StateError(
+          'Only the shared smart playlist owner can revoke public links.',
+        );
       }
-      final revision = await _requireGateway().revokeSharedSmartPlaylistPublicLink(
-        playlistId: binding.remoteId,
-        baseRevision: binding.revision,
-      );
+      final revision = await _requireGateway()
+          .revokeSharedSmartPlaylistPublicLink(
+            playlistId: binding.remoteId,
+            baseRevision: binding.revision,
+          );
       await _replaceBinding(binding.withRevision(revision));
     });
   }
@@ -400,7 +418,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       final existing = _publicSubscriptionById(id);
       if (existing != null) {
         if (remote.revision < existing.revision) {
-          throw const FormatException('Public smart-playlist revision is invalid.');
+          throw const FormatException(
+            'Public smart-playlist revision is invalid.',
+          );
         }
         await _applyPublicDocument(existing, remote.playlist, library);
         final updated = existing.withRevision(remote.revision);
@@ -421,7 +441,10 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
         localSmartPlaylistId: local.id,
         revision: remote.revision,
       );
-      await _publicLinkVault.write(_publicLinkCredentialKey(id), remote.uri.toString());
+      await _publicLinkVault.write(
+        _publicLinkCredentialKey(id),
+        remote.uri.toString(),
+      );
       try {
         await _addPublicSubscription(subscription);
       } on Object {
@@ -443,17 +466,23 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
         _publicLinkCredentialKey(subscription.id),
       );
       if (link == null || link.trim().isEmpty) {
-        throw StateError('This public smart-playlist link is no longer available.');
+        throw StateError(
+          'This public smart-playlist link is no longer available.',
+        );
       }
       final remote = await fetchPublicSharedSmartPlaylist(
         link,
         httpExecutor: httpExecutor,
       );
       if (remote.playlistId != subscription.remoteId) {
-        throw const FormatException('Public smart-playlist link does not match.');
+        throw const FormatException(
+          'Public smart-playlist link does not match.',
+        );
       }
       if (remote.revision < subscription.revision) {
-        throw const FormatException('Public smart-playlist revision is invalid.');
+        throw const FormatException(
+          'Public smart-playlist revision is invalid.',
+        );
       }
       await _applyPublicDocument(subscription, remote.playlist, library);
       final updated = subscription.withRevision(remote.revision);
@@ -534,7 +563,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     SharedSmartPlaylistDocument document,
     LibraryStore library,
   ) async {
-    final local = library.customSmartPlaylistById(subscription.localSmartPlaylistId);
+    final local = library.customSmartPlaylistById(
+      subscription.localSmartPlaylistId,
+    );
     if (local == null) {
       throw StateError('The linked local smart playlist no longer exists.');
     }
@@ -632,7 +663,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   }
 
   Future<void> _replaceBinding(SharedSmartPlaylistBinding binding) async {
-    final index = _bindings.indexWhere((item) => item.remoteId == binding.remoteId);
+    final index = _bindings.indexWhere(
+      (item) => item.remoteId == binding.remoteId,
+    );
     if (index < 0) {
       throw StateError('Shared smart playlist binding no longer exists.');
     }
@@ -703,7 +736,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       if (metadata['version'] != 2 ||
           metadata['privateBindings'] is! List ||
           metadata['publicSubscriptions'] is! List) {
-        throw const FormatException('Shared smart playlist metadata is invalid.');
+        throw const FormatException(
+          'Shared smart playlist metadata is invalid.',
+        );
       }
       privateBindings.addAll(metadata['privateBindings'] as List);
       publicSubscriptions.addAll(metadata['publicSubscriptions'] as List);
@@ -873,7 +908,9 @@ CustomSmartPlaylist _valuesFromRemote(SharedPlaylistRemote remote) {
   return _valuesFromSmartDocument(smart);
 }
 
-CustomSmartPlaylist _valuesFromSmartDocument(SharedSmartPlaylistDocument smart) {
+CustomSmartPlaylist _valuesFromSmartDocument(
+  SharedSmartPlaylistDocument smart,
+) {
   return CustomSmartPlaylist.fromJson(<String, Object?>{
     'id': 'shared-smart-playlist',
     'name': smart.name,

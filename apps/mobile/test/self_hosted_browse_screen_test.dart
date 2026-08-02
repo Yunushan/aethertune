@@ -64,10 +64,7 @@ void main() {
     await tester.tap(followArtist);
     await tester.pumpAndSettle();
     expect(library.isArtistFollowed('Open Artist'), isTrue);
-    expect(
-      tester.widget<IconButton>(followArtist).tooltip,
-      'Unfollow artist',
-    );
+    expect(tester.widget<IconButton>(followArtist).tooltip, 'Unfollow artist');
 
     await tester.enterText(
       find.byKey(const Key('catalog-filter-artist')),
@@ -77,10 +74,7 @@ void main() {
     expect(find.text('Ambient Artist'), findsOneWidget);
     expect(find.text('Open Artist'), findsNothing);
 
-    await tester.enterText(
-      find.byKey(const Key('catalog-filter-artist')),
-      '',
-    );
+    await tester.enterText(find.byKey(const Key('catalog-filter-artist')), '');
     await tester.pump();
     await tester.tap(find.text('Open Artist'));
     await tester.pumpAndSettle();
@@ -119,11 +113,7 @@ void main() {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -158,19 +148,13 @@ void main() {
     );
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Open Artist'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('catalog-start-radio-artist')),
-    );
+    await tester.tap(find.byKey(const Key('catalog-start-radio-artist')));
     await tester.pumpAndSettle();
 
     expect(provider.radioCalls, <String>['artist:artist-1:50']);
@@ -182,9 +166,7 @@ void main() {
 
     await tester.tap(find.text('Blue Rooms'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('catalog-start-radio-album')),
-    );
+    await tester.tap(find.byKey(const Key('catalog-start-radio-album')));
     await tester.pumpAndSettle();
 
     expect(provider.radioCalls.last, 'album:album-1:50');
@@ -221,11 +203,7 @@ void main() {
     );
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -233,21 +211,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Blue Rooms'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('catalog-start-radio-album')),
-    );
+    await tester.tap(find.byKey(const Key('catalog-start-radio-album')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('Remote radio request failed'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Remote radio request failed'), findsOneWidget);
     expect(find.text('Aether Session'), findsOneWidget);
     expect(engine.queue, isEmpty);
 
-    await tester.tap(
-      find.byKey(const Key('catalog-start-radio-album')),
-    );
+    await tester.tap(find.byKey(const Key('catalog-start-radio-album')));
     await tester.pumpAndSettle();
 
     expect(provider.radioCalls, <String>[
@@ -267,11 +238,7 @@ void main() {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -333,11 +300,7 @@ void main() {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -386,9 +349,7 @@ void main() {
       find.byKey(const Key('catalog-track-actions-track-song-3')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.widgetWithText(ListTile, 'Remove from playlist'),
-    );
+    await tester.tap(find.widgetWithText(ListTile, 'Remove from playlist'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
     await tester.pumpAndSettle();
@@ -408,11 +369,7 @@ void main() {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -428,7 +385,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Remote playlist update failed'), findsOneWidget);
+    expect(
+      find.textContaining('Remote playlist update failed'),
+      findsOneWidget,
+    );
     expect(find.text('Rejected Mix'), findsNothing);
     expect(find.text('Late Night'), findsOneWidget);
     expect(provider.mutationCalls, isEmpty);
@@ -442,11 +402,7 @@ void main() {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -471,10 +427,10 @@ void main() {
 
     await tester.tap(favoriteButton);
     await tester.pumpAndSettle();
-    expect(
-      provider.albumFavoriteMutationCalls,
-      <String>['album-1:true', 'album-1:false'],
-    );
+    expect(provider.albumFavoriteMutationCalls, <String>[
+      'album-1:true',
+      'album-1:false',
+    ]);
     expect(tester.takeException(), isNull);
   });
 
@@ -507,49 +463,50 @@ void main() {
     ]);
   });
 
-  testWidgets('searches remote catalog collections only after explicit submit', (
-    tester,
-  ) async {
-    final provider = _FakeCollectionSearchProvider();
-    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
-    addTearDown(player.dispose);
+  testWidgets(
+    'searches remote catalog collections only after explicit submit',
+    (tester) async {
+      final provider = _FakeCollectionSearchProvider();
+      final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+      addTearDown(player.dispose);
 
-    await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-        collectionKinds: const <MusicCatalogCollectionKind>[
-          MusicCatalogCollectionKind.artist,
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        _testApp(
+          provider: provider,
+          library: LibraryStore(),
+          player: player,
+          collectionKinds: const <MusicCatalogCollectionKind>[
+            MusicCatalogCollectionKind.artist,
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Search Artists'), findsOneWidget);
-    expect(provider.searchCalls, isEmpty);
-    await tester.enterText(
-      find.byKey(const Key('catalog-filter-artist')),
-      'ambient',
-    );
-    await tester.pump();
-    expect(provider.searchCalls, isEmpty);
+      expect(find.text('Search Artists'), findsOneWidget);
+      expect(provider.searchCalls, isEmpty);
+      await tester.enterText(
+        find.byKey(const Key('catalog-filter-artist')),
+        'ambient',
+      );
+      await tester.pump();
+      expect(provider.searchCalls, isEmpty);
 
-    await tester.tap(find.byKey(const Key('catalog-search-artist')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('catalog-search-artist')));
+      await tester.pumpAndSettle();
 
-    expect(provider.searchCalls, <String>['artist:ambient:0:100']);
-    expect(find.text('Remote Ambient Artist'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('catalog-load-more-artist')));
-    await tester.pumpAndSettle();
+      expect(provider.searchCalls, <String>['artist:ambient:0:100']);
+      expect(find.text('Remote Ambient Artist'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('catalog-load-more-artist')));
+      await tester.pumpAndSettle();
 
-    expect(provider.searchCalls, <String>[
-      'artist:ambient:0:100',
-      'artist:ambient:1:100',
-    ]);
-    expect(find.text('Remote Second Artist'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(provider.searchCalls, <String>[
+        'artist:ambient:0:100',
+        'artist:ambient:1:100',
+      ]);
+      expect(find.text('Remote Second Artist'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('shows bounded collection suggestions before explicit search', (
     tester,
@@ -613,7 +570,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<FilledButton>(find.byKey(const Key('catalog-play-all')))
+      tester
+          .widget<FilledButton>(find.byKey(const Key('catalog-play-all')))
           .onPressed,
       isNull,
     );
@@ -896,7 +854,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('opens a Jamendo public playlist into its tracks', (tester) async {
+  testWidgets('opens a Jamendo public playlist into its tracks', (
+    tester,
+  ) async {
     final provider = JamendoProvider(
       clientId: 'client-id',
       loader: (uri) async {
@@ -932,49 +892,49 @@ void main() {
   });
 
   testWidgets(
-      'keeps local artist following distinct from server artist favorites', (
-    tester,
-  ) async {
-    final provider = _FakeCatalogProvider();
-    final library = LibraryStore();
-    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
-    addTearDown(player.dispose);
-    await tester.pumpWidget(
-      _testApp(provider: provider, library: library, player: player),
-    );
-    await tester.pumpAndSettle();
+    'keeps local artist following distinct from server artist favorites',
+    (tester) async {
+      final provider = _FakeCatalogProvider();
+      final library = LibraryStore();
+      final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+      addTearDown(player.dispose);
+      await tester.pumpWidget(
+        _testApp(provider: provider, library: library, player: player),
+      );
+      await tester.pumpAndSettle();
 
-    final followButton = find.byKey(
-      const Key('catalog-follow-artist-artist-1'),
-    );
-    final favoriteButton = find.byKey(
-      const Key('catalog-favorite-artist-artist-1'),
-    );
-    expect(followButton, findsOneWidget);
-    expect(favoriteButton, findsOneWidget);
-    expect(
-      tester.widget<IconButton>(favoriteButton).tooltip,
-      'Favorite artist on server',
-    );
+      final followButton = find.byKey(
+        const Key('catalog-follow-artist-artist-1'),
+      );
+      final favoriteButton = find.byKey(
+        const Key('catalog-favorite-artist-artist-1'),
+      );
+      expect(followButton, findsOneWidget);
+      expect(favoriteButton, findsOneWidget);
+      expect(
+        tester.widget<IconButton>(favoriteButton).tooltip,
+        'Favorite artist on server',
+      );
 
-    await tester.tap(favoriteButton);
-    await tester.pumpAndSettle();
-    expect(provider.artistFavoriteMutationCalls, <String>['artist-1:true']);
-    expect(library.isArtistFollowed('Open Artist'), isFalse);
+      await tester.tap(favoriteButton);
+      await tester.pumpAndSettle();
+      expect(provider.artistFavoriteMutationCalls, <String>['artist-1:true']);
+      expect(library.isArtistFollowed('Open Artist'), isFalse);
 
-    await tester.tap(followButton);
-    await tester.pumpAndSettle();
-    expect(library.isArtistFollowed('Open Artist'), isTrue);
-    expect(provider.artistFavoriteMutationCalls, <String>['artist-1:true']);
+      await tester.tap(followButton);
+      await tester.pumpAndSettle();
+      expect(library.isArtistFollowed('Open Artist'), isTrue);
+      expect(provider.artistFavoriteMutationCalls, <String>['artist-1:true']);
 
-    await tester.tap(favoriteButton);
-    await tester.pumpAndSettle();
-    expect(
-      provider.artistFavoriteMutationCalls,
-      <String>['artist-1:true', 'artist-1:false'],
-    );
-    expect(tester.takeException(), isNull);
-  });
+      await tester.tap(favoriteButton);
+      await tester.pumpAndSettle();
+      expect(provider.artistFavoriteMutationCalls, <String>[
+        'artist-1:true',
+        'artist-1:false',
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('adds and removes server favorites from a catalog track', (
     tester,
@@ -983,11 +943,7 @@ void main() {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -1004,21 +960,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(provider.favoriteMutationCalls, <String>['song-1:true']);
-    expect(find.text('Added Aether Session to server favorites.'), findsOneWidget);
+    expect(
+      find.text('Added Aether Session to server favorites.'),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const Key('catalog-track-actions-track-song-1')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.widgetWithText(ListTile, 'Remove server favorite'),
-    );
+    await tester.tap(find.widgetWithText(ListTile, 'Remove server favorite'));
     await tester.pumpAndSettle();
 
-    expect(
-      provider.favoriteMutationCalls,
-      <String>['song-1:true', 'song-1:false'],
-    );
+    expect(provider.favoriteMutationCalls, <String>[
+      'song-1:true',
+      'song-1:false',
+    ]);
     expect(tester.takeException(), isNull);
   });
 
@@ -1035,25 +992,16 @@ void main() {
       final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
       addTearDown(player.dispose);
       await tester.pumpWidget(
-        _testApp(
-          provider: provider,
-          library: LibraryStore(),
-          player: player,
-        ),
+        _testApp(provider: provider, library: LibraryStore(), player: player),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('Open Artist'), findsOneWidget);
       expect(find.text('Ambient Artist'), findsNothing);
-      expect(
-        find.byKey(const Key('catalog-load-more-artist')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('catalog-load-more-artist')), findsOneWidget);
       expect(provider.pageCalls, <String>['artist:0:100']);
 
-      await tester.tap(
-        find.byKey(const Key('catalog-load-more-artist')),
-      );
+      await tester.tap(find.byKey(const Key('catalog-load-more-artist')));
       await tester.pumpAndSettle();
 
       expect(find.text('Open Artist'), findsOneWidget);
@@ -1062,23 +1010,22 @@ void main() {
         find.byKey(const Key('catalog-load-more-error-artist')),
         findsOneWidget,
       );
-      expect(find.textContaining('Continuation request failed'), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(const Key('catalog-load-more-retry-artist')),
+      expect(
+        find.textContaining('Continuation request failed'),
+        findsOneWidget,
       );
+
+      await tester.tap(find.byKey(const Key('catalog-load-more-retry-artist')));
       await tester.pumpAndSettle();
 
       expect(find.text('Open Artist'), findsOneWidget);
       expect(find.text('Ambient Artist'), findsOneWidget);
-      expect(
-        find.byKey(const Key('catalog-load-more-artist')),
-        findsNothing,
-      );
-      expect(
-        provider.pageCalls,
-        <String>['artist:0:100', 'artist:1:100', 'artist:1:100'],
-      );
+      expect(find.byKey(const Key('catalog-load-more-artist')), findsNothing);
+      expect(provider.pageCalls, <String>[
+        'artist:0:100',
+        'artist:1:100',
+        'artist:1:100',
+      ]);
       expect(
         provider.browseCalls,
         containsAll(<MusicCatalogCollectionKind>[
@@ -1165,11 +1112,7 @@ void main() {
     addTearDown(player.dispose);
 
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -1179,8 +1122,9 @@ void main() {
 
     expect(find.text('Open Artist'), findsOneWidget);
     expect(
-      provider.browseCalls
-          .where((kind) => kind == MusicCatalogCollectionKind.artist),
+      provider.browseCalls.where(
+        (kind) => kind == MusicCatalogCollectionKind.artist,
+      ),
       hasLength(2),
     );
   });
@@ -1191,11 +1135,7 @@ void main() {
     addTearDown(player.dispose);
 
     await tester.pumpWidget(
-      _testApp(
-        provider: provider,
-        library: LibraryStore(),
-        player: player,
-      ),
+      _testApp(provider: provider, library: LibraryStore(), player: player),
     );
     await tester.pumpAndSettle();
 
@@ -1331,8 +1271,7 @@ class _FakeCatalogProvider
   final List<String> albumFavoriteMutationCalls = <String>[];
   final List<String> artistFavoriteMutationCalls = <String>[];
   final List<String> radioCalls = <String>[];
-  final List<MusicCatalogCollection> _playlists =
-      <MusicCatalogCollection>[
+  final List<MusicCatalogCollection> _playlists = <MusicCatalogCollection>[
     const MusicCatalogCollection(
       id: 'playlist-1',
       title: 'Late Night',
@@ -1354,32 +1293,31 @@ class _FakeCatalogProvider
   String get description => 'Test self-hosted catalog';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.libraryBrowse,
-        MusicSourceCapability.playlists,
-        MusicSourceCapability.playlistMutation,
-        MusicSourceCapability.favoriteMutation,
-        MusicSourceCapability.albumFavoriteMutation,
-        MusicSourceCapability.artistFavoriteMutation,
-        MusicSourceCapability.artwork,
-        MusicSourceCapability.offlineCache,
-        MusicSourceCapability.downloads,
-        MusicSourceCapability.recommendations,
-        MusicSourceCapability.authentication,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.libraryBrowse,
+    MusicSourceCapability.playlists,
+    MusicSourceCapability.playlistMutation,
+    MusicSourceCapability.favoriteMutation,
+    MusicSourceCapability.albumFavoriteMutation,
+    MusicSourceCapability.artistFavoriteMutation,
+    MusicSourceCapability.artwork,
+    MusicSourceCapability.offlineCache,
+    MusicSourceCapability.downloads,
+    MusicSourceCapability.recommendations,
+    MusicSourceCapability.authentication,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
-        networkDomains: <String>['music.example.test'],
-        dataSent: <String>['catalog request', 'account credential'],
-        requiresUserCredentials: true,
-        cachesMetadata: true,
-        cachesMedia: true,
-        supportsDownloads: true,
-      );
+    networkDomains: <String>['music.example.test'],
+    dataSent: <String>['catalog request', 'account credential'],
+    requiresUserCredentials: true,
+    cachesMetadata: true,
+    cachesMedia: true,
+    supportsDownloads: true,
+  );
 
   @override
   Future<List<MusicCatalogCollection>> browseCollections(
@@ -1393,29 +1331,29 @@ class _FakeCatalogProvider
     }
     return switch (kind) {
       MusicCatalogCollectionKind.artist => const <MusicCatalogCollection>[
-          MusicCatalogCollection(
-            id: 'artist-1',
-            title: 'Open Artist',
-            kind: MusicCatalogCollectionKind.artist,
-            subtitle: '2 albums',
-            artworkId: 'artist-cover-1',
-          ),
-          MusicCatalogCollection(
-            id: 'artist-2',
-            title: 'Ambient Artist',
-            kind: MusicCatalogCollectionKind.artist,
-            subtitle: '1 album',
-          ),
-        ],
+        MusicCatalogCollection(
+          id: 'artist-1',
+          title: 'Open Artist',
+          kind: MusicCatalogCollectionKind.artist,
+          subtitle: '2 albums',
+          artworkId: 'artist-cover-1',
+        ),
+        MusicCatalogCollection(
+          id: 'artist-2',
+          title: 'Ambient Artist',
+          kind: MusicCatalogCollectionKind.artist,
+          subtitle: '1 album',
+        ),
+      ],
       MusicCatalogCollectionKind.album => const <MusicCatalogCollection>[
-          MusicCatalogCollection(
-            id: 'album-1',
-            title: 'Blue Rooms',
-            kind: MusicCatalogCollectionKind.album,
-            subtitle: 'Open Artist',
-            artworkId: 'album-cover-1',
-          ),
-        ],
+        MusicCatalogCollection(
+          id: 'album-1',
+          title: 'Blue Rooms',
+          kind: MusicCatalogCollectionKind.album,
+          subtitle: 'Open Artist',
+          artworkId: 'album-cover-1',
+        ),
+      ],
       MusicCatalogCollectionKind.playlist =>
         List<MusicCatalogCollection>.unmodifiable(_playlists),
     };
@@ -1473,9 +1411,7 @@ class _FakeCatalogProvider
 
   @override
   Future<Uri?> resolveStream(Track track) async {
-    return Uri.parse(
-      'https://music.example.test/stream/${track.externalId}',
-    );
+    return Uri.parse('https://music.example.test/stream/${track.externalId}');
   }
 
   @override
@@ -1562,8 +1498,9 @@ class _FakeCatalogProvider
   ) async {
     _failMutationIfNeeded();
     mutationCalls.add('replace:$playlistId:${trackIds.join(',')}');
-    _playlistTracks[playlistId] =
-        trackIds.map(_trackForId).toList(growable: true);
+    _playlistTracks[playlistId] = trackIds
+        .map(_trackForId)
+        .toList(growable: true);
     _syncPlaylistCount(playlistId);
   }
 
@@ -1656,9 +1593,7 @@ class _FakePagedCatalogProvider extends _FakeCatalogProvider
 
   @override
   Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
-      const <MusicCatalogCollectionKind>{
-        MusicCatalogCollectionKind.artist,
-      };
+      const <MusicCatalogCollectionKind>{MusicCatalogCollectionKind.artist};
 
   @override
   Future<MusicCatalogCollectionPage> browseCollectionsPage(
@@ -1714,15 +1649,11 @@ class _FakeCollectionSearchProvider extends _FakeCatalogProvider
 
   @override
   Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
-      const <MusicCatalogCollectionKind>{
-        MusicCatalogCollectionKind.artist,
-      };
+      const <MusicCatalogCollectionKind>{MusicCatalogCollectionKind.artist};
 
   @override
   Set<MusicCatalogCollectionKind> get suggestionCollectionKinds =>
-      const <MusicCatalogCollectionKind>{
-        MusicCatalogCollectionKind.artist,
-      };
+      const <MusicCatalogCollectionKind>{MusicCatalogCollectionKind.artist};
 
   @override
   Future<List<MusicCatalogCollection>> suggestCollections(
@@ -1791,11 +1722,10 @@ class _MetadataOnlyCatalogProvider extends _FakeCatalogProvider {
   String get id => 'metadata-only-catalog';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.libraryBrowse,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.libraryBrowse,
+  };
 }
 
 const _tinyPngBase64 =

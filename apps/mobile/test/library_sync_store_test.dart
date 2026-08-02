@@ -22,56 +22,58 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('tests before saving metadata and keeps token only in the vault',
-      () async {
-    final vault = _MemorySyncVault();
-    final gateway = _FakeSyncGateway(
-      remote: LibrarySyncRemoteSnapshot(
-        revision: 3,
-        updatedAt: DateTime.utc(2026, 7, 10, 12),
-        updatedByDevice: 'Phone',
-        checksum: 'checksum',
-        snapshot: _emptySnapshot(),
-      ),
-      profile: _managedProfile(),
-    );
-    final store = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) {
-        expect(token, 'private-token');
-        return gateway;
-      },
-    );
-    await store.load();
-    final library = LibraryStore();
-    await library.load();
+  test(
+    'tests before saving metadata and keeps token only in the vault',
+    () async {
+      final vault = _MemorySyncVault();
+      final gateway = _FakeSyncGateway(
+        remote: LibrarySyncRemoteSnapshot(
+          revision: 3,
+          updatedAt: DateTime.utc(2026, 7, 10, 12),
+          updatedByDevice: 'Phone',
+          checksum: 'checksum',
+          snapshot: _emptySnapshot(),
+        ),
+        profile: _managedProfile(),
+      );
+      final store = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) {
+          expect(token, 'private-token');
+          return gateway;
+        },
+      );
+      await store.load();
+      final library = LibraryStore();
+      await library.load();
 
-    await store.testAndSave(library, _account(), 'private-token');
+      await store.testAndSave(library, _account(), 'private-token');
 
-    expect(store.isConfigured, isTrue);
-    expect(store.lastKnownRevision, 0);
-    expect(store.remoteRevision, 3);
-    expect(store.profile?.effectiveDisplayName, 'Primary listener');
-    expect(store.profile?.device?.name, 'Windows desktop');
-    expect(vault.token, 'private-token');
-    final prefs = await SharedPreferences.getInstance();
-    final metadata = prefs.getString('aethertune.library_sync.metadata.v1')!;
-    expect(metadata, contains('sync.example.test'));
-    expect(metadata, contains('Test device'));
-    expect(metadata, contains('Primary listener'));
-    expect(metadata, contains('Windows desktop'));
-    expect(metadata, isNot(contains('private-token')));
+      expect(store.isConfigured, isTrue);
+      expect(store.lastKnownRevision, 0);
+      expect(store.remoteRevision, 3);
+      expect(store.profile?.effectiveDisplayName, 'Primary listener');
+      expect(store.profile?.device?.name, 'Windows desktop');
+      expect(vault.token, 'private-token');
+      final prefs = await SharedPreferences.getInstance();
+      final metadata = prefs.getString('aethertune.library_sync.metadata.v1')!;
+      expect(metadata, contains('sync.example.test'));
+      expect(metadata, contains('Test device'));
+      expect(metadata, contains('Primary listener'));
+      expect(metadata, contains('Windows desktop'));
+      expect(metadata, isNot(contains('private-token')));
 
-    final restored = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) => gateway,
-    );
-    await restored.load();
-    expect(restored.isConfigured, isTrue);
-    expect(restored.remoteRevision, 3);
-    expect(restored.profile?.id, 'primary');
-    expect(restored.profile?.device?.name, 'Windows desktop');
-  });
+      final restored = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+      );
+      await restored.load();
+      expect(restored.isConfigured, isTrue);
+      expect(restored.remoteRevision, 3);
+      expect(restored.profile?.id, 'primary');
+      expect(restored.profile?.device?.name, 'Windows desktop');
+    },
+  );
 
   test('refreshes and persists non-secret account identity', () async {
     final vault = _MemorySyncVault();
@@ -179,301 +181,316 @@ void main() {
     expect(store.account?.deviceId, 'Pocket player');
   });
 
-  test('failed connection and vault writes do not replace working settings',
-      () async {
-    final vault = _MemorySyncVault();
-    final firstGateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-      profile: _managedProfile(),
-    );
-    var activeGateway = firstGateway;
-    final store = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) => activeGateway,
-    );
-    await store.load();
-    final library = LibraryStore();
-    await library.load();
-    await store.testAndSave(library, _account(), 'old-token');
-
-    activeGateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-      fetchError: StateError('Rejected replacement-token.'),
-    );
-    await expectLater(
-      store.testAndSave(
-        library,
-        _account(deviceId: 'Changed device'),
-        'replacement-token',
-      ),
-      throwsA(
-        predicate<Object>((error) {
-          final message = error.toString();
-          return message.contains('[redacted]') &&
-              !message.contains('replacement-token');
-        }),
-      ),
-    );
-    expect(vault.token, 'old-token');
-    expect(store.account?.deviceId, 'Test device');
-    expect(store.profile?.effectiveDisplayName, 'Primary listener');
-
-    activeGateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-      profile: LibrarySyncProfile(
-        id: 'replacement',
-        displayName: 'Replacement profile',
-        managed: true,
-        device: _managedProfile().device,
-      ),
-    );
-    vault.failNextWriteFor = 'write-failure-token';
-    await expectLater(
-      store.testAndSave(
-        library,
-        _account(deviceId: 'Changed device'),
-        'write-failure-token',
-      ),
-      throwsA(isA<Exception>()),
-    );
-    expect(vault.token, 'old-token');
-    expect(store.account?.deviceId, 'Test device');
-    expect(store.profile?.effectiveDisplayName, 'Primary listener');
-  });
-
-  test('push detects conflicts and explicit overwrite advances revision',
-      () async {
-    final vault = _MemorySyncVault();
-    final gateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-    );
-    final sync = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) => gateway,
-      clock: () => DateTime.utc(2026, 7, 10, 15),
-    );
-    final library = LibraryStore();
-    await library.load();
-    await library.addTracks(<Track>[
-      Track(id: 'track-1', title: 'Track 1', localPath: '/music/track.mp3'),
-    ]);
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
-    gateway.pushError = const LibrarySyncConflictException(
-      currentRevision: 4,
-      updatedByDevice: 'Other device',
-    );
-
-    await expectLater(
-      sync.push(library),
-      throwsA(isA<LibrarySyncConflictException>()),
-    );
-    expect(sync.lastKnownRevision, 0);
-    expect(sync.remoteRevision, 4);
-    expect(sync.conflict?.updatedByDevice, 'Other device');
-
-    gateway
-      ..pushError = null
-      ..pushResult = LibrarySyncRemoteSnapshot(
-        revision: 5,
-        updatedAt: DateTime.utc(2026, 7, 10, 14),
-        updatedByDevice: 'Test device',
-        checksum: 'new-checksum',
+  test(
+    'failed connection and vault writes do not replace working settings',
+    () async {
+      final vault = _MemorySyncVault();
+      final firstGateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+        profile: _managedProfile(),
       );
-    await sync.push(library, baseRevision: sync.conflict!.currentRevision);
+      var activeGateway = firstGateway;
+      final store = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => activeGateway,
+      );
+      await store.load();
+      final library = LibraryStore();
+      await library.load();
+      await store.testAndSave(library, _account(), 'old-token');
 
-    expect(gateway.pushedBaseRevisions, <int>[0, 4]);
-    expect(sync.lastKnownRevision, 5);
-    expect(sync.remoteRevision, 5);
-    expect(sync.conflict, isNull);
-    expect(sync.lastSyncAt, DateTime.utc(2026, 7, 10, 15));
-    final pushedJson = jsonEncode(gateway.pushedSnapshots.last);
-    expect(pushedJson, isNot(contains('/music/track.mp3')));
-  });
-
-  test('pull applies remote library and preserves matched local file', () async {
-    final remoteStore = LibraryStore();
-    await remoteStore.load();
-    await remoteStore.addTracks(<Track>[
-      Track(
-        id: 'remote-id',
-        title: 'Remote title',
-        localPath: '/desktop/music.mp3',
-        contentHash: 'same-file',
-      ),
-    ]);
-    final snapshot = jsonDecode(remoteStore.exportSyncSnapshotJson())
-        as Map<String, dynamic>;
-
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    final localStore = LibraryStore();
-    await localStore.load();
-    await localStore.addTracks(<Track>[
-      Track(
-        id: 'local-id',
-        title: 'Local title',
-        localPath: '/phone/music.mp3',
-        contentHash: 'same-file',
-      ),
-    ]);
-    final gateway = _FakeSyncGateway(
-      remote: LibrarySyncRemoteSnapshot(
-        revision: 2,
-        updatedAt: DateTime.utc(2026, 7, 10),
-        updatedByDevice: 'Desktop',
-        checksum: 'checksum',
-        snapshot: Map<String, Object?>.from(snapshot),
-      ),
-    );
-    final sync = LibrarySyncStore(
-      credentialVault: _MemorySyncVault(),
-      clientFactory: (account, token) => gateway,
-    );
-    await sync.load();
-    await sync.testAndSave(localStore, _account(), 'token');
-
-    await sync.pull(localStore);
-
-    expect(localStore.tracks.single.id, 'remote-id');
-    expect(localStore.tracks.single.title, 'Remote title');
-    expect(localStore.tracks.single.localPath, '/phone/music.mp3');
-    expect(sync.lastKnownRevision, 2);
-    expect(sync.conflict, isNull);
-  });
-
-  test('opt-in queue sync shares only IDs and restores the remote queue',
-      () async {
-    final library = LibraryStore();
-    await library.load();
-    final localFirst = Track(
-      id: 'local-first',
-      title: 'Local first',
-      localPath: '/phone/local-first.mp3',
-    );
-    final localSecond = Track(
-      id: 'local-second',
-      title: 'Local second',
-      localPath: '/phone/local-second.mp3',
-    );
-    await library.addTracks(<Track>[localFirst, localSecond]);
-    final engine = _QueueSyncPlaybackAudioEngine();
-    final player = PlayerController(
-      audioEngine: engine,
-      clock: () => DateTime.utc(2026, 7, 16, 10),
-    );
-    addTearDown(player.dispose);
-    await player.playTrack(
-      localSecond,
-      queue: <Track>[
-        localFirst,
-        Track(
-          id: 'search-only',
-          title: 'Search-only result',
-          streamUrl: 'https://private.example.test/stream?token=secret',
+      activeGateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+        fetchError: StateError('Rejected replacement-token.'),
+      );
+      await expectLater(
+        store.testAndSave(
+          library,
+          _account(deviceId: 'Changed device'),
+          'replacement-token',
         ),
-        localSecond,
-      ],
-    );
-    final gateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-    );
-    final sync = LibrarySyncStore(
-      credentialVault: _MemorySyncVault(),
-      clientFactory: (account, token) => gateway,
-    );
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
-    await sync.setQueueSyncEnabled(true);
-
-    await sync.push(library, player: player);
-
-    final pushedQueue = Map<String, Object?>.from(
-      gateway.pushedSnapshots.single['queueSync']! as Map,
-    );
-    expect(pushedQueue['trackIds'], <String>['local-first', 'local-second']);
-    expect(pushedQueue['currentTrackId'], 'local-second');
-    expect(pushedQueue['currentIndex'], 1);
-    final pushedJson = jsonEncode(gateway.pushedSnapshots.single);
-    expect(pushedJson, isNot(contains('/phone/local-first.mp3')));
-    expect(pushedJson, isNot(contains('private.example.test')));
-
-    final remoteLibrary = LibraryStore();
-    await remoteLibrary.load();
-    await remoteLibrary.addTracks(<Track>[
-      Track(id: 'remote-first', title: 'Remote first'),
-      Track(id: 'remote-second', title: 'Remote second'),
-    ]);
-    final remoteSnapshot = Map<String, Object?>.from(
-      jsonDecode(remoteLibrary.exportSyncSnapshotJson()) as Map,
-    )..['queueSync'] = TrackQueueReferenceSnapshot(
-        trackIds: const <String>[
-          'remote-second',
-          'remote-first',
-          'remote-second',
-        ],
-        currentTrackId: 'remote-second',
-        currentIndex: 2,
-        updatedAt: DateTime.utc(2026, 7, 16, 11),
-      ).toJson();
-    gateway.remote = LibrarySyncRemoteSnapshot(
-      revision: 2,
-      updatedAt: DateTime.utc(2026, 7, 16, 11),
-      updatedByDevice: 'Desktop',
-      checksum: 'remote-checksum',
-      snapshot: remoteSnapshot,
-    );
-
-    await sync.pull(library, player: player);
-
-    expect(player.queue.map((track) => track.id), <String>[
-      'remote-second',
-      'remote-first',
-      'remote-second',
-    ]);
-    expect(player.current?.id, 'remote-second');
-    expect(player.currentQueueIndex, 2);
-    expect(engine.playingValue, isFalse);
-    expect(engine.stopCalls, 1);
-  });
-
-  test('deletes only the remote snapshot and disables automatic upload',
-      () async {
-    final gateway = _FakeSyncGateway(
-      remote: LibrarySyncRemoteSnapshot(
-        revision: 4,
-        updatedAt: DateTime.utc(2026, 7, 10),
-        updatedByDevice: 'Desktop',
-        checksum: 'checksum',
-        snapshot: _emptySnapshot(),
-      ),
-    )
-      ..deleteResult = LibrarySyncRemoteSnapshot(
-        revision: 5,
-        updatedAt: DateTime.utc(2026, 7, 11),
-        updatedByDevice: 'Test device',
+        throwsA(
+          predicate<Object>((error) {
+            final message = error.toString();
+            return message.contains('[redacted]') &&
+                !message.contains('replacement-token');
+          }),
+        ),
       );
-    final library = LibraryStore();
-    final sync = LibrarySyncStore(
-      credentialVault: _MemorySyncVault(),
-      clientFactory: (account, token) => gateway,
-      clock: () => DateTime.utc(2026, 7, 11),
-    );
-    await library.load();
-    await library.addTracks(<Track>[Track(id: 'local', title: 'Local')]);
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
-    await sync.setAutomaticUploadEnabled(true);
+      expect(vault.token, 'old-token');
+      expect(store.account?.deviceId, 'Test device');
+      expect(store.profile?.effectiveDisplayName, 'Primary listener');
 
-    final result = await sync.deleteRemoteSnapshot(library);
+      activeGateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+        profile: LibrarySyncProfile(
+          id: 'replacement',
+          displayName: 'Replacement profile',
+          managed: true,
+          device: _managedProfile().device,
+        ),
+      );
+      vault.failNextWriteFor = 'write-failure-token';
+      await expectLater(
+        store.testAndSave(
+          library,
+          _account(deviceId: 'Changed device'),
+          'write-failure-token',
+        ),
+        throwsA(isA<Exception>()),
+      );
+      expect(vault.token, 'old-token');
+      expect(store.account?.deviceId, 'Test device');
+      expect(store.profile?.effectiveDisplayName, 'Primary listener');
+    },
+  );
 
-    expect(gateway.deletedBaseRevisions, <int>[4]);
-    expect(result.revision, 5);
-    expect(result.hasSnapshot, isFalse);
-    expect(sync.lastKnownRevision, 5);
-    expect(sync.remoteRevision, 5);
-    expect(sync.automaticUploadEnabled, isFalse);
-    expect(library.tracks.single.id, 'local');
-  });
+  test(
+    'push detects conflicts and explicit overwrite advances revision',
+    () async {
+      final vault = _MemorySyncVault();
+      final gateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      );
+      final sync = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+        clock: () => DateTime.utc(2026, 7, 10, 15),
+      );
+      final library = LibraryStore();
+      await library.load();
+      await library.addTracks(<Track>[
+        Track(id: 'track-1', title: 'Track 1', localPath: '/music/track.mp3'),
+      ]);
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
+      gateway.pushError = const LibrarySyncConflictException(
+        currentRevision: 4,
+        updatedByDevice: 'Other device',
+      );
+
+      await expectLater(
+        sync.push(library),
+        throwsA(isA<LibrarySyncConflictException>()),
+      );
+      expect(sync.lastKnownRevision, 0);
+      expect(sync.remoteRevision, 4);
+      expect(sync.conflict?.updatedByDevice, 'Other device');
+
+      gateway
+        ..pushError = null
+        ..pushResult = LibrarySyncRemoteSnapshot(
+          revision: 5,
+          updatedAt: DateTime.utc(2026, 7, 10, 14),
+          updatedByDevice: 'Test device',
+          checksum: 'new-checksum',
+        );
+      await sync.push(library, baseRevision: sync.conflict!.currentRevision);
+
+      expect(gateway.pushedBaseRevisions, <int>[0, 4]);
+      expect(sync.lastKnownRevision, 5);
+      expect(sync.remoteRevision, 5);
+      expect(sync.conflict, isNull);
+      expect(sync.lastSyncAt, DateTime.utc(2026, 7, 10, 15));
+      final pushedJson = jsonEncode(gateway.pushedSnapshots.last);
+      expect(pushedJson, isNot(contains('/music/track.mp3')));
+    },
+  );
+
+  test(
+    'pull applies remote library and preserves matched local file',
+    () async {
+      final remoteStore = LibraryStore();
+      await remoteStore.load();
+      await remoteStore.addTracks(<Track>[
+        Track(
+          id: 'remote-id',
+          title: 'Remote title',
+          localPath: '/desktop/music.mp3',
+          contentHash: 'same-file',
+        ),
+      ]);
+      final snapshot =
+          jsonDecode(remoteStore.exportSyncSnapshotJson())
+              as Map<String, dynamic>;
+
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final localStore = LibraryStore();
+      await localStore.load();
+      await localStore.addTracks(<Track>[
+        Track(
+          id: 'local-id',
+          title: 'Local title',
+          localPath: '/phone/music.mp3',
+          contentHash: 'same-file',
+        ),
+      ]);
+      final gateway = _FakeSyncGateway(
+        remote: LibrarySyncRemoteSnapshot(
+          revision: 2,
+          updatedAt: DateTime.utc(2026, 7, 10),
+          updatedByDevice: 'Desktop',
+          checksum: 'checksum',
+          snapshot: Map<String, Object?>.from(snapshot),
+        ),
+      );
+      final sync = LibrarySyncStore(
+        credentialVault: _MemorySyncVault(),
+        clientFactory: (account, token) => gateway,
+      );
+      await sync.load();
+      await sync.testAndSave(localStore, _account(), 'token');
+
+      await sync.pull(localStore);
+
+      expect(localStore.tracks.single.id, 'remote-id');
+      expect(localStore.tracks.single.title, 'Remote title');
+      expect(localStore.tracks.single.localPath, '/phone/music.mp3');
+      expect(sync.lastKnownRevision, 2);
+      expect(sync.conflict, isNull);
+    },
+  );
+
+  test(
+    'opt-in queue sync shares only IDs and restores the remote queue',
+    () async {
+      final library = LibraryStore();
+      await library.load();
+      final localFirst = Track(
+        id: 'local-first',
+        title: 'Local first',
+        localPath: '/phone/local-first.mp3',
+      );
+      final localSecond = Track(
+        id: 'local-second',
+        title: 'Local second',
+        localPath: '/phone/local-second.mp3',
+      );
+      await library.addTracks(<Track>[localFirst, localSecond]);
+      final engine = _QueueSyncPlaybackAudioEngine();
+      final player = PlayerController(
+        audioEngine: engine,
+        clock: () => DateTime.utc(2026, 7, 16, 10),
+      );
+      addTearDown(player.dispose);
+      await player.playTrack(
+        localSecond,
+        queue: <Track>[
+          localFirst,
+          Track(
+            id: 'search-only',
+            title: 'Search-only result',
+            streamUrl: 'https://private.example.test/stream?token=secret',
+          ),
+          localSecond,
+        ],
+      );
+      final gateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      );
+      final sync = LibrarySyncStore(
+        credentialVault: _MemorySyncVault(),
+        clientFactory: (account, token) => gateway,
+      );
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
+      await sync.setQueueSyncEnabled(true);
+
+      await sync.push(library, player: player);
+
+      final pushedQueue = Map<String, Object?>.from(
+        gateway.pushedSnapshots.single['queueSync']! as Map,
+      );
+      expect(pushedQueue['trackIds'], <String>['local-first', 'local-second']);
+      expect(pushedQueue['currentTrackId'], 'local-second');
+      expect(pushedQueue['currentIndex'], 1);
+      final pushedJson = jsonEncode(gateway.pushedSnapshots.single);
+      expect(pushedJson, isNot(contains('/phone/local-first.mp3')));
+      expect(pushedJson, isNot(contains('private.example.test')));
+
+      final remoteLibrary = LibraryStore();
+      await remoteLibrary.load();
+      await remoteLibrary.addTracks(<Track>[
+        Track(id: 'remote-first', title: 'Remote first'),
+        Track(id: 'remote-second', title: 'Remote second'),
+      ]);
+      final remoteSnapshot =
+          Map<String, Object?>.from(
+              jsonDecode(remoteLibrary.exportSyncSnapshotJson()) as Map,
+            )
+            ..['queueSync'] = TrackQueueReferenceSnapshot(
+              trackIds: const <String>[
+                'remote-second',
+                'remote-first',
+                'remote-second',
+              ],
+              currentTrackId: 'remote-second',
+              currentIndex: 2,
+              updatedAt: DateTime.utc(2026, 7, 16, 11),
+            ).toJson();
+      gateway.remote = LibrarySyncRemoteSnapshot(
+        revision: 2,
+        updatedAt: DateTime.utc(2026, 7, 16, 11),
+        updatedByDevice: 'Desktop',
+        checksum: 'remote-checksum',
+        snapshot: remoteSnapshot,
+      );
+
+      await sync.pull(library, player: player);
+
+      expect(player.queue.map((track) => track.id), <String>[
+        'remote-second',
+        'remote-first',
+        'remote-second',
+      ]);
+      expect(player.current?.id, 'remote-second');
+      expect(player.currentQueueIndex, 2);
+      expect(engine.playingValue, isFalse);
+      expect(engine.stopCalls, 1);
+    },
+  );
+
+  test(
+    'deletes only the remote snapshot and disables automatic upload',
+    () async {
+      final gateway =
+          _FakeSyncGateway(
+              remote: LibrarySyncRemoteSnapshot(
+                revision: 4,
+                updatedAt: DateTime.utc(2026, 7, 10),
+                updatedByDevice: 'Desktop',
+                checksum: 'checksum',
+                snapshot: _emptySnapshot(),
+              ),
+            )
+            ..deleteResult = LibrarySyncRemoteSnapshot(
+              revision: 5,
+              updatedAt: DateTime.utc(2026, 7, 11),
+              updatedByDevice: 'Test device',
+            );
+      final library = LibraryStore();
+      final sync = LibrarySyncStore(
+        credentialVault: _MemorySyncVault(),
+        clientFactory: (account, token) => gateway,
+        clock: () => DateTime.utc(2026, 7, 11),
+      );
+      await library.load();
+      await library.addTracks(<Track>[Track(id: 'local', title: 'Local')]);
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
+      await sync.setAutomaticUploadEnabled(true);
+
+      final result = await sync.deleteRemoteSnapshot(library);
+
+      expect(gateway.deletedBaseRevisions, <int>[4]);
+      expect(result.revision, 5);
+      expect(result.hasSnapshot, isFalse);
+      expect(sync.lastKnownRevision, 5);
+      expect(sync.remoteRevision, 5);
+      expect(sync.automaticUploadEnabled, isFalse);
+      expect(library.tracks.single.id, 'local');
+    },
+  );
 
   test('merge and push keeps the accepted merged library', () async {
     final remoteSnapshot = _emptySnapshot()
@@ -501,10 +518,10 @@ void main() {
 
     await sync.mergeAndPush(library);
 
-    expect(library.tracks.map((track) => track.id), containsAll(<String>[
-      'local-track',
-      'remote-track',
-    ]));
+    expect(
+      library.tracks.map((track) => track.id),
+      containsAll(<String>['local-track', 'remote-track']),
+    );
     expect(gateway.pushedBaseRevisions, <int>[4]);
     expect(sync.lastKnownRevision, 5);
   });
@@ -524,9 +541,7 @@ void main() {
     );
 
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final library = LibraryStore(
-      clock: () => DateTime.utc(2026, 7, 12, 11),
-    );
+    final library = LibraryStore(clock: () => DateTime.utc(2026, 7, 12, 11));
     await library.load();
     await library.createSavedHistoryView(
       name: 'Phone favorites',
@@ -555,8 +570,8 @@ void main() {
       library.savedHistoryViews.map((view) => view.name),
       containsAll(<String>['Desktop recent albums', 'Phone favorites']),
     );
-    final pushedViews = gateway.pushedSnapshots.single['savedHistoryViews']
-        as List<Object?>;
+    final pushedViews =
+        gateway.pushedSnapshots.single['savedHistoryViews'] as List<Object?>;
     expect(pushedViews, hasLength(2));
   });
 
@@ -575,9 +590,7 @@ void main() {
     );
 
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final library = LibraryStore(
-      clock: () => DateTime.utc(2026, 7, 12, 11),
-    );
+    final library = LibraryStore(clock: () => DateTime.utc(2026, 7, 12, 11));
     await library.load();
     await library.createSavedLibraryView(
       name: 'Phone offline favorites',
@@ -607,162 +620,167 @@ void main() {
       library.savedLibraryViews.map((view) => view.name),
       containsAll(<String>['Desktop albums', 'Phone offline favorites']),
     );
-    final pushedViews = gateway.pushedSnapshots.single['savedLibraryViews']
-        as List<Object?>;
+    final pushedViews =
+        gateway.pushedSnapshots.single['savedLibraryViews'] as List<Object?>;
     expect(pushedViews, hasLength(2));
   });
 
-  test('provider configuration updates preserve other configuration sections',
-      () async {
-    final remoteProviderSnapshot = <String, Object?>{
-      'format': 'aethertune.provider_configurations',
-      'version': 1,
-      'customCatalogs': <String, Object?>{
-        'format': 'aethertune.custom_catalogs',
+  test(
+    'provider configuration updates preserve other configuration sections',
+    () async {
+      final remoteProviderSnapshot = <String, Object?>{
+        'format': 'aethertune.provider_configurations',
         'version': 1,
-        'catalogs': <Object?>[],
-      },
-      'lyricsSearchEndpoint': <String, Object?>{
-        'format': 'aethertune.lyrics_search_endpoint',
-        'version': 1,
-        'endpoint': 'https://lyrics.example.test',
-      },
-    };
-    final gateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-      providerRemote: LibrarySyncRemoteSnapshot(
-        revision: 6,
-        updatedAt: DateTime.utc(2026, 7, 12),
-        updatedByDevice: 'Desktop',
-        checksum: 'provider-checksum',
-        snapshot: remoteProviderSnapshot,
-      ),
-    );
-    final library = LibraryStore();
-    final sync = LibrarySyncStore(
-      credentialVault: _MemorySyncVault(),
-      clientFactory: (account, token) => gateway,
-    );
-    await library.load();
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
-
-    await sync.updateProviderConfiguration(
-      library,
-      (remoteSnapshot) => <String, Object?>{
-        ...remoteSnapshot!,
-        'selfHostedAccounts': <String, Object?>{
-          'format': 'aethertune.self_hosted_accounts',
+        'customCatalogs': <String, Object?>{
+          'format': 'aethertune.custom_catalogs',
           'version': 1,
-          'accounts': <Object?>[],
+          'catalogs': <Object?>[],
         },
-      },
-    );
+        'lyricsSearchEndpoint': <String, Object?>{
+          'format': 'aethertune.lyrics_search_endpoint',
+          'version': 1,
+          'endpoint': 'https://lyrics.example.test',
+        },
+      };
+      final gateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+        providerRemote: LibrarySyncRemoteSnapshot(
+          revision: 6,
+          updatedAt: DateTime.utc(2026, 7, 12),
+          updatedByDevice: 'Desktop',
+          checksum: 'provider-checksum',
+          snapshot: remoteProviderSnapshot,
+        ),
+      );
+      final library = LibraryStore();
+      final sync = LibrarySyncStore(
+        credentialVault: _MemorySyncVault(),
+        clientFactory: (account, token) => gateway,
+      );
+      await library.load();
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
 
-    expect(gateway.providerFetchCalls, 1);
-    expect(gateway.providerPushedBaseRevisions, <int>[6]);
-    expect(
-      gateway.pushedProviderSnapshots.single['customCatalogs'],
-      remoteProviderSnapshot['customCatalogs'],
-    );
-    expect(
-      gateway.pushedProviderSnapshots.single['lyricsSearchEndpoint'],
-      remoteProviderSnapshot['lyricsSearchEndpoint'],
-    );
-    expect(
-      gateway.pushedProviderSnapshots.single['selfHostedAccounts'],
-      isA<Map>(),
-    );
-  });
+      await sync.updateProviderConfiguration(
+        library,
+        (remoteSnapshot) => <String, Object?>{
+          ...remoteSnapshot!,
+          'selfHostedAccounts': <String, Object?>{
+            'format': 'aethertune.self_hosted_accounts',
+            'version': 1,
+            'accounts': <Object?>[],
+          },
+        },
+      );
 
-  test('merge and push restores the local library when the server rejects it',
-      () async {
-    final remoteSnapshot = _emptySnapshot()
-      ..['tracks'] = <Object?>[
-        Track(id: 'remote-track', title: 'Remote track').toJson(),
-      ];
-    final gateway = _FakeSyncGateway(
-      remote: LibrarySyncRemoteSnapshot(
-        revision: 4,
-        updatedAt: DateTime.utc(2026, 7, 12),
+      expect(gateway.providerFetchCalls, 1);
+      expect(gateway.providerPushedBaseRevisions, <int>[6]);
+      expect(
+        gateway.pushedProviderSnapshots.single['customCatalogs'],
+        remoteProviderSnapshot['customCatalogs'],
+      );
+      expect(
+        gateway.pushedProviderSnapshots.single['lyricsSearchEndpoint'],
+        remoteProviderSnapshot['lyricsSearchEndpoint'],
+      );
+      expect(
+        gateway.pushedProviderSnapshots.single['selfHostedAccounts'],
+        isA<Map>(),
+      );
+    },
+  );
+
+  test(
+    'merge and push restores the local library when the server rejects it',
+    () async {
+      final remoteSnapshot = _emptySnapshot()
+        ..['tracks'] = <Object?>[
+          Track(id: 'remote-track', title: 'Remote track').toJson(),
+        ];
+      final gateway = _FakeSyncGateway(
+        remote: LibrarySyncRemoteSnapshot(
+          revision: 4,
+          updatedAt: DateTime.utc(2026, 7, 12),
+          updatedByDevice: 'Desktop',
+          checksum: 'remote-checksum',
+          snapshot: remoteSnapshot,
+        ),
+      )..pushError = StateError('Server rejected merged snapshot.');
+      final library = LibraryStore();
+      final sync = LibrarySyncStore(
+        credentialVault: _MemorySyncVault(),
+        clientFactory: (account, token) => gateway,
+      );
+      await library.load();
+      await library.addTracks(<Track>[
+        Track(id: 'local-track', title: 'Local'),
+      ]);
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
+
+      await expectLater(sync.mergeAndPush(library), throwsA(isA<StateError>()));
+
+      expect(library.tracks.map((track) => track.id), <String>['local-track']);
+      expect(sync.lastKnownRevision, 0);
+    },
+  );
+
+  test(
+    'automatic uploads are opt-in, paced, persisted, and conflict-safe',
+    () async {
+      var now = DateTime.utc(2026, 7, 11, 9);
+      final vault = _MemorySyncVault();
+      final gateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      );
+      final library = LibraryStore();
+      final sync = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+        clock: () => now,
+      );
+      await library.load();
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
+
+      expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+      expect(gateway.pushCalls, 0);
+
+      await sync.setAutomaticUploadEnabled(true);
+      expect(await sync.uploadAutomaticallyIfDue(library), isTrue);
+      expect(gateway.pushCalls, 1);
+      expect(sync.lastAutomaticUploadAt, now);
+
+      now = now.add(const Duration(minutes: 14));
+      expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+      expect(gateway.pushCalls, 1);
+
+      now = now.add(const Duration(minutes: 1));
+      await library.setOfflineModeEnabled(true);
+      expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+      expect(gateway.pushCalls, 1);
+      await library.setOfflineModeEnabled(false);
+
+      now = now.add(const Duration(minutes: 15));
+      gateway.pushError = const LibrarySyncConflictException(
+        currentRevision: 7,
         updatedByDevice: 'Desktop',
-        checksum: 'remote-checksum',
-        snapshot: remoteSnapshot,
-      ),
-    )..pushError = StateError('Server rejected merged snapshot.');
-    final library = LibraryStore();
-    final sync = LibrarySyncStore(
-      credentialVault: _MemorySyncVault(),
-      clientFactory: (account, token) => gateway,
-    );
-    await library.load();
-    await library.addTracks(<Track>[Track(id: 'local-track', title: 'Local')]);
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
+      );
+      expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
+      expect(gateway.pushCalls, 2);
+      expect(sync.conflict?.currentRevision, 7);
+      expect(sync.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
 
-    await expectLater(
-      sync.mergeAndPush(library),
-      throwsA(isA<StateError>()),
-    );
-
-    expect(library.tracks.map((track) => track.id), <String>['local-track']);
-    expect(sync.lastKnownRevision, 0);
-  });
-
-  test('automatic uploads are opt-in, paced, persisted, and conflict-safe',
-      () async {
-    var now = DateTime.utc(2026, 7, 11, 9);
-    final vault = _MemorySyncVault();
-    final gateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-    );
-    final library = LibraryStore();
-    final sync = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) => gateway,
-      clock: () => now,
-    );
-    await library.load();
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
-
-    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
-    expect(gateway.pushCalls, 0);
-
-    await sync.setAutomaticUploadEnabled(true);
-    expect(await sync.uploadAutomaticallyIfDue(library), isTrue);
-    expect(gateway.pushCalls, 1);
-    expect(sync.lastAutomaticUploadAt, now);
-
-    now = now.add(const Duration(minutes: 14));
-    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
-    expect(gateway.pushCalls, 1);
-
-    now = now.add(const Duration(minutes: 1));
-    await library.setOfflineModeEnabled(true);
-    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
-    expect(gateway.pushCalls, 1);
-    await library.setOfflineModeEnabled(false);
-
-    now = now.add(const Duration(minutes: 15));
-    gateway.pushError = const LibrarySyncConflictException(
-      currentRevision: 7,
-      updatedByDevice: 'Desktop',
-    );
-    expect(await sync.uploadAutomaticallyIfDue(library), isFalse);
-    expect(gateway.pushCalls, 2);
-    expect(sync.conflict?.currentRevision, 7);
-    expect(sync.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
-
-    final restored = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) => gateway,
-      clock: () => now,
-    );
-    await restored.load();
-    expect(restored.automaticUploadEnabled, isTrue);
-    expect(restored.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
-  });
+      final restored = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+        clock: () => now,
+      );
+      await restored.load();
+      expect(restored.automaticUploadEnabled, isTrue);
+      expect(restored.lastAutomaticUploadAt, DateTime.utc(2026, 7, 11, 9));
+    },
+  );
 
   test('automatic uploads avoid sending a stale library snapshot', () async {
     final gateway = _FakeSyncGateway(
@@ -832,33 +850,35 @@ void main() {
     expect(gateway.pushCalls, 1);
   });
 
-  test('offline mode blocks network sync and removal clears secure state',
-      () async {
-    final vault = _MemorySyncVault();
-    final gateway = _FakeSyncGateway(
-      remote: const LibrarySyncRemoteSnapshot(revision: 0),
-    );
-    final sync = LibrarySyncStore(
-      credentialVault: vault,
-      clientFactory: (account, token) => gateway,
-    );
-    final library = LibraryStore();
-    await library.load();
-    await sync.load();
-    await sync.testAndSave(library, _account(), 'token');
-    await library.setOfflineModeEnabled(true);
+  test(
+    'offline mode blocks network sync and removal clears secure state',
+    () async {
+      final vault = _MemorySyncVault();
+      final gateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      );
+      final sync = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+      );
+      final library = LibraryStore();
+      await library.load();
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'token');
+      await library.setOfflineModeEnabled(true);
 
-    await expectLater(sync.push(library), throwsA(isA<StateError>()));
-    await expectLater(sync.pull(library), throwsA(isA<StateError>()));
-    expect(gateway.pushCalls, 0);
+      await expectLater(sync.push(library), throwsA(isA<StateError>()));
+      await expectLater(sync.pull(library), throwsA(isA<StateError>()));
+      expect(gateway.pushCalls, 0);
 
-    await sync.remove();
-    expect(sync.isConfigured, isFalse);
-    expect(sync.profile, isNull);
-    expect(vault.token, isNull);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('aethertune.library_sync.metadata.v1'), isNull);
-  });
+      await sync.remove();
+      expect(sync.isConfigured, isFalse);
+      expect(sync.profile, isNull);
+      expect(vault.token, isNull);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('aethertune.library_sync.metadata.v1'), isNull);
+    },
+  );
 }
 
 LibrarySyncAccount _account({String deviceId = 'Test device'}) {
@@ -929,7 +949,8 @@ class _FakeSyncGateway
     this.profile,
     this.fetchError,
     LibrarySyncRemoteSnapshot? providerRemote,
-  }) : providerRemote = providerRemote ?? const LibrarySyncRemoteSnapshot(revision: 0);
+  }) : providerRemote =
+           providerRemote ?? const LibrarySyncRemoteSnapshot(revision: 0);
 
   LibrarySyncRemoteSnapshot remote;
   LibrarySyncRemoteSnapshot providerRemote;
@@ -953,8 +974,7 @@ class _FakeSyncGateway
   LibrarySyncProfileAvatarTone? lastAvatarTone;
   final List<int> pushedBaseRevisions = <int>[];
   final List<int> deletedBaseRevisions = <int>[];
-  final List<Map<String, Object?>> pushedSnapshots =
-      <Map<String, Object?>>[];
+  final List<Map<String, Object?>> pushedSnapshots = <Map<String, Object?>>[];
   final List<int> providerPushedBaseRevisions = <int>[];
   final List<Map<String, Object?>> pushedProviderSnapshots =
       <Map<String, Object?>>[];
@@ -1003,7 +1023,8 @@ class _FakeSyncGateway
     if (current == null || current.device == null) {
       throw StateError('No managed profile.');
     }
-    final result = profileUpdateResult ??
+    final result =
+        profileUpdateResult ??
         LibrarySyncProfile(
           id: current.id,
           displayName: displayName,
@@ -1040,7 +1061,8 @@ class _FakeSyncGateway
     if (pushError != null) {
       throw pushError!;
     }
-    final result = pushResult ??
+    final result =
+        pushResult ??
         LibrarySyncRemoteSnapshot(
           revision: baseRevision + 1,
           updatedAt: DateTime.utc(2026, 7, 10),
@@ -1054,9 +1076,7 @@ class _FakeSyncGateway
   }
 
   @override
-  Future<LibrarySyncRemoteSnapshot> delete({
-    required int baseRevision,
-  }) async {
+  Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision}) async {
     deletedBaseRevisions.add(baseRevision);
     if (deleteError != null) {
       throw deleteError!;

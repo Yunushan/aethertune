@@ -25,7 +25,10 @@ void main() {
     expect(request.uri.queryParameters['access_type'], 'offline');
     expect(request.uri.queryParameters['prompt'], 'consent');
     expect(request.uri.queryParameters['state'], request.state);
-    expect(request.uri.queryParameters['code_challenge'], request.codeChallenge);
+    expect(
+      request.uri.queryParameters['code_challenge'],
+      request.codeChallenge,
+    );
     expect(
       request.uri.queryParameters['scope'],
       'https://www.googleapis.com/auth/youtube.readonly',
@@ -70,7 +73,9 @@ void main() {
     final authorization = YouTubeAuthorizationRequest.create(
       clientId: 'client-id.apps.googleusercontent.com',
       redirectUri: Uri.parse('http://127.0.0.1:45678/youtube-callback'),
-      scopes: const <String>['https://www.googleapis.com/auth/youtube.readonly'],
+      scopes: const <String>[
+        'https://www.googleapis.com/auth/youtube.readonly',
+      ],
     );
 
     final token = await client.exchangeAuthorizationCode(
@@ -86,27 +91,29 @@ void main() {
     expect(token.expiresAt, DateTime.utc(2026, 7, 24, 13));
   });
 
-  test('retains the old refresh token when Google omits a replacement',
-      () async {
-    final client = YouTubeOAuthClient(
-      clock: () => DateTime.utc(2026, 7, 24, 12),
-      request: (uri, {required method, required headers, body}) async =>
-          const YouTubeOAuthHttpResponse(
-            statusCode: 200,
-            body: '{"access_token":"next-access","expires_in":1800}',
-          ),
-    );
+  test(
+    'retains the old refresh token when Google omits a replacement',
+    () async {
+      final client = YouTubeOAuthClient(
+        clock: () => DateTime.utc(2026, 7, 24, 12),
+        request: (uri, {required method, required headers, body}) async =>
+            const YouTubeOAuthHttpResponse(
+              statusCode: 200,
+              body: '{"access_token":"next-access","expires_in":1800}',
+            ),
+      );
 
-    final token = await client.refresh(
-      clientId: 'client-id.apps.googleusercontent.com',
-      current: YouTubeOAuthToken(
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: DateTime.utc(2026, 7, 24, 12),
-      ),
-    );
+      final token = await client.refresh(
+        clientId: 'client-id.apps.googleusercontent.com',
+        current: YouTubeOAuthToken(
+          accessToken: 'old-access',
+          refreshToken: 'old-refresh',
+          expiresAt: DateTime.utc(2026, 7, 24, 12),
+        ),
+      );
 
-    expect(token.accessToken, 'next-access');
-    expect(token.refreshToken, 'old-refresh');
-  });
+      expect(token.accessToken, 'next-access');
+      expect(token.refreshToken, 'old-refresh');
+    },
+  );
 }

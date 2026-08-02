@@ -13,14 +13,13 @@ import 'provider_credential_vault.dart';
 import 'provider_error.dart';
 import 'subsonic_provider.dart';
 
-typedef SelfHostedConnectionTester = Future<void> Function(
-  SelfHostedProviderAccount account,
-  String secret,
-);
-typedef SelfHostedProviderFactory = MusicCatalogProvider Function(
-  SelfHostedProviderAccount account,
-  String secret,
-);
+typedef SelfHostedConnectionTester =
+    Future<void> Function(SelfHostedProviderAccount account, String secret);
+typedef SelfHostedProviderFactory =
+    MusicCatalogProvider Function(
+      SelfHostedProviderAccount account,
+      String secret,
+    );
 
 final class SelfHostedProviderAccountExport {
   const SelfHostedProviderAccountExport({
@@ -52,11 +51,10 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     SelfHostedConnectionTester? connectionTester,
     SelfHostedProviderFactory? providerFactory,
     ProviderArtworkFileCache? artworkFileCache,
-  })  : _credentialVault =
-            credentialVault ?? SecureProviderCredentialVault(),
-        _connectionTester = connectionTester ?? _testConnection,
-        _providerFactory = providerFactory ?? _createProvider,
-        _artworkFileCache = artworkFileCache ?? ProviderArtworkFileCache();
+  }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
+       _connectionTester = connectionTester ?? _testConnection,
+       _providerFactory = providerFactory ?? _createProvider,
+       _artworkFileCache = artworkFileCache ?? ProviderArtworkFileCache();
 
   static const _accountsKey = 'aethertune.self_hosted_accounts.v1';
   static const accountMigrationDocumentFormat =
@@ -118,8 +116,9 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     );
   }
 
-  Future<SelfHostedProviderAccountImportResult>
-      importAccountConfiguration(String document) async {
+  Future<SelfHostedProviderAccountImportResult> importAccountConfiguration(
+    String document,
+  ) async {
     if (utf8.encode(document).length > _maximumMigrationBytes) {
       throw const FormatException(
         'Self-hosted account configuration is too large.',
@@ -128,7 +127,9 @@ final class SelfHostedProviderStore extends ChangeNotifier {
 
     final decoded = jsonDecode(document);
     if (decoded is! Map) {
-      throw const FormatException('Self-hosted account configuration is invalid.');
+      throw const FormatException(
+        'Self-hosted account configuration is invalid.',
+      );
     }
     final root = Map<String, Object?>.from(decoded);
     if (root['format'] != accountMigrationDocumentFormat ||
@@ -138,7 +139,8 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       );
     }
     final rawAccounts = root['accounts'];
-    if (rawAccounts is! List || rawAccounts.length > _maximumMigrationAccounts) {
+    if (rawAccounts is! List ||
+        rawAccounts.length > _maximumMigrationAccounts) {
       throw const FormatException(
         'Self-hosted account configuration has an invalid account list.',
       );
@@ -237,7 +239,8 @@ final class SelfHostedProviderStore extends ChangeNotifier {
 
     final normalizedVersion = version?.trim() ?? '';
     final normalizedWidth = maxWidth.clamp(32, 2048);
-    final cacheKey = '${account.id}|$normalizedArtworkId|'
+    final cacheKey =
+        '${account.id}|$normalizedArtworkId|'
         '$normalizedVersion|$normalizedWidth';
     final cached = _artworkRequests[cacheKey];
     if (cached != null) {
@@ -280,9 +283,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
       for (final item in decoded.whereType<Map>()) {
         try {
           accounts.add(
-            SelfHostedProviderAccount.fromJson(
-              Map<String, Object?>.from(item),
-            ),
+            SelfHostedProviderAccount.fromJson(Map<String, Object?>.from(item)),
           );
         } on Object {
           // Skip only the malformed account; other secure entries remain usable.
@@ -486,11 +487,13 @@ final class SelfHostedProviderStore extends ChangeNotifier {
     }
     return track.copyWith(
       streamUrl: streamUri?.toString(),
-      streamUrlIsEphemeral:
-          streamUri == null ? track.streamUrlIsEphemeral : true,
+      streamUrlIsEphemeral: streamUri == null
+          ? track.streamUrlIsEphemeral
+          : true,
       artworkUri: artworkUri,
-      artworkUriIsEphemeral:
-          artworkUri == null ? track.artworkUriIsEphemeral : true,
+      artworkUriIsEphemeral: artworkUri == null
+          ? track.artworkUriIsEphemeral
+          : true,
     );
   }
 
@@ -513,9 +516,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
   }
 
   void _clearArtworkRequests(String accountId) {
-    _artworkRequests.removeWhere(
-      (key, _) => key.startsWith('$accountId|'),
-    );
+    _artworkRequests.removeWhere((key, _) => key.startsWith('$accountId|'));
     _artworkRevision += 1;
   }
 

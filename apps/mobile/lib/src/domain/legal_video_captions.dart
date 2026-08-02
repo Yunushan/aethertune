@@ -7,10 +7,7 @@ import 'lyrics_document.dart';
 const maxLegalVideoCaptionBytes = 256 * 1024;
 
 class LegalVideoCaptionDocument {
-  const LegalVideoCaptionDocument({
-    required this.title,
-    required this.text,
-  });
+  const LegalVideoCaptionDocument({required this.title, required this.text});
 
   final String title;
   final String text;
@@ -32,7 +29,10 @@ LegalVideoCaptionDocument decodeLegalVideoCaptionDocument(
 
   final text = decodeLyricsDocumentBytes(bytes, fileName: normalizedName);
   return LegalVideoCaptionDocument(
-    title: normalizedName.substring(0, normalizedName.length - extension.length - 1),
+    title: normalizedName.substring(
+      0,
+      normalizedName.length - extension.length - 1,
+    ),
     text: text,
   );
 }

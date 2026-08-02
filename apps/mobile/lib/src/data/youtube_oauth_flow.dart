@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:io';
 

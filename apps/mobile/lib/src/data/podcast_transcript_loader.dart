@@ -5,16 +5,12 @@ import '../domain/track_lyrics.dart';
 
 const maxPodcastTranscriptBytes = 256 * 1024;
 
-typedef PodcastTranscriptLoader = Future<PodcastTranscriptDocument> Function(
-  Uri transcriptUri,
-);
+typedef PodcastTranscriptLoader =
+    Future<PodcastTranscriptDocument> Function(Uri transcriptUri);
 
 /// A user-requested Podcasting 2.0 transcript kept only for the reader view.
 final class PodcastTranscriptDocument {
-  const PodcastTranscriptDocument({
-    required this.text,
-    this.contentType,
-  });
+  const PodcastTranscriptDocument({required this.text, this.contentType});
 
   final String text;
   final String? contentType;
@@ -75,7 +71,8 @@ PodcastTranscriptDocument decodePodcastTranscript(
     throw const FormatException('Podcast transcript is too large to open.');
   }
   try {
-    final text = utf8.decode(bytes, allowMalformed: false)
+    final text = utf8
+        .decode(bytes, allowMalformed: false)
         .replaceFirst('\ufeff', '')
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')

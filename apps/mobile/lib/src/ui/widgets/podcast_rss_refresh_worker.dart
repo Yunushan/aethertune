@@ -38,10 +38,12 @@ class _PodcastRssRefreshWorkerState extends State<PodcastRssRefreshWorker>
   @override
   void initState() {
     super.initState();
-    _runRefresh = widget.runRefresh ??
+    _runRefresh =
+        widget.runRefresh ??
         PodcastSubscriptionRefreshWorker(
-          isExternalChapterUriApproved:
-              context.read<PodcastChapterHostPolicy>().allows,
+          isExternalChapterUriApproved: context
+              .read<PodcastChapterHostPolicy>()
+              .allows,
         ).refreshDue;
     WidgetsBinding.instance.addObserver(this);
     _timer = Timer.periodic(const Duration(minutes: 15), (_) => _runIfDue());

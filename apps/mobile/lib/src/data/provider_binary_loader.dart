@@ -3,10 +3,8 @@ import 'dart:typed_data';
 
 import 'provider_error.dart';
 
-typedef ProviderBinaryRequestLoader = Future<Uint8List> Function(
-  Uri requestUri,
-  Map<String, String> headers,
-);
+typedef ProviderBinaryRequestLoader =
+    Future<Uint8List> Function(Uri requestUri, Map<String, String> headers);
 
 const maxProviderArtworkBytes = 10 * 1024 * 1024;
 

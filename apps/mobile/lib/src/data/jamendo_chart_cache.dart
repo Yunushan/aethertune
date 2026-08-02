@@ -12,7 +12,8 @@ final class JamendoCachedChart {
   final List<Track> tracks;
   final DateTime savedAt;
 
-  bool isExpired(DateTime now) => now.difference(savedAt) > jamendoChartCacheLifetime;
+  bool isExpired(DateTime now) =>
+      now.difference(savedAt) > jamendoChartCacheLifetime;
 }
 
 abstract interface class JamendoChartCache {
@@ -128,7 +129,8 @@ bool _isCacheableTrack(Track track) {
       !RegExp(r'^\d+$').hasMatch(track.externalId ?? '') ||
       track.localPath != null ||
       track.duration.isNegative ||
-      track.duration.inMicroseconds > const Duration(hours: 12).inMicroseconds) {
+      track.duration.inMicroseconds >
+          const Duration(hours: 12).inMicroseconds) {
     return false;
   }
   return _isSafeArtworkUri(track.artworkUri) &&

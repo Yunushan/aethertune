@@ -10,11 +10,9 @@ const androidSystemDownloadsChannel = MethodChannel(
 /// Exports an already-verified private cache file to Android's public
 /// Downloads collection. It never receives a provider URL or credentials.
 final class AndroidSystemDownloadsExporter {
-  AndroidSystemDownloadsExporter({
-    MethodChannel? channel,
-    bool? isSupported,
-  }) : _channel = channel ?? androidSystemDownloadsChannel,
-       _isSupported = isSupported ?? (!kIsWeb && Platform.isAndroid);
+  AndroidSystemDownloadsExporter({MethodChannel? channel, bool? isSupported})
+    : _channel = channel ?? androidSystemDownloadsChannel,
+      _isSupported = isSupported ?? (!kIsWeb && Platform.isAndroid);
 
   final MethodChannel _channel;
   final bool _isSupported;
@@ -31,15 +29,13 @@ final class AndroidSystemDownloadsExporter {
       return null;
     }
 
-    final rawUri = await _channel.invokeMethod<String>(
-      'exportVerifiedFile',
-      <String, Object>{
-        'sourcePath': file.path,
-        'displayName': displayName,
-        'byteCount': byteCount,
-        'checksum': checksum,
-      },
-    );
+    final rawUri = await _channel
+        .invokeMethod<String>('exportVerifiedFile', <String, Object>{
+          'sourcePath': file.path,
+          'displayName': displayName,
+          'byteCount': byteCount,
+          'checksum': checksum,
+        });
     return rawUri == null ? null : Uri.tryParse(rawUri);
   }
 }

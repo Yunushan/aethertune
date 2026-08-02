@@ -216,9 +216,7 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
 
   @override
   Future<void> onWindowClose() async {
-    switch (
-      desktopWindowCloseAction(minimizeToTray: widget.minimizeToTray)
-    ) {
+    switch (desktopWindowCloseAction(minimizeToTray: widget.minimizeToTray)) {
       case DesktopWindowCloseAction.hide:
         await windowManager.hide();
       case DesktopWindowCloseAction.quit:

@@ -11,12 +11,13 @@ final class YouTubeOAuthHttpResponse {
   final String body;
 }
 
-typedef YouTubeOAuthHttpRequest = Future<YouTubeOAuthHttpResponse> Function(
-  Uri uri, {
-  required String method,
-  required Map<String, String> headers,
-  String? body,
-});
+typedef YouTubeOAuthHttpRequest =
+    Future<YouTubeOAuthHttpResponse> Function(
+      Uri uri, {
+      required String method,
+      required Map<String, String> headers,
+      String? body,
+    });
 
 final class YouTubeOAuthToken {
   const YouTubeOAuthToken({
@@ -70,21 +71,18 @@ final class YouTubeAuthorizationRequest {
   final String codeChallenge;
   final List<String> scopes;
 
-  Uri get uri => Uri.https(
-    'accounts.google.com',
-    '/o/oauth2/v2/auth',
-    <String, String>{
-      'client_id': clientId,
-      'response_type': 'code',
-      'redirect_uri': redirectUri.toString(),
-      'scope': scopes.join(' '),
-      'code_challenge_method': 'S256',
-      'code_challenge': codeChallenge,
-      'state': state,
-      'access_type': 'offline',
-      'prompt': 'consent',
-    },
-  );
+  Uri get uri =>
+      Uri.https('accounts.google.com', '/o/oauth2/v2/auth', <String, String>{
+        'client_id': clientId,
+        'response_type': 'code',
+        'redirect_uri': redirectUri.toString(),
+        'scope': scopes.join(' '),
+        'code_challenge_method': 'S256',
+        'code_challenge': codeChallenge,
+        'state': state,
+        'access_type': 'offline',
+        'prompt': 'consent',
+      });
 
   static YouTubeAuthorizationRequest create({
     required String clientId,
@@ -103,7 +101,9 @@ final class YouTubeAuthorizationRequest {
     }
     final normalizedScopes = _normalizeScopes(scopes);
     if (normalizedScopes.isEmpty) {
-      throw const FormatException('At least one YouTube OAuth scope is required.');
+      throw const FormatException(
+        'At least one YouTube OAuth scope is required.',
+      );
     }
     final source = random ?? Random.secure();
     return YouTubeAuthorizationRequest(
@@ -121,8 +121,9 @@ String youtubePkceChallenge(String verifier) {
   if (normalized.length < 43 || normalized.length > 128) {
     throw const FormatException('YouTube PKCE verifier has an invalid length.');
   }
-  return base64UrlEncode(sha256.convert(utf8.encode(normalized)).bytes)
-      .replaceAll('=', '');
+  return base64UrlEncode(
+    sha256.convert(utf8.encode(normalized)).bytes,
+  ).replaceAll('=', '');
 }
 
 final class YouTubeOAuthClient {
@@ -143,7 +144,9 @@ final class YouTubeOAuthClient {
   }) {
     final normalizedCode = code.trim();
     if (normalizedCode.isEmpty) {
-      throw const FormatException('Google did not return an authorization code.');
+      throw const FormatException(
+        'Google did not return an authorization code.',
+      );
     }
     return _requestToken(<String, String>{
       'client_id': authorization.clientId,

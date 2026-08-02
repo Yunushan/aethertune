@@ -28,49 +28,54 @@ void main() {
     expect(restored.isConfigured, isFalse);
   });
 
-  test('rejects insecure and credential-bearing lyrics search endpoints', () async {
-    final store = LyricsSearchEndpointSettingsStore();
-    await store.load();
+  test(
+    'rejects insecure and credential-bearing lyrics search endpoints',
+    () async {
+      final store = LyricsSearchEndpointSettingsStore();
+      await store.load();
 
-    await expectLater(
-      store.save('http://lyrics.example.test'),
-      throwsFormatException,
-    );
-    await expectLater(
-      store.save('https://person:secret@lyrics.example.test'),
-      throwsFormatException,
-    );
-    await expectLater(
-      store.save('https://lyrics.example.test/api?q=track'),
-      throwsFormatException,
-    );
-  });
+      await expectLater(
+        store.save('http://lyrics.example.test'),
+        throwsFormatException,
+      );
+      await expectLater(
+        store.save('https://person:secret@lyrics.example.test'),
+        throwsFormatException,
+      );
+      await expectLater(
+        store.save('https://lyrics.example.test/api?q=track'),
+        throwsFormatException,
+      );
+    },
+  );
 
-  test('exports and imports only the validated endpoint configuration',
-      () async {
-    final source = LyricsSearchEndpointSettingsStore();
-    await source.load();
-    await source.save('https://lyrics.example.test/api');
+  test(
+    'exports and imports only the validated endpoint configuration',
+    () async {
+      final source = LyricsSearchEndpointSettingsStore();
+      await source.load();
+      await source.save('https://lyrics.example.test/api');
 
-    final document = source.exportConfiguration();
-    expect(document, <String, Object?>{
-      'format': 'aethertune.lyrics_search_endpoint',
-      'version': 1,
-      'endpoint': 'https://lyrics.example.test/api',
-    });
-
-    final target = LyricsSearchEndpointSettingsStore();
-    await target.load();
-    await target.importConfiguration(document);
-    expect(target.endpoint, source.endpoint);
-
-    await expectLater(
-      target.importConfiguration(<String, Object?>{
+      final document = source.exportConfiguration();
+      expect(document, <String, Object?>{
         'format': 'aethertune.lyrics_search_endpoint',
         'version': 1,
-        'endpoint': 'http://lyrics.example.test',
-      }),
-      throwsFormatException,
-    );
-  });
+        'endpoint': 'https://lyrics.example.test/api',
+      });
+
+      final target = LyricsSearchEndpointSettingsStore();
+      await target.load();
+      await target.importConfiguration(document);
+      expect(target.endpoint, source.endpoint);
+
+      await expectLater(
+        target.importConfiguration(<String, Object?>{
+          'format': 'aethertune.lyrics_search_endpoint',
+          'version': 1,
+          'endpoint': 'http://lyrics.example.test',
+        }),
+        throwsFormatException,
+      );
+    },
+  );
 }

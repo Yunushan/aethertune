@@ -20,6 +20,24 @@ SPEC.loader.exec_module(platform_config)
 
 
 class AndroidPlaybackWidgetTest(unittest.TestCase):
+    def test_stale_android_signing_configuration_fails_closed(self) -> None:
+        stale_gradle = """android {
+    defaultConfig {
+        applicationId = "com.example.example"
+        minSdk = flutter.minSdkVersion
+    }
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+}
+
+val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
+"""
+        with self.assertRaisesRegex(RuntimeError, "stale"):
+            platform_config._configure_android_release_signing(stale_gradle)
+
     def test_configures_and_verifies_media_button_widget(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             app_dir = Path(temporary_directory) / "mobile"
@@ -38,7 +56,19 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 encoding="utf-8",
             )
             gradle_path.write_text(
-                "android { defaultConfig { minSdk = flutter.minSdkVersion } }\n",
+                """android {
+    defaultConfig {
+        // TODO: Specify your own unique Application ID
+        applicationId = "com.example.example"
+        minSdk = flutter.minSdkVersion
+    }
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+}
+""",
                 encoding="utf-8",
             )
 
@@ -71,6 +101,10 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
             )
             activity = application.find("activity")
             self.assertIsNotNone(activity)
+            self.assertEqual(
+                application.get(f"{platform_config.ANDROID}label"),
+                "AetherTune",
+            )
             self.assertEqual(
                 activity.get(f"{platform_config.ANDROID}name"),
                 platform_config.ACTIVITY_NAME,
@@ -119,6 +153,14 @@ class AndroidPlaybackWidgetTest(unittest.TestCase):
                 "minSdk = maxOf(flutter.minSdkVersion, 23)",
                 gradle_path.read_text(encoding="utf-8"),
             )
+            gradle_text = gradle_path.read_text(encoding="utf-8")
+            self.assertIn('create("aethertuneRelease")', gradle_text)
+            self.assertIn("AETHERTUNE_RELEASE_STORE_FILE", gradle_text)
+            self.assertIn("providers.environmentVariable(name)", gradle_text)
+            self.assertIn("providers.gradleProperty(name).orElse", gradle_text)
+            self.assertIn('applicationId = "dev.aethertune.aethertune"', gradle_text)
+            self.assertNotIn("TODO: Specify your own unique Application ID", gradle_text)
+            self.assertNotIn('signingConfigs.getByName("debug")', gradle_text)
             self.assertIn(
                 'call.argument<Number>("positionMillis")',
                 activity_source.read_text(encoding="utf-8"),

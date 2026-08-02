@@ -104,7 +104,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
       issues.add(
         const MusicSourceProviderContractIssue(
           code: MusicSourceProviderContractIssueCode.invalidNetworkDomain,
-          message: 'Network domains must be non-empty host names without spaces.',
+          message:
+              'Network domains must be non-empty host names without spaces.',
         ),
       );
     } else if (!domains.add(domain)) {
@@ -120,7 +121,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
     issues.add(
       const MusicSourceProviderContractIssue(
         code: MusicSourceProviderContractIssueCode.missingNetworkDisclosure,
-        message: 'Network providers must describe the data sent to each service.',
+        message:
+            'Network providers must describe the data sent to each service.',
       ),
     );
   }
@@ -136,7 +138,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
       !provider.capabilities.contains(MusicSourceCapability.authentication)) {
     issues.add(
       const MusicSourceProviderContractIssue(
-        code: MusicSourceProviderContractIssueCode.missingAuthenticationCapability,
+        code: MusicSourceProviderContractIssueCode
+            .missingAuthenticationCapability,
         message: 'Credentialed providers must declare Authentication.',
       ),
     );
@@ -146,7 +149,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
     issues.add(
       const MusicSourceProviderContractIssue(
         code: MusicSourceProviderContractIssueCode.missingMediaCacheCapability,
-        message: 'Media caching must be paired with the Offline cache capability.',
+        message:
+            'Media caching must be paired with the Offline cache capability.',
       ),
     );
   }
@@ -155,7 +159,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
     issues.add(
       const MusicSourceProviderContractIssue(
         code: MusicSourceProviderContractIssueCode.missingDownloadCapability,
-        message: 'Download support must be paired with the Download capability.',
+        message:
+            'Download support must be paired with the Download capability.',
       ),
     );
   }
@@ -177,9 +182,7 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
       ),
     );
   }
-  if (provider.capabilities.contains(
-        MusicSourceCapability.searchSuggestions,
-      ) &&
+  if (provider.capabilities.contains(MusicSourceCapability.searchSuggestions) &&
       provider is! MusicSourceSearchSuggestionProvider) {
     issues.add(
       const MusicSourceProviderContractIssue(
@@ -189,14 +192,12 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
       ),
     );
   }
-  if (provider.capabilities.contains(
-        MusicSourceCapability.favoriteMutation,
-      ) &&
+  if (provider.capabilities.contains(MusicSourceCapability.favoriteMutation) &&
       provider is! MusicTrackFavoriteMutationProvider) {
     issues.add(
       const MusicSourceProviderContractIssue(
-        code:
-            MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
+        code: MusicSourceProviderContractIssueCode
+            .missingFavoriteMutationExtension,
         message:
             'Server favorites capability requires MusicTrackFavoriteMutationProvider.',
       ),
@@ -208,8 +209,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
       provider is! MusicAlbumFavoriteMutationProvider) {
     issues.add(
       const MusicSourceProviderContractIssue(
-        code:
-            MusicSourceProviderContractIssueCode.missingAlbumFavoriteMutationExtension,
+        code: MusicSourceProviderContractIssueCode
+            .missingAlbumFavoriteMutationExtension,
         message:
             'Server album favorites capability requires MusicAlbumFavoriteMutationProvider.',
       ),
@@ -221,8 +222,8 @@ MusicSourceProviderContractReport validateMusicSourceProviderContract(
       provider is! MusicArtistFavoriteMutationProvider) {
     issues.add(
       const MusicSourceProviderContractIssue(
-        code:
-            MusicSourceProviderContractIssueCode.missingArtistFavoriteMutationExtension,
+        code: MusicSourceProviderContractIssueCode
+            .missingArtistFavoriteMutationExtension,
         message:
             'Server artist favorites capability requires MusicArtistFavoriteMutationProvider.',
       ),

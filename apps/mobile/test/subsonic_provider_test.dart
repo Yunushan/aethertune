@@ -38,9 +38,7 @@ void main() {
         MusicSourceCapability.authentication,
       ]),
     );
-    expect(provider.disclosure.networkDomains, <String>[
-      'music.example.test',
-    ]);
+    expect(provider.disclosure.networkDomains, <String>['music.example.test']);
     expect(provider.disclosure.requiresUserCredentials, isTrue);
     expect(provider.disclosure.cachesMedia, isTrue);
     expect(provider.disclosure.supportsDownloads, isTrue);
@@ -105,11 +103,7 @@ void main() {
       },
     );
 
-    final page = await provider.searchPage(
-      'aether',
-      cursor: '7',
-      limit: 2,
-    );
+    final page = await provider.searchPage('aether', cursor: '7', limit: 2);
 
     expect(provider, isA<MusicSourceSearchPagingProvider>());
     expect(page.tracks, hasLength(2));
@@ -160,10 +154,10 @@ void main() {
     expect(capturedUri!.queryParameters['songCount'], '2');
     expect(capturedUri!.queryParameters['songOffset'], '0');
     expect(capturedUri!.queryParameters['t'], _secretToken);
-    expect(
-      suggestions.map((suggestion) => suggestion.value),
-      <String>['Aether Artist', 'Aether Album'],
-    );
+    expect(suggestions.map((suggestion) => suggestion.value), <String>[
+      'Aether Artist',
+      'Aether Album',
+    ]);
     expect(
       suggestions.map((suggestion) => suggestion.kind),
       <MusicSourceSearchSuggestionKind>[
@@ -174,7 +168,10 @@ void main() {
     expect(suggestions.last.subtitle, 'Aether Artist');
 
     expect(await provider.suggest('   '), isEmpty);
-    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
+    await expectLater(
+      provider.suggest('aether', limit: 0),
+      throwsArgumentError,
+    );
   });
 
   test('searches and suggests bounded Subsonic artists and albums', () async {
@@ -204,13 +201,10 @@ void main() {
 
     expect(provider, isA<MusicCatalogCollectionSearchProvider>());
     expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
-    expect(
-      provider.searchableCollectionKinds,
-      <MusicCatalogCollectionKind>{
-        MusicCatalogCollectionKind.artist,
-        MusicCatalogCollectionKind.album,
-      },
-    );
+    expect(provider.searchableCollectionKinds, <MusicCatalogCollectionKind>{
+      MusicCatalogCollectionKind.artist,
+      MusicCatalogCollectionKind.album,
+    });
     expect(
       provider.suggestionCollectionKinds,
       provider.searchableCollectionKinds,
@@ -412,10 +406,13 @@ void main() {
       MusicCatalogDiscoveryKind.favoriteArtists,
       MusicCatalogDiscoveryKind.random,
     ]);
-    expect(
-      requests.map((request) => request.queryParameters['type']),
-      <String>['newest', 'frequent', 'recent', 'starred', 'random'],
-    );
+    expect(requests.map((request) => request.queryParameters['type']), <String>[
+      'newest',
+      'frequent',
+      'recent',
+      'starred',
+      'random',
+    ]);
     expect(
       requests.every(
         (request) =>
@@ -535,26 +532,21 @@ void main() {
     );
 
     expect(provider, isA<MusicCatalogRadioProvider>());
-    expect(
-      provider.radioSeedKinds,
-      MusicCatalogRadioSeedKind.values.toSet(),
-    );
+    expect(provider.radioSeedKinds, MusicCatalogRadioSeedKind.values.toSet());
     expect(trackRadio.single.title, 'Radio Signal');
     expect(albumRadio.single.externalId, 'radio-song-1');
     expect(artistRadio.single.title, 'Artist Signal');
     expect(artistRadio.single.sourceId, provider.id);
-    expect(
-      requests.map((request) => request.path.split('/').last),
-      <String>[
-        'getSimilarSongs.view',
-        'getSimilarSongs.view',
-        'getSimilarSongs2.view',
-      ],
-    );
-    expect(
-      requests.map((request) => request.queryParameters['id']),
-      <String>['song-1', 'album-1', 'artist-1'],
-    );
+    expect(requests.map((request) => request.path.split('/').last), <String>[
+      'getSimilarSongs.view',
+      'getSimilarSongs.view',
+      'getSimilarSongs2.view',
+    ]);
+    expect(requests.map((request) => request.queryParameters['id']), <String>[
+      'song-1',
+      'album-1',
+      'artist-1',
+    ]);
     expect(
       requests.map((request) => request.queryParameters['count']),
       <String>['7', '8', '9'],
@@ -591,167 +583,174 @@ void main() {
     expect(requests, hasLength(3));
   });
 
-  test('loads Subsonic artist albums, album tracks, and playlist entries',
-      () async {
-    final requests = <Uri>[];
-    final provider = SubsonicProvider(
-      baseUri: Uri.parse('https://music.example.test/navidrome'),
-      username: 'yunus',
-      password: 'secret',
-      saltGenerator: _fixedSaltGenerator,
-      requestLoader: (uri) async {
-        requests.add(uri);
-        return switch (uri.path.split('/').last) {
-          'getArtist.view' => _artistResponseJson,
-          'getAlbum.view' => _albumResponseJson,
-          'getPlaylist.view' => _playlistResponseJson,
-          _ => throw StateError('Unexpected request: $uri'),
-        };
-      },
-    );
+  test(
+    'loads Subsonic artist albums, album tracks, and playlist entries',
+    () async {
+      final requests = <Uri>[];
+      final provider = SubsonicProvider(
+        baseUri: Uri.parse('https://music.example.test/navidrome'),
+        username: 'yunus',
+        password: 'secret',
+        saltGenerator: _fixedSaltGenerator,
+        requestLoader: (uri) async {
+          requests.add(uri);
+          return switch (uri.path.split('/').last) {
+            'getArtist.view' => _artistResponseJson,
+            'getAlbum.view' => _albumResponseJson,
+            'getPlaylist.view' => _playlistResponseJson,
+            _ => throw StateError('Unexpected request: $uri'),
+          };
+        },
+      );
 
-    final artist = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'artist-1',
-        title: 'Open Artist',
-        kind: MusicCatalogCollectionKind.artist,
-      ),
-    );
-    final album = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'album-1',
-        title: 'Self Hosted Album',
-        kind: MusicCatalogCollectionKind.album,
-      ),
-    );
-    final playlist = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'playlist-1',
-        title: 'Late Night',
-        kind: MusicCatalogCollectionKind.playlist,
-      ),
-    );
+      final artist = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'artist-1',
+          title: 'Open Artist',
+          kind: MusicCatalogCollectionKind.artist,
+        ),
+      );
+      final album = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'album-1',
+          title: 'Self Hosted Album',
+          kind: MusicCatalogCollectionKind.album,
+        ),
+      );
+      final playlist = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'playlist-1',
+          title: 'Late Night',
+          kind: MusicCatalogCollectionKind.playlist,
+        ),
+      );
 
-    expect(artist.collections.single.id, 'album-1');
-    expect(album.tracks, hasLength(2));
-    expect(album.tracks.first.title, 'Aether Session');
-    expect(album.tracks.first.streamUrl, isNull);
-    expect(album.tracks.first.providerArtworkId, 'cover-1');
-    expect(playlist.tracks.single.title, 'Playlist Cut');
-    expect(playlist.tracks.single.providerArtworkId, 'playlist-cover-1');
-    expect(playlist.tracks.single.sourceId, provider.id);
-    expect(requests[0].queryParameters['id'], 'artist-1');
-    expect(requests[1].queryParameters['id'], 'album-1');
-    expect(requests[2].queryParameters['id'], 'playlist-1');
-  });
+      expect(artist.collections.single.id, 'album-1');
+      expect(album.tracks, hasLength(2));
+      expect(album.tracks.first.title, 'Aether Session');
+      expect(album.tracks.first.streamUrl, isNull);
+      expect(album.tracks.first.providerArtworkId, 'cover-1');
+      expect(playlist.tracks.single.title, 'Playlist Cut');
+      expect(playlist.tracks.single.providerArtworkId, 'playlist-cover-1');
+      expect(playlist.tracks.single.sourceId, provider.id);
+      expect(requests[0].queryParameters['id'], 'artist-1');
+      expect(requests[1].queryParameters['id'], 'album-1');
+      expect(requests[2].queryParameters['id'], 'playlist-1');
+    },
+  );
 
-  test('creates edits and deletes Subsonic playlists with ordered song IDs',
-      () async {
-    final requests = <Uri>[];
-    var saltIndex = 0;
-    final provider = SubsonicProvider(
-      baseUri: Uri.parse('https://music.example.test/navidrome'),
-      username: 'yunus',
-      password: 'secret',
-      saltGenerator: () => 'mutation-salt-${saltIndex++}',
-      requestLoader: (uri) async {
-        requests.add(uri);
-        return '{"subsonic-response":{"status":"ok"}}';
-      },
-    );
+  test(
+    'creates edits and deletes Subsonic playlists with ordered song IDs',
+    () async {
+      final requests = <Uri>[];
+      var saltIndex = 0;
+      final provider = SubsonicProvider(
+        baseUri: Uri.parse('https://music.example.test/navidrome'),
+        username: 'yunus',
+        password: 'secret',
+        saltGenerator: () => 'mutation-salt-${saltIndex++}',
+        requestLoader: (uri) async {
+          requests.add(uri);
+          return '{"subsonic-response":{"status":"ok"}}';
+        },
+      );
 
-    await provider.createPlaylist(
-      '  Morning Focus  ',
-      trackIds: const <String>['song-1', 'song-2'],
-    );
-    await provider.renamePlaylist('playlist-1', 'Deep Focus');
-    await provider.addPlaylistTracks(
-      'playlist-1',
-      const <String>['song-3', 'song-4'],
-    );
-    await provider.replacePlaylistTracks(
-      'playlist-1',
-      const <String>['song-2', 'song-1', 'song-2'],
-    );
-    await provider.deletePlaylist('playlist-1');
-    await provider.addPlaylistTracks('playlist-1', const <String>[]);
+      await provider.createPlaylist(
+        '  Morning Focus  ',
+        trackIds: const <String>['song-1', 'song-2'],
+      );
+      await provider.renamePlaylist('playlist-1', 'Deep Focus');
+      await provider.addPlaylistTracks('playlist-1', const <String>[
+        'song-3',
+        'song-4',
+      ]);
+      await provider.replacePlaylistTracks('playlist-1', const <String>[
+        'song-2',
+        'song-1',
+        'song-2',
+      ]);
+      await provider.deletePlaylist('playlist-1');
+      await provider.addPlaylistTracks('playlist-1', const <String>[]);
 
-    expect(requests.map((request) => request.path), <String>[
-      '/navidrome/rest/createPlaylist.view',
-      '/navidrome/rest/updatePlaylist.view',
-      '/navidrome/rest/updatePlaylist.view',
-      '/navidrome/rest/createPlaylist.view',
-      '/navidrome/rest/deletePlaylist.view',
-    ]);
-    expect(requests[0].queryParameters['name'], 'Morning Focus');
-    expect(
-      requests[0].queryParametersAll['songId'],
-      <String>['song-1', 'song-2'],
-    );
-    expect(requests[1].queryParameters['playlistId'], 'playlist-1');
-    expect(requests[1].queryParameters['name'], 'Deep Focus');
-    expect(
-      requests[2].queryParametersAll['songIdToAdd'],
-      <String>['song-3', 'song-4'],
-    );
-    expect(requests[3].queryParameters['playlistId'], 'playlist-1');
-    expect(
-      requests[3].queryParametersAll['songId'],
-      <String>['song-2', 'song-1', 'song-2'],
-    );
-    expect(requests[4].queryParameters['id'], 'playlist-1');
-    expect(
-      requests.map((request) => request.queryParameters['s']).toSet(),
-      hasLength(5),
-    );
-    expect(
-      requests.every(
-        (request) =>
-            request.queryParameters.containsKey('t') &&
-            !request.queryParameters.containsKey('p'),
-      ),
-      isTrue,
-    );
-    expect(
-      () => provider.renamePlaylist('playlist-1', ' '),
-      throwsArgumentError,
-    );
-    await expectLater(
-      provider.addPlaylistTracks(' ', const <String>['song-1']),
-      throwsArgumentError,
-    );
-  });
+      expect(requests.map((request) => request.path), <String>[
+        '/navidrome/rest/createPlaylist.view',
+        '/navidrome/rest/updatePlaylist.view',
+        '/navidrome/rest/updatePlaylist.view',
+        '/navidrome/rest/createPlaylist.view',
+        '/navidrome/rest/deletePlaylist.view',
+      ]);
+      expect(requests[0].queryParameters['name'], 'Morning Focus');
+      expect(requests[0].queryParametersAll['songId'], <String>[
+        'song-1',
+        'song-2',
+      ]);
+      expect(requests[1].queryParameters['playlistId'], 'playlist-1');
+      expect(requests[1].queryParameters['name'], 'Deep Focus');
+      expect(requests[2].queryParametersAll['songIdToAdd'], <String>[
+        'song-3',
+        'song-4',
+      ]);
+      expect(requests[3].queryParameters['playlistId'], 'playlist-1');
+      expect(requests[3].queryParametersAll['songId'], <String>[
+        'song-2',
+        'song-1',
+        'song-2',
+      ]);
+      expect(requests[4].queryParameters['id'], 'playlist-1');
+      expect(
+        requests.map((request) => request.queryParameters['s']).toSet(),
+        hasLength(5),
+      );
+      expect(
+        requests.every(
+          (request) =>
+              request.queryParameters.containsKey('t') &&
+              !request.queryParameters.containsKey('p'),
+        ),
+        isTrue,
+      );
+      expect(
+        () => provider.renamePlaylist('playlist-1', ' '),
+        throwsArgumentError,
+      );
+      await expectLater(
+        provider.addPlaylistTracks(' ', const <String>['song-1']),
+        throwsArgumentError,
+      );
+    },
+  );
 
-  test('loads Subsonic cover art through a salted credential request',
-      () async {
-    Uri? capturedUri;
-    Map<String, String>? capturedHeaders;
-    final provider = SubsonicProvider(
-      baseUri: Uri.parse('https://music.example.test/navidrome'),
-      username: 'yunus',
-      password: 'secret',
-      saltGenerator: _fixedSaltGenerator,
-      requestLoader: (_) async =>
-          '{"subsonic-response":{"status":"ok"}}',
-      artworkLoader: (uri, headers) async {
-        capturedUri = uri;
-        capturedHeaders = headers;
-        return Uint8List.fromList(<int>[4, 5, 6]);
-      },
-    );
+  test(
+    'loads Subsonic cover art through a salted credential request',
+    () async {
+      Uri? capturedUri;
+      Map<String, String>? capturedHeaders;
+      final provider = SubsonicProvider(
+        baseUri: Uri.parse('https://music.example.test/navidrome'),
+        username: 'yunus',
+        password: 'secret',
+        saltGenerator: _fixedSaltGenerator,
+        requestLoader: (_) async => '{"subsonic-response":{"status":"ok"}}',
+        artworkLoader: (uri, headers) async {
+          capturedUri = uri;
+          capturedHeaders = headers;
+          return Uint8List.fromList(<int>[4, 5, 6]);
+        },
+      );
 
-    final bytes = await provider.loadArtwork('cover-1', maxWidth: 256);
+      final bytes = await provider.loadArtwork('cover-1', maxWidth: 256);
 
-    expect(bytes, <int>[4, 5, 6]);
-    expect(capturedUri!.path, '/navidrome/rest/getCoverArt.view');
-    expect(capturedUri!.queryParameters['id'], 'cover-1');
-    expect(capturedUri!.queryParameters['size'], '256');
-    expect(capturedUri!.queryParameters['t'], _secretToken);
-    expect(capturedUri!.queryParameters['s'], _fixedSalt);
-    expect(capturedUri!.queryParameters.containsKey('p'), isFalse);
-    expect(capturedUri.toString(), isNot(contains('secret')));
-    expect(capturedHeaders, isEmpty);
-  });
+      expect(bytes, <int>[4, 5, 6]);
+      expect(capturedUri!.path, '/navidrome/rest/getCoverArt.view');
+      expect(capturedUri!.queryParameters['id'], 'cover-1');
+      expect(capturedUri!.queryParameters['size'], '256');
+      expect(capturedUri!.queryParameters['t'], _secretToken);
+      expect(capturedUri!.queryParameters['s'], _fixedSalt);
+      expect(capturedUri!.queryParameters.containsKey('p'), isFalse);
+      expect(capturedUri.toString(), isNot(contains('secret')));
+      expect(capturedHeaders, isEmpty);
+    },
+  );
 
   test('syncs Subsonic track favorites through star and unstar', () async {
     final requests = <Uri>[];
@@ -780,10 +779,10 @@ void main() {
       '/navidrome/rest/star.view',
       '/navidrome/rest/unstar.view',
     ]);
-    expect(
-      requests.map((request) => request.queryParameters['id']),
-      <String>['song-1', 'song-1'],
-    );
+    expect(requests.map((request) => request.queryParameters['id']), <String>[
+      'song-1',
+      'song-1',
+    ]);
     expect(
       requests.every(
         (request) =>
@@ -875,21 +874,20 @@ void main() {
       saltGenerator: _fixedSaltGenerator,
       requestLoader: (_) async => _searchResponseJson,
     );
-    final decision = OfflineMediaPolicy(<MusicSourceProvider>[
-      provider,
-    ]).evaluate(
-      const SubsonicSong(
-        id: 'song-1',
-        title: 'Aether Session',
-        artist: 'Open Artist',
-        album: 'Self Hosted Album',
-        genre: 'Ambient',
-        duration: Duration(seconds: 245),
-        coverArt: 'cover-1',
-        suffix: 'mp3',
-      ).toTrack(sourceId: provider.id),
-      OfflineMediaAction.cache,
-    );
+    final decision = OfflineMediaPolicy(<MusicSourceProvider>[provider])
+        .evaluate(
+          const SubsonicSong(
+            id: 'song-1',
+            title: 'Aether Session',
+            artist: 'Open Artist',
+            album: 'Self Hosted Album',
+            genre: 'Ambient',
+            duration: Duration(seconds: 245),
+            coverArt: 'cover-1',
+            suffix: 'mp3',
+          ).toTrack(sourceId: provider.id),
+          OfflineMediaAction.cache,
+        );
 
     expect(decision.isAllowed, isTrue);
     expect(decision.providerId, provider.id);

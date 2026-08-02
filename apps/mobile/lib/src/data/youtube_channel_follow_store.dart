@@ -42,7 +42,9 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
           ? const <Object?>[]
           : jsonDecode(raw);
       if (decoded is! List) {
-        throw const FormatException('YouTube channel follow storage is invalid.');
+        throw const FormatException(
+          'YouTube channel follow storage is invalid.',
+        );
       }
       final parsed = <YouTubeChannelFollow>[];
       final ids = <String>{};
@@ -136,9 +138,9 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
   /// The document intentionally omits Google credentials, YouTube account
   /// subscriptions, remote-feed results, and playback state.
   String exportFollowDocument() => jsonEncode(<String, Object?>{
-        'version': _documentVersion,
-        'follows': _follows.map((follow) => follow.toJson()).toList(),
-      });
+    'version': _documentVersion,
+    'follows': _follows.map((follow) => follow.toJson()).toList(),
+  });
 
   /// Imports a bounded public-channel follow document.
   ///
@@ -170,20 +172,26 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
     }
     final rawFollows = root['follows'];
     if (rawFollows is! List || rawFollows.length > _maxFollows) {
-      throw const FormatException('Follow document contains too many channels.');
+      throw const FormatException(
+        'Follow document contains too many channels.',
+      );
     }
 
     final incoming = <YouTubeChannelFollow>[];
     final incomingIds = <String>{};
     for (final rawFollow in rawFollows) {
       if (rawFollow is! Map) {
-        throw const FormatException('Follow document contains an invalid channel.');
+        throw const FormatException(
+          'Follow document contains an invalid channel.',
+        );
       }
       final follow = YouTubeChannelFollow.tryFromJson(
         Map<String, Object?>.from(rawFollow),
       );
       if (follow == null) {
-        throw const FormatException('Follow document contains an invalid channel.');
+        throw const FormatException(
+          'Follow document contains an invalid channel.',
+        );
       }
       if (incomingIds.add(follow.id)) {
         incoming.add(follow);

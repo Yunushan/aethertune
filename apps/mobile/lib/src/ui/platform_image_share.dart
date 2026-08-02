@@ -33,9 +33,9 @@ final class PlatformImageShareRequest {
 
   static String _requiredPngFileName(String value) {
     final normalized = value.trim();
-    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.png$').hasMatch(
-      normalized,
-    )) {
+    if (!RegExp(
+      r'^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.png$',
+    ).hasMatch(normalized)) {
       throw ArgumentError.value(
         value,
         'fileName',

@@ -7,18 +7,47 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   provenance:
     name: Dependency provenance
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Flutter and Dart
-        uses: subosito/flutter-action@v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          channel: stable
+          flutter-version: '3.44.6'
+
+      - name: Verify Dart formatting
+        run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+
+      - name: Capture Dart formatting patch
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+          mkdir -p build/dart-format
+          git diff --binary > build/dart-format/dart-format.patch
+
+      - name: Upload Dart formatting patch
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-dart-format-patch
+          if-no-files-found: error
+          path: build/dart-format/dart-format.patch
 
       - name: Test SBOM generator
         run: python3 scripts/ci/test_generate_dart_sbom.py
@@ -35,8 +64,27 @@ jobs:
       - name: Test Android dependency pin
         run: python3 scripts/ci/test_android_dependency_pins.py
 
+      - name: Test Android signing contract
+        run: python3 scripts/ci/test_android_signing_contract.py
+
       - name: Test Android release artifact verifier
         run: python3 scripts/ci/test_verify_android_release_artifacts.py
+
+      - name: Test iOS release artifact verifier
+        run: python3 scripts/ci/test_verify_ios_release_artifact.py
+
+      - name: Test macOS release artifact verifier
+        run: python3 scripts/ci/test_verify_macos_release_artifacts.py
+
+      - name: Test Windows release artifact verifier
+        run: python3 scripts/ci/test_verify_windows_release_artifacts.py
+
+      - name: Test production release preflight
+        run: python3 scripts/ci/test_verify_production_release.py
+
+      - name: Test release version contract
+        shell: bash
+        run: bash scripts/ci/test_verify_release_version.sh
 
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
@@ -47,11 +95,23 @@ jobs:
       - name: Test privacy and network audit
         run: python3 scripts/ci/test_privacy_network_audit.py
 
+      - name: Test dependency lock policy
+        run: python3 scripts/ci/test_dependency_lock_policy.py
+
+      - name: Test toolchain pin policy
+        run: python3 scripts/ci/test_toolchain_policy.py
+
+      - name: Test shell syntax
+        run: bash scripts/ci/test_shell_syntax.sh
+
+      - name: Test coverage gate
+        run: python3 scripts/ci/test_check_lcov_coverage.py
+
       - name: Resolve client dependencies
-        run: cd apps/mobile && flutter pub get
+        run: cd apps/mobile && flutter pub get --enforce-lockfile
 
       - name: Resolve server dependencies
-        run: cd services/server && dart pub get
+        run: cd services/server && dart pub get --enforce-lockfile
 
       - name: Capture resolved dependency graphs
         shell: bash
@@ -69,7 +129,7 @@ jobs:
           python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output build/provenance/aethertune-server.cdx.json --check
 
       - name: Upload dependency provenance
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: aethertune-dependency-provenance
           if-no-files-found: error
@@ -78,14 +138,17 @@ jobs:
   flutter:
     name: Flutter analyze and test
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          channel: stable
+          flutter-version: '3.44.6'
 
       - name: Verify generated platform wrappers
         run: python3 scripts/test_configure_audio_service_platforms.py
@@ -99,7 +162,17 @@ jobs:
           bash ../../scripts/ci/flutter_analyze_with_annotations.sh
 
       - name: Test
-        run: cd apps/mobile && flutter test
+        run: cd apps/mobile && flutter test --coverage
+
+      - name: Enforce mobile line coverage floor
+        run: python3 scripts/ci/check_lcov_coverage.py --lcov apps/mobile/coverage/lcov.info --minimum 70
+
+      - name: Upload mobile coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-mobile-coverage
+          if-no-files-found: error
+          path: apps/mobile/coverage/lcov.info
 
       - name: Provider contract - Core source model
         run: cd apps/mobile && flutter test test/music_source_provider_test.dart test/musicbrainz_metadata_provider_test.dart test/itunes_metadata_provider_test.dart test/itunes_metadata_settings_store_test.dart test/provider_search_test.dart test/provider_home_feed_test.dart
@@ -146,6 +219,7 @@ jobs:
   desktop:
     name: Desktop build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -158,7 +232,9 @@ jobs:
             target: macos
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Linux desktop dependencies
         if: matrix.target == 'linux'
@@ -167,9 +243,9 @@ jobs:
           sudo apt-get install -y clang cmake libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          channel: stable
+          flutter-version: '3.44.6'
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
@@ -227,17 +303,30 @@ jobs:
   server:
     name: Server analyze and test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1.7.2
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
         with:
-          sdk: stable
+          sdk: '3.12.2'
 
       - name: Install server dependencies
-        run: cd services/server && dart pub get
+        run: cd services/server && dart pub get --enforce-lockfile
+
+      - name: Validate Docker deployment configuration
+        working-directory: services/server
+        env:
+          AETHERTUNE_SYNC_USERS: '{}'
+          AETHERTUNE_OPS_TOKEN: ci-only-configuration-check-token
+        run: docker compose config --quiet
+
+      - name: Build and smoke-test Docker deployment
+        run: bash scripts/ci/test_server_compose.sh
 
       - name: Analyze server
         run: cd services/server && dart analyze
@@ -248,5 +337,21 @@ jobs:
       - name: Compile server executable
         run: cd services/server && mkdir -p build && dart compile exe bin/server.dart -o build/aethertune-server
 
+      - name: Install systemd validation artifacts
+        run: |
+          sudo install -D -m 0755 services/server/build/aethertune-server /usr/local/bin/aethertune-server
+          sudo install -D -m 0755 services/server/deploy/aethertune-backup.sh /usr/local/libexec/aethertune-backup.sh
+
+      - name: Validate systemd deployment units
+        run: >-
+          systemd-analyze verify
+          services/server/deploy/aethertune.service
+          services/server/deploy/aethertune-backup.service
+          services/server/deploy/aethertune-backup.timer
+
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server
+
+      - name: Test server backup and restore
+        shell: bash
+        run: bash scripts/ci/test_server_backup_restore.sh

@@ -38,105 +38,114 @@ void main() {
     expect(engine.mediaItem.value?.duration, const Duration(minutes: 4));
   });
 
-  test('publishes sleep timer state only with the current media item',
-      () async {
-    final delegate = _FakePlaybackAudioEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
-    final endsAt = DateTime.utc(2026, 7, 20, 12, 30);
+  test(
+    'publishes sleep timer state only with the current media item',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      final endsAt = DateTime.utc(2026, 7, 20, 12, 30);
 
-    await engine.setQueue(
-      <Track>[_track('one'), _track('two')],
-      initialIndex: 1,
-    );
-    engine.setSleepTimerMediaMetadata(endsAt: endsAt);
+      await engine.setQueue(<Track>[
+        _track('one'),
+        _track('two'),
+      ], initialIndex: 1);
+      engine.setSleepTimerMediaMetadata(endsAt: endsAt);
 
-    expect(
-      engine.mediaItem.value?.extras?[systemMediaSleepTimerEndsAtEpochMsKey],
-      endsAt.millisecondsSinceEpoch,
-    );
-    expect(
-      engine.queue.value.first.extras,
-      isNot(contains(systemMediaSleepTimerEndsAtEpochMsKey)),
-    );
+      expect(
+        engine.mediaItem.value?.extras?[systemMediaSleepTimerEndsAtEpochMsKey],
+        endsAt.millisecondsSinceEpoch,
+      );
+      expect(
+        engine.queue.value.first.extras,
+        isNot(contains(systemMediaSleepTimerEndsAtEpochMsKey)),
+      );
 
-    engine.setSleepTimerMediaMetadata(stopsAtEndOfTrack: true);
-    expect(
-      engine.mediaItem.value?.extras,
-      isNot(contains(systemMediaSleepTimerEndsAtEpochMsKey)),
-    );
-    expect(
-      engine.mediaItem.value?.extras?[systemMediaSleepTimerStopsAtEndOfTrackKey],
-      isTrue,
-    );
+      engine.setSleepTimerMediaMetadata(stopsAtEndOfTrack: true);
+      expect(
+        engine.mediaItem.value?.extras,
+        isNot(contains(systemMediaSleepTimerEndsAtEpochMsKey)),
+      );
+      expect(
+        engine
+            .mediaItem
+            .value
+            ?.extras?[systemMediaSleepTimerStopsAtEndOfTrackKey],
+        isTrue,
+      );
 
-    engine.setSleepTimerMediaMetadata();
-    expect(
-      engine.mediaItem.value?.extras,
-      isNot(contains(systemMediaSleepTimerStopsAtEndOfTrackKey)),
-    );
-  });
+      engine.setSleepTimerMediaMetadata();
+      expect(
+        engine.mediaItem.value?.extras,
+        isNot(contains(systemMediaSleepTimerStopsAtEndOfTrackKey)),
+      );
+    },
+  );
 
-  test('does not publish authenticated stream URLs to system media metadata',
-      () async {
-    const secret = 'private-api-key';
-    final delegate = _FakePlaybackAudioEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
-    final track = Track(
-      id: 'private-track',
-      title: 'Private Track',
-      artist: 'Private Artist',
-      artworkUri: Uri.file('/private/cache/provider-artwork.png'),
-      artworkUriIsEphemeral: true,
-      providerArtworkId: 'cover-1',
-      streamUrl: 'https://media.example.test/audio?api_key=$secret',
-      streamUrlIsEphemeral: true,
-      sourceId: 'self-hosted-jellyfin',
-      externalId: 'song-1',
-    );
+  test(
+    'does not publish authenticated stream URLs to system media metadata',
+    () async {
+      const secret = 'private-api-key';
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      final track = Track(
+        id: 'private-track',
+        title: 'Private Track',
+        artist: 'Private Artist',
+        artworkUri: Uri.file('/private/cache/provider-artwork.png'),
+        artworkUriIsEphemeral: true,
+        providerArtworkId: 'cover-1',
+        streamUrl: 'https://media.example.test/audio?api_key=$secret',
+        streamUrlIsEphemeral: true,
+        sourceId: 'self-hosted-jellyfin',
+        externalId: 'song-1',
+      );
 
-    await engine.setQueue(<Track>[track], initialIndex: 0);
+      await engine.setQueue(<Track>[track], initialIndex: 0);
 
-    final item = engine.mediaItem.value!;
-    expect(item.id, 'private-track');
-    expect(item.artUri, Uri.file('/private/cache/provider-artwork.png'));
-    expect(item.extras, isNot(contains('streamUrl')));
-    expect(item.extras.toString(), isNot(contains(secret)));
-    expect(item.extras?['sourceId'], 'self-hosted-jellyfin');
-    expect(item.extras?['externalId'], 'song-1');
-  });
+      final item = engine.mediaItem.value!;
+      expect(item.id, 'private-track');
+      expect(item.artUri, Uri.file('/private/cache/provider-artwork.png'));
+      expect(item.extras, isNot(contains('streamUrl')));
+      expect(item.extras.toString(), isNot(contains(secret)));
+      expect(item.extras?['sourceId'], 'self-hosted-jellyfin');
+      expect(item.extras?['externalId'], 'song-1');
+    },
+  );
 
-  test('publishes playback state for notifications and control center',
-      () async {
-    final delegate = _FakePlaybackAudioEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
-    await engine.setQueue(
-      <Track>[_track('one'), _track('two')],
-      initialIndex: 0,
-    );
+  test(
+    'publishes playback state for notifications and control center',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[
+        _track('one'),
+        _track('two'),
+      ], initialIndex: 0);
 
-    delegate
-      ..positionValue = const Duration(seconds: 12)
-      ..bufferedPositionValue = const Duration(seconds: 28)
-      ..emitProcessingState(ProcessingState.ready)
-      ..emitPlaying(true);
+      delegate
+        ..positionValue = const Duration(seconds: 12)
+        ..bufferedPositionValue = const Duration(seconds: 28)
+        ..emitProcessingState(ProcessingState.ready)
+        ..emitPlaying(true);
 
-    final state = engine.playbackState.value;
-    expect(state.playing, isTrue);
-    expect(state.processingState, AudioProcessingState.ready);
-    expect(state.updatePosition, const Duration(seconds: 12));
-    expect(state.bufferedPosition, const Duration(seconds: 28));
-    expect(state.queueIndex, 0);
-    expect(state.controls, contains(MediaControl.pause));
-    expect(state.controls, contains(MediaControl.skipToNext));
-    expect(state.systemActions, contains(MediaAction.seek));
+      final state = engine.playbackState.value;
+      expect(state.playing, isTrue);
+      expect(state.processingState, AudioProcessingState.ready);
+      expect(state.updatePosition, const Duration(seconds: 12));
+      expect(state.bufferedPosition, const Duration(seconds: 28));
+      expect(state.queueIndex, 0);
+      expect(state.controls, contains(MediaControl.pause));
+      expect(state.controls, contains(MediaControl.skipToNext));
+      expect(state.systemActions, contains(MediaAction.seek));
 
-    await engine.setSpeed(1.5);
-    expect(delegate.speedValue, 1.5);
-    expect(engine.playbackState.value.speed, 1.5);
-  });
+      await engine.setSpeed(1.5);
+      expect(delegate.speedValue, 1.5);
+      expect(engine.playbackState.value.speed, 1.5);
+    },
+  );
 
   test('forwards pitch only when the wrapped backend supports it', () async {
     final delegate = _FakePitchPlaybackAudioEngine();
@@ -162,84 +171,84 @@ void main() {
     expect(supportsPitchControl(TargetPlatform.macOS), isFalse);
   });
 
-  test('publishes the current title and play state to Android widgets',
-      () async {
-    final delegate = _FakePlaybackAudioEngine();
-    final widget = _FakePlaybackWidgetBridge();
-    final engine = SystemMediaPlaybackEngine(
-      delegate,
-      playbackWidgetBridge: widget,
-    );
-    addTearDown(engine.dispose);
-    widget.updates.clear();
+  test(
+    'publishes the current title and play state to Android widgets',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final widget = _FakePlaybackWidgetBridge();
+      final engine = SystemMediaPlaybackEngine(
+        delegate,
+        playbackWidgetBridge: widget,
+      );
+      addTearDown(engine.dispose);
+      widget.updates.clear();
 
-    await engine.setQueue(
-      <Track>[
+      await engine.setQueue(<Track>[
         _track('one', duration: const Duration(minutes: 3)),
         _track('two'),
-      ],
-      initialIndex: 0,
-    );
-    expect(
-      widget.updates.last,
-      const _WidgetUpdate(
-        'Track one',
-        'Artist one',
-        false,
-        Duration.zero,
-        Duration(minutes: 3),
-      ),
-    );
+      ], initialIndex: 0);
+      expect(
+        widget.updates.last,
+        const _WidgetUpdate(
+          'Track one',
+          'Artist one',
+          false,
+          Duration.zero,
+          Duration(minutes: 3),
+        ),
+      );
 
-    delegate.emitPlaying(true);
-    expect(
-      widget.updates.last,
-      const _WidgetUpdate(
-        'Track one',
-        'Artist one',
-        true,
-        Duration.zero,
-        Duration(minutes: 3),
-      ),
-    );
+      delegate.emitPlaying(true);
+      expect(
+        widget.updates.last,
+        const _WidgetUpdate(
+          'Track one',
+          'Artist one',
+          true,
+          Duration.zero,
+          Duration(minutes: 3),
+        ),
+      );
 
-    final updatesBeforeShortProgress = widget.updates.length;
-    delegate.emitPosition(const Duration(milliseconds: 500));
-    expect(widget.updates, hasLength(updatesBeforeShortProgress));
+      final updatesBeforeShortProgress = widget.updates.length;
+      delegate.emitPosition(const Duration(milliseconds: 500));
+      expect(widget.updates, hasLength(updatesBeforeShortProgress));
 
-    delegate.emitPosition(const Duration(seconds: 1));
-    expect(
-      widget.updates.last,
-      const _WidgetUpdate(
-        'Track one',
-        'Artist one',
-        true,
-        Duration(seconds: 1),
-        Duration(minutes: 3),
-      ),
-    );
+      delegate.emitPosition(const Duration(seconds: 1));
+      expect(
+        widget.updates.last,
+        const _WidgetUpdate(
+          'Track one',
+          'Artist one',
+          true,
+          Duration(seconds: 1),
+          Duration(minutes: 3),
+        ),
+      );
 
-    await engine.seek(Duration.zero, index: 1);
-    expect(
-      widget.updates.last,
-      const _WidgetUpdate(
-        'Track two',
-        'Artist two',
-        true,
-        Duration.zero,
-        null,
-      ),
-    );
-  });
+      await engine.seek(Duration.zero, index: 1);
+      expect(
+        widget.updates.last,
+        const _WidgetUpdate(
+          'Track two',
+          'Artist two',
+          true,
+          Duration.zero,
+          null,
+        ),
+      );
+    },
+  );
 
   test('routes system transport, repeat, and shuffle commands', () async {
     final delegate = _FakePlaybackAudioEngine();
     final engine = SystemMediaPlaybackEngine(delegate);
     addTearDown(engine.dispose);
-    await engine.setQueue(
-      <Track>[_track('one'), _track('two'), _track('three')],
-      initialIndex: 1,
-    );
+    await engine.setQueue(<Track>[
+      _track('one'),
+      _track('two'),
+      _track('three'),
+    ], initialIndex: 1);
 
     await engine.skipToNext();
     expect(delegate.currentIndex, 2);
@@ -255,52 +264,53 @@ void main() {
     expect(delegate.loopModeValue, LoopMode.all);
     expect(delegate.shuffleValue, isTrue);
     expect(engine.playbackState.value.repeatMode, AudioServiceRepeatMode.all);
-    expect(
-      engine.playbackState.value.shuffleMode,
-      AudioServiceShuffleMode.all,
-    );
+    expect(engine.playbackState.value.shuffleMode, AudioServiceShuffleMode.all);
   });
 
-  test('routes validated MPRIS volume custom actions to the audio engine',
-      () async {
-    final delegate = _FakePlaybackAudioEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
+  test(
+    'routes validated MPRIS volume custom actions to the audio engine',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
 
-    await engine.customAction('dbusVolume', <String, dynamic>{'value': 0.35});
-    expect(delegate.volumeValue, 0.35);
+      await engine.customAction('dbusVolume', <String, dynamic>{'value': 0.35});
+      expect(delegate.volumeValue, 0.35);
 
-    await engine.customAction('dbusVolume', <String, dynamic>{'value': 1.1});
-    expect(delegate.volumeValue, 0.35);
-  });
+      await engine.customAction('dbusVolume', <String, dynamic>{'value': 1.1});
+      expect(delegate.volumeValue, 0.35);
+    },
+  );
 
-  test('forwards native audio effects through the system media wrapper',
-      () async {
-    final delegate = _FakeAudioEffectsPlaybackEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
-    const profile = PlaybackEqualizerProfile(
-      preset: PlaybackEqualizerPreset.bassBoost,
-    );
+  test(
+    'forwards native audio effects through the system media wrapper',
+    () async {
+      final delegate = _FakeAudioEffectsPlaybackEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      const profile = PlaybackEqualizerProfile(
+        preset: PlaybackEqualizerPreset.bassBoost,
+      );
 
-    expect(engine.supportsEqualizer, isTrue);
-    expect(engine.supportsLoudnessEnhancer, isTrue);
-    expect(engine.supportsVirtualizer, isTrue);
-    await engine.setEqualizerEnabled(true);
-    await engine.setEqualizerProfile(profile);
-    await engine.setLoudnessEnhancerTargetGain(4.5);
-    await engine.setLoudnessEnhancerEnabled(true);
-    await engine.setVirtualizerStrength(650);
-    await engine.setVirtualizerEnabled(true);
+      expect(engine.supportsEqualizer, isTrue);
+      expect(engine.supportsLoudnessEnhancer, isTrue);
+      expect(engine.supportsVirtualizer, isTrue);
+      await engine.setEqualizerEnabled(true);
+      await engine.setEqualizerProfile(profile);
+      await engine.setLoudnessEnhancerTargetGain(4.5);
+      await engine.setLoudnessEnhancerEnabled(true);
+      await engine.setVirtualizerStrength(650);
+      await engine.setVirtualizerEnabled(true);
 
-    expect(delegate.equalizerEnabledValue, isTrue);
-    expect(delegate.equalizerProfileValue, same(profile));
-    expect(delegate.loudnessEnhancerTargetGainValue, 4.5);
-    expect(delegate.loudnessEnhancerEnabledValue, isTrue);
-    expect(delegate.virtualizerStrengthValue, 650);
-    expect(delegate.virtualizerEnabledValue, isTrue);
-    expect(await engine.loadEqualizerBands(), delegate.bands);
-  });
+      expect(delegate.equalizerEnabledValue, isTrue);
+      expect(delegate.equalizerProfileValue, same(profile));
+      expect(delegate.loudnessEnhancerTargetGainValue, 4.5);
+      expect(delegate.loudnessEnhancerEnabledValue, isTrue);
+      expect(delegate.virtualizerStrengthValue, 650);
+      expect(delegate.virtualizerEnabledValue, isTrue);
+      expect(await engine.loadEqualizerBands(), delegate.bands);
+    },
+  );
 
   test('publishes and routes a desktop system media session', () async {
     final delegate = _FakePlaybackAudioEngine();
@@ -311,13 +321,10 @@ void main() {
     );
     addTearDown(engine.dispose);
     await Future<void>.delayed(Duration.zero);
-    await engine.setQueue(
-      <Track>[
-        _track('one', duration: const Duration(minutes: 3)),
-        _track('two'),
-      ],
-      initialIndex: 0,
-    );
+    await engine.setQueue(<Track>[
+      _track('one', duration: const Duration(minutes: 3)),
+      _track('two'),
+    ], initialIndex: 0);
     delegate
       ..emitProcessingState(ProcessingState.ready)
       ..emitPosition(const Duration(seconds: 12))
@@ -343,10 +350,10 @@ void main() {
     final delegate = _FakePlaybackAudioEngine();
     final engine = SystemMediaPlaybackEngine(delegate);
     addTearDown(engine.dispose);
-    await engine.setQueue(
-      <Track>[_track('one'), _track('two')],
-      initialIndex: 1,
-    );
+    await engine.setQueue(<Track>[
+      _track('one'),
+      _track('two'),
+    ], initialIndex: 1);
 
     final rootItems = await engine.getChildren(AudioService.browsableRootId);
     expect(rootItems.map((item) => item.title), <String>[
@@ -387,19 +394,15 @@ void main() {
     final libraryFolder = rootItems.singleWhere(
       (item) => item.title == 'Library',
     );
-    final allTracksFolder =
-        (await engine.getChildren(libraryFolder.id)).single;
+    final allTracksFolder = (await engine.getChildren(libraryFolder.id)).single;
     expect(allTracksFolder.title, 'All tracks');
     expect(allTracksFolder.playable, isFalse);
 
     final libraryItems = await engine.getChildren(allTracksFolder.id);
-    expect(
-      libraryItems.map((item) => item.id),
-      <String>[
-        'aethertune:android-auto:library-track:one',
-        'aethertune:android-auto:library-track:two',
-      ],
-    );
+    expect(libraryItems.map((item) => item.id), <String>[
+      'aethertune:android-auto:library-track:one',
+      'aethertune:android-auto:library-track:two',
+    ]);
     expect(
       (await engine.getMediaItem(libraryItems.last.id))?.title,
       'Track two',
@@ -410,221 +413,233 @@ void main() {
     expect(delegate.playingValue, isFalse);
   });
 
-  test('browses Android Auto playlists and selects their ordered queue',
-      () async {
-    final delegate = _FakePlaybackAudioEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
-    final tracks = <Track>[_track('one'), _track('two')];
-    Track? selectedTrack;
-    List<Track>? selectedQueue;
-    int? selectedQueueIndex;
-    engine.setMediaLibraryBrowseTracks(
-      tracks,
-      onTrackSelected: (_) async {},
-      playlists: <MediaLibraryBrowsePlaylist>[
-        MediaLibraryBrowsePlaylist(
-          id: 'favorites',
-          title: 'Favorites',
-          artworkUri: Uri.parse('https://example.test/favorites.jpg'),
-          tracks: <Track>[tracks.last, tracks.first, tracks.last],
-        ),
-        MediaLibraryBrowsePlaylist(
-          id: 'artist:artist-one',
-          title: 'Artist one',
-          category: MediaLibraryBrowseCategory.artist,
-          tracks: <Track>[tracks.first, tracks.last],
-        ),
-        MediaLibraryBrowsePlaylist(
-          id: 'album:album-one',
-          title: 'Album one',
-          category: MediaLibraryBrowseCategory.album,
-          tracks: <Track>[tracks.last, tracks.first],
-        ),
-        MediaLibraryBrowsePlaylist(
-          id: 'genre:electronic',
-          title: 'Electronic',
-          category: MediaLibraryBrowseCategory.genre,
-          tracks: <Track>[tracks.first, tracks.last],
-        ),
-        MediaLibraryBrowsePlaylist(
-          id: 'source:local',
-          title: 'local',
-          category: MediaLibraryBrowseCategory.source,
-          tracks: <Track>[tracks.last, tracks.first],
-        ),
-      ],
-      onPlaylistTrackSelected: (track, queue, queueIndex) async {
-        selectedTrack = track;
-        selectedQueue = queue;
-        selectedQueueIndex = queueIndex;
-      },
-    );
+  test(
+    'browses Android Auto playlists and selects their ordered queue',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      final tracks = <Track>[_track('one'), _track('two')];
+      Track? selectedTrack;
+      List<Track>? selectedQueue;
+      int? selectedQueueIndex;
+      engine.setMediaLibraryBrowseTracks(
+        tracks,
+        onTrackSelected: (_) async {},
+        playlists: <MediaLibraryBrowsePlaylist>[
+          MediaLibraryBrowsePlaylist(
+            id: 'favorites',
+            title: 'Favorites',
+            artworkUri: Uri.parse('https://example.test/favorites.jpg'),
+            tracks: <Track>[tracks.last, tracks.first, tracks.last],
+          ),
+          MediaLibraryBrowsePlaylist(
+            id: 'artist:artist-one',
+            title: 'Artist one',
+            category: MediaLibraryBrowseCategory.artist,
+            tracks: <Track>[tracks.first, tracks.last],
+          ),
+          MediaLibraryBrowsePlaylist(
+            id: 'album:album-one',
+            title: 'Album one',
+            category: MediaLibraryBrowseCategory.album,
+            tracks: <Track>[tracks.last, tracks.first],
+          ),
+          MediaLibraryBrowsePlaylist(
+            id: 'genre:electronic',
+            title: 'Electronic',
+            category: MediaLibraryBrowseCategory.genre,
+            tracks: <Track>[tracks.first, tracks.last],
+          ),
+          MediaLibraryBrowsePlaylist(
+            id: 'source:local',
+            title: 'local',
+            category: MediaLibraryBrowseCategory.source,
+            tracks: <Track>[tracks.last, tracks.first],
+          ),
+        ],
+        onPlaylistTrackSelected: (track, queue, queueIndex) async {
+          selectedTrack = track;
+          selectedQueue = queue;
+          selectedQueueIndex = queueIndex;
+        },
+      );
 
-    final libraryFolder = (await engine.getChildren(
-      AudioService.browsableRootId,
-    )).singleWhere((item) => item.title == 'Library');
-    final libraryChildren = await engine.getChildren(libraryFolder.id);
-    final playlistsFolder = libraryChildren.singleWhere(
-      (item) => item.title == 'Playlists',
-    );
-    final playlistFolder = (await engine.getChildren(playlistsFolder.id)).single;
-    expect(playlistFolder.title, 'Favorites');
-    expect(playlistFolder.displaySubtitle, '3 tracks');
-    expect(playlistFolder.artUri, Uri.parse('https://example.test/favorites.jpg'));
+      final libraryFolder = (await engine.getChildren(
+        AudioService.browsableRootId,
+      )).singleWhere((item) => item.title == 'Library');
+      final libraryChildren = await engine.getChildren(libraryFolder.id);
+      final playlistsFolder = libraryChildren.singleWhere(
+        (item) => item.title == 'Playlists',
+      );
+      final playlistFolder = (await engine.getChildren(
+        playlistsFolder.id,
+      )).single;
+      expect(playlistFolder.title, 'Favorites');
+      expect(playlistFolder.displaySubtitle, '3 tracks');
+      expect(
+        playlistFolder.artUri,
+        Uri.parse('https://example.test/favorites.jpg'),
+      );
 
-    await engine.playFromMediaId(playlistFolder.id);
-    expect(selectedTrack, same(tracks.last));
-    expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
-    expect(selectedQueueIndex, 0);
+      await engine.playFromMediaId(playlistFolder.id);
+      expect(selectedTrack, same(tracks.last));
+      expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
+      expect(selectedQueueIndex, 0);
 
-    final playlistTracks = await engine.getChildren(playlistFolder.id);
-    expect(
-      playlistTracks.map((item) => item.title),
-      <String>['Track two', 'Track one', 'Track two'],
-    );
-    expect(playlistTracks.map((item) => item.id).toSet(), hasLength(3));
+      final playlistTracks = await engine.getChildren(playlistFolder.id);
+      expect(playlistTracks.map((item) => item.title), <String>[
+        'Track two',
+        'Track one',
+        'Track two',
+      ]);
+      expect(playlistTracks.map((item) => item.id).toSet(), hasLength(3));
 
-    final artistsFolder = libraryChildren.singleWhere(
-      (item) => item.title == 'Artists',
-    );
-    final artistFolder = (await engine.getChildren(artistsFolder.id)).single;
-    expect(artistFolder.title, 'Artist one');
-    final artistTracks = await engine.getChildren(artistFolder.id);
-    expect(
-      artistTracks.map((item) => item.title),
-      <String>['Track one', 'Track two'],
-    );
+      final artistsFolder = libraryChildren.singleWhere(
+        (item) => item.title == 'Artists',
+      );
+      final artistFolder = (await engine.getChildren(artistsFolder.id)).single;
+      expect(artistFolder.title, 'Artist one');
+      final artistTracks = await engine.getChildren(artistFolder.id);
+      expect(artistTracks.map((item) => item.title), <String>[
+        'Track one',
+        'Track two',
+      ]);
 
-    final albumsFolder = libraryChildren.singleWhere(
-      (item) => item.title == 'Albums',
-    );
-    final albumFolder = (await engine.getChildren(albumsFolder.id)).single;
-    expect(albumFolder.title, 'Album one');
-    final albumTracks = await engine.getChildren(albumFolder.id);
-    expect(
-      albumTracks.map((item) => item.title),
-      <String>['Track two', 'Track one'],
-    );
+      final albumsFolder = libraryChildren.singleWhere(
+        (item) => item.title == 'Albums',
+      );
+      final albumFolder = (await engine.getChildren(albumsFolder.id)).single;
+      expect(albumFolder.title, 'Album one');
+      final albumTracks = await engine.getChildren(albumFolder.id);
+      expect(albumTracks.map((item) => item.title), <String>[
+        'Track two',
+        'Track one',
+      ]);
 
-    final genresFolder = libraryChildren.singleWhere(
-      (item) => item.title == 'Genres',
-    );
-    final genreFolder = (await engine.getChildren(genresFolder.id)).single;
-    expect(genreFolder.title, 'Electronic');
-    final genreTracks = await engine.getChildren(genreFolder.id);
-    expect(
-      genreTracks.map((item) => item.title),
-      <String>['Track one', 'Track two'],
-    );
+      final genresFolder = libraryChildren.singleWhere(
+        (item) => item.title == 'Genres',
+      );
+      final genreFolder = (await engine.getChildren(genresFolder.id)).single;
+      expect(genreFolder.title, 'Electronic');
+      final genreTracks = await engine.getChildren(genreFolder.id);
+      expect(genreTracks.map((item) => item.title), <String>[
+        'Track one',
+        'Track two',
+      ]);
 
-    final sourcesFolder = libraryChildren.singleWhere(
-      (item) => item.title == 'Sources',
-    );
-    final sourceFolder = (await engine.getChildren(sourcesFolder.id)).single;
-    expect(sourceFolder.title, 'local');
-    final sourceTracks = await engine.getChildren(sourceFolder.id);
-    expect(
-      sourceTracks.map((item) => item.title),
-      <String>['Track two', 'Track one'],
-    );
+      final sourcesFolder = libraryChildren.singleWhere(
+        (item) => item.title == 'Sources',
+      );
+      final sourceFolder = (await engine.getChildren(sourcesFolder.id)).single;
+      expect(sourceFolder.title, 'local');
+      final sourceTracks = await engine.getChildren(sourceFolder.id);
+      expect(sourceTracks.map((item) => item.title), <String>[
+        'Track two',
+        'Track one',
+      ]);
 
-    await engine.playFromMediaId(playlistTracks.last.id);
-    expect(selectedTrack, same(tracks.last));
-    expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
-    expect(selectedQueueIndex, 2);
-    expect(delegate.playingValue, isFalse);
+      await engine.playFromMediaId(playlistTracks.last.id);
+      expect(selectedTrack, same(tracks.last));
+      expect(selectedQueue, <Track>[tracks.last, tracks.first, tracks.last]);
+      expect(selectedQueueIndex, 2);
+      expect(delegate.playingValue, isFalse);
 
-    await engine.playFromMediaId(albumTracks.first.id);
-    expect(selectedTrack, same(tracks.last));
-    expect(selectedQueue, <Track>[tracks.last, tracks.first]);
-    expect(selectedQueueIndex, 0);
+      await engine.playFromMediaId(albumTracks.first.id);
+      expect(selectedTrack, same(tracks.last));
+      expect(selectedQueue, <Track>[tracks.last, tracks.first]);
+      expect(selectedQueueIndex, 0);
 
-    await engine.playFromMediaId(genreTracks.last.id);
-    expect(selectedTrack, same(tracks.last));
-    expect(selectedQueue, <Track>[tracks.first, tracks.last]);
-    expect(selectedQueueIndex, 1);
+      await engine.playFromMediaId(genreTracks.last.id);
+      expect(selectedTrack, same(tracks.last));
+      expect(selectedQueue, <Track>[tracks.first, tracks.last]);
+      expect(selectedQueueIndex, 1);
 
-    await engine.playFromMediaId(sourceTracks.first.id);
-    expect(selectedTrack, same(tracks.last));
-    expect(selectedQueue, <Track>[tracks.last, tracks.first]);
-    expect(selectedQueueIndex, 0);
-  });
+      await engine.playFromMediaId(sourceTracks.first.id);
+      expect(selectedTrack, same(tracks.last));
+      expect(selectedQueue, <Track>[tracks.last, tracks.first]);
+      expect(selectedQueueIndex, 0);
+    },
+  );
 
-  test('browses nested Android Auto folders and selects their folder queue',
-      () async {
-    final delegate = _FakePlaybackAudioEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
-    final tracks = <Track>[_track('one'), _track('two')];
-    Track? selectedTrack;
-    List<Track>? selectedQueue;
-    int? selectedQueueIndex;
-    engine.setMediaLibraryBrowseTracks(
-      tracks,
-      onTrackSelected: (_) async {},
-      folders: <MediaLibraryBrowseFolder>[
-        MediaLibraryBrowseFolder(
-          id: 'music',
-          title: 'Music',
-          queueTracks: tracks,
-          children: <MediaLibraryBrowseFolder>[
-            MediaLibraryBrowseFolder(
-              id: 'music/live',
-              title: 'Live',
-              queueTracks: tracks,
-              directTracks: tracks,
-            ),
-          ],
-        ),
-      ],
-      onPlaylistTrackSelected: (track, queue, queueIndex) async {
-        selectedTrack = track;
-        selectedQueue = queue;
-        selectedQueueIndex = queueIndex;
-      },
-    );
+  test(
+    'browses nested Android Auto folders and selects their folder queue',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      final tracks = <Track>[_track('one'), _track('two')];
+      Track? selectedTrack;
+      List<Track>? selectedQueue;
+      int? selectedQueueIndex;
+      engine.setMediaLibraryBrowseTracks(
+        tracks,
+        onTrackSelected: (_) async {},
+        folders: <MediaLibraryBrowseFolder>[
+          MediaLibraryBrowseFolder(
+            id: 'music',
+            title: 'Music',
+            queueTracks: tracks,
+            children: <MediaLibraryBrowseFolder>[
+              MediaLibraryBrowseFolder(
+                id: 'music/live',
+                title: 'Live',
+                queueTracks: tracks,
+                directTracks: tracks,
+              ),
+            ],
+          ),
+        ],
+        onPlaylistTrackSelected: (track, queue, queueIndex) async {
+          selectedTrack = track;
+          selectedQueue = queue;
+          selectedQueueIndex = queueIndex;
+        },
+      );
 
-    final libraryFolder = (await engine.getChildren(
-      AudioService.browsableRootId,
-    )).singleWhere((item) => item.title == 'Library');
-    final foldersFolder = (await engine.getChildren(
-      libraryFolder.id,
-    )).singleWhere((item) => item.title == 'Folders');
-    final musicFolder = (await engine.getChildren(foldersFolder.id)).single;
-    expect(musicFolder.title, 'Music');
-    expect(musicFolder.displaySubtitle, '1 folder');
+      final libraryFolder = (await engine.getChildren(
+        AudioService.browsableRootId,
+      )).singleWhere((item) => item.title == 'Library');
+      final foldersFolder = (await engine.getChildren(
+        libraryFolder.id,
+      )).singleWhere((item) => item.title == 'Folders');
+      final musicFolder = (await engine.getChildren(foldersFolder.id)).single;
+      expect(musicFolder.title, 'Music');
+      expect(musicFolder.displaySubtitle, '1 folder');
 
-    final liveFolder = (await engine.getChildren(musicFolder.id)).single;
-    expect(liveFolder.title, 'Live');
-    expect(liveFolder.displaySubtitle, '2 tracks');
-    final liveTracks = await engine.getChildren(liveFolder.id);
-    expect(liveTracks.map((item) => item.title), <String>[
-      'Track one',
-      'Track two',
-    ]);
+      final liveFolder = (await engine.getChildren(musicFolder.id)).single;
+      expect(liveFolder.title, 'Live');
+      expect(liveFolder.displaySubtitle, '2 tracks');
+      final liveTracks = await engine.getChildren(liveFolder.id);
+      expect(liveTracks.map((item) => item.title), <String>[
+        'Track one',
+        'Track two',
+      ]);
 
-    await engine.playFromMediaId(liveTracks.last.id);
-    expect(selectedTrack, same(tracks.last));
-    expect(selectedQueue, tracks);
-    expect(selectedQueueIndex, 1);
-    expect(delegate.playingValue, isFalse);
-  });
+      await engine.playFromMediaId(liveTracks.last.id);
+      expect(selectedTrack, same(tracks.last));
+      expect(selectedQueue, tracks);
+      expect(selectedQueueIndex, 1);
+      expect(delegate.playingValue, isFalse);
+    },
+  );
 
-  test('forwards an opt-in visualizer through the system media wrapper',
-      () async {
-    final delegate = _FakeVisualizationPlaybackEngine();
-    final engine = SystemMediaPlaybackEngine(delegate);
-    addTearDown(engine.dispose);
+  test(
+    'forwards an opt-in visualizer through the system media wrapper',
+    () async {
+      final delegate = _FakeVisualizationPlaybackEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
 
-    expect(engine.supportsVisualizer, isTrue);
-    expect(await engine.startVisualizer(), isTrue);
-    await engine.stopVisualizer();
+      expect(engine.supportsVisualizer, isTrue);
+      expect(await engine.startVisualizer(), isTrue);
+      await engine.stopVisualizer();
 
-    expect(delegate.startCalls, 1);
-    expect(delegate.stopCalls, 1);
-    expect(await engine.visualizerBands.first, <double>[0.2, 0.8]);
-  });
+      expect(delegate.startCalls, 1);
+      expect(delegate.stopCalls, 1);
+      expect(await engine.visualizerBands.first, <double>[0.2, 0.8]);
+    },
+  );
 
   test('forwards skip silence through the system media wrapper', () async {
     final delegate = _FakeSkipSilencePlaybackEngine();
@@ -668,11 +683,11 @@ Track _track(String id, {Duration duration = Duration.zero, Uri? artwork}) {
 
 class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
-  final _durationController =
-      StreamController<Duration?>.broadcast(sync: true);
+  final _durationController = StreamController<Duration?>.broadcast(sync: true);
   final _positionController = StreamController<Duration>.broadcast(sync: true);
-  final _processingController =
-      StreamController<ProcessingState>.broadcast(sync: true);
+  final _processingController = StreamController<ProcessingState>.broadcast(
+    sync: true,
+  );
   final _indexController = StreamController<int?>.broadcast(sync: true);
 
   List<Track> tracks = <Track>[];
@@ -781,8 +796,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Future<void> seekToNext() => seek(Duration.zero, index: currentIndex + 1);
 
   @override
-  Future<void> seekToPrevious() =>
-      seek(Duration.zero, index: currentIndex - 1);
+  Future<void> seekToPrevious() => seek(Duration.zero, index: currentIndex - 1);
 
   @override
   Future<void> setShuffleModeEnabled(bool enabled) async {
@@ -834,9 +848,7 @@ class _FakeAudioEffectsPlaybackEngine extends _FakePlaybackAudioEngine
     implements AudioEffectsPlaybackAudioEngine, VirtualizerPlaybackAudioEngine {
   bool equalizerEnabledValue = false;
   PlaybackEqualizerProfile equalizerProfileValue =
-      const PlaybackEqualizerProfile(
-        preset: PlaybackEqualizerPreset.flat,
-      );
+      const PlaybackEqualizerProfile(preset: PlaybackEqualizerPreset.flat);
   bool loudnessEnhancerEnabledValue = false;
   double loudnessEnhancerTargetGainValue = 0;
   bool virtualizerEnabledValue = false;

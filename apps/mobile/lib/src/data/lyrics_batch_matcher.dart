@@ -69,7 +69,9 @@ final class LyricsBatchMatcher {
           !_sameMetadata(track.title, result.trackName) ||
           !_sameMetadata(track.artist, result.artistName) ||
           !_hasCompatibleDuration(track.duration, result.duration) ||
-          !seenExternalIds.add('${result.providerId}\u0000${result.externalId}')) {
+          !seenExternalIds.add(
+            '${result.providerId}\u0000${result.externalId}',
+          )) {
         continue;
       }
       matches.add(result);
@@ -90,18 +92,16 @@ final class LyricsBatchMatchReport {
   Iterable<LyricsBatchMatchOutcome> get matches =>
       outcomes.where((outcome) => outcome.result != null);
 
-  int get unmatchedCount =>
-      outcomes.where((outcome) => outcome.result == null && outcome.error == null).length;
+  int get unmatchedCount => outcomes
+      .where((outcome) => outcome.result == null && outcome.error == null)
+      .length;
 
-  int get failedCount => outcomes.where((outcome) => outcome.error != null).length;
+  int get failedCount =>
+      outcomes.where((outcome) => outcome.error != null).length;
 }
 
 final class LyricsBatchMatchOutcome {
-  const LyricsBatchMatchOutcome({
-    required this.track,
-    this.result,
-    this.error,
-  });
+  const LyricsBatchMatchOutcome({required this.track, this.result, this.error});
 
   const LyricsBatchMatchOutcome.noMatch(Track track) : this(track: track);
 
@@ -134,11 +134,13 @@ bool _sameMetadata(String left, String right) {
   if (leftTrimmed.toLowerCase() == rightTrimmed.toLowerCase()) {
     return true;
   }
-  final leftCompact = leftTrimmed
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]'), '');
-  final rightCompact = rightTrimmed
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]'), '');
+  final leftCompact = leftTrimmed.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]'),
+    '',
+  );
+  final rightCompact = rightTrimmed.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]'),
+    '',
+  );
   return leftCompact.isNotEmpty && leftCompact == rightCompact;
 }

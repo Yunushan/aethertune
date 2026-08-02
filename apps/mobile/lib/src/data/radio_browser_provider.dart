@@ -8,8 +8,8 @@ import '../domain/track.dart';
 typedef RadioBrowserSearchLoader = Future<String> Function(Uri searchUri);
 typedef RadioBrowserClickLoader = Future<String> Function(Uri clickUri);
 typedef RadioBrowserMirrorLoader = Future<String> Function(Uri mirrorsUri);
-typedef RadioBrowserStreamValidator = Future<RadioBrowserStreamValidation>
-    Function(Uri streamUri);
+typedef RadioBrowserStreamValidator =
+    Future<RadioBrowserStreamValidation> Function(Uri streamUri);
 typedef RadioBrowserRetryDelay = Future<void> Function(Duration duration);
 
 const _radioBrowserRetryDelays = <Duration>[
@@ -98,16 +98,16 @@ class RadioBrowserProvider
     RadioBrowserStreamValidator? streamValidator,
     RadioBrowserRetryDelay? retryDelay,
     this.limit = 20,
-  })  : _baseUri = baseUri ?? defaultRadioBrowserBaseUri,
-        _mirrorDirectoryUri =
-            mirrorDirectoryUri ?? defaultRadioBrowserMirrorDirectoryUri,
-        _mirrorLoader = mirrorLoader ?? _loadRadioBrowserMirrors,
-        _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
-        _clickLoader = clickLoader ?? _loadRadioBrowserClick,
-        _streamValidator = streamValidator ?? _validateRadioBrowserStream,
-        _retryDelay =
-            retryDelay ?? ((duration) => Future<void>.delayed(duration)),
-        _discoversMirrors = baseUri == null;
+  }) : _baseUri = baseUri ?? defaultRadioBrowserBaseUri,
+       _mirrorDirectoryUri =
+           mirrorDirectoryUri ?? defaultRadioBrowserMirrorDirectoryUri,
+       _mirrorLoader = mirrorLoader ?? _loadRadioBrowserMirrors,
+       _searchLoader = searchLoader ?? _loadRadioBrowserSearch,
+       _clickLoader = clickLoader ?? _loadRadioBrowserClick,
+       _streamValidator = streamValidator ?? _validateRadioBrowserStream,
+       _retryDelay =
+           retryDelay ?? ((duration) => Future<void>.delayed(duration)),
+       _discoversMirrors = baseUri == null;
 
   Uri _baseUri;
   final Uri _mirrorDirectoryUri;
@@ -134,27 +134,27 @@ class RadioBrowserProvider
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.radioDirectory,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.directPlayback,
-      };
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+    MusicSourceCapability.radioDirectory,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.directPlayback,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: <String>{
-          if (_discoversMirrors && _mirrorDirectoryUri.host.isNotEmpty)
-            _mirrorDirectoryUri.host,
-          if (baseUri.host.isNotEmpty) baseUri.host,
-        }.toList(growable: false),
-        dataSent: <String>[
-          if (_discoversMirrors) 'mirror discovery request',
-          'station search query',
-          'station click UUID',
-          'station stream validation request',
-        ],
-      );
+    networkDomains: <String>{
+      if (_discoversMirrors && _mirrorDirectoryUri.host.isNotEmpty)
+        _mirrorDirectoryUri.host,
+      if (baseUri.host.isNotEmpty) baseUri.host,
+    }.toList(growable: false),
+    dataSent: <String>[
+      if (_discoversMirrors) 'mirror discovery request',
+      'station search query',
+      'station click UUID',
+      'station stream validation request',
+    ],
+  );
 
   @override
   Future<List<Track>> search(String query) async {
@@ -243,24 +243,14 @@ class RadioBrowserProvider
     }
     final effectiveLimit = pageSize ?? limit;
     if (effectiveLimit <= 0) {
-      throw ArgumentError.value(
-        effectiveLimit,
-        'pageSize',
-        'must be positive',
-      );
+      throw ArgumentError.value(effectiveLimit, 'pageSize', 'must be positive');
     }
 
     final normalized = query.trim();
     final baseUri = await _resolvedBaseUri();
     final response = await _runRadioBrowserDirectoryRequest(
       () => _searchLoader(
-        _searchUri(
-          baseUri,
-          normalized,
-          filters,
-          offset,
-          effectiveLimit,
-        ),
+        _searchUri(baseUri, normalized, filters, offset, effectiveLimit),
       ),
       delay: _retryDelay,
     );
@@ -411,7 +401,9 @@ int _radioBrowserResponseCount(String jsonText) {
 List<Uri> parseRadioBrowserMirrors(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! List<dynamic>) {
-    throw const FormatException('Radio Browser mirror response must be a list.');
+    throw const FormatException(
+      'Radio Browser mirror response must be a list.',
+    );
   }
 
   return decoded
@@ -420,10 +412,7 @@ List<Uri> parseRadioBrowserMirrors(String jsonText) {
       .toList(growable: false);
 }
 
-Uri selectRadioBrowserMirror(
-  List<Uri> mirrors, {
-  required Uri fallback,
-}) {
+Uri selectRadioBrowserMirror(List<Uri> mirrors, {required Uri fallback}) {
   if (mirrors.isEmpty) {
     return fallback;
   }
@@ -493,8 +482,7 @@ final class RadioBrowserStation {
     }
 
     final normalizedCodec = filters.codec.trim().toLowerCase();
-    if (normalizedCodec.isNotEmpty &&
-        codec.toLowerCase() != normalizedCodec) {
+    if (normalizedCodec.isNotEmpty && codec.toLowerCase() != normalizedCodec) {
       return false;
     }
 
@@ -536,7 +524,9 @@ final class RadioBrowserStation {
 List<RadioBrowserStation> parseRadioBrowserStations(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! List<dynamic>) {
-    throw const FormatException('Radio Browser station response must be a list.');
+    throw const FormatException(
+      'Radio Browser station response must be a list.',
+    );
   }
 
   return decoded
@@ -668,8 +658,7 @@ Future<RadioBrowserStreamValidation> _validateRadioBrowserStream(
     );
   }
 
-  final client = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 10);
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
     final request = await client.getUrl(streamUri);
     request.headers.set(HttpHeaders.acceptHeader, 'audio/*,*/*;q=0.8');
@@ -677,7 +666,8 @@ Future<RadioBrowserStreamValidation> _validateRadioBrowserStream(
     request.headers.set('Icy-MetaData', '1');
     request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-4095');
     final response = await request.close();
-    final contentType = response.headers.contentType?.mimeType ??
+    final contentType =
+        response.headers.contentType?.mimeType ??
         response.headers.value(HttpHeaders.contentTypeHeader);
     if (response.statusCode < 200 || response.statusCode >= 400) {
       return RadioBrowserStreamValidation(
@@ -732,12 +722,24 @@ String? detectRadioBrowserStreamCodec(List<int> bytes) {
       bytes[2] == 0x67 &&
       bytes[3] == 0x53) {
     if (_containsRadioBrowserSignature(bytes, const <int>[
-      0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64,
+      0x4f,
+      0x70,
+      0x75,
+      0x73,
+      0x48,
+      0x65,
+      0x61,
+      0x64,
     ])) {
       return 'Opus';
     }
     if (_containsRadioBrowserSignature(bytes, const <int>[
-      0x76, 0x6f, 0x72, 0x62, 0x69, 0x73,
+      0x76,
+      0x6f,
+      0x72,
+      0x62,
+      0x69,
+      0x73,
     ])) {
       return 'Ogg/Vorbis';
     }
@@ -886,8 +888,8 @@ Uri? _mirrorUriFromJson(Object? value) {
       url.isNotEmpty
           ? url
           : name.isNotEmpty
-              ? name
-              : host,
+          ? name
+          : host,
     );
   }
 

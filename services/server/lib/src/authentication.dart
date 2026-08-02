@@ -17,6 +17,8 @@ abstract interface class OperationsAuthenticator {
   bool authenticate(String token);
 }
 
+const operationsTokenPlaceholder = 'replace-with-a-separate-long-random-token';
+
 class DisabledOperationsAuthenticator implements OperationsAuthenticator {
   const DisabledOperationsAuthenticator();
 
@@ -29,10 +31,7 @@ class DisabledOperationsAuthenticator implements OperationsAuthenticator {
 
 class StaticOperationsAuthenticator implements OperationsAuthenticator {
   StaticOperationsAuthenticator(String configuredToken)
-      : _tokenHash = _configuredTokenHash(
-          configuredToken,
-          configurationName: 'AETHERTUNE_OPS_TOKEN',
-        );
+    : _tokenHash = _configuredOperationsTokenHash(configuredToken);
 
   final List<int> _tokenHash;
 
@@ -48,6 +47,18 @@ class StaticOperationsAuthenticator implements OperationsAuthenticator {
   }
 }
 
+List<int> _configuredOperationsTokenHash(String configuredToken) {
+  if (configuredToken == operationsTokenPlaceholder) {
+    throw const FormatException(
+      'AETHERTUNE_OPS_TOKEN must replace the deployment placeholder.',
+    );
+  }
+  return _configuredTokenHash(
+    configuredToken,
+    configurationName: 'AETHERTUNE_OPS_TOKEN',
+  );
+}
+
 class DisabledSyncAuthenticator implements SyncAuthenticator {
   const DisabledSyncAuthenticator();
 
@@ -60,7 +71,7 @@ class DisabledSyncAuthenticator implements SyncAuthenticator {
 
 class CompositeSyncAuthenticator implements SyncAuthenticator {
   CompositeSyncAuthenticator(Iterable<SyncAuthenticator> authenticators)
-      : _authenticators = List<SyncAuthenticator>.unmodifiable(authenticators);
+    : _authenticators = List<SyncAuthenticator>.unmodifiable(authenticators);
 
   final List<SyncAuthenticator> _authenticators;
 
@@ -82,12 +93,12 @@ class CompositeSyncAuthenticator implements SyncAuthenticator {
 
 class StaticSyncAuthenticator implements SyncAuthenticator {
   StaticSyncAuthenticator(Map<String, String> users)
-      : _credentials = _validatedStaticCredentials(
-          _credentialsFromFlatMap(users),
-        );
+    : _credentials = _validatedStaticCredentials(
+        _credentialsFromFlatMap(users),
+      );
 
   StaticSyncAuthenticator._(List<_StaticSyncCredential> credentials)
-      : _credentials = _validatedStaticCredentials(credentials);
+    : _credentials = _validatedStaticCredentials(credentials);
 
   factory StaticSyncAuthenticator.fromJson(String? rawUsers) {
     if (rawUsers == null || rawUsers.trim().isEmpty) {
@@ -133,12 +144,12 @@ class ManagedSyncTokenMetadata {
   final DateTime? lastAuthenticatedAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'id': id,
-        'deviceName': deviceName,
-        'createdAt': createdAt.toUtc().toIso8601String(),
-        if (lastAuthenticatedAt != null)
-          'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
-      };
+    'id': id,
+    'deviceName': deviceName,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+    if (lastAuthenticatedAt != null)
+      'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
+  };
 }
 
 class ManagedSyncAccountProfile {
@@ -163,22 +174,19 @@ class ManagedSyncAccountProfile {
   final List<ManagedSyncTokenMetadata> tokens;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'id': id,
-        'displayName': displayName,
-        'avatarTone': avatarTone,
-        'publicProfileEnabled': publicProfileEnabled,
-        'publicDisplayNameEnabled': publicDisplayNameEnabled,
-        'publicAvatarToneEnabled': publicAvatarToneEnabled,
-        'createdAt': createdAt.toUtc().toIso8601String(),
-        'tokens': tokens.map((token) => token.toJson()).toList(growable: false),
-      };
+    'id': id,
+    'displayName': displayName,
+    'avatarTone': avatarTone,
+    'publicProfileEnabled': publicProfileEnabled,
+    'publicDisplayNameEnabled': publicDisplayNameEnabled,
+    'publicAvatarToneEnabled': publicAvatarToneEnabled,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+    'tokens': tokens.map((token) => token.toJson()).toList(growable: false),
+  };
 }
 
 class ManagedSyncPrincipal {
-  const ManagedSyncPrincipal({
-    required this.accountId,
-    required this.token,
-  });
+  const ManagedSyncPrincipal({required this.accountId, required this.token});
 
   final String accountId;
   final ManagedSyncTokenMetadata token;
@@ -209,10 +217,7 @@ class IssuedManagedRecoveryCode {
 }
 
 class ManagedSyncProfileUpdate {
-  const ManagedSyncProfileUpdate({
-    required this.account,
-    required this.device,
-  });
+  const ManagedSyncProfileUpdate({required this.account, required this.device});
 
   final ManagedSyncAccountProfile account;
   final ManagedSyncTokenMetadata device;
@@ -251,12 +256,12 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     ManagedSyncTokenGenerator? tokenGenerator,
     ManagedRecoveryCodeGenerator? recoveryCodeGenerator,
     Duration? tokenLifetime,
-  })  : _directory = null,
-        _clock = clock ?? DateTime.now,
-        _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
-        _recoveryCodeGenerator =
-            recoveryCodeGenerator ?? _generateManagedRecoveryCode,
-        _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
+  }) : _directory = null,
+       _clock = clock ?? DateTime.now,
+       _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
+       _recoveryCodeGenerator =
+           recoveryCodeGenerator ?? _generateManagedRecoveryCode,
+       _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
 
   ManagedSyncAccountRegistry._(
     this._directory, {
@@ -264,11 +269,11 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     ManagedSyncTokenGenerator? tokenGenerator,
     ManagedRecoveryCodeGenerator? recoveryCodeGenerator,
     Duration? tokenLifetime,
-  })  : _clock = clock ?? DateTime.now,
-        _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
-        _recoveryCodeGenerator =
-            recoveryCodeGenerator ?? _generateManagedRecoveryCode,
-        _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
+  }) : _clock = clock ?? DateTime.now,
+       _tokenGenerator = tokenGenerator ?? _generateManagedBearerToken,
+       _recoveryCodeGenerator =
+           recoveryCodeGenerator ?? _generateManagedRecoveryCode,
+       _tokenLifetime = _validatedTokenLifetime(tokenLifetime);
 
   static Future<ManagedSyncAccountRegistry> open(
     Directory directory, {
@@ -325,27 +330,28 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     int limit = 20,
   }) {
     final normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery.length < 2 || normalizedQuery.length > 80 ||
-        limit < 1 || limit > 20) {
+    if (normalizedQuery.length < 2 ||
+        normalizedQuery.length > 80 ||
+        limit < 1 ||
+        limit > 20) {
       throw const FormatException('Public profile query is invalid.');
     }
-    final profiles = _accounts.values
-        .map(_profileForRecord)
-        .where(
-          (profile) =>
-              profile.publicDisplayNameEnabled &&
-              profile.displayName.toLowerCase().contains(normalizedQuery),
-        )
-        .toList()
-      ..sort((left, right) {
-        final byName = left.displayName
-            .toLowerCase()
-            .compareTo(right.displayName.toLowerCase());
-        return byName != 0 ? byName : left.id.compareTo(right.id);
-      });
-    return List<ManagedSyncAccountProfile>.unmodifiable(
-      profiles.take(limit),
-    );
+    final profiles =
+        _accounts.values
+            .map(_profileForRecord)
+            .where(
+              (profile) =>
+                  profile.publicDisplayNameEnabled &&
+                  profile.displayName.toLowerCase().contains(normalizedQuery),
+            )
+            .toList()
+          ..sort((left, right) {
+            final byName = left.displayName.toLowerCase().compareTo(
+              right.displayName.toLowerCase(),
+            );
+            return byName != 0 ? byName : left.id.compareTo(right.id);
+          });
+    return List<ManagedSyncAccountProfile>.unmodifiable(profiles.take(limit));
   }
 
   @override
@@ -408,9 +414,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         return false;
       }
 
-      account.tokens[tokenIndex] = current.copyWith(
-        lastAuthenticatedAt: now,
-      );
+      account.tokens[tokenIndex] = current.copyWith(lastAuthenticatedAt: now);
       final nextRevision = await _persist(candidate);
       _accounts = candidate;
       _revision = nextRevision;
@@ -432,11 +436,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     );
     final normalizedDisplayName = displayName == null
         ? null
-        : _validatedLabel(
-            displayName,
-            fieldName: 'displayName',
-            maxLength: 80,
-          );
+        : _validatedLabel(displayName, fieldName: 'displayName', maxLength: 80);
     final normalizedReplacement = replaceTokenId?.trim();
 
     return _serialized(() async {
@@ -612,9 +612,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         return false;
       }
       final previousLength = account.tokens.length;
-      account.tokens.removeWhere(
-        (token) => token.id == normalizedTokenId,
-      );
+      account.tokens.removeWhere((token) => token.id == normalizedTokenId);
       if (account.tokens.length == previousLength) {
         return false;
       }
@@ -656,18 +654,10 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     }
     final normalizedDisplayName = displayName == null
         ? null
-        : _validatedLabel(
-            displayName,
-            fieldName: 'displayName',
-            maxLength: 80,
-          );
+        : _validatedLabel(displayName, fieldName: 'displayName', maxLength: 80);
     final normalizedDeviceName = deviceName == null
         ? null
-        : _validatedLabel(
-            deviceName,
-            fieldName: 'deviceName',
-            maxLength: 80,
-          );
+        : _validatedLabel(deviceName, fieldName: 'deviceName', maxLength: 80);
     final normalizedAvatarTone = avatarTone == null
         ? null
         : _validatedAvatarTone(avatarTone);
@@ -696,28 +686,31 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         );
       }
 
-      final accountChanged = normalizedDisplayName != null &&
+      final accountChanged =
+          normalizedDisplayName != null &&
           normalizedDisplayName != account.displayName;
-      final deviceChanged = normalizedDeviceName != null &&
+      final deviceChanged =
+          normalizedDeviceName != null &&
           normalizedDeviceName != currentToken.deviceName;
-      final avatarChanged = avatarToneProvided &&
-          normalizedAvatarTone != account.avatarTone;
-      final publicProfileChanged = publicProfileEnabledProvided &&
+      final avatarChanged =
+          avatarToneProvided && normalizedAvatarTone != account.avatarTone;
+      final publicProfileChanged =
+          publicProfileEnabledProvided &&
           publicProfileEnabled != account.publicProfileEnabled;
       final publicDisplayNameChanged =
           publicProfileEnabledProvided || publicDisplayNameEnabledProvided
-              ? (publicProfileEnabledProvided
+          ? (publicProfileEnabledProvided
                     ? publicProfileEnabled
                     : publicDisplayNameEnabled) !=
-                  account.publicDisplayNameEnabled
-              : false;
+                account.publicDisplayNameEnabled
+          : false;
       final publicAvatarToneChanged =
           publicProfileEnabledProvided || publicAvatarToneEnabledProvided
-              ? (publicProfileEnabledProvided
+          ? (publicProfileEnabledProvided
                     ? publicProfileEnabled
                     : publicAvatarToneEnabled) !=
-                  account.publicAvatarToneEnabled
-              : false;
+                account.publicAvatarToneEnabled
+          : false;
       if (accountChanged) {
         account.displayName = normalizedDisplayName;
       }
@@ -770,7 +763,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
     final result = _writeTail.then((_) => action());
     _writeTail = result.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return result;
   }
@@ -791,9 +784,9 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
       if (entity is! File) {
         continue;
       }
-      final match = RegExp(r'^registry-(\d+)\.json$').firstMatch(
-        p.basename(entity.path),
-      );
+      final match = RegExp(
+        r'^registry-(\d+)\.json$',
+      ).firstMatch(p.basename(entity.path));
       final revision = int.tryParse(match?.group(1) ?? '');
       if (revision != null) {
         candidates.add((revision: revision, file: entity));
@@ -891,9 +884,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
   }
 }
 
-List<_StaticSyncCredential> _credentialsFromFlatMap(
-  Map<String, String> users,
-) {
+List<_StaticSyncCredential> _credentialsFromFlatMap(Map<String, String> users) {
   return <_StaticSyncCredential>[
     for (final entry in users.entries)
       if (entry.key.trim().isNotEmpty && entry.value.isNotEmpty)
@@ -919,8 +910,8 @@ List<_StaticSyncCredential> _credentialsFromJsonMap(Map<dynamic, dynamic> map) {
       List<dynamic> values => values,
       Map<dynamic, dynamic> values => values.values.toList(growable: false),
       _ => throw const FormatException(
-          'AETHERTUNE_SYNC_USERS values must be tokens, token lists, or device-token objects.',
-        ),
+        'AETHERTUNE_SYNC_USERS values must be tokens, token lists, or device-token objects.',
+      ),
     };
     for (final token in tokens) {
       if (token is! String) {
@@ -1024,9 +1015,9 @@ bool _constantTimeEquals(List<int> left, List<int> right) {
 }
 
 List<int> _bytesFromHex(String value) => <int>[
-      for (var index = 0; index < value.length; index += 2)
-        int.parse(value.substring(index, index + 2), radix: 16),
-    ];
+  for (var index = 0; index < value.length; index += 2)
+    int.parse(value.substring(index, index + 2), radix: 16),
+];
 
 String _hex(List<int> bytes) =>
     bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
@@ -1093,9 +1084,10 @@ class _ManagedAccountRecord {
     required this.createdAt,
     required this.tokens,
     this.recovery,
-  })  : publicDisplayNameEnabled =
-            publicDisplayNameEnabled ?? publicProfileEnabled,
-        publicAvatarToneEnabled = publicAvatarToneEnabled ?? publicProfileEnabled;
+  }) : publicDisplayNameEnabled =
+           publicDisplayNameEnabled ?? publicProfileEnabled,
+       publicAvatarToneEnabled =
+           publicAvatarToneEnabled ?? publicProfileEnabled;
 
   factory _ManagedAccountRecord.fromStorageJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -1123,7 +1115,9 @@ class _ManagedAccountRecord {
         ? null
         : rawAvatarTone is String
         ? _validatedAvatarTone(rawAvatarTone)
-        : throw const FormatException('Stored authentication avatar is invalid.');
+        : throw const FormatException(
+            'Stored authentication avatar is invalid.',
+          );
     final publicProfileEnabled = rawPublicProfileEnabled == null
         ? false
         : rawPublicProfileEnabled is bool
@@ -1140,7 +1134,9 @@ class _ManagedAccountRecord {
         ? publicProfileEnabled
         : rawPublicAvatarToneEnabled is bool
         ? rawPublicAvatarToneEnabled
-        : throw const FormatException('Stored public avatar audience is invalid.');
+        : throw const FormatException(
+            'Stored public avatar audience is invalid.',
+          );
     final tokens = <_ManagedTokenRecord>[];
     final tokenIds = <String>{};
     for (final rawToken in rawTokens) {
@@ -1192,29 +1188,29 @@ class _ManagedAccountRecord {
   _ManagedRecoveryRecord? recovery;
 
   _ManagedAccountRecord copy() => _ManagedAccountRecord(
-        id: id,
-        displayName: displayName,
-        avatarTone: avatarTone,
-        publicDisplayNameEnabled: publicDisplayNameEnabled,
-        publicAvatarToneEnabled: publicAvatarToneEnabled,
-        createdAt: createdAt,
-        tokens: tokens.map((token) => token.copy()).toList(),
-        recovery: recovery?.copy(),
-      );
+    id: id,
+    displayName: displayName,
+    avatarTone: avatarTone,
+    publicDisplayNameEnabled: publicDisplayNameEnabled,
+    publicAvatarToneEnabled: publicAvatarToneEnabled,
+    createdAt: createdAt,
+    tokens: tokens.map((token) => token.copy()).toList(),
+    recovery: recovery?.copy(),
+  );
 
   Map<String, Object?> toStorageJson() => <String, Object?>{
-        'id': id,
-        'displayName': displayName,
-        'avatarTone': avatarTone,
-        'publicProfileEnabled': publicProfileEnabled,
-        'publicDisplayNameEnabled': publicDisplayNameEnabled,
-        'publicAvatarToneEnabled': publicAvatarToneEnabled,
-        'createdAt': createdAt.toUtc().toIso8601String(),
-        'tokens': tokens
-            .map((token) => token.toStorageJson())
-            .toList(growable: false),
-        if (recovery != null) 'recovery': recovery!.toStorageJson(),
-      };
+    'id': id,
+    'displayName': displayName,
+    'avatarTone': avatarTone,
+    'publicProfileEnabled': publicProfileEnabled,
+    'publicDisplayNameEnabled': publicDisplayNameEnabled,
+    'publicAvatarToneEnabled': publicAvatarToneEnabled,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+    'tokens': tokens
+        .map((token) => token.toStorageJson())
+        .toList(growable: false),
+    if (recovery != null) 'recovery': recovery!.toStorageJson(),
+  };
 }
 
 class _ManagedRecoveryRecord {
@@ -1241,14 +1237,14 @@ class _ManagedRecoveryRecord {
   final DateTime expiresAt;
 
   _ManagedRecoveryRecord copy() => _ManagedRecoveryRecord(
-        codeHash: List<int>.from(codeHash),
-        expiresAt: expiresAt,
-      );
+    codeHash: List<int>.from(codeHash),
+    expiresAt: expiresAt,
+  );
 
   Map<String, Object?> toStorageJson() => <String, Object?>{
-        'sha256': _hex(codeHash),
-        'expiresAt': expiresAt.toUtc().toIso8601String(),
-      };
+    'sha256': _hex(codeHash),
+    'expiresAt': expiresAt.toUtc().toIso8601String(),
+  };
 }
 
 class _ManagedTokenRecord {
@@ -1303,11 +1299,11 @@ class _ManagedTokenRecord {
   final List<int> tokenHash;
 
   ManagedSyncTokenMetadata get metadata => ManagedSyncTokenMetadata(
-        id: id,
-        deviceName: deviceName,
-        createdAt: createdAt,
-        lastAuthenticatedAt: lastAuthenticatedAt,
-      );
+    id: id,
+    deviceName: deviceName,
+    createdAt: createdAt,
+    lastAuthenticatedAt: lastAuthenticatedAt,
+  );
 
   _ManagedTokenRecord copyWith({DateTime? lastAuthenticatedAt}) =>
       _ManagedTokenRecord(
@@ -1319,19 +1315,19 @@ class _ManagedTokenRecord {
       );
 
   _ManagedTokenRecord copy() => _ManagedTokenRecord(
-        id: id,
-        deviceName: deviceName,
-        createdAt: createdAt,
-        lastAuthenticatedAt: lastAuthenticatedAt,
-        tokenHash: List<int>.from(tokenHash),
-      );
+    id: id,
+    deviceName: deviceName,
+    createdAt: createdAt,
+    lastAuthenticatedAt: lastAuthenticatedAt,
+    tokenHash: List<int>.from(tokenHash),
+  );
 
   Map<String, Object?> toStorageJson() => <String, Object?>{
-        'id': id,
-        'deviceName': deviceName,
-        'createdAt': createdAt.toUtc().toIso8601String(),
-        if (lastAuthenticatedAt != null)
-          'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
-        'sha256': _hex(tokenHash),
-      };
+    'id': id,
+    'deviceName': deviceName,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+    if (lastAuthenticatedAt != null)
+      'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
+    'sha256': _hex(tokenHash),
+  };
 }

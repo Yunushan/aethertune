@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -8,12 +11,10 @@ import 'youtube_account_provider.dart';
 import 'youtube_oauth_client.dart';
 import 'youtube_oauth_flow.dart';
 
-typedef YouTubeAuthorizationRunner = Future<YouTubeOAuthToken> Function(
-  String clientId,
-);
-typedef YouTubeAccountProviderFactory = YouTubeAccountProvider Function(
-  YouTubeAccessTokenReader accessTokenReader,
-);
+typedef YouTubeAuthorizationRunner =
+    Future<YouTubeOAuthToken> Function(String clientId);
+typedef YouTubeAccountProviderFactory =
+    YouTubeAccountProvider Function(YouTubeAccessTokenReader accessTokenReader);
 
 final class YouTubeOAuthSession {
   const YouTubeOAuthSession({required this.clientId, required this.token});
@@ -48,7 +49,8 @@ final class YouTubeAccountSettingsStore extends ChangeNotifier {
   }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
        _oauthClient = oauthClient ?? YouTubeOAuthClient(),
        _authorizationRunner = authorizationRunner,
-       _providerFactory = providerFactory ??
+       _providerFactory =
+           providerFactory ??
            ((accessTokenReader) =>
                YouTubeAccountProvider(accessTokenReader: accessTokenReader)),
        _clock = clock ?? DateTime.now,
@@ -108,9 +110,7 @@ final class YouTubeAccountSettingsStore extends ChangeNotifier {
 
   Future<void> connect(String clientId) async {
     if (!desktopOAuthSupported) {
-      throw StateError(
-        'YouTube account sign-in is available on desktop only.',
-      );
+      throw StateError('YouTube account sign-in is available on desktop only.');
     }
     final normalizedClientId = clientId.trim();
     if (normalizedClientId.isEmpty) {
@@ -203,8 +203,6 @@ final class YouTubeAccountSettingsStore extends ChangeNotifier {
     if (decoded is! Map) {
       return null;
     }
-    return YouTubeOAuthSession.tryFromJson(
-      Map<String, Object?>.from(decoded),
-    );
+    return YouTubeOAuthSession.tryFromJson(Map<String, Object?>.from(decoded));
   }
 }

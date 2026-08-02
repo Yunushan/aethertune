@@ -23,17 +23,14 @@ void main() {
     expect(requestUri!.scheme, 'https');
     expect(requestUri!.host, 'itunes.apple.com');
     expect(requestUri!.path, '/search');
-    expect(
-      requestUri!.queryParameters,
-      <String, String>{
-        'term': 'aether song',
-        'country': 'tr',
-        'media': 'music',
-        'entity': 'song',
-        'explicit': 'No',
-        'limit': '50',
-      },
-    );
+    expect(requestUri!.queryParameters, <String, String>{
+      'term': 'aether song',
+      'country': 'tr',
+      'media': 'music',
+      'entity': 'song',
+      'explicit': 'No',
+      'limit': '50',
+    });
     expect(requestHeaders!['accept'], 'application/json');
     expect(requestHeaders!['user-agent'], ItunesMetadataProvider.userAgent);
     expect(page.nextCursor, isNull);
@@ -49,8 +46,7 @@ void main() {
   });
 
   test('filters malformed, non-song, and duplicate catalog rows', () {
-    final tracks = parseItunesSongSearchResponse(
-      '''
+    final tracks = parseItunesSongSearchResponse('''
 {
   "results": [
     {"kind":"song","trackId":"bad","trackName":"Invalid"},
@@ -60,9 +56,7 @@ void main() {
     {"kind":"song","trackId":987654321,"trackName":"Unknown fields"}
   ]
 }
-''',
-      limit: 10,
-    );
+''', limit: 10);
 
     expect(tracks, hasLength(2));
     expect(tracks.first.artist, 'Mira Sol');
@@ -84,82 +78,78 @@ void main() {
 
     expect(suggestions.single.value, 'Aether Song');
     expect(suggestions.single.subtitle, 'Mira Sol - Night Signal');
-    expect(
-      () => ItunesMetadataProvider(country: 'tur'),
-      throwsArgumentError,
-    );
-    expect(
-      () => ItunesMetadataProvider(country: '1!'),
-      throwsArgumentError,
-    );
+    expect(() => ItunesMetadataProvider(country: 'tur'), throwsArgumentError);
+    expect(() => ItunesMetadataProvider(country: '1!'), throwsArgumentError);
   });
 
-  test('searches and loads non-explicit album metadata without media', () async {
-    final requests = <Uri>[];
-    final provider = ItunesMetadataProvider(
-      country: 'TR',
-      limiter: _instantLimiter(),
-      loader: (uri, _) async {
-        requests.add(uri);
-        return uri.path == '/lookup' ? _albumLookupResponse : _albumResponse;
-      },
-    );
+  test(
+    'searches and loads non-explicit album metadata without media',
+    () async {
+      final requests = <Uri>[];
+      final provider = ItunesMetadataProvider(
+        country: 'TR',
+        limiter: _instantLimiter(),
+        loader: (uri, _) async {
+          requests.add(uri);
+          return uri.path == '/lookup' ? _albumLookupResponse : _albumResponse;
+        },
+      );
 
-    expect(provider.searchableCollectionKinds, <MusicCatalogCollectionKind>{
-      MusicCatalogCollectionKind.album,
-    });
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.libraryBrowse),
-    );
-    expect(
-      await provider.browseCollections(MusicCatalogCollectionKind.album),
-      isEmpty,
-    );
-    expect(requests, isEmpty);
+      expect(provider.searchableCollectionKinds, <MusicCatalogCollectionKind>{
+        MusicCatalogCollectionKind.album,
+      });
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.libraryBrowse),
+      );
+      expect(
+        await provider.browseCollections(MusicCatalogCollectionKind.album),
+        isEmpty,
+      );
+      expect(requests, isEmpty);
 
-    final page = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.album,
-      'night signal',
-      limit: 99,
-    );
+      final page = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        'night signal',
+        limit: 99,
+      );
 
-    expect(requests.single.path, '/search');
-    expect(requests.single.queryParameters, <String, String>{
-      'term': 'night signal',
-      'country': 'tr',
-      'media': 'music',
-      'entity': 'album',
-      'explicit': 'No',
-      'limit': '50',
-    });
-    expect(page.collections, hasLength(1));
-    expect(page.collections.single.id, 'itunes-album:222');
-    expect(page.collections.single.title, 'Night Signal');
-    expect(page.collections.single.subtitle, 'Mira Sol / 2024');
-    expect(page.collections.single.itemCount, 8);
-    expect(page.hasMore, isFalse);
+      expect(requests.single.path, '/search');
+      expect(requests.single.queryParameters, <String, String>{
+        'term': 'night signal',
+        'country': 'tr',
+        'media': 'music',
+        'entity': 'album',
+        'explicit': 'No',
+        'limit': '50',
+      });
+      expect(page.collections, hasLength(1));
+      expect(page.collections.single.id, 'itunes-album:222');
+      expect(page.collections.single.title, 'Night Signal');
+      expect(page.collections.single.subtitle, 'Mira Sol / 2024');
+      expect(page.collections.single.itemCount, 8);
+      expect(page.hasMore, isFalse);
 
-    final detail = await provider.loadCollection(page.collections.single);
+      final detail = await provider.loadCollection(page.collections.single);
 
-    expect(requests.last.path, '/lookup');
-    expect(requests.last.queryParameters, <String, String>{
-      'id': '222',
-      'country': 'tr',
-      'entity': 'song',
-      'explicit': 'No',
-      'limit': '50',
-    });
-    expect(detail.tracks, hasLength(1));
-    expect(detail.tracks.single.id, 'itunes:333');
-    expect(detail.tracks.single.isPlayable, isFalse);
-    expect(detail.tracks.single.artworkUri, isNull);
-    expect(await provider.loadArtwork('unused'), isNull);
-  });
+      expect(requests.last.path, '/lookup');
+      expect(requests.last.queryParameters, <String, String>{
+        'id': '222',
+        'country': 'tr',
+        'entity': 'song',
+        'explicit': 'No',
+        'limit': '50',
+      });
+      expect(detail.tracks, hasLength(1));
+      expect(detail.tracks.single.id, 'itunes:333');
+      expect(detail.tracks.single.isPlayable, isFalse);
+      expect(detail.tracks.single.artworkUri, isNull);
+      expect(await provider.loadArtwork('unused'), isNull);
+    },
+  );
 
   test('filters malformed, explicit, and duplicate album rows', () {
-    final albums = parseItunesAlbumSearchResponse(
-      '''
+    final albums = parseItunesAlbumSearchResponse('''
 {
   "results": [
     {"collectionId":"bad","collectionName":"Invalid","collectionType":"Album"},
@@ -169,9 +159,7 @@ void main() {
     {"collectionId":333,"collectionName":"Duplicate","collectionType":"Album"}
   ]
 }
-''',
-      limit: 10,
-    );
+''', limit: 10);
 
     expect(albums, hasLength(1));
     expect(albums.single.id, 'itunes-album:333');
@@ -236,9 +224,7 @@ void main() {
 }
 
 ItunesRequestLimiter _instantLimiter() {
-  return ItunesRequestLimiter(
-    delay: (_) async {},
-  );
+  return ItunesRequestLimiter(delay: (_) async {});
 }
 
 const _response = '''

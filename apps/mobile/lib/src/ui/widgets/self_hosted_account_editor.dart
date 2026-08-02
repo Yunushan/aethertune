@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../domain/self_hosted_provider_account.dart';
 
-typedef SelfHostedAccountSaver = Future<void> Function(
-  SelfHostedProviderAccount account,
-  String secret,
-);
+typedef SelfHostedAccountSaver =
+    Future<void> Function(SelfHostedProviderAccount account, String secret);
 
 Future<bool?> showSelfHostedAccountEditor(
   BuildContext context, {
@@ -15,11 +13,8 @@ Future<bool?> showSelfHostedAccountEditor(
 }) {
   return showDialog<bool>(
     context: context,
-    builder: (_) => SelfHostedAccountEditor(
-      kind: kind,
-      account: account,
-      onSave: onSave,
-    ),
+    builder: (_) =>
+        SelfHostedAccountEditor(kind: kind, account: account, onSave: onSave),
   );
 }
 
@@ -78,11 +73,13 @@ class _SelfHostedAccountEditorState extends State<SelfHostedAccountEditor> {
   Widget build(BuildContext context) {
     final editing = widget.account != null;
     final usesHttp = _baseUrlController.text.trim().toLowerCase().startsWith(
-          'http://',
-        );
+      'http://',
+    );
 
     return AlertDialog(
-      title: Text(editing ? 'Edit ${widget.kind.label}' : 'Add ${widget.kind.label}'),
+      title: Text(
+        editing ? 'Edit ${widget.kind.label}' : 'Add ${widget.kind.label}',
+      ),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -125,13 +122,14 @@ class _SelfHostedAccountEditorState extends State<SelfHostedAccountEditor> {
                   decoration: InputDecoration(
                     labelText: widget.kind.secretLabel,
                     suffixIcon: IconButton(
-                      tooltip:
-                          _obscureSecret ? 'Show credential' : 'Hide credential',
+                      tooltip: _obscureSecret
+                          ? 'Show credential'
+                          : 'Hide credential',
                       onPressed: _saving
                           ? null
                           : () => setState(
-                                () => _obscureSecret = !_obscureSecret,
-                              ),
+                              () => _obscureSecret = !_obscureSecret,
+                            ),
                       icon: Icon(
                         _obscureSecret
                             ? Icons.visibility
@@ -153,9 +151,8 @@ class _SelfHostedAccountEditorState extends State<SelfHostedAccountEditor> {
                   value: _allowInsecureHttp,
                   onChanged: _saving
                       ? null
-                      : (value) => setState(
-                            () => _allowInsecureHttp = value ?? false,
-                          ),
+                      : (value) =>
+                            setState(() => _allowInsecureHttp = value ?? false),
                 ),
               if (_error != null) ...<Widget>[
                 const SizedBox(height: 12),
@@ -172,9 +169,7 @@ class _SelfHostedAccountEditorState extends State<SelfHostedAccountEditor> {
               ],
               if (_saving) ...<Widget>[
                 const SizedBox(height: 12),
-                const LinearProgressIndicator(
-                  key: Key('self-hosted-saving'),
-                ),
+                const LinearProgressIndicator(key: Key('self-hosted-saving')),
               ],
             ],
           ),

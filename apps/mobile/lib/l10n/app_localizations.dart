@@ -373,27 +373,55 @@ abstract class AppLocalizations {
   /// No description provided for @sleepTimerMinutes.
   ///
   /// In en, this message translates to:
-  /// **'{count} minutes'**
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
   String sleepTimerMinutes(int count);
 
   /// No description provided for @sleepTimerHours.
   ///
   /// In en, this message translates to:
-  /// **'{count} hours'**
+  /// **'{count, plural, =1{1 hour} other{{count} hours}}'**
   String sleepTimerHours(int count);
 
+  /// No description provided for @targetLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Target language'**
   String get targetLanguage;
 
+  /// No description provided for @translatingLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Translating lyrics...'**
   String get translatingLyrics;
 
+  /// No description provided for @translatedLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Translated lyrics'**
   String get translatedLyrics;
 
+  /// No description provided for @translatedLyricsForLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Target language: {language}'**
   String translatedLyricsForLanguage(String language);
 
+  /// No description provided for @copyTranslatedLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy translated lyrics'**
   String get copyTranslatedLyrics;
 
+  /// No description provided for @translatedLyricsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Translated lyrics copied.'**
   String get translatedLyricsCopied;
 
+  /// No description provided for @couldNotTranslateLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not translate lyrics: {error}'**
   String couldNotTranslateLyrics(String error);
 }
 

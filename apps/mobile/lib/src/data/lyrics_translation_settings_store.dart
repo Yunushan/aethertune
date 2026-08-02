@@ -5,20 +5,21 @@ import '../domain/lyrics_translator.dart';
 import 'libretranslate_lyrics_translator.dart';
 import 'provider_credential_vault.dart';
 
-typedef LyricsTranslatorFactory = LyricsTranslator Function(
-  Uri endpoint,
-  String? apiKey,
-);
+typedef LyricsTranslatorFactory =
+    LyricsTranslator Function(Uri endpoint, String? apiKey);
 
 /// Persists only a self-hosted translation endpoint and language preference.
 final class LyricsTranslationSettingsStore extends ChangeNotifier {
   LyricsTranslationSettingsStore({
     ProviderCredentialVault? credentialVault,
     LyricsTranslatorFactory? translatorFactory,
-  })  : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
-        _translatorFactory = translatorFactory ??
-            ((endpoint, apiKey) =>
-                LibreTranslateLyricsTranslator(baseUri: endpoint, apiKey: apiKey));
+  }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
+       _translatorFactory =
+           translatorFactory ??
+           ((endpoint, apiKey) => LibreTranslateLyricsTranslator(
+             baseUri: endpoint,
+             apiKey: apiKey,
+           ));
 
   static const _endpointKey = 'aethertune.lyrics_translation.endpoint.v1';
   static const _targetLanguageKey =
@@ -58,9 +59,7 @@ final class LyricsTranslationSettingsStore extends ChangeNotifier {
         prefs.getString(_targetLanguageKey),
         fallback: 'en',
       );
-      _apiKey = _normalizeApiKey(
-        await _credentialVault.read(_credentialId),
-      );
+      _apiKey = _normalizeApiKey(await _credentialVault.read(_credentialId));
       _loadError = null;
     } on Object {
       _endpoint = null;
@@ -78,7 +77,9 @@ final class LyricsTranslationSettingsStore extends ChangeNotifier {
   }) async {
     final parsedEndpoint = _parseEndpoint(endpoint);
     if (parsedEndpoint == null) {
-      throw const FormatException('Enter an http or https translation service URL.');
+      throw const FormatException(
+        'Enter an http or https translation service URL.',
+      );
     }
     final normalizedTarget = normalizeTranslationLanguage(targetLanguage);
     final normalizedApiKey = _normalizeApiKey(apiKey);
@@ -117,7 +118,9 @@ Uri? _parseEndpoint(String? value) {
   }
   final uri = Uri.tryParse(normalized);
   if (uri == null) {
-    throw const FormatException('Use an http or https translation service URL.');
+    throw const FormatException(
+      'Use an http or https translation service URL.',
+    );
   }
   return LibreTranslateLyricsTranslator(baseUri: uri).baseUri;
 }

@@ -110,8 +110,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get skipSetup => 'تخطي الإعداد';
 
   @override
-  String get desktopTrayMinimizeOnClose =>
-      'تصغير إلى شريط النظام عند الإغلاق';
+  String get desktopTrayMinimizeOnClose => 'تصغير إلى شريط النظام عند الإغلاق';
 
   @override
   String get desktopTrayMinimizeOnCloseDescription =>
@@ -125,8 +124,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'أظهر أمر السابق إلى جانب إجرائي الإظهار والإنهاء المتاحين دائمًا.';
 
   @override
-  String get desktopTrayPlayPause =>
-      'تشغيل / إيقاف مؤقت في قائمة شريط النظام';
+  String get desktopTrayPlayPause => 'تشغيل / إيقاف مؤقت في قائمة شريط النظام';
 
   @override
   String get desktopTrayPlayPauseDescription =>
@@ -149,37 +147,40 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sleepTimerStopsAtEnd => 'سيتوقف التشغيل عند نهاية هذا المقطع.';
 
   @override
-  String sleepTimerStopsIn(String remaining) =>
-      'سيتوقف التشغيل خلال $remaining.';
+  String sleepTimerStopsIn(String remaining) {
+    return 'سيتوقف التشغيل خلال $remaining.';
+  }
 
   @override
   String get sleepTimerLessThanOneMinute => 'أقل من دقيقة واحدة';
 
   @override
   String sleepTimerMinutes(int count) {
-    return intl.Intl.plural(
+    String _temp0 = intl.Intl.pluralLogic(
       count,
-      zero: 'أقل من دقيقة',
-      one: 'دقيقة واحدة',
-      two: 'دقيقتان',
-      few: '$count دقائق',
-      many: '$count دقيقة',
-      other: '$count دقيقة',
       locale: localeName,
+      other: '$count دقيقة',
+      many: '$count دقيقة',
+      few: '$count دقائق',
+      two: 'دقيقتان',
+      one: 'دقيقة واحدة',
+      zero: 'أقل من دقيقة',
     );
+    return '$_temp0';
   }
 
   @override
   String sleepTimerHours(int count) {
-    return intl.Intl.plural(
+    String _temp0 = intl.Intl.pluralLogic(
       count,
-      one: 'ساعة واحدة',
-      two: 'ساعتان',
-      few: '$count ساعات',
-      many: '$count ساعة',
-      other: '$count ساعة',
       locale: localeName,
+      other: '$count ساعة',
+      many: '$count ساعة',
+      few: '$count ساعات',
+      two: 'ساعتان',
+      one: 'ساعة واحدة',
     );
+    return '$_temp0';
   }
 
   @override
@@ -192,8 +193,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get translatedLyrics => 'كلمات الأغنية المترجمة';
 
   @override
-  String translatedLyricsForLanguage(String language) =>
-      'اللغة المستهدفة: $language';
+  String translatedLyricsForLanguage(String language) {
+    return 'اللغة المستهدفة: $language';
+  }
 
   @override
   String get copyTranslatedLyrics => 'نسخ كلمات الأغنية المترجمة';
@@ -202,6 +204,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get translatedLyricsCopied => 'تم نسخ كلمات الأغنية المترجمة.';
 
   @override
-  String couldNotTranslateLyrics(String error) =>
-      'تعذرت ترجمة كلمات الأغنية: $error';
+  String couldNotTranslateLyrics(String error) {
+    return 'تعذرت ترجمة كلمات الأغنية: $error';
+  }
 }

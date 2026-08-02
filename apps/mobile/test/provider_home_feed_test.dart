@@ -145,28 +145,26 @@ void main() {
           MusicCatalogDiscoveryKind.frequentlyPlayed,
           MusicCatalogDiscoveryKind.frequentlyPlayed,
         ],
-        discoveryCollections: const <
-            MusicCatalogDiscoveryKind,
-            List<MusicCatalogCollection>>{
-          MusicCatalogDiscoveryKind.recentlyAdded:
-              <MusicCatalogCollection>[
-            MusicCatalogCollection(
-              id: 'new-1',
-              title: 'New Album',
-              kind: MusicCatalogCollectionKind.album,
-            ),
-            MusicCatalogCollection(
-              id: 'new-1',
-              title: 'Duplicate Album',
-              kind: MusicCatalogCollectionKind.album,
-            ),
-            MusicCatalogCollection(
-              id: 'wrong-kind',
-              title: 'Wrong Kind',
-              kind: MusicCatalogCollectionKind.playlist,
-            ),
-          ],
-        },
+        discoveryCollections:
+            const <MusicCatalogDiscoveryKind, List<MusicCatalogCollection>>{
+              MusicCatalogDiscoveryKind.recentlyAdded: <MusicCatalogCollection>[
+                MusicCatalogCollection(
+                  id: 'new-1',
+                  title: 'New Album',
+                  kind: MusicCatalogCollectionKind.album,
+                ),
+                MusicCatalogCollection(
+                  id: 'new-1',
+                  title: 'Duplicate Album',
+                  kind: MusicCatalogCollectionKind.album,
+                ),
+                MusicCatalogCollection(
+                  id: 'wrong-kind',
+                  title: 'Wrong Kind',
+                  kind: MusicCatalogCollectionKind.playlist,
+                ),
+              ],
+            },
         failDiscoveryKinds: const <MusicCatalogDiscoveryKind>{
           MusicCatalogDiscoveryKind.frequentlyPlayed,
         },
@@ -239,31 +237,29 @@ void main() {
       discoveryKinds: const <MusicCatalogDiscoveryKind>[
         MusicCatalogDiscoveryKind.recentlyAdded,
       ],
-      discoveryCollections: const <
-          MusicCatalogDiscoveryKind,
-          List<MusicCatalogCollection>>{
-        MusicCatalogDiscoveryKind.recentlyAdded:
-            <MusicCatalogCollection>[
-          MusicCatalogCollection(
-            id: 'album-mira',
-            title: 'Mira New Release',
-            kind: MusicCatalogCollectionKind.album,
-            subtitle: 'Mira',
-          ),
-          MusicCatalogCollection(
-            id: 'album-other',
-            title: 'Other Release',
-            kind: MusicCatalogCollectionKind.album,
-            subtitle: 'Another Artist',
-          ),
-          MusicCatalogCollection(
-            id: 'album-orion',
-            title: 'Orion New Release',
-            kind: MusicCatalogCollectionKind.album,
-            subtitle: '  ORION  ',
-          ),
-        ],
-      },
+      discoveryCollections:
+          const <MusicCatalogDiscoveryKind, List<MusicCatalogCollection>>{
+            MusicCatalogDiscoveryKind.recentlyAdded: <MusicCatalogCollection>[
+              MusicCatalogCollection(
+                id: 'album-mira',
+                title: 'Mira New Release',
+                kind: MusicCatalogCollectionKind.album,
+                subtitle: 'Mira',
+              ),
+              MusicCatalogCollection(
+                id: 'album-other',
+                title: 'Other Release',
+                kind: MusicCatalogCollectionKind.album,
+                subtitle: 'Another Artist',
+              ),
+              MusicCatalogCollection(
+                id: 'album-orion',
+                title: 'Orion New Release',
+                kind: MusicCatalogCollectionKind.album,
+                subtitle: '  ORION  ',
+              ),
+            ],
+          },
     );
 
     final feed = await const ProviderHomeFeedCoordinator().load(
@@ -362,9 +358,8 @@ final class _FakeHomeCatalogProvider
     this.playlists = const <MusicCatalogCollection>[],
     this.failAlbums = false,
     this.discoveryKinds = const <MusicCatalogDiscoveryKind>[],
-    this.discoveryCollections = const <
-        MusicCatalogDiscoveryKind,
-        List<MusicCatalogCollection>>{},
+    this.discoveryCollections =
+        const <MusicCatalogDiscoveryKind, List<MusicCatalogCollection>>{},
     this.failDiscoveryKinds = const <MusicCatalogDiscoveryKind>{},
     this.pagedDiscoveryKinds = const <MusicCatalogDiscoveryKind>{},
     this.discoveryPages = const <String, MusicCatalogCollectionPage>{},
@@ -382,7 +377,7 @@ final class _FakeHomeCatalogProvider
   @override
   final List<MusicCatalogDiscoveryKind> discoveryKinds;
   final Map<MusicCatalogDiscoveryKind, List<MusicCatalogCollection>>
-      discoveryCollections;
+  discoveryCollections;
   final Set<MusicCatalogDiscoveryKind> failDiscoveryKinds;
   @override
   final Set<MusicCatalogDiscoveryKind> pagedDiscoveryKinds;

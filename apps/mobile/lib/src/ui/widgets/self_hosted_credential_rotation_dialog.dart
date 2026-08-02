@@ -36,8 +36,7 @@ class SelfHostedCredentialRotationDialog extends StatefulWidget {
 class _SelfHostedCredentialRotationDialogState
     extends State<SelfHostedCredentialRotationDialog> {
   final TextEditingController _secretController = TextEditingController();
-  final TextEditingController _confirmationController =
-      TextEditingController();
+  final TextEditingController _confirmationController = TextEditingController();
   bool _obscureSecret = true;
   bool _saving = false;
   String? _error;
@@ -74,9 +73,7 @@ class _SelfHostedCredentialRotationDialogState
                       : 'Hide credentials',
                   onPressed: _saving
                       ? null
-                      : () => setState(
-                            () => _obscureSecret = !_obscureSecret,
-                          ),
+                      : () => setState(() => _obscureSecret = !_obscureSecret),
                   icon: Icon(
                     _obscureSecret ? Icons.visibility : Icons.visibility_off,
                   ),
@@ -104,9 +101,7 @@ class _SelfHostedCredentialRotationDialogState
                 child: Text(
                   _error!,
                   key: const Key('self-hosted-rotation-error'),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
             ],
@@ -137,7 +132,9 @@ class _SelfHostedCredentialRotationDialogState
   Future<void> _rotate() async {
     final secret = _secretController.text;
     if (secret.isEmpty) {
-      setState(() => _error = '${widget.account.kind.secretLabel} is required.');
+      setState(
+        () => _error = '${widget.account.kind.secretLabel} is required.',
+      );
       return;
     }
     if (secret != _confirmationController.text) {

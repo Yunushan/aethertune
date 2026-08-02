@@ -73,17 +73,23 @@ void main() {
           home: NowPlayingScreen(
             onOpenQueue: () => queueOpens += 1,
             onOpenLyrics: () => lyricsOpens += 1,
-            podcastTranscriptLoader: (_) async => const PodcastTranscriptDocument(
-              text: 'Podcast transcript text',
-              contentType: 'text/plain',
-            ),
-            sponsorBlockSegmentLoader: (_, {required maximum, categories = sponsorBlockCategories}) async => <TrackSkipSegment>[
-              TrackSkipSegment(
-                start: const Duration(seconds: 90),
-                end: const Duration(seconds: 100),
-                label: 'SponsorBlock: sponsor',
-              ),
-            ],
+            podcastTranscriptLoader: (_) async =>
+                const PodcastTranscriptDocument(
+                  text: 'Podcast transcript text',
+                  contentType: 'text/plain',
+                ),
+            sponsorBlockSegmentLoader:
+                (
+                  _, {
+                  required maximum,
+                  categories = sponsorBlockCategories,
+                }) async => <TrackSkipSegment>[
+                  TrackSkipSegment(
+                    start: const Duration(seconds: 90),
+                    end: const Duration(seconds: 100),
+                    label: 'SponsorBlock: sponsor',
+                  ),
+                ],
           ),
         ),
       ),
@@ -258,9 +264,7 @@ void main() {
     );
     expect(secondBookmark, isNotNull);
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(Key('bookmark-manager-select-${bookmark.id}')),
-    );
+    await tester.tap(find.byKey(Key('bookmark-manager-select-${bookmark.id}')));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(Key('bookmark-manager-select-${secondBookmark!.id}')),
@@ -280,9 +284,7 @@ void main() {
       everyElement('Song sections'),
     );
     expect(find.text('Song sections'), findsOneWidget);
-    await tester.tap(
-      find.byKey(Key('bookmark-manager-select-${bookmark.id}')),
-    );
+    await tester.tap(find.byKey(Key('bookmark-manager-select-${bookmark.id}')));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(Key('bookmark-manager-select-${secondBookmark.id}')),
@@ -320,9 +322,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('now-playing-track-speed')));
     await tester.pumpAndSettle();
-    final trackSpeedItem = find.byKey(
-      const Key('now-playing-track-speed-2.0'),
-    );
+    final trackSpeedItem = find.byKey(const Key('now-playing-track-speed-2.0'));
     await tester.ensureVisible(trackSpeedItem);
     await tester.tap(trackSpeedItem);
     await tester.pumpAndSettle();
@@ -430,9 +430,7 @@ Recovered transcript
     await tester.pumpAndSettle();
     expect(requests, 2);
     expect(find.text('Recovered transcript'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const Key('podcast-transcript-cue-3000')),
-    );
+    await tester.tap(find.byKey(const Key('podcast-transcript-cue-3000')));
     await tester.pump();
     expect(engine.positionValue, const Duration(seconds: 3));
   });
@@ -603,86 +601,88 @@ Recovered transcript
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('desktop queue pane clears upcoming tracks and the active queue', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1280, 800);
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'desktop queue pane clears upcoming tracks and the active queue',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(tester.view.reset);
 
-    final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
-    final first = _track('first', title: 'First Song', durationSeconds: 240);
-    final second = _track('second', title: 'Second Song', durationSeconds: 180);
-    await player.playTrack(first, queue: <Track>[first, second]);
+      final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+      final first = _track('first', title: 'First Song', durationSeconds: 240);
+      final second = _track(
+        'second',
+        title: 'Second Song',
+        durationSeconds: 180,
+      );
+      await player.playTrack(first, queue: <Track>[first, second]);
 
-    await tester.pumpWidget(
-      ChangeNotifierProvider<PlayerController>.value(
-        value: player,
-        child: MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 320,
-              child: DesktopQueuePane(
-                onOpenNowPlaying: () {},
-                onOpenQueue: () {},
+      await tester.pumpWidget(
+        ChangeNotifierProvider<PlayerController>.value(
+          value: player,
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 320,
+                child: DesktopQueuePane(
+                  onOpenNowPlaying: () {},
+                  onOpenQueue: () {},
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    await tester.tap(find.byTooltip('Clear upcoming tracks'));
-    await tester.pumpAndSettle();
-    expect(find.text('Clear upcoming tracks?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
-    await tester.pumpAndSettle();
-    expect(player.queue, <Track>[first]);
-    expect(player.current, first);
+      await tester.tap(find.byTooltip('Clear upcoming tracks'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear upcoming tracks?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
+      await tester.pumpAndSettle();
+      expect(player.queue, <Track>[first]);
+      expect(player.current, first);
 
-    await tester.tap(find.byTooltip('Clear queue'));
-    await tester.pumpAndSettle();
-    expect(find.text('Clear queue?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
-    await tester.pumpAndSettle();
-    expect(player.queue, isEmpty);
-    expect(player.current, isNull);
-    expect(tester.takeException(), isNull);
-  });
+      await tester.tap(find.byTooltip('Clear queue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear queue?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
+      await tester.pumpAndSettle();
+      expect(player.queue, isEmpty);
+      expect(player.current, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('desktop queue resize handle reports drag changes and completion', (
-    tester,
-  ) async {
-    var accumulatedDelta = 0.0;
-    var completed = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DesktopQueuePaneResizeHandle(
-            onDragUpdate: (delta) => accumulatedDelta += delta,
-            onDragEnd: () => completed = true,
+  testWidgets(
+    'desktop queue resize handle reports drag changes and completion',
+    (tester) async {
+      var accumulatedDelta = 0.0;
+      var completed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DesktopQueuePaneResizeHandle(
+              onDragUpdate: (delta) => accumulatedDelta += delta,
+              onDragEnd: () => completed = true,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byKey(const Key('desktop-queue-pane-resize'))),
-    );
-    await gesture.moveBy(const Offset(-36, 0));
-    await gesture.up();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('desktop-queue-pane-resize'))),
+      );
+      await gesture.moveBy(const Offset(-36, 0));
+      await gesture.up();
 
-    expect(accumulatedDelta, lessThan(0));
-    expect(completed, isTrue);
-  });
+      expect(accumulatedDelta, lessThan(0));
+      expect(completed, isTrue);
+    },
+  );
 }
 
-Track _track(
-  String id, {
-  required String title,
-  required int durationSeconds,
-}) {
+Track _track(String id, {required String title, required int durationSeconds}) {
   return Track(
     id: id,
     title: title,
@@ -698,8 +698,9 @@ class _FakePlaybackAudioEngine
   final _stateController = StreamController<Object?>.broadcast(sync: true);
   final _durationController = StreamController<Duration?>.broadcast(sync: true);
   final _positionController = StreamController<Duration>.broadcast(sync: true);
-  final _processingController =
-      StreamController<ProcessingState>.broadcast(sync: true);
+  final _processingController = StreamController<ProcessingState>.broadcast(
+    sync: true,
+  );
   final _indexController = StreamController<int?>.broadcast(sync: true);
 
   List<Track> queue = <Track>[];

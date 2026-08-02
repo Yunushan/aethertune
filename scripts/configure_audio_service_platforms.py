@@ -1827,6 +1827,7 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
     application = root.find("application")
     if application is None:
         raise RuntimeError(f"No <application> in {manifest_path}")
+    application.set(f"{ANDROID}label", "AetherTune")
     application.set(f"{ANDROID}allowBackup", "false")
     insert_at = list(root).index(application)
     for permission in ANDROID_PERMISSIONS:
@@ -1929,7 +1930,93 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
         )
     if replacements == 0 and not _has_android_min_sdk_floor(gradle):
         raise RuntimeError(f"No Android minimum SDK declaration in {gradle_path}")
+    gradle = _configure_android_release_signing(gradle)
+    gradle = _normalize_android_identity(gradle)
     gradle_path.write_text(gradle, encoding="utf-8")
+
+
+def _configure_android_release_signing(gradle: str) -> str:
+    if "AETHERTUNE_RELEASE_STORE_FILE" in gradle:
+        modern_markers = (
+            "providers.environmentVariable(name)",
+            'create("aethertuneRelease")',
+            'signingConfigs.getByName("aethertuneRelease")',
+        )
+        if all(marker in gradle for marker in modern_markers) and (
+            'signingConfigs.getByName("debug")' not in gradle
+        ):
+            return gradle
+        raise RuntimeError(
+            "Existing Android release signing configuration is stale; "
+            "regenerate the Flutter platform wrapper before building"
+        )
+    marker = "android {\n"
+    if marker not in gradle:
+        return gradle
+
+    release_inputs = '''// CI exports signing inputs through GITHUB_ENV; retain -P support for local release builds.
+fun releaseInput(name: String) =
+    providers.gradleProperty(name).orElse(providers.environmentVariable(name))
+
+val releaseStoreFile = releaseInput("AETHERTUNE_RELEASE_STORE_FILE")
+val releaseStorePassword = releaseInput("AETHERTUNE_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = releaseInput("AETHERTUNE_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = releaseInput("AETHERTUNE_RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it.isPresent }
+
+'''
+    gradle = gradle.replace(marker, release_inputs + marker, 1)
+
+    build_types = re.compile(
+        r"(?ms)^    buildTypes\s*\{\s*release\s*\{.*?^    \}\s*\}\s*"
+    )
+    replacement = '''    signingConfigs {
+        if (hasReleaseSigning) {
+            create("aethertuneRelease") {
+                storeFile = project.file(releaseStoreFile.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("aethertuneRelease")
+            }
+        }
+    }
+'''
+    gradle, replacements = build_types.subn(replacement, gradle, count=1)
+    if replacements == 0:
+        return gradle
+
+    return gradle
+
+
+def _normalize_android_identity(gradle: str) -> str:
+    gradle = re.sub(
+        r"^\s*// TODO: Specify your own unique Application ID.*\n",
+        "",
+        gradle,
+        flags=re.MULTILINE,
+    )
+    gradle, replacements = re.subn(
+        r'applicationId\s*=\s*"[^"]+"',
+        'applicationId = "dev.aethertune.aethertune"',
+        gradle,
+        count=1,
+    )
+    if replacements == 0:
+        raise RuntimeError("Android application ID declaration is missing")
+    return gradle
 
 
 def _has_android_min_sdk_floor(gradle: str) -> bool:
@@ -2213,6 +2300,8 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     application = root.find("application")
     if application is None:
         raise RuntimeError("Missing Android application element")
+    if application.get(f"{ANDROID}label") != "AetherTune":
+        raise RuntimeError("Android application label is not AetherTune")
     if application.get(f"{ANDROID}allowBackup") != "false":
         raise RuntimeError("Android backup must be disabled for secure storage")
     activity = application.find("activity")
@@ -2429,6 +2518,18 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
     if not all(action in activity_source_text for action in shortcut_actions):
         raise RuntimeError("Android launcher shortcuts are not routed by MainActivity")
     gradle = gradle_path.read_text(encoding="utf-8")
+    if 'applicationId = "dev.aethertune.aethertune"' not in gradle:
+        raise RuntimeError("Android application ID is not stable")
+    if "AETHERTUNE_RELEASE_STORE_FILE" not in gradle:
+        raise RuntimeError("Android release signing inputs are missing")
+    if "providers.environmentVariable(name)" not in gradle:
+        raise RuntimeError("Android release signing does not accept CI environment inputs")
+    if 'create("aethertuneRelease")' not in gradle:
+        raise RuntimeError("Android release signing config is missing")
+    if 'signingConfigs.getByName("aethertuneRelease")' not in gradle:
+        raise RuntimeError("Android release build is not bound to release signing")
+    if 'signingConfigs.getByName("debug")' in gradle:
+        raise RuntimeError("Android release builds must not fall back to debug signing")
     if not _has_android_min_sdk_floor(gradle):
         raise RuntimeError("Android minimum SDK floor is not 23")
 

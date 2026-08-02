@@ -326,7 +326,7 @@ class LibrarySyncStore extends ChangeNotifier {
             publicProfileEnabled: publicProfileEnabled,
             includePublicProfileEnabled:
                 previousProfile.publicProfileSupported &&
-                    !previousProfile.publicProfileFieldAudienceSupported,
+                !previousProfile.publicProfileFieldAudienceSupported,
             publicDisplayNameEnabled: publicDisplayNameEnabled,
             includePublicDisplayNameEnabled:
                 previousProfile.publicProfileFieldAudienceSupported,
@@ -494,10 +494,9 @@ class LibrarySyncStore extends ChangeNotifier {
         if (_queueSyncEnabled &&
             remoteQueueSnapshot != null &&
             identical(mergedQueueSnapshot, remoteQueueSnapshot)) {
-          await _requireQueuePlayer(player).restoreQueueSyncSnapshot(
-            remoteQueueSnapshot,
-            library.tracks,
-          );
+          await _requireQueuePlayer(
+            player,
+          ).restoreQueueSyncSnapshot(remoteQueueSnapshot, library.tracks);
         }
         _lastKnownRevision = result.revision;
         _applyRemoteMetadata(result);
@@ -625,7 +624,9 @@ class LibrarySyncStore extends ChangeNotifier {
   ListenTogetherGateway createListenTogetherGateway() {
     final client = _requireClient();
     if (client is! ListenTogetherGateway) {
-      throw StateError('This library sync server does not support listen together.');
+      throw StateError(
+        'This library sync server does not support listen together.',
+      );
     }
     return client as ListenTogetherGateway;
   }
@@ -650,10 +651,13 @@ class LibrarySyncStore extends ChangeNotifier {
       _requireOnline(library);
       final client = _requireClient();
       if (client is! LibrarySyncPublicProfileGateway) {
-        throw StateError('This sync server does not support profile discovery.');
+        throw StateError(
+          'This sync server does not support profile discovery.',
+        );
       }
-      return (client as LibrarySyncPublicProfileGateway)
-          .findPublicProfiles(query);
+      return (client as LibrarySyncPublicProfileGateway).findPublicProfiles(
+        query,
+      );
     });
   }
 
@@ -690,7 +694,8 @@ class LibrarySyncStore extends ChangeNotifier {
       return snapshot;
     }
 
-    final queue = queueSnapshot ??
+    final queue =
+        queueSnapshot ??
         _requireQueuePlayer(player).exportQueueSyncSnapshot(library.tracks);
     snapshot['queueSync'] = queue.toJson();
     return snapshot;
@@ -715,9 +720,7 @@ class LibrarySyncStore extends ChangeNotifier {
     if (raw is! Map) {
       throw const FormatException('Queue sync snapshot must be an object.');
     }
-    return TrackQueueReferenceSnapshot.fromJson(
-      Map<String, Object?>.from(raw),
-    );
+    return TrackQueueReferenceSnapshot.fromJson(Map<String, Object?>.from(raw));
   }
 
   TrackQueueReferenceSnapshot? _newestQueueSnapshot(
@@ -786,8 +789,7 @@ class LibrarySyncStore extends ChangeNotifier {
   /// configuration sections stored on the same authenticated sync account.
   Future<LibrarySyncRemoteSnapshot> updateProviderConfiguration(
     LibraryStore library,
-    Map<String, Object?> Function(Map<String, Object?>? remoteSnapshot)
-        update,
+    Map<String, Object?> Function(Map<String, Object?>? remoteSnapshot) update,
   ) {
     return _runBusy(() async {
       _requireOnline(library);

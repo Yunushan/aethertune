@@ -27,18 +27,18 @@ class DesktopNavigationShortcutScope extends StatelessWidget {
       policy: WidgetOrderTraversalPolicy(),
       child: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.digit1, control: true):
-              () => onDestinationSelected(0),
-          const SingleActivator(LogicalKeyboardKey.digit2, control: true):
-              () => onDestinationSelected(1),
-          const SingleActivator(LogicalKeyboardKey.digit3, control: true):
-              () => onDestinationSelected(2),
-          const SingleActivator(LogicalKeyboardKey.digit4, control: true):
-              () => onDestinationSelected(3),
-          const SingleActivator(LogicalKeyboardKey.digit5, control: true):
-              () => onDestinationSelected(4),
-          const SingleActivator(LogicalKeyboardKey.digit6, control: true):
-              () => onDestinationSelected(5),
+          const SingleActivator(LogicalKeyboardKey.digit1, control: true): () =>
+              onDestinationSelected(0),
+          const SingleActivator(LogicalKeyboardKey.digit2, control: true): () =>
+              onDestinationSelected(1),
+          const SingleActivator(LogicalKeyboardKey.digit3, control: true): () =>
+              onDestinationSelected(2),
+          const SingleActivator(LogicalKeyboardKey.digit4, control: true): () =>
+              onDestinationSelected(3),
+          const SingleActivator(LogicalKeyboardKey.digit5, control: true): () =>
+              onDestinationSelected(4),
+          const SingleActivator(LogicalKeyboardKey.digit6, control: true): () =>
+              onDestinationSelected(5),
           const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
               onPreviousDestination,
           const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):

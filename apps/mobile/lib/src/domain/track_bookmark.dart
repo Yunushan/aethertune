@@ -57,8 +57,12 @@ final class TrackBookmark {
       createdAt:
           DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      label: normalizeLabel(json['label'] is String ? json['label'] as String : ''),
-      folder: normalizeFolder(json['folder'] is String ? json['folder'] as String : ''),
+      label: normalizeLabel(
+        json['label'] is String ? json['label'] as String : '',
+      ),
+      folder: normalizeFolder(
+        json['folder'] is String ? json['folder'] as String : '',
+      ),
     );
   }
 

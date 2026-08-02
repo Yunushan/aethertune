@@ -27,9 +27,9 @@ final class LibreTranslateLyricsTranslator implements LyricsTranslator {
     required Uri baseUri,
     String? apiKey,
     LyricsTranslationResponseLoader? responseLoader,
-  })  : baseUri = _validateBaseUri(baseUri),
-        _apiKey = apiKey?.trim(),
-        _responseLoader = responseLoader ?? _loadTranslationResponse;
+  }) : baseUri = _validateBaseUri(baseUri),
+       _apiKey = apiKey?.trim(),
+       _responseLoader = responseLoader ?? _loadTranslationResponse;
 
   static const maxInputLength = 30000;
   static const userAgent =
@@ -71,15 +71,12 @@ final class LibreTranslateLyricsTranslator implements LyricsTranslator {
       payload['api_key'] = apiKey;
     }
 
-    final response = await _responseLoader(
-      _translateUri(baseUri),
-      const <String, String>{
-        HttpHeaders.acceptHeader: 'application/json',
-        HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
-        HttpHeaders.userAgentHeader: userAgent,
-      },
-      jsonEncode(payload),
-    );
+    final response =
+        await _responseLoader(_translateUri(baseUri), const <String, String>{
+          HttpHeaders.acceptHeader: 'application/json',
+          HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
+          HttpHeaders.userAgentHeader: userAgent,
+        }, jsonEncode(payload));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw HttpException(
         'Translation service returned HTTP ${response.statusCode}.',
@@ -109,7 +106,9 @@ Uri _validateBaseUri(Uri value) {
       value.host.isEmpty ||
       value.userInfo.isNotEmpty ||
       value.hasFragment) {
-    throw const FormatException('Use an http or https translation service URL.');
+    throw const FormatException(
+      'Use an http or https translation service URL.',
+    );
   }
   return value.replace(query: null, fragment: null);
 }

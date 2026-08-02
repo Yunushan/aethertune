@@ -3,10 +3,9 @@ import 'dart:io';
 
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
-typedef MusicBrainzResponseLoader = Future<String> Function(
-  Uri uri,
-  Map<String, String> headers,
-);
+
+typedef MusicBrainzResponseLoader =
+    Future<String> Function(Uri uri, Map<String, String> headers);
 
 typedef MusicBrainzClock = DateTime Function();
 typedef MusicBrainzDelay = Future<void> Function(Duration duration);
@@ -14,11 +13,9 @@ typedef MusicBrainzDelay = Future<void> Function(Duration duration);
 /// Serializes requests so this app respects MusicBrainz's one request per
 /// second limit even when a user performs several explicit lookups quickly.
 final class MusicBrainzRequestLimiter {
-  MusicBrainzRequestLimiter({
-    MusicBrainzClock? clock,
-    MusicBrainzDelay? delay,
-  }) : _clock = clock ?? DateTime.now,
-       _delay = delay ?? ((duration) => Future<void>.delayed(duration));
+  MusicBrainzRequestLimiter({MusicBrainzClock? clock, MusicBrainzDelay? delay})
+    : _clock = clock ?? DateTime.now,
+      _delay = delay ?? ((duration) => Future<void>.delayed(duration));
 
   final MusicBrainzClock _clock;
   final MusicBrainzDelay _delay;
@@ -82,11 +79,10 @@ final class MusicBrainzMetadataProvider
       'identifies local files, resolves playback, caches media, or downloads.';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
@@ -125,9 +121,7 @@ final class MusicBrainzMetadataProvider
       limit: limit.clamp(1, 25),
     );
     return MusicSourceSearchPage(
-      tracks: List<Track>.unmodifiable(
-        candidates.map(_trackFromCandidate),
-      ),
+      tracks: List<Track>.unmodifiable(candidates.map(_trackFromCandidate)),
       totalCount: candidates.length,
     );
   }
@@ -364,7 +358,9 @@ Future<String> _loadMusicBrainzResponse(
 ) async {
   final client = HttpClient();
   try {
-    final request = await client.getUrl(uri).timeout(const Duration(seconds: 15));
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 15));
     headers.forEach(request.headers.set);
     final response = await request.close();
     final body = await utf8.decoder.bind(response).join();

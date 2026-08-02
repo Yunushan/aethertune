@@ -34,7 +34,8 @@ final class ArtistReleaseUpdatesShelf extends StatefulWidget {
 }
 
 final class _ArtistReleaseUpdatesShelfState
-    extends State<ArtistReleaseUpdatesShelf> with WidgetsBindingObserver {
+    extends State<ArtistReleaseUpdatesShelf>
+    with WidgetsBindingObserver {
   static const _automaticRefreshInterval = Duration(days: 1);
   static const _automaticRefreshCheckInterval = Duration(minutes: 15);
 

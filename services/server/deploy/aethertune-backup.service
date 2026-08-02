@@ -1,0 +1,23 @@
+[Unit]
+Description=Back up AetherTune server state
+After=aethertune.service
+Requires=aethertune.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/aethertune/server.env
+ExecStart=/usr/local/libexec/aethertune-backup.sh /var/lib/aethertune /var/backups/aethertune
+NoNewPrivileges=yes
+LockPersonality=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths=/var/backups/aethertune
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+UMask=0077

@@ -54,8 +54,10 @@ final class _LibrarySearchQuery {
       if (term.isEmpty) {
         continue;
       }
-      final ratingMatch = RegExp(r'^rating>=(\d)$', caseSensitive: false)
-          .firstMatch(term);
+      final ratingMatch = RegExp(
+        r'^rating>=(\d)$',
+        caseSensitive: false,
+      ).firstMatch(term);
       if (ratingMatch != null) {
         final value = int.tryParse(ratingMatch.group(1)!);
         if (value != null && value >= 1 && value <= 5) {
@@ -63,8 +65,10 @@ final class _LibrarySearchQuery {
           continue;
         }
       }
-      final yearMatch = RegExp(r'^year:(\d{4})$', caseSensitive: false)
-          .firstMatch(term);
+      final yearMatch = RegExp(
+        r'^year:(\d{4})$',
+        caseSensitive: false,
+      ).firstMatch(term);
       if (yearMatch != null) {
         final value = int.tryParse(yearMatch.group(1)!);
         if (value != null && value >= 1 && value <= 9999) {
@@ -387,10 +391,7 @@ extension DesktopDensityPreferenceLabel on DesktopDensityPreference {
 }
 
 class SearchSuggestion {
-  const SearchSuggestion({
-    required this.type,
-    required this.value,
-  });
+  const SearchSuggestion({required this.type, required this.value});
 
   final SearchSuggestionType type;
   final String value;
@@ -479,18 +480,15 @@ class _DuplicateResolutionSnapshot {
 }
 
 class _BookmarkTombstone {
-  const _BookmarkTombstone({
-    required this.id,
-    required this.deletedAt,
-  });
+  const _BookmarkTombstone({required this.id, required this.deletedAt});
 
   final String id;
   final DateTime deletedAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'id': id,
-        'deletedAt': deletedAt.toIso8601String(),
-      };
+    'id': id,
+    'deletedAt': deletedAt.toIso8601String(),
+  };
 
   static _BookmarkTombstone? tryFromJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -561,20 +559,14 @@ class SmartPlaylist {
 }
 
 class LibraryHomeSection {
-  const LibraryHomeSection({
-    required this.type,
-    required this.tracks,
-  });
+  const LibraryHomeSection({required this.type, required this.tracks});
 
   final LibraryHomeSectionType type;
   final List<Track> tracks;
 }
 
 class LibraryChartsSnapshot {
-  const LibraryChartsSnapshot({
-    required this.range,
-    required this.stats,
-  });
+  const LibraryChartsSnapshot({required this.range, required this.stats});
 
   final LibraryChartRange range;
   final LibraryStatsSummary stats;
@@ -683,9 +675,9 @@ class CustomSmartPlaylistRule {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'field': field.name,
-        'value': value,
-      };
+    'field': field.name,
+    'value': value,
+  };
 
   static CustomSmartPlaylistRule? tryFromJson(Object? raw) {
     if (raw is! Map) {
@@ -715,8 +707,8 @@ class CustomSmartPlaylistRuleGroup {
     List<CustomSmartPlaylistRule> rules = const <CustomSmartPlaylistRule>[],
     List<CustomSmartPlaylistRuleGroup> groups =
         const <CustomSmartPlaylistRuleGroup>[],
-  })  : rules = List.unmodifiable(rules),
-        groups = List.unmodifiable(groups);
+  }) : rules = List.unmodifiable(rules),
+       groups = List.unmodifiable(groups);
 
   final CustomSmartPlaylistMatchMode matchMode;
   final List<CustomSmartPlaylistRule> rules;
@@ -749,10 +741,10 @@ class CustomSmartPlaylistRuleGroup {
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'matchMode': matchMode.name,
-        'rules': rules.map((rule) => rule.toJson()).toList(growable: false),
-        'groups': groups.map((group) => group.toJson()).toList(growable: false),
-      };
+    'matchMode': matchMode.name,
+    'rules': rules.map((rule) => rule.toJson()).toList(growable: false),
+    'groups': groups.map((group) => group.toJson()).toList(growable: false),
+  };
 
   static CustomSmartPlaylistRuleGroup? tryFromJson(
     Object? raw, {
@@ -769,22 +761,22 @@ class CustomSmartPlaylistRuleGroup {
     final rawGroups = raw['groups'];
     final rules = rawRules is List
         ? rawRules
-            .map(CustomSmartPlaylistRule.tryFromJson)
-            .whereType<CustomSmartPlaylistRule>()
-            .take(maxCustomSmartPlaylistRulesPerGroup)
-            .toList(growable: false)
+              .map(CustomSmartPlaylistRule.tryFromJson)
+              .whereType<CustomSmartPlaylistRule>()
+              .take(maxCustomSmartPlaylistRulesPerGroup)
+              .toList(growable: false)
         : const <CustomSmartPlaylistRule>[];
     final groups = rawGroups is List
         ? rawGroups
-            .map(
-              (group) => CustomSmartPlaylistRuleGroup.tryFromJson(
-                group,
-                depth: depth + 1,
-              ),
-            )
-            .whereType<CustomSmartPlaylistRuleGroup>()
-            .take(maxCustomSmartPlaylistGroupsPerGroup)
-            .toList(growable: false)
+              .map(
+                (group) => CustomSmartPlaylistRuleGroup.tryFromJson(
+                  group,
+                  depth: depth + 1,
+                ),
+              )
+              .whereType<CustomSmartPlaylistRuleGroup>()
+              .take(maxCustomSmartPlaylistGroupsPerGroup)
+              .toList(growable: false)
         : const <CustomSmartPlaylistRuleGroup>[];
     return CustomSmartPlaylistRuleGroup(
       matchMode: matchMode,
@@ -815,8 +807,8 @@ class CustomSmartPlaylist {
     this.limit = 50,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+       updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String id;
   final String name;
@@ -934,16 +926,16 @@ class CustomSmartPlaylist {
         json['sortMode'] as String?,
       ),
       limit: json['limit'] as int? ?? 50,
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 
-  static List<CustomSmartPlaylistRuleGroup> _ruleGroupsFromJson(
-    Object? raw,
-  ) {
+  static List<CustomSmartPlaylistRuleGroup> _ruleGroupsFromJson(Object? raw) {
     if (raw is! List) {
       return const <CustomSmartPlaylistRuleGroup>[];
     }
@@ -969,8 +961,8 @@ class SavedHistoryView {
     this.range = ListeningHistoryRange.all,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+       updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String id;
   final String name;
@@ -1014,9 +1006,11 @@ class SavedHistoryView {
       name: json['name'] as String? ?? 'Untitled history view',
       query: json['query'] as String? ?? '',
       range: _listeningHistoryRangeFromName(json['range'] as String?),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -1034,8 +1028,8 @@ class SavedLibraryView {
     this.sortMode = LibrarySortMode.recentlyAdded,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+       updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String id;
   final String name;
@@ -1089,9 +1083,11 @@ class SavedLibraryView {
       favoritesOnly: json['favoritesOnly'] as bool? ?? false,
       offlineOnly: json['offlineOnly'] as bool? ?? false,
       sortMode: _librarySortModeFromName(json['sortMode'] as String?),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -1188,10 +1184,7 @@ class LibraryListeningHeatmapDay {
 }
 
 class TrackRadioSeedQueue {
-  const TrackRadioSeedQueue({
-    required this.seedTrack,
-    required this.tracks,
-  });
+  const TrackRadioSeedQueue({required this.seedTrack, required this.tracks});
 
   final Track seedTrack;
   final List<Track> tracks;
@@ -1372,8 +1365,7 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.custom_smart_playlists.v1';
   static const _savedHistoryViewsKey = 'aethertune.saved_history_views.v1';
   static const _savedLibraryViewsKey = 'aethertune.saved_library_views.v1';
-  static const _podcastSubscriptionsKey =
-      'aethertune.podcast_subscriptions.v1';
+  static const _podcastSubscriptionsKey = 'aethertune.podcast_subscriptions.v1';
   static const _followedArtistsKey = 'aethertune.followed_artists.v1';
   static const _lyricsKey = 'aethertune.lyrics.v1';
   static const _historyKey = 'aethertune.playback_history.v1';
@@ -1391,8 +1383,7 @@ class LibraryStore extends ChangeNotifier {
   static const _recommendationHistorySignalsKey =
       'aethertune.recommendation_history_signals.v1';
   static const _offlineModeKey = 'aethertune.offline_mode.v1';
-  static const _screenshotProtectionKey =
-      'aethertune.screenshot_protection.v1';
+  static const _screenshotProtectionKey = 'aethertune.screenshot_protection.v1';
   static const _automaticOfflineQueueKey =
       'aethertune.automatic_offline_queue.v1';
   static const _sponsorBlockCategoriesKey =
@@ -1414,8 +1405,7 @@ class LibraryStore extends ChangeNotifier {
       'aethertune.desktop_tray_transport_actions.v1';
   static const _desktopDensityPreferenceKey =
       'aethertune.desktop_density_preference.v1';
-  static const _onboardingCompletedKey =
-      'aethertune.onboarding_completed.v1';
+  static const _onboardingCompletedKey = 'aethertune.onboarding_completed.v1';
   static const _offlineCacheQueueKey = 'aethertune.offline_cache_queue.v1';
   static const _offlineCacheLimitMegabytesKey =
       'aethertune.offline_cache_limit_mb.v1';
@@ -1466,8 +1456,9 @@ class LibraryStore extends ChangeNotifier {
   bool _offlineModeEnabled = false;
   bool _screenshotProtectionEnabled = false;
   bool _automaticOfflineQueueEnabled = false;
-  Set<String> _sponsorBlockCategories =
-      Set<String>.of(sponsor_block.sponsorBlockCategories);
+  Set<String> _sponsorBlockCategories = Set<String>.of(
+    sponsor_block.sponsorBlockCategories,
+  );
   AppThemePreference _themePreference = AppThemePreference.system;
   AppAccentColor _accentColor = AppAccentColor.system;
   ListeningRecapVisualTheme _listeningRecapVisualTheme =
@@ -1492,6 +1483,7 @@ class LibraryStore extends ChangeNotifier {
     final resolution = _lastDuplicateResolution;
     return resolution != null && resolution.stateRevision == _stateRevision;
   }
+
   List<Track> get tracks => List.unmodifiable(_tracks);
   List<Playlist> get playlists => List.unmodifiable(_playlists);
   List<String> get playlistFolders {
@@ -1503,6 +1495,7 @@ class LibraryStore extends ChangeNotifier {
     folders.sort(_compareText);
     return folders;
   }
+
   List<CustomSmartPlaylist> get customSmartPlaylists =>
       List.unmodifiable(_customSmartPlaylists);
   List<SavedHistoryView> get savedHistoryViews =>
@@ -1512,25 +1505,23 @@ class LibraryStore extends ChangeNotifier {
   List<PodcastSubscription> get podcastSubscriptions =>
       List.unmodifiable(_podcastSubscriptions);
   List<String> get followedArtists => List.unmodifiable(_followedArtists);
-  List<PlaybackHistoryEntry> get playbackHistory =>
-      List.unmodifiable(_history);
-  List<String> get searchQueryHistory =>
-      List.unmodifiable(_searchQueryHistory);
+  List<PlaybackHistoryEntry> get playbackHistory => List.unmodifiable(_history);
+  List<String> get searchQueryHistory => List.unmodifiable(_searchQueryHistory);
   List<PlaybackProgressEntry> get playbackProgress =>
       List.unmodifiable(_progressByTrackId.values);
   List<TrackBookmark> bookmarksForTrack(String trackId) => List.unmodifiable(
-        _bookmarksByTrackId[trackId] ?? const <TrackBookmark>[],
-      );
+    _bookmarksByTrackId[trackId] ?? const <TrackBookmark>[],
+  );
   List<TrackLyrics> get lyrics => List.unmodifiable(_lyricsByTrackId.values);
   Map<String, double> get trackPlaybackSpeedOverrides =>
       Map.unmodifiable(_trackPlaybackSpeedOverrides);
   List<OfflineCacheEntry> get offlineCacheQueue =>
       List.unmodifiable(_offlineCacheQueue);
   bool get hasPendingOfflineCacheWork => _offlineCacheQueue.any(
-        (entry) =>
-            entry.status == OfflineCacheEntryStatus.queued ||
-            entry.status == OfflineCacheEntryStatus.failed,
-      );
+    (entry) =>
+        entry.status == OfflineCacheEntryStatus.queued ||
+        entry.status == OfflineCacheEntryStatus.failed,
+  );
 
   /// Returns the earliest eligible podcast refresh deadline, if any.
   ///
@@ -1563,9 +1554,8 @@ class LibraryStore extends ChangeNotifier {
   bool get offlineModeEnabled => _offlineModeEnabled;
   bool get screenshotProtectionEnabled => _screenshotProtectionEnabled;
   bool get automaticOfflineQueueEnabled => _automaticOfflineQueueEnabled;
-  Set<String> get sponsorBlockCategories => Set<String>.unmodifiable(
-        _sponsorBlockCategories,
-      );
+  Set<String> get sponsorBlockCategories =>
+      Set<String>.unmodifiable(_sponsorBlockCategories);
   AppThemePreference get themePreference => _themePreference;
   AppAccentColor get accentColor => _accentColor;
   ListeningRecapVisualTheme get listeningRecapVisualTheme =>
@@ -1576,7 +1566,9 @@ class LibraryStore extends ChangeNotifier {
   bool get desktopArtistReleaseRefreshEnabled =>
       _desktopArtistReleaseRefreshEnabled;
   Set<DesktopTrayTransportAction> get desktopTrayTransportActions =>
-      Set<DesktopTrayTransportAction>.unmodifiable(_desktopTrayTransportActions);
+      Set<DesktopTrayTransportAction>.unmodifiable(
+        _desktopTrayTransportActions,
+      );
   DesktopDensityPreference get desktopDensityPreference =>
       _desktopDensityPreference;
   bool get onboardingCompleted => _onboardingCompleted;
@@ -1612,9 +1604,7 @@ class LibraryStore extends ChangeNotifier {
         ..addAll(
           decoded
               .whereType<Map>()
-              .map(
-                (item) => Playlist.fromJson(Map<String, Object?>.from(item)),
-              )
+              .map((item) => Playlist.fromJson(Map<String, Object?>.from(item)))
               .toList(growable: false),
         );
     }
@@ -1644,10 +1634,9 @@ class LibraryStore extends ChangeNotifier {
         ..addAll(
           _dedupeSavedHistoryViews(
             decoded.whereType<Map>().map(
-                  (item) => SavedHistoryView.fromJson(
-                    Map<String, Object?>.from(item),
-                  ),
-                ),
+              (item) =>
+                  SavedHistoryView.fromJson(Map<String, Object?>.from(item)),
+            ),
           ),
         );
       _sortSavedHistoryViews();
@@ -1661,10 +1650,9 @@ class LibraryStore extends ChangeNotifier {
         ..addAll(
           _dedupeSavedLibraryViews(
             decoded.whereType<Map>().map(
-                  (item) => SavedLibraryView.fromJson(
-                    Map<String, Object?>.from(item),
-                  ),
-                ),
+              (item) =>
+                  SavedLibraryView.fromJson(Map<String, Object?>.from(item)),
+            ),
           ),
         );
       _sortSavedLibraryViews();
@@ -1705,16 +1693,12 @@ class LibraryStore extends ChangeNotifier {
           decoded
               .whereType<Map>()
               .map(
-                (item) => TrackLyrics.fromJson(
-                  Map<String, Object?>.from(item),
-                ),
+                (item) => TrackLyrics.fromJson(Map<String, Object?>.from(item)),
               )
               .where((lyrics) => !lyrics.isEmpty)
               .map(
-                (lyrics) => MapEntry<String, TrackLyrics>(
-                  lyrics.trackId,
-                  lyrics,
-                ),
+                (lyrics) =>
+                    MapEntry<String, TrackLyrics>(lyrics.trackId, lyrics),
               ),
         );
     }
@@ -1741,9 +1725,7 @@ class LibraryStore extends ChangeNotifier {
       final decoded = jsonDecode(rawSearchQueryHistory) as List<dynamic>;
       _searchQueryHistory
         ..clear()
-        ..addAll(
-          _dedupeSearchQueryHistory(decoded.whereType<String>()),
-        );
+        ..addAll(_dedupeSearchQueryHistory(decoded.whereType<String>()));
     }
 
     final rawProgress = prefs.getString(_progressKey);
@@ -1778,9 +1760,8 @@ class LibraryStore extends ChangeNotifier {
           decoded
               .whereType<Map>()
               .map(
-                (item) => TrackBookmark.tryFromJson(
-                  Map<String, Object?>.from(item),
-                ),
+                (item) =>
+                    TrackBookmark.tryFromJson(Map<String, Object?>.from(item)),
               )
               .whereType<TrackBookmark>()
               .where((bookmark) => knownTrackIds.contains(bookmark.trackId))
@@ -1815,8 +1796,7 @@ class LibraryStore extends ChangeNotifier {
           ),
         );
     }
-    _pauseListeningHistory =
-        prefs.getBool(_pauseListeningHistoryKey) ?? false;
+    _pauseListeningHistory = prefs.getBool(_pauseListeningHistoryKey) ?? false;
     _recommendationFavoriteSignalsEnabled =
         prefs.getBool(_recommendationFavoriteSignalsKey) ?? true;
     _recommendationHistorySignalsEnabled =
@@ -1840,9 +1820,7 @@ class LibraryStore extends ChangeNotifier {
     _themePreference = _appThemePreferenceFromName(
       prefs.getString(_themePreferenceKey),
     );
-    _accentColor = _appAccentColorFromName(
-      prefs.getString(_accentColorKey),
-    );
+    _accentColor = _appAccentColorFromName(prefs.getString(_accentColorKey));
     _listeningRecapVisualTheme = _listeningRecapVisualThemeFromName(
       prefs.getString(_listeningRecapVisualThemeKey),
     );
@@ -1860,8 +1838,7 @@ class LibraryStore extends ChangeNotifier {
       prefs.getDouble(_desktopQueuePaneWidthKey) ??
           defaultDesktopQueuePaneWidth,
     );
-    _desktopMinimizeToTray =
-        prefs.getBool(_desktopMinimizeToTrayKey) ?? false;
+    _desktopMinimizeToTray = prefs.getBool(_desktopMinimizeToTrayKey) ?? false;
     _desktopArtistReleaseRefreshEnabled =
         prefs.getBool(_desktopArtistReleaseRefreshKey) ?? false;
     _desktopTrayTransportActions = desktopTrayTransportActionsFromStorage(
@@ -1994,8 +1971,7 @@ class LibraryStore extends ChangeNotifier {
     }
     await _reconcileScannedLocalTracks(
       tracks: tracks.where((track) => _isLocalTrackWithinFolder(track, root)),
-      isExistingTrackInScope: (track) =>
-          _isLocalTrackWithinFolder(track, root),
+      isExistingTrackInScope: (track) => _isLocalTrackWithinFolder(track, root),
       sidecarLyricsByTrackId: sidecarLyricsByTrackId,
       embeddedLyricsByTrackId: embeddedLyricsByTrackId,
       sidecarChaptersByTrackId: sidecarChaptersByTrackId,
@@ -2280,7 +2256,11 @@ class LibraryStore extends ChangeNotifier {
         .where(sponsor_block.sponsorBlockCategories.contains)
         .toSet();
     if (normalized.isEmpty) {
-      throw ArgumentError.value(categories, 'categories', 'Choose at least one category.');
+      throw ArgumentError.value(
+        categories,
+        'categories',
+        'Choose at least one category.',
+      );
     }
     if (setEquals(_sponsorBlockCategories, normalized)) return;
     _sponsorBlockCategories = normalized;
@@ -2327,7 +2307,11 @@ class LibraryStore extends ChangeNotifier {
   Future<void> setTrackPlaybackSpeed(String trackId, double speed) async {
     final normalizedTrackId = trackId.trim();
     if (normalizedTrackId.isEmpty) {
-      throw ArgumentError.value(trackId, 'trackId', 'Track ID cannot be empty.');
+      throw ArgumentError.value(
+        trackId,
+        'trackId',
+        'Track ID cannot be empty.',
+      );
     }
     if (!isSupportedPlaybackSpeed(speed)) {
       throw ArgumentError.value(
@@ -2673,9 +2657,7 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setLanguagePreference(
-    AppLanguagePreference preference,
-  ) async {
+  Future<void> setLanguagePreference(AppLanguagePreference preference) async {
     if (_languagePreference == preference) {
       return;
     }
@@ -2750,7 +2732,11 @@ class LibraryStore extends ChangeNotifier {
 
     final current = _tracks[index];
     if (year != null && (year < 1000 || year > 9999)) {
-      throw ArgumentError.value(year, 'year', 'Year must be between 1000 and 9999.');
+      throw ArgumentError.value(
+        year,
+        'year',
+        'Year must be between 1000 and 9999.',
+      );
     }
     if (trackNumber != null && trackNumber <= 0) {
       throw ArgumentError.value(
@@ -2920,10 +2906,7 @@ class LibraryStore extends ChangeNotifier {
 
     final current = _tracks[index];
     final updated = current.copyWith(
-      chapters: TrackChapter.normalize(
-        chapters,
-        maximum: current.duration,
-      ),
+      chapters: TrackChapter.normalize(chapters, maximum: current.duration),
     );
     if (_sameChapters(current.chapters, updated.chapters)) {
       return updated;
@@ -2979,14 +2962,15 @@ class LibraryStore extends ChangeNotifier {
     LibrarySortMode sortMode = LibrarySortMode.recentlyAdded,
   }) {
     final searchQuery = _LibrarySearchQuery.parse(query);
-    final source = (favoritesOnly ? favorites : tracks)
-        .where((track) => !offlineOnly || track.hasLocalSource);
+    final source = (favoritesOnly ? favorites : tracks).where(
+      (track) => !offlineOnly || track.hasLocalSource,
+    );
 
     final results = searchQuery.isEmpty
         ? source.toList(growable: false)
         : source
-            .where((track) => _trackMatchesLibrarySearch(track, searchQuery))
-            .toList(growable: false);
+              .where((track) => _trackMatchesLibrarySearch(track, searchQuery))
+              .toList(growable: false);
 
     return _sortTrackResults(results, sortMode);
   }
@@ -3085,11 +3069,7 @@ class LibraryStore extends ChangeNotifier {
   List<DuplicateTrackGroup> duplicateTrackGroups() {
     final groupsByKey = <String, _MutableDuplicateTrackGroup>{};
 
-    void addGroupTrack(
-      DuplicateMatchType type,
-      String keyPart,
-      Track track,
-    ) {
+    void addGroupTrack(DuplicateMatchType type, String keyPart, Track track) {
       final normalizedKey = _duplicateKeyPart(keyPart);
       if (normalizedKey.isEmpty) {
         return;
@@ -3098,20 +3078,13 @@ class LibraryStore extends ChangeNotifier {
       final key = '${type.name}:$normalizedKey';
       final group = groupsByKey.putIfAbsent(
         key,
-        () => _MutableDuplicateTrackGroup(
-          key: key,
-          type: type,
-        ),
+        () => _MutableDuplicateTrackGroup(key: key, type: type),
       );
       group.add(track);
     }
 
     for (final track in _tracks) {
-      addGroupTrack(
-        DuplicateMatchType.localPath,
-        track.localPath ?? '',
-        track,
-      );
+      addGroupTrack(DuplicateMatchType.localPath, track.localPath ?? '', track);
       addGroupTrack(
         DuplicateMatchType.contentHash,
         track.contentHash ?? '',
@@ -3130,11 +3103,7 @@ class LibraryStore extends ChangeNotifier {
           track,
         );
       }
-      addGroupTrack(
-        DuplicateMatchType.streamUrl,
-        track.streamUrl ?? '',
-        track,
-      );
+      addGroupTrack(DuplicateMatchType.streamUrl, track.streamUrl ?? '', track);
 
       final metadataKey = _duplicateMetadataKey(track);
       if (metadataKey != null) {
@@ -3245,8 +3214,7 @@ class LibraryStore extends ChangeNotifier {
           .intersection(knownKeys(candidateTracks.map((track) => track.genre)))
           .length;
       final reasons = <LibraryCollectionSimilarityReason>[
-        if (sharedArtistCount > 0)
-          LibraryCollectionSimilarityReason.artist,
+        if (sharedArtistCount > 0) LibraryCollectionSimilarityReason.artist,
         if (sharedAlbumCount > 0) LibraryCollectionSimilarityReason.album,
         if (sharedGenreCount > 0) LibraryCollectionSimilarityReason.genre,
       ];
@@ -3337,7 +3305,8 @@ class LibraryStore extends ChangeNotifier {
     final searchQuery = SearchQuery.parse(query);
     final nodes = nodesByKey.values
         .where(
-          (node) => searchQuery.isEmpty ||
+          (node) =>
+              searchQuery.isEmpty ||
               searchFieldsMatch(<String>[node.label, node.path], searchQuery),
         )
         .map((node) => node.toFolderNode())
@@ -3356,16 +3325,18 @@ class LibraryStore extends ChangeNotifier {
       return <Track>[];
     }
 
-    final tracks = _tracks.where((track) {
-      final localPath = track.localPath?.trim();
-      if (localPath == null || localPath.isEmpty) {
-        return false;
-      }
+    final tracks = _tracks
+        .where((track) {
+          final localPath = track.localPath?.trim();
+          if (localPath == null || localPath.isEmpty) {
+            return false;
+          }
 
-      final folderKey = _folderTreeKey(_folderLabelForTrack(track));
-      return folderKey == normalizedKey ||
-          folderKey.startsWith('$normalizedKey/');
-    }).toList(growable: false);
+          final folderKey = _folderTreeKey(_folderLabelForTrack(track));
+          return folderKey == normalizedKey ||
+              folderKey.startsWith('$normalizedKey/');
+        })
+        .toList(growable: false);
 
     return _sortTrackResults(tracks, sortMode);
   }
@@ -3379,36 +3350,37 @@ class LibraryStore extends ChangeNotifier {
       return <Track>[];
     }
 
-    final tracks = _tracks.where((track) {
-      final localPath = track.localPath?.trim();
-      return localPath != null &&
-          localPath.isNotEmpty &&
-          _folderTreeKey(_folderLabelForTrack(track)) == normalizedKey;
-    }).toList(growable: false);
+    final tracks = _tracks
+        .where((track) {
+          final localPath = track.localPath?.trim();
+          return localPath != null &&
+              localPath.isNotEmpty &&
+              _folderTreeKey(_folderLabelForTrack(track)) == normalizedKey;
+        })
+        .toList(growable: false);
 
     return _sortTrackResults(tracks, sortMode);
   }
 
   List<SmartPlaylist> smartPlaylists() {
-    return SmartPlaylistType.values.map((type) {
-      final trackCount = tracksForSmartPlaylist(
-        type,
-        limit: _tracks.length,
-      ).length;
+    return SmartPlaylistType.values
+        .map((type) {
+          final trackCount = tracksForSmartPlaylist(
+            type,
+            limit: _tracks.length,
+          ).length;
 
-      return SmartPlaylist(
-        type: type,
-        name: _smartPlaylistName(type),
-        description: _smartPlaylistDescription(type),
-        trackCount: trackCount,
-      );
-    }).toList(growable: false);
+          return SmartPlaylist(
+            type: type,
+            name: _smartPlaylistName(type),
+            description: _smartPlaylistDescription(type),
+            trackCount: trackCount,
+          );
+        })
+        .toList(growable: false);
   }
 
-  List<Track> tracksForSmartPlaylist(
-    SmartPlaylistType type, {
-    int limit = 50,
-  }) {
+  List<Track> tracksForSmartPlaylist(SmartPlaylistType type, {int limit = 50}) {
     if (limit <= 0) {
       return <Track>[];
     }
@@ -3437,9 +3409,9 @@ class LibraryStore extends ChangeNotifier {
     final sections = <LibraryHomeSection>[];
 
     void addSection(LibraryHomeSectionType type, List<Track> tracks) {
-      final sectionTracks = _uniqueTracks(tracks).take(limit).toList(
-            growable: false,
-          );
+      final sectionTracks = _uniqueTracks(
+        tracks,
+      ).take(limit).toList(growable: false);
       if (sectionTracks.isEmpty) {
         return;
       }
@@ -3614,7 +3586,9 @@ class LibraryStore extends ChangeNotifier {
         .where((key) => key.isNotEmpty)
         .toSet();
     final tracks = _tracks
-        .where((track) => followedKeys.contains(_followedArtistKey(track.artist)))
+        .where(
+          (track) => followedKeys.contains(_followedArtistKey(track.artist)),
+        )
         .toList(growable: false);
     tracks.sort(_compareByDateThenTitle);
     return tracks.take(limit).toList(growable: false);
@@ -3706,8 +3680,7 @@ class LibraryStore extends ChangeNotifier {
         LibraryListeningHeatmapDay(
           day: day,
           playbackCount: playCounts[day] ?? 0,
-          estimatedListeningDuration:
-              listeningDurations[day] ?? Duration.zero,
+          estimatedListeningDuration: listeningDurations[day] ?? Duration.zero,
         ),
       );
       day = DateTime(day.year, day.month, day.day + 1);
@@ -3740,10 +3713,7 @@ class LibraryStore extends ChangeNotifier {
     return mixes;
   }
 
-  List<Track> tracksForMoodMix(
-    LibraryMoodMixType type, {
-    int limit = 50,
-  }) {
+  List<Track> tracksForMoodMix(LibraryMoodMixType type, {int limit = 50}) {
     if (limit <= 0) {
       return <Track>[];
     }
@@ -3797,9 +3767,9 @@ class LibraryStore extends ChangeNotifier {
   }
 
   List<Track> personalizedRecommendations({int limit = 12}) {
-    return personalizedRecommendationMatches(limit: limit)
-        .map((match) => match.track)
-        .toList(growable: false);
+    return personalizedRecommendationMatches(
+      limit: limit,
+    ).map((match) => match.track).toList(growable: false);
   }
 
   List<PersonalizedRecommendationMatch> personalizedRecommendationMatches({
@@ -3809,9 +3779,7 @@ class LibraryStore extends ChangeNotifier {
       return <PersonalizedRecommendationMatch>[];
     }
 
-    final byId = <String, Track>{
-      for (final track in _tracks) track.id: track,
-    };
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
     final artistWeights = <String, int>{};
     final albumWeights = <String, int>{};
     final genreWeights = <String, int>{};
@@ -4156,8 +4124,10 @@ class LibraryStore extends ChangeNotifier {
   }) {
     final value = rule.value.trim();
     return switch (rule.field) {
-      CustomSmartPlaylistRuleField.searchText =>
-        _trackMatchesQuery(track, SearchQuery.parse(value)),
+      CustomSmartPlaylistRuleField.searchText => _trackMatchesQuery(
+        track,
+        SearchQuery.parse(value),
+      ),
       CustomSmartPlaylistRuleField.sourceId =>
         _matchesCustomSmartPlaylistSource(track.sourceId, value),
       CustomSmartPlaylistRuleField.artist =>
@@ -4182,10 +4152,7 @@ class LibraryStore extends ChangeNotifier {
     };
   }
 
-  bool _matchesCustomSmartPlaylistSource(
-    String sourceId,
-    String selector,
-  ) {
+  bool _matchesCustomSmartPlaylistSource(String sourceId, String selector) {
     final normalizedSource = sourceId.trim().toLowerCase();
     final normalizedSelector = selector.trim().toLowerCase();
     const prefix = 'aethertune-source-kind:';
@@ -4194,16 +4161,21 @@ class LibraryStore extends ChangeNotifier {
     }
     final kind = normalizedSelector.substring(prefix.length);
     return switch (kind) {
-      'self-hosted-jellyfin' =>
-        normalizedSource.startsWith('self-hosted-jellyfin-'),
-      'self-hosted-subsonic' =>
-        normalizedSource.startsWith('self-hosted-subsonic-'),
+      'self-hosted-jellyfin' => normalizedSource.startsWith(
+        'self-hosted-jellyfin-',
+      ),
+      'self-hosted-subsonic' => normalizedSource.startsWith(
+        'self-hosted-subsonic-',
+      ),
       'custom-catalog' => normalizedSource.startsWith('custom-catalog-'),
       _ => false,
     };
   }
 
-  TrackRadioSeedQueue? radioQueueForTrack(String seedTrackId, {int limit = 50}) {
+  TrackRadioSeedQueue? radioQueueForTrack(
+    String seedTrackId, {
+    int limit = 50,
+  }) {
     if (limit <= 0) {
       return null;
     }
@@ -4244,9 +4216,7 @@ class LibraryStore extends ChangeNotifier {
       seedTrack: seedTrack,
       tracks: <Track>[
         seedTrack,
-        ...candidates
-            .map((candidate) => candidate.track)
-            .take(limit - 1),
+        ...candidates.map((candidate) => candidate.track).take(limit - 1),
       ],
     );
   }
@@ -4280,9 +4250,10 @@ class LibraryStore extends ChangeNotifier {
       return null;
     }
 
-    final seedTracks = tracksForBrowseGroup(type, key)
-        .where((track) => track.isPlayable)
-        .toList(growable: false);
+    final seedTracks = tracksForBrowseGroup(
+      type,
+      key,
+    ).where((track) => track.isPlayable).toList(growable: false);
     if (seedTracks.isEmpty) {
       return null;
     }
@@ -4422,9 +4393,7 @@ class LibraryStore extends ChangeNotifier {
     DateTime? to,
   }) {
     final normalizedLimit = limit < 0 ? 0 : limit;
-    final byId = <String, Track>{
-      for (final track in _tracks) track.id: track,
-    };
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
     final trackPlayCounts = <String, int>{};
     final trackListeningDurations = <String, Duration>{};
     final trackLastPlayed = <String, DateTime>{};
@@ -4465,8 +4434,7 @@ class LibraryStore extends ChangeNotifier {
       playbackCount += 1;
       trackPlayCounts[track.id] = (trackPlayCounts[track.id] ?? 0) + 1;
       trackListeningDurations[track.id] =
-          (trackListeningDurations[track.id] ?? Duration.zero) +
-              track.duration;
+          (trackListeningDurations[track.id] ?? Duration.zero) + track.duration;
       final currentLastPlayed = trackLastPlayed[track.id];
       if (currentLastPlayed == null ||
           entry.playedAt.isAfter(currentLastPlayed)) {
@@ -4485,15 +4453,17 @@ class LibraryStore extends ChangeNotifier {
       );
     }
 
-    final topTracks = trackPlayCounts.entries.map((entry) {
-      return LibraryStatsTrack(
-        track: byId[entry.key]!,
-        playCount: entry.value,
-        estimatedListeningDuration:
-            trackListeningDurations[entry.key] ?? Duration.zero,
-        lastPlayedAt: trackLastPlayed[entry.key],
-      );
-    }).toList(growable: false);
+    final topTracks = trackPlayCounts.entries
+        .map((entry) {
+          return LibraryStatsTrack(
+            track: byId[entry.key]!,
+            playCount: entry.value,
+            estimatedListeningDuration:
+                trackListeningDurations[entry.key] ?? Duration.zero,
+            lastPlayedAt: trackLastPlayed[entry.key],
+          );
+        })
+        .toList(growable: false);
     topTracks.sort(_compareLibraryStatsTrack);
 
     final libraryDuration = _tracks.fold<Duration>(
@@ -4557,11 +4527,7 @@ class LibraryStore extends ChangeNotifier {
     });
   }
 
-  String exportLibraryStatsCsv({
-    int limit = 25,
-    DateTime? from,
-    DateTime? to,
-  }) {
+  String exportLibraryStatsCsv({int limit = 25, DateTime? from, DateTime? to}) {
     final stats = libraryStats(limit: limit, from: from, to: to);
     final buffer = StringBuffer()
       ..writeln(
@@ -4665,8 +4631,10 @@ class LibraryStore extends ChangeNotifier {
         genre: trackStats.track.genre,
         playCount: trackStats.playCount.toString(),
         trackCount: '1',
-        estimatedListeningMs:
-            trackStats.estimatedListeningDuration.inMilliseconds.toString(),
+        estimatedListeningMs: trackStats
+            .estimatedListeningDuration
+            .inMilliseconds
+            .toString(),
         lastPlayedAt: trackStats.lastPlayedAt?.toIso8601String() ?? '',
       );
     }
@@ -4678,8 +4646,8 @@ class LibraryStore extends ChangeNotifier {
           label: group.label,
           playCount: group.playCount.toString(),
           trackCount: group.trackCount.toString(),
-          estimatedListeningMs:
-              group.estimatedListeningDuration.inMilliseconds.toString(),
+          estimatedListeningMs: group.estimatedListeningDuration.inMilliseconds
+              .toString(),
           lastPlayedAt: group.lastPlayedAt?.toIso8601String() ?? '',
         );
       }
@@ -4712,27 +4680,31 @@ class LibraryStore extends ChangeNotifier {
       'listeningRecapVisualTheme': _listeningRecapVisualTheme.name,
       'languagePreference': _languagePreference.name,
       'offlineCacheLimitMegabytes': _offlineCacheLimitMegabytes,
-      'offlineCacheProviderLimitMegabytes':
-          Map<String, int>.from(_offlineCacheProviderLimitMegabytes),
+      'offlineCacheProviderLimitMegabytes': Map<String, int>.from(
+        _offlineCacheProviderLimitMegabytes,
+      ),
       'tracks': _tracks.map(_portableTrackArtworkJson).toList(),
       'playlists': _playlists
           .map(_portablePlaylistJson)
           .toList(growable: false),
-      'customSmartPlaylists':
-          _customSmartPlaylists
-              .map(_portableCustomSmartPlaylistJson)
-              .toList(growable: false),
-      'savedHistoryViews':
-          _savedHistoryViews.map((view) => view.toJson()).toList(),
-      'savedLibraryViews':
-          _savedLibraryViews.map((view) => view.toJson()).toList(),
-      'podcastSubscriptions':
-          _podcastSubscriptions.map((item) => item.toJson()).toList(),
+      'customSmartPlaylists': _customSmartPlaylists
+          .map(_portableCustomSmartPlaylistJson)
+          .toList(growable: false),
+      'savedHistoryViews': _savedHistoryViews
+          .map((view) => view.toJson())
+          .toList(),
+      'savedLibraryViews': _savedLibraryViews
+          .map((view) => view.toJson())
+          .toList(),
+      'podcastSubscriptions': _podcastSubscriptions
+          .map((item) => item.toJson())
+          .toList(),
       'followedArtists': _followedArtists,
       'history': _history.map((entry) => entry.toJson()).toList(),
       'searchQueryHistory': _searchQueryHistory,
-      'progress':
-          _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
+      'progress': _progressByTrackId.values
+          .map((entry) => entry.toJson())
+          .toList(),
       'bookmarks': _bookmarksByTrackId.values
           .expand((entries) => entries)
           .map((bookmark) => bookmark.toJson())
@@ -4741,8 +4713,9 @@ class LibraryStore extends ChangeNotifier {
       'lyrics': _lyricsByTrackId.values
           .map((lyrics) => lyrics.toJson())
           .toList(),
-      'offlineCacheQueue':
-          _offlineCacheQueue.map((entry) => entry.toJson()).toList(),
+      'offlineCacheQueue': _offlineCacheQueue
+          .map((entry) => entry.toJson())
+          .toList(),
     });
   }
 
@@ -4757,9 +4730,7 @@ class LibraryStore extends ChangeNotifier {
       ..remove('offlineCacheLimitMegabytes')
       ..remove('offlineCacheProviderLimitMegabytes')
       ..['offlineCacheQueue'] = <Object?>[]
-      ..['tracks'] = _tracks
-          .map(_portableSyncTrackJson)
-          .toList(growable: false)
+      ..['tracks'] = _tracks.map(_portableSyncTrackJson).toList(growable: false)
       ..['playlists'] = _playlists
           .map(_portablePlaylistJson)
           .toList(growable: false);
@@ -5116,9 +5087,9 @@ class LibraryStore extends ChangeNotifier {
       'type': 'aethertune.playlist',
       'version': _playlistDocumentVersion,
       'playlist': _portablePlaylistJson(playlist),
-      'tracks': tracksForPlaylist(playlist.id)
-          .map(_portableSyncTrackJson)
-          .toList(growable: false),
+      'tracks': tracksForPlaylist(
+        playlist.id,
+      ).map(_portableSyncTrackJson).toList(growable: false),
     };
     final payload = utf8.encode(jsonEncode(document));
     if (payload.length > _maxPlaylistImportLinkBytes) {
@@ -5127,9 +5098,7 @@ class LibraryStore extends ChangeNotifier {
     return Uri(
       scheme: _playlistImportLinkScheme,
       host: _playlistImportLinkHost,
-      queryParameters: <String, String>{
-        'data': base64Url.encode(payload),
-      },
+      queryParameters: <String, String>{'data': base64Url.encode(payload)},
     ).toString();
   }
 
@@ -5160,7 +5129,9 @@ class LibraryStore extends ChangeNotifier {
       throw const FormatException('The AetherTune playlist link is malformed.');
     }
     if (decoded is! Map || decoded['type'] != 'aethertune.playlist') {
-      throw const FormatException('The AetherTune playlist link is unsupported.');
+      throw const FormatException(
+        'The AetherTune playlist link is unsupported.',
+      );
     }
     return importPlaylistJson(jsonEncode(decoded));
   }
@@ -5182,9 +5153,7 @@ class LibraryStore extends ChangeNotifier {
     return Uri(
       scheme: _playlistImportLinkScheme,
       host: _customSmartPlaylistImportLinkHost,
-      queryParameters: <String, String>{
-        'data': base64Url.encode(payload),
-      },
+      queryParameters: <String, String>{'data': base64Url.encode(payload)},
     ).toString();
   }
 
@@ -5193,33 +5162,47 @@ class LibraryStore extends ChangeNotifier {
     if (uri == null ||
         uri.scheme != _playlistImportLinkScheme ||
         uri.host != _customSmartPlaylistImportLinkHost) {
-      throw const FormatException('Enter a valid AetherTune smart playlist link.');
+      throw const FormatException(
+        'Enter a valid AetherTune smart playlist link.',
+      );
     }
     final encoded = uri.queryParameters['data'];
     if (encoded == null || encoded.isEmpty) {
-      throw const FormatException('The AetherTune smart playlist link has no data.');
+      throw const FormatException(
+        'The AetherTune smart playlist link has no data.',
+      );
     }
     late List<int> bytes;
     try {
       bytes = base64Url.decode(encoded);
     } on FormatException {
-      throw const FormatException('The AetherTune smart playlist link is malformed.');
+      throw const FormatException(
+        'The AetherTune smart playlist link is malformed.',
+      );
     }
     if (bytes.length > _maxPlaylistImportLinkBytes) {
-      throw const FormatException('The AetherTune smart playlist link is too large.');
+      throw const FormatException(
+        'The AetherTune smart playlist link is too large.',
+      );
     }
     late Object? decoded;
     try {
       decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
     } on FormatException {
-      throw const FormatException('The AetherTune smart playlist link is malformed.');
+      throw const FormatException(
+        'The AetherTune smart playlist link is malformed.',
+      );
     }
     if (decoded is! Map || decoded['type'] != 'aethertune.smart-playlist') {
-      throw const FormatException('The AetherTune smart playlist link is unsupported.');
+      throw const FormatException(
+        'The AetherTune smart playlist link is unsupported.',
+      );
     }
     final rawRule = decoded['rule'];
     if (rawRule is! Map) {
-      throw const FormatException('The AetherTune smart playlist link has no rule.');
+      throw const FormatException(
+        'The AetherTune smart playlist link has no rule.',
+      );
     }
     final rule = CustomSmartPlaylist.fromJson(
       Map<String, Object?>.from(rawRule),
@@ -5244,7 +5227,10 @@ class LibraryStore extends ChangeNotifier {
     final artworkUri = rule.artworkUri;
     if (artworkUri != null &&
         (artworkUri.scheme == 'http' || artworkUri.scheme == 'https')) {
-      return (await updateCustomSmartPlaylistArtwork(imported.id, artworkUri)) ??
+      return (await updateCustomSmartPlaylistArtwork(
+            imported.id,
+            artworkUri,
+          )) ??
           imported;
     }
     return imported;
@@ -5388,9 +5374,7 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
 
-      trackIds.add(
-        _matchM3uEntry(line, extInfo),
-      );
+      trackIds.add(_matchM3uEntry(line, extInfo));
       extInfo = null;
     }
 
@@ -5423,7 +5407,8 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
       if (line.startsWith('[') && line.endsWith(']')) {
-        inPlaylistSection = line.substring(1, line.length - 1).trim().toLowerCase() ==
+        inPlaylistSection =
+            line.substring(1, line.length - 1).trim().toLowerCase() ==
             'playlist';
         sawPlaylistSection = sawPlaylistSection || inPlaylistSection;
         continue;
@@ -5468,18 +5453,25 @@ class LibraryStore extends ChangeNotifier {
     if (version != 2) {
       throw const FormatException('Only PLS Version=2 is supported.');
     }
-    if (declaredEntries != null && (declaredEntries < 0 || declaredEntries > 500)) {
-      throw const FormatException('PLS NumberOfEntries must be between 0 and 500.');
+    if (declaredEntries != null &&
+        (declaredEntries < 0 || declaredEntries > 500)) {
+      throw const FormatException(
+        'PLS NumberOfEntries must be between 0 and 500.',
+      );
     }
     final entryIndexes = locators.keys.toList()..sort();
-    if (declaredEntries != null && entryIndexes.any((index) => index > declaredEntries!)) {
-      throw const FormatException('PLS contains entries beyond NumberOfEntries.');
+    if (declaredEntries != null &&
+        entryIndexes.any((index) => index > declaredEntries!)) {
+      throw const FormatException(
+        'PLS contains entries beyond NumberOfEntries.',
+      );
     }
     final trackIds = <String?>[
       for (final index in entryIndexes)
-        _matchM3uEntry(locators[index]!, titles[index] == null
-            ? null
-            : '#EXTINF:-1,${titles[index]}'),
+        _matchM3uEntry(
+          locators[index]!,
+          titles[index] == null ? null : '#EXTINF:-1,${titles[index]}',
+        ),
     ];
     final importedTrackIds = _dedupeTrackIds(trackIds);
     if (importedTrackIds.isEmpty) {
@@ -5508,7 +5500,9 @@ class LibraryStore extends ChangeNotifier {
     final root = parsed.rootElement;
     if (root.name.local.toLowerCase() != 'playlist' ||
         root.getAttribute('version') != '1') {
-      throw const FormatException('XSPF must contain a version 1 playlist root.');
+      throw const FormatException(
+        'XSPF must contain a version 1 playlist root.',
+      );
     }
 
     final trackList = _firstXmlChild(root, 'trackList');
@@ -5682,11 +5676,9 @@ class LibraryStore extends ChangeNotifier {
     var restoredScreenshotProtectionEnabled = false;
     var restoredThemePreference = AppThemePreference.system;
     var restoredAccentColor = AppAccentColor.system;
-    var restoredListeningRecapVisualTheme =
-        ListeningRecapVisualTheme.midnight;
+    var restoredListeningRecapVisualTheme = ListeningRecapVisualTheme.midnight;
     var restoredLanguagePreference = AppLanguagePreference.system;
-    var restoredOfflineCacheLimitMegabytes =
-        defaultOfflineCacheLimitMegabytes;
+    var restoredOfflineCacheLimitMegabytes = defaultOfflineCacheLimitMegabytes;
     var restoredOfflineCacheProviderLimitMegabytes = <String, int>{};
 
     try {
@@ -5780,9 +5772,11 @@ class LibraryStore extends ChangeNotifier {
         ).map(SavedLibraryView.fromJson),
       );
       restoredHistory.addAll(
-        _jsonObjectList(backup, 'history', isRequired: false).map(
-          PlaybackHistoryEntry.fromJson,
-        ),
+        _jsonObjectList(
+          backup,
+          'history',
+          isRequired: false,
+        ).map(PlaybackHistoryEntry.fromJson),
       );
       restoredSearchQueryHistory.addAll(
         _jsonStringList(backup, 'searchQueryHistory', isRequired: false),
@@ -5798,19 +5792,25 @@ class LibraryStore extends ChangeNotifier {
         _jsonStringList(backup, 'followedArtists', isRequired: false),
       );
       restoredProgress.addAll(
-        _jsonObjectList(backup, 'progress', isRequired: false).map(
-          PlaybackProgressEntry.fromJson,
-        ),
+        _jsonObjectList(
+          backup,
+          'progress',
+          isRequired: false,
+        ).map(PlaybackProgressEntry.fromJson),
       );
       restoredBookmarks.addAll(
-        _jsonObjectList(backup, 'bookmarks', isRequired: false)
-            .map(TrackBookmark.tryFromJson)
-            .whereType<TrackBookmark>(),
+        _jsonObjectList(
+          backup,
+          'bookmarks',
+          isRequired: false,
+        ).map(TrackBookmark.tryFromJson).whereType<TrackBookmark>(),
       );
       restoredBookmarkTombstones.addAll(
-        _jsonObjectList(backup, 'bookmarkTombstones', isRequired: false)
-            .map(_BookmarkTombstone.tryFromJson)
-            .whereType<_BookmarkTombstone>(),
+        _jsonObjectList(
+          backup,
+          'bookmarkTombstones',
+          isRequired: false,
+        ).map(_BookmarkTombstone.tryFromJson).whereType<_BookmarkTombstone>(),
       );
       restoredLyrics.addAll(
         _jsonObjectList(backup, 'lyrics').map(TrackLyrics.fromJson),
@@ -5830,14 +5830,16 @@ class LibraryStore extends ChangeNotifier {
       for (final track in restoredTracks) track.id: track,
     };
     final knownTrackIds = uniqueTracks.keys.toSet();
-    final sanitizedPlaylists = restoredPlaylists.map((playlist) {
-      final filteredTrackIds = playlist.trackIds
-          .where(knownTrackIds.contains)
-          .toSet()
-          .toList(growable: false);
+    final sanitizedPlaylists = restoredPlaylists
+        .map((playlist) {
+          final filteredTrackIds = playlist.trackIds
+              .where(knownTrackIds.contains)
+              .toSet()
+              .toList(growable: false);
 
-      return playlist.copyWith(trackIds: filteredTrackIds);
-    }).toList(growable: false);
+          return playlist.copyWith(trackIds: filteredTrackIds);
+        })
+        .toList(growable: false);
     final sanitizedLyrics = <String, TrackLyrics>{
       for (final lyrics in restoredLyrics)
         if (knownTrackIds.contains(lyrics.trackId) && !lyrics.isEmpty)
@@ -5981,17 +5983,14 @@ class LibraryStore extends ChangeNotifier {
       _tracks,
       (track) => track.audioFingerprint,
     );
-    final byProviderIdentity = _uniqueSyncTrackIndex(
-      _tracks,
-      (track) {
-        final externalId = track.externalId?.trim() ?? '';
-        final sourceId = track.sourceId.trim();
-        if (sourceId.isEmpty || externalId.isEmpty) {
-          return null;
-        }
-        return '$sourceId|$externalId';
-      },
-    );
+    final byProviderIdentity = _uniqueSyncTrackIndex(_tracks, (track) {
+      final externalId = track.externalId?.trim() ?? '';
+      final sourceId = track.sourceId.trim();
+      if (sourceId.isEmpty || externalId.isEmpty) {
+        return null;
+      }
+      return '$sourceId|$externalId';
+    });
     final restoredTracks = <Map<String, Object?>>[];
     for (final item in rawTracks) {
       if (item is! Map) {
@@ -6012,7 +6011,8 @@ class LibraryStore extends ChangeNotifier {
       final providerKey = sourceId == null || externalId == null
           ? null
           : '$sourceId|$externalId';
-      final localTrack = (id == null ? null : byId[id]) ??
+      final localTrack =
+          (id == null ? null : byId[id]) ??
           (contentHash == null ? null : byContentHash[contentHash]) ??
           (audioFingerprint == null
               ? null
@@ -6036,8 +6036,9 @@ class LibraryStore extends ChangeNotifier {
       ..['tracks'] = restoredTracks
       ..['offlineModeEnabled'] = _offlineModeEnabled
       ..['offlineCacheLimitMegabytes'] = _offlineCacheLimitMegabytes
-      ..['offlineCacheProviderLimitMegabytes'] =
-          Map<String, int>.from(_offlineCacheProviderLimitMegabytes)
+      ..['offlineCacheProviderLimitMegabytes'] = Map<String, int>.from(
+        _offlineCacheProviderLimitMegabytes,
+      )
       ..['offlineCacheQueue'] = _offlineCacheQueue
           .map((entry) => entry.toJson())
           .toList(growable: false);
@@ -6082,7 +6083,9 @@ class LibraryStore extends ChangeNotifier {
       identity: (item) {
         final trackId = _syncString(item['trackId']);
         final playedAt = _syncString(item['playedAt']);
-        return trackId == null || playedAt == null ? null : '$trackId|$playedAt';
+        return trackId == null || playedAt == null
+            ? null
+            : '$trackId|$playedAt';
       },
     );
     merged['bookmarkTombstones'] = _mergeSyncBookmarkTombstones(
@@ -6092,17 +6095,23 @@ class LibraryStore extends ChangeNotifier {
     final tombstonedBookmarkIds = _syncBookmarkTombstoneIds(
       merged['bookmarkTombstones'],
     );
-    merged['bookmarks'] = _mergeSyncObjectLists(
-      local['bookmarks'],
-      remote['bookmarks'],
-      identity: (item) => _syncString(item['id']),
-    ).where((item) {
-      if (item is! Map) {
-        return false;
-      }
-      return !tombstonedBookmarkIds.contains(_syncString(item['id']));
-    }).toList(growable: false);
-    merged['playlists'] = _mergeSyncPlaylists(local['playlists'], remote['playlists']);
+    merged['bookmarks'] =
+        _mergeSyncObjectLists(
+              local['bookmarks'],
+              remote['bookmarks'],
+              identity: (item) => _syncString(item['id']),
+            )
+            .where((item) {
+              if (item is! Map) {
+                return false;
+              }
+              return !tombstonedBookmarkIds.contains(_syncString(item['id']));
+            })
+            .toList(growable: false);
+    merged['playlists'] = _mergeSyncPlaylists(
+      local['playlists'],
+      remote['playlists'],
+    );
     for (final key in const <String>['progress', 'lyrics']) {
       merged[key] = _mergeSyncObjectLists(
         local[key],
@@ -6162,7 +6171,9 @@ class LibraryStore extends ChangeNotifier {
       }
       final localPath = item['localPath'];
       if (localPath is String && localPath.trim().isNotEmpty) {
-        throw const FormatException('Sync snapshot contains a device-local file path.');
+        throw const FormatException(
+          'Sync snapshot contains a device-local file path.',
+        );
       }
     }
     return snapshot;
@@ -6223,7 +6234,8 @@ class LibraryStore extends ChangeNotifier {
           continue;
         }
         final existing = merged[tombstone.id];
-        if (existing == null || tombstone.deletedAt.isAfter(existing.deletedAt)) {
+        if (existing == null ||
+            tombstone.deletedAt.isAfter(existing.deletedAt)) {
           merged[tombstone.id] = tombstone;
         }
       }
@@ -6231,8 +6243,7 @@ class LibraryStore extends ChangeNotifier {
 
     add(remoteValue);
     add(localValue);
-    return _sanitizeBookmarkTombstones(merged.values)
-        .entries
+    return _sanitizeBookmarkTombstones(merged.values).entries
         .map(
           (entry) => _BookmarkTombstone(
             id: entry.key,
@@ -6250,9 +6261,8 @@ class LibraryStore extends ChangeNotifier {
       value
           .whereType<Map>()
           .map(
-            (item) => _BookmarkTombstone.tryFromJson(
-              Map<String, Object?>.from(item),
-            ),
+            (item) =>
+                _BookmarkTombstone.tryFromJson(Map<String, Object?>.from(item)),
           )
           .whereType<_BookmarkTombstone>(),
     ).keys.toSet();
@@ -6317,7 +6327,9 @@ class LibraryStore extends ChangeNotifier {
               local['isFavorite'] == true || remoteTrack['isFavorite'] == true;
           final localRating = (local['rating'] as num?)?.toInt() ?? 0;
           final remoteRating = (remoteTrack['rating'] as num?)?.toInt() ?? 0;
-          local['rating'] = localRating >= remoteRating ? localRating : remoteRating;
+          local['rating'] = localRating >= remoteRating
+              ? localRating
+              : remoteRating;
         }
         byId[id] = local;
       }
@@ -6396,7 +6408,9 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
       for (final item in value) {
-        if (item is String && item.trim().isNotEmpty && !values.contains(item)) {
+        if (item is String &&
+            item.trim().isNotEmpty &&
+            !values.contains(item)) {
           values.add(item);
         }
       }
@@ -6433,9 +6447,7 @@ class LibraryStore extends ChangeNotifier {
       return <Track>[];
     }
 
-    final byId = <String, Track>{
-      for (final track in _tracks) track.id: track,
-    };
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
 
     final tracks = playlist.trackIds
         .map((trackId) => byId[trackId])
@@ -6462,9 +6474,7 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final searchQuery = SearchQuery.parse(query);
-    final byId = <String, Track>{
-      for (final track in _tracks) track.id: track,
-    };
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
     final seen = <String>{};
     final recentTracks = <Track>[];
 
@@ -6507,9 +6517,7 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final searchQuery = SearchQuery.parse(query);
-    final byId = <String, Track>{
-      for (final track in _tracks) track.id: track,
-    };
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
     final entries = <PlaybackHistoryEntry>[];
 
     for (final entry in _history) {
@@ -6595,9 +6603,7 @@ class LibraryStore extends ChangeNotifier {
       return <Track>[];
     }
 
-    final byId = <String, Track>{
-      for (final track in _tracks) track.id: track,
-    };
+    final byId = <String, Track>{for (final track in _tracks) track.id: track};
     final entries = _progressByTrackId.values.toList(growable: false)
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
@@ -6613,14 +6619,16 @@ class LibraryStore extends ChangeNotifier {
       return <Track>[];
     }
 
-    final candidates = _tracks.where((track) {
-      if (!track.isPlayable) {
-        return false;
-      }
+    final candidates = _tracks
+        .where((track) {
+          if (!track.isPlayable) {
+            return false;
+          }
 
-      final queue = radioQueueForTrack(track.id, limit: 2);
-      return queue != null && queue.tracks.length > 1;
-    }).toList(growable: false);
+          final queue = radioQueueForTrack(track.id, limit: 2);
+          return queue != null && queue.tracks.length > 1;
+        })
+        .toList(growable: false);
 
     candidates.sort(_compareHomeRadioSeedTracks);
 
@@ -6892,8 +6900,9 @@ class LibraryStore extends ChangeNotifier {
         .toList(growable: false);
 
     tracks.sort((a, b) {
-      final byPlayCount =
-          playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+      final byPlayCount = playCountForTrack(
+        b.id,
+      ).compareTo(playCountForTrack(a.id));
       if (byPlayCount != 0) {
         return byPlayCount;
       }
@@ -6950,10 +6959,7 @@ class LibraryStore extends ChangeNotifier {
 
     _history.insert(
       0,
-      PlaybackHistoryEntry(
-        trackId: trackId,
-        playedAt: _clock(),
-      ),
+      PlaybackHistoryEntry(trackId: trackId, playedAt: _clock()),
     );
     _trimHistory();
     await _save();
@@ -6986,7 +6992,9 @@ class LibraryStore extends ChangeNotifier {
                 normalizeSearchText(track.artist) == artist,
           )
           .toList(growable: false);
-      final album = entry.album == null ? '' : normalizeSearchText(entry.album!);
+      final album = entry.album == null
+          ? ''
+          : normalizeSearchText(entry.album!);
       if (album.isNotEmpty) {
         candidates = candidates
             .where((track) => normalizeSearchText(track.album) == album)
@@ -7137,13 +7145,16 @@ class LibraryStore extends ChangeNotifier {
   }
 
   List<String> bookmarkFoldersForTrack(String trackId) {
-    final folders = _bookmarksByTrackId[trackId]
+    final folders =
+        _bookmarksByTrackId[trackId]
             ?.map((bookmark) => bookmark.folder)
             .where((folder) => folder.isNotEmpty)
             .toSet()
             .toList() ??
         <String>[];
-    folders.sort((left, right) => left.toLowerCase().compareTo(right.toLowerCase()));
+    folders.sort(
+      (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
+    );
     return List.unmodifiable(folders);
   }
 
@@ -7484,8 +7495,9 @@ class LibraryStore extends ChangeNotifier {
       maximumDurationSeconds: _sanitizeMinimumPlayCount(maximumDurationSeconds),
       favoritesOnly: favoritesOnly,
       minimumPlayCount: _sanitizeMinimumPlayCount(minimumPlayCount),
-      minimumDaysSinceLastPlayed:
-          _sanitizeMinimumPlayCount(minimumDaysSinceLastPlayed),
+      minimumDaysSinceLastPlayed: _sanitizeMinimumPlayCount(
+        minimumDaysSinceLastPlayed,
+      ),
       matchMode: matchMode,
       ruleGroups: _normalizeCustomSmartPlaylistRuleGroups(ruleGroups),
       sortMode: sortMode,
@@ -7794,7 +7806,9 @@ class LibraryStore extends ChangeNotifier {
       throw ArgumentError.value(name, 'name', 'Playlist name cannot be empty.');
     }
 
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return;
     }
@@ -7812,7 +7826,9 @@ class LibraryStore extends ChangeNotifier {
     String playlistId,
     String folder,
   ) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return null;
     }
@@ -7838,7 +7854,9 @@ class LibraryStore extends ChangeNotifier {
     String playlistId,
     Uri? artworkUri,
   ) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return null;
     }
@@ -7861,7 +7879,9 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<void> deletePlaylist(String playlistId) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return;
     }
@@ -7872,7 +7892,9 @@ class LibraryStore extends ChangeNotifier {
   }
 
   Future<Playlist?> duplicatePlaylist(String playlistId) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return null;
     }
@@ -7900,7 +7922,9 @@ class LibraryStore extends ChangeNotifier {
       return;
     }
 
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1 || _playlists[index].containsTrack(trackId)) {
       return;
     }
@@ -7923,7 +7947,9 @@ class LibraryStore extends ChangeNotifier {
     String playlistId,
     Iterable<String> trackIds,
   ) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return null;
     }
@@ -7935,10 +7961,7 @@ class LibraryStore extends ChangeNotifier {
     if (listEquals(existing.trackIds, resolved)) {
       return existing;
     }
-    final updated = existing.copyWith(
-      trackIds: resolved,
-      updatedAt: _clock(),
-    );
+    final updated = existing.copyWith(trackIds: resolved, updatedAt: _clock());
     _playlists[index] = updated;
     _sortPlaylists();
     await _save();
@@ -7950,14 +7973,15 @@ class LibraryStore extends ChangeNotifier {
     String playlistId,
     String trackId,
   ) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1 || !_playlists[index].containsTrack(trackId)) {
       return;
     }
 
     _playlists[index] = _playlists[index].copyWith(
-      trackIds: _playlists[index]
-          .trackIds
+      trackIds: _playlists[index].trackIds
           .where((existingId) => existingId != trackId)
           .toList(growable: false),
       updatedAt: _clock(),
@@ -7972,7 +7996,9 @@ class LibraryStore extends ChangeNotifier {
     int fromIndex,
     int toIndex,
   ) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return;
     }
@@ -8213,7 +8239,9 @@ class LibraryStore extends ChangeNotifier {
     String playlistId,
     ArtworkCrop artworkCrop,
   ) async {
-    final index = _playlists.indexWhere((playlist) => playlist.id == playlistId);
+    final index = _playlists.indexWhere(
+      (playlist) => playlist.id == playlistId,
+    );
     if (index == -1) {
       return null;
     }
@@ -8288,10 +8316,7 @@ class LibraryStore extends ChangeNotifier {
     return json;
   }
 
-  String? _portableSyncUri(
-    String? value, {
-    required bool allowData,
-  }) {
+  String? _portableSyncUri(String? value, {required bool allowData}) {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return null;
@@ -8558,23 +8583,18 @@ class LibraryStore extends ChangeNotifier {
     return left.trim().toLowerCase() == right.trim().toLowerCase();
   }
 
-  Map<String, Object?> _libraryStatsSummaryToJson(
-    LibraryStatsSummary stats,
-  ) {
+  Map<String, Object?> _libraryStatsSummaryToJson(LibraryStatsSummary stats) {
     return <String, Object?>{
       'trackCount': stats.trackCount,
       'libraryDurationMs': stats.libraryDuration.inMilliseconds,
       'favoriteTrackCount': stats.favoriteTrackCount,
       'playbackCount': stats.playbackCount,
       'uniquePlayedTrackCount': stats.uniquePlayedTrackCount,
-      'estimatedListeningMs':
-          stats.estimatedListeningDuration.inMilliseconds,
+      'estimatedListeningMs': stats.estimatedListeningDuration.inMilliseconds,
     };
   }
 
-  Map<String, Object?> _libraryStatsTrackToJson(
-    LibraryStatsTrack trackStats,
-  ) {
+  Map<String, Object?> _libraryStatsTrackToJson(LibraryStatsTrack trackStats) {
     return <String, Object?>{
       'trackId': trackStats.track.id,
       'title': trackStats.track.title,
@@ -8588,9 +8608,7 @@ class LibraryStore extends ChangeNotifier {
     };
   }
 
-  Map<String, Object?> _libraryStatsGroupToJson(
-    LibraryStatsGroup group,
-  ) {
+  Map<String, Object?> _libraryStatsGroupToJson(LibraryStatsGroup group) {
     return <String, Object?>{
       'label': group.label,
       'playCount': group.playCount,
@@ -8765,7 +8783,9 @@ class LibraryStore extends ChangeNotifier {
       final playlist = _playlists[index];
       final trackIds = <String>[];
       for (final trackId in playlist.trackIds) {
-        final mappedTrackId = removeIds.contains(trackId) ? keepTrackId : trackId;
+        final mappedTrackId = removeIds.contains(trackId)
+            ? keepTrackId
+            : trackId;
         if (!trackIds.contains(mappedTrackId)) {
           trackIds.add(mappedTrackId);
         }
@@ -8834,24 +8854,25 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final seenIds = <String>{};
-    final merged = candidates
-        .where((bookmark) => seenIds.add(bookmark.id))
-        .map(
-          (bookmark) => bookmark.trackId == keepTrackId
-              ? bookmark
-              : TrackBookmark(
-                  id: bookmark.id,
-                  trackId: keepTrackId,
-                  position: bookmark.position,
-                  createdAt: bookmark.createdAt,
-                  label: bookmark.label,
-                  folder: bookmark.folder,
-                ),
-        )
-        .toList(growable: false)
-      ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
-    _bookmarksByTrackId[keepTrackId] = merged.length <=
-            _maxTrackBookmarksPerTrack
+    final merged =
+        candidates
+            .where((bookmark) => seenIds.add(bookmark.id))
+            .map(
+              (bookmark) => bookmark.trackId == keepTrackId
+                  ? bookmark
+                  : TrackBookmark(
+                      id: bookmark.id,
+                      trackId: keepTrackId,
+                      position: bookmark.position,
+                      createdAt: bookmark.createdAt,
+                      label: bookmark.label,
+                      folder: bookmark.folder,
+                    ),
+            )
+            .toList(growable: false)
+          ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+    _bookmarksByTrackId[keepTrackId] =
+        merged.length <= _maxTrackBookmarksPerTrack
         ? merged
         : merged.sublist(merged.length - _maxTrackBookmarksPerTrack);
   }
@@ -8934,10 +8955,7 @@ class LibraryStore extends ChangeNotifier {
     _tracks.sort((a, b) => b.addedAt.compareTo(a.addedAt));
   }
 
-  List<Track> _sortTrackResults(
-    List<Track> results,
-    LibrarySortMode sortMode,
-  ) {
+  List<Track> _sortTrackResults(List<Track> results, LibrarySortMode sortMode) {
     results.sort((a, b) {
       switch (sortMode) {
         case LibrarySortMode.recentlyAdded:
@@ -8959,8 +8977,13 @@ class LibraryStore extends ChangeNotifier {
           if (byAlbumArtist != 0) {
             return byAlbumArtist;
           }
-          final byTrackNumber = _compareTrackNumber(a.trackNumber, b.trackNumber);
-          return byTrackNumber == 0 ? _compareText(a.title, b.title) : byTrackNumber;
+          final byTrackNumber = _compareTrackNumber(
+            a.trackNumber,
+            b.trackNumber,
+          );
+          return byTrackNumber == 0
+              ? _compareText(a.title, b.title)
+              : byTrackNumber;
         case LibrarySortMode.rating:
           final byRating = b.rating.compareTo(a.rating);
           return byRating == 0 ? _compareText(a.title, b.title) : byRating;
@@ -8993,19 +9016,16 @@ class LibraryStore extends ChangeNotifier {
   }
 
   bool _trackMatchesQuery(Track track, SearchQuery query) {
-    final metadataMatches = searchFieldsMatch(
-      <String>[
-        track.title,
-        track.artist,
-        track.album,
-        track.albumArtist ?? '',
-        track.year?.toString() ?? '',
-        track.genre,
-        _browseLabelForTrack(track, LibraryBrowseType.source),
-        _browseLabelForTrack(track, LibraryBrowseType.folder),
-      ],
-      query,
-    );
+    final metadataMatches = searchFieldsMatch(<String>[
+      track.title,
+      track.artist,
+      track.album,
+      track.albumArtist ?? '',
+      track.year?.toString() ?? '',
+      track.genre,
+      _browseLabelForTrack(track, LibraryBrowseType.source),
+      _browseLabelForTrack(track, LibraryBrowseType.folder),
+    ], query);
     if (metadataMatches) {
       return true;
     }
@@ -9075,8 +9095,9 @@ class LibraryStore extends ChangeNotifier {
   }
 
   int _compareByPlayCountThenLastPlayed(Track a, Track b) {
-    final byPlayCount =
-        playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+    final byPlayCount = playCountForTrack(
+      b.id,
+    ).compareTo(playCountForTrack(a.id));
     if (byPlayCount != 0) {
       return byPlayCount;
     }
@@ -9089,8 +9110,9 @@ class LibraryStore extends ChangeNotifier {
       return a.isFavorite ? -1 : 1;
     }
 
-    final byPlayCount =
-        playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+    final byPlayCount = playCountForTrack(
+      b.id,
+    ).compareTo(playCountForTrack(a.id));
     if (byPlayCount != 0) {
       return byPlayCount;
     }
@@ -9331,8 +9353,9 @@ class LibraryStore extends ChangeNotifier {
       return byFavorite;
     }
 
-    final byPlayCount =
-        playCountForTrack(b.id).compareTo(playCountForTrack(a.id));
+    final byPlayCount = playCountForTrack(
+      b.id,
+    ).compareTo(playCountForTrack(a.id));
     if (byPlayCount != 0) {
       return byPlayCount;
     }
@@ -9368,10 +9391,7 @@ class LibraryStore extends ChangeNotifier {
     return _compareText(a.track.title, b.track.title);
   }
 
-  int _compareLibraryStatsTrack(
-    LibraryStatsTrack a,
-    LibraryStatsTrack b,
-  ) {
+  int _compareLibraryStatsTrack(LibraryStatsTrack a, LibraryStatsTrack b) {
     final byPlayCount = b.playCount.compareTo(a.playCount);
     if (byPlayCount != 0) {
       return byPlayCount;
@@ -9388,17 +9408,15 @@ class LibraryStore extends ChangeNotifier {
     return _compareText(a.track.title, b.track.title);
   }
 
-  int _compareLibraryStatsGroup(
-    LibraryStatsGroup a,
-    LibraryStatsGroup b,
-  ) {
+  int _compareLibraryStatsGroup(LibraryStatsGroup a, LibraryStatsGroup b) {
     final byPlayCount = b.playCount.compareTo(a.playCount);
     if (byPlayCount != 0) {
       return byPlayCount;
     }
 
-    final byDuration =
-        b.estimatedListeningDuration.compareTo(a.estimatedListeningDuration);
+    final byDuration = b.estimatedListeningDuration.compareTo(
+      a.estimatedListeningDuration,
+    );
     if (byDuration != 0) {
       return byDuration;
     }
@@ -9464,7 +9482,8 @@ class LibraryStore extends ChangeNotifier {
     final searchQuery = SearchQuery.parse(query);
     final groups = groupsByKey.values
         .where(
-          (group) => searchQuery.isEmpty ||
+          (group) =>
+              searchQuery.isEmpty ||
               searchTextMatches(group.label, searchQuery),
         )
         .map((group) => group.toBrowseGroup())
@@ -9637,15 +9656,11 @@ class LibraryStore extends ChangeNotifier {
   }
 
   void _sortCustomSmartPlaylists() {
-    _customSmartPlaylists.sort(
-      (a, b) => b.updatedAt.compareTo(a.updatedAt),
-    );
+    _customSmartPlaylists.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
   void _sortSavedHistoryViews() {
-    _savedHistoryViews.sort(
-      (a, b) => b.updatedAt.compareTo(a.updatedAt),
-    );
+    _savedHistoryViews.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
   void _sortSavedLibraryViews() {
@@ -9706,12 +9721,14 @@ class LibraryStore extends ChangeNotifier {
   }
 
   List<Map<String, Object?>> _bookmarkTombstonesJson() {
-    final entries = _sanitizeBookmarkTombstones(
-      _bookmarkTombstonesById.entries.map(
-        (entry) => _BookmarkTombstone(id: entry.key, deletedAt: entry.value),
-      ),
-    ).entries.toList(growable: false)
-      ..sort((left, right) => left.value.compareTo(right.value));
+    final entries =
+        _sanitizeBookmarkTombstones(
+            _bookmarkTombstonesById.entries.map(
+              (entry) =>
+                  _BookmarkTombstone(id: entry.key, deletedAt: entry.value),
+            ),
+          ).entries.toList(growable: false)
+          ..sort((left, right) => left.value.compareTo(right.value));
     return entries
         .map(
           (entry) => _BookmarkTombstone(
@@ -9789,9 +9806,9 @@ class LibraryStore extends ChangeNotifier {
           !seenIds.add(bookmark.id)) {
         continue;
       }
-      byTrackId.putIfAbsent(bookmark.trackId, () => <TrackBookmark>[]).add(
-        bookmark,
-      );
+      byTrackId
+          .putIfAbsent(bookmark.trackId, () => <TrackBookmark>[])
+          .add(bookmark);
     }
     for (final entries in byTrackId.values) {
       entries.sort((left, right) => left.createdAt.compareTo(right.createdAt));
@@ -9884,13 +9901,15 @@ class LibraryStore extends ChangeNotifier {
       throw FormatException('Backup field "$key" must be a list.');
     }
 
-    return rawList.map((item) {
-      if (item is! Map) {
-        throw FormatException('Backup field "$key" contains a non-object.');
-      }
+    return rawList
+        .map((item) {
+          if (item is! Map) {
+            throw FormatException('Backup field "$key" contains a non-object.');
+          }
 
-      return Map<String, Object?>.from(item);
-    }).toList(growable: false);
+          return Map<String, Object?>.from(item);
+        })
+        .toList(growable: false);
   }
 
   List<String> _jsonStringList(
@@ -9907,13 +9926,15 @@ class LibraryStore extends ChangeNotifier {
       throw FormatException('Backup field "$key" must be a list.');
     }
 
-    return rawList.map((item) {
-      if (item is! String) {
-        throw FormatException('Backup field "$key" contains a non-string.');
-      }
+    return rawList
+        .map((item) {
+          if (item is! String) {
+            throw FormatException('Backup field "$key" contains a non-string.');
+          }
 
-      return item;
-    }).toList(growable: false);
+          return item;
+        })
+        .toList(growable: false);
   }
 
   String? _jsonOptionalString(Map<String, Object?> backup, String key) {
@@ -10016,8 +10037,12 @@ class LibraryStore extends ChangeNotifier {
       final overrides = <String, double>{};
       for (final entry in decoded.entries) {
         final trackId = entry.key.toString().trim();
-        final speed = entry.value is num ? (entry.value as num).toDouble() : null;
-        if (trackId.isNotEmpty && speed != null && isSupportedPlaybackSpeed(speed)) {
+        final speed = entry.value is num
+            ? (entry.value as num).toDouble()
+            : null;
+        if (trackId.isNotEmpty &&
+            speed != null &&
+            isSupportedPlaybackSpeed(speed)) {
           overrides[trackId] = speed;
         }
       }
@@ -10074,8 +10099,9 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
 
-      limits[normalized] =
-          _sanitizeOfflineCacheProviderLimitMegabytes(megabytes);
+      limits[normalized] = _sanitizeOfflineCacheProviderLimitMegabytes(
+        megabytes,
+      );
     }
 
     return limits;
@@ -10158,8 +10184,9 @@ class LibraryStore extends ChangeNotifier {
         artist: rule.artist.trim(),
         album: rule.album.trim(),
         minimumPlayCount: _sanitizeMinimumPlayCount(rule.minimumPlayCount),
-        minimumDaysSinceLastPlayed:
-            _sanitizeMinimumPlayCount(rule.minimumDaysSinceLastPlayed),
+        minimumDaysSinceLastPlayed: _sanitizeMinimumPlayCount(
+          rule.minimumDaysSinceLastPlayed,
+        ),
         matchMode: rule.matchMode,
         ruleGroups: _normalizeCustomSmartPlaylistRuleGroups(rule.ruleGroups),
         limit: _sanitizeCustomSmartPlaylistLimit(rule.limit),
@@ -10190,11 +10217,7 @@ class LibraryStore extends ChangeNotifier {
         continue;
       }
 
-      byId[id] = view.copyWith(
-        id: id,
-        name: name,
-        query: view.query.trim(),
-      );
+      byId[id] = view.copyWith(id: id, name: name, query: view.query.trim());
     }
 
     return byId.values.toList(growable: false);
@@ -10243,9 +10266,7 @@ class LibraryStore extends ChangeNotifier {
   }
 
   void _sortPodcastSubscriptions() {
-    _podcastSubscriptions.sort(
-      (a, b) => _compareText(a.title, b.title),
-    );
+    _podcastSubscriptions.sort((a, b) => _compareText(a.title, b.title));
   }
 
   List<OfflineCacheEntry> _dedupeOfflineCacheQueue(
@@ -10298,10 +10319,7 @@ class LibraryStore extends ChangeNotifier {
     );
     _offlineCacheQueue[index] = updated;
     if (upsertCachedTrack && track != null) {
-      _upsertOfflineCachedTrack(
-        track,
-        addIfMissing: addCachedTrackIfMissing,
-      );
+      _upsertOfflineCachedTrack(track, addIfMissing: addCachedTrackIfMissing);
     }
 
     _sortOfflineCacheQueue();
@@ -10372,9 +10390,10 @@ class LibraryStore extends ChangeNotifier {
       _progressByTrackId.values.map((entry) => entry.toJson()).toList(),
     );
     final encodedTrackBookmarks = jsonEncode(
-      _bookmarksByTrackId.values.expand((entries) => entries).map(
-        (bookmark) => bookmark.toJson(),
-      ).toList(),
+      _bookmarksByTrackId.values
+          .expand((entries) => entries)
+          .map((bookmark) => bookmark.toJson())
+          .toList(),
     );
     final encodedBookmarkTombstones = jsonEncode(_bookmarkTombstonesJson());
     final encodedLyrics = jsonEncode(
@@ -10415,10 +10434,7 @@ class LibraryStore extends ChangeNotifier {
       _recommendationHistorySignalsEnabled,
     );
     await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
-    await prefs.setBool(
-      _screenshotProtectionKey,
-      _screenshotProtectionEnabled,
-    );
+    await prefs.setBool(_screenshotProtectionKey, _screenshotProtectionEnabled);
     await prefs.setBool(
       _automaticOfflineQueueKey,
       _automaticOfflineQueueEnabled,
@@ -10433,10 +10449,7 @@ class LibraryStore extends ChangeNotifier {
       _listeningRecapVisualThemeKey,
       _listeningRecapVisualTheme.name,
     );
-    await prefs.setString(
-      _languagePreferenceKey,
-      _languagePreference.name,
-    );
+    await prefs.setString(_languagePreferenceKey, _languagePreference.name);
     await prefs.setString(
       _trackPlaybackSpeedOverridesKey,
       jsonEncode(_trackPlaybackSpeedOverrides),
@@ -10553,10 +10566,7 @@ class LibraryStore extends ChangeNotifier {
     );
   }
 
-  bool _sameChapters(
-    List<TrackChapter> left,
-    List<TrackChapter> right,
-  ) {
+  bool _sameChapters(List<TrackChapter> left, List<TrackChapter> right) {
     if (left.length != right.length) {
       return false;
     }
@@ -10664,10 +10674,7 @@ class _MutableFolderNode {
 }
 
 class _MutableDuplicateTrackGroup {
-  _MutableDuplicateTrackGroup({
-    required this.key,
-    required this.type,
-  });
+  _MutableDuplicateTrackGroup({required this.key, required this.type});
 
   final String key;
   final DuplicateMatchType type;

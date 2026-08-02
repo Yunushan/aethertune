@@ -90,29 +90,34 @@ void main() {
     },
   );
 
-  test('returns bounded station suggestions through the public search API',
-      () async {
-    Uri? capturedUri;
-    final provider = RadioBrowserProvider(
-      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
-      searchLoader: (uri) async {
-        capturedUri = uri;
-        return _sampleStationsJson;
-      },
-    );
+  test(
+    'returns bounded station suggestions through the public search API',
+    () async {
+      Uri? capturedUri;
+      final provider = RadioBrowserProvider(
+        baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+        searchLoader: (uri) async {
+          capturedUri = uri;
+          return _sampleStationsJson;
+        },
+      );
 
-    final suggestions = await provider.suggest('  aether  ', limit: 1);
+      final suggestions = await provider.suggest('  aether  ', limit: 1);
 
-    expect(capturedUri!.path, '/json/stations/search');
-    expect(capturedUri!.queryParameters['name'], 'aether');
-    expect(capturedUri!.queryParameters['limit'], '1');
-    expect(suggestions, hasLength(1));
-    expect(suggestions.single.value, 'Aether Radio');
-    expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.track);
-    expect(suggestions.single.subtitle, 'US / english / jazz');
-    expect(await provider.suggest('   '), isEmpty);
-    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
-  });
+      expect(capturedUri!.path, '/json/stations/search');
+      expect(capturedUri!.queryParameters['name'], 'aether');
+      expect(capturedUri!.queryParameters['limit'], '1');
+      expect(suggestions, hasLength(1));
+      expect(suggestions.single.value, 'Aether Radio');
+      expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.track);
+      expect(suggestions.single.subtitle, 'US / english / jazz');
+      expect(await provider.suggest('   '), isEmpty);
+      await expectLater(
+        provider.suggest('aether', limit: 0),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('parses and selects radio browser mirrors', () {
     final mirrors = parseRadioBrowserMirrors('''
@@ -125,14 +130,11 @@ void main() {
 ]
 ''');
 
-    expect(
-      mirrors.map((uri) => uri.toString()),
-      <String>[
-        'https://de1.api.radio-browser.info',
-        'http://legacy.radio-browser.example',
-        'https://nl1.api.radio-browser.info',
-      ],
-    );
+    expect(mirrors.map((uri) => uri.toString()), <String>[
+      'https://de1.api.radio-browser.info',
+      'http://legacy.radio-browser.example',
+      'https://nl1.api.radio-browser.info',
+    ]);
     expect(
       selectRadioBrowserMirror(
         mirrors,
@@ -141,10 +143,9 @@ void main() {
       Uri.parse('https://de1.api.radio-browser.info'),
     );
     expect(
-      selectRadioBrowserMirror(
-        <Uri>[Uri.parse('http://legacy.radio-browser.example')],
-        fallback: Uri.parse('https://fallback.example.test'),
-      ),
+      selectRadioBrowserMirror(<Uri>[
+        Uri.parse('http://legacy.radio-browser.example'),
+      ], fallback: Uri.parse('https://fallback.example.test')),
       Uri.parse('http://legacy.radio-browser.example'),
     );
   });
@@ -154,7 +155,9 @@ void main() {
     Uri? capturedSearchUri;
     Uri? capturedClickUri;
     final provider = RadioBrowserProvider(
-      mirrorDirectoryUri: Uri.parse('https://mirrors.example.test/json/servers'),
+      mirrorDirectoryUri: Uri.parse(
+        'https://mirrors.example.test/json/servers',
+      ),
       mirrorLoader: (uri) async {
         capturedMirrorUri = uri;
         return '[{"name":"nl1.api.radio-browser.info"}]';
@@ -173,15 +176,12 @@ void main() {
       'mirrors.example.test',
       'de1.api.radio-browser.info',
     ]);
-    expect(
-      provider.disclosure.dataSent,
-      <String>[
-        'mirror discovery request',
-        'station search query',
-        'station click UUID',
-        'station stream validation request',
-      ],
-    );
+    expect(provider.disclosure.dataSent, <String>[
+      'mirror discovery request',
+      'station search query',
+      'station click UUID',
+      'station stream validation request',
+    ]);
 
     final tracks = await provider.search('aether');
     await provider.recordStationClick(tracks.single);
@@ -198,49 +198,52 @@ void main() {
     ]);
   });
 
-  test('falls back to the bundled radio browser mirror on discovery failure', () async {
-    Uri? capturedSearchUri;
-    final provider = RadioBrowserProvider(
-      mirrorLoader: (_) async => throw const FormatException('offline'),
-      searchLoader: (uri) async {
-        capturedSearchUri = uri;
-        return _sampleStationsJson;
-      },
-    );
+  test(
+    'falls back to the bundled radio browser mirror on discovery failure',
+    () async {
+      Uri? capturedSearchUri;
+      final provider = RadioBrowserProvider(
+        mirrorLoader: (_) async => throw const FormatException('offline'),
+        searchLoader: (uri) async {
+          capturedSearchUri = uri;
+          return _sampleStationsJson;
+        },
+      );
 
-    final tracks = await provider.search('aether');
+      final tracks = await provider.search('aether');
 
-    expect(tracks, hasLength(1));
-    expect(capturedSearchUri!.host, 'de1.api.radio-browser.info');
-  });
+      expect(tracks, hasLength(1));
+      expect(capturedSearchUri!.host, 'de1.api.radio-browser.info');
+    },
+  );
 
-  test('retries transient station search failures with bounded backoff', () async {
-    var attempts = 0;
-    final delays = <Duration>[];
-    final provider = RadioBrowserProvider(
-      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
-      retryDelay: (duration) async => delays.add(duration),
-      searchLoader: (_) async {
-        attempts += 1;
-        if (attempts < 3) {
-          throw const HttpException('temporarily unavailable');
-        }
-        return _sampleStationsJson;
-      },
-    );
+  test(
+    'retries transient station search failures with bounded backoff',
+    () async {
+      var attempts = 0;
+      final delays = <Duration>[];
+      final provider = RadioBrowserProvider(
+        baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+        retryDelay: (duration) async => delays.add(duration),
+        searchLoader: (_) async {
+          attempts += 1;
+          if (attempts < 3) {
+            throw const HttpException('temporarily unavailable');
+          }
+          return _sampleStationsJson;
+        },
+      );
 
-    final tracks = await provider.search('aether');
+      final tracks = await provider.search('aether');
 
-    expect(tracks, hasLength(1));
-    expect(attempts, 3);
-    expect(
-      delays,
-      const <Duration>[
+      expect(tracks, hasLength(1));
+      expect(attempts, 3);
+      expect(delays, const <Duration>[
         Duration(milliseconds: 250),
         Duration(milliseconds: 750),
-      ],
-    );
-  });
+      ]);
+    },
+  );
 
   test('does not retry malformed station payload failures', () async {
     var attempts = 0;
@@ -260,32 +263,37 @@ void main() {
     expect(delays, isEmpty);
   });
 
-  test('retries transient mirror discovery before selecting a mirror', () async {
-    var mirrorAttempts = 0;
-    final delays = <Duration>[];
-    Uri? searchUri;
-    final provider = RadioBrowserProvider(
-      mirrorDirectoryUri: Uri.parse('https://mirrors.example.test/json/servers'),
-      retryDelay: (duration) async => delays.add(duration),
-      mirrorLoader: (_) async {
-        mirrorAttempts += 1;
-        if (mirrorAttempts < 3) {
-          throw const HttpException('directory unavailable');
-        }
-        return '[{"name":"nl1.api.radio-browser.info"}]';
-      },
-      searchLoader: (uri) async {
-        searchUri = uri;
-        return _sampleStationsJson;
-      },
-    );
+  test(
+    'retries transient mirror discovery before selecting a mirror',
+    () async {
+      var mirrorAttempts = 0;
+      final delays = <Duration>[];
+      Uri? searchUri;
+      final provider = RadioBrowserProvider(
+        mirrorDirectoryUri: Uri.parse(
+          'https://mirrors.example.test/json/servers',
+        ),
+        retryDelay: (duration) async => delays.add(duration),
+        mirrorLoader: (_) async {
+          mirrorAttempts += 1;
+          if (mirrorAttempts < 3) {
+            throw const HttpException('directory unavailable');
+          }
+          return '[{"name":"nl1.api.radio-browser.info"}]';
+        },
+        searchLoader: (uri) async {
+          searchUri = uri;
+          return _sampleStationsJson;
+        },
+      );
 
-    await provider.search('aether');
+      await provider.search('aether');
 
-    expect(mirrorAttempts, 3);
-    expect(searchUri!.host, 'nl1.api.radio-browser.info');
-    expect(delays, hasLength(2));
-  });
+      expect(mirrorAttempts, 3);
+      expect(searchUri!.host, 'nl1.api.radio-browser.info');
+      expect(delays, hasLength(2));
+    },
+  );
 
   test('searchStations applies advanced filters to URI and results', () async {
     Uri? capturedUri;
@@ -319,23 +327,26 @@ void main() {
     expect(capturedUri!.queryParameters['bitrateMax'], '192');
   });
 
-  test('search station page provides an offset cursor for continuation', () async {
-    Uri? capturedUri;
-    final provider = RadioBrowserProvider(
-      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
-      limit: 1,
-      searchLoader: (uri) async {
-        capturedUri = uri;
-        return _singleStationJson;
-      },
-    );
+  test(
+    'search station page provides an offset cursor for continuation',
+    () async {
+      Uri? capturedUri;
+      final provider = RadioBrowserProvider(
+        baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+        limit: 1,
+        searchLoader: (uri) async {
+          capturedUri = uri;
+          return _singleStationJson;
+        },
+      );
 
-    final page = await provider.searchStationPage('aether', offset: 20);
+      final page = await provider.searchStationPage('aether', offset: 20);
 
-    expect(capturedUri!.queryParameters['offset'], '20');
-    expect(page.nextOffset, 21);
-    expect(page.hasMore, isTrue);
-  });
+      expect(capturedUri!.queryParameters['offset'], '20');
+      expect(page.nextOffset, 21);
+      expect(page.hasMore, isTrue);
+    },
+  );
 
   test('adapts Radio Browser offsets to shared search cursors', () async {
     final requests = <Uri>[];
@@ -347,11 +358,7 @@ void main() {
       },
     );
 
-    final page = await provider.searchPage(
-      'aether',
-      cursor: '20',
-      limit: 1,
-    );
+    final page = await provider.searchPage('aether', cursor: '20', limit: 1);
 
     expect(provider, isA<MusicSourceSearchPagingProvider>());
     expect(page.tracks.single.title, 'Aether Radio');
@@ -371,19 +378,22 @@ void main() {
     expect(requests, hasLength(1));
   });
 
-  test('search station page advances past locally filtered server rows', () async {
-    final provider = RadioBrowserProvider(
-      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
-      limit: 2,
-      searchLoader: (_) async => _sampleStationsJson,
-    );
+  test(
+    'search station page advances past locally filtered server rows',
+    () async {
+      final provider = RadioBrowserProvider(
+        baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+        limit: 2,
+        searchLoader: (_) async => _sampleStationsJson,
+      );
 
-    final page = await provider.searchStationPage('aether');
+      final page = await provider.searchStationPage('aether');
 
-    expect(page.stations, hasLength(1));
-    expect(page.nextOffset, 2);
-    expect(page.hasMore, isTrue);
-  });
+      expect(page.stations, hasLength(1));
+      expect(page.nextOffset, 2);
+      expect(page.hasMore, isTrue);
+    },
+  );
 
   test('search station page stops after a short server page', () async {
     final provider = RadioBrowserProvider(
@@ -410,21 +420,24 @@ void main() {
     );
   });
 
-  test('search station page retains station metadata with playable tracks', () async {
-    final provider = RadioBrowserProvider(
-      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
-      searchLoader: (_) async => _sampleStationsJson,
-    );
+  test(
+    'search station page retains station metadata with playable tracks',
+    () async {
+      final provider = RadioBrowserProvider(
+        baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+        searchLoader: (_) async => _sampleStationsJson,
+      );
 
-    final page = await provider.searchStationPage('aether');
+      final page = await provider.searchStationPage('aether');
 
-    expect(page.stations.single.stationUuid, 'station-1');
-    expect(
-      page.stations.single.homepageUri,
-      Uri.parse('https://station.example.test'),
-    );
-    expect(page.tracks.single.externalId, page.stations.single.stationUuid);
-  });
+      expect(page.stations.single.stationUuid, 'station-1');
+      expect(
+        page.stations.single.homepageUri,
+        Uri.parse('https://station.example.test'),
+      );
+      expect(page.tracks.single.externalId, page.stations.single.stationUuid);
+    },
+  );
 
   test('ignores click accounting for non-radio tracks', () async {
     var clicked = false;
@@ -436,9 +449,9 @@ void main() {
     );
 
     await provider.recordStationClick(
-      parseRadioBrowserStations(_singleStationJson)
-          .single
-          .toTrack(sourceId: 'another-provider'),
+      parseRadioBrowserStations(
+        _singleStationJson,
+      ).single.toTrack(sourceId: 'another-provider'),
     );
 
     expect(clicked, isFalse);
@@ -475,23 +488,59 @@ void main() {
   test('detects bounded radio stream codec signatures', () {
     expect(
       detectRadioBrowserStreamCodec(<int>[
-        0x4f, 0x67, 0x67, 0x53, 0, 0, 0x4f, 0x70, 0x75, 0x73,
-        0x48, 0x65, 0x61, 0x64,
+        0x4f,
+        0x67,
+        0x67,
+        0x53,
+        0,
+        0,
+        0x4f,
+        0x70,
+        0x75,
+        0x73,
+        0x48,
+        0x65,
+        0x61,
+        0x64,
       ]),
       'Opus',
     );
     expect(
       detectRadioBrowserStreamCodec(<int>[
-        0x4f, 0x67, 0x67, 0x53, 0, 0, 0x76, 0x6f, 0x72, 0x62,
-        0x69, 0x73,
+        0x4f,
+        0x67,
+        0x67,
+        0x53,
+        0,
+        0,
+        0x76,
+        0x6f,
+        0x72,
+        0x62,
+        0x69,
+        0x73,
       ]),
       'Ogg/Vorbis',
     );
     expect(detectRadioBrowserStreamCodec(<int>[0x4f, 0x67, 0x67, 0x53]), 'Ogg');
-    expect(detectRadioBrowserStreamCodec(<int>[0x66, 0x4c, 0x61, 0x43]), 'FLAC');
+    expect(
+      detectRadioBrowserStreamCodec(<int>[0x66, 0x4c, 0x61, 0x43]),
+      'FLAC',
+    );
     expect(
       detectRadioBrowserStreamCodec(<int>[
-        0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45,
+        0x52,
+        0x49,
+        0x46,
+        0x46,
+        0,
+        0,
+        0,
+        0,
+        0x57,
+        0x41,
+        0x56,
+        0x45,
       ]),
       'WAV',
     );

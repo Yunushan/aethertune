@@ -111,7 +111,10 @@ final class _YouTubeMusicChartScreenState
                 icon: const Icon(Icons.refresh),
               ),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.ondemand_video_outlined),
               title: Text('No music chart videos found'),
@@ -195,9 +198,9 @@ final class _YouTubeMusicChartScreenState
       }
     });
     try {
-      await context
-          .read<YouTubeDataSettingsStore?>()
-          ?.setPreferredRegion(_regionController.text);
+      await context.read<YouTubeDataSettingsStore?>()?.setPreferredRegion(
+        _regionController.text,
+      );
       final page = await widget.provider.loadPopularMusicPage(
         regionCode: _regionController.text,
         cursor: reset ? null : _nextCursor,

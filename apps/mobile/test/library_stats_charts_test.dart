@@ -91,9 +91,11 @@ void main() {
     expect(find.text('28m'), findsOneWidget);
     expect(find.text('20m'), findsOneWidget);
     expect(
-      tester.widget<SegmentedButton<LibraryStatsChartMetric>>(
-        find.byKey(const Key('listening-stats-chart-metric')),
-      ).selected,
+      tester
+          .widget<SegmentedButton<LibraryStatsChartMetric>>(
+            find.byKey(const Key('listening-stats-chart-metric')),
+          )
+          .selected,
       <LibraryStatsChartMetric>{LibraryStatsChartMetric.listeningTime},
     );
     expect(tester.takeException(), isNull);

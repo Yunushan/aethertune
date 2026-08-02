@@ -94,10 +94,7 @@ class _EditableId3v2Tag {
   final List<Uint8List> preservedFrames;
 }
 
-Future<_Id3v1Tag> _readId3v1Tag(
-  RandomAccessFile access,
-  int length,
-) async {
+Future<_Id3v1Tag> _readId3v1Tag(RandomAccessFile access, int length) async {
   if (length < 128) {
     return _Id3v1Tag(bytes: Uint8List(128), hadExistingTag: false);
   }
@@ -105,10 +102,7 @@ Future<_Id3v1Tag> _readId3v1Tag(
   await access.setPosition(length - 128);
   final existing = await access.read(128);
   if (_isId3v1(existing)) {
-    return _Id3v1Tag(
-      bytes: Uint8List.fromList(existing),
-      hadExistingTag: true,
-    );
+    return _Id3v1Tag(bytes: Uint8List.fromList(existing), hadExistingTag: true);
   }
   return _Id3v1Tag(bytes: Uint8List(128), hadExistingTag: false);
 }
@@ -133,9 +127,7 @@ Future<_EditableId3v2Tag?> _readEditableId3v2Tag(
   final majorVersion = signature[3];
   final flags = signature[5];
   if (majorVersion != 3 && majorVersion != 4) {
-    throw FormatException(
-      'ID3v2.$majorVersion tags cannot be safely updated.',
-    );
+    throw FormatException('ID3v2.$majorVersion tags cannot be safely updated.');
   }
   if ((flags & 0xc0) != 0 || (majorVersion == 4 && (flags & 0x10) != 0)) {
     throw const FormatException(
@@ -169,12 +161,16 @@ List<Uint8List> _preservedId3v2Frames(List<int> payload, int majorVersion) {
       return preserved;
     }
     if (offset + 10 > payload.length) {
-      throw const FormatException('MP3 ID3v2 tag has a truncated frame header.');
+      throw const FormatException(
+        'MP3 ID3v2 tag has a truncated frame header.',
+      );
     }
 
     final frameId = ascii.decode(payload.sublist(offset, offset + 4));
     if (!_isId3v2FrameId(frameId)) {
-      throw const FormatException('MP3 ID3v2 tag has an invalid frame identifier.');
+      throw const FormatException(
+        'MP3 ID3v2 tag has an invalid frame identifier.',
+      );
     }
     final frameSize = majorVersion == 4
         ? _synchsafeInt(payload, offset + 4)
@@ -290,7 +286,9 @@ Future<void> _replaceWithTaggedCopy(File file, _Mp3TagWritePlan plan) async {
     await source.setPosition(plan.sourceStart);
     var remaining = plan.sourceLength;
     while (remaining > 0) {
-      final chunk = await source.read(remaining > 64 * 1024 ? 64 * 1024 : remaining);
+      final chunk = await source.read(
+        remaining > 64 * 1024 ? 64 * 1024 : remaining,
+      );
       if (chunk.isEmpty) {
         throw const FileSystemException(
           'MP3 file ended unexpectedly while copying.',

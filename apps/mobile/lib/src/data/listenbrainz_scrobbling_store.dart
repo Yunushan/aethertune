@@ -34,7 +34,8 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     ListenBrainzClientFactory? clientFactory,
     DateTime Function()? clock,
   }) : _credentialVault = credentialVault ?? SecureProviderCredentialVault(),
-       _clientFactory = clientFactory ?? ((token) => ListenBrainzClient(token: token)),
+       _clientFactory =
+           clientFactory ?? ((token) => ListenBrainzClient(token: token)),
        _clock = clock ?? DateTime.now;
 
   static const _credentialId = 'listenbrainz-user-token';
@@ -129,7 +130,9 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
   /// This remains disabled by default and never causes a retry during load.
   Future<void> setBackgroundRetryEnabled(bool enabled) async {
     if (enabled && !isConfigured) {
-      throw StateError('Connect ListenBrainz before enabling background retry.');
+      throw StateError(
+        'Connect ListenBrainz before enabling background retry.',
+      );
     }
     if (_backgroundRetryEnabled == enabled) {
       return;
@@ -173,18 +176,16 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     }
     final pending = _PendingListen.fromTrack(track, startedAt);
     final key = pending.deduplicationKey;
-    if (_submittedListenKeys.contains(key) ||
-        !_submittingListenKeys.add(key)) {
+    if (_submittedListenKeys.contains(key) || !_submittingListenKeys.add(key)) {
       return;
     }
 
     _submitting = true;
     notifyListeners();
     try {
-      await _clientFactory(token).submitListen(
-        track: track,
-        startedAt: pending.startedAt,
-      );
+      await _clientFactory(
+        token,
+      ).submitListen(track: track, startedAt: pending.startedAt);
       _submittedListenKeys.add(key);
       _removePending(pending);
       _lastError = null;
@@ -278,8 +279,9 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     final minimumStartedAt = _clock().toUtc().subtract(_pendingRetention);
     final parsed = <_PendingListen>[];
     final seen = <String>{};
-    for (final rawListen
-        in (document['listens'] as List).take(_maximumPendingListens)) {
+    for (final rawListen in (document['listens'] as List).take(
+      _maximumPendingListens,
+    )) {
       if (rawListen is! Map) {
         continue;
       }
@@ -311,7 +313,9 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
   }
 
   Future<void> _clearPendingListens() async {
-    await (await SharedPreferences.getInstance()).remove(_pendingPreferencesKey);
+    await (await SharedPreferences.getInstance()).remove(
+      _pendingPreferencesKey,
+    );
   }
 
   Future<void> _clearBackgroundRetryPreference() async {
@@ -393,7 +397,10 @@ final class _PendingListen {
     final artist = _optionalText(json['artist']?.toString());
     final startedAt = DateTime.tryParse(json['startedAt']?.toString() ?? '');
     final durationMs = (json['durationMs'] as num?)?.toInt() ?? 0;
-    if (title == null || artist == null || startedAt == null || durationMs < 0) {
+    if (title == null ||
+        artist == null ||
+        startedAt == null ||
+        durationMs < 0) {
       return null;
     }
     return _PendingListen(

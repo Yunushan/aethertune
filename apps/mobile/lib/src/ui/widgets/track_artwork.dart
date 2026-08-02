@@ -40,7 +40,8 @@ class TrackArtwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalizedProviderId = providerId?.trim() ?? '';
     final normalizedArtworkId = providerArtworkId?.trim() ?? '';
-    final needsProviderArtwork = artworkUri == null &&
+    final needsProviderArtwork =
+        artworkUri == null &&
         normalizedProviderId.isNotEmpty &&
         normalizedArtworkId.isNotEmpty;
     final store = needsProviderArtwork
@@ -49,23 +50,24 @@ class TrackArtwork extends StatelessWidget {
     final maxWidth = (size * MediaQuery.devicePixelRatioOf(context))
         .ceil()
         .clamp(64, 1024);
-    final availableStore = store?.loaded == true &&
+    final availableStore =
+        store?.loaded == true &&
             store!.hasCredentialForProvider(normalizedProviderId)
         ? store
         : null;
     final storeLoader = availableStore == null
         ? null
         : (int width) => availableStore.loadArtwork(
-              sourceId: normalizedProviderId,
-              artworkId: normalizedArtworkId,
-              version: providerArtworkVersion,
-              maxWidth: width,
-            );
+            sourceId: normalizedProviderId,
+            artworkId: normalizedArtworkId,
+            version: providerArtworkVersion,
+            maxWidth: width,
+          );
     final loader = storeLoader ?? loadProviderArtwork;
     final requestKey = needsProviderArtwork && loader != null
         ? '$normalizedProviderId|$normalizedArtworkId|'
-            '${providerArtworkVersion ?? ''}|$maxWidth|'
-            '${store?.artworkRevision ?? 0}'
+              '${providerArtworkVersion ?? ''}|$maxWidth|'
+              '${store?.artworkRevision ?? 0}'
         : null;
 
     return SizedBox.square(
@@ -213,10 +215,7 @@ class _TrackArtworkFallback extends StatelessWidget {
 
     return ColoredBox(
       color: colorScheme.secondaryContainer,
-      child: Icon(
-        icon,
-        color: colorScheme.onSecondaryContainer,
-      ),
+      child: Icon(icon, color: colorScheme.onSecondaryContainer),
     );
   }
 }

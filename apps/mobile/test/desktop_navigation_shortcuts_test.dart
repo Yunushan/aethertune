@@ -4,8 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('selects desktop navigation destinations with Ctrl+digits',
-      (tester) async {
+  testWidgets('selects desktop navigation destinations with Ctrl+digits', (
+    tester,
+  ) async {
     int? selectedDestination;
 
     await tester.pumpWidget(
@@ -28,8 +29,9 @@ void main() {
     expect(selectedDestination, 3);
   });
 
-  testWidgets('cycles desktop navigation destinations with Alt+arrows',
-      (tester) async {
+  testWidgets('cycles desktop navigation destinations with Alt+arrows', (
+    tester,
+  ) async {
     var previousCalls = 0;
     var nextCalls = 0;
 
@@ -55,7 +57,9 @@ void main() {
     expect(nextCalls, 1);
   });
 
-  testWidgets('does not install shortcuts outside desktop layout', (tester) async {
+  testWidgets('does not install shortcuts outside desktop layout', (
+    tester,
+  ) async {
     var selected = false;
 
     await tester.pumpWidget(

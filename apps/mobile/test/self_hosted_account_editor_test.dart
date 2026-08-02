@@ -48,44 +48,45 @@ void main() {
     expect(find.text('Saved: Jellyfin'), findsOneWidget);
   });
 
-  testWidgets('requires explicit consent before sending credentials over HTTP', (
-    tester,
-  ) async {
-    var saveCalls = 0;
-    await tester.pumpWidget(
-      _EditorHarness(
-        kind: SelfHostedProviderKind.subsonic,
-        onSave: (account, secret) async => saveCalls += 1,
-      ),
-    );
+  testWidgets(
+    'requires explicit consent before sending credentials over HTTP',
+    (tester) async {
+      var saveCalls = 0;
+      await tester.pumpWidget(
+        _EditorHarness(
+          kind: SelfHostedProviderKind.subsonic,
+          onSave: (account, secret) async => saveCalls += 1,
+        ),
+      );
 
-    await tester.tap(find.text('Open editor'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('self-hosted-url')),
-      'http://192.168.1.10:4533',
-    );
-    await tester.enterText(
-      find.byKey(const Key('self-hosted-identity')),
-      'yunus',
-    );
-    await tester.enterText(
-      find.byKey(const Key('self-hosted-secret')),
-      'password',
-    );
-    await tester.tap(find.byKey(const Key('self-hosted-test-save')));
-    await tester.pump();
+      await tester.tap(find.text('Open editor'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('self-hosted-url')),
+        'http://192.168.1.10:4533',
+      );
+      await tester.enterText(
+        find.byKey(const Key('self-hosted-identity')),
+        'yunus',
+      );
+      await tester.enterText(
+        find.byKey(const Key('self-hosted-secret')),
+        'password',
+      );
+      await tester.tap(find.byKey(const Key('self-hosted-test-save')));
+      await tester.pump();
 
-    expect(saveCalls, 0);
-    expect(find.textContaining('Confirm insecure HTTP'), findsOneWidget);
+      expect(saveCalls, 0);
+      expect(find.textContaining('Confirm insecure HTTP'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('allow-insecure-http')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('self-hosted-test-save')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('allow-insecure-http')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('self-hosted-test-save')));
+      await tester.pumpAndSettle();
 
-    expect(saveCalls, 1);
-  });
+      expect(saveCalls, 1);
+    },
+  );
 
   testWidgets('edits account metadata without exposing the saved credential', (
     tester,

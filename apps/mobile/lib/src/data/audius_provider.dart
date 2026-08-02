@@ -8,10 +8,8 @@ import '../domain/track.dart';
 import 'provider_binary_loader.dart';
 
 typedef AudiusResponseLoader = Future<String> Function(Uri uri);
-typedef AudiusBinaryLoader = Future<Uint8List> Function(
-  Uri uri,
-  Map<String, String> headers,
-);
+typedef AudiusBinaryLoader =
+    Future<Uint8List> Function(Uri uri, Map<String, String> headers);
 
 /// Read-only public Audius adapter for search and stream resolution.
 ///
@@ -96,16 +94,15 @@ final class AudiusProvider
       'Open Audio Protocol.';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.directPlayback,
-        MusicSourceCapability.libraryBrowse,
-        MusicSourceCapability.playlists,
-        MusicSourceCapability.artwork,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.directPlayback,
+    MusicSourceCapability.libraryBrowse,
+    MusicSourceCapability.playlists,
+    MusicSourceCapability.artwork,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
@@ -174,16 +171,17 @@ final class AudiusProvider
       throw ArgumentError.value(limit, 'limit', 'Must be positive.');
     }
     final requestedLimit = limit.clamp(1, 50);
-    final uri = (kind == MusicCatalogCollectionKind.artist
-            ? usersSearchUri
-            : playlistsSearchUri)
-        .replace(
-          queryParameters: <String, String>{
-            'query': normalizedQuery,
-            'offset': offset.toString(),
-            'limit': requestedLimit.toString(),
-          },
-        );
+    final uri =
+        (kind == MusicCatalogCollectionKind.artist
+                ? usersSearchUri
+                : playlistsSearchUri)
+            .replace(
+              queryParameters: <String, String>{
+                'query': normalizedQuery,
+                'offset': offset.toString(),
+                'limit': requestedLimit.toString(),
+              },
+            );
     final response = kind == MusicCatalogCollectionKind.artist
         ? _parseAudiusArtistsResponse(await _loader(uri))
         : _parseAudiusCollectionsResponse(await _loader(uri), kind);
@@ -314,9 +312,7 @@ final class AudiusProvider
     return parseAudiusTracksResponse(
       await _loader(
         trendingUri.replace(
-          queryParameters: <String, String>{
-            'limit': requestedLimit.toString(),
-          },
+          queryParameters: <String, String>{'limit': requestedLimit.toString()},
         ),
       ),
     );
@@ -507,10 +503,7 @@ _AudiusCollectionsResponse _parseAudiusArtistsResponse(String jsonText) {
     final value = raw.cast<String, Object?>();
     final id = _stringValue(value['id']);
     final handle = _stringValue(value['handle']);
-    final title = _firstNonEmpty(<String>[
-      _stringValue(value['name']),
-      handle,
-    ]);
+    final title = _firstNonEmpty(<String>[_stringValue(value['name']), handle]);
     if (value['is_deactivated'] == true ||
         !_isAudiusId(id) ||
         title.isEmpty ||

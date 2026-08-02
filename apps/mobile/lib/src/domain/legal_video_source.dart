@@ -18,7 +18,8 @@ Uri? localVideoUri(String path) {
   if (normalized.isEmpty) {
     return null;
   }
-  final windowsPath = RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(normalized) ||
+  final windowsPath =
+      RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(normalized) ||
       normalized.startsWith(r'\\');
   return Uri.file(normalized, windows: windowsPath);
 }
