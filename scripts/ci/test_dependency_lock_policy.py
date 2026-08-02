@@ -104,6 +104,7 @@ class DependencyLockPolicyTest(unittest.TestCase):
         )
         self.assertIn("fail-on-vuln: true", workflow)
         self.assertIn("        -r\n        ./", workflow)
+        self.assertIn("--allow-no-lockfiles", workflow)
         self.assertIn("--licenses=", workflow)
 
 
