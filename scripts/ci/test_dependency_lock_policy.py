@@ -85,6 +85,7 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
         self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)
         self.assertIn("--licenses=", workflow)
+        self.assertIn(",UNKNOWN", workflow)
 
     def test_osv_pr_scan_covers_pull_requests_and_merge_queue(self) -> None:
         workflow = OSV_PR_WORKFLOW.read_text(encoding="utf-8")

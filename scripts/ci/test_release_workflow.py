@@ -197,6 +197,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("--licenses=", workflow)
         self.assertIn("needs: [provenance, osv-scan, android, desktop, server]", workflow)
         self.assertIn("scripts/ci/verify_production_release.py", workflow)
+        self.assertIn(
+            "- name: Test production release preflight\n"
+            "        run: python3 scripts/ci/test_verify_production_release.py",
+            workflow,
+        )
         self.assertIn("name: Checkout release policy", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn(
