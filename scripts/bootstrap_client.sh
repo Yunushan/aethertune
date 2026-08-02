@@ -13,7 +13,7 @@ mkdir -p "$APP_DIR"
 
 if [ ! -d "$APP_DIR/android" ] || [ ! -d "$APP_DIR/ios" ] || [ ! -d "$APP_DIR/linux" ] || [ ! -d "$APP_DIR/macos" ] || [ ! -d "$APP_DIR/windows" ]; then
   echo "Generating Flutter mobile and desktop platform wrappers..."
-  flutter create "$APP_DIR" --project-name aethertune --org dev.aethertune --platforms android,ios,linux,macos,windows
+  flutter create "$APP_DIR" --project-name aethertune --org dev.aethertune --platforms android,ios,linux,macos,windows --no-pub
 fi
 
 ANDROID_BUILD_GRADLE="$APP_DIR/android/app/build.gradle.kts"

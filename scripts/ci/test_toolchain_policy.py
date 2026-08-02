@@ -78,6 +78,11 @@ class ToolchainPolicyTest(unittest.TestCase):
             flutter_job.index("run: bash ./scripts/bootstrap_client.sh"),
             flutter_job.index("run: cd apps/mobile && flutter build apk --debug"),
         )
+        bootstrap = (ROOT / "scripts" / "bootstrap_client.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("flutter create", bootstrap)
+        self.assertIn("--no-pub", bootstrap)
 
     def test_governance_audit_is_scheduled_and_fail_closed(self) -> None:
         workflow = (
