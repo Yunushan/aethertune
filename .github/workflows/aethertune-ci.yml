@@ -110,6 +110,24 @@ jobs:
       - name: Resolve client dependencies
         run: cd apps/mobile && flutter pub get --enforce-lockfile
 
+      - name: Capture resolved mobile lockfile
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/mobile
+          flutter pub get
+          mkdir -p ../../build/mobile-lock
+          cp pubspec.lock ../../build/mobile-lock/pubspec.lock
+
+      - name: Upload resolved mobile lockfile
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-mobile-lockfile
+          if-no-files-found: error
+          path: build/mobile-lock/pubspec.lock
+
       - name: Resolve server dependencies
         run: cd services/server && dart pub get --enforce-lockfile
 
