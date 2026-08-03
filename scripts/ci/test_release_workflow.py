@@ -17,8 +17,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         self.assertIn("concurrency:", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertEqual(workflow.count("timeout-minutes:"), 6)
-        self.assertEqual(workflow.count("persist-credentials: false"), 6)
+        self.assertEqual(workflow.count("timeout-minutes:"), 7)
+        self.assertEqual(workflow.count("persist-credentials: false"), 7)
 
     def test_assembly_checks_out_release_policy_before_running_verifiers(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -174,6 +174,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'", workflow)
         self.assertIn("name: production", workflow)
         self.assertIn("'production' || 'candidate'", workflow)
+        self.assertIn("  governance:\n", workflow)
+        self.assertIn("Verify protected governance for production", workflow)
+        self.assertIn("AETHERTUNE_GOVERNANCE_TOKEN", workflow)
+        self.assertIn("verify_github_governance.py", workflow)
+        self.assertIn("needs: [provenance, osv-scan, governance, android, desktop, server]", workflow)
         self.assertIn("  osv-scan:", workflow)
         osv_lines = workflow.split("  osv-scan:\n", 1)[1].split(
             "  android:\n", 1
@@ -195,7 +200,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
         self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)
         self.assertIn("--licenses=", workflow)
-        self.assertIn("needs: [provenance, osv-scan, android, desktop, server]", workflow)
+        self.assertIn(
+            "needs: [provenance, osv-scan, governance, android, desktop, server]",
+            workflow,
+        )
         self.assertIn("scripts/ci/verify_production_release.py", workflow)
         self.assertIn(
             "- name: Test production release preflight\n"

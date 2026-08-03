@@ -161,8 +161,12 @@ The scheduled `Repository governance audit` workflow verifies that `main`
 requires code-owner review, all client/server/security checks, administrator
 enforcement, and no force-push or deletion, and that the `production`
 environment requires an independent reviewer and approved deployment refs.
-Configure the repository secret `AETHERTUNE_GOVERNANCE_TOKEN` with read access
-to those repository settings before treating the governance gate as verified.
+Production release runs also execute this audit as a blocking dependency before
+assembling artifacts. Configure the repository secret
+`AETHERTUNE_GOVERNANCE_TOKEN` with read access to those repository settings;
+production release runs fail closed when it is missing or the settings do not
+match the policy. Candidate/manual runs skip this check because they cannot
+publish a GitHub release.
 
 CI and release builds pin Flutter `3.44.6` and Dart `3.12.2`; dependency lock
 files are enforced so a floating SDK or dependency resolution cannot silently

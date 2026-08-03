@@ -80,6 +80,27 @@ jobs:
       contents: read
       security-events: write
 
+  governance:
+    name: Verify production governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Verify protected governance for production
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.AETHERTUNE_GOVERNANCE_TOKEN }}
+        run: python3 scripts/ci/verify_github_governance.py
+
+      - name: Confirm candidate governance bypass is non-publishing
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true'
+        run: echo 'Candidate mode does not publish a GitHub release or require production governance.'
+
   android:
     name: Android release artifacts
     runs-on: ubuntu-latest
@@ -495,7 +516,7 @@ jobs:
 
   assemble-release:
     name: Assemble verified release bundle
-    needs: [provenance, osv-scan, android, desktop, server]
+    needs: [provenance, osv-scan, governance, android, desktop, server]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
