@@ -16,11 +16,17 @@ if [[ ! -f "$flutter_assets_path" ]]; then
   exit 1
 fi
 
-package_root="$(mktemp -d)"
+output_directory="$(dirname "$output_path")"
+mkdir -p "$output_directory"
+output_path="$(cd "$output_directory" && pwd)/$(basename "$output_path")"
+
+# Keep the staging directory beside the bundle so regular files can be
+# hard-linked instead of duplicating the entire Flutter bundle on disk.
+package_root="$(mktemp -d "$output_directory/.aethertune-deb.XXXXXX")"
 trap 'rm -rf "$package_root"' EXIT
 mkdir -p "$package_root/DEBIAN" "$package_root/opt/aethertune" \
   "$package_root/usr/share/applications"
-cp -a "$bundle_dir/." "$package_root/opt/aethertune/"
+cp -al "$bundle_dir/." "$package_root/opt/aethertune/"
 
 cat > "$package_root/DEBIAN/control" <<EOF
 Package: aethertune
@@ -44,9 +50,6 @@ Categories=AudioVideo;Audio;Player;
 StartupNotify=true
 EOF
 
-output_directory="$(dirname "$output_path")"
-mkdir -p "$output_directory"
-output_path="$(cd "$output_directory" && pwd)/$(basename "$output_path")"
 dpkg-deb --build --root-owner-group -Zgzip "$package_root" "$output_path"
 dpkg-deb --info "$output_path" >/dev/null
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'
