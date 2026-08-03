@@ -53,6 +53,23 @@ class GithubGovernanceTest(unittest.TestCase):
             CODEOWNERS,
         )
 
+    def test_accepts_workflow_and_job_status_check_name(self) -> None:
+        protection = valid_branch_protection()
+        protection["required_status_checks"] = {
+            "strict": True,
+            "contexts": [
+                f"{check} / osv-scan"
+                if check == "New OSV vulnerabilities and license violations"
+                else check
+                for check in REQUIRED_STATUS_CHECKS
+            ],
+        }
+        verify_governance_payloads(
+            protection,
+            valid_environment(),
+            CODEOWNERS,
+        )
+
     def test_rejects_missing_required_status_check(self) -> None:
         protection = valid_branch_protection()
         protection["required_status_checks"] = {

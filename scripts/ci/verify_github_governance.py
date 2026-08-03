@@ -38,7 +38,8 @@ def _enabled(value: Any) -> bool:
 
 def _status_check_matches(contexts: set[str], required: str) -> bool:
     return required in contexts or any(
-        context.endswith(f" / {required}") for context in contexts
+        context.startswith(f"{required} / ") or context.endswith(f" / {required}")
+        for context in contexts
     )
 
 
