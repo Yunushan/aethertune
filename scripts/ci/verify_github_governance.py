@@ -102,6 +102,16 @@ def verify_governance_payloads(
         for rule in rules
     ):
         failures.append("production environment requires an independent reviewer")
+    if environment.get("can_admins_bypass") is not False:
+        failures.append("production environment prevents administrator bypass")
+    if not any(
+        isinstance(rule, dict)
+        and rule.get("type") == "wait_timer"
+        and isinstance(rule.get("wait_timer"), int)
+        and rule["wait_timer"] >= 5
+        for rule in rules or []
+    ):
+        failures.append("production environment requires a five-minute wait timer")
     branch_policy = environment.get("deployment_branch_policy")
     if not isinstance(branch_policy, dict) or not (
         branch_policy.get("protected_branches") is True

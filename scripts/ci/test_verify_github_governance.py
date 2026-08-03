@@ -38,7 +38,11 @@ def valid_branch_protection() -> dict[str, object]:
 
 def valid_environment() -> dict[str, object]:
     return {
-        "protection_rules": [{"type": "required_reviewers"}],
+        "can_admins_bypass": False,
+        "protection_rules": [
+            {"type": "required_reviewers"},
+            {"type": "wait_timer", "wait_timer": 5},
+        ],
         "deployment_branch_policy": {
             "protected_branches": True,
             "custom_branch_policies": False,
@@ -95,6 +99,26 @@ class GithubGovernanceTest(unittest.TestCase):
         environment = valid_environment()
         environment["protection_rules"] = []
         with self.assertRaisesRegex(ValueError, "independent reviewer"):
+            verify_governance_payloads(
+                valid_branch_protection(),
+                environment,
+                CODEOWNERS,
+            )
+
+    def test_rejects_environment_admin_bypass(self) -> None:
+        environment = valid_environment()
+        environment["can_admins_bypass"] = True
+        with self.assertRaisesRegex(ValueError, "administrator bypass"):
+            verify_governance_payloads(
+                valid_branch_protection(),
+                environment,
+                CODEOWNERS,
+            )
+
+    def test_rejects_environment_without_wait_timer(self) -> None:
+        environment = valid_environment()
+        environment["protection_rules"] = [{"type": "required_reviewers"}]
+        with self.assertRaisesRegex(ValueError, "five-minute wait timer"):
             verify_governance_payloads(
                 valid_branch_protection(),
                 environment,
