@@ -201,7 +201,9 @@ class _AudioEffectsDialog extends StatelessWidget {
                       ),
                     ),
                     Slider(
-                      key: const ValueKey<String>('virtualizer-strength-slider'),
+                      key: const ValueKey<String>(
+                        'virtualizer-strength-slider',
+                      ),
                       min: PlayerController.minVirtualizerStrength.toDouble(),
                       max: PlayerController.maxVirtualizerStrength.toDouble(),
                       divisions: 20,

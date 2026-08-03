@@ -9,6 +9,8 @@ version: 0.1.0+1
 ```
 
 Use semantic versioning for the public version and increment the build number for every store build.
+Version tags must use `vMAJOR.MINOR.PATCH` and match the `version` in
+`apps/mobile/pubspec.yaml` before the release bundle is assembled.
 
 ## Android release
 
@@ -18,7 +20,7 @@ flutter build apk --release
 flutter build appbundle --release
 ```
 
-For a real Play Store/F-Droid release, configure signing keys outside the repository. Never commit keystores or passwords.
+For a real Play Store/F-Droid release, configure signing keys outside the repository. Never commit keystores or passwords. The production workflow expects the `AETHERTUNE_ANDROID_KEYSTORE_BASE64`, `AETHERTUNE_ANDROID_KEYSTORE_PASSWORD`, `AETHERTUNE_ANDROID_KEY_ALIAS`, and `AETHERTUNE_ANDROID_KEY_PASSWORD` secrets in the protected `production` environment; it fails before building if any is absent.
 The tag/manual workflow reopens both outputs before upload and requires their
 Android manifest, primary dex payload, and Flutter asset manifest.
 
@@ -31,9 +33,16 @@ flutter build ios --release
 
 Open the generated iOS project in Xcode for signing, capabilities, and App Store upload.
 
-Tag/manual releases also include `aethertune-ios-unsigned.zip`, a verified
-unsigned `.app` archive for developer inspection or local re-signing. It is
-not installable on a device and is not an App Store or TestFlight artifact.
+Manual and non-production tag runs include `aethertune-ios-unsigned.zip`, a
+verified unsigned `.app` archive for developer inspection or local re-signing.
+It is not installable on a device and is not an App Store or TestFlight
+artifact. Production tag runs instead require
+`AETHERTUNE_IOS_SIGNING_CERTIFICATE_BASE64`,
+`AETHERTUNE_IOS_SIGNING_CERTIFICATE_PASSWORD`,
+`AETHERTUNE_IOS_SIGNING_IDENTITY`,
+`AETHERTUNE_IOS_PROVISIONING_PROFILE_BASE64`, and
+`AETHERTUNE_IOS_EXPORT_OPTIONS_PLIST_BASE64`, then publish a signed
+`aethertune-ios.ipa`.
 
 ## Desktop release
 
@@ -69,9 +78,16 @@ desktop archives on tags or manual dispatch:
 
 The macOS ZIP and DMG packagers validate the app executable and Flutter asset
 manifest. The ZIP reopens the archive to verify both paths, while the DMG test
-mounts the volume to verify the bundle and its Applications shortcut. The DMG
-is unsigned: platform-specific signing, notarization, universal binaries, and
-installer work still remain before store-quality distribution.
+mounts the volume to verify the bundle and its Applications shortcut.
+Candidate/manual macOS builds are unsigned. Production macOS builds require
+the Apple signing and notarization secrets, sign and notarize the app before
+packaging, staple and validate the DMG, and publish a deterministic
+`aethertune-macos-notarization.json` attestation. Production Windows MSIX and
+portable ZIP builds use the
+`AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_BASE64` and
+`AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD` secrets and are rejected by
+the publish preflight unless the executable and `AppxSignature.p7x` are
+signed.
 
 The Linux portable-archive and Debian packagers validate the executable and
 Flutter asset manifest, then reopen their output to verify the executable and
@@ -81,13 +97,14 @@ payload before upload.
 
 ```bash
 cd services/server
-dart pub get
+dart pub get --enforce-lockfile
 dart compile exe bin/server.dart -o build/aethertune-server
 ```
 
-For hosted deployments, set `PORT` in the environment. The server exposes `/health` for uptime checks.
-Each CI and release executable is started on a temporary loopback port and must
-return `200` from `/health` before it is uploaded.
+For hosted deployments, set `PORT` in the environment. The server exposes
+`/health` for liveness and `/ready` for persistence readiness. Each CI and
+release executable is started on a temporary loopback port and must return
+`200` from both endpoints before it is uploaded.
 
 The release workflow uploads native server executables as:
 
@@ -103,16 +120,22 @@ workflow manually. Both runs assemble the following files into the
 `RELEASE_MANIFEST.json` inventory:
 
 - Android: `app-release.apk` and `app-release.aab`
-- iOS: `aethertune-ios-unsigned.zip` for developer re-signing only
+- iOS: `aethertune-ios.ipa` for production tags, or `aethertune-ios-unsigned.zip` for candidate/manual inspection
 - Linux desktop archive
 - macOS ZIP and DMG desktop packages
 - Windows desktop archive
 - Linux/macOS/Windows server executables
 - `aethertune-dependency-provenance`: resolved client/server dependency inventories and deterministic CycloneDX 1.5 SBOMs
 
-A pushed `v*` tag also creates or updates a GitHub Release and attaches the
-same bundle files individually. Manual dispatch intentionally remains
-artifact-only, so it can validate a candidate without publishing it. Verify a
+A pushed `v*` tag creates the verified bundle, but publication is intentionally
+disabled unless the repository variable
+`AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is exactly `true`. When enabled, the
+publish job also targets the `production` environment; configure that
+environment to allow protected branches and require a separate release
+approval. Configure the repository variable only after platform signing,
+notarization, installer validation, store metadata, and physical-device smoke
+tests are complete. Manual dispatch remains artifact-only, so it can validate a
+candidate without publishing it. Verify a
 download with `sha256sum -c SHA256SUMS.txt` on Linux/macOS, or
 `Get-FileHash` on Windows. `RELEASE_MANIFEST.json` identifies each artifact's
 platform, kind, byte size, and SHA-256 digest without timestamps or user data;
@@ -121,9 +144,40 @@ every supported-platform artifact before upload.
 
 The SBOM artifact is generated from the exact `dart pub deps --json` graph
 resolved by that workflow. It intentionally omits a timestamp, embeds the
-graph SHA-256, and is regenerated byte-for-byte before upload. It is evidence
-of what was built, not a claim that the release has passed license or
-vulnerability policy scanning.
+graph SHA-256, and is regenerated byte-for-byte before upload. Pull requests
+also run the GitHub Dependency Review action and fail for newly introduced
+moderate-or-higher advisories. OSV's PR/merge-queue scan compares both
+committed Pub lockfiles with `main`; its full scan also runs on schedule,
+`main` pushes, and version tags, fails on known
+vulnerabilities, and enforces the repository's SPDX license allowlist. Packages
+whose license metadata is unavailable still require an explicit release-review
+exception; they are not silently accepted.
+
+After checksums are generated, the release workflow creates a signed GitHub
+artifact attestation for every subject listed in `SHA256SUMS.txt`. A release
+bundle is not considered verified if the OIDC-backed attestation step fails.
+
+The scheduled `Repository governance audit` workflow verifies that `main`
+requires code-owner review, all client/server/security checks, administrator
+enforcement, and no force-push or deletion, and that the `production`
+environment requires an independent reviewer and approved deployment refs.
+Configure the repository secret `AETHERTUNE_GOVERNANCE_TOKEN` with read access
+to those repository settings before treating the governance gate as verified.
+
+CI and release builds pin Flutter `3.44.6` and Dart `3.12.2`; dependency lock
+files are enforced so a floating SDK or dependency resolution cannot silently
+change a release build.
+
+The CI client suite publishes an LCOV report and fails below the current 70%
+line-coverage floor. This is a regression guard, not a claim of complete
+behavioral or physical-device coverage.
+
+The production publish job rejects unsigned or debug markers and independently
+checks Android signatures, the iOS IPA structure, the macOS code signature and
+notarization attestation, and the Windows executable Authenticode and MSIX
+signature evidence. This is intentionally
+fail-closed: missing credentials or incomplete platform evidence cannot turn a
+candidate bundle into a store release.
 
 Dependency maintenance is configured in [`.github/dependabot.yml`](../.github/dependabot.yml)
 for the Flutter client, Dart server, server container definitions, and GitHub
@@ -154,3 +208,10 @@ AetherTune is 0BSD licensed and has no telemetry. To prepare for F-Droid:
 - [ ] Changelog is written.
 - [ ] APK/AAB/IPA build instructions are verified.
 - [ ] License and third-party notices are updated.
+- [ ] `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is enabled only after signed-release approval.
+- [ ] The protected `production` environment has an independent release approver and the required platform secrets.
+- [ ] The scheduled repository governance audit passes with `AETHERTUNE_GOVERNANCE_TOKEN`.
+- [ ] A signed tag release has been installed on representative Android, iOS, macOS, and Windows hosts.
+- [ ] The server has been deployed behind TLS, and both public and loopback health/readiness probes pass.
+- [ ] A fresh server backup has been restored into an isolated data directory and its checksum verified.
+- [ ] Load, alerting, rollback, and release recovery procedures have been exercised and recorded.

@@ -12,10 +12,7 @@ import 'widgets/track_artwork.dart';
 
 /// An ephemeral, explicitly refreshed feed for account subscription metadata.
 final class YouTubeAccountFollowingFeedScreen extends StatefulWidget {
-  const YouTubeAccountFollowingFeedScreen({
-    super.key,
-    required this.provider,
-  });
+  const YouTubeAccountFollowingFeedScreen({super.key, required this.provider});
 
   final YouTubeAccountProvider provider;
 
@@ -79,8 +76,12 @@ final class _YouTubeAccountFollowingFeedScreenState
               padding: const EdgeInsets.only(top: 12),
               child: ListTile(
                 leading: const Icon(Icons.error_outline),
-                title: Text('$_failedChannelCount subscription channel(s) could not refresh'),
-                subtitle: const Text('Other account subscription results are still shown.'),
+                title: Text(
+                  '$_failedChannelCount subscription channel(s) could not refresh',
+                ),
+                subtitle: const Text(
+                  'Other account subscription results are still shown.',
+                ),
               ),
             ),
           if (_failedChannelCount != null &&
@@ -100,7 +101,8 @@ final class _YouTubeAccountFollowingFeedScreenState
               title: Text(item.track.title),
               subtitle: Text(item.subtitle),
               trailing: IconButton(
-                tooltip: library.tracks.any((saved) => saved.id == item.track.id)
+                tooltip:
+                    library.tracks.any((saved) => saved.id == item.track.id)
                     ? 'Saved to library'
                     : 'Save metadata to library',
                 onPressed: () => unawaited(_saveTrack(item.track)),

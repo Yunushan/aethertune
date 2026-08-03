@@ -33,17 +33,34 @@ void main() {
       expect(body['timestamp'], '2026-01-02T03:04:05.000Z');
     });
 
+    test(
+      'readiness endpoint fails closed when persistence is unavailable',
+      () async {
+        final unavailable = await createServerHandler(
+          readinessCheck: () async => false,
+        )(_request('GET', '/ready'));
+        expect(unavailable.statusCode, 503);
+        expect((await _json(unavailable))['status'], 'not_ready');
+
+        final ready = await createServerHandler(
+          readinessCheck: () async => true,
+        )(_request('GET', '/ready'));
+        expect(ready.statusCode, 200);
+        expect((await _json(ready))['status'], 'ready');
+      },
+    );
+
     test('parses a strict server request-rate limit configuration', () {
       expect(
-        serverRequestRateLimiterFromEnvironment(
-          const <String, String>{'AETHERTUNE_RATE_LIMIT_PER_MINUTE': '7'},
-        ).maximumRequests,
+        serverRequestRateLimiterFromEnvironment(const <String, String>{
+          'AETHERTUNE_RATE_LIMIT_PER_MINUTE': '7',
+        }).maximumRequests,
         7,
       );
       expect(
-        () => serverRequestRateLimiterFromEnvironment(
-          const <String, String>{'AETHERTUNE_RATE_LIMIT_PER_MINUTE': '0'},
-        ),
+        () => serverRequestRateLimiterFromEnvironment(const <String, String>{
+          'AETHERTUNE_RATE_LIMIT_PER_MINUTE': '0',
+        }),
         throwsA(isA<FormatException>()),
       );
     });
@@ -59,15 +76,32 @@ void main() {
         ),
       );
 
-      expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
-      expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
-      final limited = await handler(_request('GET', '/health', token: 'private'));
+      expect(
+        (await handler(
+          _request('GET', '/health', token: 'private'),
+        )).statusCode,
+        200,
+      );
+      expect(
+        (await handler(
+          _request('GET', '/health', token: 'private'),
+        )).statusCode,
+        200,
+      );
+      final limited = await handler(
+        _request('GET', '/health', token: 'private'),
+      );
 
       expect(limited.statusCode, 429);
       expect(limited.headers['retry-after'], '60');
       expect((await _json(limited))['error'], 'rate_limited');
       now = now.add(const Duration(minutes: 1));
-      expect((await handler(_request('GET', '/health', token: 'private'))).statusCode, 200);
+      expect(
+        (await handler(
+          _request('GET', '/health', token: 'private'),
+        )).statusCode,
+        200,
+      );
     });
 
     test('bounds rate-limit buckets under distinct-token traffic', () async {
@@ -77,133 +111,181 @@ void main() {
           maximumBuckets: 1,
         ),
       );
-      expect((await handler(_request('GET', '/health', token: 'one'))).statusCode, 200);
-      expect((await handler(_request('GET', '/health', token: 'two'))).statusCode, 429);
-    });
-
-    test('metrics reports aggregate process state without request details',
-        () async {
-      var current = DateTime.utc(2026, 1, 2, 3, 4, 5);
-      final handler = createServerHandler(
-        clock: () => current,
-        syncAuthenticator: StaticSyncAuthenticator(
-          const <String, String>{'yunus': 'test-token'},
-        ),
-      );
-
-      await handler(_request('GET', '/health'));
-      current = current.add(const Duration(seconds: 65));
-      final response = await handler(_request('GET', '/api/v1/metrics'));
-      final body = await _json(response);
-
-      expect(response.statusCode, 200);
-      expect(body['service'], 'aethertune-server');
-      expect(body['startedAt'], '2026-01-02T03:04:05.000Z');
-      expect(body['uptimeSeconds'], 65);
-      expect(body['requestsTotal'], 2);
-      expect(body['librarySync'], isTrue);
       expect(
-        body.keys,
-        containsAll(<String>[
-          'service',
-          'startedAt',
-          'uptimeSeconds',
-          'requestsTotal',
-          'librarySync',
-        ]),
-      );
-      expect(jsonEncode(body), isNot(contains('yunus')));
-      expect(jsonEncode(body), isNot(contains('test-token')));
-    });
-
-    test('metrics supports constant-time raw and digest bearer protection',
-        () async {
-      const token = 'private-operations-token';
-      final rawHandler = createServerHandler(
-        operationsAuthenticator: StaticOperationsAuthenticator(token),
-      );
-
-      final missing = await rawHandler(_request('GET', '/api/v1/metrics'));
-      final rejected = await rawHandler(
-        _request('GET', '/api/v1/metrics', token: 'wrong-token'),
-      );
-      final accepted = await rawHandler(
-        _request('GET', '/api/v1/metrics', token: token),
-      );
-
-      expect(missing.statusCode, 401);
-      expect(missing.headers['www-authenticate'], 'Bearer');
-      expect(rejected.statusCode, 401);
-      expect(await rejected.readAsString(), isNot(contains('wrong-token')));
-      expect(accepted.statusCode, 200);
-      expect((await _json(accepted))['requestsTotal'], 3);
-
-      final digest = sha256.convert(utf8.encode(token)).toString();
-      final digestHandler = createServerHandler(
-        operationsAuthenticator:
-            StaticOperationsAuthenticator('sha256:$digest'),
+        (await handler(_request('GET', '/health', token: 'one'))).statusCode,
+        200,
       );
       expect(
-        (await digestHandler(
+        (await handler(_request('GET', '/health', token: 'two'))).statusCode,
+        429,
+      );
+    });
+
+    test(
+      'metrics reports aggregate process state without request details',
+      () async {
+        var current = DateTime.utc(2026, 1, 2, 3, 4, 5);
+        final handler = createServerHandler(
+          clock: () => current,
+          syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+            'yunus': 'test-token',
+          }),
+        );
+
+        await handler(_request('GET', '/health'));
+        await handler(_request('GET', '/missing'));
+        current = current.add(const Duration(seconds: 65));
+        final response = await handler(_request('GET', '/api/v1/metrics'));
+        final body = await _json(response);
+
+        expect(response.statusCode, 200);
+        expect(body['service'], 'aethertune-server');
+        expect(body['startedAt'], '2026-01-02T03:04:05.000Z');
+        expect(body['uptimeSeconds'], 65);
+        expect(body['requestsTotal'], 3);
+        expect(body['requestsRateLimited'], 0);
+        expect(body['responses2xx'], 1);
+        expect(body['responses3xx'], 0);
+        expect(body['responses4xx'], 1);
+        expect(body['responses5xx'], 0);
+        expect(body['requestDurationMillisecondsTotal'], 0);
+        expect(body['librarySync'], isTrue);
+        expect(
+          body.keys,
+          containsAll(<String>[
+            'service',
+            'startedAt',
+            'uptimeSeconds',
+            'requestsTotal',
+            'librarySync',
+          ]),
+        );
+        expect(jsonEncode(body), isNot(contains('yunus')));
+        expect(jsonEncode(body), isNot(contains('test-token')));
+      },
+    );
+
+    test(
+      'metrics counts rate-limited responses without exposing request data',
+      () async {
+        var current = DateTime.utc(2026, 1, 2, 3, 4, 5);
+        final handler = createServerHandler(
+          clock: () => current,
+          requestRateLimiter: ServerRequestRateLimiter(
+            maximumRequests: 1,
+            clock: () => current,
+          ),
+        );
+
+        expect((await handler(_request('GET', '/health'))).statusCode, 200);
+        expect((await handler(_request('GET', '/health'))).statusCode, 429);
+        current = current.add(const Duration(minutes: 1));
+        final response = await handler(_request('GET', '/api/v1/metrics'));
+        final body = await _json(response);
+
+        expect(response.statusCode, 200);
+        expect(body['requestsTotal'], 3);
+        expect(body['requestsRateLimited'], 1);
+        expect(body['responses2xx'], 1);
+        expect(body['responses4xx'], 1);
+        expect(jsonEncode(body), isNot(contains('/health')));
+      },
+    );
+
+    test(
+      'metrics supports constant-time raw and digest bearer protection',
+      () async {
+        const token = 'private-operations-token';
+        final rawHandler = createServerHandler(
+          operationsAuthenticator: StaticOperationsAuthenticator(token),
+        );
+
+        final missing = await rawHandler(_request('GET', '/api/v1/metrics'));
+        final rejected = await rawHandler(
+          _request('GET', '/api/v1/metrics', token: 'wrong-token'),
+        );
+        final accepted = await rawHandler(
           _request('GET', '/api/v1/metrics', token: token),
-        ))
-            .statusCode,
-        200,
-      );
-      expect(
-        () => StaticOperationsAuthenticator('sha256:not-a-digest'),
-        throwsA(isA<FormatException>()),
-      );
-      expect(
-        () => StaticOperationsAuthenticator('   '),
-        throwsA(isA<FormatException>()),
-      );
-    });
+        );
 
-    test('writes safe structured request logs without disrupting requests',
-        () async {
-      final entries = <ServerRequestLogEntry>[];
-      final handler = createServerHandler(
-        clock: () => DateTime.utc(2026, 1, 2, 3, 4, 5),
-        requestLogger: entries.add,
-      );
+        expect(missing.statusCode, 401);
+        expect(missing.headers['www-authenticate'], 'Bearer');
+        expect(rejected.statusCode, 401);
+        expect(await rejected.readAsString(), isNot(contains('wrong-token')));
+        expect(accepted.statusCode, 200);
+        expect((await _json(accepted))['requestsTotal'], 3);
 
-      final tracks = await handler(
-        _request(
-          'GET',
-          '/api/v1/tracks?q=private-search&token=query-secret',
-          token: 'header-secret',
-        ),
-      );
-      final missing = await handler(
-        _request('POST', '/private-path/embedded-secret'),
-      );
+        final digest = sha256.convert(utf8.encode(token)).toString();
+        final digestHandler = createServerHandler(
+          operationsAuthenticator: StaticOperationsAuthenticator(
+            'sha256:$digest',
+          ),
+        );
+        expect(
+          (await digestHandler(
+            _request('GET', '/api/v1/metrics', token: token),
+          )).statusCode,
+          200,
+        );
+        expect(
+          () => StaticOperationsAuthenticator('sha256:not-a-digest'),
+          throwsA(isA<FormatException>()),
+        );
+        expect(
+          () => StaticOperationsAuthenticator('   '),
+          throwsA(isA<FormatException>()),
+        );
+      },
+    );
 
-      expect(tracks.statusCode, 200);
-      expect(missing.statusCode, 404);
-      expect(entries, hasLength(2));
-      expect(entries[0].toJson(), <String, Object?>{
-        'timestamp': '2026-01-02T03:04:05.000Z',
-        'method': 'GET',
-        'route': '/api/v1/tracks',
-        'statusCode': 200,
-        'durationMilliseconds': 0,
-      });
-      expect(entries[1].route, '/not-found');
-      final logs = jsonEncode(entries.map((entry) => entry.toJson()).toList());
-      expect(logs, isNot(contains('private-search')));
-      expect(logs, isNot(contains('query-secret')));
-      expect(logs, isNot(contains('header-secret')));
-      expect(logs, isNot(contains('embedded-secret')));
+    test(
+      'writes safe structured request logs without disrupting requests',
+      () async {
+        final entries = <ServerRequestLogEntry>[];
+        final handler = createServerHandler(
+          clock: () => DateTime.utc(2026, 1, 2, 3, 4, 5),
+          requestLogger: entries.add,
+        );
 
-      final failureTolerant = createServerHandler(
-        requestLogger: (_) => throw StateError('logger failure'),
-      );
-      expect(
-        (await failureTolerant(_request('GET', '/health'))).statusCode,
-        200,
-      );
-    });
+        final tracks = await handler(
+          _request(
+            'GET',
+            '/api/v1/tracks?q=private-search&token=query-secret',
+            token: 'header-secret',
+          ),
+        );
+        final missing = await handler(
+          _request('POST', '/private-path/embedded-secret'),
+        );
+
+        expect(tracks.statusCode, 200);
+        expect(missing.statusCode, 404);
+        expect(entries, hasLength(2));
+        expect(entries[0].toJson(), <String, Object?>{
+          'timestamp': '2026-01-02T03:04:05.000Z',
+          'method': 'GET',
+          'route': '/api/v1/tracks',
+          'statusCode': 200,
+          'durationMilliseconds': 0,
+        });
+        expect(entries[1].route, '/not-found');
+        final logs = jsonEncode(
+          entries.map((entry) => entry.toJson()).toList(),
+        );
+        expect(logs, isNot(contains('private-search')));
+        expect(logs, isNot(contains('query-secret')));
+        expect(logs, isNot(contains('header-secret')));
+        expect(logs, isNot(contains('embedded-secret')));
+
+        final failureTolerant = createServerHandler(
+          requestLogger: (_) => throw StateError('logger failure'),
+        );
+        expect(
+          (await failureTolerant(_request('GET', '/health'))).statusCode,
+          200,
+        );
+      },
+    );
 
     test('info endpoint lists clients and sync availability', () async {
       final unavailable = await createServerHandler()(
@@ -213,9 +295,9 @@ void main() {
       expect(unavailableBody['librarySync'], isFalse);
 
       final configured = await createServerHandler(
-        syncAuthenticator: StaticSyncAuthenticator(
-          const <String, String>{'yunus': 'test-token'},
-        ),
+        syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+          'yunus': 'test-token',
+        }),
       )(_request('GET', '/api/v1/info'));
       final body = await _json(configured);
 
@@ -262,9 +344,9 @@ void main() {
     late MemoryLibrarySyncSnapshotStore store;
 
     setUp(() {
-      authenticator = StaticSyncAuthenticator(
-        const <String, String>{'yunus': token},
-      );
+      authenticator = StaticSyncAuthenticator(const <String, String>{
+        'yunus': token,
+      });
       store = MemoryLibrarySyncSnapshotStore();
     });
 
@@ -277,129 +359,129 @@ void main() {
       expect((await _json(response))['error'], 'sync_not_configured');
     });
 
-    test('rejects missing and invalid bearer tokens without echoing them',
-        () async {
-      final handler = createServerHandler(
-        syncAuthenticator: authenticator,
-        syncStore: store,
-      );
-      final missing = await handler(
-        _request('GET', '/api/v1/sync/library'),
-      );
-      const rejected = 'wrong-private-token';
-      final invalid = await handler(
-        _request(
-          'GET',
-          '/api/v1/sync/library',
-          token: rejected,
-        ),
-      );
-      final invalidText = await invalid.readAsString();
+    test(
+      'rejects missing and invalid bearer tokens without echoing them',
+      () async {
+        final handler = createServerHandler(
+          syncAuthenticator: authenticator,
+          syncStore: store,
+        );
+        final missing = await handler(_request('GET', '/api/v1/sync/library'));
+        const rejected = 'wrong-private-token';
+        final invalid = await handler(
+          _request('GET', '/api/v1/sync/library', token: rejected),
+        );
+        final invalidText = await invalid.readAsString();
 
-      expect(missing.statusCode, 401);
-      expect(missing.headers['www-authenticate'], 'Bearer');
-      expect(invalid.statusCode, 401);
-      expect(invalidText, contains('unauthorized'));
-      expect(invalidText, isNot(contains(rejected)));
-    });
+        expect(missing.statusCode, 401);
+        expect(missing.headers['www-authenticate'], 'Bearer');
+        expect(invalid.statusCode, 401);
+        expect(invalidText, contains('unauthorized'));
+        expect(invalidText, isNot(contains(rejected)));
+      },
+    );
 
-    test('uploads and downloads a versioned checksum-verified snapshot',
-        () async {
-      final handler = createServerHandler(
-        clock: () => DateTime.utc(2026, 7, 10, 12, 30),
-        syncAuthenticator: authenticator,
-        syncStore: store,
-      );
-      final empty = await handler(
-        _request('GET', '/api/v1/sync/library', token: token),
-      );
-      final emptyBody = await _json(empty);
-      expect(empty.statusCode, 200);
-      expect(emptyBody['revision'], 0);
-      expect(emptyBody['snapshot'], isNull);
+    test(
+      'uploads and downloads a versioned checksum-verified snapshot',
+      () async {
+        final handler = createServerHandler(
+          clock: () => DateTime.utc(2026, 7, 10, 12, 30),
+          syncAuthenticator: authenticator,
+          syncStore: store,
+        );
+        final empty = await handler(
+          _request('GET', '/api/v1/sync/library', token: token),
+        );
+        final emptyBody = await _json(empty);
+        expect(empty.statusCode, 200);
+        expect(emptyBody['revision'], 0);
+        expect(emptyBody['snapshot'], isNull);
 
-      final snapshot = _syncSnapshot(title: 'First device library');
-      final uploaded = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/library',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'android-phone',
-            'snapshot': snapshot,
-          },
-        ),
-      );
-      final uploadBody = await _json(uploaded);
+        final snapshot = _syncSnapshot(title: 'First device library');
+        final uploaded = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/library',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'android-phone',
+              'snapshot': snapshot,
+            },
+          ),
+        );
+        final uploadBody = await _json(uploaded);
 
-      expect(uploaded.statusCode, 200);
-      expect(uploadBody['revision'], 1);
-      expect(uploadBody['updatedAt'], '2026-07-10T12:30:00.000Z');
-      expect(uploadBody['updatedByDevice'], 'android-phone');
-      expect(uploadBody['checksum'], hasLength(64));
+        expect(uploaded.statusCode, 200);
+        expect(uploadBody['revision'], 1);
+        expect(uploadBody['updatedAt'], '2026-07-10T12:30:00.000Z');
+        expect(uploadBody['updatedByDevice'], 'android-phone');
+        expect(uploadBody['checksum'], hasLength(64));
 
-      final metadata = await handler(
-        _request('GET', '/api/v1/sync/library/metadata', token: token),
-      );
-      final metadataBody = await _json(metadata);
-      expect(metadata.statusCode, 200);
-      expect(metadataBody['revision'], 1);
-      expect(metadataBody['checksum'], uploadBody['checksum']);
-      expect(metadataBody, isNot(contains('snapshot')));
+        final metadata = await handler(
+          _request('GET', '/api/v1/sync/library/metadata', token: token),
+        );
+        final metadataBody = await _json(metadata);
+        expect(metadata.statusCode, 200);
+        expect(metadataBody['revision'], 1);
+        expect(metadataBody['checksum'], uploadBody['checksum']);
+        expect(metadataBody, isNot(contains('snapshot')));
 
-      final downloaded = await handler(
-        _request('GET', '/api/v1/sync/library', token: token),
-      );
-      final downloadBody = await _json(downloaded);
-      expect(downloaded.statusCode, 200);
-      expect(downloadBody['revision'], 1);
-      expect(downloadBody['checksum'], uploadBody['checksum']);
-      expect(downloadBody['snapshot'], snapshot);
-      expect(jsonEncode(downloadBody), isNot(contains(token)));
-    });
+        final downloaded = await handler(
+          _request('GET', '/api/v1/sync/library', token: token),
+        );
+        final downloadBody = await _json(downloaded);
+        expect(downloaded.statusCode, 200);
+        expect(downloadBody['revision'], 1);
+        expect(downloadBody['checksum'], uploadBody['checksum']);
+        expect(downloadBody['snapshot'], snapshot);
+        expect(jsonEncode(downloadBody), isNot(contains(token)));
+      },
+    );
 
-    test('isolates authenticated provider configurations from library snapshots',
-        () async {
-      final providerStore = MemoryLibrarySyncSnapshotStore();
-      final handler = createServerHandler(
-        syncAuthenticator: authenticator,
-        syncStore: store,
-        providerConfigurationStore: providerStore,
-      );
-      final providerSnapshot = <String, Object?>{
-        'format': 'aethertune.provider_configurations',
-        'version': 1,
-        'customCatalogs': <String, Object?>{
-          'format': 'aethertune.custom_catalogs',
+    test(
+      'isolates authenticated provider configurations from library snapshots',
+      () async {
+        final providerStore = MemoryLibrarySyncSnapshotStore();
+        final handler = createServerHandler(
+          syncAuthenticator: authenticator,
+          syncStore: store,
+          providerConfigurationStore: providerStore,
+        );
+        final providerSnapshot = <String, Object?>{
+          'format': 'aethertune.provider_configurations',
           'version': 1,
-          'catalogs': <Object?>[],
-        },
-      };
-
-      final uploaded = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/providers',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'desktop',
-            'snapshot': providerSnapshot,
+          'customCatalogs': <String, Object?>{
+            'format': 'aethertune.custom_catalogs',
+            'version': 1,
+            'catalogs': <Object?>[],
           },
-        ),
-      );
-      final providerResponse = await handler(
-        _request('GET', '/api/v1/sync/providers', token: token),
-      );
-      final libraryResponse = await handler(
-        _request('GET', '/api/v1/sync/library', token: token),
-      );
+        };
 
-      expect(uploaded.statusCode, 200);
-      expect((await _json(providerResponse))['snapshot'], providerSnapshot);
-      expect((await _json(libraryResponse))['snapshot'], isNull);
-    });
+        final uploaded = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/providers',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'desktop',
+              'snapshot': providerSnapshot,
+            },
+          ),
+        );
+        final providerResponse = await handler(
+          _request('GET', '/api/v1/sync/providers', token: token),
+        );
+        final libraryResponse = await handler(
+          _request('GET', '/api/v1/sync/library', token: token),
+        );
+
+        expect(uploaded.statusCode, 200);
+        expect((await _json(providerResponse))['snapshot'], providerSnapshot);
+        expect((await _json(libraryResponse))['snapshot'], isNull);
+      },
+    );
 
     test('accepts secure self-hosted accounts without credentials', () async {
       final providerStore = MemoryLibrarySyncSnapshotStore();
@@ -480,142 +562,148 @@ void main() {
       expect(uploaded.statusCode, 200);
     });
 
-    test('rejects insecure or credential-bearing lyrics search endpoints',
-        () async {
-      final providerStore = MemoryLibrarySyncSnapshotStore();
-      final handler = createServerHandler(
-        syncAuthenticator: authenticator,
-        syncStore: store,
-        providerConfigurationStore: providerStore,
-      );
-      final response = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/providers',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'desktop',
-            'snapshot': <String, Object?>{
-              'format': 'aethertune.provider_configurations',
-              'version': 1,
-              'lyricsSearchEndpoint': <String, Object?>{
-                'format': 'aethertune.lyrics_search_endpoint',
+    test(
+      'rejects insecure or credential-bearing lyrics search endpoints',
+      () async {
+        final providerStore = MemoryLibrarySyncSnapshotStore();
+        final handler = createServerHandler(
+          syncAuthenticator: authenticator,
+          syncStore: store,
+          providerConfigurationStore: providerStore,
+        );
+        final response = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/providers',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'desktop',
+              'snapshot': <String, Object?>{
+                'format': 'aethertune.provider_configurations',
                 'version': 1,
-                'endpoint': 'https://person:secret@lyrics.example.test/api',
+                'lyricsSearchEndpoint': <String, Object?>{
+                  'format': 'aethertune.lyrics_search_endpoint',
+                  'version': 1,
+                  'endpoint': 'https://person:secret@lyrics.example.test/api',
+                },
               },
             },
-          },
-        ),
-      );
+          ),
+        );
 
-      expect(response.statusCode, 400);
-    });
+        expect(response.statusCode, 400);
+      },
+    );
 
-    test('rejects insecure or credential-bearing self-hosted accounts',
-        () async {
-      final providerStore = MemoryLibrarySyncSnapshotStore();
-      final handler = createServerHandler(
-        syncAuthenticator: authenticator,
-        syncStore: store,
-        providerConfigurationStore: providerStore,
-      );
-      final invalidSnapshot = <String, Object?>{
-        'format': 'aethertune.provider_configurations',
-        'version': 1,
-        'selfHostedAccounts': <String, Object?>{
-          'format': 'aethertune.self_hosted_accounts',
+    test(
+      'rejects insecure or credential-bearing self-hosted accounts',
+      () async {
+        final providerStore = MemoryLibrarySyncSnapshotStore();
+        final handler = createServerHandler(
+          syncAuthenticator: authenticator,
+          syncStore: store,
+          providerConfigurationStore: providerStore,
+        );
+        final invalidSnapshot = <String, Object?>{
+          'format': 'aethertune.provider_configurations',
           'version': 1,
-          'accounts': <Object?>[
-            <String, Object?>{
-              'id': 'c3Vic29uaWN8aHR0cDovL2xvY2FsaG9zdHxhZGFt',
-              'kind': 'subsonic',
-              'name': 'Local server',
-              'baseUrl': 'http://token@example.test',
-              'identity': 'adam',
-              'allowInsecureHttp': false,
+          'selfHostedAccounts': <String, Object?>{
+            'format': 'aethertune.self_hosted_accounts',
+            'version': 1,
+            'accounts': <Object?>[
+              <String, Object?>{
+                'id': 'c3Vic29uaWN8aHR0cDovL2xvY2FsaG9zdHxhZGFt',
+                'kind': 'subsonic',
+                'name': 'Local server',
+                'baseUrl': 'http://token@example.test',
+                'identity': 'adam',
+                'allowInsecureHttp': false,
+              },
+            ],
+          },
+        };
+
+        final response = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/providers',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'desktop',
+              'snapshot': invalidSnapshot,
             },
-          ],
-        },
-      };
+          ),
+        );
 
-      final response = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/providers',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'desktop',
-            'snapshot': invalidSnapshot,
-          },
-        ),
-      );
+        expect(response.statusCode, 400);
+      },
+    );
 
-      expect(response.statusCode, 400);
-    });
+    test(
+      'detects stale revisions without overwriting the current snapshot',
+      () async {
+        final handler = createServerHandler(
+          clock: () => DateTime.utc(2026, 7, 10, 13),
+          syncAuthenticator: authenticator,
+          syncStore: store,
+        );
+        await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/library',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'phone',
+              'snapshot': _syncSnapshot(title: 'Phone copy'),
+            },
+          ),
+        );
 
-    test('detects stale revisions without overwriting the current snapshot',
-        () async {
-      final handler = createServerHandler(
-        clock: () => DateTime.utc(2026, 7, 10, 13),
-        syncAuthenticator: authenticator,
-        syncStore: store,
-      );
-      await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/library',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'phone',
-            'snapshot': _syncSnapshot(title: 'Phone copy'),
-          },
-        ),
-      );
+        final conflict = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/library',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'desktop',
+              'snapshot': _syncSnapshot(title: 'Stale desktop copy'),
+            },
+          ),
+        );
+        final conflictBody = await _json(conflict);
 
-      final conflict = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/library',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'desktop',
-            'snapshot': _syncSnapshot(title: 'Stale desktop copy'),
-          },
-        ),
-      );
-      final conflictBody = await _json(conflict);
+        expect(conflict.statusCode, 409);
+        expect(conflictBody['error'], 'sync_conflict');
+        expect(conflictBody['currentRevision'], 1);
+        expect(conflictBody['updatedByDevice'], 'phone');
 
-      expect(conflict.statusCode, 409);
-      expect(conflictBody['error'], 'sync_conflict');
-      expect(conflictBody['currentRevision'], 1);
-      expect(conflictBody['updatedByDevice'], 'phone');
+        final current = await handler(
+          _request('GET', '/api/v1/sync/library', token: token),
+        );
+        final currentBody = await _json(current);
+        final currentSnapshot = currentBody['snapshot'] as Map<String, dynamic>;
+        expect(currentSnapshot['name'], 'Phone copy');
 
-      final current = await handler(
-        _request('GET', '/api/v1/sync/library', token: token),
-      );
-      final currentBody = await _json(current);
-      final currentSnapshot = currentBody['snapshot'] as Map<String, dynamic>;
-      expect(currentSnapshot['name'], 'Phone copy');
-
-      final resolved = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/library',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 1,
-            'deviceId': 'desktop',
-            'snapshot': _syncSnapshot(title: 'Chosen desktop copy'),
-          },
-        ),
-      );
-      expect(resolved.statusCode, 200);
-      expect((await _json(resolved))['revision'], 2);
-    });
+        final resolved = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/library',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 1,
+              'deviceId': 'desktop',
+              'snapshot': _syncSnapshot(title: 'Chosen desktop copy'),
+            },
+          ),
+        );
+        expect(resolved.statusCode, 200);
+        expect((await _json(resolved))['revision'], 2);
+      },
+    );
 
     test('deletes a snapshot as a revisioned tombstone', () async {
       final handler = createServerHandler(
@@ -642,10 +730,7 @@ void main() {
           'DELETE',
           '/api/v1/sync/library',
           token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 1,
-            'deviceId': 'desktop',
-          },
+          jsonBody: <String, Object?>{'baseRevision': 1, 'deviceId': 'desktop'},
         ),
       );
       final deletedBody = await _json(deleted);
@@ -681,64 +766,62 @@ void main() {
       expect(staleBody['checksum'], isNull);
     });
 
-    test('rejects local paths, device cache jobs, and oversized requests',
-        () async {
-      final handler = createServerHandler(
-        syncAuthenticator: authenticator,
-        syncStore: store,
-      );
-      final localPath = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/library',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'phone',
-            'snapshot': _syncSnapshot(localPath: '/private/music/song.mp3'),
-          },
-        ),
-      );
-      expect(localPath.statusCode, 400);
-      expect(
-        (await _json(localPath))['message'],
-        contains('local file paths'),
-      );
-
-      final cacheJobs = _syncSnapshot();
-      cacheJobs['offlineCacheQueue'] = <Object?>[
-        <String, Object?>{'id': 'private-cache-job'},
-      ];
-      final offlineQueue = await handler(
-        _request(
-          'PUT',
-          '/api/v1/sync/library',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'phone',
-            'snapshot': cacheJobs,
-          },
-        ),
-      );
-      expect(offlineQueue.statusCode, 400);
-      expect((await _json(offlineQueue))['message'], contains('cache jobs'));
-
-      final oversized = await handler(
-        Request(
-          'PUT',
-          Uri.parse('http://localhost/api/v1/sync/library'),
-          headers: const <String, String>{
-            'authorization': 'Bearer $token',
-          },
-          body: Stream<List<int>>.value(
-            Uint8List(maxSyncSnapshotBytes + 1),
+    test(
+      'rejects local paths, device cache jobs, and oversized requests',
+      () async {
+        final handler = createServerHandler(
+          syncAuthenticator: authenticator,
+          syncStore: store,
+        );
+        final localPath = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/library',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'phone',
+              'snapshot': _syncSnapshot(localPath: '/private/music/song.mp3'),
+            },
           ),
-        ),
-      );
-      expect(oversized.statusCode, 413);
-      expect((await _json(oversized))['error'], 'payload_too_large');
-    });
+        );
+        expect(localPath.statusCode, 400);
+        expect(
+          (await _json(localPath))['message'],
+          contains('local file paths'),
+        );
+
+        final cacheJobs = _syncSnapshot();
+        cacheJobs['offlineCacheQueue'] = <Object?>[
+          <String, Object?>{'id': 'private-cache-job'},
+        ];
+        final offlineQueue = await handler(
+          _request(
+            'PUT',
+            '/api/v1/sync/library',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'phone',
+              'snapshot': cacheJobs,
+            },
+          ),
+        );
+        expect(offlineQueue.statusCode, 400);
+        expect((await _json(offlineQueue))['message'], contains('cache jobs'));
+
+        final oversized = await handler(
+          Request(
+            'PUT',
+            Uri.parse('http://localhost/api/v1/sync/library'),
+            headers: const <String, String>{'authorization': 'Bearer $token'},
+            body: Stream<List<int>>.value(Uint8List(maxSyncSnapshotBytes + 1)),
+          ),
+        );
+        expect(oversized.statusCode, 413);
+        expect((await _json(oversized))['error'], 'payload_too_large');
+      },
+    );
   });
 
   group('authenticated listen-together sessions', () {
@@ -747,9 +830,9 @@ void main() {
     test('shares a portable revision-protected playback session', () async {
       final handler = createServerHandler(
         clock: () => DateTime.utc(2026, 7, 12, 10),
-        syncAuthenticator: StaticSyncAuthenticator(
-          const <String, String>{'friends': token},
-        ),
+        syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+          'friends': token,
+        }),
         listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
       );
       final empty = await handler(
@@ -788,7 +871,10 @@ void main() {
       );
       final joinedBody = await _json(joined);
       expect(joinedBody['revision'], 1);
-      expect((joinedBody['session'] as Map<String, dynamic>)['playing'], isTrue);
+      expect(
+        (joinedBody['session'] as Map<String, dynamic>)['playing'],
+        isTrue,
+      );
 
       final stale = await handler(
         _request(
@@ -812,53 +898,55 @@ void main() {
       expect((await _json(stale))['error'], 'listen_together_conflict');
     });
 
-    test('accepts a repeated v2 shared queue with its exact current index',
-        () async {
-      final handler = createServerHandler(
-        syncAuthenticator: StaticSyncAuthenticator(
-          const <String, String>{'friends': token},
-        ),
-        listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
-      );
-      final response = await handler(
-        _request(
-          'PUT',
-          '/api/v1/listen-together/session',
-          token: token,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'host-phone',
-            'session': <String, Object?>{
-              'version': 2,
-              'trackIds': <String>['track-1', 'track-2', 'track-1'],
-              'currentTrackId': 'track-1',
-              'currentIndex': 2,
-              'positionMilliseconds': 12345,
-              'playing': true,
+    test(
+      'accepts a repeated v2 shared queue with its exact current index',
+      () async {
+        final handler = createServerHandler(
+          syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+            'friends': token,
+          }),
+          listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
+        );
+        final response = await handler(
+          _request(
+            'PUT',
+            '/api/v1/listen-together/session',
+            token: token,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'host-phone',
+              'session': <String, Object?>{
+                'version': 2,
+                'trackIds': <String>['track-1', 'track-2', 'track-1'],
+                'currentTrackId': 'track-1',
+                'currentIndex': 2,
+                'positionMilliseconds': 12345,
+                'playing': true,
+              },
             },
-          },
-        ),
-      );
+          ),
+        );
 
-      expect(response.statusCode, 200);
-      final fetched = await handler(
-        _request('GET', '/api/v1/listen-together/session', token: token),
-      );
-      final body = await _json(fetched);
-      expect(fetched.statusCode, 200);
-      expect((body['session'] as Map<String, dynamic>)['trackIds'], <String>[
-        'track-1',
-        'track-2',
-        'track-1',
-      ]);
-      expect((body['session'] as Map<String, dynamic>)['currentIndex'], 2);
-    });
+        expect(response.statusCode, 200);
+        final fetched = await handler(
+          _request('GET', '/api/v1/listen-together/session', token: token),
+        );
+        final body = await _json(fetched);
+        expect(fetched.statusCode, 200);
+        expect((body['session'] as Map<String, dynamic>)['trackIds'], <String>[
+          'track-1',
+          'track-2',
+          'track-1',
+        ]);
+        expect((body['session'] as Map<String, dynamic>)['currentIndex'], 2);
+      },
+    );
 
     test('rejects non-portable listen-together payloads', () async {
       final handler = createServerHandler(
-        syncAuthenticator: StaticSyncAuthenticator(
-          const <String, String>{'friends': token},
-        ),
+        syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+          'friends': token,
+        }),
       );
       final rejected = await handler(
         _request(
@@ -880,19 +968,20 @@ void main() {
         ),
       );
       expect(rejected.statusCode, 400);
-      expect((await _json(rejected))['error'], 'invalid_listen_together_session');
+      expect(
+        (await _json(rejected))['error'],
+        'invalid_listen_together_session',
+      );
     });
 
     test('lets a separately authenticated guest read a host invite', () async {
       const hostToken = 'host-secret';
       const guestToken = 'guest-secret';
       final handler = createServerHandler(
-        syncAuthenticator: StaticSyncAuthenticator(
-          const <String, String>{
-            'host-account': hostToken,
-            'guest-account': guestToken,
-          },
-        ),
+        syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+          'host-account': hostToken,
+          'guest-account': guestToken,
+        }),
         listenTogetherStore: MemoryLibrarySyncSnapshotStore(),
         listenTogetherInviteStore: MemoryListenTogetherInviteStore(),
       );
@@ -936,7 +1025,10 @@ void main() {
       );
       final joinedBody = await _json(joined);
       expect(joined.statusCode, 200);
-      expect((joinedBody['session'] as Map<String, dynamic>)['currentTrackId'], 'track-1');
+      expect(
+        (joinedBody['session'] as Map<String, dynamic>)['currentTrackId'],
+        'track-1',
+      );
       expect(joinedBody.containsKey('host-account'), isFalse);
 
       final ended = await handler(
@@ -981,140 +1073,150 @@ void main() {
     });
   });
 
-  test('file listen-together invites survive restart without storing raw codes',
-      () async {
-    final root = await Directory.systemTemp.createTemp(
-      'aethertune-server-invite-test-',
-    );
-    addTearDown(() async {
-      if (await root.exists()) {
-        await root.delete(recursive: true);
-      }
-    });
-    final firstStore = FileListenTogetherInviteStore(root);
-    final code = await firstStore.issue('host-account', 7);
-    final restartedStore = FileListenTogetherInviteStore(root);
-
-    final restored = await restartedStore.lookup(code);
-    expect(restored?.ownerId, 'host-account');
-    expect(restored?.sessionRevision, 7);
-    expect(await restartedStore.lookup('not-an-invite'), isNull);
-    final files = await root
-        .list(recursive: true)
-        .where((entity) => entity is File)
-        .cast<File>()
-        .toList();
-    expect(files, hasLength(1));
-    expect(files.single.path, isNot(contains(code)));
-  });
-
-  test('file shared-playlist invites are consumed once without raw codes',
-      () async {
-    final root = await Directory.systemTemp.createTemp(
-      'aethertune-server-shared-invite-test-',
-    );
-    addTearDown(() async {
-      if (await root.exists()) {
-        await root.delete(recursive: true);
-      }
-    });
-    final firstStore = FileSharedPlaylistInviteStore(root);
-    final code = await firstStore.issue(
-      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      role: SharedPlaylistRole.editor,
-      expiresAt: DateTime.utc(2026, 7, 24),
-    );
-    final restartedStore = FileSharedPlaylistInviteStore(root);
-
-    final consumed = await restartedStore.consume(code);
-
-    expect(consumed?.playlistId, 'AAAAAAAAAAAAAAAAAAAAAAAA');
-    expect(consumed?.role, SharedPlaylistRole.editor);
-    expect(await restartedStore.lookup(code), isNull);
-    final files = await root
-        .list(recursive: true)
-        .where((entity) => entity is File)
-        .cast<File>()
-        .toList();
-    expect(files, isEmpty);
-  });
-
-  test('file shared-playlist invite rotation keeps other playlists intact',
-      () async {
-    final root = await Directory.systemTemp.createTemp(
-      'aethertune-server-shared-rotate-test-',
-    );
-    addTearDown(() async {
-      if (await root.exists()) {
-        await root.delete(recursive: true);
-      }
-    });
-    final store = FileSharedPlaylistInviteStore(root);
-    final expiresAt = DateTime.utc(2026, 7, 24);
-    final first = await store.issue(
-      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      role: SharedPlaylistRole.viewer,
-      expiresAt: expiresAt,
-    );
-    final second = await store.issue(
-      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      role: SharedPlaylistRole.editor,
-      expiresAt: expiresAt,
-    );
-    final other = await store.issue(
-      playlistId: 'BBBBBBBBBBBBBBBBBBBBBBBB',
-      role: SharedPlaylistRole.viewer,
-      expiresAt: expiresAt,
-    );
-
-    expect(
-      await store.invalidateForPlaylist('AAAAAAAAAAAAAAAAAAAAAAAA'),
-      2,
-    );
-    expect(await store.lookup(first), isNull);
-    expect(await store.lookup(second), isNull);
-    expect((await store.lookup(other))?.playlistId, 'BBBBBBBBBBBBBBBBBBBBBBBB');
-  });
-
-  test('file shared-playlist history survives restart and retains 25 revisions',
-      () async {
-    final root = await Directory.systemTemp.createTemp(
-      'aethertune-server-shared-history-test-',
-    );
-    addTearDown(() async {
-      if (await root.exists()) {
-        await root.delete(recursive: true);
-      }
-    });
-    final store = FileSharedPlaylistStore(root);
-    const playlistId = 'AAAAAAAAAAAAAAAAAAAAAAAA';
-    for (var revision = 0;
-        revision <= maxSharedPlaylistHistoryEntries;
-        revision += 1) {
-      final result = await store.write(
-        playlistId: playlistId,
-        ownerId: 'owner-account',
-        baseRevision: revision,
-        deviceId: 'desktop',
-        document: <String, Object?>{
-          'version': 1,
-          'name': 'Revision ${revision + 1}',
-          'trackIds': <String>['track-$revision'],
-        },
-        collaborators: const <String, SharedPlaylistRole>{},
-        publicShareSecretHash: null,
-        updatedAt: DateTime.utc(2026, 7, 17, 12, revision),
+  test(
+    'file listen-together invites survive restart without storing raw codes',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-server-invite-test-',
       );
-      expect(result.isConflict, isFalse);
-    }
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final firstStore = FileListenTogetherInviteStore(root);
+      final code = await firstStore.issue('host-account', 7);
+      final restartedStore = FileListenTogetherInviteStore(root);
 
-    final restarted = FileSharedPlaylistStore(root);
-    final history = await restarted.readHistory(playlistId);
+      final restored = await restartedStore.lookup(code);
+      expect(restored?.ownerId, 'host-account');
+      expect(restored?.sessionRevision, 7);
+      expect(await restartedStore.lookup('not-an-invite'), isNull);
+      final files = await root
+          .list(recursive: true)
+          .where((entity) => entity is File)
+          .cast<File>()
+          .toList();
+      expect(files, hasLength(1));
+      expect(files.single.path, isNot(contains(code)));
+    },
+  );
 
-    expect(history, hasLength(maxSharedPlaylistHistoryEntries));
-    expect(history.first.revision, maxSharedPlaylistHistoryEntries + 1);
-    expect(history.last.revision, 2);
-  });
+  test(
+    'file shared-playlist invites are consumed once without raw codes',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-server-shared-invite-test-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final firstStore = FileSharedPlaylistInviteStore(root);
+      final code = await firstStore.issue(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        role: SharedPlaylistRole.editor,
+        expiresAt: DateTime.utc(2026, 7, 24),
+      );
+      final restartedStore = FileSharedPlaylistInviteStore(root);
+
+      final consumed = await restartedStore.consume(code);
+
+      expect(consumed?.playlistId, 'AAAAAAAAAAAAAAAAAAAAAAAA');
+      expect(consumed?.role, SharedPlaylistRole.editor);
+      expect(await restartedStore.lookup(code), isNull);
+      final files = await root
+          .list(recursive: true)
+          .where((entity) => entity is File)
+          .cast<File>()
+          .toList();
+      expect(files, isEmpty);
+    },
+  );
+
+  test(
+    'file shared-playlist invite rotation keeps other playlists intact',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-server-shared-rotate-test-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final store = FileSharedPlaylistInviteStore(root);
+      final expiresAt = DateTime.utc(2026, 7, 24);
+      final first = await store.issue(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        role: SharedPlaylistRole.viewer,
+        expiresAt: expiresAt,
+      );
+      final second = await store.issue(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        role: SharedPlaylistRole.editor,
+        expiresAt: expiresAt,
+      );
+      final other = await store.issue(
+        playlistId: 'BBBBBBBBBBBBBBBBBBBBBBBB',
+        role: SharedPlaylistRole.viewer,
+        expiresAt: expiresAt,
+      );
+
+      expect(await store.invalidateForPlaylist('AAAAAAAAAAAAAAAAAAAAAAAA'), 2);
+      expect(await store.lookup(first), isNull);
+      expect(await store.lookup(second), isNull);
+      expect(
+        (await store.lookup(other))?.playlistId,
+        'BBBBBBBBBBBBBBBBBBBBBBBB',
+      );
+    },
+  );
+
+  test(
+    'file shared-playlist history survives restart and retains 25 revisions',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-server-shared-history-test-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final store = FileSharedPlaylistStore(root);
+      const playlistId = 'AAAAAAAAAAAAAAAAAAAAAAAA';
+      for (
+        var revision = 0;
+        revision <= maxSharedPlaylistHistoryEntries;
+        revision += 1
+      ) {
+        final result = await store.write(
+          playlistId: playlistId,
+          ownerId: 'owner-account',
+          baseRevision: revision,
+          deviceId: 'desktop',
+          document: <String, Object?>{
+            'version': 1,
+            'name': 'Revision ${revision + 1}',
+            'trackIds': <String>['track-$revision'],
+          },
+          collaborators: const <String, SharedPlaylistRole>{},
+          publicShareSecretHash: null,
+          updatedAt: DateTime.utc(2026, 7, 17, 12, revision),
+        );
+        expect(result.isConflict, isFalse);
+      }
+
+      final restarted = FileSharedPlaylistStore(root);
+      final history = await restarted.readHistory(playlistId);
+
+      expect(history, hasLength(maxSharedPlaylistHistoryEntries));
+      expect(history.first.revision, maxSharedPlaylistHistoryEntries + 1);
+      expect(history.last.revision, 2);
+    },
+  );
 
   group('shared playlists', () {
     const ownerToken = 'shared-owner-token';
@@ -1123,341 +1225,343 @@ void main() {
 
     Handler handler({DateTime Function()? clock}) => createServerHandler(
       clock: clock,
-      syncAuthenticator: StaticSyncAuthenticator(
-        const <String, String>{
-          'owner-account': ownerToken,
-          'viewer-account': viewerToken,
-          'editor-account': editorToken,
-        },
-      ),
+      syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+        'owner-account': ownerToken,
+        'viewer-account': viewerToken,
+        'editor-account': editorToken,
+      }),
       sharedPlaylistStore: MemorySharedPlaylistStore(),
       sharedPlaylistInviteStore: MemorySharedPlaylistInviteStore(),
     );
 
-    test('issues, rotates, and revokes anonymous smart-playlist links',
-        () async {
-      final server = handler();
-      final created = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists',
-          token: ownerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'owner-phone',
-            'playlist': <String, Object?>{
-              'version': 2,
-              'kind': 'smart',
-              'name': 'Rated favorites',
-              'rule': <String, Object?>{
-                'favoritesOnly': true,
-                'limit': 25,
+    test(
+      'issues, rotates, and revokes anonymous smart-playlist links',
+      () async {
+        final server = handler();
+        final created = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists',
+            token: ownerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'owner-phone',
+              'playlist': <String, Object?>{
+                'version': 2,
+                'kind': 'smart',
+                'name': 'Rated favorites',
+                'rule': <String, Object?>{'favoritesOnly': true, 'limit': 25},
               },
             },
-          },
-        ),
-      );
-      expect(created.statusCode, 201);
-      final playlistId = (await _json(created))['id'] as String;
+          ),
+        );
+        expect(created.statusCode, 201);
+        final playlistId = (await _json(created))['id'] as String;
 
-      final issued = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists/$playlistId/public-link',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{
-            'baseRevision': 1,
-            'deviceId': 'owner-phone',
-          },
-        ),
-      );
-      expect(issued.statusCode, 200);
-      final firstSecret = (await _json(issued))['secret'] as String;
-      expect(firstSecret, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
-
-      final anonymousRead = await server(
-        _request(
-          'GET',
-          '/api/v1/public-smart-playlists/$playlistId/$firstSecret',
-        ),
-      );
-      expect(anonymousRead.statusCode, 200);
-      final anonymousBody = await _json(anonymousRead);
-      expect((anonymousBody['playlist'] as Map)['name'], 'Rated favorites');
-      expect(anonymousBody.containsKey('updatedByDevice'), isFalse);
-      expect(anonymousBody.containsKey('ownerId'), isFalse);
-
-      final rotated = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists/$playlistId/public-link',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{
-            'baseRevision': 2,
-            'deviceId': 'owner-phone',
-          },
-        ),
-      );
-      expect(rotated.statusCode, 200);
-      final secondSecret = (await _json(rotated))['secret'] as String;
-      expect(secondSecret, isNot(firstSecret));
-      final retiredRead = await server(
-        _request(
-          'GET',
-          '/api/v1/public-smart-playlists/$playlistId/$firstSecret',
-        ),
-      );
-      expect(retiredRead.statusCode, 404);
-
-      final revoked = await server(
-        _request(
-          'DELETE',
-          '/api/v1/shared-playlists/$playlistId/public-link',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{
-            'baseRevision': 3,
-            'deviceId': 'owner-phone',
-          },
-        ),
-      );
-      expect(revoked.statusCode, 200);
-      final revokedRead = await server(
-        _request(
-          'GET',
-          '/api/v1/public-smart-playlists/$playlistId/$secondSecret',
-        ),
-      );
-      expect(revokedRead.statusCode, 404);
-
-      final manual = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists',
-          token: ownerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'owner-phone',
-            'playlist': <String, Object?>{
-              'version': 1,
-              'name': 'Private IDs',
-              'trackIds': <String>['local-track'],
+        final issued = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists/$playlistId/public-link',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{
+              'baseRevision': 1,
+              'deviceId': 'owner-phone',
             },
-          },
-        ),
-      );
-      final manualId = (await _json(manual))['id'] as String;
-      final rejectedManualLink = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists/$manualId/public-link',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{
-            'baseRevision': 1,
-            'deviceId': 'owner-phone',
-          },
-        ),
-      );
-      expect(rejectedManualLink.statusCode, 400);
-    });
+          ),
+        );
+        expect(issued.statusCode, 200);
+        final firstSecret = (await _json(issued))['secret'] as String;
+        expect(firstSecret, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
 
-    test('enforces authenticated viewer/editor invitations and revisions',
-        () async {
-      final server = handler();
-      final created = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists',
-          token: ownerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'owner-phone',
-            'playlist': <String, Object?>{
-              'version': 1,
-              'name': 'Road trip',
-              'trackIds': <String>['track-1', 'track-2'],
+        final anonymousRead = await server(
+          _request(
+            'GET',
+            '/api/v1/public-smart-playlists/$playlistId/$firstSecret',
+          ),
+        );
+        expect(anonymousRead.statusCode, 200);
+        final anonymousBody = await _json(anonymousRead);
+        expect((anonymousBody['playlist'] as Map)['name'], 'Rated favorites');
+        expect(anonymousBody.containsKey('updatedByDevice'), isFalse);
+        expect(anonymousBody.containsKey('ownerId'), isFalse);
+
+        final rotated = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists/$playlistId/public-link',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{
+              'baseRevision': 2,
+              'deviceId': 'owner-phone',
             },
-          },
-        ),
-      );
-      expect(created.statusCode, 201);
-      final createdBody = await _json(created);
-      final playlistId = createdBody['id'] as String;
-      expect(playlistId, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
-      expect(createdBody['role'], 'owner');
+          ),
+        );
+        expect(rotated.statusCode, 200);
+        final secondSecret = (await _json(rotated))['secret'] as String;
+        expect(secondSecret, isNot(firstSecret));
+        final retiredRead = await server(
+          _request(
+            'GET',
+            '/api/v1/public-smart-playlists/$playlistId/$firstSecret',
+          ),
+        );
+        expect(retiredRead.statusCode, 404);
 
-      final viewerInvite = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists/$playlistId/invites',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{'role': 'viewer'},
-        ),
-      );
-      expect(viewerInvite.statusCode, 201);
-      final viewerCode = (await _json(viewerInvite))['inviteCode'] as String;
-
-      final viewerJoin = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlist-invites/$viewerCode',
-          token: viewerToken,
-        ),
-      );
-      expect(viewerJoin.statusCode, 200);
-      expect((await _json(viewerJoin))['role'], 'viewer');
-
-      final reusedViewerInvite = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlist-invites/$viewerCode',
-          token: viewerToken,
-        ),
-      );
-      expect(reusedViewerInvite.statusCode, 404);
-
-      final viewerWrite = await server(
-        _request(
-          'PUT',
-          '/api/v1/shared-playlists/$playlistId',
-          token: viewerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 2,
-            'deviceId': 'viewer-desktop',
-            'playlist': <String, Object?>{
-              'version': 1,
-              'name': 'Changed',
-              'trackIds': <String>['track-1'],
+        final revoked = await server(
+          _request(
+            'DELETE',
+            '/api/v1/shared-playlists/$playlistId/public-link',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{
+              'baseRevision': 3,
+              'deviceId': 'owner-phone',
             },
-          },
-        ),
-      );
-      expect(viewerWrite.statusCode, 403);
+          ),
+        );
+        expect(revoked.statusCode, 200);
+        final revokedRead = await server(
+          _request(
+            'GET',
+            '/api/v1/public-smart-playlists/$playlistId/$secondSecret',
+          ),
+        );
+        expect(revokedRead.statusCode, 404);
 
-      final viewerRevoke = await server(
-        _request(
-          'DELETE',
-          '/api/v1/shared-playlists/$playlistId/collaborators/viewer-account',
-          token: viewerToken,
-          jsonBody: const <String, Object?>{
-            'baseRevision': 2,
-            'deviceId': 'viewer-desktop',
-          },
-        ),
-      );
-      expect(viewerRevoke.statusCode, 403);
-
-      final editorInvite = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists/$playlistId/invites',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{'role': 'editor'},
-        ),
-      );
-      final editorCode = (await _json(editorInvite))['inviteCode'] as String;
-      final editorJoin = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlist-invites/$editorCode',
-          token: editorToken,
-        ),
-      );
-      expect(editorJoin.statusCode, 200);
-      expect((await _json(editorJoin))['role'], 'editor');
-
-      final editorWrite = await server(
-        _request(
-          'PUT',
-          '/api/v1/shared-playlists/$playlistId',
-          token: editorToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 3,
-            'deviceId': 'editor-desktop',
-            'playlist': <String, Object?>{
-              'version': 1,
-              'name': 'Road trip updated',
-              'trackIds': <String>['track-2', 'track-1', 'track-2'],
+        final manual = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists',
+            token: ownerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'owner-phone',
+              'playlist': <String, Object?>{
+                'version': 1,
+                'name': 'Private IDs',
+                'trackIds': <String>['local-track'],
+              },
             },
-          },
-        ),
-      );
-      expect(editorWrite.statusCode, 200);
-      expect((await _json(editorWrite))['revision'], 4);
-
-      final staleOwnerWrite = await server(
-        _request(
-          'PUT',
-          '/api/v1/shared-playlists/$playlistId',
-          token: ownerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 3,
-            'deviceId': 'owner-phone',
-            'playlist': <String, Object?>{
-              'version': 1,
-              'name': 'Stale',
-              'trackIds': <String>['track-1'],
+          ),
+        );
+        final manualId = (await _json(manual))['id'] as String;
+        final rejectedManualLink = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists/$manualId/public-link',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{
+              'baseRevision': 1,
+              'deviceId': 'owner-phone',
             },
-          },
-        ),
-      );
-      expect(staleOwnerWrite.statusCode, 409);
-      expect((await _json(staleOwnerWrite))['error'], 'shared_playlist_conflict');
+          ),
+        );
+        expect(rejectedManualLink.statusCode, 400);
+      },
+    );
 
-      final ownerRead = await server(
-        _request(
-          'GET',
-          '/api/v1/shared-playlists/$playlistId',
-          token: ownerToken,
-        ),
-      );
-      final ownerBody = await _json(ownerRead);
-      expect(ownerRead.statusCode, 200);
-      expect((ownerBody['playlist'] as Map)['name'], 'Road trip updated');
-      expect((ownerBody['collaborators'] as Map)['viewer-account'], 'viewer');
-      expect((ownerBody['collaborators'] as Map)['editor-account'], 'editor');
+    test(
+      'enforces authenticated viewer/editor invitations and revisions',
+      () async {
+        final server = handler();
+        final created = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists',
+            token: ownerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'owner-phone',
+              'playlist': <String, Object?>{
+                'version': 1,
+                'name': 'Road trip',
+                'trackIds': <String>['track-1', 'track-2'],
+              },
+            },
+          ),
+        );
+        expect(created.statusCode, 201);
+        final createdBody = await _json(created);
+        final playlistId = createdBody['id'] as String;
+        expect(playlistId, matches(RegExp(r'^[A-Za-z0-9_-]{24}$')));
+        expect(createdBody['role'], 'owner');
 
-      final revokedEditor = await server(
-        _request(
-          'DELETE',
-          '/api/v1/shared-playlists/$playlistId/collaborators/editor-account',
-          token: ownerToken,
-          jsonBody: const <String, Object?>{
-            'baseRevision': 4,
-            'deviceId': 'owner-phone',
-          },
-        ),
-      );
-      expect(revokedEditor.statusCode, 200);
-      final revokedBody = await _json(revokedEditor);
-      expect(revokedBody['revision'], 5);
-      final remainingCollaborators = revokedBody['collaborators'] as Map;
-      expect(remainingCollaborators['viewer-account'], 'viewer');
-      expect(remainingCollaborators.containsKey('editor-account'), isFalse);
+        final viewerInvite = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists/$playlistId/invites',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{'role': 'viewer'},
+          ),
+        );
+        expect(viewerInvite.statusCode, 201);
+        final viewerCode = (await _json(viewerInvite))['inviteCode'] as String;
 
-      final editorReadAfterRevocation = await server(
-        _request(
-          'GET',
-          '/api/v1/shared-playlists/$playlistId',
-          token: editorToken,
-        ),
-      );
-      expect(editorReadAfterRevocation.statusCode, 404);
+        final viewerJoin = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlist-invites/$viewerCode',
+            token: viewerToken,
+          ),
+        );
+        expect(viewerJoin.statusCode, 200);
+        expect((await _json(viewerJoin))['role'], 'viewer');
 
-      final viewerHistory = await server(
-        _request(
-          'GET',
-          '/api/v1/shared-playlists/$playlistId/revisions',
-          token: viewerToken,
-        ),
-      );
-      expect(viewerHistory.statusCode, 200);
-      final revisions = (await _json(viewerHistory))['revisions'] as List;
-      expect(
-        revisions.map((value) => (value as Map)['revision']).toList(),
-        <int>[5, 4, 3, 2, 1],
-      );
-      expect((revisions[1] as Map)['playlist'], isA<Map>());
-    });
+        final reusedViewerInvite = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlist-invites/$viewerCode',
+            token: viewerToken,
+          ),
+        );
+        expect(reusedViewerInvite.statusCode, 404);
+
+        final viewerWrite = await server(
+          _request(
+            'PUT',
+            '/api/v1/shared-playlists/$playlistId',
+            token: viewerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 2,
+              'deviceId': 'viewer-desktop',
+              'playlist': <String, Object?>{
+                'version': 1,
+                'name': 'Changed',
+                'trackIds': <String>['track-1'],
+              },
+            },
+          ),
+        );
+        expect(viewerWrite.statusCode, 403);
+
+        final viewerRevoke = await server(
+          _request(
+            'DELETE',
+            '/api/v1/shared-playlists/$playlistId/collaborators/viewer-account',
+            token: viewerToken,
+            jsonBody: const <String, Object?>{
+              'baseRevision': 2,
+              'deviceId': 'viewer-desktop',
+            },
+          ),
+        );
+        expect(viewerRevoke.statusCode, 403);
+
+        final editorInvite = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists/$playlistId/invites',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{'role': 'editor'},
+          ),
+        );
+        final editorCode = (await _json(editorInvite))['inviteCode'] as String;
+        final editorJoin = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlist-invites/$editorCode',
+            token: editorToken,
+          ),
+        );
+        expect(editorJoin.statusCode, 200);
+        expect((await _json(editorJoin))['role'], 'editor');
+
+        final editorWrite = await server(
+          _request(
+            'PUT',
+            '/api/v1/shared-playlists/$playlistId',
+            token: editorToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 3,
+              'deviceId': 'editor-desktop',
+              'playlist': <String, Object?>{
+                'version': 1,
+                'name': 'Road trip updated',
+                'trackIds': <String>['track-2', 'track-1', 'track-2'],
+              },
+            },
+          ),
+        );
+        expect(editorWrite.statusCode, 200);
+        expect((await _json(editorWrite))['revision'], 4);
+
+        final staleOwnerWrite = await server(
+          _request(
+            'PUT',
+            '/api/v1/shared-playlists/$playlistId',
+            token: ownerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 3,
+              'deviceId': 'owner-phone',
+              'playlist': <String, Object?>{
+                'version': 1,
+                'name': 'Stale',
+                'trackIds': <String>['track-1'],
+              },
+            },
+          ),
+        );
+        expect(staleOwnerWrite.statusCode, 409);
+        expect(
+          (await _json(staleOwnerWrite))['error'],
+          'shared_playlist_conflict',
+        );
+
+        final ownerRead = await server(
+          _request(
+            'GET',
+            '/api/v1/shared-playlists/$playlistId',
+            token: ownerToken,
+          ),
+        );
+        final ownerBody = await _json(ownerRead);
+        expect(ownerRead.statusCode, 200);
+        expect((ownerBody['playlist'] as Map)['name'], 'Road trip updated');
+        expect((ownerBody['collaborators'] as Map)['viewer-account'], 'viewer');
+        expect((ownerBody['collaborators'] as Map)['editor-account'], 'editor');
+
+        final revokedEditor = await server(
+          _request(
+            'DELETE',
+            '/api/v1/shared-playlists/$playlistId/collaborators/editor-account',
+            token: ownerToken,
+            jsonBody: const <String, Object?>{
+              'baseRevision': 4,
+              'deviceId': 'owner-phone',
+            },
+          ),
+        );
+        expect(revokedEditor.statusCode, 200);
+        final revokedBody = await _json(revokedEditor);
+        expect(revokedBody['revision'], 5);
+        final remainingCollaborators = revokedBody['collaborators'] as Map;
+        expect(remainingCollaborators['viewer-account'], 'viewer');
+        expect(remainingCollaborators.containsKey('editor-account'), isFalse);
+
+        final editorReadAfterRevocation = await server(
+          _request(
+            'GET',
+            '/api/v1/shared-playlists/$playlistId',
+            token: editorToken,
+          ),
+        );
+        expect(editorReadAfterRevocation.statusCode, 404);
+
+        final viewerHistory = await server(
+          _request(
+            'GET',
+            '/api/v1/shared-playlists/$playlistId/revisions',
+            token: viewerToken,
+          ),
+        );
+        expect(viewerHistory.statusCode, 200);
+        final revisions = (await _json(viewerHistory))['revisions'] as List;
+        expect(
+          revisions.map((value) => (value as Map)['revision']).toList(),
+          <int>[5, 4, 3, 2, 1],
+        );
+        expect((revisions[1] as Map)['playlist'], isA<Map>());
+      },
+    );
 
     test('expires unused invitations after the configured lifetime', () async {
       var now = DateTime.utc(2026, 7, 17, 12);
@@ -1495,7 +1599,9 @@ void main() {
         now.add(sharedPlaylistInviteLifetime),
       );
 
-      now = now.add(sharedPlaylistInviteLifetime).add(const Duration(seconds: 1));
+      now = now
+          .add(sharedPlaylistInviteLifetime)
+          .add(const Duration(seconds: 1));
       final expired = await server(
         _request(
           'POST',
@@ -1579,7 +1685,8 @@ void main() {
           jsonBody: const <String, Object?>{'role': 'viewer'},
         ),
       );
-      final replacementCode = (await _json(replacement))['inviteCode'] as String;
+      final replacementCode =
+          (await _json(replacement))['inviteCode'] as String;
       final acceptedReplacement = await server(
         _request(
           'POST',
@@ -1618,62 +1725,64 @@ void main() {
       expect(unauthenticated.statusCode, 401);
     });
 
-    test('stores portable manual playlist references without local identifiers',
-        () async {
-      final server = handler();
-      final accepted = await server(
-        _request(
-          'POST',
-          '/api/v1/shared-playlists',
-          token: ownerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 0,
-            'deviceId': 'owner-phone',
-            'playlist': <String, Object?>{
-              'version': 3,
-              'name': 'Portable',
-              'tracks': <Object?>[
-                <String, Object?>{
-                  'title': 'One',
-                  'artist': 'Artist',
-                  'album': 'Album',
-                  'durationMs': 180000,
-                },
-              ],
+    test(
+      'stores portable manual playlist references without local identifiers',
+      () async {
+        final server = handler();
+        final accepted = await server(
+          _request(
+            'POST',
+            '/api/v1/shared-playlists',
+            token: ownerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 0,
+              'deviceId': 'owner-phone',
+              'playlist': <String, Object?>{
+                'version': 3,
+                'name': 'Portable',
+                'tracks': <Object?>[
+                  <String, Object?>{
+                    'title': 'One',
+                    'artist': 'Artist',
+                    'album': 'Album',
+                    'durationMs': 180000,
+                  },
+                ],
+              },
             },
-          },
-        ),
-      );
-      expect(accepted.statusCode, 201);
-      final playlistId = (await _json(accepted))['id'] as String;
+          ),
+        );
+        expect(accepted.statusCode, 201);
+        final playlistId = (await _json(accepted))['id'] as String;
 
-      final rejected = await server(
-        _request(
-          'PUT',
-          '/api/v1/shared-playlists/$playlistId',
-          token: ownerToken,
-          jsonBody: <String, Object?>{
-            'baseRevision': 1,
-            'deviceId': 'owner-phone',
-            'playlist': <String, Object?>{
-              'version': 3,
-              'name': 'Portable',
-              'tracks': <Object?>[
-                <String, Object?>{
-                  'title': 'One',
-                  'artist': 'Artist',
-                  'album': 'Album',
-                  'durationMs': 180000,
-                  'localTrackId': 'private-device-id',
-                },
-              ],
+        final rejected = await server(
+          _request(
+            'PUT',
+            '/api/v1/shared-playlists/$playlistId',
+            token: ownerToken,
+            jsonBody: <String, Object?>{
+              'baseRevision': 1,
+              'deviceId': 'owner-phone',
+              'playlist': <String, Object?>{
+                'version': 3,
+                'name': 'Portable',
+                'tracks': <Object?>[
+                  <String, Object?>{
+                    'title': 'One',
+                    'artist': 'Artist',
+                    'album': 'Album',
+                    'durationMs': 180000,
+                    'localTrackId': 'private-device-id',
+                  },
+                ],
+              },
             },
-          },
-        ),
-      );
-      expect(rejected.statusCode, 400);
-      expect((await _json(rejected))['error'], 'invalid_shared_playlist');
-    });
+          ),
+        );
+        expect(rejected.statusCode, 400);
+        expect((await _json(rejected))['error'], 'invalid_shared_playlist');
+      },
+    );
 
     test('stores bounded smart-playlist rules without library data', () async {
       final server = handler();
@@ -1744,92 +1853,93 @@ void main() {
     });
   });
 
-  test('file sync store survives restart and retains only the latest revision',
-      () async {
-    final root = await Directory.systemTemp.createTemp(
-      'aethertune-server-sync-test-',
-    );
-    addTearDown(() async {
-      if (await root.exists()) {
-        await root.delete(recursive: true);
-      }
-    });
-    final firstStore = FileLibrarySyncSnapshotStore(root);
-    final first = await firstStore.write(
-      userId: 'private-user-name',
-      baseRevision: 0,
-      deviceId: 'phone',
-      snapshot: _syncSnapshot(title: 'Revision one'),
-      checksum: _checksum(_syncSnapshot(title: 'Revision one')),
-      updatedAt: DateTime.utc(2026, 7, 10, 14),
-    );
-    expect(first.isConflict, isFalse);
+  test(
+    'file sync store survives restart and retains only the latest revision',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-server-sync-test-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final firstStore = FileLibrarySyncSnapshotStore(root);
+      final first = await firstStore.write(
+        userId: 'private-user-name',
+        baseRevision: 0,
+        deviceId: 'phone',
+        snapshot: _syncSnapshot(title: 'Revision one'),
+        checksum: _checksum(_syncSnapshot(title: 'Revision one')),
+        updatedAt: DateTime.utc(2026, 7, 10, 14),
+      );
+      expect(first.isConflict, isFalse);
 
-    final restartedStore = FileLibrarySyncSnapshotStore(root);
-    final restored = await restartedStore.read('private-user-name');
-    expect(restored?.revision, 1);
-    expect(restored?.snapshot?['name'], 'Revision one');
+      final restartedStore = FileLibrarySyncSnapshotStore(root);
+      final restored = await restartedStore.read('private-user-name');
+      expect(restored?.revision, 1);
+      expect(restored?.snapshot?['name'], 'Revision one');
 
-    final conflict = await restartedStore.write(
-      userId: 'private-user-name',
-      baseRevision: 0,
-      deviceId: 'desktop',
-      snapshot: _syncSnapshot(title: 'Stale'),
-      checksum: _checksum(_syncSnapshot(title: 'Stale')),
-      updatedAt: DateTime.utc(2026, 7, 10, 15),
-    );
-    expect(conflict.isConflict, isTrue);
-    expect(conflict.snapshot?.revision, 1);
+      final conflict = await restartedStore.write(
+        userId: 'private-user-name',
+        baseRevision: 0,
+        deviceId: 'desktop',
+        snapshot: _syncSnapshot(title: 'Stale'),
+        checksum: _checksum(_syncSnapshot(title: 'Stale')),
+        updatedAt: DateTime.utc(2026, 7, 10, 15),
+      );
+      expect(conflict.isConflict, isTrue);
+      expect(conflict.snapshot?.revision, 1);
 
-    final secondSnapshot = _syncSnapshot(title: 'Revision two');
-    final second = await restartedStore.write(
-      userId: 'private-user-name',
-      baseRevision: 1,
-      deviceId: 'desktop',
-      snapshot: secondSnapshot,
-      checksum: _checksum(secondSnapshot),
-      updatedAt: DateTime.utc(2026, 7, 10, 15),
-    );
-    expect(second.snapshot?.revision, 2);
+      final secondSnapshot = _syncSnapshot(title: 'Revision two');
+      final second = await restartedStore.write(
+        userId: 'private-user-name',
+        baseRevision: 1,
+        deviceId: 'desktop',
+        snapshot: secondSnapshot,
+        checksum: _checksum(secondSnapshot),
+        updatedAt: DateTime.utc(2026, 7, 10, 15),
+      );
+      expect(second.snapshot?.revision, 2);
 
-    final deleted = await restartedStore.delete(
-      userId: 'private-user-name',
-      baseRevision: 2,
-      deviceId: 'desktop',
-      updatedAt: DateTime.utc(2026, 7, 10, 16),
-    );
-    expect(deleted.isConflict, isFalse);
-    expect(deleted.snapshot?.revision, 3);
-    expect(deleted.snapshot?.snapshot, isNull);
+      final deleted = await restartedStore.delete(
+        userId: 'private-user-name',
+        baseRevision: 2,
+        deviceId: 'desktop',
+        updatedAt: DateTime.utc(2026, 7, 10, 16),
+      );
+      expect(deleted.isConflict, isFalse);
+      expect(deleted.snapshot?.revision, 3);
+      expect(deleted.snapshot?.snapshot, isNull);
 
-    final afterDeletionRestart = FileLibrarySyncSnapshotStore(root);
-    final tombstone = await afterDeletionRestart.read('private-user-name');
-    expect(tombstone?.revision, 3);
-    expect(tombstone?.snapshot, isNull);
+      final afterDeletionRestart = FileLibrarySyncSnapshotStore(root);
+      final tombstone = await afterDeletionRestart.read('private-user-name');
+      expect(tombstone?.revision, 3);
+      expect(tombstone?.snapshot, isNull);
 
-    final staleAfterDeletion = await afterDeletionRestart.write(
-      userId: 'private-user-name',
-      baseRevision: 2,
-      deviceId: 'phone',
-      snapshot: _syncSnapshot(title: 'Stale after deletion'),
-      checksum: _checksum(_syncSnapshot(title: 'Stale after deletion')),
-      updatedAt: DateTime.utc(2026, 7, 10, 17),
-    );
-    expect(staleAfterDeletion.isConflict, isTrue);
-    expect(staleAfterDeletion.snapshot?.revision, 3);
+      final staleAfterDeletion = await afterDeletionRestart.write(
+        userId: 'private-user-name',
+        baseRevision: 2,
+        deviceId: 'phone',
+        snapshot: _syncSnapshot(title: 'Stale after deletion'),
+        checksum: _checksum(_syncSnapshot(title: 'Stale after deletion')),
+        updatedAt: DateTime.utc(2026, 7, 10, 17),
+      );
+      expect(staleAfterDeletion.isConflict, isTrue);
+      expect(staleAfterDeletion.snapshot?.revision, 3);
 
-    final files = await root
-        .list(recursive: true)
-        .where((entity) => entity is File)
-        .cast<File>()
-        .toList();
-    expect(files, hasLength(1));
-    expect(files.single.path, endsWith('snapshot-3.json'));
-    expect(files.single.path, isNot(contains('private-user-name')));
-  });
+      final files = await root
+          .list(recursive: true)
+          .where((entity) => entity is File)
+          .cast<File>()
+          .toList();
+      expect(files, hasLength(1));
+      expect(files.single.path, endsWith('snapshot-3.json'));
+      expect(files.single.path, isNot(contains('private-user-name')));
+    },
+  );
 
-  test('authenticator parses JSON users and rejects malformed configuration',
-      () {
+  test('authenticator parses JSON users and rejects malformed configuration', () {
     final hashedToken = sha256.convert(utf8.encode('token-three')).toString();
     final authenticator = StaticSyncAuthenticator.fromJson(
       '{"yunus":"token-one","desktop":"token-two","server":"sha256:$hashedToken"}',

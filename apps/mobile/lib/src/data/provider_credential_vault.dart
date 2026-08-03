@@ -8,7 +8,7 @@ abstract interface class ProviderCredentialVault {
 
 final class SecureProviderCredentialVault implements ProviderCredentialVault {
   SecureProviderCredentialVault({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const _keyPrefix = 'aethertune.provider.secret.v1.';
   final FlutterSecureStorage _storage;

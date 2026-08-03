@@ -186,8 +186,9 @@ class Track {
       rating: rating ?? this.rating,
       chapters: chapters ?? this.chapters,
       skipSegments: skipSegments ?? this.skipSegments,
-      transcriptUri:
-          clearTranscriptUri ? null : transcriptUri ?? this.transcriptUri,
+      transcriptUri: clearTranscriptUri
+          ? null
+          : transcriptUri ?? this.transcriptUri,
       transcriptType: transcriptType ?? this.transcriptType,
       transcriptLanguage: transcriptLanguage ?? this.transcriptLanguage,
       addedAt: addedAt ?? this.addedAt,

@@ -8,11 +8,12 @@ import '../domain/track_skip_segment.dart';
 const maxSponsorBlockResponseBytes = 64 * 1024;
 const maxSponsorBlockSegments = 50;
 
-typedef SponsorBlockSegmentLoader = Future<List<TrackSkipSegment>> Function(
-  String videoId, {
-  required Duration maximum,
-  Set<String> categories,
-});
+typedef SponsorBlockSegmentLoader =
+    Future<List<TrackSkipSegment>> Function(
+      String videoId, {
+      required Duration maximum,
+      Set<String> categories,
+    });
 
 const sponsorBlockCategories = <String>{
   'sponsor',
@@ -28,7 +29,7 @@ const sponsorBlockCategories = <String>{
 /// Fetches public skip-only segments after a user explicitly enables it.
 final class SponsorBlockSegmentProvider {
   SponsorBlockSegmentProvider({Uri? baseUri})
-      : baseUri = baseUri ?? Uri.parse('https://sponsor.ajay.app');
+    : baseUri = baseUri ?? Uri.parse('https://sponsor.ajay.app');
 
   final Uri baseUri;
 
@@ -47,18 +48,25 @@ final class SponsorBlockSegmentProvider {
     if (selectedCategories.isEmpty) {
       return const <TrackSkipSegment>[];
     }
-    final prefix = sha256.convert(utf8.encode(normalizedVideoId)).toString().substring(0, 4);
+    final prefix = sha256
+        .convert(utf8.encode(normalizedVideoId))
+        .toString()
+        .substring(0, 4);
     final uri = baseUri.replace(
       path: '${baseUri.path}/api/skipSegments/$prefix'.replaceAll('//', '/'),
       queryParameters: <String, String>{
         'categories': jsonEncode(selectedCategories.toList()..sort()),
       },
     );
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       final response = await (await client.getUrl(uri)).close();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException('Segment request failed with HTTP ${response.statusCode}.', uri: uri);
+        throw HttpException(
+          'Segment request failed with HTTP ${response.statusCode}.',
+          uri: uri,
+        );
       }
       final bytes = <int>[];
       await for (final chunk in response) {
@@ -114,7 +122,13 @@ List<TrackSkipSegment> parseSponsorBlockSegments(
     final end = _secondsToDuration(range[1]);
     if (start == null || end == null) continue;
     try {
-      segments.add(TrackSkipSegment(start: start, end: end, label: 'SponsorBlock: $category'));
+      segments.add(
+        TrackSkipSegment(
+          start: start,
+          end: end,
+          label: 'SponsorBlock: $category',
+        ),
+      );
     } on ArgumentError {
       continue;
     }

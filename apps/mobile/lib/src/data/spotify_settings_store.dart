@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -9,12 +12,12 @@ import 'spotify_metadata_provider.dart';
 import 'spotify_oauth_client.dart';
 import 'spotify_oauth_flow.dart';
 
-typedef SpotifyAuthorizationRunner = Future<SpotifyOAuthToken> Function(
-  String clientId,
-);
-typedef SpotifyMetadataProviderFactory = SpotifyMetadataProvider Function(
-  SpotifyAccessTokenReader accessTokenReader,
-);
+typedef SpotifyAuthorizationRunner =
+    Future<SpotifyOAuthToken> Function(String clientId);
+typedef SpotifyMetadataProviderFactory =
+    SpotifyMetadataProvider Function(
+      SpotifyAccessTokenReader accessTokenReader,
+    );
 
 final class SpotifyOAuthSession {
   const SpotifyOAuthSession({required this.clientId, required this.token});
@@ -49,7 +52,8 @@ final class SpotifySettingsStore extends ChangeNotifier {
        _oauthClient = oauthClient ?? SpotifyOAuthClient(),
        _clock = clock ?? DateTime.now,
        _authorizationRunner = authorizationRunner,
-       _providerFactory = providerFactory ??
+       _providerFactory =
+           providerFactory ??
            ((accessTokenReader) =>
                SpotifyMetadataProvider(accessTokenReader: accessTokenReader));
 
@@ -76,9 +80,7 @@ final class SpotifySettingsStore extends ChangeNotifier {
 
   List<MusicSourceProvider> get musicProviders => _session == null
       ? const <MusicSourceProvider>[]
-      : <MusicSourceProvider>[
-          _providerFactory(readAccessToken),
-        ];
+      : <MusicSourceProvider>[_providerFactory(readAccessToken)];
 
   Future<void> load() async {
     if (_loaded) {

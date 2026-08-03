@@ -9,7 +9,7 @@ abstract interface class LibrarySyncCredentialVault {
 final class SecureLibrarySyncCredentialVault
     implements LibrarySyncCredentialVault {
   SecureLibrarySyncCredentialVault({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'aethertune.library_sync.token.v1';
   final FlutterSecureStorage _storage;

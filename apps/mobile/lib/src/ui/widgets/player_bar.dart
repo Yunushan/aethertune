@@ -63,7 +63,9 @@ class PlayerBar extends StatelessWidget {
                 final max = duration.inMilliseconds <= 0
                     ? 1.0
                     : duration.inMilliseconds.toDouble();
-                final value = position.inMilliseconds.clamp(0, max.toInt()).toDouble();
+                final value = position.inMilliseconds
+                    .clamp(0, max.toInt())
+                    .toDouble();
 
                 return Slider(
                   key: const Key('player-bar-seek'),
@@ -96,7 +98,9 @@ class PlayerBar extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                               onTap: onOpenNowPlaying,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
                                 child: Row(
                                   children: <Widget>[
                                     Hero(
@@ -115,14 +119,17 @@ class PlayerBar extends StatelessWidget {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: <Widget>[
                                           Text(
                                             current.title,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context).textTheme.titleMedium,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
                                           ),
                                           Text(
                                             current.artist,
@@ -157,21 +164,23 @@ class PlayerBar extends StatelessWidget {
                         ),
                         IconButton(
                           tooltip: 'Previous',
-                          onPressed: () => _runPlaybackAction(context, player.previous),
+                          onPressed: () =>
+                              _runPlaybackAction(context, player.previous),
                           icon: const Icon(Icons.skip_previous),
                         ),
                       ],
                       IconButton.filledTonal(
                         tooltip: player.isPlaying ? 'Pause' : 'Play',
-                        onPressed: () => _runPlaybackAction(
-                          context,
-                          player.togglePlayPause,
+                        onPressed: () =>
+                            _runPlaybackAction(context, player.togglePlayPause),
+                        icon: Icon(
+                          player.isPlaying ? Icons.pause : Icons.play_arrow,
                         ),
-                        icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
                       ),
                       IconButton(
                         tooltip: 'Next',
-                        onPressed: () => _runPlaybackAction(context, player.next),
+                        onPressed: () =>
+                            _runPlaybackAction(context, player.next),
                         icon: const Icon(Icons.skip_next),
                       ),
                     ],

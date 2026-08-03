@@ -23,7 +23,8 @@ Future<OfflineCacheEvictionResult> enforceOfflineCacheLimit({
       continue;
     }
 
-    final reason = 'Evicted automatically to keep $sourceId cache under '
+    final reason =
+        'Evicted automatically to keep $sourceId cache under '
         '${providerLimit.value} MB.';
     for (final entryId in providerResult.evictedEntryIds) {
       await library.markOfflineCacheEntryEvicted(entryId, reason: reason);
@@ -37,7 +38,8 @@ Future<OfflineCacheEvictionResult> enforceOfflineCacheLimit({
     maxBytes: library.offlineCacheLimitBytes,
   );
   if (appResult.evictedEntryIds.isNotEmpty) {
-    final reason = 'Evicted automatically to keep cache under '
+    final reason =
+        'Evicted automatically to keep cache under '
         '${library.offlineCacheLimitMegabytes} MB.';
     for (final entryId in appResult.evictedEntryIds) {
       await library.markOfflineCacheEntryEvicted(entryId, reason: reason);

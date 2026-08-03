@@ -53,7 +53,11 @@ void main() {
       },
     );
 
-    final page = await provider.searchPage('  synthetic  ', cursor: '50', limit: 100);
+    final page = await provider.searchPage(
+      '  synthetic  ',
+      cursor: '50',
+      limit: 100,
+    );
 
     expect(requestToken, 'access-token');
     expect(requestUri!.queryParameters['q'], 'synthetic');
@@ -112,16 +116,17 @@ void main() {
     expect(await provider.resolveStream(track), isNull);
   });
 
-  test('loads recently played metadata with an official history cursor',
-      () async {
-    Uri? requestUri;
-    String? requestToken;
-    final provider = SpotifyMetadataProvider(
-      accessTokenReader: () async => 'access-token',
-      recentlyPlayedLoader: (uri, token) async {
-        requestUri = uri;
-        requestToken = token;
-        return '''
+  test(
+    'loads recently played metadata with an official history cursor',
+    () async {
+      Uri? requestUri;
+      String? requestToken;
+      final provider = SpotifyMetadataProvider(
+        accessTokenReader: () async => 'access-token',
+        recentlyPlayedLoader: (uri, token) async {
+          requestUri = uri;
+          requestToken = token;
+          return '''
           {
             "cursors": {"before": "1763380800000"},
             "items": [{
@@ -136,27 +141,28 @@ void main() {
             }]
           }
         ''';
-      },
-    );
+        },
+      );
 
-    final page = await provider.loadRecentlyPlayedPage(
-      before: '1763380801000',
-      limit: 100,
-    );
+      final page = await provider.loadRecentlyPlayedPage(
+        before: '1763380801000',
+        limit: 100,
+      );
 
-    expect(requestToken, 'access-token');
-    expect(requestUri!.path, '/v1/me/player/recently-played');
-    expect(requestUri!.queryParameters['limit'], '50');
-    expect(requestUri!.queryParameters['before'], '1763380801000');
-    expect(page.nextBefore, '1763380800000');
-    expect(page.hasMore, isTrue);
-    final item = page.items.single;
-    expect(item.playedAt, DateTime.utc(2026, 7, 17, 12));
-    expect(item.track.title, 'History Signal');
-    expect(item.track.addedAt, item.playedAt);
-    expect(item.track.isPlayable, isFalse);
-    expect(await provider.resolveStream(item.track), isNull);
-  });
+      expect(requestToken, 'access-token');
+      expect(requestUri!.path, '/v1/me/player/recently-played');
+      expect(requestUri!.queryParameters['limit'], '50');
+      expect(requestUri!.queryParameters['before'], '1763380801000');
+      expect(page.nextBefore, '1763380800000');
+      expect(page.hasMore, isTrue);
+      final item = page.items.single;
+      expect(item.playedAt, DateTime.utc(2026, 7, 17, 12));
+      expect(item.track.title, 'History Signal');
+      expect(item.track.addedAt, item.playedAt);
+      expect(item.track.isPlayable, isFalse);
+      expect(await provider.resolveStream(item.track), isNull);
+    },
+  );
 
   test('loads bounded official Spotify top-track metadata', () async {
     Uri? requestUri;
@@ -208,7 +214,10 @@ void main() {
     expect(requestUri!.queryParameters['time_range'], 'long_term');
     expect(requestUri!.queryParameters['limit'], '50');
     expect(artists.single.name, 'Aether');
-    expect(artists.single.artworkUri, Uri.parse('https://i.scdn.co/image/artist'));
+    expect(
+      artists.single.artworkUri,
+      Uri.parse('https://i.scdn.co/image/artist'),
+    );
   });
 
   test('loads bounded saved-episode metadata without a playable URI', () async {
@@ -264,14 +273,16 @@ void main() {
     expect(await provider.resolveStream(episode), isNull);
   });
 
-  test('loads saved shows and their episode metadata without playback', () async {
-    Uri? showsRequest;
-    Uri? episodesRequest;
-    final provider = SpotifyMetadataProvider(
-      accessTokenReader: () async => 'access-token',
-      savedShowsLoader: (uri, token) async {
-        showsRequest = uri;
-        return '''
+  test(
+    'loads saved shows and their episode metadata without playback',
+    () async {
+      Uri? showsRequest;
+      Uri? episodesRequest;
+      final provider = SpotifyMetadataProvider(
+        accessTokenReader: () async => 'access-token',
+        savedShowsLoader: (uri, token) async {
+          showsRequest = uri;
+          return '''
           {"offset":0,"total":1,"next":null,"items":[{
             "added_at":"2026-07-17T12:00:00Z",
             "show":{
@@ -281,44 +292,45 @@ void main() {
             }
           }]}
         ''';
-      },
-      showEpisodesLoader: (uri, token) async {
-        episodesRequest = uri;
-        return '''
+        },
+        showEpisodesLoader: (uri, token) async {
+          episodesRequest = uri;
+          return '''
           {"offset":1,"total":2,"next":null,"items":[{
             "id":"show-episode-id","name":"Show Episode","duration_ms":125000,
             "images":[{"url":"https://i.scdn.co/image/episode"}]
           }]}
         ''';
-      },
-    );
+        },
+      );
 
-    final shows = await provider.loadSavedShowsPage(limit: 99);
-    final show = shows.shows.single;
-    final episodes = await provider.loadShowEpisodesPage(show, offset: 1);
+      final shows = await provider.loadSavedShowsPage(limit: 99);
+      final show = shows.shows.single;
+      final episodes = await provider.loadShowEpisodesPage(show, offset: 1);
 
-    expect(showsRequest!.path, '/v1/me/shows');
-    expect(showsRequest!.queryParameters, <String, String>{
-      'limit': '50',
-      'offset': '0',
-    });
-    expect(show.title, 'Signal Show');
-    expect(show.publisher, 'Aether Radio');
-    expect(show.totalEpisodes, 2);
-    expect(show.artworkUri, Uri.parse('https://i.scdn.co/image/show'));
-    expect(episodesRequest!.path, '/v1/shows/show-id/episodes');
-    expect(episodesRequest!.queryParameters, <String, String>{
-      'limit': '20',
-      'offset': '1',
-    });
-    final episode = episodes.tracks.single;
-    expect(episode.title, 'Show Episode');
-    expect(episode.artist, 'Aether Radio');
-    expect(episode.album, 'Signal Show');
-    expect(episode.duration, const Duration(minutes: 2, seconds: 5));
-    expect(episode.artworkUri, Uri.parse('https://i.scdn.co/image/show'));
-    expect(episode.isPlayable, isFalse);
-  });
+      expect(showsRequest!.path, '/v1/me/shows');
+      expect(showsRequest!.queryParameters, <String, String>{
+        'limit': '50',
+        'offset': '0',
+      });
+      expect(show.title, 'Signal Show');
+      expect(show.publisher, 'Aether Radio');
+      expect(show.totalEpisodes, 2);
+      expect(show.artworkUri, Uri.parse('https://i.scdn.co/image/show'));
+      expect(episodesRequest!.path, '/v1/shows/show-id/episodes');
+      expect(episodesRequest!.queryParameters, <String, String>{
+        'limit': '20',
+        'offset': '1',
+      });
+      final episode = episodes.tracks.single;
+      expect(episode.title, 'Show Episode');
+      expect(episode.artist, 'Aether Radio');
+      expect(episode.album, 'Signal Show');
+      expect(episode.duration, const Duration(minutes: 2, seconds: 5));
+      expect(episode.artworkUri, Uri.parse('https://i.scdn.co/image/show'));
+      expect(episode.isPlayable, isFalse);
+    },
+  );
 
   test('loads bounded official Spotify followed-artist metadata', () async {
     Uri? requestUri;
@@ -366,16 +378,17 @@ void main() {
     expect(page.nextBefore, 'next');
   });
 
-  test('loads saved albums and album tracks as non-playable metadata',
-      () async {
-    Uri? albumsRequest;
-    Uri? tracksRequest;
-    final provider = SpotifyMetadataProvider(
-      accessTokenReader: () async => 'access-token',
-      savedAlbumsLoader: (uri, token) async {
-        albumsRequest = uri;
-        expect(token, 'access-token');
-        return '''
+  test(
+    'loads saved albums and album tracks as non-playable metadata',
+    () async {
+      Uri? albumsRequest;
+      Uri? tracksRequest;
+      final provider = SpotifyMetadataProvider(
+        accessTokenReader: () async => 'access-token',
+        savedAlbumsLoader: (uri, token) async {
+          albumsRequest = uri;
+          expect(token, 'access-token');
+          return '''
           {
             "offset": 1,
             "total": 3,
@@ -392,11 +405,11 @@ void main() {
             }]
           }
         ''';
-      },
-      albumTracksLoader: (uri, token) async {
-        tracksRequest = uri;
-        expect(token, 'access-token');
-        return '''
+        },
+        albumTracksLoader: (uri, token) async {
+          tracksRequest = uri;
+          expect(token, 'access-token');
+          return '''
           {
             "offset": 0,
             "total": 2,
@@ -409,34 +422,35 @@ void main() {
             }]
           }
         ''';
-      },
-    );
+        },
+      );
 
-    final albums = await provider.loadSavedAlbumsPage(offset: 1, limit: 100);
+      final albums = await provider.loadSavedAlbumsPage(offset: 1, limit: 100);
 
-    expect(albumsRequest!.path, '/v1/me/albums');
-    expect(albumsRequest!.queryParameters['offset'], '1');
-    expect(albumsRequest!.queryParameters['limit'], '50');
-    expect(albums.offset, 1);
-    expect(albums.total, 3);
-    expect(albums.hasMore, isTrue);
-    final album = albums.albums.single;
-    expect(album.title, 'Signal Archive');
-    expect(album.artist, 'Aether');
-    expect(album.totalTracks, 2);
-    expect(album.artworkUri, Uri.parse('https://i.scdn.co/image/album'));
+      expect(albumsRequest!.path, '/v1/me/albums');
+      expect(albumsRequest!.queryParameters['offset'], '1');
+      expect(albumsRequest!.queryParameters['limit'], '50');
+      expect(albums.offset, 1);
+      expect(albums.total, 3);
+      expect(albums.hasMore, isTrue);
+      final album = albums.albums.single;
+      expect(album.title, 'Signal Archive');
+      expect(album.artist, 'Aether');
+      expect(album.totalTracks, 2);
+      expect(album.artworkUri, Uri.parse('https://i.scdn.co/image/album'));
 
-    final tracks = await provider.loadAlbumTracksPage(album, limit: 1);
+      final tracks = await provider.loadAlbumTracksPage(album, limit: 1);
 
-    expect(tracksRequest!.path, '/v1/albums/album-id/tracks');
-    expect(tracksRequest!.queryParameters['offset'], '0');
-    expect(tracksRequest!.queryParameters['limit'], '1');
-    expect(tracks.hasMore, isTrue);
-    expect(tracks.tracks.single.album, 'Signal Archive');
-    expect(tracks.tracks.single.artworkUri, album.artworkUri);
-    expect(tracks.tracks.single.isPlayable, isFalse);
-    expect(await provider.resolveStream(tracks.tracks.single), isNull);
-  });
+      expect(tracksRequest!.path, '/v1/albums/album-id/tracks');
+      expect(tracksRequest!.queryParameters['offset'], '0');
+      expect(tracksRequest!.queryParameters['limit'], '1');
+      expect(tracks.hasMore, isTrue);
+      expect(tracks.tracks.single.album, 'Signal Archive');
+      expect(tracks.tracks.single.artworkUri, album.artworkUri);
+      expect(tracks.tracks.single.isPlayable, isFalse);
+      expect(await provider.resolveStream(tracks.tracks.single), isNull);
+    },
+  );
 
   test('loads bounded official Spotify new-release album metadata', () async {
     Uri? requestUri;
@@ -458,7 +472,10 @@ void main() {
     expect(requestUri!.path, '/v1/browse/new-releases');
     expect(requestUri!.queryParameters['limit'], '50');
     expect(page.albums.single.title, 'New Signal');
-    expect(page.albums.single.artworkUri, Uri.parse('https://i.scdn.co/image/release'));
+    expect(
+      page.albums.single.artworkUri,
+      Uri.parse('https://i.scdn.co/image/release'),
+    );
   });
 
   test('loads read-only playlists and playlist-item metadata', () async {
@@ -540,16 +557,17 @@ void main() {
     expect(await provider.resolveStream(tracks.tracks.single), isNull);
   });
 
-  test('returns bounded official Spotify artist album and track suggestions',
-      () async {
-    Uri? requestUri;
-    String? requestToken;
-    final provider = SpotifyMetadataProvider(
-      accessTokenReader: () async => 'access-token',
-      searchLoader: (uri, token) async {
-        requestUri = uri;
-        requestToken = token;
-        return '''
+  test(
+    'returns bounded official Spotify artist album and track suggestions',
+    () async {
+      Uri? requestUri;
+      String? requestToken;
+      final provider = SpotifyMetadataProvider(
+        accessTokenReader: () async => 'access-token',
+        searchLoader: (uri, token) async {
+          requestUri = uri;
+          requestToken = token;
+          return '''
           {"artists": {"items": [
             {"name":"Mira"}
           ]}, "albums": {"items": [
@@ -560,35 +578,40 @@ void main() {
             {"id":"three","name":"Beyond","artists":[],"album":{}}
           ]}}
         ''';
-      },
-    );
+        },
+      );
 
-    final suggestions = await provider.suggest('  aether  ', limit: 3);
+      final suggestions = await provider.suggest('  aether  ', limit: 3);
 
-    expect(requestToken, 'access-token');
-    expect(requestUri!.queryParameters['q'], 'aether');
-    expect(requestUri!.queryParameters['type'], 'artist,album,track');
-    expect(requestUri!.queryParameters['limit'], '3');
-    expect(requestUri!.queryParameters['offset'], '0');
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.searchSuggestions),
-    );
-    expect(
-      suggestions.map((suggestion) => suggestion.value),
-      <String>['Mira', 'Signals', 'Aether'],
-    );
-    expect(
-      suggestions.map((suggestion) => suggestion.kind),
-      <MusicSourceSearchSuggestionKind>[
-        MusicSourceSearchSuggestionKind.artist,
-        MusicSourceSearchSuggestionKind.album,
-        MusicSourceSearchSuggestionKind.track,
-      ],
-    );
-    expect(suggestions[1].subtitle, 'Mira');
-    expect(suggestions.last.subtitle, 'Mira - Signals');
-    expect(await provider.suggest('   '), isEmpty);
-    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
-  });
+      expect(requestToken, 'access-token');
+      expect(requestUri!.queryParameters['q'], 'aether');
+      expect(requestUri!.queryParameters['type'], 'artist,album,track');
+      expect(requestUri!.queryParameters['limit'], '3');
+      expect(requestUri!.queryParameters['offset'], '0');
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.searchSuggestions),
+      );
+      expect(suggestions.map((suggestion) => suggestion.value), <String>[
+        'Mira',
+        'Signals',
+        'Aether',
+      ]);
+      expect(
+        suggestions.map((suggestion) => suggestion.kind),
+        <MusicSourceSearchSuggestionKind>[
+          MusicSourceSearchSuggestionKind.artist,
+          MusicSourceSearchSuggestionKind.album,
+          MusicSourceSearchSuggestionKind.track,
+        ],
+      );
+      expect(suggestions[1].subtitle, 'Mira');
+      expect(suggestions.last.subtitle, 'Mira - Signals');
+      expect(await provider.suggest('   '), isEmpty);
+      await expectLater(
+        provider.suggest('aether', limit: 0),
+        throwsArgumentError,
+      );
+    },
+  );
 }

@@ -41,11 +41,11 @@ class SubsonicProvider
     this.limit = 20,
     this.apiVersion = '1.16.1',
     this.clientName = 'AetherTune',
-  })  : id = id ?? 'subsonic-${Track.stableLocalId(baseUri.toString())}',
-        name = name ?? 'Navidrome / Subsonic',
-        _requestLoader = requestLoader ?? _loadSubsonicJson,
-        _artworkLoader = artworkLoader ?? loadProviderImageBytes,
-        _saltGenerator = saltGenerator ?? _randomSalt;
+  }) : id = id ?? 'subsonic-${Track.stableLocalId(baseUri.toString())}',
+       name = name ?? 'Navidrome / Subsonic',
+       _requestLoader = requestLoader ?? _loadSubsonicJson,
+       _artworkLoader = artworkLoader ?? loadProviderImageBytes,
+       _saltGenerator = saltGenerator ?? _randomSalt;
 
   static const defaultCapabilities = <MusicSourceCapability>{
     MusicSourceCapability.metadataSearch,
@@ -90,30 +90,30 @@ class SubsonicProvider
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: baseUri.host.isEmpty ? const <String>[] : <String>[
-          baseUri.host,
-        ],
-        dataSent: const <String>[
-          'username credential',
-          'salted authentication token',
-          'song search query',
-          'audio search suggestion query',
-          'explicit artist or album catalog search query',
-          'artist, album, and playlist browse identifiers',
-          'Home discovery list selection and result limit',
-          'radio seed item identifier and result limit',
-          'playlist names, membership, and track order changes',
-          'favorite track changes',
-          'favorite album changes',
-          'favorite artist changes',
-          'song stream identifier',
-          'cover art identifier',
-        ],
-        requiresUserCredentials: true,
-        cachesMetadata: true,
-        cachesMedia: true,
-        supportsDownloads: true,
-      );
+    networkDomains: baseUri.host.isEmpty
+        ? const <String>[]
+        : <String>[baseUri.host],
+    dataSent: const <String>[
+      'username credential',
+      'salted authentication token',
+      'song search query',
+      'audio search suggestion query',
+      'explicit artist or album catalog search query',
+      'artist, album, and playlist browse identifiers',
+      'Home discovery list selection and result limit',
+      'radio seed item identifier and result limit',
+      'playlist names, membership, and track order changes',
+      'favorite track changes',
+      'favorite album changes',
+      'favorite artist changes',
+      'song stream identifier',
+      'cover art identifier',
+    ],
+    requiresUserCredentials: true,
+    cachesMetadata: true,
+    cachesMedia: true,
+    supportsDownloads: true,
+  );
 
   @override
   Future<List<Track>> search(String query) {
@@ -166,11 +166,7 @@ class SubsonicProvider
     return _guardRequest(() async {
       return parseSubsonicSearchPageResponse(
         await _requestLoader(
-          _searchUri(
-            normalizedQuery,
-            offset: offset,
-            limit: boundedLimit,
-          ),
+          _searchUri(normalizedQuery, offset: offset, limit: boundedLimit),
         ),
         sourceId: id,
         requestOffset: offset,
@@ -198,32 +194,23 @@ class SubsonicProvider
         case MusicCatalogCollectionKind.artist:
           return parseSubsonicArtistsResponse(
             await _requestLoader(
-              _requestUri(
-                '/rest/getArtists.view',
-                const <String, String>{},
-              ),
+              _requestUri('/rest/getArtists.view', const <String, String>{}),
             ),
           );
         case MusicCatalogCollectionKind.album:
           return parseSubsonicAlbumListResponse(
             await _requestLoader(
-              _requestUri(
-                '/rest/getAlbumList2.view',
-                const <String, String>{
-                  'type': 'alphabeticalByName',
-                  'size': '500',
-                  'offset': '0',
-                },
-              ),
+              _requestUri('/rest/getAlbumList2.view', const <String, String>{
+                'type': 'alphabeticalByName',
+                'size': '500',
+                'offset': '0',
+              }),
             ),
           );
         case MusicCatalogCollectionKind.playlist:
           return parseSubsonicPlaylistsResponse(
             await _requestLoader(
-              _requestUri(
-                '/rest/getPlaylists.view',
-                const <String, String>{},
-              ),
+              _requestUri('/rest/getPlaylists.view', const <String, String>{}),
             ),
           );
       }
@@ -232,9 +219,7 @@ class SubsonicProvider
 
   @override
   Set<MusicCatalogCollectionKind> get pagedCollectionKinds =>
-      const <MusicCatalogCollectionKind>{
-        MusicCatalogCollectionKind.album,
-      };
+      const <MusicCatalogCollectionKind>{MusicCatalogCollectionKind.album};
 
   @override
   Set<MusicCatalogCollectionKind> get searchableCollectionKinds =>
@@ -296,19 +281,21 @@ class SubsonicProvider
       );
     }
     final boundedLimit = limit.clamp(1, 500);
-    return _guardRequest(() async => parseSubsonicSearchCollectionsResponse(
-          await _requestLoader(
-            _catalogSearchUri(
-              kind,
-              normalizedQuery,
-              offset: offset,
-              limit: boundedLimit,
-            ),
+    return _guardRequest(
+      () async => parseSubsonicSearchCollectionsResponse(
+        await _requestLoader(
+          _catalogSearchUri(
+            kind,
+            normalizedQuery,
+            offset: offset,
+            limit: boundedLimit,
           ),
-          kind: kind,
-          requestOffset: offset,
-          requestLimit: boundedLimit,
-        ));
+        ),
+        kind: kind,
+        requestOffset: offset,
+        requestLimit: boundedLimit,
+      ),
+    );
   }
 
   @override
@@ -336,14 +323,11 @@ class SubsonicProvider
     return _guardRequest(() async {
       return parseSubsonicAlbumListPageResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/getAlbumList2.view',
-            <String, String>{
-              'type': 'alphabeticalByName',
-              'size': boundedLimit.toString(),
-              'offset': offset.toString(),
-            },
-          ),
+          _requestUri('/rest/getAlbumList2.view', <String, String>{
+            'type': 'alphabeticalByName',
+            'size': boundedLimit.toString(),
+            'offset': offset.toString(),
+          }),
         ),
         requestOffset: offset,
         requestLimit: boundedLimit,
@@ -381,7 +365,9 @@ class SubsonicProvider
       final boundedLimit = limit.clamp(1, 500);
       return _guardRequest(() async {
         final artists = parseSubsonicStarredArtistsResponse(
-          await _requestLoader(_requestUri('/rest/getStarred2.view', const <String, String>{})),
+          await _requestLoader(
+            _requestUri('/rest/getStarred2.view', const <String, String>{}),
+          ),
         );
         return artists.take(boundedLimit).toList(growable: false);
       });
@@ -425,14 +411,11 @@ class SubsonicProvider
     return _guardRequest(() async {
       return parseSubsonicAlbumListPageResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/getAlbumList2.view',
-            <String, String>{
-              'type': listType,
-              'size': boundedLimit.toString(),
-              'offset': offset.toString(),
-            },
-          ),
+          _requestUri('/rest/getAlbumList2.view', <String, String>{
+            'type': listType,
+            'size': boundedLimit.toString(),
+            'offset': offset.toString(),
+          }),
         ),
         requestOffset: offset,
         requestLimit: boundedLimit,
@@ -452,31 +435,25 @@ class SubsonicProvider
     }
     return _guardRequest(
       () => _artworkLoader(
-        _requestUri(
-          '/rest/getCoverArt.view',
-          <String, String>{
-            'id': normalizedId,
-            'size': maxWidth.clamp(32, 2048).toString(),
-          },
-        ),
+        _requestUri('/rest/getCoverArt.view', <String, String>{
+          'id': normalizedId,
+          'size': maxWidth.clamp(32, 2048).toString(),
+        }),
         const <String, String>{},
       ),
     );
   }
 
   @override
-  Future<MusicCatalogDetail> loadCollection(
-    MusicCatalogCollection collection,
-  ) {
+  Future<MusicCatalogDetail> loadCollection(MusicCatalogCollection collection) {
     return _guardRequest(() async {
       switch (collection.kind) {
         case MusicCatalogCollectionKind.artist:
           final albums = parseSubsonicArtistAlbumsResponse(
             await _requestLoader(
-              _requestUri(
-                '/rest/getArtist.view',
-                <String, String>{'id': collection.id},
-              ),
+              _requestUri('/rest/getArtist.view', <String, String>{
+                'id': collection.id,
+              }),
             ),
           );
           return MusicCatalogDetail(
@@ -486,31 +463,23 @@ class SubsonicProvider
         case MusicCatalogCollectionKind.album:
           final tracks = parseSubsonicAlbumTracksResponse(
             await _requestLoader(
-              _requestUri(
-                '/rest/getAlbum.view',
-                <String, String>{'id': collection.id},
-              ),
+              _requestUri('/rest/getAlbum.view', <String, String>{
+                'id': collection.id,
+              }),
             ),
             sourceId: id,
           );
-          return MusicCatalogDetail(
-            collection: collection,
-            tracks: tracks,
-          );
+          return MusicCatalogDetail(collection: collection, tracks: tracks);
         case MusicCatalogCollectionKind.playlist:
           final tracks = parseSubsonicPlaylistTracksResponse(
             await _requestLoader(
-              _requestUri(
-                '/rest/getPlaylist.view',
-                <String, String>{'id': collection.id},
-              ),
+              _requestUri('/rest/getPlaylist.view', <String, String>{
+                'id': collection.id,
+              }),
             ),
             sourceId: id,
           );
-          return MusicCatalogDetail(
-            collection: collection,
-            tracks: tracks,
-          );
+          return MusicCatalogDetail(collection: collection, tracks: tracks);
       }
     });
   }
@@ -520,10 +489,7 @@ class SubsonicProvider
       MusicCatalogRadioSeedKind.values.toSet();
 
   @override
-  Future<List<Track>> loadRadio(
-    MusicCatalogRadioSeed seed, {
-    int limit = 50,
-  }) {
+  Future<List<Track>> loadRadio(MusicCatalogRadioSeed seed, {int limit = 50}) {
     final normalizedId = seed.id.trim();
     if (normalizedId.isEmpty) {
       return Future<List<Track>>.error(
@@ -571,13 +537,10 @@ class SubsonicProvider
     return _guardRequest(() async {
       _subsonicResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/createPlaylist.view',
-            <String, Object?>{
-              'name': normalizedName,
-              if (normalizedTrackIds.isNotEmpty) 'songId': normalizedTrackIds,
-            },
-          ),
+          _requestUri('/rest/createPlaylist.view', <String, Object?>{
+            'name': normalizedName,
+            if (normalizedTrackIds.isNotEmpty) 'songId': normalizedTrackIds,
+          }),
         ),
       );
     });
@@ -590,13 +553,10 @@ class SubsonicProvider
     return _guardRequest(() async {
       _subsonicResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/updatePlaylist.view',
-            <String, Object?>{
-              'playlistId': normalizedPlaylistId,
-              'name': normalizedName,
-            },
-          ),
+          _requestUri('/rest/updatePlaylist.view', <String, Object?>{
+            'playlistId': normalizedPlaylistId,
+            'name': normalizedName,
+          }),
         ),
       );
     });
@@ -608,10 +568,9 @@ class SubsonicProvider
     return _guardRequest(() async {
       _subsonicResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/deletePlaylist.view',
-            <String, Object?>{'id': normalizedPlaylistId},
-          ),
+          _requestUri('/rest/deletePlaylist.view', <String, Object?>{
+            'id': normalizedPlaylistId,
+          }),
         ),
       );
     });
@@ -630,35 +589,26 @@ class SubsonicProvider
     await _guardRequest(() async {
       _subsonicResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/updatePlaylist.view',
-            <String, Object?>{
-              'playlistId': normalizedPlaylistId,
-              'songIdToAdd': normalizedTrackIds,
-            },
-          ),
+          _requestUri('/rest/updatePlaylist.view', <String, Object?>{
+            'playlistId': normalizedPlaylistId,
+            'songIdToAdd': normalizedTrackIds,
+          }),
         ),
       );
     });
   }
 
   @override
-  Future<void> replacePlaylistTracks(
-    String playlistId,
-    List<String> trackIds,
-  ) {
+  Future<void> replacePlaylistTracks(String playlistId, List<String> trackIds) {
     final normalizedPlaylistId = _requiredPlaylistId(playlistId);
     final normalizedTrackIds = _playlistTrackIds(trackIds);
     return _guardRequest(() async {
       _subsonicResponse(
         await _requestLoader(
-          _requestUri(
-            '/rest/createPlaylist.view',
-            <String, Object?>{
-              'playlistId': normalizedPlaylistId,
-              if (normalizedTrackIds.isNotEmpty) 'songId': normalizedTrackIds,
-            },
-          ),
+          _requestUri('/rest/createPlaylist.view', <String, Object?>{
+            'playlistId': normalizedPlaylistId,
+            if (normalizedTrackIds.isNotEmpty) 'songId': normalizedTrackIds,
+          }),
         ),
       );
     });
@@ -684,42 +634,29 @@ class SubsonicProvider
   }
 
   Uri streamUriFor(String songId) {
-    return _requestUri(
-      '/rest/stream.view',
-      <String, String>{'id': songId},
-    );
+    return _requestUri('/rest/stream.view', <String, String>{'id': songId});
   }
 
-  Uri _searchUri(
-    String query, {
-    required int offset,
-    required int limit,
-  }) {
-    return _requestUri(
-      '/rest/search3.view',
-      <String, String>{
-        'query': query,
-        'artistCount': '0',
-        'albumCount': '0',
-        'songCount': limit.toString(),
-        'songOffset': offset.toString(),
-      },
-    );
+  Uri _searchUri(String query, {required int offset, required int limit}) {
+    return _requestUri('/rest/search3.view', <String, String>{
+      'query': query,
+      'artistCount': '0',
+      'albumCount': '0',
+      'songCount': limit.toString(),
+      'songOffset': offset.toString(),
+    });
   }
 
   Uri _suggestionsUri(String query, {required int limit}) {
-    return _requestUri(
-      '/rest/search3.view',
-      <String, String>{
-        'query': query,
-        'artistCount': limit.toString(),
-        'artistOffset': '0',
-        'albumCount': limit.toString(),
-        'albumOffset': '0',
-        'songCount': limit.toString(),
-        'songOffset': '0',
-      },
-    );
+    return _requestUri('/rest/search3.view', <String, String>{
+      'query': query,
+      'artistCount': limit.toString(),
+      'artistOffset': '0',
+      'albumCount': limit.toString(),
+      'albumOffset': '0',
+      'songCount': limit.toString(),
+      'songOffset': '0',
+    });
   }
 
   Uri _catalogSearchUri(
@@ -729,25 +666,19 @@ class SubsonicProvider
     required int limit,
   }) {
     final isArtist = kind == MusicCatalogCollectionKind.artist;
-    return _requestUri(
-      '/rest/search3.view',
-      <String, String>{
-        'query': query,
-        'artistCount': isArtist ? limit.toString() : '0',
-        'artistOffset': isArtist ? offset.toString() : '0',
-        'albumCount': isArtist ? '0' : limit.toString(),
-        'albumOffset': isArtist ? '0' : offset.toString(),
-        'songCount': '0',
-        'songOffset': '0',
-      },
-    );
+    return _requestUri('/rest/search3.view', <String, String>{
+      'query': query,
+      'artistCount': isArtist ? limit.toString() : '0',
+      'artistOffset': isArtist ? offset.toString() : '0',
+      'albumCount': isArtist ? '0' : limit.toString(),
+      'albumOffset': isArtist ? '0' : offset.toString(),
+      'songCount': '0',
+      'songOffset': '0',
+    });
   }
 
   @override
-  Future<void> setTrackFavorite(
-    String trackId, {
-    required bool isFavorite,
-  }) {
+  Future<void> setTrackFavorite(String trackId, {required bool isFavorite}) {
     final normalizedTrackId = _requiredPlaylistId(trackId);
     return _guardRequest(() async {
       _subsonicResponse(
@@ -762,10 +693,7 @@ class SubsonicProvider
   }
 
   @override
-  Future<void> setAlbumFavorite(
-    String albumId, {
-    required bool isFavorite,
-  }) {
+  Future<void> setAlbumFavorite(String albumId, {required bool isFavorite}) {
     final normalizedAlbumId = _requiredPlaylistId(albumId);
     return _guardRequest(() async {
       _subsonicResponse(
@@ -858,11 +786,7 @@ final class SubsonicSong {
   final String suffix;
   final bool isFavorite;
 
-  Track toTrack({
-    required String sourceId,
-    Uri? streamUri,
-    Uri? artworkUri,
-  }) {
+  Track toTrack({required String sourceId, Uri? streamUri, Uri? artworkUri}) {
     return Track(
       id: Track.stableLocalId('$sourceId|$id'),
       title: title.isEmpty ? id : title,
@@ -963,10 +887,7 @@ List<MusicSourceSearchSuggestion> parseSubsonicSearchSuggestionsResponse(
       continue;
     }
     final artist = rawArtist.cast<String, Object?>();
-    add(
-      _stringValue(artist['name']),
-      MusicSourceSearchSuggestionKind.artist,
-    );
+    add(_stringValue(artist['name']), MusicSourceSearchSuggestionKind.artist);
   }
   for (final rawAlbum in _jsonList(searchResult['album'])) {
     if (rawAlbum is! Map<dynamic, dynamic>) {
@@ -1013,8 +934,7 @@ MusicCatalogCollectionPage parseSubsonicSearchCollectionsResponse(
   return MusicCatalogCollectionPage(
     collections: List<MusicCatalogCollection>.unmodifiable(collections),
     nextOffset: nextOffset,
-    hasMore:
-        rawCollections.isNotEmpty && rawCollections.length >= requestLimit,
+    hasMore: rawCollections.isNotEmpty && rawCollections.length >= requestLimit,
   );
 }
 
@@ -1028,10 +948,12 @@ List<MusicCatalogCollection> parseSubsonicArtistsResponse(String jsonText) {
       .whereType<Map<dynamic, dynamic>>()
       .expand((index) => _jsonList(index['artist']))
       .whereType<Map<dynamic, dynamic>>()
-      .map((artist) => _subsonicCollection(
-            artist.cast<String, Object?>(),
-            MusicCatalogCollectionKind.artist,
-          ))
+      .map(
+        (artist) => _subsonicCollection(
+          artist.cast<String, Object?>(),
+          MusicCatalogCollectionKind.artist,
+        ),
+      )
       .whereType<MusicCatalogCollection>()
       .toList(growable: false);
 }
@@ -1042,10 +964,7 @@ List<MusicCatalogCollection> parseSubsonicAlbumListResponse(String jsonText) {
   if (list is! Map<dynamic, dynamic>) {
     return const <MusicCatalogCollection>[];
   }
-  return _subsonicCollections(
-    list['album'],
-    MusicCatalogCollectionKind.album,
-  );
+  return _subsonicCollections(list['album'], MusicCatalogCollectionKind.album);
 }
 
 MusicCatalogCollectionPage parseSubsonicAlbumListPageResponse(
@@ -1126,9 +1045,7 @@ List<Track> parseSubsonicSimilarSongsResponse(
   required bool id3Response,
 }) {
   final response = _subsonicResponse(jsonText);
-  final similarSongs = response[
-    id3Response ? 'similarSongs2' : 'similarSongs'
-  ];
+  final similarSongs = response[id3Response ? 'similarSongs2' : 'similarSongs'];
   if (similarSongs is! Map<dynamic, dynamic>) {
     return const <Track>[];
   }
@@ -1303,17 +1220,19 @@ String _requiredPlaylistId(String playlistId) {
 }
 
 List<String> _playlistTrackIds(List<String> trackIds) {
-  return trackIds.map((trackId) {
-    final normalized = trackId.trim();
-    if (normalized.isEmpty) {
-      throw ArgumentError.value(
-        trackIds,
-        'trackIds',
-        'Playlist track IDs cannot be empty.',
-      );
-    }
-    return normalized;
-  }).toList(growable: false);
+  return trackIds
+      .map((trackId) {
+        final normalized = trackId.trim();
+        if (normalized.isEmpty) {
+          throw ArgumentError.value(
+            trackIds,
+            'trackIds',
+            'Playlist track IDs cannot be empty.',
+          );
+        }
+        return normalized;
+      })
+      .toList(growable: false);
 }
 
 List<Object?> _jsonList(Object? value) {
@@ -1328,9 +1247,7 @@ List<Object?> _jsonList(Object? value) {
 }
 
 String _hexEncode(List<int> bytes) {
-  return bytes
-      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-      .join();
+  return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
 }
 
 String _randomSalt() {

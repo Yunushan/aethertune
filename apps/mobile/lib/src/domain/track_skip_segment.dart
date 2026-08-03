@@ -21,7 +21,9 @@ String decodeTrackSkipSegmentDocumentBytes(
     throw const FormatException('Choose a .txt skip-segment file.');
   }
   if (bytes.length > trackSkipSegmentDocumentMaxBytes) {
-    throw const FormatException('Skip-segment files must be 64 KiB or smaller.');
+    throw const FormatException(
+      'Skip-segment files must be 64 KiB or smaller.',
+    );
   }
   try {
     return utf8.decode(bytes, allowMalformed: false);

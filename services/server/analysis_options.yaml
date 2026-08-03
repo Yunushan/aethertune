@@ -1,5 +1,9 @@
 include: package:lints/recommended.yaml
 
+analyzer:
+  errors:
+    require_trailing_commas: error
+
 linter:
   rules:
     prefer_single_quotes: true

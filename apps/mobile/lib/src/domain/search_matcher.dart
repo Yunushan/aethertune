@@ -1,15 +1,9 @@
 final class SearchQuery {
-  const SearchQuery._({
-    required this.raw,
-    required this.terms,
-  });
+  const SearchQuery._({required this.raw, required this.terms});
 
   factory SearchQuery.parse(String query) {
     final raw = normalizeSearchText(query);
-    return SearchQuery._(
-      raw: raw,
-      terms: _searchTerms(raw),
-    );
+    return SearchQuery._(raw: raw, terms: _searchTerms(raw));
   }
 
   final String raw;
@@ -73,11 +67,7 @@ bool searchFieldsMatch(Iterable<String> values, SearchQuery query) {
   );
 }
 
-int searchTextScore(
-  String value,
-  SearchQuery query, {
-  required int exact,
-}) {
+int searchTextScore(String value, SearchQuery query, {required int exact}) {
   if (query.isEmpty) {
     return 0;
   }
@@ -196,11 +186,7 @@ int _tokenDistance(String term, String token, int maxDistance) {
   return distance;
 }
 
-int _boundedDamerauLevenshtein(
-  String source,
-  String target,
-  int maxDistance,
-) {
+int _boundedDamerauLevenshtein(String source, String target, int maxDistance) {
   if ((source.length - target.length).abs() > maxDistance) {
     return maxDistance + 1;
   }
@@ -211,7 +197,8 @@ int _boundedDamerauLevenshtein(
   for (var sourceIndex = 1; sourceIndex <= source.length; sourceIndex += 1) {
     final current = List<int>.filled(target.length + 1, sourceIndex);
     for (var targetIndex = 1; targetIndex <= target.length; targetIndex += 1) {
-      final substitutionCost = source.codeUnitAt(sourceIndex - 1) ==
+      final substitutionCost =
+          source.codeUnitAt(sourceIndex - 1) ==
               target.codeUnitAt(targetIndex - 1)
           ? 0
           : 1;

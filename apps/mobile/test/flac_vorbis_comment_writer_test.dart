@@ -11,7 +11,9 @@ void main() {
   late Directory temporaryDirectory;
 
   setUp(() async {
-    temporaryDirectory = await Directory.systemTemp.createTemp('aethertune-flac-');
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'aethertune-flac-',
+    );
   });
 
   tearDown(() async {
@@ -117,9 +119,9 @@ void main() {
       ],
     );
 
-    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
-        .tracks
-        .single;
+    final track = (await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+    )).tracks.single;
     final bytes = await file.readAsBytes();
     expect(track.chapters.map((chapter) => chapter.title), <String>[
       'Opening',
@@ -129,7 +131,10 @@ void main() {
       track.chapters[1].start,
       const Duration(minutes: 1, seconds: 2, milliseconds: 500),
     );
-    expect(_containsBytes(bytes, ascii.encode('CHAPTER001NAME=Old chapter')), isFalse);
+    expect(
+      _containsBytes(bytes, ascii.encode('CHAPTER001NAME=Old chapter')),
+      isFalse,
+    );
     expect(
       _containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')),
       isTrue,
@@ -138,20 +143,7 @@ void main() {
 
   test('leaves malformed Vorbis comments untouched', () async {
     final file = File('${temporaryDirectory.path}/malformed.flac');
-    final original = <int>[
-      0x66,
-      0x4c,
-      0x61,
-      0x43,
-      0x84,
-      0,
-      0,
-      1,
-      0,
-      1,
-      2,
-      3,
-    ];
+    final original = <int>[0x66, 0x4c, 0x61, 0x43, 0x84, 0, 0, 1, 0, 1, 2, 3];
     await file.writeAsBytes(original);
 
     await expectLater(
@@ -243,7 +235,9 @@ List<int> _audioPayload(List<int> bytes) {
   while (true) {
     final isLast = (bytes[offset] & 0x80) != 0;
     final length =
-        (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+        (bytes[offset + 1] << 16) |
+        (bytes[offset + 2] << 8) |
+        bytes[offset + 3];
     offset += 4 + length;
     if (isLast) {
       return bytes.sublist(offset);

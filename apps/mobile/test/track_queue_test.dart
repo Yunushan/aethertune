@@ -105,16 +105,15 @@ void main() {
     });
 
     expect(snapshot.currentIndex, 2);
-    expect(snapshot.toJson()['version'], TrackQueueReferenceSnapshot.syncVersion);
+    expect(
+      snapshot.toJson()['version'],
+      TrackQueueReferenceSnapshot.syncVersion,
+    );
     expect(snapshot.toJson()['currentIndex'], 2);
   });
 
   test('moves queue items without mutating the original queue', () {
-    final queue = <Track>[
-      _track('1'),
-      _track('2'),
-      _track('3'),
-    ];
+    final queue = <Track>[_track('1'), _track('2'), _track('3')];
 
     final reordered = moveQueueItem(queue, 2, 0);
 
@@ -125,27 +124,22 @@ void main() {
   test('ignores invalid queue move indexes', () {
     final queue = <Track>[_track('1'), _track('2')];
 
-    expect(
-      moveQueueItem(queue, -1, 1).map((track) => track.id),
-      <String>['1', '2'],
-    );
-    expect(
-      moveQueueItem(queue, 0, 9).map((track) => track.id),
-      <String>['1', '2'],
-    );
-    expect(
-      moveQueueItem(queue, 1, 1).map((track) => track.id),
-      <String>['1', '2'],
-    );
+    expect(moveQueueItem(queue, -1, 1).map((track) => track.id), <String>[
+      '1',
+      '2',
+    ]);
+    expect(moveQueueItem(queue, 0, 9).map((track) => track.id), <String>[
+      '1',
+      '2',
+    ]);
+    expect(moveQueueItem(queue, 1, 1).map((track) => track.id), <String>[
+      '1',
+      '2',
+    ]);
   });
 
   test('removes matching tracks from queue order', () {
-    final queue = <Track>[
-      _track('1'),
-      _track('2'),
-      _track('1'),
-      _track('3'),
-    ];
+    final queue = <Track>[_track('1'), _track('2'), _track('1'), _track('3')];
 
     final remaining = removeTrackFromQueueItems(queue, '1');
 
@@ -155,9 +149,5 @@ void main() {
 }
 
 Track _track(String id) {
-  return Track(
-    id: id,
-    title: 'Track $id',
-    localPath: '/music/$id.mp3',
-  );
+  return Track(id: id, title: 'Track $id', localPath: '/music/$id.mp3');
 }

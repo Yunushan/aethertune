@@ -177,7 +177,9 @@ Future<_OggWritePlan> _buildWritePlan(
   ]);
   final lacing = _packetLacing(updatedPacket.length);
   if (lacing.length > 255) {
-    throw const FormatException('Updated Ogg/Opus comment packet is too large.');
+    throw const FormatException(
+      'Updated Ogg/Opus comment packet is too large.',
+    );
   }
 
   return _OggWritePlan(
@@ -228,10 +230,27 @@ Future<_OggPage> _readOggPage(
 }
 
 _OggCodec? _codecForIdentificationPacket(List<int> packet) {
-  if (_startsWithBytes(packet, const <int>[1, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73])) {
+  if (_startsWithBytes(packet, const <int>[
+    1,
+    0x76,
+    0x6f,
+    0x72,
+    0x62,
+    0x69,
+    0x73,
+  ])) {
     return _OggCodec.vorbis;
   }
-  if (_startsWithBytes(packet, const <int>[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64])) {
+  if (_startsWithBytes(packet, const <int>[
+    0x4f,
+    0x70,
+    0x75,
+    0x73,
+    0x48,
+    0x65,
+    0x61,
+    0x64,
+  ])) {
     return _OggCodec.opus;
   }
   return null;
@@ -312,11 +331,7 @@ Uint8List _updatedVorbisComments({
   return output.takeBytes();
 }
 
-Uint8List _updatedPage(
-  _OggPage original,
-  List<int> lacing,
-  List<int> body,
-) {
+Uint8List _updatedPage(_OggPage original, List<int> lacing, List<int> body) {
   final bytes = BytesBuilder(copy: false)
     ..add(original.header.sublist(0, 22))
     ..add(const <int>[0, 0, 0, 0])
@@ -393,9 +408,13 @@ Future<void> _copyRange(
   await source.setPosition(start);
   var remaining = length;
   while (remaining > 0) {
-    final chunk = await source.read(remaining > 64 * 1024 ? 64 * 1024 : remaining);
+    final chunk = await source.read(
+      remaining > 64 * 1024 ? 64 * 1024 : remaining,
+    );
     if (chunk.isEmpty) {
-      throw const FileSystemException('Ogg file ended unexpectedly while copying.');
+      throw const FileSystemException(
+        'Ogg file ended unexpectedly while copying.',
+      );
     }
     await output.writeFrom(chunk);
     remaining -= chunk.length;
@@ -424,9 +443,9 @@ bool _isChapterComment(String comment) {
   if (separator <= 0) {
     return false;
   }
-  return RegExp(r'^CHAPTER\d{1,3}(?:NAME)?$').hasMatch(
-    comment.substring(0, separator).toUpperCase(),
-  );
+  return RegExp(
+    r'^CHAPTER\d{1,3}(?:NAME)?$',
+  ).hasMatch(comment.substring(0, separator).toUpperCase());
 }
 
 List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
@@ -435,10 +454,14 @@ List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
   }
   final normalized = TrackChapter.normalize(chapters);
   if (normalized.length > _maxVorbisChapters) {
-    throw const FormatException('Ogg/Opus chapter markers exceed the 255-item limit.');
+    throw const FormatException(
+      'Ogg/Opus chapter markers exceed the 255-item limit.',
+    );
   }
   if (normalized.any((chapter) => chapter.start.inHours > 999)) {
-    throw const FormatException('Ogg/Opus chapter markers exceed the 999-hour limit.');
+    throw const FormatException(
+      'Ogg/Opus chapter markers exceed the 999-hour limit.',
+    );
   }
   return normalized;
 }

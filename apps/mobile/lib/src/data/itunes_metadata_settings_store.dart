@@ -4,16 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/music_source_provider.dart';
 import 'itunes_metadata_provider.dart';
 
-typedef ItunesMetadataProviderFactory = ItunesMetadataProvider Function(
-  String country,
-);
+typedef ItunesMetadataProviderFactory =
+    ItunesMetadataProvider Function(String country);
 
 /// Persists the credential-free iTunes Store storefront used for metadata
 /// searches. A storefront choice affects only future public API requests.
 final class ItunesMetadataSettingsStore extends ChangeNotifier {
-  ItunesMetadataSettingsStore({
-    ItunesMetadataProviderFactory? providerFactory,
-  }) : _providerFactory = providerFactory ?? _createProvider;
+  ItunesMetadataSettingsStore({ItunesMetadataProviderFactory? providerFactory})
+    : _providerFactory = providerFactory ?? _createProvider;
 
   static const _storefrontKey = 'aethertune.itunes_metadata.storefront.v1';
 
@@ -32,8 +30,9 @@ final class ItunesMetadataSettingsStore extends ChangeNotifier {
   ItunesMetadataProvider get provider =>
       _provider ??= _providerFactory(_country);
 
-  List<MusicSourceProvider> get musicProviders =>
-      <MusicSourceProvider>[provider];
+  List<MusicSourceProvider> get musicProviders => <MusicSourceProvider>[
+    provider,
+  ];
 
   Future<void> load() async {
     if (_loaded) {

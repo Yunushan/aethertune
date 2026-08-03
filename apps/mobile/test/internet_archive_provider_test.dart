@@ -35,10 +35,7 @@ void main() {
       Uri.parse('https://archive.org/services/img/aether_session'),
     );
     expect(track.externalId, 'aether_session|aether-session-vbr.mp3');
-    expect(
-      track.expectedMediaChecksum,
-      'md5:0123456789abcdef0123456789abcdef',
-    );
+    expect(track.expectedMediaChecksum, 'md5:0123456789abcdef0123456789abcdef');
     expect(
       item
           .toTracks(
@@ -141,39 +138,47 @@ void main() {
     },
   );
 
-  test('returns bounded Archive suggestions without fetching item metadata',
-      () async {
-    Uri? capturedSearchUri;
-    var metadataRequests = 0;
-    final provider = InternetArchiveProvider(
-      baseUri: Uri.parse('https://archive.org'),
-      searchLoader: (uri) async {
-        capturedSearchUri = uri;
-        return _searchResultsJson;
-      },
-      metadataLoader: (_) async {
-        metadataRequests += 1;
-        throw StateError('Type-ahead must not load item metadata.');
-      },
-    );
+  test(
+    'returns bounded Archive suggestions without fetching item metadata',
+    () async {
+      Uri? capturedSearchUri;
+      var metadataRequests = 0;
+      final provider = InternetArchiveProvider(
+        baseUri: Uri.parse('https://archive.org'),
+        searchLoader: (uri) async {
+          capturedSearchUri = uri;
+          return _searchResultsJson;
+        },
+        metadataLoader: (_) async {
+          metadataRequests += 1;
+          throw StateError('Type-ahead must not load item metadata.');
+        },
+      );
 
-    final suggestions = await provider.suggest('  aether  ', limit: 1);
+      final suggestions = await provider.suggest('  aether  ', limit: 1);
 
-    expect(capturedSearchUri!.path, '/advancedsearch.php');
-    expect(capturedSearchUri!.queryParameters['q'], 'mediatype:audio AND (aether)');
-    expect(capturedSearchUri!.queryParameters['rows'], '1');
-    expect(
-      capturedSearchUri!.queryParametersAll.containsKey('facet[]'),
-      isFalse,
-    );
-    expect(metadataRequests, 0);
-    expect(suggestions, hasLength(1));
-    expect(suggestions.single.value, 'Aether Public Session');
-    expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.album);
-    expect(suggestions.single.subtitle, 'Internet Archive item');
-    expect(await provider.suggest('   '), isEmpty);
-    await expectLater(provider.suggest('aether', limit: 0), throwsArgumentError);
-  });
+      expect(capturedSearchUri!.path, '/advancedsearch.php');
+      expect(
+        capturedSearchUri!.queryParameters['q'],
+        'mediatype:audio AND (aether)',
+      );
+      expect(capturedSearchUri!.queryParameters['rows'], '1');
+      expect(
+        capturedSearchUri!.queryParametersAll.containsKey('facet[]'),
+        isFalse,
+      );
+      expect(metadataRequests, 0);
+      expect(suggestions, hasLength(1));
+      expect(suggestions.single.value, 'Aether Public Session');
+      expect(suggestions.single.kind, MusicSourceSearchSuggestionKind.album);
+      expect(suggestions.single.subtitle, 'Internet Archive item');
+      expect(await provider.suggest('   '), isEmpty);
+      await expectLater(
+        provider.suggest('aether', limit: 0),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('search page requests and exposes archive facet suggestions', () async {
     Uri? capturedSearchUri;
@@ -261,9 +266,7 @@ void main() {
               identifiers: <String>['fifth'],
             );
           default:
-            throw StateError(
-              'Unexpected page ${uri.queryParameters['page']}.',
-            );
+            throw StateError('Unexpected page ${uri.queryParameters['page']}.');
         }
       },
       metadataLoader: (uri) async {
@@ -311,11 +314,7 @@ void main() {
       },
     );
 
-    final page = await provider.searchPage(
-      'ambient',
-      cursor: '2',
-      limit: 1,
-    );
+    final page = await provider.searchPage('ambient', cursor: '2', limit: 1);
 
     expect(provider, isA<MusicSourceSearchPagingProvider>());
     expect(page.tracks.single.title, 'Archive second');
@@ -323,7 +322,10 @@ void main() {
     expect(page.totalCount, 3);
     expect(searchUris.single.queryParameters['page'], '2');
     expect(searchUris.single.queryParameters['rows'], '1');
-    expect(searchUris.single.queryParametersAll.containsKey('facet[]'), isFalse);
+    expect(
+      searchUris.single.queryParametersAll.containsKey('facet[]'),
+      isFalse,
+    );
 
     await expectLater(
       provider.searchPage('ambient', cursor: '0'),

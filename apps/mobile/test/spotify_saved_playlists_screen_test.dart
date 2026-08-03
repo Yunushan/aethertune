@@ -27,7 +27,9 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<LibraryStore>.value(
         value: library,
-        child: MaterialApp(home: SpotifySavedPlaylistsScreen(provider: provider)),
+        child: MaterialApp(
+          home: SpotifySavedPlaylistsScreen(provider: provider),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -39,9 +41,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Playlist Signal'), findsNWidgets(2));
-    await tester.tap(
-      find.byTooltip('Save loaded metadata as local playlist'),
-    );
+    await tester.tap(find.byTooltip('Save loaded metadata as local playlist'));
     await tester.pumpAndSettle();
 
     expect(library.playlists.single.name, 'Signal Queue');

@@ -12,21 +12,24 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  test('enters Android Picture-in-Picture through its platform channel', () async {
-    MethodCall? call;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (incoming) async {
-          call = incoming;
-          return true;
-        });
-    final bridge = AndroidVideoPictureInPictureBridge(
-      channel: channel,
-      isAndroid: () => true,
-    );
+  test(
+    'enters Android Picture-in-Picture through its platform channel',
+    () async {
+      MethodCall? call;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (incoming) async {
+            call = incoming;
+            return true;
+          });
+      final bridge = AndroidVideoPictureInPictureBridge(
+        channel: channel,
+        isAndroid: () => true,
+      );
 
-    expect(await bridge.enter(), isTrue);
-    expect(call?.method, 'enter');
-  });
+      expect(await bridge.enter(), isTrue);
+      expect(call?.method, 'enter');
+    },
+  );
 
   test('does not invoke PiP outside Android and absorbs failures', () async {
     final outsideAndroid = AndroidVideoPictureInPictureBridge(

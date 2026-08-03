@@ -13,10 +13,17 @@ ExecStart=/usr/local/bin/aethertune-server
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes
+PrivateDevices=yes
 PrivateTmp=yes
 ProtectHome=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/aethertune
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictSUIDSGID=yes
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

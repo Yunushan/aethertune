@@ -12,8 +12,8 @@ final class PodcastSubscription {
     this.lastFetchedAt,
     this.lastFetchError = '',
     Iterable<Track> episodes = const <Track>[],
-  })  : addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        episodes = List<Track>.unmodifiable(_normalizeEpisodes(episodes));
+  }) : addedAt = addedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+       episodes = List<Track>.unmodifiable(_normalizeEpisodes(episodes));
 
   final String id;
   final String feedUrl;
@@ -60,8 +60,9 @@ final class PodcastSubscription {
       author: author ?? this.author,
       artworkUri: clearArtworkUri ? null : artworkUri ?? this.artworkUri,
       addedAt: addedAt ?? this.addedAt,
-      lastFetchedAt:
-          clearLastFetchedAt ? null : lastFetchedAt ?? this.lastFetchedAt,
+      lastFetchedAt: clearLastFetchedAt
+          ? null
+          : lastFetchedAt ?? this.lastFetchedAt,
       lastFetchError: lastFetchError ?? this.lastFetchError,
       episodes: episodes ?? this.episodes,
     );
@@ -91,7 +92,8 @@ final class PodcastSubscription {
       description: json['description'] as String? ?? '',
       author: json['author'] as String? ?? '',
       artworkUri: _parseUri(json['artworkUri'] as String?),
-      addedAt: DateTime.tryParse(json['addedAt'] as String? ?? '') ??
+      addedAt:
+          DateTime.tryParse(json['addedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       lastFetchedAt: DateTime.tryParse(json['lastFetchedAt'] as String? ?? ''),
       lastFetchError: json['lastFetchError'] as String? ?? '',

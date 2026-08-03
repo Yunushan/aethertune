@@ -131,9 +131,7 @@ final class ProviderPrivacyDisclosure {
   bool get usesNetwork => networkDomains.isNotEmpty;
 
   bool get isLocalOnly =>
-      !usesNetwork &&
-      !requiresUserCredentials &&
-      dataSent.isEmpty;
+      !usesNetwork && !requiresUserCredentials && dataSent.isEmpty;
 
   String get networkSummary {
     if (!usesNetwork) {
@@ -183,10 +181,7 @@ final class OfflineMediaPolicy {
     return evaluate(track, OfflineMediaAction.download).isAllowed;
   }
 
-  OfflineMediaPolicyDecision evaluate(
-    Track track,
-    OfflineMediaAction action,
-  ) {
+  OfflineMediaPolicyDecision evaluate(Track track, OfflineMediaAction action) {
     if (track.localPath != null && track.localPath!.trim().isNotEmpty) {
       return OfflineMediaPolicyDecision(
         action: action,

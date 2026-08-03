@@ -11,9 +11,9 @@ class Playlist {
     this.artworkCrop = ArtworkCrop.centered,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : trackIds = List.unmodifiable(trackIds),
-        createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : trackIds = List.unmodifiable(trackIds),
+       createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+       updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String id;
   final String name;
@@ -73,9 +73,11 @@ class Playlist {
       folder: json['folder'] as String? ?? '',
       artworkUri: _parseUri(json['artworkUri'] as String?),
       artworkCrop: ArtworkCrop.fromJson(json['artworkCrop']),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }

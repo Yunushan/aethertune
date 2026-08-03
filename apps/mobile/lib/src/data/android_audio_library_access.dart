@@ -99,7 +99,8 @@ final class AndroidSafTreeMaterialization {
   ) {
     final stagingRootPath = value['stagingRootPath'] as String?;
     final rawFiles = value['audioFiles'];
-    if (stagingRootPath == null || stagingRootPath.trim().isEmpty ||
+    if (stagingRootPath == null ||
+        stagingRootPath.trim().isEmpty ||
         rawFiles is! List) {
       throw const FormatException('Android returned an invalid SAF tree scan.');
     }

@@ -10,9 +10,7 @@ void main() {
   ) async {
     final rotatedSecrets = <String>[];
     await tester.pumpWidget(
-      _RotationHarness(
-        onRotate: (secret) async => rotatedSecrets.add(secret),
-      ),
+      _RotationHarness(onRotate: (secret) async => rotatedSecrets.add(secret)),
     );
 
     await tester.tap(find.text('Open rotation'));

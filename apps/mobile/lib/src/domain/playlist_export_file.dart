@@ -2,7 +2,10 @@ String playlistExportFileName({
   required String playlistName,
   required String extension,
 }) {
-  final normalizedExtension = extension.trim().replaceFirst(RegExp(r'^\.+'), '');
+  final normalizedExtension = extension.trim().replaceFirst(
+    RegExp(r'^\.+'),
+    '',
+  );
   if (normalizedExtension.isEmpty) {
     throw ArgumentError.value(extension, 'extension', 'must not be empty');
   }

@@ -25,7 +25,7 @@ For the full project introduction, release artifacts, and server overview, see t
 ## Run
 
 ```bash
-flutter pub get
+flutter pub get --enforce-lockfile
 flutter run
 ```
 

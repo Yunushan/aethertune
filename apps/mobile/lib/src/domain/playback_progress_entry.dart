@@ -33,7 +33,8 @@ final class PlaybackProgressEntry {
       trackId: json['trackId'] as String,
       position: Duration(milliseconds: json['positionMs'] as int? ?? 0),
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }

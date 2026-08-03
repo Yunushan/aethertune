@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:flutter/foundation.dart';
 
 import '../domain/listen_together_session.dart';
@@ -18,8 +21,8 @@ class ListenTogetherStore extends ChangeNotifier {
   ListenTogetherStore({
     ListenTogetherGatewayFactory? gatewayFactory,
     ListenTogetherClock? clock,
-  })  : _gatewayFactory = gatewayFactory,
-        _clock = clock ?? DateTime.now;
+  }) : _gatewayFactory = gatewayFactory,
+       _clock = clock ?? DateTime.now;
 
   ListenTogetherGatewayFactory? _gatewayFactory;
   final ListenTogetherClock _clock;
@@ -115,7 +118,9 @@ class ListenTogetherStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       _requireOnline(library);
-      final remote = await _requireGateway().fetchListenTogetherInvite(inviteCode);
+      final remote = await _requireGateway().fetchListenTogetherInvite(
+        inviteCode,
+      );
       final shared = remote.session;
       if (shared == null) {
         throw StateError('That listen-together invite has ended.');
@@ -232,9 +237,12 @@ class ListenTogetherStore extends ChangeNotifier {
     );
     final sourceCurrentIndex = playerCurrentIndex ?? fallbackCurrentIndex;
     if (trackIds.isEmpty) {
-      throw StateError('Queue a library track before starting a shared session.');
+      throw StateError(
+        'Queue a library track before starting a shared session.',
+      );
     }
-    final hasLocalCurrent = sourceCurrentIndex >= 0 &&
+    final hasLocalCurrent =
+        sourceCurrentIndex >= 0 &&
         sourceCurrentIndex < playerQueue.length &&
         libraryIds.contains(playerQueue[sourceCurrentIndex].id);
     var currentIndex = hasLocalCurrent
@@ -288,7 +296,9 @@ class ListenTogetherStore extends ChangeNotifier {
         .toList(growable: false);
     _unavailableTrackCount = session.trackIds.length - queue.length;
     if (queue.isEmpty) {
-      throw StateError('None of the shared tracks are available in this library.');
+      throw StateError(
+        'None of the shared tracks are available in this library.',
+      );
     }
     final requestedCurrentIndex = _currentIndexForSession(session);
     final requestedCurrentId = requestedCurrentIndex == null
@@ -310,8 +320,7 @@ class ListenTogetherStore extends ChangeNotifier {
         : _positionAtReceipt(session, updatedAt);
     if (_matchesActiveQueue(player, queue, current, currentQueueIndex)) {
       final drift = targetPosition - player.position;
-      if (drift.inMilliseconds.abs() >
-          _positionDriftTolerance.inMilliseconds) {
+      if (drift.inMilliseconds.abs() > _positionDriftTolerance.inMilliseconds) {
         await player.seek(targetPosition);
       }
       if (player.isPlaying != session.playing) {
@@ -337,7 +346,9 @@ class ListenTogetherStore extends ChangeNotifier {
       return currentIndex;
     }
     final currentTrackId = session.currentTrackId;
-    return currentTrackId == null ? null : session.trackIds.indexOf(currentTrackId);
+    return currentTrackId == null
+        ? null
+        : session.trackIds.indexOf(currentTrackId);
   }
 
   int _resolvedQueueIndexForSessionIndex(
@@ -415,7 +426,9 @@ class ListenTogetherStore extends ChangeNotifier {
 
   void _requireOnline(LibraryStore library) {
     if (library.offlineModeEnabled) {
-      throw StateError('Turn off offline mode before joining a shared session.');
+      throw StateError(
+        'Turn off offline mode before joining a shared session.',
+      );
     }
   }
 

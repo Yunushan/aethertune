@@ -18,10 +18,12 @@ final class SpotifyTopArtistsScreen extends StatefulWidget {
   final bool followedArtists;
 
   @override
-  State<SpotifyTopArtistsScreen> createState() => _SpotifyTopArtistsScreenState();
+  State<SpotifyTopArtistsScreen> createState() =>
+      _SpotifyTopArtistsScreenState();
 }
 
-final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen> {
+final class _SpotifyTopArtistsScreenState
+    extends State<SpotifyTopArtistsScreen> {
   List<SpotifyTopArtist> _artists = const <SpotifyTopArtist>[];
   SpotifyTopTracksTimeRange _range = SpotifyTopTracksTimeRange.mediumTerm;
   bool _loading = false;
@@ -120,7 +122,9 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
                 label: Text(_loadMoreLabel),
               ),
             )
-          else if (widget.followedArtists && _artists.isNotEmpty && _total != null)
+          else if (widget.followedArtists &&
+              _artists.isNotEmpty &&
+              _total != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
@@ -158,7 +162,9 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
         );
         if (!mounted || request != _requestSerial) return;
         setState(() {
-          _artists = reset ? page.artists : _mergeArtists(_artists, page.artists);
+          _artists = reset
+              ? page.artists
+              : _mergeArtists(_artists, page.artists);
           _nextAfter = page.nextAfter;
           _total = page.total;
           _hasMore = page.hasMore && page.artists.isNotEmpty;
@@ -207,8 +213,9 @@ final class _SpotifyTopArtistsScreenState extends State<SpotifyTopArtistsScreen>
 
   String get _description =>
       widget.followedArtists ? 'followed artists' : 'top artists';
-  String get _title =>
-      widget.followedArtists ? 'Spotify followed artists' : 'Spotify top artists';
+  String get _title => widget.followedArtists
+      ? 'Spotify followed artists'
+      : 'Spotify top artists';
   String get _loadMoreLabel {
     final total = _total;
     if (total == null) return 'Load more $_description';

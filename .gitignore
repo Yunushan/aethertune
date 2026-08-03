@@ -7,12 +7,20 @@
 .pub/
 build/
 coverage/
+__pycache__/
 
 # Android
 .gradle/
 local.properties
 *.jks
 *.keystore
+
+# The release build type is customized for production signing.
+!/apps/mobile/android/
+/apps/mobile/android/*
+!/apps/mobile/android/app/
+/apps/mobile/android/app/*
+!/apps/mobile/android/app/build.gradle.kts
 
 # iOS
 Pods/
@@ -33,10 +41,7 @@ Thumbs.db
 # Track platform-specific settings explicitly only when they cannot be recreated.
 /apps/mobile/.gitignore
 /apps/mobile/.metadata
-/apps/mobile/android/
 /apps/mobile/ios/
 /apps/mobile/linux/
 /apps/mobile/macos/
 /apps/mobile/windows/
-/apps/mobile/pubspec.lock
-/services/server/pubspec.lock

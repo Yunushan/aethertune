@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethertune/src/ui/widgets/track_artwork.dart';
 
 void main() {
-  testWidgets('renders data artwork and falls back without art', (tester) async {
+  testWidgets('renders data artwork and falls back without art', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

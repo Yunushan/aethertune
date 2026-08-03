@@ -107,9 +107,7 @@ final class _ChannelFeedResponse {
     required this.videos,
   });
 
-  const _ChannelFeedResponse.failure()
-    : channelTitle = null,
-      videos = null;
+  const _ChannelFeedResponse.failure() : channelTitle = null, videos = null;
 
   final String? channelTitle;
   final List<YouTubeDataChannelVideo>? videos;
@@ -122,7 +120,9 @@ int _compareFeedItems(
   final firstTime = first.publishedAt;
   final secondTime = second.publishedAt;
   if (firstTime == null && secondTime == null) {
-    return first.track.title.toLowerCase().compareTo(second.track.title.toLowerCase());
+    return first.track.title.toLowerCase().compareTo(
+      second.track.title.toLowerCase(),
+    );
   }
   if (firstTime == null) {
     return 1;
@@ -133,5 +133,7 @@ int _compareFeedItems(
   final byTime = secondTime.compareTo(firstTime);
   return byTime != 0
       ? byTime
-      : first.track.title.toLowerCase().compareTo(second.track.title.toLowerCase());
+      : first.track.title.toLowerCase().compareTo(
+          second.track.title.toLowerCase(),
+        );
 }

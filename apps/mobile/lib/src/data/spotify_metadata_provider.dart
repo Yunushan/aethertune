@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -82,34 +85,48 @@ final class SpotifyMetadataProvider
        playlistBaseUri = playlistBaseUri ?? _defaultPlaylistBaseUri,
        _playlistItemsLoader = playlistItemsLoader ?? _loadSpotifyJson;
 
-  static final Uri _defaultSearchUri =
-      Uri.parse('https://api.spotify.com/v1/search');
-  static final Uri _defaultSavedTracksUri =
-      Uri.parse('https://api.spotify.com/v1/me/tracks');
-  static final Uri _defaultSavedEpisodesUri =
-      Uri.parse('https://api.spotify.com/v1/me/episodes');
-  static final Uri _defaultSavedShowsUri =
-      Uri.parse('https://api.spotify.com/v1/me/shows');
-  static final Uri _defaultSavedAlbumsUri =
-      Uri.parse('https://api.spotify.com/v1/me/albums');
-  static final Uri _defaultRecentlyPlayedUri =
-      Uri.parse('https://api.spotify.com/v1/me/player/recently-played');
-  static final Uri _defaultTopTracksUri =
-      Uri.parse('https://api.spotify.com/v1/me/top/tracks');
-  static final Uri _defaultTopArtistsUri =
-      Uri.parse('https://api.spotify.com/v1/me/top/artists');
-  static final Uri _defaultFollowedArtistsUri =
-      Uri.parse('https://api.spotify.com/v1/me/following');
-  static final Uri _defaultNewReleasesUri =
-      Uri.parse('https://api.spotify.com/v1/browse/new-releases');
-  static final Uri _defaultAlbumsUri =
-      Uri.parse('https://api.spotify.com/v1/albums');
-  static final Uri _defaultShowsUri =
-      Uri.parse('https://api.spotify.com/v1/shows');
-  static final Uri _defaultPlaylistsUri =
-      Uri.parse('https://api.spotify.com/v1/me/playlists');
-  static final Uri _defaultPlaylistBaseUri =
-      Uri.parse('https://api.spotify.com/v1/playlists');
+  static final Uri _defaultSearchUri = Uri.parse(
+    'https://api.spotify.com/v1/search',
+  );
+  static final Uri _defaultSavedTracksUri = Uri.parse(
+    'https://api.spotify.com/v1/me/tracks',
+  );
+  static final Uri _defaultSavedEpisodesUri = Uri.parse(
+    'https://api.spotify.com/v1/me/episodes',
+  );
+  static final Uri _defaultSavedShowsUri = Uri.parse(
+    'https://api.spotify.com/v1/me/shows',
+  );
+  static final Uri _defaultSavedAlbumsUri = Uri.parse(
+    'https://api.spotify.com/v1/me/albums',
+  );
+  static final Uri _defaultRecentlyPlayedUri = Uri.parse(
+    'https://api.spotify.com/v1/me/player/recently-played',
+  );
+  static final Uri _defaultTopTracksUri = Uri.parse(
+    'https://api.spotify.com/v1/me/top/tracks',
+  );
+  static final Uri _defaultTopArtistsUri = Uri.parse(
+    'https://api.spotify.com/v1/me/top/artists',
+  );
+  static final Uri _defaultFollowedArtistsUri = Uri.parse(
+    'https://api.spotify.com/v1/me/following',
+  );
+  static final Uri _defaultNewReleasesUri = Uri.parse(
+    'https://api.spotify.com/v1/browse/new-releases',
+  );
+  static final Uri _defaultAlbumsUri = Uri.parse(
+    'https://api.spotify.com/v1/albums',
+  );
+  static final Uri _defaultShowsUri = Uri.parse(
+    'https://api.spotify.com/v1/shows',
+  );
+  static final Uri _defaultPlaylistsUri = Uri.parse(
+    'https://api.spotify.com/v1/me/playlists',
+  );
+  static final Uri _defaultPlaylistBaseUri = Uri.parse(
+    'https://api.spotify.com/v1/playlists',
+  );
 
   final SpotifyAccessTokenReader _accessTokenReader;
   final Uri searchUri;
@@ -694,7 +711,11 @@ final class SpotifySavedAlbumsPage {
 }
 
 final class SpotifyTopArtist {
-  const SpotifyTopArtist({required this.id, required this.name, this.artworkUri});
+  const SpotifyTopArtist({
+    required this.id,
+    required this.name,
+    this.artworkUri,
+  });
 
   final String id;
   final String name;
@@ -726,10 +747,7 @@ final class SpotifyRecentlyPlayedItem {
 }
 
 final class SpotifyRecentlyPlayedPage {
-  const SpotifyRecentlyPlayedPage({
-    required this.items,
-    this.nextBefore,
-  });
+  const SpotifyRecentlyPlayedPage({required this.items, this.nextBefore});
 
   final List<SpotifyRecentlyPlayedItem> items;
   final String? nextBefore;
@@ -813,7 +831,10 @@ SpotifySearchPage parseSpotifySearchPage(String jsonText) {
     tracks: items is List
         ? items
               .whereType<Map>()
-              .map((item) => _trackFromSpotifyJson(Map<String, Object?>.from(item)))
+              .map(
+                (item) =>
+                    _trackFromSpotifyJson(Map<String, Object?>.from(item)),
+              )
               .whereType<Track>()
               .toList(growable: false)
         : const <Track>[],
@@ -894,9 +915,7 @@ List<MusicSourceSearchSuggestion> parseSpotifySearchSuggestions(
       final artist = _spotifyArtistNames(track['artists']);
       final album = track['album'];
       final albumName = album is Map ? _nonEmpty(album['name']) : null;
-      return <String?>[artist, albumName]
-          .whereType<String>()
-          .join(' - ');
+      return <String?>[artist, albumName].whereType<String>().join(' - ');
     },
   );
   return List<MusicSourceSearchSuggestion>.unmodifiable(suggestions);
@@ -949,9 +968,10 @@ SpotifySavedAlbumsPage parseSpotifySavedAlbumsPage(String jsonText) {
   final albums = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _savedAlbumFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                ))
+            .map(
+              (item) =>
+                  _savedAlbumFromSpotifyJson(Map<String, Object?>.from(item)),
+            )
             .whereType<SpotifySavedAlbum>()
             .toList(growable: false)
       : const <SpotifySavedAlbum>[];
@@ -972,16 +992,19 @@ SpotifySavedAlbumsPage parseSpotifyNewReleasesPage(String jsonText) {
   }
   final albumsValue = Map<String, Object?>.from(decoded)['albums'];
   if (albumsValue is! Map) {
-    throw const FormatException('Spotify new releases response is missing albums.');
+    throw const FormatException(
+      'Spotify new releases response is missing albums.',
+    );
   }
   final albumsJson = Map<String, Object?>.from(albumsValue);
   final items = albumsJson['items'];
   final albums = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _catalogAlbumFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                ))
+            .map(
+              (item) =>
+                  _catalogAlbumFromSpotifyJson(Map<String, Object?>.from(item)),
+            )
             .whereType<SpotifySavedAlbum>()
             .toList(growable: false)
       : const <SpotifySavedAlbum>[];
@@ -991,8 +1014,8 @@ SpotifySavedAlbumsPage parseSpotifyNewReleasesPage(String jsonText) {
     albums: albums,
     offset: offset,
     total: total,
-    hasMore: _nonEmpty(albumsJson['next']) != null ||
-        offset + albums.length < total,
+    hasMore:
+        _nonEmpty(albumsJson['next']) != null || offset + albums.length < total,
   );
 }
 
@@ -1001,13 +1024,17 @@ List<SpotifyTopArtist> parseSpotifyTopArtists(String jsonText) {
   if (decoded is! Map) {
     throw const FormatException('Spotify top artists response must be a map.');
   }
-  return _spotifyArtistsFromJsonItems(Map<String, Object?>.from(decoded)['items']);
+  return _spotifyArtistsFromJsonItems(
+    Map<String, Object?>.from(decoded)['items'],
+  );
 }
 
 SpotifySavedTracksPage parseSpotifySavedEpisodesPage(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map) {
-    throw const FormatException('Spotify saved episodes response must be a map.');
+    throw const FormatException(
+      'Spotify saved episodes response must be a map.',
+    );
   }
   final root = Map<String, Object?>.from(decoded);
   final items = root['items'];
@@ -1050,9 +1077,10 @@ SpotifySavedShowsPage parseSpotifySavedShowsPage(String jsonText) {
   final shows = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _savedShowFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                ))
+            .map(
+              (item) =>
+                  _savedShowFromSpotifyJson(Map<String, Object?>.from(item)),
+            )
             .whereType<SpotifySavedShow>()
             .toList(growable: false)
       : const <SpotifySavedShow>[];
@@ -1072,20 +1100,24 @@ SpotifySavedTracksPage parseSpotifyShowEpisodesPage(
 ) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map) {
-    throw const FormatException('Spotify show episodes response must be a map.');
+    throw const FormatException(
+      'Spotify show episodes response must be a map.',
+    );
   }
   final root = Map<String, Object?>.from(decoded);
   final items = root['items'];
   final tracks = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _episodeTrackFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                  addedAt: show.addedAt,
-                  showName: show.title,
-                  publisher: show.publisher,
-                  artworkUri: show.artworkUri,
-                ))
+            .map(
+              (item) => _episodeTrackFromSpotifyJson(
+                Map<String, Object?>.from(item),
+                addedAt: show.addedAt,
+                showName: show.title,
+                publisher: show.publisher,
+                artworkUri: show.artworkUri,
+              ),
+            )
             .whereType<Track>()
             .toList(growable: false)
       : const <Track>[];
@@ -1102,7 +1134,9 @@ SpotifySavedTracksPage parseSpotifyShowEpisodesPage(
 SpotifyFollowedArtistsPage parseSpotifyFollowedArtistsPage(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map) {
-    throw const FormatException('Spotify followed artists response must be a map.');
+    throw const FormatException(
+      'Spotify followed artists response must be a map.',
+    );
   }
   final artistsValue = Map<String, Object?>.from(decoded)['artists'];
   if (artistsValue is! Map) {
@@ -1157,7 +1191,9 @@ SpotifySavedTracksPage parseSpotifyTopTracksPage(String jsonText) {
   final tracks = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _trackFromSpotifyJson(Map<String, Object?>.from(item)))
+            .map(
+              (item) => _trackFromSpotifyJson(Map<String, Object?>.from(item)),
+            )
             .whereType<Track>()
             .toList(growable: false)
       : const <Track>[];
@@ -1183,9 +1219,11 @@ SpotifyRecentlyPlayedPage parseSpotifyRecentlyPlayedPage(String jsonText) {
   final history = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _recentlyPlayedItemFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                ))
+            .map(
+              (item) => _recentlyPlayedItemFromSpotifyJson(
+                Map<String, Object?>.from(item),
+              ),
+            )
             .whereType<SpotifyRecentlyPlayedItem>()
             .toList(growable: false)
       : const <SpotifyRecentlyPlayedItem>[];
@@ -1211,12 +1249,14 @@ SpotifyAlbumTracksPage parseSpotifyAlbumTracksPage(
   final tracks = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _trackFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                  albumName: album.title,
-                  artworkUri: album.artworkUri,
-                  addedAt: album.addedAt,
-                ))
+            .map(
+              (item) => _trackFromSpotifyJson(
+                Map<String, Object?>.from(item),
+                albumName: album.title,
+                artworkUri: album.artworkUri,
+                addedAt: album.addedAt,
+              ),
+            )
             .whereType<Track>()
             .toList(growable: false)
       : const <Track>[];
@@ -1240,9 +1280,11 @@ SpotifySavedPlaylistsPage parseSpotifySavedPlaylistsPage(String jsonText) {
   final playlists = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _savedPlaylistFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                ))
+            .map(
+              (item) => _savedPlaylistFromSpotifyJson(
+                Map<String, Object?>.from(item),
+              ),
+            )
             .whereType<SpotifySavedPlaylist>()
             .toList(growable: false)
       : const <SpotifySavedPlaylist>[];
@@ -1260,16 +1302,20 @@ SpotifySavedPlaylistsPage parseSpotifySavedPlaylistsPage(String jsonText) {
 SpotifyPlaylistTracksPage parseSpotifyPlaylistTracksPage(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map) {
-    throw const FormatException('Spotify playlist items response must be a map.');
+    throw const FormatException(
+      'Spotify playlist items response must be a map.',
+    );
   }
   final root = Map<String, Object?>.from(decoded);
   final items = root['items'];
   final tracks = items is List
       ? items
             .whereType<Map>()
-            .map((item) => _playlistTrackFromSpotifyJson(
-                  Map<String, Object?>.from(item),
-                ))
+            .map(
+              (item) => _playlistTrackFromSpotifyJson(
+                Map<String, Object?>.from(item),
+              ),
+            )
             .whereType<Track>()
             .toList(growable: false)
       : const <Track>[];
@@ -1299,15 +1345,14 @@ SpotifySavedAlbum? _savedAlbumFromSpotifyJson(Map<String, Object?> json) {
     title: title,
     artist: _spotifyArtistNames(albumJson['artists']) ?? 'Unknown Artist',
     totalTracks: _nonNegativeInt(albumJson['total_tracks']) ?? 0,
-    addedAt: DateTime.tryParse(json['added_at']?.toString() ?? '')?.toUtc() ??
+    addedAt:
+        DateTime.tryParse(json['added_at']?.toString() ?? '')?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0),
     artworkUri: _spotifyArtworkUri(albumJson['images']),
   );
 }
 
-SpotifySavedPlaylist? _savedPlaylistFromSpotifyJson(
-  Map<String, Object?> json,
-) {
+SpotifySavedPlaylist? _savedPlaylistFromSpotifyJson(Map<String, Object?> json) {
   final id = _nonEmpty(json['id']);
   final title = _nonEmpty(json['name']);
   if (id == null || title == null) {
@@ -1349,8 +1394,9 @@ SpotifyRecentlyPlayedItem? _recentlyPlayedItemFromSpotifyJson(
   Map<String, Object?> json,
 ) {
   final trackValue = json['track'];
-  final playedAt = DateTime.tryParse(json['played_at']?.toString() ?? '')
-      ?.toUtc();
+  final playedAt = DateTime.tryParse(
+    json['played_at']?.toString() ?? '',
+  )?.toUtc();
   if (trackValue is! Map || playedAt == null) {
     return null;
   }
@@ -1417,7 +1463,8 @@ Track? _episodeTrackFromSpotifyJson(
   final show = json['show'] is Map
       ? Map<String, Object?>.from(json['show'] as Map)
       : const <String, Object?>{};
-  final resolvedShowName = showName ?? _nonEmpty(show['name']) ?? 'Unknown show';
+  final resolvedShowName =
+      showName ?? _nonEmpty(show['name']) ?? 'Unknown show';
   final resolvedPublisher =
       publisher ?? _nonEmpty(show['publisher']) ?? 'Unknown publisher';
   return Track(
@@ -1426,7 +1473,8 @@ Track? _episodeTrackFromSpotifyJson(
     artist: resolvedPublisher,
     album: resolvedShowName,
     duration: Duration(milliseconds: _nonNegativeInt(json['duration_ms']) ?? 0),
-    artworkUri: artworkUri ??
+    artworkUri:
+        artworkUri ??
         _spotifyArtworkUri(json['images']) ??
         _spotifyArtworkUri(show['images']),
     sourceId: 'spotify-metadata',
@@ -1451,7 +1499,8 @@ SpotifySavedShow? _savedShowFromSpotifyJson(Map<String, Object?> json) {
     title: title,
     publisher: _nonEmpty(show['publisher']) ?? 'Unknown publisher',
     totalEpisodes: _nonNegativeInt(show['total_episodes']) ?? 0,
-    addedAt: DateTime.tryParse(json['added_at']?.toString() ?? '')?.toUtc() ??
+    addedAt:
+        DateTime.tryParse(json['added_at']?.toString() ?? '')?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0),
     description: _nonEmpty(show['description']),
     artworkUri: _spotifyArtworkUri(show['images']),

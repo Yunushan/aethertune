@@ -24,19 +24,23 @@ void main() {
       responseLoader: (uri, accessToken) async {
         expect(accessToken, 'access-token');
         return switch (uri.path) {
-          '/youtube/v3/playlists' => '''
+          '/youtube/v3/playlists' =>
+            '''
             {"items":[{"id":"playlist-1","snippet":{"title":"My account mix","channelTitle":"Aether Radio"}}]}
           ''',
-          '/youtube/v3/subscriptions' => '''
+          '/youtube/v3/subscriptions' =>
+            '''
             {"items":[{"id":"subscription-1","snippet":{"title":"Orbit Channel","resourceId":{"channelId":"channel-1"}}}]}
           ''',
-          '/youtube/v3/playlistItems' => '''
+          '/youtube/v3/playlistItems' =>
+            '''
             {"items":[
               {"snippet":{"title":"Account Signal","channelTitle":"Aether Radio","resourceId":{"videoId":"video-1"}}},
               {"snippet":{"title":"Account Signal","channelTitle":"Aether Radio","resourceId":{"videoId":"video-1"}}}
             ]}
           ''',
-          '/youtube/v3/search' => '''
+          '/youtube/v3/search' =>
+            '''
             {"items":[{"id":{"videoId":"video-2"},"snippet":{"title":"Subscription Signal","channelTitle":"Orbit Channel"}}]}
           ''',
           _ => throw StateError('Unexpected endpoint: $uri'),
@@ -91,6 +95,9 @@ void main() {
 
     await tester.tap(find.byTooltip('Save metadata to library'));
     await tester.pumpAndSettle();
-    expect(library.tracks.map((track) => track.title), contains('Subscription Signal'));
+    expect(
+      library.tracks.map((track) => track.title),
+      contains('Subscription Signal'),
+    );
   });
 }

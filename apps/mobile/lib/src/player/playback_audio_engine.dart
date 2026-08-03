@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:just_audio/just_audio.dart';
@@ -43,9 +46,9 @@ class MediaLibraryBrowseFolder {
     Iterable<Track> directTracks = const <Track>[],
     Iterable<MediaLibraryBrowseFolder> children =
         const <MediaLibraryBrowseFolder>[],
-  })  : queueTracks = List<Track>.unmodifiable(queueTracks),
-        directTracks = List<Track>.unmodifiable(directTracks),
-        children = List<MediaLibraryBrowseFolder>.unmodifiable(children);
+  }) : queueTracks = List<Track>.unmodifiable(queueTracks),
+       directTracks = List<Track>.unmodifiable(directTracks),
+       children = List<MediaLibraryBrowseFolder>.unmodifiable(children);
 
   final String id;
   final String title;
@@ -134,9 +137,7 @@ abstract interface class CrossfadePlaybackAudioEngine
   bool get supportsCrossfade;
   Duration get crossfadeDuration;
 
-  void setCrossfadeTrackVolumeResolver(
-    CrossfadeTrackVolumeResolver? resolver,
-  );
+  void setCrossfadeTrackVolumeResolver(CrossfadeTrackVolumeResolver? resolver);
   Future<void> setCrossfadeDuration(Duration duration);
 }
 
@@ -205,8 +206,9 @@ class JustAudioPlaybackEngine
       return JustAudioPlaybackEngine._(
         player: player ?? AudioPlayer(),
         crossfadePlayer: AudioPlayer(),
-        visualizer:
-            enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
+        visualizer: enableAndroidVisualizer
+            ? AndroidAudioVisualizerBridge()
+            : null,
         virtualizer: enableAndroidVirtualizer
             ? AndroidAudioVirtualizerBridge()
             : null,
@@ -240,8 +242,9 @@ class JustAudioPlaybackEngine
       crossfadeEqualizer: crossfadeEqualizer,
       loudnessEnhancer: loudnessEnhancer,
       crossfadeLoudnessEnhancer: crossfadeLoudnessEnhancer,
-      visualizer:
-          enableAndroidVisualizer ? AndroidAudioVisualizerBridge() : null,
+      visualizer: enableAndroidVisualizer
+          ? AndroidAudioVisualizerBridge()
+          : null,
       virtualizer: enableAndroidVirtualizer
           ? AndroidAudioVirtualizerBridge()
           : null,
@@ -261,16 +264,16 @@ class JustAudioPlaybackEngine
     AndroidAudioVirtualizerBridge? virtualizer,
     required bool supportsSkipSilence,
     required bool enablePitch,
-  })  : _player = player,
-        _crossfadePlayer = crossfadePlayer,
-        _equalizer = equalizer,
-        _crossfadeEqualizer = crossfadeEqualizer,
-        _loudnessEnhancer = loudnessEnhancer,
-        _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer,
-        _visualizer = visualizer,
-        _virtualizer = virtualizer,
-        _supportsSkipSilence = supportsSkipSilence,
-        _pitchEnabled = enablePitch {
+  }) : _player = player,
+       _crossfadePlayer = crossfadePlayer,
+       _equalizer = equalizer,
+       _crossfadeEqualizer = crossfadeEqualizer,
+       _loudnessEnhancer = loudnessEnhancer,
+       _crossfadeLoudnessEnhancer = crossfadeLoudnessEnhancer,
+       _visualizer = visualizer,
+       _virtualizer = virtualizer,
+       _supportsSkipSilence = supportsSkipSilence,
+       _pitchEnabled = enablePitch {
     _durationSubscription = _player.durationStream.listen(
       (_) => _scheduleCrossfade(),
     );
@@ -339,8 +342,9 @@ class JustAudioPlaybackEngine
   bool _mainSourceLoaded = false;
   bool _crossfadeSourceLoaded = false;
   int? _visualizerSessionId;
-  PlaybackEqualizerProfile _equalizerProfile =
-      const PlaybackEqualizerProfile(preset: PlaybackEqualizerPreset.flat);
+  PlaybackEqualizerProfile _equalizerProfile = const PlaybackEqualizerProfile(
+    preset: PlaybackEqualizerPreset.flat,
+  );
   Future<void> _equalizerApplyTail = Future<void>.value();
 
   static const _crossfadeStepInterval = Duration(milliseconds: 50);
@@ -550,7 +554,9 @@ class JustAudioPlaybackEngine
     final equalizer = _equalizer;
     final crossfadeEqualizer = _crossfadeEqualizer;
     if (equalizer == null || crossfadeEqualizer == null) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     await equalizer.setEnabled(enabled);
     await crossfadeEqualizer.setEnabled(enabled);
@@ -559,7 +565,9 @@ class JustAudioPlaybackEngine
   @override
   Future<void> setEqualizerProfile(PlaybackEqualizerProfile profile) {
     if (!supportsEqualizer) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     _equalizerProfile = profile;
     return _scheduleEqualizerProfileApply();
@@ -569,7 +577,9 @@ class JustAudioPlaybackEngine
   Future<List<PlaybackEqualizerBand>> loadEqualizerBands() async {
     final equalizer = _equalizer;
     if (equalizer == null) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     if (!_mainSourceLoaded) {
       return const <PlaybackEqualizerBand>[];
@@ -619,10 +629,14 @@ class JustAudioPlaybackEngine
   Future<void> setVirtualizerEnabled(bool enabled) async {
     final virtualizer = _virtualizer;
     if (virtualizer == null) {
-      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Virtualizer is unavailable for this audio backend.',
+      );
     }
     if (!await virtualizer.setEnabled(enabled)) {
-      throw StateError('Android virtualizer could not be enabled on this device.');
+      throw StateError(
+        'Android virtualizer could not be enabled on this device.',
+      );
     }
   }
 
@@ -630,10 +644,14 @@ class JustAudioPlaybackEngine
   Future<void> setVirtualizerStrength(int strength) async {
     final virtualizer = _virtualizer;
     if (virtualizer == null) {
-      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Virtualizer is unavailable for this audio backend.',
+      );
     }
     if (!await virtualizer.setStrength(strength)) {
-      throw StateError('Android virtualizer strength is unavailable on this device.');
+      throw StateError(
+        'Android virtualizer strength is unavailable on this device.',
+      );
     }
   }
 
@@ -664,9 +682,7 @@ class JustAudioPlaybackEngine
   }
 
   @override
-  void setCrossfadeTrackVolumeResolver(
-    CrossfadeTrackVolumeResolver? resolver,
-  ) {
+  void setCrossfadeTrackVolumeResolver(CrossfadeTrackVolumeResolver? resolver) {
     _crossfadeTrackVolumeResolver = resolver;
   }
 
@@ -762,7 +778,9 @@ class JustAudioPlaybackEngine
     final incomingTrack = _queue[nextIndex];
     try {
       await _crossfadePlayer.stop();
-      await _crossfadePlayer.setAudioSource(_audioSourceForTrack(incomingTrack));
+      await _crossfadePlayer.setAudioSource(
+        _audioSourceForTrack(incomingTrack),
+      );
       _crossfadeSourceLoaded = true;
       await _scheduleEqualizerProfileApply();
       await _crossfadePlayer.setSpeed(_player.speed);
@@ -770,10 +788,11 @@ class JustAudioPlaybackEngine
       unawaited(_crossfadePlayer.play());
 
       _crossfadeStepTimer = Timer.periodic(_crossfadeStepInterval, (timer) {
-        final ratio = (DateTime.now().difference(startedAt).inMicroseconds /
-                _crossfadeDuration.inMicroseconds)
-            .clamp(0, 1)
-            .toDouble();
+        final ratio =
+            (DateTime.now().difference(startedAt).inMicroseconds /
+                    _crossfadeDuration.inMicroseconds)
+                .clamp(0, 1)
+                .toDouble();
         unawaited(
           _player.setVolume(_crossfadeVolumeFor(outgoingTrack) * (1 - ratio)),
         );

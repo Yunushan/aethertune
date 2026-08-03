@@ -42,8 +42,8 @@ class TrackLyrics {
     this.sourceUri,
     Duration timingOffset = Duration.zero,
     DateTime? updatedAt,
-  })  : timingOffset = normalizeTimingOffset(timingOffset),
-        updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : timingOffset = normalizeTimingOffset(timingOffset),
+       updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final String trackId;
   final String plainText;
@@ -58,10 +58,8 @@ class TrackLyrics {
   bool get isTtmlDocument => isTtmlLyricsDocument(plainText);
   bool get isWebVttDocument => isWebVttLyricsDocument(plainText);
   bool get isSrtDocument => isSrtLyricsDocument(plainText);
-  List<SyncedLyricLine> get syncedLines => _offsetSyncedLyricLines(
-        parseSyncedLyricLines(plainText),
-        timingOffset,
-      );
+  List<SyncedLyricLine> get syncedLines =>
+      _offsetSyncedLyricLines(parseSyncedLyricLines(plainText), timingOffset);
   bool get hasSyncedLines => syncedLines.isNotEmpty;
   bool get hasProviderAttribution =>
       sourceId.trim().isNotEmpty &&
@@ -127,7 +125,8 @@ class TrackLyrics {
       timingOffset: Duration(
         milliseconds: (json['timingOffsetMs'] as num?)?.toInt() ?? 0,
       ),
-      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -146,10 +145,7 @@ List<SyncedLyricLine> _offsetSyncedLyricLines(
       .toList(growable: false);
 }
 
-SyncedLyricLine _offsetSyncedLyricLine(
-  SyncedLyricLine line,
-  Duration offset,
-) {
+SyncedLyricLine _offsetSyncedLyricLine(SyncedLyricLine line, Duration offset) {
   final timestamp = _offsetTimestamp(line.timestamp, offset);
   return SyncedLyricLine(
     timestamp: timestamp,
@@ -166,10 +162,7 @@ SyncedLyricLine _offsetSyncedLyricLine(
   );
 }
 
-SyncedLyricWord _offsetSyncedLyricWord(
-  SyncedLyricWord word,
-  Duration offset,
-) {
+SyncedLyricWord _offsetSyncedLyricWord(SyncedLyricWord word, Duration offset) {
   final timestamp = _offsetTimestamp(word.timestamp, offset);
   return SyncedLyricWord(
     timestamp: timestamp,
@@ -292,10 +285,7 @@ String formatSyncedLyricTimestamp(Duration timestamp) {
   return '$minutes:$secondsLabel';
 }
 
-int syncedLyricLineIndexAt(
-  List<SyncedLyricLine> lines,
-  Duration position,
-) {
+int syncedLyricLineIndexAt(List<SyncedLyricLine> lines, Duration position) {
   var activeIndex = -1;
   for (var index = 0; index < lines.length; index += 1) {
     final line = lines[index];
@@ -310,10 +300,7 @@ int syncedLyricLineIndexAt(
   return activeIndex;
 }
 
-int syncedLyricWordIndexAt(
-  List<SyncedLyricWord> words,
-  Duration position,
-) {
+int syncedLyricWordIndexAt(List<SyncedLyricWord> words, Duration position) {
   for (var index = 0; index < words.length; index += 1) {
     final word = words[index];
     final end = word.endTimestamp;
@@ -359,8 +346,10 @@ bool isTtmlLyricsDocument(String input) {
     }
     root = root.substring(declarationEnd + 2).trimLeft();
   }
-  return RegExp(r'^<(?:[\w.-]+:)?tt(?:\s|>)', caseSensitive: false)
-      .hasMatch(root);
+  return RegExp(
+    r'^<(?:[\w.-]+:)?tt(?:\s|>)',
+    caseSensitive: false,
+  ).hasMatch(root);
 }
 
 bool isSrtLyricsDocument(String input) =>
@@ -521,11 +510,11 @@ _SrtTiming? _parseSrtTiming(String value) {
     return null;
   }
   Duration timestamp(int offset) => Duration(
-        hours: int.parse(match.group(offset)!),
-        minutes: int.parse(match.group(offset + 1)!),
-        seconds: int.parse(match.group(offset + 2)!),
-        milliseconds: _lrcFractionToMilliseconds(match.group(offset + 3)),
-      );
+    hours: int.parse(match.group(offset)!),
+    minutes: int.parse(match.group(offset + 1)!),
+    seconds: int.parse(match.group(offset + 2)!),
+    milliseconds: _lrcFractionToMilliseconds(match.group(offset + 3)),
+  );
   return _SrtTiming(start: timestamp(1), end: timestamp(5));
 }
 
@@ -549,7 +538,8 @@ List<SyncedLyricLine> _parseTtmlSyncedLyricLines(String input) {
       continue;
     }
 
-    final timestamp = _resolveTtmlTimestamp(
+    final timestamp =
+        _resolveTtmlTimestamp(
           _ttmlAttribute(paragraph, 'begin'),
           Duration.zero,
         ) ??
@@ -716,10 +706,8 @@ List<SyncedLyricWord> _ttmlWordsForParagraph(
 
   void visit(XmlElement element, Duration parentStart, Duration? parentEnd) {
     for (final child in element.children.whereType<XmlElement>()) {
-      final start = _resolveTtmlTimestamp(
-            _ttmlAttribute(child, 'begin'),
-            parentStart,
-          ) ??
+      final start =
+          _resolveTtmlTimestamp(_ttmlAttribute(child, 'begin'), parentStart) ??
           parentStart;
       final explicitEnd = _resolveTtmlEndTimestamp(
         child,
@@ -727,9 +715,9 @@ List<SyncedLyricWord> _ttmlWordsForParagraph(
         parentStart: parentStart,
       );
       final end = explicitEnd ?? parentEnd;
-      final hasTimedDescendant = child.descendants
-          .whereType<XmlElement>()
-          .any((nested) => _ttmlAttribute(nested, 'begin') != null);
+      final hasTimedDescendant = child.descendants.whereType<XmlElement>().any(
+        (nested) => _ttmlAttribute(nested, 'begin') != null,
+      );
       final text = _ttmlText(child);
       if (child.name.local.toLowerCase() == 'span' &&
           _ttmlAttribute(child, 'begin') != null &&
@@ -811,10 +799,7 @@ int _lrcFractionToMilliseconds(String? rawFraction) {
 }
 
 class _IndexedSyncedLyricLine {
-  const _IndexedSyncedLyricLine({
-    required this.line,
-    required this.order,
-  });
+  const _IndexedSyncedLyricLine({required this.line, required this.order});
 
   final SyncedLyricLine line;
   final int order;

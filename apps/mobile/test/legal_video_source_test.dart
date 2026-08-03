@@ -5,7 +5,9 @@ void main() {
   group('parseLegalVideoUrl', () {
     test('accepts credential-free HTTPS media and removes fragments', () {
       expect(
-        parseLegalVideoUrl('https://media.example.test/video.mp4?quality=high#t=4'),
+        parseLegalVideoUrl(
+          'https://media.example.test/video.mp4?quality=high#t=4',
+        ),
         Uri.parse('https://media.example.test/video.mp4?quality=high'),
       );
     });

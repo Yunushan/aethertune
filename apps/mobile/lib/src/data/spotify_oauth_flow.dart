@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:io';
 
@@ -113,7 +116,9 @@ SpotifyAuthorizationCallback parseSpotifyAuthorizationCallback(
   }
   final code = callback.queryParameters['code']?.trim();
   if (code == null || code.isEmpty) {
-    throw const FormatException('Spotify did not return an authorization code.');
+    throw const FormatException(
+      'Spotify did not return an authorization code.',
+    );
   }
   return SpotifyAuthorizationCallback(code: code);
 }

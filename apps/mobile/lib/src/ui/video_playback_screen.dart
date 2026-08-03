@@ -233,8 +233,7 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
   Future<void> _selectEmbeddedAudioTrack() async {
     final tracks = _player.state.tracks.audio
         .where(
-          (track) =>
-              isSelectableEmbeddedVideoTrackId(track.id) && !track.uri,
+          (track) => isSelectableEmbeddedVideoTrackId(track.id) && !track.uri,
         )
         .toList(growable: false);
     final selected = await _pickTrack<AudioTrack>(

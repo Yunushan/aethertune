@@ -85,10 +85,7 @@ void main() {
     expect(vault.values[account.id], 'super-secret');
     expect(tested.single, '${account.providerId}:super-secret');
     expect(store.musicProviders.single.id, account.providerId);
-    expect(
-      store.catalogProviderFor(account.id),
-      isA<MusicCatalogProvider>(),
-    );
+    expect(store.catalogProviderFor(account.id), isA<MusicCatalogProvider>());
     expect(store.catalogProviderFor('missing-account'), isNull);
 
     final secondStore = SelfHostedProviderStore(
@@ -124,40 +121,43 @@ void main() {
     expect(vault.values.containsKey(account.id), isFalse);
   });
 
-  test('exports only secure account configuration without credentials', () async {
-    final vault = _MemoryCredentialVault();
-    final store = SelfHostedProviderStore(
-      credentialVault: vault,
-      connectionTester: (account, secret) async {},
-    );
-    await store.load();
-    final secureAccount = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.jellyfin,
-      name: 'Home media',
-      baseUrl: 'https://media.example.test',
-      identity: 'user-1',
-      allowInsecureHttp: false,
-    );
-    final insecureAccount = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.subsonic,
-      name: 'LAN music',
-      baseUrl: 'http://192.168.1.10:4533',
-      identity: 'yunus',
-      allowInsecureHttp: true,
-    );
-    await store.testAndSave(secureAccount, 'secure-api-key');
-    await store.testAndSave(insecureAccount, 'local-password');
+  test(
+    'exports only secure account configuration without credentials',
+    () async {
+      final vault = _MemoryCredentialVault();
+      final store = SelfHostedProviderStore(
+        credentialVault: vault,
+        connectionTester: (account, secret) async {},
+      );
+      await store.load();
+      final secureAccount = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.jellyfin,
+        name: 'Home media',
+        baseUrl: 'https://media.example.test',
+        identity: 'user-1',
+        allowInsecureHttp: false,
+      );
+      final insecureAccount = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.subsonic,
+        name: 'LAN music',
+        baseUrl: 'http://192.168.1.10:4533',
+        identity: 'yunus',
+        allowInsecureHttp: true,
+      );
+      await store.testAndSave(secureAccount, 'secure-api-key');
+      await store.testAndSave(insecureAccount, 'local-password');
 
-    final export = store.exportAccountConfiguration();
+      final export = store.exportAccountConfiguration();
 
-    expect(export.exportedAccountCount, 1);
-    expect(export.skippedInsecureAccountCount, 1);
-    expect(export.json, contains('aethertune.self_hosted_accounts'));
-    expect(export.json, contains('media.example.test'));
-    expect(export.json, isNot(contains('secure-api-key')));
-    expect(export.json, isNot(contains('local-password')));
-    expect(export.json, isNot(contains('192.168.1.10')));
-  });
+      expect(export.exportedAccountCount, 1);
+      expect(export.skippedInsecureAccountCount, 1);
+      expect(export.json, contains('aethertune.self_hosted_accounts'));
+      expect(export.json, contains('media.example.test'));
+      expect(export.json, isNot(contains('secure-api-key')));
+      expect(export.json, isNot(contains('local-password')));
+      expect(export.json, isNot(contains('192.168.1.10')));
+    },
+  );
 
   test('imports secure account configuration without credentials', () async {
     final sourceVault = _MemoryCredentialVault();
@@ -196,92 +196,102 @@ void main() {
     expect(destinationVault.values, isEmpty);
   });
 
-  test('does not overwrite existing accounts during configuration import',
-      () async {
-    final vault = _MemoryCredentialVault();
-    final store = SelfHostedProviderStore(
-      credentialVault: vault,
-      connectionTester: (account, secret) async {},
-    );
-    await store.load();
-    final account = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.jellyfin,
-      name: 'Media server',
-      baseUrl: 'https://media.example.test',
-      identity: 'user-1',
-      allowInsecureHttp: false,
-    );
-    await store.testAndSave(account.copyWith(name: 'Local name'), 'local-key');
-    final document = jsonEncode(<String, Object?>{
-      'format': SelfHostedProviderStore.accountMigrationDocumentFormat,
-      'version': SelfHostedProviderStore.accountMigrationDocumentVersion,
-      'accounts': <Map<String, Object?>>[account.toJson()],
-    });
+  test(
+    'does not overwrite existing accounts during configuration import',
+    () async {
+      final vault = _MemoryCredentialVault();
+      final store = SelfHostedProviderStore(
+        credentialVault: vault,
+        connectionTester: (account, secret) async {},
+      );
+      await store.load();
+      final account = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.jellyfin,
+        name: 'Media server',
+        baseUrl: 'https://media.example.test',
+        identity: 'user-1',
+        allowInsecureHttp: false,
+      );
+      await store.testAndSave(
+        account.copyWith(name: 'Local name'),
+        'local-key',
+      );
+      final document = jsonEncode(<String, Object?>{
+        'format': SelfHostedProviderStore.accountMigrationDocumentFormat,
+        'version': SelfHostedProviderStore.accountMigrationDocumentVersion,
+        'accounts': <Map<String, Object?>>[account.toJson()],
+      });
 
-    final result = await store.importAccountConfiguration(document);
+      final result = await store.importAccountConfiguration(document);
 
-    expect(result.importedAccountCount, 0);
-    expect(result.skippedExistingAccountCount, 1);
-    expect(store.accounts.single.name, 'Local name');
-    expect(vault.values[account.id], 'local-key');
-  });
+      expect(result.importedAccountCount, 0);
+      expect(result.skippedExistingAccountCount, 1);
+      expect(store.accounts.single.name, 'Local name');
+      expect(vault.values[account.id], 'local-key');
+    },
+  );
 
-  test('rejects malformed documents and skips insecure imported accounts',
-      () async {
-    final store = SelfHostedProviderStore(
-      credentialVault: _MemoryCredentialVault(),
-      connectionTester: (account, secret) async {},
-    );
-    await store.load();
-    final insecure = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.subsonic,
-      name: 'LAN music',
-      baseUrl: 'http://192.168.1.10:4533',
-      identity: 'yunus',
-      allowInsecureHttp: true,
-    );
-    final document = jsonEncode(<String, Object?>{
-      'format': SelfHostedProviderStore.accountMigrationDocumentFormat,
-      'version': SelfHostedProviderStore.accountMigrationDocumentVersion,
-      'accounts': <Map<String, Object?>>[insecure.toJson()],
-    });
+  test(
+    'rejects malformed documents and skips insecure imported accounts',
+    () async {
+      final store = SelfHostedProviderStore(
+        credentialVault: _MemoryCredentialVault(),
+        connectionTester: (account, secret) async {},
+      );
+      await store.load();
+      final insecure = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.subsonic,
+        name: 'LAN music',
+        baseUrl: 'http://192.168.1.10:4533',
+        identity: 'yunus',
+        allowInsecureHttp: true,
+      );
+      final document = jsonEncode(<String, Object?>{
+        'format': SelfHostedProviderStore.accountMigrationDocumentFormat,
+        'version': SelfHostedProviderStore.accountMigrationDocumentVersion,
+        'accounts': <Map<String, Object?>>[insecure.toJson()],
+      });
 
-    final result = await store.importAccountConfiguration(document);
+      final result = await store.importAccountConfiguration(document);
 
-    expect(result.importedAccountCount, 0);
-    expect(result.skippedInsecureAccountCount, 1);
-    expect(store.accounts, isEmpty);
-    await expectLater(
-      store.importAccountConfiguration('{"format":"unknown"}'),
-      throwsA(isA<FormatException>()),
-    );
-    expect(store.accounts, isEmpty);
-  });
+      expect(result.importedAccountCount, 0);
+      expect(result.skippedInsecureAccountCount, 1);
+      expect(store.accounts, isEmpty);
+      await expectLater(
+        store.importAccountConfiguration('{"format":"unknown"}'),
+        throwsA(isA<FormatException>()),
+      );
+      expect(store.accounts, isEmpty);
+    },
+  );
 
-  test('keeps the existing secure secret when an edit leaves it blank', () async {
-    final vault = _MemoryCredentialVault();
-    final testedSecrets = <String>[];
-    final store = SelfHostedProviderStore(
-      credentialVault: vault,
-      connectionTester: (account, secret) async {
-        testedSecrets.add(secret);
-      },
-    );
-    await store.load();
-    final account = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.jellyfin,
-      name: 'Jellyfin',
-      baseUrl: 'https://media.example.test',
-      identity: 'user-1',
-      allowInsecureHttp: false,
-    );
-    await store.testAndSave(account, 'api-key');
-    await store.testAndSave(account.copyWith(name: 'Living room'), '');
+  test(
+    'keeps the existing secure secret when an edit leaves it blank',
+    () async {
+      final vault = _MemoryCredentialVault();
+      final testedSecrets = <String>[];
+      final store = SelfHostedProviderStore(
+        credentialVault: vault,
+        connectionTester: (account, secret) async {
+          testedSecrets.add(secret);
+        },
+      );
+      await store.load();
+      final account = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.jellyfin,
+        name: 'Jellyfin',
+        baseUrl: 'https://media.example.test',
+        identity: 'user-1',
+        allowInsecureHttp: false,
+      );
+      await store.testAndSave(account, 'api-key');
+      await store.testAndSave(account.copyWith(name: 'Living room'), '');
 
-    expect(testedSecrets, <String>['api-key', 'api-key']);
-    expect(vault.values[account.id], 'api-key');
-    expect(store.accounts.single.name, 'Living room');
-  });
+      expect(testedSecrets, <String>['api-key', 'api-key']);
+      expect(vault.values[account.id], 'api-key');
+      expect(store.accounts.single.name, 'Living room');
+    },
+  );
 
   test('rotates credentials atomically and clears private artwork', () async {
     final vault = _MemoryCredentialVault();
@@ -377,150 +387,157 @@ void main() {
     );
   });
 
-  test('does not persist failed connection attempts or expose secrets', () async {
-    final vault = _MemoryCredentialVault();
-    final store = SelfHostedProviderStore(
-      credentialVault: vault,
-      connectionTester: (account, secret) async {
-        throw StateError(
-          'Could not open ${account.baseUri}?api_key=$secret',
-        );
-      },
-    );
-    await store.load();
-    final account = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.jellyfin,
-      name: 'Private server',
-      baseUrl: 'https://media.example.test',
-      identity: 'user-1',
-      allowInsecureHttp: false,
-    );
+  test(
+    'does not persist failed connection attempts or expose secrets',
+    () async {
+      final vault = _MemoryCredentialVault();
+      final store = SelfHostedProviderStore(
+        credentialVault: vault,
+        connectionTester: (account, secret) async {
+          throw StateError('Could not open ${account.baseUri}?api_key=$secret');
+        },
+      );
+      await store.load();
+      final account = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.jellyfin,
+        name: 'Private server',
+        baseUrl: 'https://media.example.test',
+        identity: 'user-1',
+        allowInsecureHttp: false,
+      );
 
-    await expectLater(
-      store.testAndSave(account, 'super-secret'),
-      throwsA(
-        predicate<Object>((error) {
-          final message = error.toString();
-          return message.contains('[redacted]') &&
-              !message.contains('super-secret');
-        }),
-      ),
-    );
+      await expectLater(
+        store.testAndSave(account, 'super-secret'),
+        throwsA(
+          predicate<Object>((error) {
+            final message = error.toString();
+            return message.contains('[redacted]') &&
+                !message.contains('super-secret');
+          }),
+        ),
+      );
 
-    expect(store.accounts, isEmpty);
-    expect(store.musicProviders, isEmpty);
-    expect(vault.values, isEmpty);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('aethertune.self_hosted_accounts.v1'), isNull);
-  });
+      expect(store.accounts, isEmpty);
+      expect(store.musicProviders, isEmpty);
+      expect(vault.values, isEmpty);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('aethertune.self_hosted_accounts.v1'), isNull);
+    },
+  );
 
-  test('caches safe artwork bytes and invalidates them with the account',
-      () async {
-    final vault = _MemoryCredentialVault();
-    final provider = _ArtworkCatalogProvider('self-hosted-artwork');
-    final factorySecrets = <String>[];
-    final cacheRoot = await Directory.systemTemp.createTemp(
-      'aethertune-provider-store-artwork-',
-    );
-    addTearDown(() async {
-      if (await cacheRoot.exists()) {
-        await cacheRoot.delete(recursive: true);
-      }
-    });
-    final store = SelfHostedProviderStore(
-      credentialVault: vault,
-      connectionTester: (account, secret) async {},
-      providerFactory: (account, secret) {
-        factorySecrets.add(secret);
-        return provider;
-      },
-      artworkFileCache: ProviderArtworkFileCache(
-        cacheRootLoader: () async => cacheRoot,
-      ),
-    );
-    await store.load();
-    final account = createSelfHostedProviderAccount(
-      kind: SelfHostedProviderKind.jellyfin,
-      name: 'Artwork server',
-      baseUrl: 'https://media.example.test',
-      identity: 'user-1',
-      allowInsecureHttp: false,
-    );
-    provider.providerId = account.providerId;
-    await store.testAndSave(account, 'api-secret');
+  test(
+    'caches safe artwork bytes and invalidates them with the account',
+    () async {
+      final vault = _MemoryCredentialVault();
+      final provider = _ArtworkCatalogProvider('self-hosted-artwork');
+      final factorySecrets = <String>[];
+      final cacheRoot = await Directory.systemTemp.createTemp(
+        'aethertune-provider-store-artwork-',
+      );
+      addTearDown(() async {
+        if (await cacheRoot.exists()) {
+          await cacheRoot.delete(recursive: true);
+        }
+      });
+      final store = SelfHostedProviderStore(
+        credentialVault: vault,
+        connectionTester: (account, secret) async {},
+        providerFactory: (account, secret) {
+          factorySecrets.add(secret);
+          return provider;
+        },
+        artworkFileCache: ProviderArtworkFileCache(
+          cacheRootLoader: () async => cacheRoot,
+        ),
+      );
+      await store.load();
+      final account = createSelfHostedProviderAccount(
+        kind: SelfHostedProviderKind.jellyfin,
+        name: 'Artwork server',
+        baseUrl: 'https://media.example.test',
+        identity: 'user-1',
+        allowInsecureHttp: false,
+      );
+      provider.providerId = account.providerId;
+      await store.testAndSave(account, 'api-secret');
 
-    final first = await store.loadArtwork(
-      sourceId: account.providerId,
-      artworkId: 'cover-1',
-      version: 'v1',
-      maxWidth: 300,
-    );
-    final second = await store.loadArtwork(
-      sourceId: account.providerId,
-      artworkId: 'cover-1',
-      version: 'v1',
-      maxWidth: 300,
-    );
-
-    expect(first, <int>[7, 8, 9]);
-    expect(second, <int>[7, 8, 9]);
-    expect(provider.artworkCalls, <String>['cover-1|v1|300']);
-    expect(factorySecrets, <String>['api-secret']);
-    expect(store.hasCredentialForProvider(account.providerId), isTrue);
-
-    final resolved = await store.resolveTrack(
-      Track(
-        id: 'remote-track',
-        title: 'Remote track',
-        sourceId: account.providerId,
-        externalId: 'song-1',
-        providerArtworkId: 'cover-1',
-        providerArtworkVersion: 'v1',
-      ),
-    );
-    expect(resolved.streamUrl, 'https://media.example.test/stream/song-1');
-    expect(resolved.streamUrlIsEphemeral, isTrue);
-    expect(resolved.artworkUri?.scheme, 'file');
-    expect(resolved.artworkUriIsEphemeral, isTrue);
-    expect(await File.fromUri(resolved.artworkUri!).exists(), isTrue);
-    expect(resolved.toJson()['artworkUri'], isNull);
-    expect(resolved.toJson()['providerArtworkId'], 'cover-1');
-    expect(provider.artworkCalls, <String>[
-      'cover-1|v1|300',
-      'cover-1|v1|512',
-    ]);
-    expect(factorySecrets, <String>['api-secret', 'api-secret', 'api-secret']);
-    final resolvedArtworkFile = File.fromUri(resolved.artworkUri!);
-
-    provider.failArtwork = true;
-    final resolvedWithoutArtwork = await store.resolveTrack(
-      Track(
-        id: 'remote-track-with-broken-art',
-        title: 'Remote track with broken art',
-        sourceId: account.providerId,
-        externalId: 'song-2',
-        providerArtworkId: 'broken-cover',
-      ),
-    );
-    expect(
-      resolvedWithoutArtwork.streamUrl,
-      'https://media.example.test/stream/song-2',
-    );
-    expect(resolvedWithoutArtwork.artworkUri, isNull);
-    expect(factorySecrets, hasLength(5));
-    expect(factorySecrets.every((secret) => secret == 'api-secret'), isTrue);
-
-    await store.remove(account.id);
-    expect(await resolvedArtworkFile.exists(), isFalse);
-    expect(
-      await store.loadArtwork(
+      final first = await store.loadArtwork(
         sourceId: account.providerId,
         artworkId: 'cover-1',
-      ),
-      isNull,
-    );
-    expect(store.hasCredentialForProvider(account.providerId), isFalse);
-  });
+        version: 'v1',
+        maxWidth: 300,
+      );
+      final second = await store.loadArtwork(
+        sourceId: account.providerId,
+        artworkId: 'cover-1',
+        version: 'v1',
+        maxWidth: 300,
+      );
+
+      expect(first, <int>[7, 8, 9]);
+      expect(second, <int>[7, 8, 9]);
+      expect(provider.artworkCalls, <String>['cover-1|v1|300']);
+      expect(factorySecrets, <String>['api-secret']);
+      expect(store.hasCredentialForProvider(account.providerId), isTrue);
+
+      final resolved = await store.resolveTrack(
+        Track(
+          id: 'remote-track',
+          title: 'Remote track',
+          sourceId: account.providerId,
+          externalId: 'song-1',
+          providerArtworkId: 'cover-1',
+          providerArtworkVersion: 'v1',
+        ),
+      );
+      expect(resolved.streamUrl, 'https://media.example.test/stream/song-1');
+      expect(resolved.streamUrlIsEphemeral, isTrue);
+      expect(resolved.artworkUri?.scheme, 'file');
+      expect(resolved.artworkUriIsEphemeral, isTrue);
+      expect(await File.fromUri(resolved.artworkUri!).exists(), isTrue);
+      expect(resolved.toJson()['artworkUri'], isNull);
+      expect(resolved.toJson()['providerArtworkId'], 'cover-1');
+      expect(provider.artworkCalls, <String>[
+        'cover-1|v1|300',
+        'cover-1|v1|512',
+      ]);
+      expect(factorySecrets, <String>[
+        'api-secret',
+        'api-secret',
+        'api-secret',
+      ]);
+      final resolvedArtworkFile = File.fromUri(resolved.artworkUri!);
+
+      provider.failArtwork = true;
+      final resolvedWithoutArtwork = await store.resolveTrack(
+        Track(
+          id: 'remote-track-with-broken-art',
+          title: 'Remote track with broken art',
+          sourceId: account.providerId,
+          externalId: 'song-2',
+          providerArtworkId: 'broken-cover',
+        ),
+      );
+      expect(
+        resolvedWithoutArtwork.streamUrl,
+        'https://media.example.test/stream/song-2',
+      );
+      expect(resolvedWithoutArtwork.artworkUri, isNull);
+      expect(factorySecrets, hasLength(5));
+      expect(factorySecrets.every((secret) => secret == 'api-secret'), isTrue);
+
+      await store.remove(account.id);
+      expect(await resolvedArtworkFile.exists(), isFalse);
+      expect(
+        await store.loadArtwork(
+          sourceId: account.providerId,
+          artworkId: 'cover-1',
+        ),
+        isNull,
+      );
+      expect(store.hasCredentialForProvider(account.providerId), isFalse);
+    },
+  );
 }
 
 class _MemoryCredentialVault implements ProviderCredentialVault {
@@ -562,27 +579,26 @@ class _ArtworkCatalogProvider implements MusicCatalogProvider {
   String get description => 'Artwork provider fixture';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{MusicSourceCapability.artwork};
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.artwork,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
-        networkDomains: <String>['media.example.test'],
-        requiresUserCredentials: true,
-        cachesMetadata: true,
-      );
+    networkDomains: <String>['media.example.test'],
+    requiresUserCredentials: true,
+    cachesMetadata: true,
+  );
 
   @override
   Future<List<MusicCatalogCollection>> browseCollections(
     MusicCatalogCollectionKind kind,
-  ) async =>
-      const <MusicCatalogCollection>[];
+  ) async => const <MusicCatalogCollection>[];
 
   @override
   Future<MusicCatalogDetail> loadCollection(
     MusicCatalogCollection collection,
-  ) async =>
-      MusicCatalogDetail(collection: collection);
+  ) async => MusicCatalogDetail(collection: collection);
 
   @override
   Future<Uint8List?> loadArtwork(
@@ -602,8 +618,6 @@ class _ArtworkCatalogProvider implements MusicCatalogProvider {
 
   @override
   Future<Uri?> resolveStream(Track track) async {
-    return Uri.parse(
-      'https://media.example.test/stream/${track.externalId}',
-    );
+    return Uri.parse('https://media.example.test/stream/${track.externalId}');
   }
 }

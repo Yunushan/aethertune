@@ -1,0 +1,30 @@
+name: OSV dependency and license scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  schedule:
+    - cron: '30 12 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  osv-scan:
+    name: OSV vulnerability and license scan
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      fail-on-vuln: true
+      scan-args: |-
+        --lockfile=./apps/mobile/pubspec.lock
+        --lockfile=./services/server/pubspec.lock
+        --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
+    permissions:
+      actions: read
+      contents: read
+      security-events: write

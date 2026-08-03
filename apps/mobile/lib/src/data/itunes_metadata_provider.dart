@@ -6,10 +6,8 @@ import '../domain/music_catalog_provider.dart';
 import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
 
-typedef ItunesSearchResponseLoader = Future<String> Function(
-  Uri uri,
-  Map<String, String> headers,
-);
+typedef ItunesSearchResponseLoader =
+    Future<String> Function(Uri uri, Map<String, String> headers);
 
 typedef ItunesClock = DateTime Function();
 typedef ItunesDelay = Future<void> Function(Duration duration);
@@ -17,11 +15,9 @@ typedef ItunesDelay = Future<void> Function(Duration duration);
 /// Serializes explicit requests below Apple's documented public Search API
 /// guidance of roughly 20 requests per minute.
 final class ItunesRequestLimiter {
-  ItunesRequestLimiter({
-    ItunesClock? clock,
-    ItunesDelay? delay,
-  }) : _clock = clock ?? DateTime.now,
-       _delay = delay ?? ((duration) => Future<void>.delayed(duration));
+  ItunesRequestLimiter({ItunesClock? clock, ItunesDelay? delay})
+    : _clock = clock ?? DateTime.now,
+      _delay = delay ?? ((duration) => Future<void>.delayed(duration));
 
   static const minimumInterval = Duration(seconds: 3);
 
@@ -72,7 +68,8 @@ final class ItunesMetadataProvider
     ItunesRequestLimiter? limiter,
   }) : searchUri = searchUri ?? _defaultSearchUri,
        lookupUri =
-           lookupUri ?? (searchUri ?? _defaultSearchUri).replace(
+           lookupUri ??
+           (searchUri ?? _defaultSearchUri).replace(
              path: '/lookup',
              query: null,
            ),
@@ -80,10 +77,7 @@ final class ItunesMetadataProvider
        _loader = loader ?? _loadItunesSearchResponse,
        _limiter = limiter ?? itunesRequestLimiter;
 
-  static final Uri _defaultSearchUri = Uri.https(
-    'itunes.apple.com',
-    '/search',
-  );
+  static final Uri _defaultSearchUri = Uri.https('itunes.apple.com', '/search');
   static const userAgent =
       'AetherTune/0.1 (https://github.com/Yunushan/aethertune)';
 
@@ -106,12 +100,11 @@ final class ItunesMetadataProvider
       'playback, caching, or downloads.';
 
   @override
-  Set<MusicSourceCapability> get capabilities =>
-      const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.libraryBrowse,
-      };
+  Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+    MusicSourceCapability.libraryBrowse,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
@@ -159,10 +152,7 @@ final class ItunesMetadataProvider
       await _request(uri),
       limit: boundedLimit,
     );
-    return MusicSourceSearchPage(
-      tracks: tracks,
-      totalCount: tracks.length,
-    );
+    return MusicSourceSearchPage(tracks: tracks, totalCount: tracks.length);
   }
 
   @override
@@ -487,7 +477,9 @@ Future<String> _loadItunesSearchResponse(
 ) async {
   final client = HttpClient();
   try {
-    final request = await client.getUrl(uri).timeout(const Duration(seconds: 15));
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 15));
     headers.forEach(request.headers.set);
     final response = await request.close();
     final body = await utf8.decoder.bind(response).join();

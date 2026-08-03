@@ -44,8 +44,8 @@ final class CustomCatalogStore extends ChangeNotifier {
       List<CustomCatalogDefinition>.unmodifiable(_definitions);
 
   List<MusicSourceProvider> get musicProviders => <MusicSourceProvider>[
-        for (final definition in _definitions) CustomCatalogProvider(definition),
-      ];
+    for (final definition in _definitions) CustomCatalogProvider(definition),
+  ];
 
   Future<void> load() async {
     if (_loaded) {
@@ -54,7 +54,9 @@ final class CustomCatalogStore extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_preferencesKey);
-      final decoded = raw == null || raw.isEmpty ? const <Object?>[] : jsonDecode(raw);
+      final decoded = raw == null || raw.isEmpty
+          ? const <Object?>[]
+          : jsonDecode(raw);
       if (decoded is! List) {
         throw const FormatException('Custom catalog storage is invalid.');
       }
@@ -89,7 +91,9 @@ final class CustomCatalogStore extends ChangeNotifier {
     }
     final index = _definitions.indexWhere((item) => item.id == definition.id);
     if (index < 0 && _definitions.length >= maxCatalogs) {
-      throw StateError('AetherTune supports at most $maxCatalogs custom catalogs.');
+      throw StateError(
+        'AetherTune supports at most $maxCatalogs custom catalogs.',
+      );
     }
     if (index < 0) {
       _definitions.add(definition);
@@ -166,7 +170,9 @@ final class CustomCatalogStore extends ChangeNotifier {
         .where((definition) => !existingIds.contains(definition.id))
         .toList(growable: false);
     if (_definitions.length + imports.length > maxCatalogs) {
-      throw StateError('AetherTune supports at most $maxCatalogs custom catalogs.');
+      throw StateError(
+        'AetherTune supports at most $maxCatalogs custom catalogs.',
+      );
     }
     final result = CustomCatalogConfigurationImportResult(
       importedCatalogCount: imports.length,
@@ -196,7 +202,9 @@ final class CustomCatalogStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _preferencesKey,
-      jsonEncode(_definitions.map((definition) => definition.toJson()).toList()),
+      jsonEncode(
+        _definitions.map((definition) => definition.toJson()).toList(),
+      ),
     );
   }
 }

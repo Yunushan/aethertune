@@ -9,24 +9,34 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   provenance:
     name: Release dependency provenance
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Flutter and Dart
-        uses: subosito/flutter-action@v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          channel: stable
+          flutter-version: '3.44.6'
+
+      - name: Verify Dart formatting
+        run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
 
       - name: Resolve client dependencies
-        run: cd apps/mobile && flutter pub get
+        run: cd apps/mobile && flutter pub get --enforce-lockfile
 
       - name: Resolve server dependencies
-        run: cd services/server && dart pub get
+        run: cd services/server && dart pub get --enforce-lockfile
 
       - name: Generate release SBOMs
         shell: bash
@@ -40,27 +50,78 @@ jobs:
           python3 scripts/ci/generate_dart_sbom.py --deps-json release/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output release/provenance/aethertune-mobile.cdx.json --check
           python3 scripts/ci/generate_dart_sbom.py --deps-json release/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output release/provenance/aethertune-server.cdx.json --check
 
+      - name: Verify toolchain pin policy
+        run: python3 scripts/ci/test_toolchain_policy.py
+
+      - name: Test production release preflight
+        run: python3 scripts/ci/test_verify_production_release.py
+
+      - name: Test shell syntax
+        run: bash scripts/ci/test_shell_syntax.sh
+
       - name: Upload release dependency provenance
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: aethertune-dependency-provenance
           if-no-files-found: error
           path: release/provenance/
 
+  osv-scan:
+    name: OSV vulnerability and license scan
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      fail-on-vuln: true
+      scan-args: |-
+        --lockfile=./apps/mobile/pubspec.lock
+        --lockfile=./services/server/pubspec.lock
+        --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
   android:
     name: Android release artifacts
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: ${{ vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' && 'production' || 'candidate' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          channel: stable
+          flutter-version: '3.44.6'
 
       - name: Generate platform wrappers
         run: bash ./scripts/bootstrap_client.sh
+
+      - name: Configure Android production signing
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.AETHERTUNE_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.AETHERTUNE_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.AETHERTUNE_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.AETHERTUNE_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${ANDROID_KEYSTORE_BASE64:?AETHERTUNE_ANDROID_KEYSTORE_BASE64 is required for production releases}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?AETHERTUNE_ANDROID_KEYSTORE_PASSWORD is required for production releases}"
+          : "${ANDROID_KEY_ALIAS:?AETHERTUNE_ANDROID_KEY_ALIAS is required for production releases}"
+          : "${ANDROID_KEY_PASSWORD:?AETHERTUNE_ANDROID_KEY_PASSWORD is required for production releases}"
+          keystore_path="$RUNNER_TEMP/aethertune-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          {
+            printf 'AETHERTUNE_RELEASE_STORE_FILE=%s\n' "$keystore_path"
+            printf 'AETHERTUNE_RELEASE_STORE_PASSWORD=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'AETHERTUNE_RELEASE_KEY_ALIAS=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'AETHERTUNE_RELEASE_KEY_PASSWORD=%s\n' "$ANDROID_KEY_PASSWORD"
+          } >> apps/mobile/android/gradle.properties
 
       - name: Build APK
         run: cd apps/mobile && flutter build apk --release
@@ -74,18 +135,54 @@ jobs:
             --apk apps/mobile/build/app/outputs/flutter-apk/app-release.apk \
             --aab apps/mobile/build/app/outputs/bundle/release/app-release.aab
 
+      - name: Require signed Android production artifacts
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+          apk_path='apps/mobile/build/app/outputs/flutter-apk/app-release.apk'
+          aab_path='apps/mobile/build/app/outputs/bundle/release/app-release.aab'
+          python3 scripts/ci/verify_android_release_artifacts.py \
+            --apk "$apk_path" \
+            --aab "$aab_path" \
+            --require-signing
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?ANDROID_HOME is required}}"
+          apksigner_path="$(find "$android_sdk/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [[ -z "$apksigner_path" ]]; then
+            echo 'Android apksigner was not found on the runner.' >&2
+            exit 1
+          fi
+          apk_certificate_output="$("$apksigner_path" verify --verbose --print-certs "$apk_path")"
+          if grep -Eiq 'Android Debug' <<< "$apk_certificate_output"; then
+            echo 'Production APK is signed with the Android debug certificate.' >&2
+            exit 1
+          fi
+          aab_certificate_output="$(jarsigner -verify -verbose -certs "$aab_path")"
+          if grep -Eiq 'Android Debug' <<< "$aab_certificate_output"; then
+            echo 'Production AAB is signed with the Android debug certificate.' >&2
+            exit 1
+          fi
+
+      - name: Stage Android artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp apps/mobile/build/app/outputs/flutter-apk/app-release.apk release/app-release.apk
+          cp apps/mobile/build/app/outputs/bundle/release/app-release.aab release/app-release.aab
+
       - name: Upload Android artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: aethertune-android
           if-no-files-found: error
-          path: |
-            apps/mobile/build/app/outputs/flutter-apk/app-release.apk
-            apps/mobile/build/app/outputs/bundle/release/app-release.aab
+          path: release/*
 
   desktop:
     name: Desktop release artifact (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    environment:
+      name: ${{ vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' && 'production' || 'candidate' }}
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +198,9 @@ jobs:
             artifact_name: aethertune-macos
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Linux desktop dependencies
         if: matrix.target == 'linux'
@@ -110,9 +209,9 @@ jobs:
           sudo apt-get install -y clang cmake libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          channel: stable
+          flutter-version: '3.44.6'
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
@@ -130,6 +229,96 @@ jobs:
       - name: Build desktop app
         run: cd apps/mobile && flutter build ${{ matrix.target }} --release
 
+      - name: Configure Apple production signing
+        if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        env:
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.AETHERTUNE_APPLE_KEYCHAIN_PASSWORD }}
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.AETHERTUNE_MACOS_SIGNING_IDENTITY }}
+          IOS_CERTIFICATE_BASE64: ${{ secrets.AETHERTUNE_IOS_SIGNING_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_IOS_SIGNING_CERTIFICATE_PASSWORD }}
+          IOS_SIGNING_IDENTITY: ${{ secrets.AETHERTUNE_IOS_SIGNING_IDENTITY }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.AETHERTUNE_IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_EXPORT_OPTIONS_BASE64: ${{ secrets.AETHERTUNE_IOS_EXPORT_OPTIONS_PLIST_BASE64 }}
+          NOTARY_API_KEY_BASE64: ${{ secrets.AETHERTUNE_APPLE_NOTARY_API_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.AETHERTUNE_APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.AETHERTUNE_APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          : "${APPLE_KEYCHAIN_PASSWORD:?AETHERTUNE_APPLE_KEYCHAIN_PASSWORD is required}"
+          : "${MACOS_CERTIFICATE_BASE64:?AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64 is required}"
+          : "${MACOS_CERTIFICATE_PASSWORD:?AETHERTUNE_MACOS_SIGNING_CERTIFICATE_PASSWORD is required}"
+          : "${MACOS_SIGNING_IDENTITY:?AETHERTUNE_MACOS_SIGNING_IDENTITY is required}"
+          : "${IOS_CERTIFICATE_BASE64:?AETHERTUNE_IOS_SIGNING_CERTIFICATE_BASE64 is required}"
+          : "${IOS_CERTIFICATE_PASSWORD:?AETHERTUNE_IOS_SIGNING_CERTIFICATE_PASSWORD is required}"
+          : "${IOS_SIGNING_IDENTITY:?AETHERTUNE_IOS_SIGNING_IDENTITY is required}"
+          : "${IOS_PROVISIONING_PROFILE_BASE64:?AETHERTUNE_IOS_PROVISIONING_PROFILE_BASE64 is required}"
+          : "${IOS_EXPORT_OPTIONS_BASE64:?AETHERTUNE_IOS_EXPORT_OPTIONS_PLIST_BASE64 is required}"
+          : "${NOTARY_API_KEY_BASE64:?AETHERTUNE_APPLE_NOTARY_API_KEY_BASE64 is required}"
+          : "${NOTARY_KEY_ID:?AETHERTUNE_APPLE_NOTARY_KEY_ID is required}"
+          : "${NOTARY_ISSUER_ID:?AETHERTUNE_APPLE_NOTARY_ISSUER_ID is required}"
+
+          keychain_path="$RUNNER_TEMP/aethertune-signing.keychain-db"
+          export AETHERTUNE_APPLE_KEYCHAIN_PATH="$keychain_path"
+          export AETHERTUNE_APPLE_KEYCHAIN_PASSWORD="$APPLE_KEYCHAIN_PASSWORD"
+          export AETHERTUNE_APPLE_CERTIFICATE_BASE64="$MACOS_CERTIFICATE_BASE64"
+          export AETHERTUNE_APPLE_CERTIFICATE_PASSWORD="$MACOS_CERTIFICATE_PASSWORD"
+          export AETHERTUNE_APPLE_CERTIFICATE_FILE_NAME='aethertune-macos-signing.p12'
+          export AETHERTUNE_APPLE_SIGNING_IDENTITY="$MACOS_SIGNING_IDENTITY"
+          bash scripts/ci/configure_apple_signing.sh
+
+          export AETHERTUNE_APPLE_CERTIFICATE_BASE64="$IOS_CERTIFICATE_BASE64"
+          export AETHERTUNE_APPLE_CERTIFICATE_PASSWORD="$IOS_CERTIFICATE_PASSWORD"
+          export AETHERTUNE_APPLE_CERTIFICATE_FILE_NAME='aethertune-ios-signing.p12'
+          export AETHERTUNE_APPLE_SIGNING_IDENTITY="$IOS_SIGNING_IDENTITY"
+          bash scripts/ci/configure_apple_signing.sh
+
+          profile_path="$RUNNER_TEMP/aethertune-ios.mobileprovision"
+          profile_plist="$RUNNER_TEMP/aethertune-ios-profile.plist"
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -D > "$profile_path"
+          security cms -D -i "$profile_path" > "$profile_plist"
+          profile_uuid=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$profile_plist")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+
+          export_options="$RUNNER_TEMP/aethertune-ios-export-options.plist"
+          printf '%s' "$IOS_EXPORT_OPTIONS_BASE64" | base64 -D > "$export_options"
+          plutil -lint "$export_options"
+
+          notary_key="$RUNNER_TEMP/aethertune-notary-key.p8"
+          printf '%s' "$NOTARY_API_KEY_BASE64" | base64 -D > "$notary_key"
+          {
+            printf 'AETHERTUNE_APPLE_KEYCHAIN_PATH=%s\n' "$keychain_path"
+            printf 'AETHERTUNE_MACOS_SIGNING_IDENTITY=%s\n' "$MACOS_SIGNING_IDENTITY"
+            printf 'AETHERTUNE_IOS_SIGNING_IDENTITY=%s\n' "$IOS_SIGNING_IDENTITY"
+            printf 'AETHERTUNE_IOS_PROVISIONING_PROFILE_PATH=%s\n' "$profile_path"
+            printf 'AETHERTUNE_IOS_EXPORT_OPTIONS_PATH=%s\n' "$export_options"
+            printf 'AETHERTUNE_NOTARY_KEY_PATH=%s\n' "$notary_key"
+            printf 'AETHERTUNE_NOTARY_KEY_ID=%s\n' "$NOTARY_KEY_ID"
+            printf 'AETHERTUNE_NOTARY_ISSUER_ID=%s\n' "$NOTARY_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+
+      - name: Sign Windows executable for production
+        if: matrix.target == 'windows' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
+            throw 'Windows signing secrets are required for production releases.'
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'aethertune-signing.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
+          ./scripts/ci/sign_windows_executable.ps1 `
+            -ExecutablePath 'apps/mobile/build/windows/x64/runner/Release/aethertune.exe' `
+            -SigningCertificatePath $certificatePath `
+            -SigningCertificatePassword $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
+          "WINDOWS_SIGNING_CERTIFICATE_PATH=$certificatePath" >> $env:GITHUB_ENV
+
       - name: Package Linux desktop app
         if: matrix.target == 'linux'
         shell: bash
@@ -139,6 +328,24 @@ jobs:
           bash scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.tar.gz
           version="$(awk '/^version:/ {print $2}' apps/mobile/pubspec.yaml | cut -d+ -f1)"
           bash scripts/ci/package_linux_deb.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.deb "$version"
+
+      - name: Sign and notarize macOS production app
+        if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_bundle="$(find apps/mobile/build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          bash scripts/ci/sign_macos_app.sh "$app_bundle" "$AETHERTUNE_MACOS_SIGNING_IDENTITY"
+          notarization_zip="$RUNNER_TEMP/aethertune-macos-notarization.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$notarization_zip"
+          xcrun notarytool submit "$notarization_zip" \
+            --key "$AETHERTUNE_NOTARY_KEY_PATH" \
+            --key-id "$AETHERTUNE_NOTARY_KEY_ID" \
+            --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$app_bundle"
+          xcrun stapler validate "$app_bundle"
+          codesign --verify --deep --strict --verbose=2 "$app_bundle"
 
       - name: Package macOS desktop app
         if: matrix.target == 'macos'
@@ -150,8 +357,20 @@ jobs:
           bash scripts/ci/package_macos_zip.sh "$app_bundle" release/aethertune-macos.zip
           bash scripts/ci/package_macos_dmg.sh "$app_bundle" release/aethertune-macos.dmg
 
+      - name: Build and package signed iOS app
+        if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd apps/mobile && flutter build ios --release --no-codesign)
+          bash scripts/ci/build_signed_ios_ipa.sh \
+            apps/mobile/ios/Runner.xcworkspace \
+            Runner \
+            release/aethertune-ios.ipa
+          python3 scripts/ci/verify_ios_release_artifact.py --ipa release/aethertune-ios.ipa
+
       - name: Build and package unsigned iOS app
-        if: matrix.target == 'macos'
+        if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -160,16 +379,61 @@ jobs:
           app_bundle="$(find apps/mobile/build/ios/iphoneos -maxdepth 1 -name '*.app' -type d | head -n 1)"
           bash scripts/ci/package_ios_unsigned_zip.sh "$app_bundle" release/aethertune-ios-unsigned.zip
 
+      - name: Notarize macOS production DMG
+        if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun notarytool submit release/aethertune-macos.dmg \
+            --key "$AETHERTUNE_NOTARY_KEY_PATH" \
+            --key-id "$AETHERTUNE_NOTARY_KEY_ID" \
+            --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
+            --wait
+          xcrun stapler staple release/aethertune-macos.dmg
+          xcrun stapler validate release/aethertune-macos.dmg
+          spctl --assess --type open --verbose=2 release/aethertune-macos.dmg
+          printf '%s\n' '{"app_archive":"aethertune-macos.zip","disk_image":"aethertune-macos.dmg","notarized":true,"schema_version":1,"stapled":true}' > release/aethertune-macos-notarization.json
+
+      - name: Verify macOS production artifact evidence
+        if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: python3 scripts/ci/verify_macos_release_artifacts.py --release-dir release
+
       - name: Package Windows desktop app
         if: matrix.target == 'windows'
         shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          ./scripts/ci/package_windows_zip.ps1 -BundlePath apps/mobile/build/windows/x64/runner/Release -OutputPath release/aethertune-windows-x64.zip
+          $bundlePath = 'apps/mobile/build/windows/x64/runner/Release'
+          $zipPath = 'release/aethertune-windows-x64.zip'
+          ./scripts/ci/package_windows_zip.ps1 -BundlePath $bundlePath -OutputPath $zipPath
           $version = (Select-String -LiteralPath apps/mobile/pubspec.yaml -Pattern '^version:' | Select-Object -First 1).Line.Split(':', 2)[1].Trim()
-          ./scripts/ci/package_windows_msix.ps1 -BundlePath apps/mobile/build/windows/x64/runner/Release -OutputPath release/aethertune-windows-x64.msix -Version $version
+          $msixArguments = @{
+            BundlePath = $bundlePath
+            OutputPath = 'release/aethertune-windows-x64.msix'
+            Version = $version
+          }
+          if ('${{ vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED }}' -eq 'true') {
+            if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PATH) -or
+                [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
+              throw 'Windows signing secrets are required for production releases.'
+            }
+            $msixArguments.SigningCertificatePath = $env:WINDOWS_SIGNING_CERTIFICATE_PATH
+            $msixArguments.SigningCertificatePassword = $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
+          }
+          ./scripts/ci/package_windows_msix.ps1 @msixArguments
+
+      - name: Verify Windows production artifact evidence
+        if: matrix.target == 'windows' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          python scripts/ci/verify_windows_release_artifacts.py `
+            --zip release/aethertune-windows-x64.zip `
+            --msix release/aethertune-windows-x64.msix
 
       - name: Upload desktop artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact_name }}
           if-no-files-found: error
@@ -178,6 +442,7 @@ jobs:
   server:
     name: Server executable (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -193,15 +458,17 @@ jobs:
             binary_name: aethertune-server-macos
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1.7.2
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
         with:
-          sdk: stable
+          sdk: '3.12.2'
 
       - name: Install server dependencies
-        run: cd services/server && dart pub get
+        run: cd services/server && dart pub get --enforce-lockfile
 
       - name: Compile server executable
         shell: bash
@@ -214,8 +481,13 @@ jobs:
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart "services/server/build/${{ matrix.binary_name }}"
 
+      - name: Test server backup and restore
+        if: matrix.label == 'linux-x64'
+        shell: bash
+        run: bash scripts/ci/test_server_backup_restore.sh
+
       - name: Upload server executable
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: aethertune-server-${{ matrix.label }}
           if-no-files-found: error
@@ -223,29 +495,75 @@ jobs:
 
   assemble-release:
     name: Assemble verified release bundle
-    needs: [provenance, android, desktop, server]
+    needs: [provenance, osv-scan, android, desktop, server]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
+      - name: Checkout release policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require production tag to be based on main
+        if: >-
+          github.event_name == 'push' &&
+          startsWith(github.ref, 'refs/tags/v') &&
+          vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
       - name: Download build artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: aethertune-*
           path: release
           merge-multiple: true
 
+      - name: Verify downloaded artifact layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          for artifact in app-release.apk app-release.aab; do
+            if [[ ! -f "release/$artifact" ]]; then
+              echo "Downloaded Android artifact is not at the release root: $artifact" >&2
+              exit 1
+            fi
+          done
+
       - name: Generate checksums
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == 'tag' ]]; then
+            bash scripts/ci/verify_release_version.sh "$GITHUB_REF_NAME" apps/mobile/pubspec.yaml
+          fi
           python3 scripts/ci/generate_release_manifest.py --release-dir release --output release/RELEASE_MANIFEST.json
           cd release
           sha256sum -- * > SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
           cd ..
+
+      - name: Attest verified release subjects
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-checksums: release/SHA256SUMS.txt
+
+      - name: Verify release manifest
+        shell: bash
+        run: |
           python3 scripts/ci/verify_release_manifest.py --release-dir release --manifest release/RELEASE_MANIFEST.json
 
       - name: Upload verified release bundle
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: aethertune-release-bundle
           if-no-files-found: error
@@ -254,26 +572,42 @@ jobs:
   publish:
     name: Publish GitHub release
     needs: [assemble-release]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
     permissions:
+      actions: read
       contents: write
     steps:
+      - name: Checkout release policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
       - name: Download verified release bundle
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: aethertune-release-bundle
           path: release
 
-      - name: Create or update GitHub release
+      - name: Create immutable GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          python3 scripts/ci/verify_production_release.py \
+            --release-dir release \
+            --manifest release/RELEASE_MANIFEST.json
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release/* --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$RELEASE_TAG" release/* --title "AetherTune $RELEASE_TAG" --generate-notes --repo "$GITHUB_REPOSITORY"
+            echo "Release $RELEASE_TAG already exists; refusing to overwrite immutable production assets." >&2
+            exit 1
           fi
+          gh release create "$RELEASE_TAG" release/* --title "AetherTune $RELEASE_TAG" --generate-notes --repo "$GITHUB_REPOSITORY"

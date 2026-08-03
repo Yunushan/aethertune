@@ -5,9 +5,8 @@ import '../domain/music_source_provider.dart';
 import '../domain/track.dart';
 
 typedef InternetArchiveSearchLoader = Future<String> Function(Uri searchUri);
-typedef InternetArchiveMetadataLoader = Future<String> Function(
-  Uri metadataUri,
-);
+typedef InternetArchiveMetadataLoader =
+    Future<String> Function(Uri metadataUri);
 
 final class InternetArchiveSearchFilters {
   const InternetArchiveSearchFilters({
@@ -62,10 +61,10 @@ class InternetArchiveProvider
     InternetArchiveSearchLoader? searchLoader,
     InternetArchiveMetadataLoader? metadataLoader,
     this.limit = 10,
-  })  : assert(limit > 0),
-        baseUri = baseUri ?? Uri.parse('https://archive.org'),
-        _searchLoader = searchLoader ?? _loadInternetArchiveJson,
-        _metadataLoader = metadataLoader ?? _loadInternetArchiveJson;
+  }) : assert(limit > 0),
+       baseUri = baseUri ?? Uri.parse('https://archive.org'),
+       _searchLoader = searchLoader ?? _loadInternetArchiveJson,
+       _metadataLoader = metadataLoader ?? _loadInternetArchiveJson;
 
   final Uri baseUri;
   final int limit;
@@ -84,26 +83,23 @@ class InternetArchiveProvider
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.directPlayback,
-        MusicSourceCapability.offlineCache,
-        MusicSourceCapability.downloads,
-      };
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.searchSuggestions,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.directPlayback,
+    MusicSourceCapability.offlineCache,
+    MusicSourceCapability.downloads,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: baseUri.host.isEmpty ? const <String>[] : <String>[
-          baseUri.host,
-        ],
-        dataSent: const <String>[
-          'item search query',
-          'item metadata identifier',
-        ],
-        cachesMedia: true,
-        supportsDownloads: true,
-      );
+    networkDomains: baseUri.host.isEmpty
+        ? const <String>[]
+        : <String>[baseUri.host],
+    dataSent: const <String>['item search query', 'item metadata identifier'],
+    cachesMedia: true,
+    supportsDownloads: true,
+  );
 
   @override
   Future<List<Track>> search(String query) async {
@@ -148,7 +144,9 @@ class InternetArchiveProvider
         MusicSourceSearchSuggestion(
           value: value,
           kind: MusicSourceSearchSuggestionKind.album,
-          subtitle: details.isEmpty ? 'Internet Archive item' : details.join(' / '),
+          subtitle: details.isEmpty
+              ? 'Internet Archive item'
+              : details.join(' / '),
         ),
       );
       if (suggestions.length >= limit) {
@@ -239,18 +237,14 @@ class InternetArchiveProvider
       facets: results.facets,
       page: page,
       totalResults: results.totalResults,
-      hasMore: _hasMoreResults(
-        results,
-        page: page,
-        limit: effectiveLimit,
-      ),
+      hasMore: _hasMoreResults(results, page: page, limit: effectiveLimit),
     );
   }
 
   Future<InternetArchiveItem> fetchItem(String identifier) {
-    return _metadataLoader(_metadataUri(identifier)).then(
-      parseInternetArchiveItem,
-    );
+    return _metadataLoader(
+      _metadataUri(identifier),
+    ).then(parseInternetArchiveItem);
   }
 
   @override
@@ -407,22 +401,17 @@ final class InternetArchiveItem {
   final List<InternetArchiveFile> files;
 
   InternetArchiveFile? get playableAudioFile {
-    final playable = files
-        .where((file) => file.isPlayableAudio)
-        .toList(growable: false)
-      ..sort(
-        (left, right) => left.playbackPriority.compareTo(
-          right.playbackPriority,
-        ),
-      );
+    final playable =
+        files.where((file) => file.isPlayableAudio).toList(growable: false)
+          ..sort(
+            (left, right) =>
+                left.playbackPriority.compareTo(right.playbackPriority),
+          );
 
     return playable.isEmpty ? null : playable.first;
   }
 
-  Track? toTrack({
-    required String sourceId,
-    required Uri baseUri,
-  }) {
+  Track? toTrack({required String sourceId, required Uri baseUri}) {
     final audioFile = playableAudioFile;
     if (audioFile == null) {
       return null;
@@ -436,18 +425,13 @@ final class InternetArchiveItem {
     );
   }
 
-  List<Track> toTracks({
-    required String sourceId,
-    required Uri baseUri,
-  }) {
-    final playable = files
-        .where((file) => file.isPlayableAudio)
-        .toList(growable: false)
-      ..sort(
-        (left, right) => left.playbackPriority.compareTo(
-          right.playbackPriority,
-        ),
-      );
+  List<Track> toTracks({required String sourceId, required Uri baseUri}) {
+    final playable =
+        files.where((file) => file.isPlayableAudio).toList(growable: false)
+          ..sort(
+            (left, right) =>
+                left.playbackPriority.compareTo(right.playbackPriority),
+          );
 
     return playable
         .map(
@@ -468,10 +452,7 @@ final class InternetArchiveItem {
     required bool includeFileTitle,
   }) {
     final genre = subjects.isEmpty ? 'Internet Archive Audio' : subjects.first;
-    final albumParts = <String>[
-      'Internet Archive',
-      if (year.isNotEmpty) year,
-    ];
+    final albumParts = <String>['Internet Archive', if (year.isNotEmpty) year];
     final itemTitle = title.isEmpty ? audioFile.displayTitle : title;
     final trackTitle = includeFileTitle && title.isNotEmpty
         ? '$itemTitle - ${audioFile.displayTitle}'
@@ -640,12 +621,14 @@ InternetArchiveItem parseInternetArchiveItem(String jsonText) {
   }
 
   final json = decoded.cast<String, Object?>();
-  final metadata = (json['metadata'] as Map<dynamic, dynamic>?)
-          ?.cast<String, Object?>() ??
+  final metadata =
+      (json['metadata'] as Map<dynamic, dynamic>?)?.cast<String, Object?>() ??
       const <String, Object?>{};
-  final identifier = _stringValue(metadata['identifier'])
-      .ifEmpty(_stringValue(json['identifier']));
-  final files = (json['files'] as List<dynamic>?)
+  final identifier = _stringValue(
+    metadata['identifier'],
+  ).ifEmpty(_stringValue(json['identifier']));
+  final files =
+      (json['files'] as List<dynamic>?)
           ?.whereType<Map<dynamic, dynamic>>()
           .map((file) => _fileFromJson(file.cast<String, Object?>()))
           .toList(growable: false) ??
@@ -664,15 +647,15 @@ InternetArchiveItem parseInternetArchiveItem(String jsonText) {
     description: _stringValue(metadata['description']),
     subjects: _stringList(metadata['subject']),
     collections: _stringList(metadata['collection']),
-    year: _stringValue(metadata['year']).ifEmpty(_stringValue(metadata['date'])),
+    year: _stringValue(
+      metadata['year'],
+    ).ifEmpty(_stringValue(metadata['date'])),
     licenseUrl: _stringValue(metadata['licenseurl']),
     files: files,
   );
 }
 
-InternetArchiveSearchResult? _searchResultFromJson(
-  Map<String, Object?> json,
-) {
+InternetArchiveSearchResult? _searchResultFromJson(Map<String, Object?> json) {
   final identifier = _stringValue(json['identifier']);
   if (identifier.isEmpty) {
     return null;
@@ -707,11 +690,7 @@ List<InternetArchiveFacet> _facetsFromJson(Object? value) {
       }
 
       facets.add(
-        InternetArchiveFacet(
-          field: field,
-          value: facetValue,
-          count: count,
-        ),
+        InternetArchiveFacet(field: field, value: facetValue, count: count),
       );
     }
   }
@@ -882,7 +861,10 @@ String _stringValue(Object? value) {
     return '';
   }
   if (value is Iterable) {
-    return value.map(_stringValue).where((value) => value.isNotEmpty).join(', ');
+    return value
+        .map(_stringValue)
+        .where((value) => value.isNotEmpty)
+        .join(', ');
   }
 
   return value.toString().trim();

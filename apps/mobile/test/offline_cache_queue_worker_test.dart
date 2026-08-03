@@ -97,8 +97,8 @@ void main() {
 
       final processed = await worker.processPending(library);
 
-    expect(resolvedIds, containsAll(<String>['will-fail', 'will-succeed']));
-    expect(resolvedIds, hasLength(2));
+      expect(resolvedIds, containsAll(<String>['will-fail', 'will-succeed']));
+      expect(resolvedIds, hasLength(2));
       expect(processed, hasLength(2));
       expect(
         library.offlineCacheEntryById(failedEntry.id)!.status,
@@ -154,83 +154,92 @@ void main() {
     );
   });
 
-  test('requeues interrupted processing work after a background handoff',
-      () async {
-    final library = LibraryStore();
-    await library.load();
-    final entry = await _queueLocalEntry(library, 'background-handoff');
-    await library.markOfflineCacheEntryProcessing(entry.id);
+  test(
+    'requeues interrupted processing work after a background handoff',
+    () async {
+      final library = LibraryStore();
+      await library.load();
+      final entry = await _queueLocalEntry(library, 'background-handoff');
+      await library.markOfflineCacheEntryProcessing(entry.id);
 
-    await library.requeueProcessingOfflineCacheEntriesForBackground();
+      await library.requeueProcessingOfflineCacheEntriesForBackground();
 
-    expect(
-      library.offlineCacheEntryById(entry.id)!.status,
-      OfflineCacheEntryStatus.queued,
-    );
-    expect(
-      library.offlineCacheEntryById(entry.id)!.reason,
-      'Continuing with the background downloader.',
-    );
-    final reloaded = LibraryStore();
-    await reloaded.load();
-    expect(
-      reloaded.offlineCacheEntryById(entry.id)!.status,
-      OfflineCacheEntryStatus.queued,
-    );
-  });
+      expect(
+        library.offlineCacheEntryById(entry.id)!.status,
+        OfflineCacheEntryStatus.queued,
+      );
+      expect(
+        library.offlineCacheEntryById(entry.id)!.reason,
+        'Continuing with the background downloader.',
+      );
+      final reloaded = LibraryStore();
+      await reloaded.load();
+      expect(
+        reloaded.offlineCacheEntryById(entry.id)!.status,
+        OfflineCacheEntryStatus.queued,
+      );
+    },
+  );
 
-  test('restores processing work as queued after an interrupted process',
-      () async {
-    final library = LibraryStore();
-    await library.load();
-    final entry = await _queueLocalEntry(library, 'interrupted-process');
-    await library.markOfflineCacheEntryProcessing(entry.id);
+  test(
+    'restores processing work as queued after an interrupted process',
+    () async {
+      final library = LibraryStore();
+      await library.load();
+      final entry = await _queueLocalEntry(library, 'interrupted-process');
+      await library.markOfflineCacheEntryProcessing(entry.id);
 
-    final reloaded = LibraryStore();
-    await reloaded.load();
+      final reloaded = LibraryStore();
+      await reloaded.load();
 
-    expect(
-      reloaded.offlineCacheEntryById(entry.id)!.status,
-      OfflineCacheEntryStatus.queued,
-    );
-    expect(
-      reloaded.offlineCacheEntryById(entry.id)!.reason,
-      'Resuming an interrupted cache request.',
-    );
-  });
+      expect(
+        reloaded.offlineCacheEntryById(entry.id)!.status,
+        OfflineCacheEntryStatus.queued,
+      );
+      expect(
+        reloaded.offlineCacheEntryById(entry.id)!.reason,
+        'Resuming an interrupted cache request.',
+      );
+    },
+  );
 
-  test('pauses an active request without marking it as a failed cache',
-      () async {
-    final root = await Directory.systemTemp.createTemp('aethertune-worker-');
-    addTearDown(() => root.delete(recursive: true));
-    final library = LibraryStore();
-    await library.load();
-    final entry = await _queueLocalEntry(library, 'active-pause');
-    final resolverStarted = Completer<void>();
-    final releaseResolver = Completer<void>();
-    final worker = OfflineCacheQueueWorker(
-      cacheRoot: root,
-      resolveTrack: (track) async {
-        resolverStarted.complete();
-        await releaseResolver.future;
-        return track;
-      },
-    );
+  test(
+    'pauses an active request without marking it as a failed cache',
+    () async {
+      final root = await Directory.systemTemp.createTemp('aethertune-worker-');
+      addTearDown(() => root.delete(recursive: true));
+      final library = LibraryStore();
+      await library.load();
+      final entry = await _queueLocalEntry(library, 'active-pause');
+      final resolverStarted = Completer<void>();
+      final releaseResolver = Completer<void>();
+      final worker = OfflineCacheQueueWorker(
+        cacheRoot: root,
+        resolveTrack: (track) async {
+          resolverStarted.complete();
+          await releaseResolver.future;
+          return track;
+        },
+      );
 
-    final processing = worker.processNext(library);
-    await resolverStarted.future;
-    await library.pauseOfflineCacheEntry(entry.id);
-    releaseResolver.complete();
+      final processing = worker.processNext(library);
+      await resolverStarted.future;
+      await library.pauseOfflineCacheEntry(entry.id);
+      releaseResolver.complete();
 
-    final result = await processing;
+      final result = await processing;
 
-    expect(result!.status, OfflineCacheEntryStatus.paused);
-    expect(
-      library.offlineCacheEntryById(entry.id)!.status,
-      OfflineCacheEntryStatus.paused,
-    );
-    expect(library.offlineCacheEntryById(entry.id)!.reason, 'Paused by user.');
-  });
+      expect(result!.status, OfflineCacheEntryStatus.paused);
+      expect(
+        library.offlineCacheEntryById(entry.id)!.status,
+        OfflineCacheEntryStatus.paused,
+      );
+      expect(
+        library.offlineCacheEntryById(entry.id)!.reason,
+        'Paused by user.',
+      );
+    },
+  );
 }
 
 Future<OfflineCacheEntry> _queueLocalEntry(LibraryStore library, String id) {

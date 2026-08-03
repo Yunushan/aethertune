@@ -23,9 +23,9 @@ class WindowsSystemMediaSession implements DesktopMediaSession {
     await SMTCWindows.initialize();
     final smtc = SMTCWindows();
     _smtc = smtc;
-    _buttonSubscription = smtc.buttonPressStream
-        .cast<PressedButton>()
-        .listen((button) => unawaited(_dispatch(button)));
+    _buttonSubscription = smtc.buttonPressStream.cast<PressedButton>().listen(
+      (button) => unawaited(_dispatch(button)),
+    );
   }
 
   @override

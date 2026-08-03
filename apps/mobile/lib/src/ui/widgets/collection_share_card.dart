@@ -55,9 +55,7 @@ class CollectionShareCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              Center(
-                child: SizedBox.square(dimension: 184, child: artwork),
-              ),
+              Center(child: SizedBox.square(dimension: 184, child: artwork)),
               const SizedBox(height: 20),
               Text(
                 title,

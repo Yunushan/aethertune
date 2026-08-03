@@ -310,7 +310,10 @@ final class _YouTubePublicPlaylistItemsScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.music_note_outlined),
               title: Text('No public playlist items found'),

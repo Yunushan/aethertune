@@ -15,9 +15,6 @@ void main() {
   });
 
   test('rejects empty native share requests', () {
-    expect(
-      () => PlatformTextShareRequest(text: '  '),
-      throwsArgumentError,
-    );
+    expect(() => PlatformTextShareRequest(text: '  '), throwsArgumentError);
   });
 }

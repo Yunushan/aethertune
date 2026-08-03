@@ -27,7 +27,10 @@ final class YouTubeAccountLibraryScreen extends StatelessWidget {
           bottom: const TabBar(
             tabs: <Tab>[
               Tab(icon: Icon(Icons.queue_music_outlined), text: 'Playlists'),
-              Tab(icon: Icon(Icons.subscriptions_outlined), text: 'Subscriptions'),
+              Tab(
+                icon: Icon(Icons.subscriptions_outlined),
+                text: 'Subscriptions',
+              ),
             ],
           ),
         ),
@@ -382,7 +385,9 @@ final class _YouTubeAccountSubscriptionsTabState
         return;
       }
       setState(() {
-        _channels = reset ? page.channels : _mergeChannels(_channels, page.channels);
+        _channels = reset
+            ? page.channels
+            : _mergeChannels(_channels, page.channels);
         _nextCursor = page.nextPageToken;
         _loading = false;
       });
@@ -411,9 +416,8 @@ final class _YouTubeAccountSubscriptionsTabState
   void _openAccountFeed(BuildContext context) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => YouTubeAccountFollowingFeedScreen(
-          provider: widget.provider,
-        ),
+        builder: (_) =>
+            YouTubeAccountFollowingFeedScreen(provider: widget.provider),
       ),
     );
   }
@@ -498,7 +502,10 @@ final class _YouTubeAccountChannelVideosScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _videos.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _videos.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.video_library_outlined),
               title: Text('No channel videos found'),
@@ -509,9 +516,8 @@ final class _YouTubeAccountChannelVideosScreenState
               title: Text(video.track.title),
               subtitle: Text(video.track.artist),
               trailing: IconButton(
-                tooltip: library.tracks.any(
-                  (saved) => saved.id == video.track.id,
-                )
+                tooltip:
+                    library.tracks.any((saved) => saved.id == video.track.id)
                     ? 'Saved to library'
                     : 'Save metadata to library',
                 onPressed: () => unawaited(_saveTrack(video.track)),
@@ -575,7 +581,9 @@ final class _YouTubeAccountChannelVideosScreenState
         return;
       }
       setState(() {
-        _videos = reset ? page.videos : _mergeChannelVideos(_videos, page.videos);
+        _videos = reset
+            ? page.videos
+            : _mergeChannelVideos(_videos, page.videos);
         _nextCursor = page.nextPageToken;
         _loading = false;
       });
@@ -675,7 +683,10 @@ final class _YouTubeAccountPlaylistItemsScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.music_note_outlined),
               title: Text('No account playlist items found'),

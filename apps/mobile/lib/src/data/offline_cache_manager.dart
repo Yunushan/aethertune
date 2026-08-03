@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:io';
 
@@ -82,9 +85,7 @@ final class OfflineCacheManager {
   final OfflineMediaDownloader? _downloader;
 
   Directory get mediaDirectory {
-    return Directory(
-      p.join(cacheRoot.path, 'aethertune', 'offline_media'),
-    );
+    return Directory(p.join(cacheRoot.path, 'aethertune', 'offline_media'));
   }
 
   Future<OfflineCacheMaterialization> materialize(
@@ -216,8 +217,8 @@ final class OfflineCacheManager {
       }
 
       return left.entry.track.title.toLowerCase().compareTo(
-            right.entry.track.title.toLowerCase(),
-          );
+        right.entry.track.title.toLowerCase(),
+      );
     });
 
     for (final candidate in candidates) {
@@ -317,9 +318,7 @@ final class OfflineCacheManager {
 
   String exportDisplayName(OfflineCacheEntry entry) {
     final sourceFile = _privateCacheFileFor(entry);
-    return '${_safeExportBaseName(entry)}${_safeMediaExtension(
-      sourceFile == null ? '' : p.extension(sourceFile.path),
-    )}';
+    return '${_safeExportBaseName(entry)}${_safeMediaExtension(sourceFile == null ? '' : p.extension(sourceFile.path))}';
   }
 
   Future<List<_OfflineCacheFileCandidate>> _privateCachedFiles(
@@ -378,10 +377,7 @@ final class OfflineCacheManager {
         cancellationToken?.throwIfCancelled();
         final request = await client.getUrl(uri);
         if (resumeStart > 0) {
-          request.headers.set(
-            HttpHeaders.rangeHeader,
-            'bytes=$resumeStart-',
-          );
+          request.headers.set(HttpHeaders.rangeHeader, 'bytes=$resumeStart-');
         }
         final response = await request.close();
         cancellationToken?.throwIfCancelled();
@@ -396,8 +392,8 @@ final class OfflineCacheManager {
           continue;
         }
 
-        final shouldAppend = resumeStart > 0 &&
-            response.statusCode == HttpStatus.partialContent;
+        final shouldAppend =
+            resumeStart > 0 && response.statusCode == HttpStatus.partialContent;
         final isFreshDownload = response.statusCode == HttpStatus.ok;
         if (!shouldAppend && !isFreshDownload) {
           throw HttpException(
@@ -511,7 +507,9 @@ Future<File> _availableExportFile(
 ) async {
   final extension = _safeMediaExtension(rawExtension);
   final baseName = _safeExportBaseName(entry);
-  var candidate = File(p.join(destinationDirectory.path, '$baseName$extension'));
+  var candidate = File(
+    p.join(destinationDirectory.path, '$baseName$extension'),
+  );
   var suffix = 2;
   while (await candidate.exists()) {
     candidate = File(

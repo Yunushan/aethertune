@@ -3,13 +3,10 @@ import 'dart:math' as math;
 /// A non-destructive square artwork crop expressed as normalized alignment
 /// coordinates plus a viewport zoom level.
 class ArtworkCrop {
-  const ArtworkCrop({
-    this.alignmentX = 0,
-    this.alignmentY = 0,
-    this.zoom = 1,
-  }) : assert(alignmentX >= -1 && alignmentX <= 1),
-       assert(alignmentY >= -1 && alignmentY <= 1),
-       assert(zoom >= 1 && zoom <= maximumZoom);
+  const ArtworkCrop({this.alignmentX = 0, this.alignmentY = 0, this.zoom = 1})
+    : assert(alignmentX >= -1 && alignmentX <= 1),
+      assert(alignmentY >= -1 && alignmentY <= 1),
+      assert(zoom >= 1 && zoom <= maximumZoom);
 
   static const maximumZoom = 3.0;
   static const centered = ArtworkCrop();
@@ -20,11 +17,7 @@ class ArtworkCrop {
 
   bool get isCentered => alignmentX == 0 && alignmentY == 0 && zoom == 1;
 
-  ArtworkCrop copyWith({
-    double? alignmentX,
-    double? alignmentY,
-    double? zoom,
-  }) {
+  ArtworkCrop copyWith({double? alignmentX, double? alignmentY, double? zoom}) {
     return ArtworkCrop.normalized(
       alignmentX: alignmentX ?? this.alignmentX,
       alignmentY: alignmentY ?? this.alignmentY,

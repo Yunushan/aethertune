@@ -54,7 +54,8 @@ class DesktopQueuePane extends StatelessWidget {
     final currentIndex = current == null
         ? -1
         : queue.indexWhere((track) => track.id == current.id);
-    final hasUpcomingTracks = currentIndex >= 0 && currentIndex < queue.length - 1;
+    final hasUpcomingTracks =
+        currentIndex >= 0 && currentIndex < queue.length - 1;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -84,12 +85,12 @@ class DesktopQueuePane extends StatelessWidget {
                   tooltip: 'Clear upcoming tracks',
                   onPressed: hasUpcomingTracks
                       ? () => unawaited(
-                            _confirmQueueClear(
-                              context,
-                              player,
-                              upcomingOnly: true,
-                            ),
-                          )
+                          _confirmQueueClear(
+                            context,
+                            player,
+                            upcomingOnly: true,
+                          ),
+                        )
                       : null,
                   icon: const Icon(Icons.playlist_remove),
                 ),
@@ -98,12 +99,12 @@ class DesktopQueuePane extends StatelessWidget {
                   onPressed: queue.isEmpty
                       ? null
                       : () => unawaited(
-                            _confirmQueueClear(
-                              context,
-                              player,
-                              upcomingOnly: false,
-                            ),
+                          _confirmQueueClear(
+                            context,
+                            player,
+                            upcomingOnly: false,
                           ),
+                        ),
                   icon: const Icon(Icons.delete_sweep_outlined),
                 ),
               ],
@@ -114,10 +115,8 @@ class DesktopQueuePane extends StatelessWidget {
               track: current,
               isPlaying: player.isPlaying,
               onOpenNowPlaying: onOpenNowPlaying,
-              onTogglePlayPause: () => _runPlaybackAction(
-                context,
-                player.togglePlayPause,
-              ),
+              onTogglePlayPause: () =>
+                  _runPlaybackAction(context, player.togglePlayPause),
             )
           else
             const Padding(
@@ -252,7 +251,11 @@ class _CurrentQueueTrack extends StatelessWidget {
         borderRadius: 6,
       ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        track.artist,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       onTap: onOpenNowPlaying,
       trailing: IconButton.filledTonal(
         tooltip: isPlaying ? 'Pause' : 'Play',
@@ -294,7 +297,11 @@ class _QueueTrackTile extends StatelessWidget {
         borderRadius: 4,
       ),
       title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(track.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        track.artist,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       onTap: onPlay,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,

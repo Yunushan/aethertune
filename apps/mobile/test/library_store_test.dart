@@ -22,22 +22,24 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('persists onboarding completion without adding it to library data',
-      () async {
-    final store = LibraryStore();
-    await store.load();
+  test(
+    'persists onboarding completion without adding it to library data',
+    () async {
+      final store = LibraryStore();
+      await store.load();
 
-    expect(store.onboardingCompleted, isFalse);
+      expect(store.onboardingCompleted, isFalse);
 
-    await store.setOnboardingCompleted(true);
+      await store.setOnboardingCompleted(true);
 
-    final restored = LibraryStore();
-    await restored.load();
+      final restored = LibraryStore();
+      await restored.load();
 
-    expect(restored.onboardingCompleted, isTrue);
-    expect(restored.tracks, isEmpty);
-    expect(restored.playlists, isEmpty);
-  });
+      expect(restored.onboardingCompleted, isTrue);
+      expect(restored.tracks, isEmpty);
+      expect(restored.playlists, isEmpty);
+    },
+  );
 
   test('persists, merges, sorts, and filters user track ratings', () async {
     final local = LibraryStore();
@@ -57,7 +59,9 @@ void main() {
     expect(local.tracks.singleWhere((track) => track.id == 'five').rating, 5);
     expect(local.setTrackRating('five', 6), throwsRangeError);
     expect(
-      local.search('', sortMode: LibrarySortMode.rating).map((track) => track.id),
+      local
+          .search('', sortMode: LibrarySortMode.rating)
+          .map((track) => track.id),
       <String>['five', 'three', 'unrated'],
     );
 
@@ -81,46 +85,53 @@ void main() {
 
     final restored = LibraryStore();
     await restored.load();
-    expect(restored.tracks.singleWhere((track) => track.id == 'five').rating, 5);
+    expect(
+      restored.tracks.singleWhere((track) => track.id == 'five').rating,
+      5,
+    );
   });
 
   test('imports only unique, unambiguous external history matches', () async {
     final store = LibraryStore();
     await store.load();
     await store.addTracks(<Track>[
-      _track('satellite', title: 'Satellite', artist: 'Aether', album: 'Signals'),
+      _track(
+        'satellite',
+        title: 'Satellite',
+        artist: 'Aether',
+        album: 'Signals',
+      ),
       _track('echo-one', title: 'Echo', artist: 'Aether', album: 'One'),
       _track('echo-two', title: 'Echo', artist: 'Aether', album: 'Two'),
     ]);
     final playedAt = DateTime.utc(2026, 7, 18, 12);
 
-    final result = await store.importPlaybackHistory(
-      <PlaybackHistoryImportEntry>[
-        PlaybackHistoryImportEntry(
-          title: ' satellite ',
-          artist: 'AETHER',
-          album: 'signals',
-          playedAt: playedAt,
-        ),
-        PlaybackHistoryImportEntry(
-          title: 'Satellite',
-          artist: 'Aether',
-          album: 'Signals',
-          playedAt: playedAt,
-        ),
-        PlaybackHistoryImportEntry(
-          title: 'Satellite',
-          artist: 'Aether',
-          album: 'Elsewhere',
-          playedAt: playedAt.add(const Duration(minutes: 1)),
-        ),
-        PlaybackHistoryImportEntry(
-          title: 'Echo',
-          artist: 'Aether',
-          playedAt: playedAt.add(const Duration(minutes: 2)),
-        ),
-      ],
-    );
+    final result = await store
+        .importPlaybackHistory(<PlaybackHistoryImportEntry>[
+          PlaybackHistoryImportEntry(
+            title: ' satellite ',
+            artist: 'AETHER',
+            album: 'signals',
+            playedAt: playedAt,
+          ),
+          PlaybackHistoryImportEntry(
+            title: 'Satellite',
+            artist: 'Aether',
+            album: 'Signals',
+            playedAt: playedAt,
+          ),
+          PlaybackHistoryImportEntry(
+            title: 'Satellite',
+            artist: 'Aether',
+            album: 'Elsewhere',
+            playedAt: playedAt.add(const Duration(minutes: 1)),
+          ),
+          PlaybackHistoryImportEntry(
+            title: 'Echo',
+            artist: 'Aether',
+            playedAt: playedAt.add(const Duration(minutes: 2)),
+          ),
+        ]);
 
     expect(result.received, 4);
     expect(result.matched, 2);
@@ -134,207 +145,198 @@ void main() {
     expect(restored.playbackHistory.single.playedAt, playedAt);
   });
 
-  test('merges sync snapshots without dropping independent tracks or playlists',
-      () async {
-    final now = DateTime.utc(2026, 2, 1);
-    final local = LibraryStore(clock: () => now);
-    final remote = LibraryStore(clock: () => now);
-    await local.load();
-    await remote.load();
-    await local.addTracks(<Track>[_track('local'), _track('shared')]);
-    await remote.addTracks(<Track>[_track('remote'), _track('shared')]);
-    await local.addTrackBookmark(
-      'shared',
-      const Duration(seconds: 15),
-      label: 'Intro',
-      folder: 'Song structure',
-    );
-    await remote.addTrackBookmark(
-      'shared',
-      const Duration(seconds: 45),
-      label: 'Chorus',
-      folder: 'Highlights',
-    );
-    final localSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
-    final portableBookmark = (localSnapshot['bookmarks'] as List).single as Map;
-    expect(
-      portableBookmark.keys,
-      unorderedEquals(<String>[
-        'id',
-        'trackId',
-        'positionMs',
-        'createdAt',
-        'label',
-        'folder',
-      ]),
-    );
-    await remote.toggleFavorite('shared');
-    final localPlaylist = await local.createPlaylist(
-      'Merged',
-      trackIds: <String>['local'],
-    );
-    await remote.createPlaylist('Merged', trackIds: <String>['remote']);
-    final localSubscription = await local.savePodcastSubscription(
-      PodcastSubscription(
-        id: 'podcast',
-        feedUrl: 'https://feeds.example.test/aether.xml',
-        title: 'Aether Radio',
-        episodes: <Track>[_track('local-episode', sourceId: 'podcast-rss')],
-      ),
-    );
-    await remote.savePodcastSubscription(
-      PodcastSubscription(
-        id: 'podcast',
-        feedUrl: 'https://feeds.example.test/aether.xml',
-        title: 'Aether Radio Remote',
-        episodes: <Track>[_track('remote-episode', sourceId: 'podcast-rss')],
-      ),
-    );
-    await local.setArtistFollowed('Mira', true);
-    await remote.setArtistFollowed('Orion', true);
-
-    await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
-
-    expect(local.tracks.map((track) => track.id), containsAll(<String>[
-      'local',
-      'remote',
-    ]));
-    expect(local.playlistById(localPlaylist.id)!.trackIds, <String>[
-      'local',
-      'remote',
-    ]);
-    expect(
-      local.tracks.singleWhere((track) => track.id == 'shared').isFavorite,
-      isTrue,
-    );
-    expect(
-      local
-          .podcastSubscriptionById(localSubscription.id)!
-          .episodes
-          .map((track) => track.id),
-      <String>['local-episode', 'remote-episode'],
-    );
-    expect(local.followedArtists, <String>['Mira', 'Orion']);
-    expect(
-      local
-          .bookmarksForTrack('shared')
-          .map((bookmark) => bookmark.position),
-      containsAll(<Duration>[
+  test(
+    'merges sync snapshots without dropping independent tracks or playlists',
+    () async {
+      final now = DateTime.utc(2026, 2, 1);
+      final local = LibraryStore(clock: () => now);
+      final remote = LibraryStore(clock: () => now);
+      await local.load();
+      await remote.load();
+      await local.addTracks(<Track>[_track('local'), _track('shared')]);
+      await remote.addTracks(<Track>[_track('remote'), _track('shared')]);
+      await local.addTrackBookmark(
+        'shared',
         const Duration(seconds: 15),
+        label: 'Intro',
+        folder: 'Song structure',
+      );
+      await remote.addTrackBookmark(
+        'shared',
         const Duration(seconds: 45),
-      ]),
-    );
-    expect(
-      local.bookmarksForTrack('shared').map((bookmark) => bookmark.label),
-      containsAll(<String>['Intro', 'Chorus']),
-    );
-    expect(
-      local.bookmarksForTrack('shared').map((bookmark) => bookmark.folder),
-      containsAll(<String>['Song structure', 'Highlights']),
-    );
-  });
+        label: 'Chorus',
+        folder: 'Highlights',
+      );
+      final localSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
+      final portableBookmark =
+          (localSnapshot['bookmarks'] as List).single as Map;
+      expect(
+        portableBookmark.keys,
+        unorderedEquals(<String>[
+          'id',
+          'trackId',
+          'positionMs',
+          'createdAt',
+          'label',
+          'folder',
+        ]),
+      );
+      await remote.toggleFavorite('shared');
+      final localPlaylist = await local.createPlaylist(
+        'Merged',
+        trackIds: <String>['local'],
+      );
+      await remote.createPlaylist('Merged', trackIds: <String>['remote']);
+      final localSubscription = await local.savePodcastSubscription(
+        PodcastSubscription(
+          id: 'podcast',
+          feedUrl: 'https://feeds.example.test/aether.xml',
+          title: 'Aether Radio',
+          episodes: <Track>[_track('local-episode', sourceId: 'podcast-rss')],
+        ),
+      );
+      await remote.savePodcastSubscription(
+        PodcastSubscription(
+          id: 'podcast',
+          feedUrl: 'https://feeds.example.test/aether.xml',
+          title: 'Aether Radio Remote',
+          episodes: <Track>[_track('remote-episode', sourceId: 'podcast-rss')],
+        ),
+      );
+      await local.setArtistFollowed('Mira', true);
+      await remote.setArtistFollowed('Orion', true);
 
-  test('sync bookmark tombstones prevent deleted markers from returning',
-      () async {
-    var now = DateTime.utc(2026, 7, 18, 9);
-    DateTime clock() => now;
-    final local = LibraryStore(clock: clock);
-    final remote = LibraryStore(clock: clock);
-    await local.load();
-    await remote.load();
-    await local.addTracks(<Track>[_track('shared')]);
-    await remote.addTracks(<Track>[_track('shared')]);
-    final bookmark = await local.addTrackBookmark(
-      'shared',
-      const Duration(seconds: 30),
-      label: 'Remove me',
-    );
-    expect(bookmark, isNotNull);
+      await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
 
-    await remote.mergeSyncSnapshotJson(local.exportSyncSnapshotJson());
-    expect(remote.bookmarksForTrack('shared'), hasLength(1));
+      expect(
+        local.tracks.map((track) => track.id),
+        containsAll(<String>['local', 'remote']),
+      );
+      expect(local.playlistById(localPlaylist.id)!.trackIds, <String>[
+        'local',
+        'remote',
+      ]);
+      expect(
+        local.tracks.singleWhere((track) => track.id == 'shared').isFavorite,
+        isTrue,
+      );
+      expect(
+        local
+            .podcastSubscriptionById(localSubscription.id)!
+            .episodes
+            .map((track) => track.id),
+        <String>['local-episode', 'remote-episode'],
+      );
+      expect(local.followedArtists, <String>['Mira', 'Orion']);
+      expect(
+        local.bookmarksForTrack('shared').map((bookmark) => bookmark.position),
+        containsAll(<Duration>[
+          const Duration(seconds: 15),
+          const Duration(seconds: 45),
+        ]),
+      );
+      expect(
+        local.bookmarksForTrack('shared').map((bookmark) => bookmark.label),
+        containsAll(<String>['Intro', 'Chorus']),
+      );
+      expect(
+        local.bookmarksForTrack('shared').map((bookmark) => bookmark.folder),
+        containsAll(<String>['Song structure', 'Highlights']),
+      );
+    },
+  );
 
-    now = now.add(const Duration(minutes: 1));
-    expect(await local.removeTrackBookmark('shared', bookmark!.id), isTrue);
-    final deletedSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
-    expect(deletedSnapshot['bookmarks'], isEmpty);
-    expect(
-      deletedSnapshot['bookmarkTombstones'],
-      <Map<String, Object?>>[
+  test(
+    'sync bookmark tombstones prevent deleted markers from returning',
+    () async {
+      var now = DateTime.utc(2026, 7, 18, 9);
+      DateTime clock() => now;
+      final local = LibraryStore(clock: clock);
+      final remote = LibraryStore(clock: clock);
+      await local.load();
+      await remote.load();
+      await local.addTracks(<Track>[_track('shared')]);
+      await remote.addTracks(<Track>[_track('shared')]);
+      final bookmark = await local.addTrackBookmark(
+        'shared',
+        const Duration(seconds: 30),
+        label: 'Remove me',
+      );
+      expect(bookmark, isNotNull);
+
+      await remote.mergeSyncSnapshotJson(local.exportSyncSnapshotJson());
+      expect(remote.bookmarksForTrack('shared'), hasLength(1));
+
+      now = now.add(const Duration(minutes: 1));
+      expect(await local.removeTrackBookmark('shared', bookmark!.id), isTrue);
+      final deletedSnapshot = jsonDecode(local.exportSyncSnapshotJson()) as Map;
+      expect(deletedSnapshot['bookmarks'], isEmpty);
+      expect(deletedSnapshot['bookmarkTombstones'], <Map<String, Object?>>[
         <String, Object?>{
           'id': bookmark.id,
           'deletedAt': now.toIso8601String(),
         },
-      ],
-    );
+      ]);
 
-    await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
-    expect(local.bookmarksForTrack('shared'), isEmpty);
-    await remote.mergeSyncSnapshotJson(local.exportSyncSnapshotJson());
-    expect(remote.bookmarksForTrack('shared'), isEmpty);
+      await local.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
+      expect(local.bookmarksForTrack('shared'), isEmpty);
+      await remote.mergeSyncSnapshotJson(local.exportSyncSnapshotJson());
+      expect(remote.bookmarksForTrack('shared'), isEmpty);
 
-    final restored = LibraryStore(clock: clock);
-    await restored.load();
-    await restored.restoreBackupJson(local.exportBackupJson());
-    expect(restored.bookmarksForTrack('shared'), isEmpty);
-    final restoredSnapshot = jsonDecode(restored.exportSyncSnapshotJson()) as Map;
-    expect(restoredSnapshot['bookmarkTombstones'], hasLength(1));
-    now = now.add(const Duration(days: 91));
-    final expiredSnapshot = jsonDecode(restored.exportSyncSnapshotJson()) as Map;
-    expect(expiredSnapshot['bookmarkTombstones'], isEmpty);
-  });
+      final restored = LibraryStore(clock: clock);
+      await restored.load();
+      await restored.restoreBackupJson(local.exportBackupJson());
+      expect(restored.bookmarksForTrack('shared'), isEmpty);
+      final restoredSnapshot =
+          jsonDecode(restored.exportSyncSnapshotJson()) as Map;
+      expect(restoredSnapshot['bookmarkTombstones'], hasLength(1));
+      now = now.add(const Duration(days: 91));
+      final expiredSnapshot =
+          jsonDecode(restored.exportSyncSnapshotJson()) as Map;
+      expect(expiredSnapshot['bookmarkTombstones'], isEmpty);
+    },
+  );
 
-  test('persists local artist follows and builds the newest follow feed',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'mira-old',
-        artist: 'Mira',
-        addedAt: DateTime.utc(2026, 1, 1),
-      ),
-      _track(
-        'mira-new',
-        artist: ' mira ',
-        addedAt: DateTime.utc(2026, 1, 4),
-      ),
-      _track(
+  test(
+    'persists local artist follows and builds the newest follow feed',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track('mira-old', artist: 'Mira', addedAt: DateTime.utc(2026, 1, 1)),
+        _track('mira-new', artist: ' mira ', addedAt: DateTime.utc(2026, 1, 4)),
+        _track('orion-new', artist: 'Orion', addedAt: DateTime.utc(2026, 1, 5)),
+        _track('other-new', artist: 'Ari', addedAt: DateTime.utc(2026, 1, 6)),
+      ]);
+
+      expect(store.canFollowArtist('Unknown Artist'), isFalse);
+      expect(await store.setArtistFollowed(' Mira ', true), isTrue);
+      expect(await store.setArtistFollowed('mira', true), isFalse);
+      expect(await store.setArtistFollowed('Orion', true), isTrue);
+      expect(store.followedArtists, <String>['Mira', 'Orion']);
+      expect(store.isArtistFollowed('  MIRA'), isTrue);
+
+      final section = store
+          .homeFeedSections(limit: 3)
+          .firstWhere(
+            (section) => section.type == LibraryHomeSectionType.followedArtists,
+          );
+      expect(section.tracks.map((track) => track.id), <String>[
         'orion-new',
-        artist: 'Orion',
-        addedAt: DateTime.utc(2026, 1, 5),
-      ),
-      _track(
-        'other-new',
-        artist: 'Ari',
-        addedAt: DateTime.utc(2026, 1, 6),
-      ),
-    ]);
+        'mira-new',
+        'mira-old',
+      ]);
 
-    expect(store.canFollowArtist('Unknown Artist'), isFalse);
-    expect(await store.setArtistFollowed(' Mira ', true), isTrue);
-    expect(await store.setArtistFollowed('mira', true), isFalse);
-    expect(await store.setArtistFollowed('Orion', true), isTrue);
-    expect(store.followedArtists, <String>['Mira', 'Orion']);
-    expect(store.isArtistFollowed('  MIRA'), isTrue);
+      final backup = store.exportBackupJson();
+      final restored = LibraryStore();
+      await restored.load();
+      await restored.restoreBackupJson(backup);
 
-    final section = store.homeFeedSections(limit: 3).firstWhere(
-          (section) => section.type == LibraryHomeSectionType.followedArtists,
-        );
-    expect(
-      section.tracks.map((track) => track.id),
-      <String>['orion-new', 'mira-new', 'mira-old'],
-    );
-
-    final backup = store.exportBackupJson();
-    final restored = LibraryStore();
-    await restored.load();
-    await restored.restoreBackupJson(backup);
-
-    expect(restored.followedArtists, <String>['Mira', 'Orion']);
-    expect(await restored.setArtistFollowed('Mira', false), isTrue);
-    expect(restored.isArtistFollowed('mira'), isFalse);
-  });
+      expect(restored.followedArtists, <String>['Mira', 'Orion']);
+      expect(await restored.setArtistFollowed('Mira', false), isTrue);
+      expect(restored.isArtistFollowed('mira'), isFalse);
+    },
+  );
 
   test('merges, de-duplicates, ranks, and filters following updates', () async {
     final store = LibraryStore();
@@ -345,11 +347,7 @@ void main() {
         artist: 'Mira',
         addedAt: DateTime.utc(2026, 1, 2),
       ),
-      _track(
-        'other-artist',
-        artist: 'Ari',
-        addedAt: DateTime.utc(2026, 1, 7),
-      ),
+      _track('other-artist', artist: 'Ari', addedAt: DateTime.utc(2026, 1, 7)),
     ]);
     await store.setArtistFollowed('Mira', true);
     await store.savePodcastSubscription(
@@ -372,10 +370,10 @@ void main() {
       ),
     );
 
-    expect(
-      store.followingFeedTracks().map((track) => track.id),
-      <String>['podcast-new', 'artist-update'],
-    );
+    expect(store.followingFeedTracks().map((track) => track.id), <String>[
+      'podcast-new',
+      'artist-update',
+    ]);
     final publicVideo = _track(
       'youtube-update',
       sourceId: 'youtube-data-metadata',
@@ -411,45 +409,48 @@ void main() {
     expect(store.followingFeedTracks(limit: 0), isEmpty);
   });
 
-  test('filters custom smart playlists by exact source artist album and genre', () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'local-rock',
-        artist: 'Mira',
-        album: 'Vault',
-        genre: 'Rock',
-        sourceId: 'local',
-      ),
-      _track(
-        'archive-rock',
-        artist: 'Mira',
-        album: 'Vault',
-        genre: 'Rock',
-        sourceId: 'archive',
-      ),
-      _track(
-        'archive-jazz',
-        artist: 'Mira',
-        album: 'Vault',
-        genre: 'Jazz',
-        sourceId: 'archive',
-      ),
-    ]);
-    final rule = await store.createCustomSmartPlaylist(
-      name: 'Archive rock',
-      sourceId: 'ARCHIVE',
-      artist: 'mira',
-      album: 'vault',
-      genre: 'rock',
-    );
+  test(
+    'filters custom smart playlists by exact source artist album and genre',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'local-rock',
+          artist: 'Mira',
+          album: 'Vault',
+          genre: 'Rock',
+          sourceId: 'local',
+        ),
+        _track(
+          'archive-rock',
+          artist: 'Mira',
+          album: 'Vault',
+          genre: 'Rock',
+          sourceId: 'archive',
+        ),
+        _track(
+          'archive-jazz',
+          artist: 'Mira',
+          album: 'Vault',
+          genre: 'Jazz',
+          sourceId: 'archive',
+        ),
+      ]);
+      final rule = await store.createCustomSmartPlaylist(
+        name: 'Archive rock',
+        sourceId: 'ARCHIVE',
+        artist: 'mira',
+        album: 'vault',
+        genre: 'rock',
+      );
 
-    expect(
-      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
-      <String>['archive-rock'],
-    );
-  });
+      expect(
+        store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+        <String>['archive-rock'],
+      );
+    },
+  );
 
   test('matches portable shared provider-kind source selectors', () async {
     final store = LibraryStore();
@@ -490,155 +491,147 @@ void main() {
     );
   });
 
-  test('matches any custom smart playlist criterion and persists the mode', () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'mira-ambient',
-        title: 'Alpha',
-        artist: 'Mira',
-        genre: 'Ambient',
-      ),
-      _track(
-        'other-jazz',
-        title: 'Bravo',
-        artist: 'Other',
-        genre: 'Jazz',
-      ),
-      _track(
-        'mira-jazz',
-        title: 'Delta',
-        artist: 'Mira',
-        genre: 'Jazz',
-      ),
-      _track(
-        'other-rock',
-        title: 'Charlie',
-        artist: 'Other',
-        genre: 'Rock',
-      ),
-    ]);
-    final rule = await store.createCustomSmartPlaylist(
-      name: 'Mira or jazz',
-      artist: 'Mira',
-      genre: 'Jazz',
-      matchMode: CustomSmartPlaylistMatchMode.any,
-      sortMode: CustomSmartPlaylistSortMode.title,
-    );
-
-    expect(
-      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
-      <String>['mira-ambient', 'other-jazz', 'mira-jazz'],
-    );
-
-    final persisted = LibraryStore();
-    await persisted.load();
-    expect(
-      persisted.customSmartPlaylists.single.matchMode,
-      CustomSmartPlaylistMatchMode.any,
-    );
-
-    await persisted.updateCustomSmartPlaylist(
-      rule.id,
-      name: rule.name,
-      query: rule.query,
-      artist: rule.artist,
-      genre: rule.genre,
-      favoritesOnly: rule.favoritesOnly,
-      minimumPlayCount: rule.minimumPlayCount,
-      matchMode: CustomSmartPlaylistMatchMode.all,
-      sortMode: rule.sortMode,
-      limit: rule.limit,
-    );
-    expect(
-      persisted.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
-      <String>['mira-jazz'],
-    );
-  });
-
-  test('evaluates and persists nested custom smart playlist rule groups',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'mira-jazz',
-        title: 'Alpha',
-        artist: 'Mira',
-        genre: 'Jazz',
-        duration: const Duration(seconds: 60),
-      ),
-      _track(
-        'mira-rock-long',
-        title: 'Beta',
-        artist: 'Mira',
-        genre: 'Rock',
-        duration: const Duration(seconds: 180),
-      ),
-      _track(
-        'mira-rock-short',
-        title: 'Charlie',
-        artist: 'Mira',
-        genre: 'Rock',
-        duration: const Duration(seconds: 30),
-      ),
-      _track(
-        'other-rock-long',
-        title: 'Delta',
-        artist: 'Other',
-        genre: 'Rock',
-        duration: const Duration(seconds: 180),
-      ),
-    ]);
-    final rule = await store.createCustomSmartPlaylist(
-      name: 'Mira jazz or long rock',
-      artist: 'Mira',
-      sortMode: CustomSmartPlaylistSortMode.title,
-      ruleGroups: <CustomSmartPlaylistRuleGroup>[
-        CustomSmartPlaylistRuleGroup(
-          matchMode: CustomSmartPlaylistMatchMode.any,
-          rules: const <CustomSmartPlaylistRule>[
-            CustomSmartPlaylistRule(
-              field: CustomSmartPlaylistRuleField.genre,
-              value: 'Jazz',
-            ),
-          ],
-          groups: <CustomSmartPlaylistRuleGroup>[
-            CustomSmartPlaylistRuleGroup(
-              rules: const <CustomSmartPlaylistRule>[
-                CustomSmartPlaylistRule(
-                  field: CustomSmartPlaylistRuleField.genre,
-                  value: 'Rock',
-                ),
-                CustomSmartPlaylistRule(
-                  field:
-                      CustomSmartPlaylistRuleField.minimumDurationSeconds,
-                  value: '120',
-                ),
-              ],
-            ),
-          ],
+  test(
+    'matches any custom smart playlist criterion and persists the mode',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'mira-ambient',
+          title: 'Alpha',
+          artist: 'Mira',
+          genre: 'Ambient',
         ),
-      ],
-    );
+        _track('other-jazz', title: 'Bravo', artist: 'Other', genre: 'Jazz'),
+        _track('mira-jazz', title: 'Delta', artist: 'Mira', genre: 'Jazz'),
+        _track('other-rock', title: 'Charlie', artist: 'Other', genre: 'Rock'),
+      ]);
+      final rule = await store.createCustomSmartPlaylist(
+        name: 'Mira or jazz',
+        artist: 'Mira',
+        genre: 'Jazz',
+        matchMode: CustomSmartPlaylistMatchMode.any,
+        sortMode: CustomSmartPlaylistSortMode.title,
+      );
 
-    expect(
-      store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
-      <String>['mira-jazz', 'mira-rock-long'],
-    );
+      expect(
+        store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+        <String>['mira-ambient', 'other-jazz', 'mira-jazz'],
+      );
 
-    final persisted = LibraryStore();
-    await persisted.load();
-    final restored = persisted.customSmartPlaylists.single;
-    expect(restored.ruleGroups, hasLength(1));
-    expect(restored.ruleGroups.single.groups, hasLength(1));
-    expect(
-      persisted.tracksForCustomSmartPlaylist(restored.id)
-          .map((track) => track.id),
-      <String>['mira-jazz', 'mira-rock-long'],
-    );
-  });
+      final persisted = LibraryStore();
+      await persisted.load();
+      expect(
+        persisted.customSmartPlaylists.single.matchMode,
+        CustomSmartPlaylistMatchMode.any,
+      );
+
+      await persisted.updateCustomSmartPlaylist(
+        rule.id,
+        name: rule.name,
+        query: rule.query,
+        artist: rule.artist,
+        genre: rule.genre,
+        favoritesOnly: rule.favoritesOnly,
+        minimumPlayCount: rule.minimumPlayCount,
+        matchMode: CustomSmartPlaylistMatchMode.all,
+        sortMode: rule.sortMode,
+        limit: rule.limit,
+      );
+      expect(
+        persisted
+            .tracksForCustomSmartPlaylist(rule.id)
+            .map((track) => track.id),
+        <String>['mira-jazz'],
+      );
+    },
+  );
+
+  test(
+    'evaluates and persists nested custom smart playlist rule groups',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'mira-jazz',
+          title: 'Alpha',
+          artist: 'Mira',
+          genre: 'Jazz',
+          duration: const Duration(seconds: 60),
+        ),
+        _track(
+          'mira-rock-long',
+          title: 'Beta',
+          artist: 'Mira',
+          genre: 'Rock',
+          duration: const Duration(seconds: 180),
+        ),
+        _track(
+          'mira-rock-short',
+          title: 'Charlie',
+          artist: 'Mira',
+          genre: 'Rock',
+          duration: const Duration(seconds: 30),
+        ),
+        _track(
+          'other-rock-long',
+          title: 'Delta',
+          artist: 'Other',
+          genre: 'Rock',
+          duration: const Duration(seconds: 180),
+        ),
+      ]);
+      final rule = await store.createCustomSmartPlaylist(
+        name: 'Mira jazz or long rock',
+        artist: 'Mira',
+        sortMode: CustomSmartPlaylistSortMode.title,
+        ruleGroups: <CustomSmartPlaylistRuleGroup>[
+          CustomSmartPlaylistRuleGroup(
+            matchMode: CustomSmartPlaylistMatchMode.any,
+            rules: const <CustomSmartPlaylistRule>[
+              CustomSmartPlaylistRule(
+                field: CustomSmartPlaylistRuleField.genre,
+                value: 'Jazz',
+              ),
+            ],
+            groups: <CustomSmartPlaylistRuleGroup>[
+              CustomSmartPlaylistRuleGroup(
+                rules: const <CustomSmartPlaylistRule>[
+                  CustomSmartPlaylistRule(
+                    field: CustomSmartPlaylistRuleField.genre,
+                    value: 'Rock',
+                  ),
+                  CustomSmartPlaylistRule(
+                    field: CustomSmartPlaylistRuleField.minimumDurationSeconds,
+                    value: '120',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+
+      expect(
+        store.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+        <String>['mira-jazz', 'mira-rock-long'],
+      );
+
+      final persisted = LibraryStore();
+      await persisted.load();
+      final restored = persisted.customSmartPlaylists.single;
+      expect(restored.ruleGroups, hasLength(1));
+      expect(restored.ruleGroups.single.groups, hasLength(1));
+      expect(
+        persisted
+            .tracksForCustomSmartPlaylist(restored.id)
+            .map((track) => track.id),
+        <String>['mira-jazz', 'mira-rock-long'],
+      );
+    },
+  );
 
   test('ignores malformed nested custom smart playlist rules from storage', () {
     final rule = CustomSmartPlaylist.fromJson(<String, Object?>{
@@ -688,9 +681,11 @@ void main() {
     expect(overfull.groups, hasLength(maxCustomSmartPlaylistGroupsPerGroup));
 
     var deepGroup = leafGroup;
-    for (var depth = 0;
-        depth < maxCustomSmartPlaylistRuleGroupDepth + 2;
-        depth += 1) {
+    for (
+      var depth = 0;
+      depth < maxCustomSmartPlaylistRuleGroupDepth + 2;
+      depth += 1
+    ) {
       deepGroup = CustomSmartPlaylistRuleGroup(
         rules: const <CustomSmartPlaylistRule>[leafRule],
         groups: <CustomSmartPlaylistRuleGroup>[deepGroup],
@@ -722,62 +717,61 @@ void main() {
     );
   });
 
-  test('persists smart playlist artwork and keeps local files private',
-      () async {
-    var now = DateTime.utc(2026, 7, 14, 5);
-    DateTime clock() => now;
-    final store = LibraryStore(clock: clock);
-    await store.load();
-    final rule = await store.createCustomSmartPlaylist(name: 'Artwork rules');
-    final webArtwork = Uri.parse('https://media.example.test/rules.jpg');
+  test(
+    'persists smart playlist artwork and keeps local files private',
+    () async {
+      var now = DateTime.utc(2026, 7, 14, 5);
+      DateTime clock() => now;
+      final store = LibraryStore(clock: clock);
+      await store.load();
+      final rule = await store.createCustomSmartPlaylist(name: 'Artwork rules');
+      final webArtwork = Uri.parse('https://media.example.test/rules.jpg');
 
-    now = now.add(const Duration(minutes: 1));
-    final updated = await store.updateCustomSmartPlaylistArtwork(
-      rule.id,
-      webArtwork,
-    );
-    expect(updated!.artworkUri, webArtwork);
-    expect(updated.updatedAt, now);
+      now = now.add(const Duration(minutes: 1));
+      final updated = await store.updateCustomSmartPlaylistArtwork(
+        rule.id,
+        webArtwork,
+      );
+      expect(updated!.artworkUri, webArtwork);
+      expect(updated.updatedAt, now);
 
-    final persisted = LibraryStore(clock: clock);
-    await persisted.load();
-    expect(persisted.customSmartPlaylists.single.artworkUri, webArtwork);
+      final persisted = LibraryStore(clock: clock);
+      await persisted.load();
+      expect(persisted.customSmartPlaylists.single.artworkUri, webArtwork);
 
-    final privateArtwork = Uri.file('/private/smart-playlist-artwork.png');
-    await persisted.updateCustomSmartPlaylistArtwork(rule.id, privateArtwork);
-    expect(
-      persisted.customSmartPlaylists.single.artworkUri,
-      privateArtwork,
-    );
+      final privateArtwork = Uri.file('/private/smart-playlist-artwork.png');
+      await persisted.updateCustomSmartPlaylistArtwork(rule.id, privateArtwork);
+      expect(persisted.customSmartPlaylists.single.artworkUri, privateArtwork);
 
-    final backup = jsonDecode(persisted.exportBackupJson())
-        as Map<String, dynamic>;
-    final backupRule = (backup['customSmartPlaylists'] as List<dynamic>).single
-        as Map<String, dynamic>;
-    expect(backupRule['artworkUri'], isNull);
+      final backup =
+          jsonDecode(persisted.exportBackupJson()) as Map<String, dynamic>;
+      final backupRule =
+          (backup['customSmartPlaylists'] as List<dynamic>).single
+              as Map<String, dynamic>;
+      expect(backupRule['artworkUri'], isNull);
 
-    final snapshot = jsonDecode(persisted.exportSyncSnapshotJson())
-        as Map<String, dynamic>;
-    final snapshotRule =
-        (snapshot['customSmartPlaylists'] as List<dynamic>).single
-            as Map<String, dynamic>;
-    expect(snapshotRule['artworkUri'], isNull);
+      final snapshot =
+          jsonDecode(persisted.exportSyncSnapshotJson())
+              as Map<String, dynamic>;
+      final snapshotRule =
+          (snapshot['customSmartPlaylists'] as List<dynamic>).single
+              as Map<String, dynamic>;
+      expect(snapshotRule['artworkUri'], isNull);
 
-    final cleared = await persisted.updateCustomSmartPlaylistArtwork(
-      rule.id,
-      null,
-    );
-    expect(cleared!.artworkUri, isNull);
-    expect(
-      await persisted.updateCustomSmartPlaylistArtwork('missing', webArtwork),
-      isNull,
-    );
-  });
+      final cleared = await persisted.updateCustomSmartPlaylistArtwork(
+        rule.id,
+        null,
+      );
+      expect(cleared!.artworkUri, isNull);
+      expect(
+        await persisted.updateCustomSmartPlaylistArtwork('missing', webArtwork),
+        isNull,
+      );
+    },
+  );
 
   test('duplicates smart playlists with rules and safe artwork', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 7, 20, 12),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 7, 20, 12));
     await store.load();
     final original = await store.createCustomSmartPlaylist(
       name: 'Mira favorites',
@@ -817,7 +811,10 @@ void main() {
     expect(duplicate.sourceId, original.sourceId);
     expect(duplicate.artist, original.artist);
     expect(duplicate.minimumDurationSeconds, original.minimumDurationSeconds);
-    expect(duplicate.minimumDaysSinceLastPlayed, original.minimumDaysSinceLastPlayed);
+    expect(
+      duplicate.minimumDaysSinceLastPlayed,
+      original.minimumDaysSinceLastPlayed,
+    );
     expect(duplicate.matchMode, original.matchMode);
     expect(duplicate.ruleGroups.single.rules.single.value, '4');
     expect(duplicate.sortMode, original.sortMode);
@@ -839,72 +836,76 @@ void main() {
     expect(privateArtworkDuplicate!.artworkUri, isNull);
   });
 
-  test('shares and imports nested smart playlist links without local artwork',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    final rule = await store.createCustomSmartPlaylist(
-      name: 'Shared Mira rules',
-      artist: 'Mira',
-      sortMode: CustomSmartPlaylistSortMode.title,
-      limit: 20,
-      ruleGroups: <CustomSmartPlaylistRuleGroup>[
-        CustomSmartPlaylistRuleGroup(
-          matchMode: CustomSmartPlaylistMatchMode.any,
-          rules: const <CustomSmartPlaylistRule>[
-            CustomSmartPlaylistRule(
-              field: CustomSmartPlaylistRuleField.genre,
-              value: 'Jazz',
-            ),
-          ],
-          groups: <CustomSmartPlaylistRuleGroup>[
-            CustomSmartPlaylistRuleGroup(
-              rules: const <CustomSmartPlaylistRule>[
-                CustomSmartPlaylistRule(
-                  field: CustomSmartPlaylistRuleField.minimumPlayCount,
-                  value: '2',
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    );
-    await store.updateCustomSmartPlaylistArtwork(
-      rule.id,
-      Uri.file('/private/shared-rules.png'),
-    );
+  test(
+    'shares and imports nested smart playlist links without local artwork',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      final rule = await store.createCustomSmartPlaylist(
+        name: 'Shared Mira rules',
+        artist: 'Mira',
+        sortMode: CustomSmartPlaylistSortMode.title,
+        limit: 20,
+        ruleGroups: <CustomSmartPlaylistRuleGroup>[
+          CustomSmartPlaylistRuleGroup(
+            matchMode: CustomSmartPlaylistMatchMode.any,
+            rules: const <CustomSmartPlaylistRule>[
+              CustomSmartPlaylistRule(
+                field: CustomSmartPlaylistRuleField.genre,
+                value: 'Jazz',
+              ),
+            ],
+            groups: <CustomSmartPlaylistRuleGroup>[
+              CustomSmartPlaylistRuleGroup(
+                rules: const <CustomSmartPlaylistRule>[
+                  CustomSmartPlaylistRule(
+                    field: CustomSmartPlaylistRuleField.minimumPlayCount,
+                    value: '2',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      await store.updateCustomSmartPlaylistArtwork(
+        rule.id,
+        Uri.file('/private/shared-rules.png'),
+      );
 
-    final link = store.customSmartPlaylistImportLink(rule.id);
-    expect(link, startsWith('aethertune://smart-playlist?data='));
+      final link = store.customSmartPlaylistImportLink(rule.id);
+      expect(link, startsWith('aethertune://smart-playlist?data='));
 
-    final uri = Uri.parse(link!);
-    final document = jsonDecode(
-      utf8.decode(base64Url.decode(uri.queryParameters['data']!)),
-    ) as Map<String, dynamic>;
-    final exportedRule = document['rule'] as Map<String, dynamic>;
-    expect(exportedRule['artworkUri'], isNull);
-    expect(exportedRule['ruleGroups'], isA<List<dynamic>>());
+      final uri = Uri.parse(link!);
+      final document =
+          jsonDecode(
+                utf8.decode(base64Url.decode(uri.queryParameters['data']!)),
+              )
+              as Map<String, dynamic>;
+      final exportedRule = document['rule'] as Map<String, dynamic>;
+      expect(exportedRule['artworkUri'], isNull);
+      expect(exportedRule['ruleGroups'], isA<List<dynamic>>());
 
-    final imported = await store.importCustomSmartPlaylistLink(link);
-    expect(imported.id, isNot(rule.id));
-    expect(imported.name, rule.name);
-    expect(imported.artist, rule.artist);
-    expect(imported.sortMode, rule.sortMode);
-    expect(imported.limit, rule.limit);
-    expect(imported.artworkUri, isNull);
-    expect(imported.ruleGroups, hasLength(1));
-    expect(imported.ruleGroups.single.groups, hasLength(1));
-    expect(
-      imported.ruleGroups.single.groups.single.rules.single.field,
-      CustomSmartPlaylistRuleField.minimumPlayCount,
-    );
+      final imported = await store.importCustomSmartPlaylistLink(link);
+      expect(imported.id, isNot(rule.id));
+      expect(imported.name, rule.name);
+      expect(imported.artist, rule.artist);
+      expect(imported.sortMode, rule.sortMode);
+      expect(imported.limit, rule.limit);
+      expect(imported.artworkUri, isNull);
+      expect(imported.ruleGroups, hasLength(1));
+      expect(imported.ruleGroups.single.groups, hasLength(1));
+      expect(
+        imported.ruleGroups.single.groups.single.rules.single.field,
+        CustomSmartPlaylistRuleField.minimumPlayCount,
+      );
 
-    await expectLater(
-      store.importCustomSmartPlaylistLink('https://example.test/not-a-link'),
-      throwsFormatException,
-    );
-  });
+      await expectLater(
+        store.importCustomSmartPlaylistLink('https://example.test/not-a-link'),
+        throwsFormatException,
+      );
+    },
+  );
 
   test('filters custom smart playlists by duration bounds', () async {
     final store = LibraryStore();
@@ -955,9 +956,7 @@ void main() {
   });
 
   test('creates manual playlists with existing tracks only', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 1),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 1));
     await store.load();
     await store.addTracks(<Track>[_track('1'), _track('2')]);
 
@@ -978,67 +977,71 @@ void main() {
     );
   });
 
-  test('duplicates manual playlists with unique names and safe artwork',
-      () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 7, 20, 12),
-    );
-    await store.load();
-    await store.addTracks(<Track>[_track('1'), _track('2')]);
-    final artworkUri = Uri.parse('https://media.example.test/road.jpg');
-    final original = await store.createPlaylist(
-      'Road Mix',
-      trackIds: <String>['2', '1'],
-      folder: 'Travel',
-      artworkUri: artworkUri,
-      artworkCrop: ArtworkCrop.normalized(
-        alignmentX: 0.4,
-        alignmentY: -0.25,
-        zoom: 1.8,
-      ),
-    );
+  test(
+    'duplicates manual playlists with unique names and safe artwork',
+    () async {
+      final store = LibraryStore(clock: () => DateTime.utc(2026, 7, 20, 12));
+      await store.load();
+      await store.addTracks(<Track>[_track('1'), _track('2')]);
+      final artworkUri = Uri.parse('https://media.example.test/road.jpg');
+      final original = await store.createPlaylist(
+        'Road Mix',
+        trackIds: <String>['2', '1'],
+        folder: 'Travel',
+        artworkUri: artworkUri,
+        artworkCrop: ArtworkCrop.normalized(
+          alignmentX: 0.4,
+          alignmentY: -0.25,
+          zoom: 1.8,
+        ),
+      );
 
-    final duplicate = await store.duplicatePlaylist(original.id);
+      final duplicate = await store.duplicatePlaylist(original.id);
 
-    expect(duplicate, isNotNull);
-    expect(duplicate!.id, isNot(original.id));
-    expect(duplicate.name, 'Road Mix (copy)');
-    expect(duplicate.trackIds, <String>['2', '1']);
-    expect(duplicate.folder, 'Travel');
-    expect(duplicate.artworkUri, artworkUri);
-    expect(duplicate.artworkCrop.zoom, 1.8);
-    expect((await store.duplicatePlaylist(original.id))!.name, 'Road Mix (copy 2)');
-    expect(await store.duplicatePlaylist('missing'), isNull);
+      expect(duplicate, isNotNull);
+      expect(duplicate!.id, isNot(original.id));
+      expect(duplicate.name, 'Road Mix (copy)');
+      expect(duplicate.trackIds, <String>['2', '1']);
+      expect(duplicate.folder, 'Travel');
+      expect(duplicate.artworkUri, artworkUri);
+      expect(duplicate.artworkCrop.zoom, 1.8);
+      expect(
+        (await store.duplicatePlaylist(original.id))!.name,
+        'Road Mix (copy 2)',
+      );
+      expect(await store.duplicatePlaylist('missing'), isNull);
 
-    await store.updatePlaylistArtwork(
-      original.id,
-      Uri.file('/private/road-mix.png'),
-    );
-    final privateArtworkDuplicate = await store.duplicatePlaylist(original.id);
-    expect(privateArtworkDuplicate!.artworkUri, isNull);
-    expect(privateArtworkDuplicate.artworkCrop.isCentered, isTrue);
-  });
+      await store.updatePlaylistArtwork(
+        original.id,
+        Uri.file('/private/road-mix.png'),
+      );
+      final privateArtworkDuplicate = await store.duplicatePlaylist(
+        original.id,
+      );
+      expect(privateArtworkDuplicate!.artworkUri, isNull);
+      expect(privateArtworkDuplicate.artworkCrop.isCentered, isTrue);
+    },
+  );
 
-  test('adds and removes tracks without duplicating playlist entries', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 2),
-    );
-    await store.load();
-    await store.addTracks(<Track>[_track('1'), _track('2')]);
-    final playlist = await store.createPlaylist('Favorites');
+  test(
+    'adds and removes tracks without duplicating playlist entries',
+    () async {
+      final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 2));
+      await store.load();
+      await store.addTracks(<Track>[_track('1'), _track('2')]);
+      final playlist = await store.createPlaylist('Favorites');
 
-    await store.addTrackToPlaylist(playlist.id, '1');
-    await store.addTrackToPlaylist(playlist.id, '1');
-    await store.addTrackToPlaylist(playlist.id, '2');
-    await store.removeTrackFromPlaylist(playlist.id, '1');
+      await store.addTrackToPlaylist(playlist.id, '1');
+      await store.addTrackToPlaylist(playlist.id, '1');
+      await store.addTrackToPlaylist(playlist.id, '2');
+      await store.removeTrackFromPlaylist(playlist.id, '1');
 
-    expect(store.playlistById(playlist.id)!.trackIds, <String>['2']);
-  });
+      expect(store.playlistById(playlist.id)!.trackIds, <String>['2']);
+    },
+  );
 
   test('reorders playlist tracks by index', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 2, 12),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 2, 12));
     await store.load();
     await store.addTracks(<Track>[_track('1'), _track('2'), _track('3')]);
     final playlist = await store.createPlaylist(
@@ -1058,9 +1061,7 @@ void main() {
   });
 
   test('saves queue track order as a playlist', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 2, 18),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 2, 18));
     await store.load();
     await store.addTracks(<Track>[_track('1'), _track('2'), _track('3')]);
 
@@ -1078,35 +1079,13 @@ void main() {
   });
 
   test('filters playlist tracks without changing playlist order', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 2, 20),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 2, 20));
     await store.load();
     await store.addTracks(<Track>[
-      _track(
-        '1',
-        title: 'Road One',
-        artist: 'Ari',
-        album: 'Home',
-      ),
-      _track(
-        '2',
-        title: 'Night Ride',
-        artist: 'Road Crew',
-        album: 'City',
-      ),
-      _track(
-        '3',
-        title: 'Archive Theme',
-        artist: 'Orion',
-        album: 'Road Album',
-      ),
-      _track(
-        '4',
-        title: 'Other Track',
-        artist: 'Mia',
-        album: 'Elsewhere',
-      ),
+      _track('1', title: 'Road One', artist: 'Ari', album: 'Home'),
+      _track('2', title: 'Night Ride', artist: 'Road Crew', album: 'City'),
+      _track('3', title: 'Archive Theme', artist: 'Orion', album: 'Road Album'),
+      _track('4', title: 'Other Track', artist: 'Mia', album: 'Elsewhere'),
     ]);
     final playlist = await store.createPlaylist(
       'Searchable',
@@ -1114,30 +1093,28 @@ void main() {
     );
 
     expect(
-      store.tracksForPlaylist(playlist.id, query: '  road  ').map(
-            (track) => track.id,
-          ),
+      store
+          .tracksForPlaylist(playlist.id, query: '  road  ')
+          .map((track) => track.id),
       <String>['3', '1', '2'],
     );
     expect(
-      store.tracksForPlaylist(playlist.id, query: 'night').map(
-            (track) => track.id,
-          ),
+      store
+          .tracksForPlaylist(playlist.id, query: 'night')
+          .map((track) => track.id),
       <String>['2'],
     );
     expect(
-      store.tracksForPlaylist(playlist.id, query: 'orion').map(
-            (track) => track.id,
-          ),
+      store
+          .tracksForPlaylist(playlist.id, query: 'orion')
+          .map((track) => track.id),
       <String>['3'],
     );
     expect(store.tracksForPlaylist(playlist.id, query: 'missing'), isEmpty);
   });
 
   test('removing a library track removes it from playlists', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 3),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 3));
     await store.load();
     await store.addTracks(<Track>[_track('1'), _track('2')]);
     final playlist = await store.createPlaylist(
@@ -1153,120 +1130,115 @@ void main() {
   test(
     'detects duplicate tracks by path hash audio provider stream and metadata',
     () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'path-a',
-        title: 'Path A',
-        localPath: '/music/shared.mp3',
-      ),
-      _track(
-        'path-b',
-        title: 'Path B',
-        localPath: '/music/shared.mp3',
-      ),
-      _track(
-        'hash-a',
-        title: 'Hash A',
-        localPath: '/music/hash-a.mp3',
-        contentHash: 'fnv64-1111222233334444',
-      ),
-      _track(
-        'hash-b',
-        title: 'Hash B',
-        localPath: '/music/hash-b.mp3',
-        contentHash: 'fnv64-1111222233334444',
-      ),
-      _track(
-        'audio-a',
-        title: 'Retagged A',
-        localPath: '/music/retagged-a.mp3',
-        audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
-      ),
-      _track(
-        'audio-b',
-        title: 'Retagged B',
-        localPath: '/music/retagged-b.mp3',
-        audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
-      ),
-      _track(
-        'provider-a',
-        title: 'Provider A',
-        sourceId: 'archive',
-        externalId: 'item-1',
-        localPath: null,
-      ),
-      _track(
-        'provider-b',
-        title: 'Provider B',
-        sourceId: 'archive',
-        externalId: 'item-1',
-        localPath: null,
-      ),
-      _track(
-        'stream-a',
-        title: 'Stream A',
-        streamUrl: 'https://media.example.test/song.mp3',
-        localPath: null,
-      ),
-      _track(
-        'stream-b',
-        title: 'Stream B',
-        streamUrl: 'https://media.example.test/song.mp3',
-        localPath: null,
-      ),
-      _track(
-        'meta-a',
-        title: 'Same Song',
-        artist: 'Mira',
-        album: 'Dawn',
-        duration: const Duration(minutes: 3),
-      ),
-      _track(
-        'meta-b',
-        title: ' same song ',
-        artist: ' mira ',
-        album: ' dawn ',
-        duration: const Duration(minutes: 3),
-      ),
-    ]);
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track('path-a', title: 'Path A', localPath: '/music/shared.mp3'),
+        _track('path-b', title: 'Path B', localPath: '/music/shared.mp3'),
+        _track(
+          'hash-a',
+          title: 'Hash A',
+          localPath: '/music/hash-a.mp3',
+          contentHash: 'fnv64-1111222233334444',
+        ),
+        _track(
+          'hash-b',
+          title: 'Hash B',
+          localPath: '/music/hash-b.mp3',
+          contentHash: 'fnv64-1111222233334444',
+        ),
+        _track(
+          'audio-a',
+          title: 'Retagged A',
+          localPath: '/music/retagged-a.mp3',
+          audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
+        ),
+        _track(
+          'audio-b',
+          title: 'Retagged B',
+          localPath: '/music/retagged-b.mp3',
+          audioFingerprint: 'audio-payload-fnv64-v1:mp3-1111222233334444',
+        ),
+        _track(
+          'provider-a',
+          title: 'Provider A',
+          sourceId: 'archive',
+          externalId: 'item-1',
+          localPath: null,
+        ),
+        _track(
+          'provider-b',
+          title: 'Provider B',
+          sourceId: 'archive',
+          externalId: 'item-1',
+          localPath: null,
+        ),
+        _track(
+          'stream-a',
+          title: 'Stream A',
+          streamUrl: 'https://media.example.test/song.mp3',
+          localPath: null,
+        ),
+        _track(
+          'stream-b',
+          title: 'Stream B',
+          streamUrl: 'https://media.example.test/song.mp3',
+          localPath: null,
+        ),
+        _track(
+          'meta-a',
+          title: 'Same Song',
+          artist: 'Mira',
+          album: 'Dawn',
+          duration: const Duration(minutes: 3),
+        ),
+        _track(
+          'meta-b',
+          title: ' same song ',
+          artist: ' mira ',
+          album: ' dawn ',
+          duration: const Duration(minutes: 3),
+        ),
+      ]);
 
-    final groups = store.duplicateTrackGroups();
+      final groups = store.duplicateTrackGroups();
 
-    expect(
-      groups.map((group) => group.type),
-      containsAll(<DuplicateMatchType>[
-        DuplicateMatchType.localPath,
-        DuplicateMatchType.contentHash,
-        DuplicateMatchType.audioFingerprint,
-        DuplicateMatchType.sourceExternalId,
-        DuplicateMatchType.streamUrl,
-        DuplicateMatchType.metadata,
-      ]),
-    );
-    expect(
-      groups
-          .firstWhere((group) => group.type == DuplicateMatchType.localPath)
-          .tracks
-          .map((track) => track.id),
-      containsAll(<String>['path-a', 'path-b']),
-    );
-    expect(
-      groups
-          .firstWhere((group) => group.type == DuplicateMatchType.contentHash)
-          .tracks
-          .map((track) => track.id),
-      containsAll(<String>['hash-a', 'hash-b']),
-    );
-    expect(
-      groups
-          .firstWhere((group) => group.type == DuplicateMatchType.audioFingerprint)
-          .tracks
-          .map((track) => track.id),
-      containsAll(<String>['audio-a', 'audio-b']),
-    );
-  });
+      expect(
+        groups.map((group) => group.type),
+        containsAll(<DuplicateMatchType>[
+          DuplicateMatchType.localPath,
+          DuplicateMatchType.contentHash,
+          DuplicateMatchType.audioFingerprint,
+          DuplicateMatchType.sourceExternalId,
+          DuplicateMatchType.streamUrl,
+          DuplicateMatchType.metadata,
+        ]),
+      );
+      expect(
+        groups
+            .firstWhere((group) => group.type == DuplicateMatchType.localPath)
+            .tracks
+            .map((track) => track.id),
+        containsAll(<String>['path-a', 'path-b']),
+      );
+      expect(
+        groups
+            .firstWhere((group) => group.type == DuplicateMatchType.contentHash)
+            .tracks
+            .map((track) => track.id),
+        containsAll(<String>['hash-a', 'hash-b']),
+      );
+      expect(
+        groups
+            .firstWhere(
+              (group) => group.type == DuplicateMatchType.audioFingerprint,
+            )
+            .tracks
+            .map((track) => track.id),
+        containsAll(<String>['audio-a', 'audio-b']),
+      );
+    },
+  );
 
   test('resolves duplicates while preserving attached library state', () async {
     var now = DateTime.utc(2026, 1, 4, 12);
@@ -1289,11 +1261,7 @@ void main() {
         duration: const Duration(minutes: 3),
         addedAt: DateTime.utc(2026, 1, 2),
       ),
-      _track(
-        'other',
-        title: 'Other',
-        addedAt: DateTime.utc(2026, 1, 3),
-      ),
+      _track('other', title: 'Other', addedAt: DateTime.utc(2026, 1, 3)),
     ]);
     final playlist = await store.createPlaylist(
       'Merge',
@@ -1331,14 +1299,14 @@ void main() {
 
     expect(removed, 1);
     expect(store.tracks.map((track) => track.id), isNot(contains('duplicate')));
-    expect(
-      store.playlistById(playlist.id)!.trackIds,
-      <String>['keep', 'other'],
-    );
-    expect(
-      store.playbackHistory.map((entry) => entry.trackId),
-      <String>['keep', 'keep'],
-    );
+    expect(store.playlistById(playlist.id)!.trackIds, <String>[
+      'keep',
+      'other',
+    ]);
+    expect(store.playbackHistory.map((entry) => entry.trackId), <String>[
+      'keep',
+      'keep',
+    ]);
     expect(store.playCountForTrack('keep'), 2);
     expect(
       store.tracks.firstWhere((track) => track.id == 'keep').isFavorite,
@@ -1382,122 +1350,121 @@ void main() {
     expect(secondStore.bookmarksForTrack('keep').single.folder, 'Review');
   });
 
-  test('undoes the last duplicate merge with all rewritten state restored',
-      () async {
-    var now = DateTime.utc(2026, 7, 14, 6);
-    final store = LibraryStore(clock: () => now);
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'keep',
-        title: 'Undo me',
-        artist: 'Mira',
-        duration: const Duration(minutes: 3),
-      ),
-      _track(
+  test(
+    'undoes the last duplicate merge with all rewritten state restored',
+    () async {
+      var now = DateTime.utc(2026, 7, 14, 6);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'keep',
+          title: 'Undo me',
+          artist: 'Mira',
+          duration: const Duration(minutes: 3),
+        ),
+        _track(
+          'duplicate',
+          title: 'Undo me',
+          artist: 'Mira',
+          duration: const Duration(minutes: 3),
+        ),
+      ]);
+      final playlist = await store.createPlaylist(
+        'Undo merge',
+        trackIds: <String>['duplicate', 'keep'],
+      );
+      await store.setLyrics('keep', 'keeper lyrics');
+      now = now.add(const Duration(minutes: 1));
+      await store.setLyrics('duplicate', 'duplicate lyrics');
+      await store.recordPlayback('duplicate');
+      await store.recordPlaybackProgress(
         'duplicate',
-        title: 'Undo me',
-        artist: 'Mira',
-        duration: const Duration(minutes: 3),
-      ),
-    ]);
-    final playlist = await store.createPlaylist(
-      'Undo merge',
-      trackIds: <String>['duplicate', 'keep'],
-    );
-    await store.setLyrics('keep', 'keeper lyrics');
-    now = now.add(const Duration(minutes: 1));
-    await store.setLyrics('duplicate', 'duplicate lyrics');
-    await store.recordPlayback('duplicate');
-    await store.recordPlaybackProgress(
-      'duplicate',
-      const Duration(minutes: 2),
-      const Duration(minutes: 3),
-    );
-    await store.addTrackBookmark('keep', const Duration(seconds: 15));
-    await store.addTrackBookmark('duplicate', const Duration(seconds: 45));
-    await store.setTrackPlaybackSpeed('duplicate', 1.5);
-    await store.toggleFavorite('duplicate');
+        const Duration(minutes: 2),
+        const Duration(minutes: 3),
+      );
+      await store.addTrackBookmark('keep', const Duration(seconds: 15));
+      await store.addTrackBookmark('duplicate', const Duration(seconds: 45));
+      await store.setTrackPlaybackSpeed('duplicate', 1.5);
+      await store.toggleFavorite('duplicate');
 
-    expect(
-      await store.resolveDuplicateTracks(
-        keepTrackId: 'keep',
-        duplicateTrackIds: <String>['duplicate'],
-      ),
-      1,
-    );
-    expect(store.canUndoDuplicateResolution, isTrue);
-    expect(store.playbackSpeedForTrack('keep'), 1.5);
-    expect(store.playbackSpeedForTrack('duplicate'), isNull);
-    expect(
-      store.bookmarksForTrack('keep').map((bookmark) => bookmark.position),
-      containsAll(<Duration>[
-        const Duration(seconds: 15),
-        const Duration(seconds: 45),
-      ]),
-    );
+      expect(
+        await store.resolveDuplicateTracks(
+          keepTrackId: 'keep',
+          duplicateTrackIds: <String>['duplicate'],
+        ),
+        1,
+      );
+      expect(store.canUndoDuplicateResolution, isTrue);
+      expect(store.playbackSpeedForTrack('keep'), 1.5);
+      expect(store.playbackSpeedForTrack('duplicate'), isNull);
+      expect(
+        store.bookmarksForTrack('keep').map((bookmark) => bookmark.position),
+        containsAll(<Duration>[
+          const Duration(seconds: 15),
+          const Duration(seconds: 45),
+        ]),
+      );
 
-    expect(await store.undoLastDuplicateResolution(), isTrue);
-    expect(store.canUndoDuplicateResolution, isFalse);
-    expect(store.tracks.map((track) => track.id), containsAll(<String>[
-      'keep',
-      'duplicate',
-    ]));
-    expect(store.playlistById(playlist.id)!.trackIds, <String>[
-      'duplicate',
-      'keep',
-    ]);
-    expect(
-      store.playbackHistory.map((entry) => entry.trackId),
-      <String>['duplicate'],
-    );
-    expect(store.lyricsForTrack('keep')!.plainText, 'keeper lyrics');
-    expect(store.lyricsForTrack('duplicate')!.plainText, 'duplicate lyrics');
-    expect(store.playbackProgressForTrack('keep'), isNull);
-    expect(
-      store.playbackProgressForTrack('duplicate')!.position,
-      const Duration(minutes: 2),
-    );
-    expect(store.playbackSpeedForTrack('keep'), isNull);
-    expect(store.playbackSpeedForTrack('duplicate'), 1.5);
-    expect(
-      store.bookmarksForTrack('keep').map((bookmark) => bookmark.position),
-      <Duration>[const Duration(seconds: 15)],
-    );
-    expect(
-      store.bookmarksForTrack('duplicate').map((bookmark) => bookmark.position),
-      <Duration>[const Duration(seconds: 45)],
-    );
-    expect(
-      store.tracks.firstWhere((track) => track.id == 'keep').isFavorite,
-      isFalse,
-    );
-    expect(
-      store.tracks.firstWhere((track) => track.id == 'duplicate').isFavorite,
-      isTrue,
-    );
-    expect(store.duplicateTrackGroups(), isNotEmpty);
-    expect(await store.undoLastDuplicateResolution(), isFalse);
+      expect(await store.undoLastDuplicateResolution(), isTrue);
+      expect(store.canUndoDuplicateResolution, isFalse);
+      expect(
+        store.tracks.map((track) => track.id),
+        containsAll(<String>['keep', 'duplicate']),
+      );
+      expect(store.playlistById(playlist.id)!.trackIds, <String>[
+        'duplicate',
+        'keep',
+      ]);
+      expect(store.playbackHistory.map((entry) => entry.trackId), <String>[
+        'duplicate',
+      ]);
+      expect(store.lyricsForTrack('keep')!.plainText, 'keeper lyrics');
+      expect(store.lyricsForTrack('duplicate')!.plainText, 'duplicate lyrics');
+      expect(store.playbackProgressForTrack('keep'), isNull);
+      expect(
+        store.playbackProgressForTrack('duplicate')!.position,
+        const Duration(minutes: 2),
+      );
+      expect(store.playbackSpeedForTrack('keep'), isNull);
+      expect(store.playbackSpeedForTrack('duplicate'), 1.5);
+      expect(
+        store.bookmarksForTrack('keep').map((bookmark) => bookmark.position),
+        <Duration>[const Duration(seconds: 15)],
+      );
+      expect(
+        store
+            .bookmarksForTrack('duplicate')
+            .map((bookmark) => bookmark.position),
+        <Duration>[const Duration(seconds: 45)],
+      );
+      expect(
+        store.tracks.firstWhere((track) => track.id == 'keep').isFavorite,
+        isFalse,
+      );
+      expect(
+        store.tracks.firstWhere((track) => track.id == 'duplicate').isFavorite,
+        isTrue,
+      );
+      expect(store.duplicateTrackGroups(), isNotEmpty);
+      expect(await store.undoLastDuplicateResolution(), isFalse);
 
-    final restored = LibraryStore(clock: () => now);
-    await restored.load();
-    expect(restored.playlistById(playlist.id)!.trackIds, <String>[
-      'duplicate',
-      'keep',
-    ]);
-    expect(restored.playbackSpeedForTrack('duplicate'), 1.5);
-  });
+      final restored = LibraryStore(clock: () => now);
+      await restored.load();
+      expect(restored.playlistById(playlist.id)!.trackIds, <String>[
+        'duplicate',
+        'keep',
+      ]);
+      expect(restored.playbackSpeedForTrack('duplicate'), 1.5);
+    },
+  );
 
   test('expires duplicate merge undo after a later library change', () async {
     final store = LibraryStore();
     await store.load();
     await store.addTracks(<Track>[
       _track('keep', title: 'Same', duration: const Duration(minutes: 1)),
-      _track(
-        'duplicate',
-        title: 'Same',
-        duration: const Duration(minutes: 1),
-      ),
+      _track('duplicate', title: 'Same', duration: const Duration(minutes: 1)),
     ]);
 
     await store.resolveDuplicateTracks(
@@ -1509,10 +1476,10 @@ void main() {
     await store.addTracks(<Track>[_track('later')]);
     expect(store.canUndoDuplicateResolution, isFalse);
     expect(await store.undoLastDuplicateResolution(), isFalse);
-    expect(store.tracks.map((track) => track.id), containsAll(<String>[
-      'keep',
-      'later',
-    ]));
+    expect(
+      store.tracks.map((track) => track.id),
+      containsAll(<String>['keep', 'later']),
+    );
     expect(store.tracks.map((track) => track.id), isNot(contains('duplicate')));
   });
 
@@ -1527,12 +1494,7 @@ void main() {
     ]);
     final playlist = await store.createPlaylist(
       'Batch merge',
-      trackIds: <String>[
-        'duplicate-a',
-        'duplicate-b',
-        'keep-a',
-        'keep-b',
-      ],
+      trackIds: <String>['duplicate-a', 'duplicate-b', 'keep-a', 'keep-b'],
     );
 
     final removed = await store.resolveDuplicateTrackBatch(
@@ -1550,12 +1512,18 @@ void main() {
 
     expect(removed, 2);
     expect(store.canUndoDuplicateResolution, isTrue);
-    expect(store.tracks.map((track) => track.id), containsAll(<String>[
-      'keep-a',
-      'keep-b',
-    ]));
-    expect(store.tracks.map((track) => track.id), isNot(contains('duplicate-a')));
-    expect(store.tracks.map((track) => track.id), isNot(contains('duplicate-b')));
+    expect(
+      store.tracks.map((track) => track.id),
+      containsAll(<String>['keep-a', 'keep-b']),
+    );
+    expect(
+      store.tracks.map((track) => track.id),
+      isNot(contains('duplicate-a')),
+    );
+    expect(
+      store.tracks.map((track) => track.id),
+      isNot(contains('duplicate-b')),
+    );
     expect(store.playlistById(playlist.id)!.trackIds, <String>[
       'keep-a',
       'keep-b',
@@ -1568,12 +1536,10 @@ void main() {
       'keep-a',
       'keep-b',
     ]);
-    expect(store.tracks.map((track) => track.id), containsAll(<String>[
-      'keep-a',
-      'duplicate-a',
-      'keep-b',
-      'duplicate-b',
-    ]));
+    expect(
+      store.tracks.map((track) => track.id),
+      containsAll(<String>['keep-a', 'duplicate-a', 'keep-b', 'duplicate-b']),
+    );
   });
 
   test('skips overlapping duplicate resolutions in a batch', () async {
@@ -1599,7 +1565,10 @@ void main() {
     );
 
     expect(removed, 1);
-    expect(store.tracks.map((track) => track.id), containsAll(<String>['a', 'c']));
+    expect(
+      store.tracks.map((track) => track.id),
+      containsAll(<String>['a', 'c']),
+    );
     expect(store.tracks.map((track) => track.id), isNot(contains('b')));
   });
 
@@ -1647,8 +1616,9 @@ void main() {
     expect(secondStore.playlistById(playlist.id)!.folder, 'Evening');
     expect(secondStore.playlistFolders, <String>['Evening']);
 
-    final document = jsonDecode(firstStore.exportPlaylistJson(playlist.id))
-        as Map<String, dynamic>;
+    final document =
+        jsonDecode(firstStore.exportPlaylistJson(playlist.id))
+            as Map<String, dynamic>;
     expect((document['playlist'] as Map<String, dynamic>)['folder'], 'Evening');
 
     final restoredStore = LibraryStore(clock: () => now);
@@ -1750,171 +1720,179 @@ void main() {
     expect(store.playlistById(playlist.id)!.artworkUri, localArtwork);
 
     final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
-    final backupPlaylist = (backup['playlists'] as List<dynamic>).single
-        as Map<String, dynamic>;
+    final backupPlaylist =
+        (backup['playlists'] as List<dynamic>).single as Map<String, dynamic>;
     expect(backupPlaylist['artworkUri'], isNull);
 
-    final document = jsonDecode(store.exportPlaylistJson(playlist.id))
-        as Map<String, dynamic>;
+    final document =
+        jsonDecode(store.exportPlaylistJson(playlist.id))
+            as Map<String, dynamic>;
     expect(
       (document['playlist'] as Map<String, dynamic>)['artworkUri'],
       isNull,
     );
 
-    final snapshot = jsonDecode(store.exportSyncSnapshotJson())
-        as Map<String, dynamic>;
-    final snapshotPlaylist = (snapshot['playlists'] as List<dynamic>).single
-        as Map<String, dynamic>;
+    final snapshot =
+        jsonDecode(store.exportSyncSnapshotJson()) as Map<String, dynamic>;
+    final snapshotPlaylist =
+        (snapshot['playlists'] as List<dynamic>).single as Map<String, dynamic>;
     expect(snapshotPlaylist['artworkUri'], isNull);
   });
 
-  test('shares and imports portable playlist links without local paths',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track('one', title: 'One', artist: 'Mira', album: 'Dawn'),
-      _track('two', title: 'Two', artist: 'Mira', album: 'Dawn'),
-    ]);
-    final playlist = await store.createPlaylist(
-      'Link mix',
-      trackIds: const <String>['one', 'two'],
-    );
+  test(
+    'shares and imports portable playlist links without local paths',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track('one', title: 'One', artist: 'Mira', album: 'Dawn'),
+        _track('two', title: 'Two', artist: 'Mira', album: 'Dawn'),
+      ]);
+      final playlist = await store.createPlaylist(
+        'Link mix',
+        trackIds: const <String>['one', 'two'],
+      );
 
-    final link = store.playlistImportLink(playlist.id);
-    expect(link, startsWith('aethertune://playlist?data='));
+      final link = store.playlistImportLink(playlist.id);
+      expect(link, startsWith('aethertune://playlist?data='));
 
-    final uri = Uri.parse(link!);
-    final payload = jsonDecode(
-      utf8.decode(base64Url.decode(uri.queryParameters['data']!)),
-    ) as Map<String, dynamic>;
-    final sharedTrack = (payload['tracks'] as List<dynamic>).first
-        as Map<String, dynamic>;
-    expect(sharedTrack['localPath'], isNull);
-    expect(sharedTrack['streamUrl'], isNull);
+      final uri = Uri.parse(link!);
+      final payload =
+          jsonDecode(
+                utf8.decode(base64Url.decode(uri.queryParameters['data']!)),
+              )
+              as Map<String, dynamic>;
+      final sharedTrack =
+          (payload['tracks'] as List<dynamic>).first as Map<String, dynamic>;
+      expect(sharedTrack['localPath'], isNull);
+      expect(sharedTrack['streamUrl'], isNull);
 
-    final imported = await store.importPlaylistLink(link);
-    expect(imported.name, 'Link mix');
-    expect(imported.trackIds, const <String>['one', 'two']);
+      final imported = await store.importPlaylistLink(link);
+      expect(imported.name, 'Link mix');
+      expect(imported.trackIds, const <String>['one', 'two']);
 
-    expect(store.playlistImportLink('missing'), isNull);
-    await expectLater(
-      store.importPlaylistLink('https://example.test/playlist'),
-      throwsFormatException,
-    );
-  });
+      expect(store.playlistImportLink('missing'), isNull);
+      await expectLater(
+        store.importPlaylistLink('https://example.test/playlist'),
+        throwsFormatException,
+      );
+    },
+  );
 
-  test('keeps private user track artwork on-device and restores source artwork',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    final scannedArtwork = Uri.parse('data:image/png;base64,c2Nhbm5lZA==');
-    final privateArtwork = Uri.file('/private/track-artwork.png');
-    await store.addTracks(<Track>[
-      _track('1', artworkUri: scannedArtwork),
-    ]);
+  test(
+    'keeps private user track artwork on-device and restores source artwork',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      final scannedArtwork = Uri.parse('data:image/png;base64,c2Nhbm5lZA==');
+      final privateArtwork = Uri.file('/private/track-artwork.png');
+      await store.addTracks(<Track>[_track('1', artworkUri: scannedArtwork)]);
 
-    final crop = await store.updateTrackArtworkCrop(
-      '1',
-      ArtworkCrop.normalized(
-        alignmentX: 0.4,
-        alignmentY: -0.25,
-        zoom: 1.8,
-      ),
-    );
-    expect(crop!.artworkCrop.alignmentX, 0.4);
-    expect(crop.artworkCrop.alignmentY, -0.25);
-    expect(crop.artworkCrop.zoom, 1.8);
+      final crop = await store.updateTrackArtworkCrop(
+        '1',
+        ArtworkCrop.normalized(alignmentX: 0.4, alignmentY: -0.25, zoom: 1.8),
+      );
+      expect(crop!.artworkCrop.alignmentX, 0.4);
+      expect(crop.artworkCrop.alignmentY, -0.25);
+      expect(crop.artworkCrop.zoom, 1.8);
 
-    final updated = await store.updateTrackArtwork('1', privateArtwork);
-    expect(updated!.artworkUri, privateArtwork);
-    expect(updated.artworkSourceUri, scannedArtwork);
-    expect(updated.artworkIsUserManaged, isTrue);
-    expect(updated.artworkCrop.isCentered, isTrue);
+      final updated = await store.updateTrackArtwork('1', privateArtwork);
+      expect(updated!.artworkUri, privateArtwork);
+      expect(updated.artworkSourceUri, scannedArtwork);
+      expect(updated.artworkIsUserManaged, isTrue);
+      expect(updated.artworkCrop.isCentered, isTrue);
 
-    final privateCrop = await store.updateTrackArtworkCrop(
-      '1',
-      ArtworkCrop.normalized(alignmentX: -0.2, zoom: 1.5),
-    );
-    expect(privateCrop!.artworkCrop.zoom, 1.5);
+      final privateCrop = await store.updateTrackArtworkCrop(
+        '1',
+        ArtworkCrop.normalized(alignmentX: -0.2, zoom: 1.5),
+      );
+      expect(privateCrop!.artworkCrop.zoom, 1.5);
 
-    final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
-    final backupTrack = (backup['tracks'] as List<dynamic>).single
-        as Map<String, dynamic>;
-    expect(backupTrack['artworkUri'], scannedArtwork.toString());
-    expect(backupTrack['artworkSourceUri'], isNull);
-    expect(backupTrack['artworkIsUserManaged'], isFalse);
-    expect(backupTrack['artworkCrop'], isNull);
+      final backup =
+          jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;
+      final backupTrack =
+          (backup['tracks'] as List<dynamic>).single as Map<String, dynamic>;
+      expect(backupTrack['artworkUri'], scannedArtwork.toString());
+      expect(backupTrack['artworkSourceUri'], isNull);
+      expect(backupTrack['artworkIsUserManaged'], isFalse);
+      expect(backupTrack['artworkCrop'], isNull);
 
-    final playlist = await store.createPlaylist('Private track cover',
-        trackIds: <String>['1']);
-    final document = jsonDecode(store.exportPlaylistJson(playlist.id))
-        as Map<String, dynamic>;
-    final documentTrack = (document['tracks'] as List<dynamic>).single
-        as Map<String, dynamic>;
-    expect(documentTrack['artworkUri'], scannedArtwork.toString());
+      final playlist = await store.createPlaylist(
+        'Private track cover',
+        trackIds: <String>['1'],
+      );
+      final document =
+          jsonDecode(store.exportPlaylistJson(playlist.id))
+              as Map<String, dynamic>;
+      final documentTrack =
+          (document['tracks'] as List<dynamic>).single as Map<String, dynamic>;
+      expect(documentTrack['artworkUri'], scannedArtwork.toString());
 
-    final snapshot = jsonDecode(store.exportSyncSnapshotJson())
-        as Map<String, dynamic>;
-    final snapshotTrack = (snapshot['tracks'] as List<dynamic>).single
-        as Map<String, dynamic>;
-    expect(snapshotTrack['artworkUri'], scannedArtwork.toString());
-    expect(snapshotTrack['artworkSourceUri'], isNull);
-    expect(snapshotTrack['artworkIsUserManaged'], isFalse);
-    expect(snapshotTrack['artworkCrop'], isNull);
+      final snapshot =
+          jsonDecode(store.exportSyncSnapshotJson()) as Map<String, dynamic>;
+      final snapshotTrack =
+          (snapshot['tracks'] as List<dynamic>).single as Map<String, dynamic>;
+      expect(snapshotTrack['artworkUri'], scannedArtwork.toString());
+      expect(snapshotTrack['artworkSourceUri'], isNull);
+      expect(snapshotTrack['artworkIsUserManaged'], isFalse);
+      expect(snapshotTrack['artworkCrop'], isNull);
 
-    final remote = LibraryStore();
-    await remote.load();
-    await store.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
-    expect(store.tracks.single.artworkUri, privateArtwork);
-    expect(store.tracks.single.artworkSourceUri, scannedArtwork);
-    expect(store.tracks.single.artworkIsUserManaged, isTrue);
+      final remote = LibraryStore();
+      await remote.load();
+      await store.mergeSyncSnapshotJson(remote.exportSyncSnapshotJson());
+      expect(store.tracks.single.artworkUri, privateArtwork);
+      expect(store.tracks.single.artworkSourceUri, scannedArtwork);
+      expect(store.tracks.single.artworkIsUserManaged, isTrue);
 
-    final restored = await store.updateTrackArtwork('1', null);
-    expect(restored!.artworkUri, scannedArtwork);
-    expect(restored.artworkSourceUri, isNull);
-    expect(restored.artworkIsUserManaged, isFalse);
-    expect(restored.artworkCrop.isCentered, isTrue);
-  });
+      final restored = await store.updateTrackArtwork('1', null);
+      expect(restored!.artworkUri, scannedArtwork);
+      expect(restored.artworkSourceUri, isNull);
+      expect(restored.artworkIsUserManaged, isFalse);
+      expect(restored.artworkCrop.isCentered, isTrue);
+    },
+  );
 
-  test('updates scanned embedded artwork without replacing a private cover',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    final originalArtwork = Uri.parse('data:image/png;base64,b3JpZ2luYWw=');
-    final replacementArtwork = Uri.parse('data:image/jpeg;base64,cmVwbGFjZWQ=');
-    final privateArtwork = Uri.file('/private/track-artwork.png');
-    await store.addTracks(<Track>[
-      _track('1', artworkUri: originalArtwork),
-    ]);
+  test(
+    'updates scanned embedded artwork without replacing a private cover',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      final originalArtwork = Uri.parse('data:image/png;base64,b3JpZ2luYWw=');
+      final replacementArtwork = Uri.parse(
+        'data:image/jpeg;base64,cmVwbGFjZWQ=',
+      );
+      final privateArtwork = Uri.file('/private/track-artwork.png');
+      await store.addTracks(<Track>[_track('1', artworkUri: originalArtwork)]);
 
-    final scannedUpdate = await store.updateEmbeddedTrackArtwork(
-      '1',
-      replacementArtwork,
-    );
-    expect(scannedUpdate!.artworkUri, replacementArtwork);
-    expect(scannedUpdate.artworkSourceUri, replacementArtwork);
-    expect(scannedUpdate.artworkIsUserManaged, isFalse);
+      final scannedUpdate = await store.updateEmbeddedTrackArtwork(
+        '1',
+        replacementArtwork,
+      );
+      expect(scannedUpdate!.artworkUri, replacementArtwork);
+      expect(scannedUpdate.artworkSourceUri, replacementArtwork);
+      expect(scannedUpdate.artworkIsUserManaged, isFalse);
 
-    await store.updateTrackArtwork('1', privateArtwork);
-    final preservedPrivateArtwork = await store.updateEmbeddedTrackArtwork(
-      '1',
-      originalArtwork,
-    );
-    expect(preservedPrivateArtwork!.artworkUri, privateArtwork);
-    expect(preservedPrivateArtwork.artworkSourceUri, originalArtwork);
-    expect(preservedPrivateArtwork.artworkIsUserManaged, isTrue);
+      await store.updateTrackArtwork('1', privateArtwork);
+      final preservedPrivateArtwork = await store.updateEmbeddedTrackArtwork(
+        '1',
+        originalArtwork,
+      );
+      expect(preservedPrivateArtwork!.artworkUri, privateArtwork);
+      expect(preservedPrivateArtwork.artworkSourceUri, originalArtwork);
+      expect(preservedPrivateArtwork.artworkIsUserManaged, isTrue);
 
-    await expectLater(
-      store.updateEmbeddedTrackArtwork('1', Uri.parse('https://example.com/cover.png')),
-      throwsArgumentError,
-    );
-  });
+      await expectLater(
+        store.updateEmbeddedTrackArtwork(
+          '1',
+          Uri.parse('https://example.com/cover.png'),
+        ),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('exports and imports playlist JSON documents', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 1),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 1));
     await store.load();
     await store.addTracks(<Track>[
       _track('1', title: 'First'),
@@ -1946,9 +1924,7 @@ void main() {
   });
 
   test('exports and imports M3U playlists by track path', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 2),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 2));
     await store.load();
     await store.addTracks(<Track>[
       _track('1', title: 'Path One', artist: 'Ari'),
@@ -1979,9 +1955,7 @@ void main() {
   });
 
   test('exports and imports bounded PLS playlists by track path', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 2, 30),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 2, 30));
     await store.load();
     await store.addTracks(<Track>[
       _track('1', title: 'Path One', artist: 'Ari'),
@@ -2027,94 +2001,94 @@ void main() {
     );
   });
 
-  test('exports and imports XSPF playlists with portable identifiers',
-      () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 2, 45),
-    );
-    await store.load();
-    await store.addTracks(<Track>[
-      _track('1', title: 'Path One', artist: 'Ari'),
-      _track('2', title: 'Path Two', artist: 'Mia'),
-    ]);
-    final playlist = await store.createPlaylist(
-      'Road XSPF',
-      trackIds: <String>['2', '1'],
-    );
+  test(
+    'exports and imports XSPF playlists with portable identifiers',
+    () async {
+      final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 2, 45));
+      await store.load();
+      await store.addTracks(<Track>[
+        _track('1', title: 'Path One', artist: 'Ari'),
+        _track('2', title: 'Path Two', artist: 'Mia'),
+      ]);
+      final playlist = await store.createPlaylist(
+        'Road XSPF',
+        trackIds: <String>['2', '1'],
+      );
 
-    final document = store.exportPlaylistDocument(
-      playlist.id,
-      format: PlaylistDocumentFormat.xspf,
-    );
-
-    expect(document, contains('xmlns="http://xspf.org/ns/0/"'));
-    expect(document, contains('<title>Road XSPF</title>'));
-    expect(document, contains('urn:aethertune:track:2'));
-    expect(document, contains('file:///music/2.mp3'));
-
-    await store.deletePlaylist(playlist.id);
-    final imported = await store.importPlaylistDocument(
-      document,
-      format: PlaylistDocumentFormat.xspf,
-    );
-
-    expect(imported.name, 'Road XSPF');
-    expect(imported.trackIds, <String>['2', '1']);
-    await expectLater(
-      store.importPlaylistDocument(
-        '<playlist version="2"><trackList /></playlist>',
+      final document = store.exportPlaylistDocument(
+        playlist.id,
         format: PlaylistDocumentFormat.xspf,
-      ),
-      throwsA(isA<FormatException>()),
-    );
-  });
+      );
 
-  test('preserves Android content URIs when exporting XSPF playlists',
-      () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 2, 46),
-    );
-    await store.load();
-    const contentUri =
-        'content://com.android.providers.media.documents/document/audio%3A42';
-    await store.addTracks(<Track>[
-      Track(
-        id: 'saf-track',
-        title: 'SAF track',
-        localPath: contentUri,
-        sourceId: 'local',
-      ),
-    ]);
-    final playlist = await store.createPlaylist(
-      'SAF XSPF',
-      trackIds: <String>['saf-track'],
-    );
+      expect(document, contains('xmlns="http://xspf.org/ns/0/"'));
+      expect(document, contains('<title>Road XSPF</title>'));
+      expect(document, contains('urn:aethertune:track:2'));
+      expect(document, contains('file:///music/2.mp3'));
 
-    final document = store.exportPlaylistDocument(
-      playlist.id,
-      format: PlaylistDocumentFormat.xspf,
-    );
+      await store.deletePlaylist(playlist.id);
+      final imported = await store.importPlaylistDocument(
+        document,
+        format: PlaylistDocumentFormat.xspf,
+      );
 
-    expect(document, contains(contentUri));
-    expect(document, isNot(contains('file:///content%3A')));
-  });
+      expect(imported.name, 'Road XSPF');
+      expect(imported.trackIds, <String>['2', '1']);
+      await expectLater(
+        store.importPlaylistDocument(
+          '<playlist version="2"><trackList /></playlist>',
+          format: PlaylistDocumentFormat.xspf,
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
 
-  test('persists a granted Android content tree as a watched local root',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    const treeUri =
-        'content://com.android.providers.media.documents/tree/primary%3AMusic';
+  test(
+    'preserves Android content URIs when exporting XSPF playlists',
+    () async {
+      final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 2, 46));
+      await store.load();
+      const contentUri =
+          'content://com.android.providers.media.documents/document/audio%3A42';
+      await store.addTracks(<Track>[
+        Track(
+          id: 'saf-track',
+          title: 'SAF track',
+          localPath: contentUri,
+          sourceId: 'local',
+        ),
+      ]);
+      final playlist = await store.createPlaylist(
+        'SAF XSPF',
+        trackIds: <String>['saf-track'],
+      );
 
-    await store.watchLocalFolder(treeUri);
+      final document = store.exportPlaylistDocument(
+        playlist.id,
+        format: PlaylistDocumentFormat.xspf,
+      );
 
-    expect(store.watchedLocalFolderPaths, <String>[treeUri]);
-  });
+      expect(document, contains(contentUri));
+      expect(document, isNot(contains('file:///content%3A')));
+    },
+  );
+
+  test(
+    'persists a granted Android content tree as a watched local root',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      const treeUri =
+          'content://com.android.providers.media.documents/tree/primary%3AMusic';
+
+      await store.watchLocalFolder(treeUri);
+
+      expect(store.watchedLocalFolderPaths, <String>[treeUri]);
+    },
+  );
 
   test('exports and imports Windows Media Player WPL playlists', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 2, 50),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 2, 50));
     await store.load();
     await store.addTracks(<Track>[
       _track('1', title: 'Path One', artist: 'Ari'),
@@ -2152,9 +2126,7 @@ void main() {
   });
 
   test('exports and imports CSV playlists with quoted fields', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 3),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 3));
     await store.load();
     await store.addTracks(<Track>[
       _track(
@@ -2189,9 +2161,7 @@ void main() {
   });
 
   test('builds privacy-safe local share text', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 4),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 4));
     await store.load();
     await store.addTracks(<Track>[
       _track(
@@ -2258,9 +2228,7 @@ void main() {
   });
 
   test('rejects playlist imports that do not match library tracks', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 4, 4),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 4, 4));
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
 
@@ -2275,9 +2243,7 @@ void main() {
   });
 
   test('saves and deletes plain lyrics for library tracks', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 5),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 5));
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
 
@@ -2292,9 +2258,7 @@ void main() {
   });
 
   test('sets sidecar lyrics only when a track has no saved lyrics', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 6),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 6));
     await store.load();
     await store.addTracks(<Track>[_track('1'), _track('2')]);
     await store.setLyrics('1', 'user edited lyrics');
@@ -2307,9 +2271,7 @@ void main() {
   });
 
   test('removing a library track removes its lyrics', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 6),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 6));
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
     await store.setLyrics('1', 'lyrics');
@@ -2341,17 +2303,11 @@ void main() {
     await firstStore.setLyrics('2', 'Plain lyrics');
 
     expect(
-      await firstStore.setLyricsTimingOffset(
-        '1',
-        const Duration(seconds: 45),
-      ),
+      await firstStore.setLyricsTimingOffset('1', const Duration(seconds: 45)),
       isTrue,
     );
     expect(
-      await firstStore.setLyricsTimingOffset(
-        '2',
-        const Duration(seconds: 1),
-      ),
+      await firstStore.setLyricsTimingOffset('2', const Duration(seconds: 1)),
       isFalse,
     );
     expect(
@@ -2410,9 +2366,7 @@ void main() {
   });
 
   test('builds limited lyrics share text from plain and synced lyrics', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 7, 1),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 7, 1));
     await store.load();
     await store.addTracks(<Track>[
       _track('1', title: 'Plain Song', artist: 'Mira', album: 'Dawn'),
@@ -2471,10 +2425,10 @@ void main() {
     expect(syncedShare, contains('Second synced'));
     expect(syncedShare, isNot(contains('[00:01.00]')));
     expect(syncedShare, isNot(contains('untimed note')));
-    expect(
-      store.lyricsShareLines('2'),
-      <String>['First synced', 'Second synced'],
-    );
+    expect(store.lyricsShareLines('2'), <String>[
+      'First synced',
+      'Second synced',
+    ]);
 
     final draftShare = store.shareLyricsText(
       '1',
@@ -2494,9 +2448,7 @@ void main() {
   });
 
   test('exports saved lyrics as txt or lrc documents', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 7, 2),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 7, 2));
     await store.load();
     await store.addTracks(<Track>[
       _track('1', title: 'Plain / Song', artist: ''),
@@ -2538,14 +2490,15 @@ void main() {
       await store.recordPlayback('1');
       await store.recordPlayback('missing');
 
-      expect(
-        store.playbackHistory.map((entry) => entry.trackId),
-        <String>['1', '2', '1'],
-      );
-      expect(
-        store.recentlyPlayedTracks().map((track) => track.id),
-        <String>['1', '2'],
-      );
+      expect(store.playbackHistory.map((entry) => entry.trackId), <String>[
+        '1',
+        '2',
+        '1',
+      ]);
+      expect(store.recentlyPlayedTracks().map((track) => track.id), <String>[
+        '1',
+        '2',
+      ]);
       expect(
         store.recentlyPlayedTracks(limit: 1).map((track) => track.id),
         <String>['1'],
@@ -2610,10 +2563,10 @@ void main() {
     expect(stats.playbackCount, 4);
     expect(stats.uniquePlayedTrackCount, 3);
     expect(stats.estimatedListeningDuration, const Duration(minutes: 15));
-    expect(
-      stats.topTracks.map((trackStats) => trackStats.track.id),
-      <String>['1', '3'],
-    );
+    expect(stats.topTracks.map((trackStats) => trackStats.track.id), <String>[
+      '1',
+      '3',
+    ]);
     expect(stats.topTracks.first.playCount, 2);
     expect(
       stats.topTracks.first.estimatedListeningDuration,
@@ -2628,10 +2581,10 @@ void main() {
     expect(stats.topAlbums.first.label, 'Dawn');
     expect(stats.topGenres.first.label, 'Ambient');
     expect(stats.topSources.first.label, 'local');
-    expect(
-      stats.topFolders.map((group) => group.label),
-      <String>['/music/dawn', 'Remote Streams'],
-    );
+    expect(stats.topFolders.map((group) => group.label), <String>[
+      '/music/dawn',
+      'Remote Streams',
+    ]);
     expect(store.libraryStats(limit: 0).topTracks, isEmpty);
   });
 
@@ -2683,10 +2636,10 @@ void main() {
     expect(stats.playbackCount, 3);
     expect(stats.uniquePlayedTrackCount, 2);
     expect(stats.estimatedListeningDuration, const Duration(minutes: 10));
-    expect(
-      stats.topTracks.map((trackStats) => trackStats.track.id),
-      <String>['1', '2'],
-    );
+    expect(stats.topTracks.map((trackStats) => trackStats.track.id), <String>[
+      '1',
+      '2',
+    ]);
     expect(store.playCountForTrack('1', from: from, to: to), 2);
     expect(
       store.lastPlayedAt('1', from: from, to: to),
@@ -2873,13 +2826,10 @@ void main() {
       statsLimit: 2,
     );
 
-    expect(
-      monthly.map((recap) => recap.start),
-      <DateTime>[
-        DateTime.utc(2026, 3),
-        DateTime.utc(2026, 2),
-      ],
-    );
+    expect(monthly.map((recap) => recap.start), <DateTime>[
+      DateTime.utc(2026, 3),
+      DateTime.utc(2026, 2),
+    ]);
     expect(monthly.first.period, LibraryRecapPeriod.month);
     expect(monthly.first.end, DateTime.utc(2026, 4));
     expect(monthly.first.stats.playbackCount, 1);
@@ -2898,13 +2848,10 @@ void main() {
       statsLimit: 1,
     );
 
-    expect(
-      yearly.map((recap) => recap.start),
-      <DateTime>[
-        DateTime.utc(2026),
-        DateTime.utc(2025),
-      ],
-    );
+    expect(yearly.map((recap) => recap.start), <DateTime>[
+      DateTime.utc(2026),
+      DateTime.utc(2025),
+    ]);
     expect(yearly.first.period, LibraryRecapPeriod.year);
     expect(yearly.first.end, DateTime.utc(2027));
     expect(yearly.first.stats.playbackCount, 5);
@@ -2914,9 +2861,7 @@ void main() {
   });
 
   test('builds local mood mixes from playable library metadata', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 2, 2, 12),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 2, 2, 12));
     await store.load();
     await store.addTracks(<Track>[
       _track(
@@ -2984,16 +2929,13 @@ void main() {
 
     final mixes = store.localMoodMixes(limit: 2);
 
-    expect(
-      mixes.map((mix) => mix.type),
-      <LibraryMoodMixType>[
-        LibraryMoodMixType.focus,
-        LibraryMoodMixType.energy,
-        LibraryMoodMixType.chill,
-        LibraryMoodMixType.workout,
-        LibraryMoodMixType.sleep,
-      ],
-    );
+    expect(mixes.map((mix) => mix.type), <LibraryMoodMixType>[
+      LibraryMoodMixType.focus,
+      LibraryMoodMixType.energy,
+      LibraryMoodMixType.chill,
+      LibraryMoodMixType.workout,
+      LibraryMoodMixType.sleep,
+    ]);
     expect(mixes.first.name, 'Focus mix');
     expect(
       store
@@ -3008,9 +2950,7 @@ void main() {
       contains('energy'),
     );
     expect(
-      store
-          .tracksForMoodMix(LibraryMoodMixType.focus)
-          .map((track) => track.id),
+      store.tracksForMoodMix(LibraryMoodMixType.focus).map((track) => track.id),
       isNot(contains('metadata-only')),
     );
     expect(store.localMoodMixes(limit: 0), isEmpty);
@@ -3025,172 +2965,169 @@ void main() {
     expect(store.playlistById(playlist.id), playlist);
 
     expect(
-      await store.saveMoodMixAsPlaylist(
-        LibraryMoodMixType.focus,
-        limit: 0,
-      ),
+      await store.saveMoodMixAsPlaylist(LibraryMoodMixType.focus, limit: 0),
       isNull,
     );
   });
 
-  test('builds personalized local recommendations from taste signals', () async {
-    var now = DateTime.utc(2026, 2, 3, 12);
-    final store = LibraryStore(clock: () => now);
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'seed',
-        title: 'Aether Seed',
-        artist: 'Mira',
-        album: 'Dawn',
-        genre: 'Ambient',
-      ),
-      _track(
+  test(
+    'builds personalized local recommendations from taste signals',
+    () async {
+      var now = DateTime.utc(2026, 2, 3, 12);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'seed',
+          title: 'Aether Seed',
+          artist: 'Mira',
+          album: 'Dawn',
+          genre: 'Ambient',
+        ),
+        _track(
+          'same-artist',
+          title: 'Morning Signal',
+          artist: 'Mira',
+          album: 'Elsewhere',
+          genre: 'Ambient',
+        ),
+        _track(
+          'same-genre',
+          title: 'Soft Current',
+          artist: 'Ari',
+          album: 'Still',
+          genre: 'Ambient',
+        ),
+        _track(
+          'same-album',
+          title: 'Dawn Echo',
+          artist: 'Vera',
+          album: 'Dawn',
+          genre: 'Pop',
+        ),
+        _track(
+          'unrelated',
+          title: 'Late Train',
+          artist: 'Sol',
+          album: 'Lines',
+          genre: 'Jazz',
+        ),
+      ]);
+
+      final fallback = store.personalizedRecommendationMatches(limit: 1);
+      expect(fallback, hasLength(1));
+      expect(fallback.single.reasons, const <LibraryRecommendationReason>[
+        LibraryRecommendationReason.recentlyAdded,
+      ]);
+
+      await store.toggleFavorite('seed');
+      await store.recordPlayback('seed');
+      now = DateTime.utc(2026, 2, 3, 12, 1);
+      await store.recordPlayback('unrelated');
+
+      final matches = store.personalizedRecommendationMatches(limit: 3);
+      final recommendations = store.personalizedRecommendations(limit: 3);
+
+      expect(recommendations.map((track) => track.id), <String>[
         'same-artist',
-        title: 'Morning Signal',
-        artist: 'Mira',
-        album: 'Elsewhere',
-        genre: 'Ambient',
-      ),
-      _track(
         'same-genre',
-        title: 'Soft Current',
-        artist: 'Ari',
-        album: 'Still',
-        genre: 'Ambient',
-      ),
-      _track(
         'same-album',
-        title: 'Dawn Echo',
-        artist: 'Vera',
-        album: 'Dawn',
-        genre: 'Pop',
-      ),
-      _track(
-        'unrelated',
-        title: 'Late Train',
-        artist: 'Sol',
-        album: 'Lines',
-        genre: 'Jazz',
-      ),
-    ]);
+      ]);
+      expect(matches.map((match) => match.track.id), <String>[
+        'same-artist',
+        'same-genre',
+        'same-album',
+      ]);
+      expect(
+        matches.first.reasons,
+        containsAll(<LibraryRecommendationReason>[
+          LibraryRecommendationReason.favoriteArtist,
+          LibraryRecommendationReason.favoriteGenre,
+          LibraryRecommendationReason.recentlyPlayedArtist,
+          LibraryRecommendationReason.recentlyPlayedGenre,
+          LibraryRecommendationReason.unplayed,
+        ]),
+      );
+      expect(
+        matches.last.reasons,
+        containsAll(<LibraryRecommendationReason>[
+          LibraryRecommendationReason.favoriteAlbum,
+          LibraryRecommendationReason.recentlyPlayedAlbum,
+        ]),
+      );
+      expect(matches.first.score, greaterThan(matches.last.score));
 
-    final fallback = store.personalizedRecommendationMatches(limit: 1);
-    expect(fallback, hasLength(1));
-    expect(
-      fallback.single.reasons,
-      const <LibraryRecommendationReason>[
-        LibraryRecommendationReason.recentlyAdded,
-      ],
-    );
+      await store.setRecommendationFavoriteSignalsEnabled(false);
+      final historyOnly = store.personalizedRecommendationMatches(limit: 3);
+      final historyOnlyReasons = historyOnly.expand((match) => match.reasons);
+      expect(
+        historyOnlyReasons,
+        contains(LibraryRecommendationReason.recentlyPlayedArtist),
+      );
+      expect(
+        historyOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.favoriteArtist)),
+      );
+      expect(
+        historyOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.favoriteAlbum)),
+      );
+      expect(
+        historyOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.favoriteGenre)),
+      );
+      expect(
+        historyOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.favoriteTrack)),
+      );
 
-    await store.toggleFavorite('seed');
-    await store.recordPlayback('seed');
-    now = DateTime.utc(2026, 2, 3, 12, 1);
-    await store.recordPlayback('unrelated');
+      await store.setRecommendationFavoriteSignalsEnabled(true);
+      await store.setRecommendationHistorySignalsEnabled(false);
+      final favoritesOnly = store.personalizedRecommendationMatches(limit: 3);
+      final favoriteOnlyReasons = favoritesOnly.expand(
+        (match) => match.reasons,
+      );
+      expect(
+        favoriteOnlyReasons,
+        contains(LibraryRecommendationReason.favoriteArtist),
+      );
+      expect(
+        favoriteOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.recentlyPlayedArtist)),
+      );
+      expect(
+        favoriteOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.recentlyPlayedAlbum)),
+      );
+      expect(
+        favoriteOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.recentlyPlayedGenre)),
+      );
+      expect(
+        favoriteOnlyReasons,
+        isNot(contains(LibraryRecommendationReason.unplayed)),
+      );
 
-    final matches = store.personalizedRecommendationMatches(limit: 3);
-    final recommendations = store.personalizedRecommendations(limit: 3);
-
-    expect(
-      recommendations.map((track) => track.id),
-      <String>['same-artist', 'same-genre', 'same-album'],
-    );
-    expect(
-      matches.map((match) => match.track.id),
-      <String>['same-artist', 'same-genre', 'same-album'],
-    );
-    expect(
-      matches.first.reasons,
-      containsAll(<LibraryRecommendationReason>[
-        LibraryRecommendationReason.favoriteArtist,
-        LibraryRecommendationReason.favoriteGenre,
-        LibraryRecommendationReason.recentlyPlayedArtist,
-        LibraryRecommendationReason.recentlyPlayedGenre,
-        LibraryRecommendationReason.unplayed,
-      ]),
-    );
-    expect(
-      matches.last.reasons,
-      containsAll(<LibraryRecommendationReason>[
-        LibraryRecommendationReason.favoriteAlbum,
-        LibraryRecommendationReason.recentlyPlayedAlbum,
-      ]),
-    );
-    expect(matches.first.score, greaterThan(matches.last.score));
-
-    await store.setRecommendationFavoriteSignalsEnabled(false);
-    final historyOnly = store.personalizedRecommendationMatches(limit: 3);
-    final historyOnlyReasons = historyOnly.expand((match) => match.reasons);
-    expect(
-      historyOnlyReasons,
-      contains(LibraryRecommendationReason.recentlyPlayedArtist),
-    );
-    expect(
-      historyOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.favoriteArtist)),
-    );
-    expect(
-      historyOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.favoriteAlbum)),
-    );
-    expect(
-      historyOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.favoriteGenre)),
-    );
-    expect(
-      historyOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.favoriteTrack)),
-    );
-
-    await store.setRecommendationFavoriteSignalsEnabled(true);
-    await store.setRecommendationHistorySignalsEnabled(false);
-    final favoritesOnly = store.personalizedRecommendationMatches(limit: 3);
-    final favoriteOnlyReasons = favoritesOnly.expand(
-      (match) => match.reasons,
-    );
-    expect(
-      favoriteOnlyReasons,
-      contains(LibraryRecommendationReason.favoriteArtist),
-    );
-    expect(
-      favoriteOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.recentlyPlayedArtist)),
-    );
-    expect(
-      favoriteOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.recentlyPlayedAlbum)),
-    );
-    expect(
-      favoriteOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.recentlyPlayedGenre)),
-    );
-    expect(
-      favoriteOnlyReasons,
-      isNot(contains(LibraryRecommendationReason.unplayed)),
-    );
-
-    await store.setRecommendationFavoriteSignalsEnabled(false);
-    final fallbackWithoutTasteSignals = store
-        .personalizedRecommendationMatches(limit: 3);
-    expect(
-      fallbackWithoutTasteSignals.map((match) => match.reasons),
-      everyElement(const <LibraryRecommendationReason>[
-        LibraryRecommendationReason.recentlyAdded,
-      ]),
-    );
-    expect(
-      fallbackWithoutTasteSignals.map((match) => match.score),
-      everyElement(0),
-    );
-    expect(store.personalizedRecommendations(limit: 0), isEmpty);
-    expect(store.personalizedRecommendationMatches(limit: 0), isEmpty);
-  });
+      await store.setRecommendationFavoriteSignalsEnabled(false);
+      final fallbackWithoutTasteSignals = store
+          .personalizedRecommendationMatches(limit: 3);
+      expect(
+        fallbackWithoutTasteSignals.map((match) => match.reasons),
+        everyElement(const <LibraryRecommendationReason>[
+          LibraryRecommendationReason.recentlyAdded,
+        ]),
+      );
+      expect(
+        fallbackWithoutTasteSignals.map((match) => match.score),
+        everyElement(0),
+      );
+      expect(store.personalizedRecommendations(limit: 0), isEmpty);
+      expect(store.personalizedRecommendationMatches(limit: 0), isEmpty);
+    },
+  );
 
   test('builds similar local tracks from artist album and genre', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 2, 4, 12),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 2, 4, 12));
     await store.load();
     await store.addTracks(<Track>[
       _track(
@@ -3248,31 +3185,27 @@ void main() {
 
     final matches = store.similarTracksForTrack('seed');
 
-    expect(
-      matches.map((match) => match.track.id),
-      <String>['same-artist', 'same-album', 'same-genre'],
-    );
-    expect(
-      matches.first.reasons,
-      contains(LibrarySimilarityReason.artist),
-    );
+    expect(matches.map((match) => match.track.id), <String>[
+      'same-artist',
+      'same-album',
+      'same-genre',
+    ]);
+    expect(matches.first.reasons, contains(LibrarySimilarityReason.artist));
     expect(
       matches.first.reasons,
       isNot(contains(LibrarySimilarityReason.album)),
     );
     final limitedMatches = store.similarTracksForTrack('seed', limit: 2);
-    expect(
-      limitedMatches.map((match) => match.track.id),
-      <String>['same-artist', 'same-album'],
-    );
+    expect(limitedMatches.map((match) => match.track.id), <String>[
+      'same-artist',
+      'same-album',
+    ]);
     expect(store.similarTracksForTrack('missing'), isEmpty);
     expect(store.similarTracksForTrack('seed', limit: 0), isEmpty);
   });
 
   test('removing a library track removes its playback history', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 9),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 9));
     await store.load();
     await store.addTracks(<Track>[_track('1'), _track('2')]);
     await store.recordPlayback('1');
@@ -3280,10 +3213,7 @@ void main() {
 
     await store.removeTrack('1');
 
-    expect(
-      store.playbackHistory.map((entry) => entry.trackId),
-      <String>['2'],
-    );
+    expect(store.playbackHistory.map((entry) => entry.trackId), <String>['2']);
   });
 
   test('persists playback history across store instances', () async {
@@ -3329,10 +3259,10 @@ void main() {
 
     expect(store.playCountForTrack('1'), 1);
     expect(store.lastPlayedAt('1'), olderPlay.playedAt);
-    expect(
-      store.playbackHistory.map((entry) => entry.trackId),
-      <String>['2', '1'],
-    );
+    expect(store.playbackHistory.map((entry) => entry.trackId), <String>[
+      '2',
+      '1',
+    ]);
 
     await store.removePlaybackHistoryEntry(newerPlay);
     expect(store.playbackHistory, hasLength(2));
@@ -3385,173 +3315,177 @@ void main() {
       <String>['ambient'],
     );
     expect(
-      store.playbackHistoryEntries(query: 'voltage').map(
-            (entry) => entry.trackId,
-          ),
+      store
+          .playbackHistoryEntries(query: 'voltage')
+          .map((entry) => entry.trackId),
       <String>['rock'],
     );
     expect(store.recentlyPlayedTracks(query: 'missing'), isEmpty);
     expect(store.playbackHistoryEntries(query: 'missing'), isEmpty);
   });
 
-  test('creates updates persists backs up and deletes saved history views',
-      () async {
-    var now = DateTime.utc(2026, 1, 10, 13);
-    final firstStore = LibraryStore(clock: () => now);
-    await firstStore.load();
+  test(
+    'creates updates persists backs up and deletes saved history views',
+    () async {
+      var now = DateTime.utc(2026, 1, 10, 13);
+      final firstStore = LibraryStore(clock: () => now);
+      await firstStore.load();
 
-    final created = await firstStore.createSavedHistoryView(
-      name: '  Recent Mira  ',
-      query: '  mira  ',
-      range: ListeningHistoryRange.sevenDays,
-    );
+      final created = await firstStore.createSavedHistoryView(
+        name: '  Recent Mira  ',
+        query: '  mira  ',
+        range: ListeningHistoryRange.sevenDays,
+      );
 
-    expect(created.name, 'Recent Mira');
-    expect(created.query, 'mira');
-    expect(created.range, ListeningHistoryRange.sevenDays);
-    expect(firstStore.savedHistoryViews.single.id, created.id);
-    await expectLater(
-      firstStore.createSavedHistoryView(name: '   '),
-      throwsArgumentError,
-    );
+      expect(created.name, 'Recent Mira');
+      expect(created.query, 'mira');
+      expect(created.range, ListeningHistoryRange.sevenDays);
+      expect(firstStore.savedHistoryViews.single.id, created.id);
+      await expectLater(
+        firstStore.createSavedHistoryView(name: '   '),
+        throwsArgumentError,
+      );
 
-    now = DateTime.utc(2026, 1, 10, 14);
-    final updated = await firstStore.updateSavedHistoryView(
-      created.id,
-      name: 'Mira month',
-      query: '  ambient  ',
-      range: ListeningHistoryRange.thirtyDays,
-    );
+      now = DateTime.utc(2026, 1, 10, 14);
+      final updated = await firstStore.updateSavedHistoryView(
+        created.id,
+        name: 'Mira month',
+        query: '  ambient  ',
+        range: ListeningHistoryRange.thirtyDays,
+      );
 
-    expect(updated, isNotNull);
-    final updatedView = updated!;
-    expect(updatedView.name, 'Mira month');
-    expect(updatedView.query, 'ambient');
-    expect(updatedView.range, ListeningHistoryRange.thirtyDays);
-    expect(updatedView.updatedAt, now);
-    expect(
-      await firstStore.updateSavedHistoryView(
-        'missing',
-        name: 'Missing',
-        query: '',
-        range: ListeningHistoryRange.all,
-      ),
-      isNull,
-    );
+      expect(updated, isNotNull);
+      final updatedView = updated!;
+      expect(updatedView.name, 'Mira month');
+      expect(updatedView.query, 'ambient');
+      expect(updatedView.range, ListeningHistoryRange.thirtyDays);
+      expect(updatedView.updatedAt, now);
+      expect(
+        await firstStore.updateSavedHistoryView(
+          'missing',
+          name: 'Missing',
+          query: '',
+          range: ListeningHistoryRange.all,
+        ),
+        isNull,
+      );
 
-    final secondStore = LibraryStore(clock: () => now);
-    await secondStore.load();
-    expect(
-      secondStore.savedHistoryViews.single.toJson(),
-      updatedView.toJson(),
-    );
+      final secondStore = LibraryStore(clock: () => now);
+      await secondStore.load();
+      expect(
+        secondStore.savedHistoryViews.single.toJson(),
+        updatedView.toJson(),
+      );
 
-    final backup = jsonDecode(secondStore.exportBackupJson())
-        as Map<String, dynamic>;
-    expect(backup['savedHistoryViews'], hasLength(1));
+      final backup =
+          jsonDecode(secondStore.exportBackupJson()) as Map<String, dynamic>;
+      expect(backup['savedHistoryViews'], hasLength(1));
 
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    final restoredStore = LibraryStore(clock: () => now);
-    await restoredStore.load();
-    await restoredStore.restoreBackupJson(jsonEncode(backup));
-    expect(
-      restoredStore.savedHistoryViews.single.toJson(),
-      updatedView.toJson(),
-    );
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final restoredStore = LibraryStore(clock: () => now);
+      await restoredStore.load();
+      await restoredStore.restoreBackupJson(jsonEncode(backup));
+      expect(
+        restoredStore.savedHistoryViews.single.toJson(),
+        updatedView.toJson(),
+      );
 
-    await restoredStore.deleteSavedHistoryView(created.id);
-    expect(restoredStore.savedHistoryViews, isEmpty);
-    await restoredStore.deleteSavedHistoryView(created.id);
-    expect(restoredStore.savedHistoryViews, isEmpty);
+      await restoredStore.deleteSavedHistoryView(created.id);
+      expect(restoredStore.savedHistoryViews, isEmpty);
+      await restoredStore.deleteSavedHistoryView(created.id);
+      expect(restoredStore.savedHistoryViews, isEmpty);
 
-    backup.remove('savedHistoryViews');
-    await restoredStore.restoreBackupJson(jsonEncode(backup));
-    expect(restoredStore.savedHistoryViews, isEmpty);
-  });
+      backup.remove('savedHistoryViews');
+      await restoredStore.restoreBackupJson(jsonEncode(backup));
+      expect(restoredStore.savedHistoryViews, isEmpty);
+    },
+  );
 
-  test('creates updates persists backs up and deletes saved library views',
-      () async {
-    var now = DateTime.utc(2026, 1, 10, 13);
-    final firstStore = LibraryStore(clock: () => now);
-    await firstStore.load();
+  test(
+    'creates updates persists backs up and deletes saved library views',
+    () async {
+      var now = DateTime.utc(2026, 1, 10, 13);
+      final firstStore = LibraryStore(clock: () => now);
+      await firstStore.load();
 
-    final created = await firstStore.createSavedLibraryView(
-      name: '  Offline Mira  ',
-      query: '  mira  ',
-      favoritesOnly: true,
-      offlineOnly: true,
-      sortMode: LibrarySortMode.artist,
-    );
+      final created = await firstStore.createSavedLibraryView(
+        name: '  Offline Mira  ',
+        query: '  mira  ',
+        favoritesOnly: true,
+        offlineOnly: true,
+        sortMode: LibrarySortMode.artist,
+      );
 
-    expect(created.name, 'Offline Mira');
-    expect(created.query, 'mira');
-    expect(created.favoritesOnly, isTrue);
-    expect(created.offlineOnly, isTrue);
-    expect(created.sortMode, LibrarySortMode.artist);
-    await expectLater(
-      firstStore.createSavedLibraryView(name: '   '),
-      throwsArgumentError,
-    );
+      expect(created.name, 'Offline Mira');
+      expect(created.query, 'mira');
+      expect(created.favoritesOnly, isTrue);
+      expect(created.offlineOnly, isTrue);
+      expect(created.sortMode, LibrarySortMode.artist);
+      await expectLater(
+        firstStore.createSavedLibraryView(name: '   '),
+        throwsArgumentError,
+      );
 
-    now = DateTime.utc(2026, 1, 10, 14);
-    final updated = await firstStore.updateSavedLibraryView(
-      created.id,
-      name: 'Mira albums',
-      query: '  ambient  ',
-      favoritesOnly: false,
-      offlineOnly: false,
-      sortMode: LibrarySortMode.album,
-    );
-
-    expect(updated, isNotNull);
-    final updatedView = updated!;
-    expect(updatedView.name, 'Mira albums');
-    expect(updatedView.query, 'ambient');
-    expect(updatedView.favoritesOnly, isFalse);
-    expect(updatedView.offlineOnly, isFalse);
-    expect(updatedView.sortMode, LibrarySortMode.album);
-    expect(updatedView.updatedAt, now);
-    expect(
-      await firstStore.updateSavedLibraryView(
-        'missing',
-        name: 'Missing',
-        query: '',
+      now = DateTime.utc(2026, 1, 10, 14);
+      final updated = await firstStore.updateSavedLibraryView(
+        created.id,
+        name: 'Mira albums',
+        query: '  ambient  ',
         favoritesOnly: false,
         offlineOnly: false,
-        sortMode: LibrarySortMode.recentlyAdded,
-      ),
-      isNull,
-    );
+        sortMode: LibrarySortMode.album,
+      );
 
-    final secondStore = LibraryStore(clock: () => now);
-    await secondStore.load();
-    expect(
-      secondStore.savedLibraryViews.single.toJson(),
-      updatedView.toJson(),
-    );
+      expect(updated, isNotNull);
+      final updatedView = updated!;
+      expect(updatedView.name, 'Mira albums');
+      expect(updatedView.query, 'ambient');
+      expect(updatedView.favoritesOnly, isFalse);
+      expect(updatedView.offlineOnly, isFalse);
+      expect(updatedView.sortMode, LibrarySortMode.album);
+      expect(updatedView.updatedAt, now);
+      expect(
+        await firstStore.updateSavedLibraryView(
+          'missing',
+          name: 'Missing',
+          query: '',
+          favoritesOnly: false,
+          offlineOnly: false,
+          sortMode: LibrarySortMode.recentlyAdded,
+        ),
+        isNull,
+      );
 
-    final backup = jsonDecode(secondStore.exportBackupJson())
-        as Map<String, dynamic>;
-    expect(backup['savedLibraryViews'], hasLength(1));
+      final secondStore = LibraryStore(clock: () => now);
+      await secondStore.load();
+      expect(
+        secondStore.savedLibraryViews.single.toJson(),
+        updatedView.toJson(),
+      );
 
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    final restoredStore = LibraryStore(clock: () => now);
-    await restoredStore.load();
-    await restoredStore.restoreBackupJson(jsonEncode(backup));
-    expect(
-      restoredStore.savedLibraryViews.single.toJson(),
-      updatedView.toJson(),
-    );
+      final backup =
+          jsonDecode(secondStore.exportBackupJson()) as Map<String, dynamic>;
+      expect(backup['savedLibraryViews'], hasLength(1));
 
-    await restoredStore.deleteSavedLibraryView(created.id);
-    expect(restoredStore.savedLibraryViews, isEmpty);
-    await restoredStore.deleteSavedLibraryView(created.id);
-    expect(restoredStore.savedLibraryViews, isEmpty);
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final restoredStore = LibraryStore(clock: () => now);
+      await restoredStore.load();
+      await restoredStore.restoreBackupJson(jsonEncode(backup));
+      expect(
+        restoredStore.savedLibraryViews.single.toJson(),
+        updatedView.toJson(),
+      );
 
-    backup.remove('savedLibraryViews');
-    await restoredStore.restoreBackupJson(jsonEncode(backup));
-    expect(restoredStore.savedLibraryViews, isEmpty);
-  });
+      await restoredStore.deleteSavedLibraryView(created.id);
+      expect(restoredStore.savedLibraryViews, isEmpty);
+      await restoredStore.deleteSavedLibraryView(created.id);
+      expect(restoredStore.savedLibraryViews, isEmpty);
+
+      backup.remove('savedLibraryViews');
+      await restoredStore.restoreBackupJson(jsonEncode(backup));
+      expect(restoredStore.savedLibraryViews, isEmpty);
+    },
+  );
 
   test('pauses playback history and resume progress recording', () async {
     var now = DateTime.utc(2026, 1, 10, 12);
@@ -3666,10 +3600,7 @@ void main() {
 
     final restored = LibraryStore(clock: clock);
     await restored.load();
-    expect(
-      restored.bookmarksForTrack('podcast').single.id,
-      bookmark!.id,
-    );
+    expect(restored.bookmarksForTrack('podcast').single.id, bookmark!.id);
     expect(restored.bookmarksForTrack('podcast').single.label, 'Episode topic');
     expect(restored.bookmarksForTrack('podcast').single.folder, 'Research');
 
@@ -3712,19 +3643,18 @@ void main() {
     );
     expect(secondBookmark, isNotNull);
     expect(
-      await restored.updateTrackBookmarksFolder(
-        'podcast',
-        <String>[bookmark.id, secondBookmark!.id],
-        'Review',
-      ),
+      await restored.updateTrackBookmarksFolder('podcast', <String>[
+        bookmark.id,
+        secondBookmark!.id,
+      ], 'Review'),
       2,
     );
     expect(restored.bookmarkFoldersForTrack('podcast'), <String>['Review']);
     expect(
-      await restored.removeTrackBookmarks(
-        'podcast',
-        <String>[bookmark.id, secondBookmark.id],
-      ),
+      await restored.removeTrackBookmarks('podcast', <String>[
+        bookmark.id,
+        secondBookmark.id,
+      ]),
       2,
     );
     expect(restored.bookmarksForTrack('podcast'), isEmpty);
@@ -3775,16 +3705,16 @@ void main() {
       firstStore.podcastSubscriptions.single.id,
       stablePodcastSubscriptionId('https://feeds.example.test/aether.xml'),
     );
-    expect(firstStore.podcastSubscriptions.single.title, 'Aether Radio Updated');
+    expect(
+      firstStore.podcastSubscriptions.single.title,
+      'Aether Radio Updated',
+    );
     expect(
       firstStore.podcastSubscriptions.single.episodes.map((track) => track.id),
       <String>['episode-1'],
     );
     expect(subscription.addedAt, DateTime.utc(2026, 1, 15));
-    expect(
-      firstStore.nextPodcastSubscriptionRefreshDelay(now),
-      Duration.zero,
-    );
+    expect(firstStore.nextPodcastSubscriptionRefreshDelay(now), Duration.zero);
 
     now = DateTime.utc(2026, 1, 15, 6);
     final refreshed = await firstStore.markPodcastSubscriptionFetched(
@@ -3792,18 +3722,8 @@ void main() {
     );
 
     expect(refreshed!.lastFetchedAt, DateTime.utc(2026, 1, 15, 6));
-    expect(
-      refreshed.isRefreshDue(
-        DateTime.utc(2026, 1, 15, 17, 59),
-      ),
-      isFalse,
-    );
-    expect(
-      refreshed.isRefreshDue(
-        DateTime.utc(2026, 1, 15, 18),
-      ),
-      isTrue,
-    );
+    expect(refreshed.isRefreshDue(DateTime.utc(2026, 1, 15, 17, 59)), isFalse);
+    expect(refreshed.isRefreshDue(DateTime.utc(2026, 1, 15, 18)), isTrue);
 
     final failed = await firstStore.markPodcastSubscriptionFetchFailed(
       subscription.id,
@@ -3882,34 +3802,39 @@ void main() {
       ),
     ]);
 
-    expect(
-      store.recentlyAddedTracks().map((track) => track.id),
-      <String>['new', 'middle', 'old'],
-    );
+    expect(store.recentlyAddedTracks().map((track) => track.id), <String>[
+      'new',
+      'middle',
+      'old',
+    ]);
     expect(
       store.recentlyAddedTracks(limit: 2).map((track) => track.id),
       <String>['new', 'middle'],
     );
-    expect(
-      store.search('').map((track) => track.id),
-      <String>['new', 'middle', 'old'],
-    );
+    expect(store.search('').map((track) => track.id), <String>[
+      'new',
+      'middle',
+      'old',
+    ]);
     final titleSorted = store.search('', sortMode: LibrarySortMode.title);
     final artistSorted = store.search('', sortMode: LibrarySortMode.artist);
     final albumSorted = store.search('', sortMode: LibrarySortMode.album);
 
-    expect(
-      titleSorted.map((track) => track.title),
-      <String>['Alpha', 'Beta', 'Gamma'],
-    );
-    expect(
-      artistSorted.map((track) => track.artist),
-      <String>['Ari', 'Mia', 'Zed'],
-    );
-    expect(
-      albumSorted.map((track) => track.album),
-      <String>['First', 'Second', 'Third'],
-    );
+    expect(titleSorted.map((track) => track.title), <String>[
+      'Alpha',
+      'Beta',
+      'Gamma',
+    ]);
+    expect(artistSorted.map((track) => track.artist), <String>[
+      'Ari',
+      'Mia',
+      'Zed',
+    ]);
+    expect(albumSorted.map((track) => track.album), <String>[
+      'First',
+      'Second',
+      'Third',
+    ]);
     expect(store.search('ambient').single.id, 'new');
   });
 
@@ -3947,7 +3872,9 @@ void main() {
     ]);
 
     expect(
-      store.search('', sortMode: LibrarySortMode.album).map((track) => track.id),
+      store
+          .search('', sortMode: LibrarySortMode.album)
+          .map((track) => track.id),
       <String>['early', 'late', 'untracked', 'other-artist'],
     );
   });
@@ -3994,25 +3921,23 @@ void main() {
         limit: 10,
       );
 
-      expect(
-        store.search('aurora').map((track) => track.id),
-        <String>['plain'],
-      );
-      expect(
-        store.search('silver chorus').map((track) => track.id),
-        <String>['synced'],
-      );
+      expect(store.search('aurora').map((track) => track.id), <String>[
+        'plain',
+      ]);
+      expect(store.search('silver chorus').map((track) => track.id), <String>[
+        'synced',
+      ]);
       expect(store.search('00:01'), isEmpty);
       expect(
-        store.tracksForPlaylist(playlist.id, query: 'midnight').map(
-              (track) => track.id,
-            ),
+        store
+            .tracksForPlaylist(playlist.id, query: 'midnight')
+            .map((track) => track.id),
         <String>['synced'],
       );
       expect(
-        store.tracksForCustomSmartPlaylist(smartRule.id).map(
-              (track) => track.id,
-            ),
+        store
+            .tracksForCustomSmartPlaylist(smartRule.id)
+            .map((track) => track.id),
         <String>['plain'],
       );
     },
@@ -4092,75 +4017,77 @@ void main() {
     },
   );
 
-  test('builds local search suggestions from recent playback and metadata', () async {
-    var now = DateTime.utc(2026, 1, 15, 12);
-    final store = LibraryStore(clock: () => now);
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
+  test(
+    'builds local search suggestions from recent playback and metadata',
+    () async {
+      var now = DateTime.utc(2026, 1, 15, 12);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'ambient',
+          title: 'Ambient Signal',
+          artist: 'Mia Nova',
+          album: 'Dawn Archive',
+          genre: 'Ambient',
+          sourceId: 'archive',
+          localPath: '/music/Mia/Dawn/ambient.mp3',
+          addedAt: DateTime.utc(2026, 1, 3),
+        ),
+        _track(
+          'jazz',
+          title: 'Late Train',
+          artist: 'Ari Vale',
+          album: 'Night Lines',
+          genre: 'Jazz',
+          sourceId: 'radio',
+          localPath: '/music/Ari/Night/train.mp3',
+          addedAt: DateTime.utc(2026, 1, 2),
+        ),
+      ]);
+
+      await store.recordPlayback('jazz');
+      now = DateTime.utc(2026, 1, 15, 12, 1);
+      await store.recordPlayback('ambient');
+
+      final suggestions = store.searchSuggestions('');
+
+      expect(
+        suggestions.take(2).map((suggestion) => suggestion.type),
+        <SearchSuggestionType>[
+          SearchSuggestionType.recent,
+          SearchSuggestionType.recent,
+        ],
+      );
+      expect(
+        suggestions.take(2).map((suggestion) => suggestion.value),
+        <String>['Ambient Signal', 'Late Train'],
+      );
+      expect(
+        suggestions.map((suggestion) => suggestion.value),
+        containsAll(<String>[
+          'Mia Nova',
+          'Dawn Archive',
+          'Ambient',
+          'archive',
+          '/music/Mia/Dawn',
+        ]),
+      );
+      expect(
+        suggestions.map((suggestion) => suggestion.value).toSet(),
+        hasLength(suggestions.length),
+      );
+
+      expect(
+        store.searchSuggestions('dawn').map((suggestion) => suggestion.value),
+        containsAll(<String>['Dawn Archive', '/music/Mia/Dawn']),
+      );
+      expect(store.search('/music/mia/dawn').map((track) => track.id), <String>[
         'ambient',
-        title: 'Ambient Signal',
-        artist: 'Mia Nova',
-        album: 'Dawn Archive',
-        genre: 'Ambient',
-        sourceId: 'archive',
-        localPath: '/music/Mia/Dawn/ambient.mp3',
-        addedAt: DateTime.utc(2026, 1, 3),
-      ),
-      _track(
-        'jazz',
-        title: 'Late Train',
-        artist: 'Ari Vale',
-        album: 'Night Lines',
-        genre: 'Jazz',
-        sourceId: 'radio',
-        localPath: '/music/Ari/Night/train.mp3',
-        addedAt: DateTime.utc(2026, 1, 2),
-      ),
-    ]);
-
-    await store.recordPlayback('jazz');
-    now = DateTime.utc(2026, 1, 15, 12, 1);
-    await store.recordPlayback('ambient');
-
-    final suggestions = store.searchSuggestions('');
-
-    expect(
-      suggestions.take(2).map((suggestion) => suggestion.type),
-      <SearchSuggestionType>[
-        SearchSuggestionType.recent,
-        SearchSuggestionType.recent,
-      ],
-    );
-    expect(
-      suggestions.take(2).map((suggestion) => suggestion.value),
-      <String>['Ambient Signal', 'Late Train'],
-    );
-    expect(
-      suggestions.map((suggestion) => suggestion.value),
-      containsAll(<String>[
-        'Mia Nova',
-        'Dawn Archive',
-        'Ambient',
-        'archive',
-        '/music/Mia/Dawn',
-      ]),
-    );
-    expect(
-      suggestions.map((suggestion) => suggestion.value).toSet(),
-      hasLength(suggestions.length),
-    );
-
-    expect(
-      store.searchSuggestions('dawn').map((suggestion) => suggestion.value),
-      containsAll(<String>['Dawn Archive', '/music/Mia/Dawn']),
-    );
-    expect(
-      store.search('/music/mia/dawn').map((track) => track.id),
-      <String>['ambient'],
-    );
-    expect(store.searchSuggestions('ambient', limit: 1), hasLength(1));
-  });
+      ]);
+      expect(store.searchSuggestions('ambient', limit: 1), hasLength(1));
+    },
+  );
 
   test('persists submitted search query history for suggestions', () async {
     final store = LibraryStore();
@@ -4251,7 +4178,9 @@ void main() {
       DesktopTrayTransportAction.next,
       false,
     );
-    await firstStore.setDesktopDensityPreference(DesktopDensityPreference.compact);
+    await firstStore.setDesktopDensityPreference(
+      DesktopDensityPreference.compact,
+    );
     await firstStore.setOfflineCacheLimitMegabytes(2048);
     await firstStore.setOfflineCacheProviderLimitMegabytes(
       ' Internet-Archive ',
@@ -4273,14 +4202,14 @@ void main() {
     expect(firstStore.desktopQueuePaneWidth, 410);
     expect(firstStore.desktopMinimizeToTray, isTrue);
     expect(firstStore.desktopArtistReleaseRefreshEnabled, isTrue);
+    expect(firstStore.desktopTrayTransportActions, <DesktopTrayTransportAction>{
+      DesktopTrayTransportAction.previous,
+      DesktopTrayTransportAction.togglePlayPause,
+    });
     expect(
-      firstStore.desktopTrayTransportActions,
-      <DesktopTrayTransportAction>{
-        DesktopTrayTransportAction.previous,
-        DesktopTrayTransportAction.togglePlayPause,
-      },
+      firstStore.desktopDensityPreference,
+      DesktopDensityPreference.compact,
     );
-    expect(firstStore.desktopDensityPreference, DesktopDensityPreference.compact);
     expect(firstStore.offlineCacheLimitMegabytes, 2048);
     expect(firstStore.offlineCacheLimitBytes, 2048 * 1024 * 1024);
     expect(
@@ -4317,7 +4246,10 @@ void main() {
         DesktopTrayTransportAction.togglePlayPause,
       },
     );
-    expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
+    expect(
+      secondStore.desktopDensityPreference,
+      DesktopDensityPreference.compact,
+    );
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -4339,12 +4271,12 @@ void main() {
     );
     expect(backup['languagePreference'], AppLanguagePreference.arabic.name);
     expect(backup['offlineCacheLimitMegabytes'], 2048);
-    expect(
-      backup['offlineCacheProviderLimitMegabytes'],
-      <String, dynamic>{'internet-archive': 256},
-    );
-    final syncSnapshot = jsonDecode(secondStore.exportSyncSnapshotJson())
-        as Map<String, dynamic>;
+    expect(backup['offlineCacheProviderLimitMegabytes'], <String, dynamic>{
+      'internet-archive': 256,
+    });
+    final syncSnapshot =
+        jsonDecode(secondStore.exportSyncSnapshotJson())
+            as Map<String, dynamic>;
     expect(
       syncSnapshot['listeningRecapVisualTheme'],
       ListeningRecapVisualTheme.signal.name,
@@ -4385,7 +4317,10 @@ void main() {
     );
     expect(secondStore.languagePreference, AppLanguagePreference.system);
     expect(secondStore.desktopMinimizeToTray, isTrue);
-    expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
+    expect(
+      secondStore.desktopDensityPreference,
+      DesktopDensityPreference.compact,
+    );
     expect(
       secondStore.offlineCacheLimitMegabytes,
       LibraryStore.defaultOfflineCacheLimitMegabytes,
@@ -4405,7 +4340,10 @@ void main() {
       ListeningRecapVisualTheme.signal,
     );
     expect(secondStore.languagePreference, AppLanguagePreference.arabic);
-    expect(secondStore.desktopDensityPreference, DesktopDensityPreference.compact);
+    expect(
+      secondStore.desktopDensityPreference,
+      DesktopDensityPreference.compact,
+    );
     expect(secondStore.offlineCacheLimitMegabytes, 2048);
     expect(
       secondStore.offlineCacheProviderLimitMegabytesFor('internet-archive'),
@@ -4426,21 +4364,24 @@ void main() {
     expect(restoredStore.accentColor, AppAccentColor.system);
   });
 
-  test('persists a non-empty SponsorBlock category selection locally', () async {
-    final firstStore = LibraryStore();
-    await firstStore.load();
+  test(
+    'persists a non-empty SponsorBlock category selection locally',
+    () async {
+      final firstStore = LibraryStore();
+      await firstStore.load();
 
-    await firstStore.setSponsorBlockCategories(<String>{'sponsor', 'intro'});
-    expect(firstStore.sponsorBlockCategories, <String>{'sponsor', 'intro'});
-    await expectLater(
-      () => firstStore.setSponsorBlockCategories(const <String>{}),
-      throwsArgumentError,
-    );
+      await firstStore.setSponsorBlockCategories(<String>{'sponsor', 'intro'});
+      expect(firstStore.sponsorBlockCategories, <String>{'sponsor', 'intro'});
+      await expectLater(
+        () => firstStore.setSponsorBlockCategories(const <String>{}),
+        throwsArgumentError,
+      );
 
-    final secondStore = LibraryStore();
-    await secondStore.load();
-    expect(secondStore.sponsorBlockCategories, <String>{'sponsor', 'intro'});
-  });
+      final secondStore = LibraryStore();
+      await secondStore.load();
+      expect(secondStore.sponsorBlockCategories, <String>{'sponsor', 'intro'});
+    },
+  );
 
   test('falls back from an unknown persisted recap visual theme', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -4450,25 +4391,25 @@ void main() {
     final store = LibraryStore();
     await store.load();
 
-    expect(
-      store.listeningRecapVisualTheme,
-      ListeningRecapVisualTheme.midnight,
-    );
+    expect(store.listeningRecapVisualTheme, ListeningRecapVisualTheme.midnight);
   });
 
-  test('falls back from an unknown persisted desktop density preference', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'aethertune.desktop_density_preference.v1': 'unknown',
-    });
+  test(
+    'falls back from an unknown persisted desktop density preference',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'aethertune.desktop_density_preference.v1': 'unknown',
+      });
 
-    final store = LibraryStore();
-    await store.load();
+      final store = LibraryStore();
+      await store.load();
 
-    expect(
-      store.desktopDensityPreference,
-      DesktopDensityPreference.comfortable,
-    );
-  });
+      expect(
+        store.desktopDensityPreference,
+        DesktopDensityPreference.comfortable,
+      );
+    },
+  );
 
   test('clamps offline cache limit setting and restored backups', () async {
     final store = LibraryStore();
@@ -4527,9 +4468,8 @@ void main() {
       isNull,
     );
 
-    final backup = jsonDecode(
-      persistedStore.exportBackupJson(),
-    ) as Map<String, dynamic>;
+    final backup =
+        jsonDecode(persistedStore.exportBackupJson()) as Map<String, dynamic>;
     backup['offlineCacheLimitMegabytes'] = 1;
     await persistedStore.restoreBackupJson(jsonEncode(backup));
     expect(
@@ -4551,16 +4491,10 @@ void main() {
     await store.load();
 
     await store.setDesktopQueuePaneWidth(-1);
-    expect(
-      store.desktopQueuePaneWidth,
-      LibraryStore.minDesktopQueuePaneWidth,
-    );
+    expect(store.desktopQueuePaneWidth, LibraryStore.minDesktopQueuePaneWidth);
 
     await store.setDesktopQueuePaneWidth(10000);
-    expect(
-      store.desktopQueuePaneWidth,
-      LibraryStore.maxDesktopQueuePaneWidth,
-    );
+    expect(store.desktopQueuePaneWidth, LibraryStore.maxDesktopQueuePaneWidth);
   });
 
   test('persists per-track playback speed overrides locally', () async {
@@ -4649,9 +4583,8 @@ void main() {
       expect(thirdStore.offlineCacheQueue.single.id, entry.id);
 
       final legacyBackup = Map<String, dynamic>.from(backup);
-      final legacyQueue =
-          (legacyBackup['offlineCacheQueue'] as List<dynamic>)
-              .cast<Map<String, dynamic>>();
+      final legacyQueue = (legacyBackup['offlineCacheQueue'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
       legacyQueue.single
         ..remove('cachedByteCount')
         ..remove('cachedMediaChecksum');
@@ -4832,150 +4765,153 @@ void main() {
     );
   });
 
-  test('edits persisted track metadata for search browse and suggestions', () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
+  test(
+    'edits persisted track metadata for search browse and suggestions',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          '1',
+          title: 'Untitled Import',
+          artist: 'Unknown Artist',
+          album: 'Unknown Album',
+          genre: 'Unknown Genre',
+        ),
+      ]);
+
+      final updated = await store.updateTrackMetadata(
         '1',
-        title: 'Untitled Import',
-        artist: 'Unknown Artist',
-        album: 'Unknown Album',
-        genre: 'Unknown Genre',
-      ),
-    ]);
-
-    final updated = await store.updateTrackMetadata(
-      '1',
-      title: '  Aether Bloom  ',
-      artist: '  Mira Vale  ',
-      album: '  Dawn Signals  ',
-      albumArtist: '  Mira Vale and Friends  ',
-      year: 2024,
-      trackNumber: 7,
-      genre: '  Synthwave  ',
-    );
-
-    expect(updated, isNotNull);
-    expect(updated!.id, '1');
-    expect(updated.title, 'Aether Bloom');
-    expect(updated.artist, 'Mira Vale');
-    expect(updated.album, 'Dawn Signals');
-    expect(updated.albumArtist, 'Mira Vale and Friends');
-    expect(updated.year, 2024);
-    expect(updated.trackNumber, 7);
-    expect(updated.genre, 'Synthwave');
-    expect(store.search('untitled'), isEmpty);
-    expect(store.search('synthwave').single.id, '1');
-    expect(
-      store.browseGroups(LibraryBrowseType.artist).single.label,
-      'Mira Vale',
-    );
-    expect(
-      store.searchSuggestions('dawn').map((suggestion) => suggestion.value),
-      contains('Dawn Signals'),
-    );
-
-    final secondStore = LibraryStore();
-    await secondStore.load();
-
-    expect(secondStore.tracks.single.title, 'Aether Bloom');
-    expect(secondStore.tracks.single.albumArtist, 'Mira Vale and Friends');
-    expect(secondStore.tracks.single.year, 2024);
-    expect(secondStore.tracks.single.trackNumber, 7);
-    expect(secondStore.search('mira').single.id, '1');
-  });
-
-  test('track metadata edits validate and clear optional album fields',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        '1',
-        albumArtist: 'Album Artist',
+        title: '  Aether Bloom  ',
+        artist: '  Mira Vale  ',
+        album: '  Dawn Signals  ',
+        albumArtist: '  Mira Vale and Friends  ',
         year: 2024,
-        trackNumber: 3,
-      ),
-    ]);
+        trackNumber: 7,
+        genre: '  Synthwave  ',
+      );
 
-    expect(
-      store.updateTrackMetadata(
+      expect(updated, isNotNull);
+      expect(updated!.id, '1');
+      expect(updated.title, 'Aether Bloom');
+      expect(updated.artist, 'Mira Vale');
+      expect(updated.album, 'Dawn Signals');
+      expect(updated.albumArtist, 'Mira Vale and Friends');
+      expect(updated.year, 2024);
+      expect(updated.trackNumber, 7);
+      expect(updated.genre, 'Synthwave');
+      expect(store.search('untitled'), isEmpty);
+      expect(store.search('synthwave').single.id, '1');
+      expect(
+        store.browseGroups(LibraryBrowseType.artist).single.label,
+        'Mira Vale',
+      );
+      expect(
+        store.searchSuggestions('dawn').map((suggestion) => suggestion.value),
+        contains('Dawn Signals'),
+      );
+
+      final secondStore = LibraryStore();
+      await secondStore.load();
+
+      expect(secondStore.tracks.single.title, 'Aether Bloom');
+      expect(secondStore.tracks.single.albumArtist, 'Mira Vale and Friends');
+      expect(secondStore.tracks.single.year, 2024);
+      expect(secondStore.tracks.single.trackNumber, 7);
+      expect(secondStore.search('mira').single.id, '1');
+    },
+  );
+
+  test(
+    'track metadata edits validate and clear optional album fields',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track('1', albumArtist: 'Album Artist', year: 2024, trackNumber: 3),
+      ]);
+
+      expect(
+        store.updateTrackMetadata(
+          '1',
+          title: 'Track 1',
+          artist: 'Artist',
+          album: 'Album',
+          genre: 'Genre',
+          year: 999,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        store.updateTrackMetadata(
+          '1',
+          title: 'Track 1',
+          artist: 'Artist',
+          album: 'Album',
+          genre: 'Genre',
+          trackNumber: 0,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+
+      final cleared = await store.updateTrackMetadata(
         '1',
         title: 'Track 1',
         artist: 'Artist',
         album: 'Album',
         genre: 'Genre',
-        year: 999,
-      ),
-      throwsA(isA<ArgumentError>()),
-    );
-    expect(
-      store.updateTrackMetadata(
+        clearAlbumArtist: true,
+        clearYear: true,
+        clearTrackNumber: true,
+      );
+
+      expect(cleared!.albumArtist, isNull);
+      expect(cleared.year, isNull);
+      expect(cleared.trackNumber, isNull);
+    },
+  );
+
+  test(
+    'track metadata edits require a title and normalize empty fields',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[_track('1', title: 'Original')]);
+
+      expect(
+        store.updateTrackMetadata(
+          '1',
+          title: '   ',
+          artist: 'Artist',
+          album: 'Album',
+          genre: 'Genre',
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        await store.updateTrackMetadata(
+          'missing',
+          title: 'Missing',
+          artist: '',
+          album: '',
+          genre: '',
+        ),
+        isNull,
+      );
+
+      final updated = await store.updateTrackMetadata(
         '1',
-        title: 'Track 1',
-        artist: 'Artist',
-        album: 'Album',
-        genre: 'Genre',
-        trackNumber: 0,
-      ),
-      throwsA(isA<ArgumentError>()),
-    );
-
-    final cleared = await store.updateTrackMetadata(
-      '1',
-      title: 'Track 1',
-      artist: 'Artist',
-      album: 'Album',
-      genre: 'Genre',
-      clearAlbumArtist: true,
-      clearYear: true,
-      clearTrackNumber: true,
-    );
-
-    expect(cleared!.albumArtist, isNull);
-    expect(cleared.year, isNull);
-    expect(cleared.trackNumber, isNull);
-  });
-
-  test('track metadata edits require a title and normalize empty fields', () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[_track('1', title: 'Original')]);
-
-    expect(
-      store.updateTrackMetadata(
-        '1',
-        title: '   ',
-        artist: 'Artist',
-        album: 'Album',
-        genre: 'Genre',
-      ),
-      throwsA(isA<ArgumentError>()),
-    );
-    expect(
-      await store.updateTrackMetadata(
-        'missing',
-        title: 'Missing',
+        title: 'Original',
         artist: '',
         album: '',
         genre: '',
-      ),
-      isNull,
-    );
+      );
 
-    final updated = await store.updateTrackMetadata(
-      '1',
-      title: 'Original',
-      artist: '',
-      album: '',
-      genre: '',
-    );
-
-    expect(updated!.artist, 'Unknown Artist');
-    expect(updated.album, 'Unknown Album');
-    expect(updated.genre, 'Unknown Genre');
-  });
+      expect(updated!.artist, 'Unknown Artist');
+      expect(updated.album, 'Unknown Album');
+      expect(updated.genre, 'Unknown Genre');
+    },
+  );
 
   test('persists validated track chapters across library reloads', () async {
     final store = LibraryStore();
@@ -4988,72 +4924,73 @@ void main() {
       ),
     ]);
 
-    final updated = await store.updateTrackChapters(
-      'chaptered',
-      <TrackChapter>[
-        TrackChapter(start: const Duration(minutes: 2), title: 'Second'),
-        TrackChapter(start: Duration.zero, title: 'First'),
-        TrackChapter(start: const Duration(minutes: 3), title: 'Too late'),
-      ],
-    );
+    final updated = await store.updateTrackChapters('chaptered', <TrackChapter>[
+      TrackChapter(start: const Duration(minutes: 2), title: 'Second'),
+      TrackChapter(start: Duration.zero, title: 'First'),
+      TrackChapter(start: const Duration(minutes: 3), title: 'Too late'),
+    ]);
 
     expect(updated!.chapters.map((chapter) => chapter.title), <String>[
       'First',
       'Second',
     ]);
-    expect(await store.updateTrackChapters('missing', <TrackChapter>[]), isNull);
-
-    final reloaded = LibraryStore();
-    await reloaded.load();
-    expect(reloaded.tracks.single.chapters.map((chapter) => chapter.title), <String>[
-      'First',
-      'Second',
-    ]);
-  });
-
-  test('persists validated local skip segments across library reloads', () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        'skippable',
-        title: 'Skippable',
-        duration: const Duration(minutes: 3),
-      ),
-    ]);
-
-    final updated = await store.updateTrackSkipSegments(
-      'skippable',
-      <TrackSkipSegment>[
-        TrackSkipSegment(
-          start: const Duration(minutes: 2),
-          end: const Duration(minutes: 2, seconds: 15),
-          label: 'Credits',
-        ),
-        TrackSkipSegment(
-          start: const Duration(seconds: 15),
-          end: const Duration(seconds: 30),
-          label: 'Intro',
-        ),
-      ],
-    );
-
-    expect(updated!.skipSegments.map((segment) => segment.label), <String>[
-      'Intro',
-      'Credits',
-    ]);
     expect(
-      await store.updateTrackSkipSegments('missing', <TrackSkipSegment>[]),
+      await store.updateTrackChapters('missing', <TrackChapter>[]),
       isNull,
     );
 
     final reloaded = LibraryStore();
     await reloaded.load();
     expect(
-      reloaded.tracks.single.skipSegments.map((segment) => segment.label),
-      <String>['Intro', 'Credits'],
+      reloaded.tracks.single.chapters.map((chapter) => chapter.title),
+      <String>['First', 'Second'],
     );
   });
+
+  test(
+    'persists validated local skip segments across library reloads',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          'skippable',
+          title: 'Skippable',
+          duration: const Duration(minutes: 3),
+        ),
+      ]);
+
+      final updated = await store
+          .updateTrackSkipSegments('skippable', <TrackSkipSegment>[
+            TrackSkipSegment(
+              start: const Duration(minutes: 2),
+              end: const Duration(minutes: 2, seconds: 15),
+              label: 'Credits',
+            ),
+            TrackSkipSegment(
+              start: const Duration(seconds: 15),
+              end: const Duration(seconds: 30),
+              label: 'Intro',
+            ),
+          ]);
+
+      expect(updated!.skipSegments.map((segment) => segment.label), <String>[
+        'Intro',
+        'Credits',
+      ]);
+      expect(
+        await store.updateTrackSkipSegments('missing', <TrackSkipSegment>[]),
+        isNull,
+      );
+
+      final reloaded = LibraryStore();
+      await reloaded.load();
+      expect(
+        reloaded.tracks.single.skipSegments.map((segment) => segment.label),
+        <String>['Intro', 'Credits'],
+      );
+    },
+  );
 
   test('builds smart playlists from library and playback state', () async {
     var now = DateTime.utc(2026, 1, 14, 12);
@@ -5105,35 +5042,33 @@ void main() {
       2,
     );
     expect(
-      store.tracksForSmartPlaylist(
-        SmartPlaylistType.favorites,
-      ).map((track) => track.id),
+      store
+          .tracksForSmartPlaylist(SmartPlaylistType.favorites)
+          .map((track) => track.id),
       <String>['middle', 'old'],
     );
     expect(
-      store.tracksForSmartPlaylist(
-        SmartPlaylistType.recentlyAdded,
-        limit: 2,
-      ).map((track) => track.id),
+      store
+          .tracksForSmartPlaylist(SmartPlaylistType.recentlyAdded, limit: 2)
+          .map((track) => track.id),
       <String>['new', 'middle'],
     );
     expect(
-      store.tracksForSmartPlaylist(
-        SmartPlaylistType.recentlyPlayed,
-      ).map((track) => track.id),
+      store
+          .tracksForSmartPlaylist(SmartPlaylistType.recentlyPlayed)
+          .map((track) => track.id),
       <String>['middle', 'old', 'new'],
     );
     expect(
-      store.tracksForSmartPlaylist(
-        SmartPlaylistType.mostPlayed,
-      ).map((track) => track.id),
+      store
+          .tracksForSmartPlaylist(SmartPlaylistType.mostPlayed)
+          .map((track) => track.id),
       <String>['old', 'middle', 'new'],
     );
     expect(
-      store.tracksForSmartPlaylist(
-        SmartPlaylistType.mostPlayed,
-        limit: 2,
-      ).map((track) => track.id),
+      store
+          .tracksForSmartPlaylist(SmartPlaylistType.mostPlayed, limit: 2)
+          .map((track) => track.id),
       <String>['old', 'middle'],
     );
     expect(
@@ -5201,10 +5136,12 @@ void main() {
       final radioQueue = store.radioQueueForTrack('seed')!;
 
       expect(radioQueue.seedTrack.id, 'seed');
-      expect(
-        radioQueue.tracks.map((track) => track.id),
-        <String>['seed', 'same-artist', 'same-genre', 'same-album'],
-      );
+      expect(radioQueue.tracks.map((track) => track.id), <String>[
+        'seed',
+        'same-artist',
+        'same-genre',
+        'same-album',
+      ]);
       expect(store.radioQueueForTrack('seed', limit: 2)!.tracks, hasLength(2));
       expect(store.radioQueueForTrack('missing'), isNull);
       expect(store.radioQueueForTrack('unplayable'), isNull);
@@ -5305,14 +5242,18 @@ void main() {
       expect(artistRadio.key, 'ari');
       expect(artistRadio.label, 'Ari');
       expect(artistRadio.seedTrack.id, 'ari-dusk');
-      expect(
-        artistRadio.tracks.map((track) => track.id),
-        <String>['ari-dusk', 'ari-dawn', 'mia-dawn', 'sol-clouds'],
-      );
-      expect(
-        artistRadio.matches.map((match) => match.score),
-        <int>[173, 160, 55, 35],
-      );
+      expect(artistRadio.tracks.map((track) => track.id), <String>[
+        'ari-dusk',
+        'ari-dawn',
+        'mia-dawn',
+        'sol-clouds',
+      ]);
+      expect(artistRadio.matches.map((match) => match.score), <int>[
+        173,
+        160,
+        55,
+        35,
+      ]);
       expect(
         artistRadio.matches[0].reasons,
         const <LibraryCollectionRadioReason>[
@@ -5344,10 +5285,11 @@ void main() {
         LibraryBrowseType.album,
         'dusk',
       )!;
-      expect(
-        albumRadio.tracks.map((track) => track.id),
-        <String>['ari-dusk', 'ari-dawn', 'sol-clouds'],
-      );
+      expect(albumRadio.tracks.map((track) => track.id), <String>[
+        'ari-dusk',
+        'ari-dawn',
+        'sol-clouds',
+      ]);
       expect(
         albumRadio.matches[1].reasons,
         const <LibraryCollectionRadioReason>[
@@ -5486,18 +5428,15 @@ void main() {
 
     final sections = store.homeFeedSections(limit: 2);
 
-    expect(
-      sections.map((section) => section.type),
-      <LibraryHomeSectionType>[
-        LibraryHomeSectionType.continueListening,
-        LibraryHomeSectionType.recentlyPlayed,
-        LibraryHomeSectionType.radioSeeds,
-        LibraryHomeSectionType.mostPlayed,
-        LibraryHomeSectionType.favorites,
-        LibraryHomeSectionType.subscribedEpisodes,
-        LibraryHomeSectionType.recentlyAdded,
-      ],
-    );
+    expect(sections.map((section) => section.type), <LibraryHomeSectionType>[
+      LibraryHomeSectionType.continueListening,
+      LibraryHomeSectionType.recentlyPlayed,
+      LibraryHomeSectionType.radioSeeds,
+      LibraryHomeSectionType.mostPlayed,
+      LibraryHomeSectionType.favorites,
+      LibraryHomeSectionType.subscribedEpisodes,
+      LibraryHomeSectionType.recentlyAdded,
+    ]);
     expect(
       sections
           .firstWhere(
@@ -5548,112 +5487,116 @@ void main() {
     expect(store.homeFeedSections(limit: 0), isEmpty);
   });
 
-  test('filters library searches with quoted metadata fields and lyric text',
-      () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      Track(
-        id: 'match',
-        title: 'Morning Signal',
-        artist: 'Mira Vale',
-        album: 'Dawn Archive',
-        genre: 'Ambient',
-        year: 2024,
-        rating: 5,
-        localPath: '/music/Mira Vale/Dawn Archive/morning-signal.flac',
-        sourceId: 'local',
-      ),
-      Track(
-        id: 'lower-rating',
-        title: 'Morning Signal',
-        artist: 'Mira Vale',
-        album: 'Dawn Archive',
-        genre: 'Ambient',
-        year: 2024,
-        rating: 3,
-        localPath: '/music/Mira Vale/Dawn Archive/lower-rating.flac',
-        sourceId: 'local',
-      ),
-      Track(
-        id: 'remote',
-        title: 'Morning Signal',
-        artist: 'Mira Vale',
-        album: 'Dawn Archive',
-        genre: 'Ambient',
-        year: 2024,
-        rating: 5,
-        streamUrl: 'https://media.example.test/morning-signal.flac',
-        sourceId: 'archive',
-      ),
-    ]);
-    await store.setLyrics('match', 'A silver chorus begins at sunrise');
+  test(
+    'filters library searches with quoted metadata fields and lyric text',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        Track(
+          id: 'match',
+          title: 'Morning Signal',
+          artist: 'Mira Vale',
+          album: 'Dawn Archive',
+          genre: 'Ambient',
+          year: 2024,
+          rating: 5,
+          localPath: '/music/Mira Vale/Dawn Archive/morning-signal.flac',
+          sourceId: 'local',
+        ),
+        Track(
+          id: 'lower-rating',
+          title: 'Morning Signal',
+          artist: 'Mira Vale',
+          album: 'Dawn Archive',
+          genre: 'Ambient',
+          year: 2024,
+          rating: 3,
+          localPath: '/music/Mira Vale/Dawn Archive/lower-rating.flac',
+          sourceId: 'local',
+        ),
+        Track(
+          id: 'remote',
+          title: 'Morning Signal',
+          artist: 'Mira Vale',
+          album: 'Dawn Archive',
+          genre: 'Ambient',
+          year: 2024,
+          rating: 5,
+          streamUrl: 'https://media.example.test/morning-signal.flac',
+          sourceId: 'archive',
+        ),
+      ]);
+      await store.setLyrics('match', 'A silver chorus begins at sunrise');
 
-    expect(
-      store
-          .search(
-            'artist:"Mira Vale" album:"Dawn Archive" genre:ambient '
-            'source:local folder:"Dawn Archive" rating>=4 year:2024 chorus',
-          )
-          .map((track) => track.id),
-      <String>['match'],
-    );
-    expect(
-      store.search('rating>=4').map((track) => track.id),
-      unorderedEquals(<String>['match', 'remote']),
-    );
-    expect(store.searchSuggestions('artist:"Mira Vale"'), isEmpty);
-    expect(store.search('unrecognized:term'), isEmpty);
-  });
+      expect(
+        store
+            .search(
+              'artist:"Mira Vale" album:"Dawn Archive" genre:ambient '
+              'source:local folder:"Dawn Archive" rating>=4 year:2024 chorus',
+            )
+            .map((track) => track.id),
+        <String>['match'],
+      );
+      expect(
+        store.search('rating>=4').map((track) => track.id),
+        unorderedEquals(<String>['match', 'remote']),
+      );
+      expect(store.searchSuggestions('artist:"Mira Vale"'), isEmpty);
+      expect(store.search('unrecognized:term'), isEmpty);
+    },
+  );
 
-  test('prioritizes resumed M4B audiobooks in a dedicated Home section',
-      () async {
-    var now = DateTime.utc(2026, 1, 14, 12);
-    final store = LibraryStore(clock: () => now);
-    await store.load();
-    final resumed = _track(
-      'book-resumed',
-      title: 'The Signal',
-      localPath: '/books/the-signal.m4b',
-      duration: const Duration(hours: 8),
-    );
-    final unread = _track(
-      'book-unread',
-      title: 'The Archive',
-      localPath: '/books/the-archive.M4B',
-      duration: const Duration(hours: 6),
-    );
-    final music = _track(
-      'music',
-      localPath: '/music/track.m4a',
-      duration: const Duration(minutes: 4),
-    );
-    await store.addTracks(<Track>[resumed, unread, music]);
-    now = now.add(const Duration(minutes: 1));
-    await store.recordPlaybackProgress(
-      resumed.id,
-      const Duration(minutes: 42),
-      resumed.duration,
-    );
+  test(
+    'prioritizes resumed M4B audiobooks in a dedicated Home section',
+    () async {
+      var now = DateTime.utc(2026, 1, 14, 12);
+      final store = LibraryStore(clock: () => now);
+      await store.load();
+      final resumed = _track(
+        'book-resumed',
+        title: 'The Signal',
+        localPath: '/books/the-signal.m4b',
+        duration: const Duration(hours: 8),
+      );
+      final unread = _track(
+        'book-unread',
+        title: 'The Archive',
+        localPath: '/books/the-archive.M4B',
+        duration: const Duration(hours: 6),
+      );
+      final music = _track(
+        'music',
+        localPath: '/music/track.m4a',
+        duration: const Duration(minutes: 4),
+      );
+      await store.addTracks(<Track>[resumed, unread, music]);
+      now = now.add(const Duration(minutes: 1));
+      await store.recordPlaybackProgress(
+        resumed.id,
+        const Duration(minutes: 42),
+        resumed.duration,
+      );
 
-    expect(isLongFormProgressTrack(resumed), isTrue);
-    expect(isLongFormProgressTrack(unread), isTrue);
-    expect(isLongFormProgressTrack(music), isFalse);
-    expect(
-      store.audiobookTracks().map((track) => track.id),
-      <String>['book-resumed', 'book-unread'],
-    );
-    expect(
-      store
-          .homeFeedSections()
-          .firstWhere(
-            (section) => section.type == LibraryHomeSectionType.audiobooks,
-          )
-          .tracks
-          .map((track) => track.id),
-      <String>['book-resumed', 'book-unread'],
-    );
-  });
+      expect(isLongFormProgressTrack(resumed), isTrue);
+      expect(isLongFormProgressTrack(unread), isTrue);
+      expect(isLongFormProgressTrack(music), isFalse);
+      expect(store.audiobookTracks().map((track) => track.id), <String>[
+        'book-resumed',
+        'book-unread',
+      ]);
+      expect(
+        store
+            .homeFeedSections()
+            .firstWhere(
+              (section) => section.type == LibraryHomeSectionType.audiobooks,
+            )
+            .tracks
+            .map((track) => track.id),
+        <String>['book-resumed', 'book-unread'],
+      );
+    },
+  );
 
   test('creates updates and persists custom smart playlist rules', () async {
     var now = DateTime.utc(2026, 1, 15, 12);
@@ -5725,7 +5668,9 @@ void main() {
     expect(secondStore.customSmartPlaylists.single.artist, 'Ari');
     expect(secondStore.customSmartPlaylists.single.album, 'Album');
     expect(
-      secondStore.tracksForCustomSmartPlaylist(rule.id).map((track) => track.id),
+      secondStore
+          .tracksForCustomSmartPlaylist(rule.id)
+          .map((track) => track.id),
       <String>['ari-old', 'ari-new'],
     );
 
@@ -5756,149 +5701,146 @@ void main() {
     expect(secondStore.tracksForCustomSmartPlaylist(rule.id), isEmpty);
   });
 
-  test('groups library tracks by artist album genre source and folder', () async {
-    final store = LibraryStore();
-    await store.load();
-    await store.addTracks(<Track>[
-      _track(
-        '1',
-        title: 'First',
-        artist: 'Ari',
-        album: 'Dawn',
-        genre: 'Ambient',
-        duration: const Duration(minutes: 2),
-        localPath: '/music/Ari/Dawn/first.mp3',
-      ),
-      _track(
-        '2',
-        title: 'Second',
-        artist: 'Ari',
-        album: 'Dusk',
-        genre: 'Ambient',
-        duration: const Duration(minutes: 3),
-        localPath: '/music/Ari/Dusk/second.mp3',
-      ),
-      _track(
-        '3',
-        title: 'Third',
-        artist: 'Mia',
-        album: 'Dawn',
-        genre: 'Jazz',
-        sourceId: 'demo',
-        duration: const Duration(minutes: 4),
-        localPath: r'C:\Music\Mia\Dawn\third.mp3',
-      ),
-    ]);
+  test(
+    'groups library tracks by artist album genre source and folder',
+    () async {
+      final store = LibraryStore();
+      await store.load();
+      await store.addTracks(<Track>[
+        _track(
+          '1',
+          title: 'First',
+          artist: 'Ari',
+          album: 'Dawn',
+          genre: 'Ambient',
+          duration: const Duration(minutes: 2),
+          localPath: '/music/Ari/Dawn/first.mp3',
+        ),
+        _track(
+          '2',
+          title: 'Second',
+          artist: 'Ari',
+          album: 'Dusk',
+          genre: 'Ambient',
+          duration: const Duration(minutes: 3),
+          localPath: '/music/Ari/Dusk/second.mp3',
+        ),
+        _track(
+          '3',
+          title: 'Third',
+          artist: 'Mia',
+          album: 'Dawn',
+          genre: 'Jazz',
+          sourceId: 'demo',
+          duration: const Duration(minutes: 4),
+          localPath: r'C:\Music\Mia\Dawn\third.mp3',
+        ),
+      ]);
 
-    final artistGroups = store.browseGroups(LibraryBrowseType.artist);
-    final albumGroups = store.browseGroups(LibraryBrowseType.album);
-    final genreGroups = store.browseGroups(LibraryBrowseType.genre);
-    final sourceGroups = store.browseGroups(LibraryBrowseType.source);
-    final folderGroups = store.browseGroups(LibraryBrowseType.folder);
+      final artistGroups = store.browseGroups(LibraryBrowseType.artist);
+      final albumGroups = store.browseGroups(LibraryBrowseType.album);
+      final genreGroups = store.browseGroups(LibraryBrowseType.genre);
+      final sourceGroups = store.browseGroups(LibraryBrowseType.source);
+      final folderGroups = store.browseGroups(LibraryBrowseType.folder);
 
-    expect(artistGroups.map((group) => group.label), <String>['Ari', 'Mia']);
-    expect(artistGroups.first.trackCount, 2);
-    expect(artistGroups.first.totalDuration, const Duration(minutes: 5));
-    expect(albumGroups.map((group) => group.label), <String>['Dawn', 'Dusk']);
-    expect(
-      genreGroups.map((group) => group.label),
-      <String>['Ambient', 'Jazz'],
-    );
-    expect(
-      sourceGroups.map((group) => group.label),
-      <String>['demo', 'local'],
-    );
-    expect(
-      folderGroups.map((group) => group.label),
-      <String>[
+      expect(artistGroups.map((group) => group.label), <String>['Ari', 'Mia']);
+      expect(artistGroups.first.trackCount, 2);
+      expect(artistGroups.first.totalDuration, const Duration(minutes: 5));
+      expect(albumGroups.map((group) => group.label), <String>['Dawn', 'Dusk']);
+      expect(genreGroups.map((group) => group.label), <String>[
+        'Ambient',
+        'Jazz',
+      ]);
+      expect(sourceGroups.map((group) => group.label), <String>[
+        'demo',
+        'local',
+      ]);
+      expect(folderGroups.map((group) => group.label), <String>[
         '/music/Ari/Dawn',
         '/music/Ari/Dusk',
         r'C:\Music\Mia\Dawn',
-      ],
-    );
-    expect(
-      store
-          .browseGroups(LibraryBrowseType.genre, query: 'amb')
-          .map((group) => group.label),
-      <String>['Ambient'],
-    );
-    expect(
-      store
-          .tracksForBrowseGroup(
-            LibraryBrowseType.folder,
-            '/music/Ari/Dawn',
-          )
-          .map((track) => track.id),
-      <String>['1'],
-    );
-    expect(
-      store
-          .tracksForBrowseGroup(
-            LibraryBrowseType.genre,
-            'ambient',
-            sortMode: LibrarySortMode.title,
-          )
-          .map((track) => track.id),
-      <String>['1', '2'],
-    );
+      ]);
+      expect(
+        store
+            .browseGroups(LibraryBrowseType.genre, query: 'amb')
+            .map((group) => group.label),
+        <String>['Ambient'],
+      );
+      expect(
+        store
+            .tracksForBrowseGroup(LibraryBrowseType.folder, '/music/Ari/Dawn')
+            .map((track) => track.id),
+        <String>['1'],
+      );
+      expect(
+        store
+            .tracksForBrowseGroup(
+              LibraryBrowseType.genre,
+              'ambient',
+              sortMode: LibrarySortMode.title,
+            )
+            .map((track) => track.id),
+        <String>['1', '2'],
+      );
 
-    final artistAlbums = store.albumGroupsForArtist('ari');
-    expect(artistAlbums.map((group) => group.label), <String>[
-      'Dawn',
-      'Dusk',
-    ]);
-    expect(artistAlbums.map((group) => group.trackCount), <int>[1, 1]);
+      final artistAlbums = store.albumGroupsForArtist('ari');
+      expect(artistAlbums.map((group) => group.label), <String>[
+        'Dawn',
+        'Dusk',
+      ]);
+      expect(artistAlbums.map((group) => group.trackCount), <int>[1, 1]);
 
-    final relatedArtists = store.relatedBrowseGroups(
-      LibraryBrowseType.artist,
-      'ari',
-    );
-    expect(relatedArtists.map((match) => match.group.label), <String>['Mia']);
-    expect(
-      relatedArtists.single.reasons,
-      const <LibraryCollectionSimilarityReason>[
-        LibraryCollectionSimilarityReason.album,
-      ],
-    );
-    expect(relatedArtists.single.score, 28);
+      final relatedArtists = store.relatedBrowseGroups(
+        LibraryBrowseType.artist,
+        'ari',
+      );
+      expect(relatedArtists.map((match) => match.group.label), <String>['Mia']);
+      expect(
+        relatedArtists.single.reasons,
+        const <LibraryCollectionSimilarityReason>[
+          LibraryCollectionSimilarityReason.album,
+        ],
+      );
+      expect(relatedArtists.single.score, 28);
 
-    final relatedAlbums = store.relatedBrowseGroups(
-      LibraryBrowseType.album,
-      'dawn',
-    );
-    expect(relatedAlbums.map((match) => match.group.label), <String>['Dusk']);
-    expect(
-      relatedAlbums.single.reasons,
-      const <LibraryCollectionSimilarityReason>[
-        LibraryCollectionSimilarityReason.artist,
-        LibraryCollectionSimilarityReason.genre,
-      ],
-    );
-    expect(relatedAlbums.single.score, 58);
-    expect(
-      store.relatedBrowseGroups(LibraryBrowseType.genre, 'ambient'),
-      isEmpty,
-    );
-    expect(
-      store.relatedBrowseGroups(LibraryBrowseType.artist, 'ari', limit: 0),
-      isEmpty,
-    );
-
-    final savedArtist = await store.saveBrowseGroupAsPlaylist(
-      LibraryBrowseType.artist,
-      'ari',
-    );
-    expect(savedArtist, isNotNull);
-    expect(savedArtist!.name, 'Ari');
-    expect(savedArtist.trackIds, <String>['1', '2']);
-    expect(
-      await store.saveBrowseGroupAsPlaylist(
+      final relatedAlbums = store.relatedBrowseGroups(
         LibraryBrowseType.album,
-        'missing',
-      ),
-      isNull,
-    );
-  });
+        'dawn',
+      );
+      expect(relatedAlbums.map((match) => match.group.label), <String>['Dusk']);
+      expect(
+        relatedAlbums.single.reasons,
+        const <LibraryCollectionSimilarityReason>[
+          LibraryCollectionSimilarityReason.artist,
+          LibraryCollectionSimilarityReason.genre,
+        ],
+      );
+      expect(relatedAlbums.single.score, 58);
+      expect(
+        store.relatedBrowseGroups(LibraryBrowseType.genre, 'ambient'),
+        isEmpty,
+      );
+      expect(
+        store.relatedBrowseGroups(LibraryBrowseType.artist, 'ari', limit: 0),
+        isEmpty,
+      );
+
+      final savedArtist = await store.saveBrowseGroupAsPlaylist(
+        LibraryBrowseType.artist,
+        'ari',
+      );
+      expect(savedArtist, isNotNull);
+      expect(savedArtist!.name, 'Ari');
+      expect(savedArtist.trackIds, <String>['1', '2']);
+      expect(
+        await store.saveBrowseGroupAsPlaylist(
+          LibraryBrowseType.album,
+          'missing',
+        ),
+        isNull,
+      );
+    },
+  );
 
   test('builds recursive folder tree and opens descendant tracks', () async {
     final store = LibraryStore();
@@ -5960,7 +5902,9 @@ void main() {
     );
     expect(ariDawnNode.parentKey, ariNode.key);
     expect(
-      store.tracksDirectlyInFolderNode(ariDawnNode.key).map((track) => track.id),
+      store
+          .tracksDirectlyInFolderNode(ariDawnNode.key)
+          .map((track) => track.id),
       <String>['1'],
     );
 
@@ -5981,8 +5925,9 @@ void main() {
       'Backup Mix',
       trackIds: <String>['1', '2'],
     );
-    final playlistArtworkUri =
-        Uri.parse('https://media.example.test/backup-mix.jpg');
+    final playlistArtworkUri = Uri.parse(
+      'https://media.example.test/backup-mix.jpg',
+    );
     await firstStore.updatePlaylistArtwork(playlist.id, playlistArtworkUri);
     await firstStore.setLyrics('1', 'backup lyrics');
     await firstStore.recordPlayback('2');
@@ -6016,9 +5961,9 @@ void main() {
       localPath: '',
       streamUrl: 'https://archive.org/download/archive-backup/audio.mp3',
     );
-    final archivePolicy = OfflineMediaPolicy(
-      <MusicSourceProvider>[archiveProvider],
-    );
+    final archivePolicy = OfflineMediaPolicy(<MusicSourceProvider>[
+      archiveProvider,
+    ]);
     final cacheEntry = await firstStore.queueOfflineCache(
       archiveTrack,
       OfflineMediaAction.cache,
@@ -6034,10 +5979,7 @@ void main() {
 
     expect(
       secondStore.tracks.map((track) => track.id),
-      containsAll(<String>[
-        '1',
-        '2',
-      ]),
+      containsAll(<String>['1', '2']),
     );
     expect(secondStore.tracks, hasLength(2));
     expect(
@@ -6045,13 +5987,7 @@ void main() {
       isTrue,
     );
     expect(secondStore.playlistById(playlist.id)!.name, 'Backup Mix');
-    expect(
-      secondStore.playlistById(playlist.id)!.trackIds,
-      <String>[
-        '1',
-        '2',
-      ],
-    );
+    expect(secondStore.playlistById(playlist.id)!.trackIds, <String>['1', '2']);
     expect(
       secondStore.playlistById(playlist.id)!.artworkUri,
       playlistArtworkUri,
@@ -6084,23 +6020,16 @@ void main() {
   });
 
   test('rejects invalid backup JSON without replacing the library', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 12),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 12));
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
 
-    expect(
-      store.restoreBackupJson('[]'),
-      throwsA(isA<FormatException>()),
-    );
+    expect(store.restoreBackupJson('[]'), throwsA(isA<FormatException>()));
     expect(store.tracks.single.id, '1');
   });
 
   test('rejects unsupported backup versions', () async {
-    final store = LibraryStore(
-      clock: () => DateTime.utc(2026, 1, 13),
-    );
+    final store = LibraryStore(clock: () => DateTime.utc(2026, 1, 13));
     await store.load();
     await store.addTracks(<Track>[_track('1')]);
     final backup = jsonDecode(store.exportBackupJson()) as Map<String, dynamic>;

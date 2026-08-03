@@ -3,7 +3,7 @@
 This is the Dart HTTP service for AetherTune server-side features.
 
 ```bash
-dart pub get
+dart pub get --enforce-lockfile
 dart run bin/server.dart
 ```
 
@@ -11,7 +11,8 @@ dart run bin/server.dart
 
 The checked-in Docker image compiles a self-contained server executable and
 runs it as an unprivileged user. It uses a named Docker volume for durable
-snapshots and a `/health` health check.
+snapshots and separate `/health` liveness and `/ready` persistence-readiness
+checks.
 
 ```bash
 cd services/server
@@ -21,6 +22,10 @@ docker compose up --build -d
 docker compose ps
 curl http://127.0.0.1:8080/health
 ```
+
+The service rejects the `.env.example` operations-token placeholder at startup.
+Replace `replace-with-a-separate-long-random-token` before starting the server;
+the operations token must be different from every managed-account token.
 
 `AETHERTUNE_SYNC_USERS` must remain valid JSON. Leave it as `{}` to use the
 managed account registry described below. Static compatibility mode accepts a
@@ -80,6 +85,7 @@ reviewing release notes.
 Available endpoints:
 
 - `GET /health`
+- `GET /ready`
 - `GET /api/v1/info`
 - `GET /api/v1/metrics`
 - `GET /api/v1/tracks`
@@ -219,10 +225,13 @@ password login, OAuth, and
 automatic client-side token rotation are intentionally not exposed yet.
 
 `GET /api/v1/metrics` reports only process-lifetime aggregate state: start
-time, uptime, total request count, and whether library sync is configured. It
-does not record or expose users, bearer tokens, request paths, addresses, or
-payloads. The count includes the metrics request itself and resets when the
-server restarts. When `AETHERTUNE_OPS_TOKEN` is set, requests require
+time, uptime, total request count, rate-limited request count, HTTP response
+classes, total request duration in milliseconds, and whether library sync is
+configured. It does not record or expose users, bearer tokens, request paths,
+addresses, or payloads. The total request count includes the metrics request
+itself; response and duration counters are sampled immediately before the
+metrics response is returned. All counters reset when the server restarts.
+When `AETHERTUNE_OPS_TOKEN` is set, requests require
 `Authorization: Bearer <operations-token>` and rejected tokens are never
 echoed. Keep the endpoint behind the same private network or proxy access
 policy as the rest of the service.
@@ -239,3 +248,16 @@ Run checks from this directory:
 dart analyze
 dart test
 ```
+
+From the repository root, the CI Docker deployment smoke test builds the image,
+waits for both health endpoints, exercises the info API, and checks the
+unprivileged/read-only/capability-drop container settings:
+
+```bash
+bash scripts/ci/test_server_compose.sh
+```
+
+The CI executable smoke test also starts the compiled binary on a loopback
+port, checks `/health` and `/ready`, and sends 90 bounded concurrent probes
+across the liveness, readiness, and `/api/v1/info` endpoints before allowing
+the executable to be uploaded.

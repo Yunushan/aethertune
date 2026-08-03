@@ -10,12 +10,13 @@ final class ListenBrainzResponse {
   final String body;
 }
 
-typedef ListenBrainzRequestSender = Future<ListenBrainzResponse> Function(
-  Uri uri, {
-  required String method,
-  required Map<String, String> headers,
-  String? body,
-});
+typedef ListenBrainzRequestSender =
+    Future<ListenBrainzResponse> Function(
+      Uri uri, {
+      required String method,
+      required Map<String, String> headers,
+      String? body,
+    });
 
 final class ListenBrainzHistoryEntry {
   const ListenBrainzHistoryEntry({
@@ -56,7 +57,9 @@ class ListenBrainzClient {
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      throw const FormatException('ListenBrainz returned an invalid token response.');
+      throw const FormatException(
+        'ListenBrainz returned an invalid token response.',
+      );
     }
     final result = Map<String, Object?>.from(decoded);
     if (result['valid'] != true) {

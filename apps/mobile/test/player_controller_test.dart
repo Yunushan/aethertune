@@ -16,65 +16,67 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('routes system-media library selections through queue playback', () async {
-    final engine = _FakeMediaLibraryBrowseEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final tracks = <Track>[
-      Track(id: 'one', title: 'One', localPath: '/music/one.mp3'),
-      Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
-    ];
+  test(
+    'routes system-media library selections through queue playback',
+    () async {
+      final engine = _FakeMediaLibraryBrowseEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final tracks = <Track>[
+        Track(id: 'one', title: 'One', localPath: '/music/one.mp3'),
+        Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
+      ];
 
-    controller.setMediaLibraryBrowseTracks(tracks);
+      controller.setMediaLibraryBrowseTracks(tracks);
 
-    expect(
-      engine.browseTracks.map((track) => track.id),
-      <String>['one', 'two'],
-    );
-    await engine.selectBrowseTrack(tracks.last);
+      expect(engine.browseTracks.map((track) => track.id), <String>[
+        'one',
+        'two',
+      ]);
+      await engine.selectBrowseTrack(tracks.last);
 
-    expect(controller.current?.id, 'two');
-    expect(
-      controller.queue.map((track) => track.id),
-      <String>['one', 'two'],
-    );
-    expect(engine.queue.map((track) => track.id), <String>['one', 'two']);
-    expect(engine.initialIndex, 1);
-    expect(engine.playingValue, isTrue);
-  });
+      expect(controller.current?.id, 'two');
+      expect(controller.queue.map((track) => track.id), <String>['one', 'two']);
+      expect(engine.queue.map((track) => track.id), <String>['one', 'two']);
+      expect(engine.initialIndex, 1);
+      expect(engine.playingValue, isTrue);
+    },
+  );
 
-  test('routes system-media playlist selections through their playlist queue',
-      () async {
-    final engine = _FakeMediaLibraryBrowseEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final tracks = <Track>[
-      Track(id: 'one', title: 'One', localPath: '/music/one.mp3'),
-      Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
-    ];
-    final playlist = MediaLibraryBrowsePlaylist(
-      id: 'favorites',
-      title: 'Favorites',
-      tracks: <Track>[tracks.last, tracks.first, tracks.last],
-    );
+  test(
+    'routes system-media playlist selections through their playlist queue',
+    () async {
+      final engine = _FakeMediaLibraryBrowseEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final tracks = <Track>[
+        Track(id: 'one', title: 'One', localPath: '/music/one.mp3'),
+        Track(id: 'two', title: 'Two', localPath: '/music/two.mp3'),
+      ];
+      final playlist = MediaLibraryBrowsePlaylist(
+        id: 'favorites',
+        title: 'Favorites',
+        tracks: <Track>[tracks.last, tracks.first, tracks.last],
+      );
 
-    controller.setMediaLibraryBrowseTracks(
-      tracks,
-      playlists: <MediaLibraryBrowsePlaylist>[playlist],
-    );
-    await engine.selectPlaylistTrack(playlist, playlist.tracks.last);
+      controller.setMediaLibraryBrowseTracks(
+        tracks,
+        playlists: <MediaLibraryBrowsePlaylist>[playlist],
+      );
+      await engine.selectPlaylistTrack(playlist, playlist.tracks.last);
 
-    expect(controller.current?.id, 'two');
-    expect(
-      controller.queue.map((track) => track.id),
-      <String>['two', 'one', 'two'],
-    );
-    expect(engine.initialIndex, 2);
-    expect(engine.playingValue, isTrue);
-  });
+      expect(controller.current?.id, 'two');
+      expect(controller.queue.map((track) => track.id), <String>[
+        'two',
+        'one',
+        'two',
+      ]);
+      expect(engine.initialIndex, 2);
+      expect(engine.playingValue, isTrue);
+    },
+  );
 
-  test('loops from B back to A and clears markers on a track change',
-      () async {
+  test('loops from B back to A and clears markers on a track change', () async {
     final engine = _FakePlaybackAudioEngine();
     final controller = PlayerController(audioEngine: engine);
     addTearDown(controller.dispose);
@@ -109,45 +111,49 @@ void main() {
     expect(controller.hasABRepeatStart, isFalse);
   });
 
-  test('clamps A-B markers to a known track duration and clears them',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    await controller.playTrack(_track('one'));
-    engine.emitDuration(const Duration(seconds: 30));
+  test(
+    'clamps A-B markers to a known track duration and clears them',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      await controller.playTrack(_track('one'));
+      engine.emitDuration(const Duration(seconds: 30));
 
-    controller.setABRepeatStart(const Duration(seconds: 45));
-    expect(controller.aBRepeatStart, const Duration(seconds: 30));
-    expect(controller.setABRepeatEnd(const Duration(seconds: 31)), isFalse);
-    controller.clearABRepeat();
+      controller.setABRepeatStart(const Duration(seconds: 45));
+      expect(controller.aBRepeatStart, const Duration(seconds: 30));
+      expect(controller.setABRepeatEnd(const Duration(seconds: 31)), isFalse);
+      controller.clearABRepeat();
 
-    expect(controller.aBRepeatStart, isNull);
-    expect(controller.aBRepeatEnd, isNull);
-  });
+      expect(controller.aBRepeatStart, isNull);
+      expect(controller.aBRepeatEnd, isNull);
+    },
+  );
 
-  test('automatically seeks past local skip segments during playback',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final track = _track('skippable').copyWith(
-      skipSegments: <TrackSkipSegment>[
-        TrackSkipSegment(
-          start: const Duration(seconds: 10),
-          end: const Duration(seconds: 20),
-          label: 'Intro',
-        ),
-      ],
-    );
+  test(
+    'automatically seeks past local skip segments during playback',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final track = _track('skippable').copyWith(
+        skipSegments: <TrackSkipSegment>[
+          TrackSkipSegment(
+            start: const Duration(seconds: 10),
+            end: const Duration(seconds: 20),
+            label: 'Intro',
+          ),
+        ],
+      );
 
-    await controller.playTrack(track);
-    engine.emitPosition(const Duration(seconds: 12));
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
+      await controller.playTrack(track);
+      engine.emitPosition(const Duration(seconds: 12));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(engine.seekPositions.last, const Duration(seconds: 20));
-  });
+      expect(engine.seekPositions.last, const Duration(seconds: 20));
+    },
+  );
 
   test('gives active A-B repeat priority over local skip segments', () async {
     final engine = _FakePlaybackAudioEngine();
@@ -171,50 +177,57 @@ void main() {
     expect(engine.seekPositions, isEmpty);
   });
 
-  test('persists supported playback speed and rejects unsupported values',
-      () async {
-    final firstEngine = _FakePlaybackAudioEngine();
-    final firstController = PlayerController(audioEngine: firstEngine);
-    await firstController.setPlaybackSpeed(1.5);
-    await firstController.setTemporaryPlaybackSpeed(2);
-    expect(firstEngine.speedValue, 2);
-    expect(firstController.playbackSpeed, 2);
-    expect(firstController.defaultPlaybackSpeed, 1.5);
-    firstController.dispose();
+  test(
+    'persists supported playback speed and rejects unsupported values',
+    () async {
+      final firstEngine = _FakePlaybackAudioEngine();
+      final firstController = PlayerController(audioEngine: firstEngine);
+      await firstController.setPlaybackSpeed(1.5);
+      await firstController.setTemporaryPlaybackSpeed(2);
+      expect(firstEngine.speedValue, 2);
+      expect(firstController.playbackSpeed, 2);
+      expect(firstController.defaultPlaybackSpeed, 1.5);
+      firstController.dispose();
 
-    final restoredEngine = _FakePlaybackAudioEngine();
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
+      final restoredEngine = _FakePlaybackAudioEngine();
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
 
-    expect(restoredController.playbackSpeed, 1.5);
-    expect(restoredController.defaultPlaybackSpeed, 1.5);
-    await expectLater(
-      restoredController.setPlaybackSpeed(1.1),
-      throwsArgumentError,
-    );
-  });
+      expect(restoredController.playbackSpeed, 1.5);
+      expect(restoredController.defaultPlaybackSpeed, 1.5);
+      await expectLater(
+        restoredController.setPlaybackSpeed(1.1),
+        throwsArgumentError,
+      );
+    },
+  );
 
-  test('persists volume and rejects values outside the supported range',
-      () async {
-    final firstEngine = _FakePlaybackAudioEngine();
-    final firstController = PlayerController(audioEngine: firstEngine);
-    await firstController.setVolume(0.35);
+  test(
+    'persists volume and rejects values outside the supported range',
+    () async {
+      final firstEngine = _FakePlaybackAudioEngine();
+      final firstController = PlayerController(audioEngine: firstEngine);
+      await firstController.setVolume(0.35);
 
-    expect(firstController.volume, 0.35);
-    expect(firstEngine.volumeValue, 0.35);
-    firstController.dispose();
+      expect(firstController.volume, 0.35);
+      expect(firstEngine.volumeValue, 0.35);
+      firstController.dispose();
 
-    final restoredEngine = _FakePlaybackAudioEngine();
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
+      final restoredEngine = _FakePlaybackAudioEngine();
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
 
-    expect(restoredController.volume, 0.35);
-    expect(restoredEngine.volumeValue, 0.35);
-    await expectLater(restoredController.setVolume(-0.1), throwsArgumentError);
-    await expectLater(restoredController.setVolume(1.1), throwsArgumentError);
-  });
+      expect(restoredController.volume, 0.35);
+      expect(restoredEngine.volumeValue, 0.35);
+      await expectLater(
+        restoredController.setVolume(-0.1),
+        throwsArgumentError,
+      );
+      await expectLater(restoredController.setVolume(1.1), throwsArgumentError);
+    },
+  );
 
   test('persists supported crossfade durations for capable engines', () async {
     final firstEngine = _FakePlaybackAudioEngine();
@@ -238,87 +251,93 @@ void main() {
     expect(restoredController.crossfadeDuration, const Duration(seconds: 3));
   });
 
-  test('rejects crossfade when the audio backend does not support it',
-      () async {
-    final controller = PlayerController(audioEngine: _NoCrossfadeAudioEngine());
-    addTearDown(controller.dispose);
+  test(
+    'rejects crossfade when the audio backend does not support it',
+    () async {
+      final controller = PlayerController(
+        audioEngine: _NoCrossfadeAudioEngine(),
+      );
+      addTearDown(controller.dispose);
 
-    expect(controller.supportsCrossfade, isFalse);
-    await expectLater(
-      controller.setCrossfadeDuration(const Duration(seconds: 3)),
-      throwsA(isA<UnsupportedError>()),
-    );
-  });
+      expect(controller.supportsCrossfade, isFalse);
+      await expectLater(
+        controller.setCrossfadeDuration(const Duration(seconds: 3)),
+        throwsA(isA<UnsupportedError>()),
+      );
+    },
+  );
 
-  test('persists supported playback pitch and hides it from unsupported engines',
-      () async {
-    final firstEngine = _FakePlaybackAudioEngine()
-      ..supportsPitchValue = true;
-    final firstController = PlayerController(audioEngine: firstEngine);
-    await firstController.setPlaybackPitch(1.25);
-    expect(firstEngine.pitchValue, 1.25);
-    expect(firstController.defaultPlaybackPitch, 1.25);
-    firstController.dispose();
+  test(
+    'persists supported playback pitch and hides it from unsupported engines',
+    () async {
+      final firstEngine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
+      final firstController = PlayerController(audioEngine: firstEngine);
+      await firstController.setPlaybackPitch(1.25);
+      expect(firstEngine.pitchValue, 1.25);
+      expect(firstController.defaultPlaybackPitch, 1.25);
+      firstController.dispose();
 
-    final restoredEngine = _FakePlaybackAudioEngine()
-      ..supportsPitchValue = true;
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
-    expect(restoredController.defaultPlaybackPitch, 1.25);
-    expect(restoredEngine.pitchValue, 1.25);
-    await expectLater(
-      restoredController.setPlaybackPitch(1.1),
-      throwsArgumentError,
-    );
+      final restoredEngine = _FakePlaybackAudioEngine()
+        ..supportsPitchValue = true;
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
+      expect(restoredController.defaultPlaybackPitch, 1.25);
+      expect(restoredEngine.pitchValue, 1.25);
+      await expectLater(
+        restoredController.setPlaybackPitch(1.1),
+        throwsArgumentError,
+      );
 
-    final unsupportedController = PlayerController(
-      audioEngine: _FakePlaybackAudioEngine(),
-    );
-    addTearDown(unsupportedController.dispose);
-    expect(unsupportedController.supportsPitch, isFalse);
-    await expectLater(
-      unsupportedController.setPlaybackPitch(1.25),
-      throwsUnsupportedError,
-    );
-  });
+      final unsupportedController = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+      );
+      addTearDown(unsupportedController.dispose);
+      expect(unsupportedController.supportsPitch, isFalse);
+      await expectLater(
+        unsupportedController.setPlaybackPitch(1.25),
+        throwsUnsupportedError,
+      );
+    },
+  );
 
-  test('persists per-track pitch overrides without changing the default',
-      () async {
-    final firstEngine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
-    final firstController = PlayerController(audioEngine: firstEngine);
-    await firstController.setPlaybackPitch(1.25);
-    await firstController.setTrackPlaybackPitch('track-1', 0.75);
-    expect(firstController.defaultPlaybackPitch, 1.25);
-    expect(firstController.playbackPitchForTrack('track-1'), 0.75);
-    firstController.dispose();
+  test(
+    'persists per-track pitch overrides without changing the default',
+    () async {
+      final firstEngine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
+      final firstController = PlayerController(audioEngine: firstEngine);
+      await firstController.setPlaybackPitch(1.25);
+      await firstController.setTrackPlaybackPitch('track-1', 0.75);
+      expect(firstController.defaultPlaybackPitch, 1.25);
+      expect(firstController.playbackPitchForTrack('track-1'), 0.75);
+      firstController.dispose();
 
-    final restoredEngine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
-    expect(restoredController.defaultPlaybackPitch, 1.25);
-    expect(restoredController.playbackPitchForTrack('track-1'), 0.75);
+      final restoredEngine = _FakePlaybackAudioEngine()
+        ..supportsPitchValue = true;
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
+      expect(restoredController.defaultPlaybackPitch, 1.25);
+      expect(restoredController.playbackPitchForTrack('track-1'), 0.75);
 
-    await restoredController.playTrack(_track('track-1'));
-    expect(restoredEngine.pitchValue, 0.75);
-    await restoredController.clearTrackPlaybackPitch('track-1');
-    expect(restoredController.playbackPitchForTrack('track-1'), isNull);
-    expect(restoredEngine.pitchValue, 1.25);
-    await expectLater(
-      restoredController.setTrackPlaybackPitch('', 1.25),
-      throwsArgumentError,
-    );
-  });
+      await restoredController.playTrack(_track('track-1'));
+      expect(restoredEngine.pitchValue, 0.75);
+      await restoredController.clearTrackPlaybackPitch('track-1');
+      expect(restoredController.playbackPitchForTrack('track-1'), isNull);
+      expect(restoredEngine.pitchValue, 1.25);
+      await expectLater(
+        restoredController.setTrackPlaybackPitch('', 1.25),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('persists and restores Android audio effect settings', () async {
     final firstEngine = _FakeAudioEffectsEngine();
     final firstController = PlayerController(audioEngine: firstEngine);
 
     await firstController.setEqualizerEnabled(true);
-    await firstController.setEqualizerPreset(
-      PlaybackEqualizerPreset.bassBoost,
-    );
+    await firstController.setEqualizerPreset(PlaybackEqualizerPreset.bassBoost);
     await firstController.setLoudnessEnhancerEnabled(true);
     await firstController.setLoudnessEnhancerTargetGain(5.5);
     await firstController.setVirtualizerEnabled(true);
@@ -355,68 +374,73 @@ void main() {
     expect(restoredEngine.virtualizerStrengthValue, 650);
   });
 
-  test('syncs only library-backed queue references without starting playback',
-      () async {
-    final updatedAt = DateTime.utc(2026, 7, 16, 12);
-    final source = PlayerController(
-      audioEngine: _FakePlaybackAudioEngine(),
-      clock: () => updatedAt,
-    );
-    addTearDown(source.dispose);
-    final libraryOne = _track('library-one');
-    final sourceOnly = _track('source-only');
-    final libraryTwo = _track('library-two');
-    await source.playTrack(
-      libraryTwo,
-      queue: <Track>[libraryOne, sourceOnly, libraryTwo],
-    );
+  test(
+    'syncs only library-backed queue references without starting playback',
+    () async {
+      final updatedAt = DateTime.utc(2026, 7, 16, 12);
+      final source = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+        clock: () => updatedAt,
+      );
+      addTearDown(source.dispose);
+      final libraryOne = _track('library-one');
+      final sourceOnly = _track('source-only');
+      final libraryTwo = _track('library-two');
+      await source.playTrack(
+        libraryTwo,
+        queue: <Track>[libraryOne, sourceOnly, libraryTwo],
+      );
 
-    final snapshot = source.exportQueueSyncSnapshot(<Track>[
-      libraryOne,
-      libraryTwo,
-    ]);
-    expect(snapshot.trackIds, <String>['library-one', 'library-two']);
-    expect(snapshot.currentTrackId, 'library-two');
-    expect(snapshot.updatedAt, updatedAt);
+      final snapshot = source.exportQueueSyncSnapshot(<Track>[
+        libraryOne,
+        libraryTwo,
+      ]);
+      expect(snapshot.trackIds, <String>['library-one', 'library-two']);
+      expect(snapshot.currentTrackId, 'library-two');
+      expect(snapshot.updatedAt, updatedAt);
 
-    final destinationEngine = _FakePlaybackAudioEngine();
-    final destination = PlayerController(audioEngine: destinationEngine);
-    addTearDown(destination.dispose);
-    await destination.playTrack(_track('previous'));
-    final restored = await destination.restoreQueueSyncSnapshot(snapshot, <Track>[
-      _track('library-one', localPath: '/device-a/one.mp3'),
-      _track('library-two', localPath: '/device-a/two.mp3'),
-    ]);
+      final destinationEngine = _FakePlaybackAudioEngine();
+      final destination = PlayerController(audioEngine: destinationEngine);
+      addTearDown(destination.dispose);
+      await destination.playTrack(_track('previous'));
+      final restored = await destination
+          .restoreQueueSyncSnapshot(snapshot, <Track>[
+            _track('library-one', localPath: '/device-a/one.mp3'),
+            _track('library-two', localPath: '/device-a/two.mp3'),
+          ]);
 
-    expect(restored, 2);
-    expect(destination.queue.map((track) => track.id), <String>[
-      'library-one',
-      'library-two',
-    ]);
-    expect(destination.current?.id, 'library-two');
-    expect(destinationEngine.stopCalls, 1);
-    expect(destinationEngine.playingValue, isFalse);
-    expect(destinationEngine.setQueueCalls, 1);
-  });
+      expect(restored, 2);
+      expect(destination.queue.map((track) => track.id), <String>[
+        'library-one',
+        'library-two',
+      ]);
+      expect(destination.current?.id, 'library-two');
+      expect(destinationEngine.stopCalls, 1);
+      expect(destinationEngine.playingValue, isFalse);
+      expect(destinationEngine.setQueueCalls, 1);
+    },
+  );
 
-  test('persists skip silence only through a supported playback engine',
-      () async {
-    final firstEngine = _FakeSkipSilenceEngine();
-    final firstController = PlayerController(audioEngine: firstEngine);
+  test(
+    'persists skip silence only through a supported playback engine',
+    () async {
+      final firstEngine = _FakeSkipSilenceEngine();
+      final firstController = PlayerController(audioEngine: firstEngine);
 
-    expect(firstController.supportsSkipSilence, isTrue);
-    await firstController.setSkipSilenceEnabled(true);
-    expect(firstEngine.skipSilenceEnabledValue, isTrue);
-    firstController.dispose();
+      expect(firstController.supportsSkipSilence, isTrue);
+      await firstController.setSkipSilenceEnabled(true);
+      expect(firstEngine.skipSilenceEnabledValue, isTrue);
+      firstController.dispose();
 
-    final restoredEngine = _FakeSkipSilenceEngine();
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
+      final restoredEngine = _FakeSkipSilenceEngine();
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
 
-    expect(restoredController.skipSilenceEnabled, isTrue);
-    expect(restoredEngine.skipSilenceEnabledValue, isTrue);
-  });
+      expect(restoredController.skipSilenceEnabled, isTrue);
+      expect(restoredEngine.skipSilenceEnabledValue, isTrue);
+    },
+  );
 
   test('persists the failed-track recovery preference', () async {
     final firstController = PlayerController(
@@ -444,16 +468,10 @@ void main() {
     await firstController.previewEqualizerBandGain(0, 4.5);
     await firstController.persistEqualizerBandGains();
 
-    expect(
-      firstController.equalizerPreset,
-      PlaybackEqualizerPreset.custom,
-    );
+    expect(firstController.equalizerPreset, PlaybackEqualizerPreset.custom);
     expect(firstController.equalizerBands.first.gainDb, 4.5);
     expect(firstController.hasCustomEqualizerProfile, isTrue);
-    expect(
-      firstEngine.equalizerProfileValue.customPoints.first.gainDb,
-      4.5,
-    );
+    expect(firstEngine.equalizerProfileValue.customPoints.first.gainDb, 4.5);
     firstController.dispose();
 
     final restoredEngine = _FakeAudioEffectsEngine();
@@ -469,70 +487,73 @@ void main() {
       restoredEngine.equalizerProfileValue.customPoints.first.frequencyHz,
       60,
     );
-    expect(
-      restoredEngine.equalizerProfileValue.customPoints.first.gainDb,
-      4.5,
-    );
+    expect(restoredEngine.equalizerProfileValue.customPoints.first.gainDb, 4.5);
   });
 
-  test('rejects audio effects on unsupported engines and invalid gain',
-      () async {
-    final unsupported = PlayerController(
-      audioEngine: _NoCrossfadeAudioEngine(),
-    );
-    addTearDown(unsupported.dispose);
+  test(
+    'rejects audio effects on unsupported engines and invalid gain',
+    () async {
+      final unsupported = PlayerController(
+        audioEngine: _NoCrossfadeAudioEngine(),
+      );
+      addTearDown(unsupported.dispose);
 
-    expect(unsupported.supportsEqualizer, isFalse);
-    await expectLater(
-      unsupported.setEqualizerEnabled(true),
-      throwsA(isA<UnsupportedError>()),
-    );
-    await expectLater(
-      unsupported.setSkipSilenceEnabled(true),
-      throwsA(isA<UnsupportedError>()),
-    );
+      expect(unsupported.supportsEqualizer, isFalse);
+      await expectLater(
+        unsupported.setEqualizerEnabled(true),
+        throwsA(isA<UnsupportedError>()),
+      );
+      await expectLater(
+        unsupported.setSkipSilenceEnabled(true),
+        throwsA(isA<UnsupportedError>()),
+      );
 
-    final supported = PlayerController(audioEngine: _FakeAudioEffectsEngine());
-    addTearDown(supported.dispose);
-    await expectLater(
-      supported.setLoudnessEnhancerTargetGain(12.5),
-      throwsArgumentError,
-    );
-    await expectLater(
-      supported.setVirtualizerStrength(1001),
-      throwsArgumentError,
-    );
-  });
+      final supported = PlayerController(
+        audioEngine: _FakeAudioEffectsEngine(),
+      );
+      addTearDown(supported.dispose);
+      await expectLater(
+        supported.setLoudnessEnhancerTargetGain(12.5),
+        throwsArgumentError,
+      );
+      await expectLater(
+        supported.setVirtualizerStrength(1001),
+        throwsArgumentError,
+      );
+    },
+  );
 
-  test('applies persisted ReplayGain normalization for queue transitions',
-      () async {
-    final firstEngine = _FakePlaybackAudioEngine();
-    final firstController = PlayerController(audioEngine: firstEngine);
-    final tracks = <Track>[
-      _track('quiet', replayGainTrackDb: -6),
-      _track('loud', replayGainTrackDb: 6, replayGainAlbumDb: -3),
-    ];
+  test(
+    'applies persisted ReplayGain normalization for queue transitions',
+    () async {
+      final firstEngine = _FakePlaybackAudioEngine();
+      final firstController = PlayerController(audioEngine: firstEngine);
+      final tracks = <Track>[
+        _track('quiet', replayGainTrackDb: -6),
+        _track('loud', replayGainTrackDb: 6, replayGainAlbumDb: -3),
+      ];
 
-    await firstController.setVolume(0.5);
-    await firstController.playTrack(tracks.first, queue: tracks);
-    await firstController.setLoudnessNormalizationEnabled(true);
+      await firstController.setVolume(0.5);
+      await firstController.playTrack(tracks.first, queue: tracks);
+      await firstController.setLoudnessNormalizationEnabled(true);
 
-    expect(firstEngine.volumeValue, closeTo(0.25059, 0.0001));
-    firstEngine.emitAutomaticIndex(1);
-    await _flushAsyncWork();
-    expect(firstEngine.volumeValue, closeTo(0.99763, 0.0001));
-    await firstController.setReplayGainMode(ReplayGainMode.album);
-    expect(firstEngine.volumeValue, closeTo(0.35397, 0.0001));
-    firstController.dispose();
+      expect(firstEngine.volumeValue, closeTo(0.25059, 0.0001));
+      firstEngine.emitAutomaticIndex(1);
+      await _flushAsyncWork();
+      expect(firstEngine.volumeValue, closeTo(0.99763, 0.0001));
+      await firstController.setReplayGainMode(ReplayGainMode.album);
+      expect(firstEngine.volumeValue, closeTo(0.35397, 0.0001));
+      firstController.dispose();
 
-    final restoredEngine = _FakePlaybackAudioEngine();
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
+      final restoredEngine = _FakePlaybackAudioEngine();
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
 
-    expect(restoredController.loudnessNormalizationEnabled, isTrue);
-    expect(restoredController.replayGainMode, ReplayGainMode.album);
-  });
+      expect(restoredController.loudnessNormalizationEnabled, isTrue);
+      expect(restoredController.replayGainMode, ReplayGainMode.album);
+    },
+  );
 
   test('uses each track ReplayGain envelope during crossfade', () async {
     final engine = _FakePlaybackAudioEngine();
@@ -551,71 +572,86 @@ void main() {
     expect(engine.crossfadeVolumeFor(tracks.last), closeTo(0.99763, 0.0001));
   });
 
-  test('limits ReplayGain normalization with the selected track peak', () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
+  test(
+    'limits ReplayGain normalization with the selected track peak',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
 
-    await controller.setVolume(0.8);
-    await controller.setLoudnessNormalizationEnabled(true);
-    await controller.playTrack(
-      _track('peaked', replayGainTrackDb: 6, replayGainTrackPeak: 2),
-    );
+      await controller.setVolume(0.8);
+      await controller.setLoudnessNormalizationEnabled(true);
+      await controller.playTrack(
+        _track('peaked', replayGainTrackDb: 6, replayGainTrackPeak: 2),
+      );
 
-    expect(engine.volumeValue, 0.5);
-  });
+      expect(engine.volumeValue, 0.5);
+    },
+  );
 
-  test('persists skip intervals and clamps skip seeks to track bounds',
-      () async {
-    final firstEngine = _FakePlaybackAudioEngine();
-    final firstController = PlayerController(audioEngine: firstEngine);
-    await firstController.setSkipBackwardInterval(const Duration(seconds: 15));
-    await firstController.setSkipForwardInterval(const Duration(seconds: 45));
-    firstEngine
-      ..positionValue = const Duration(seconds: 10)
-      ..emitDuration(const Duration(seconds: 40));
+  test(
+    'persists skip intervals and clamps skip seeks to track bounds',
+    () async {
+      final firstEngine = _FakePlaybackAudioEngine();
+      final firstController = PlayerController(audioEngine: firstEngine);
+      await firstController.setSkipBackwardInterval(
+        const Duration(seconds: 15),
+      );
+      await firstController.setSkipForwardInterval(const Duration(seconds: 45));
+      firstEngine
+        ..positionValue = const Duration(seconds: 10)
+        ..emitDuration(const Duration(seconds: 40));
 
-    await firstController.skipBackward();
-    expect(firstEngine.positionValue, Duration.zero);
-    firstEngine.positionValue = const Duration(seconds: 20);
-    await firstController.skipForward();
-    expect(firstEngine.positionValue, const Duration(seconds: 40));
-    await expectLater(
-      firstController.setSkipForwardInterval(const Duration(seconds: 12)),
-      throwsArgumentError,
-    );
-    firstController.dispose();
+      await firstController.skipBackward();
+      expect(firstEngine.positionValue, Duration.zero);
+      firstEngine.positionValue = const Duration(seconds: 20);
+      await firstController.skipForward();
+      expect(firstEngine.positionValue, const Duration(seconds: 40));
+      await expectLater(
+        firstController.setSkipForwardInterval(const Duration(seconds: 12)),
+        throwsArgumentError,
+      );
+      firstController.dispose();
 
-    final restoredEngine = _FakePlaybackAudioEngine();
-    final restoredController = PlayerController(audioEngine: restoredEngine);
-    addTearDown(restoredController.dispose);
-    await restoredController.loadPersistedPlaybackSettings();
+      final restoredEngine = _FakePlaybackAudioEngine();
+      final restoredController = PlayerController(audioEngine: restoredEngine);
+      addTearDown(restoredController.dispose);
+      await restoredController.loadPersistedPlaybackSettings();
 
-    expect(restoredController.skipBackwardInterval, const Duration(seconds: 15));
-    expect(restoredController.skipForwardInterval, const Duration(seconds: 45));
-  });
+      expect(
+        restoredController.skipBackwardInterval,
+        const Duration(seconds: 15),
+      );
+      expect(
+        restoredController.skipForwardInterval,
+        const Duration(seconds: 45),
+      );
+    },
+  );
 
-  test('loads one native queue and follows gapless index transitions',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final tracks = <Track>[_track('1'), _track('2'), _track('3')];
+  test(
+    'loads one native queue and follows gapless index transitions',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final tracks = <Track>[_track('1'), _track('2'), _track('3')];
 
-    await controller.playTrack(tracks.first, queue: tracks);
+      await controller.playTrack(tracks.first, queue: tracks);
 
-    expect(engine.setQueueCalls, 1);
-    expect(engine.queue.map((track) => track.id), <String>['1', '2', '3']);
-    expect(engine.initialIndex, 0);
-    expect(controller.current?.id, '1');
-    expect(controller.playbackStartSerial, 1);
+      expect(engine.setQueueCalls, 1);
+      expect(engine.queue.map((track) => track.id), <String>['1', '2', '3']);
+      expect(engine.initialIndex, 0);
+      expect(controller.current?.id, '1');
+      expect(controller.playbackStartSerial, 1);
 
-    engine.emitAutomaticIndex(1);
+      engine.emitAutomaticIndex(1);
 
-    expect(controller.current?.id, '2');
-    expect(controller.playbackStartSerial, 2);
-    expect(engine.setQueueCalls, 1);
-  });
+      expect(controller.current?.id, '2');
+      expect(controller.playbackStartSerial, 2);
+      expect(engine.setQueueCalls, 1);
+    },
+  );
 
   test('uses native next and previous without reloading the queue', () async {
     final engine = _FakePlaybackAudioEngine();
@@ -635,44 +671,48 @@ void main() {
     expect(engine.setQueueCalls, 1);
   });
 
-  test('skips failed tracks and stops after all looped queue items fail',
-      () async {
-    final engine = _FakePlaybackAudioEngine()..loopModeValue = LoopMode.all;
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final tracks = <Track>[_track('1'), _track('2'), _track('3')];
-    await controller.playTrack(tracks.first, queue: tracks);
+  test(
+    'skips failed tracks and stops after all looped queue items fail',
+    () async {
+      final engine = _FakePlaybackAudioEngine()..loopModeValue = LoopMode.all;
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final tracks = <Track>[_track('1'), _track('2'), _track('3')];
+      await controller.playTrack(tracks.first, queue: tracks);
 
-    engine.emitError(StateError('first failed'));
-    await _flushAsyncWork();
-    expect(controller.current?.id, '2');
+      engine.emitError(StateError('first failed'));
+      await _flushAsyncWork();
+      expect(controller.current?.id, '2');
 
-    engine.emitError(StateError('second failed'));
-    await _flushAsyncWork();
-    expect(controller.current?.id, '3');
+      engine.emitError(StateError('second failed'));
+      await _flushAsyncWork();
+      expect(controller.current?.id, '3');
 
-    engine.emitError(StateError('third failed'));
-    await _flushAsyncWork();
-    expect(engine.stopCalls, 1);
-    expect(engine.currentIndex, 2);
-  });
+      engine.emitError(StateError('third failed'));
+      await _flushAsyncWork();
+      expect(engine.stopCalls, 1);
+      expect(engine.currentIndex, 2);
+    },
+  );
 
-  test('leaves playback unchanged when failed-track recovery is disabled',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final tracks = <Track>[_track('1'), _track('2')];
-    await controller.playTrack(tracks.first, queue: tracks);
-    await controller.setSkipFailedTracksEnabled(false);
+  test(
+    'leaves playback unchanged when failed-track recovery is disabled',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final tracks = <Track>[_track('1'), _track('2')];
+      await controller.playTrack(tracks.first, queue: tracks);
+      await controller.setSkipFailedTracksEnabled(false);
 
-    engine.emitError(StateError('failed'));
-    await _flushAsyncWork();
+      engine.emitError(StateError('failed'));
+      await _flushAsyncWork();
 
-    expect(controller.current?.id, '1');
-    expect(engine.stopCalls, 0);
-    expect(engine.currentIndex, 0);
-  });
+      expect(controller.current?.id, '1');
+      expect(engine.stopCalls, 0);
+      expect(engine.currentIndex, 0);
+    },
+  );
 
   test('filters network queue entries while offline', () async {
     final engine = _FakePlaybackAudioEngine();
@@ -691,10 +731,10 @@ void main() {
 
     await controller.playTrack(tracks.first, queue: tracks);
 
-    expect(
-      engine.queue.map((track) => track.id),
-      <String>['local-1', 'local-2'],
-    );
+    expect(engine.queue.map((track) => track.id), <String>[
+      'local-1',
+      'local-2',
+    ]);
     engine.emitAutomaticIndex(1);
     expect(controller.current?.id, 'local-2');
   });
@@ -721,115 +761,133 @@ void main() {
     expect(engine.initialIndex, 1);
   });
 
-  test('appends and inserts Play Next tracks without interrupting playback',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final first = _track('1');
-    final second = _track('2');
-    final third = _track('3');
-    final fourth = _track('4');
+  test(
+    'appends and inserts Play Next tracks without interrupting playback',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final first = _track('1');
+      final second = _track('2');
+      final third = _track('3');
+      final fourth = _track('4');
 
-    await controller.playTrack(first, queue: <Track>[first, second]);
-    engine.positionValue = const Duration(seconds: 19);
+      await controller.playTrack(first, queue: <Track>[first, second]);
+      engine.positionValue = const Duration(seconds: 19);
 
-    await controller.enqueueTrack(third);
-    expect(controller.queue.map((track) => track.id), <String>['1', '2', '3']);
-    expect(controller.current?.id, '1');
-    expect(engine.setQueueCalls, 2);
-    expect(engine.initialIndex, 0);
-    expect(engine.initialPosition, const Duration(seconds: 19));
-    expect(engine.playing, isTrue);
+      await controller.enqueueTrack(third);
+      expect(controller.queue.map((track) => track.id), <String>[
+        '1',
+        '2',
+        '3',
+      ]);
+      expect(controller.current?.id, '1');
+      expect(engine.setQueueCalls, 2);
+      expect(engine.initialIndex, 0);
+      expect(engine.initialPosition, const Duration(seconds: 19));
+      expect(engine.playing, isTrue);
 
-    await controller.enqueueTrack(fourth, playNext: true);
-    expect(
-      controller.queue.map((track) => track.id),
-      <String>['1', '4', '2', '3'],
-    );
-    expect(controller.current?.id, '1');
-    expect(engine.setQueueCalls, 3);
-    expect(engine.initialIndex, 0);
-    expect(engine.initialPosition, const Duration(seconds: 19));
-    expect(engine.playing, isTrue);
-  });
+      await controller.enqueueTrack(fourth, playNext: true);
+      expect(controller.queue.map((track) => track.id), <String>[
+        '1',
+        '4',
+        '2',
+        '3',
+      ]);
+      expect(controller.current?.id, '1');
+      expect(engine.setQueueCalls, 3);
+      expect(engine.initialIndex, 0);
+      expect(engine.initialPosition, const Duration(seconds: 19));
+      expect(engine.playing, isTrue);
+    },
+  );
 
-  test('queues the first track without autoplay and honors offline policy',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    addTearDown(controller.dispose);
-    final local = _track('local');
+  test(
+    'queues the first track without autoplay and honors offline policy',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final local = _track('local');
 
-    await controller.enqueueTrack(local, playNext: true);
-    expect(controller.queue, <Track>[local]);
-    expect(controller.current, local);
-    expect(engine.setQueueCalls, 0);
-    expect(engine.playing, isFalse);
+      await controller.enqueueTrack(local, playNext: true);
+      expect(controller.queue, <Track>[local]);
+      expect(controller.current, local);
+      expect(engine.setQueueCalls, 0);
+      expect(engine.playing, isFalse);
 
-    controller.setOfflineModeEnabled(true);
-    await expectLater(
-      controller.enqueueTrack(
-        _track(
-          'stream',
-          localPath: '',
-          streamUrl: 'https://media.example.test/stream.mp3',
+      controller.setOfflineModeEnabled(true);
+      await expectLater(
+        controller.enqueueTrack(
+          _track(
+            'stream',
+            localPath: '',
+            streamUrl: 'https://media.example.test/stream.mp3',
+          ),
         ),
-      ),
-      throwsA(isA<OfflinePlaybackBlockedException>()),
-    );
-    expect(controller.queue, <Track>[local]);
-  });
+        throwsA(isA<OfflinePlaybackBlockedException>()),
+      );
+      expect(controller.queue, <Track>[local]);
+    },
+  );
 
-  test('clears upcoming tracks without interrupting playback and persists it',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    final first = _track('1');
-    final second = _track('2');
-    final third = _track('3');
-    await controller.playTrack(first, queue: <Track>[first, second, third]);
-    engine.positionValue = const Duration(seconds: 41);
+  test(
+    'clears upcoming tracks without interrupting playback and persists it',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      final first = _track('1');
+      final second = _track('2');
+      final third = _track('3');
+      await controller.playTrack(first, queue: <Track>[first, second, third]);
+      engine.positionValue = const Duration(seconds: 41);
 
-    await controller.clearUpcomingTracks();
+      await controller.clearUpcomingTracks();
 
-    expect(controller.queue, <Track>[first]);
-    expect(controller.current, first);
-    expect(engine.queue, <Track>[first]);
-    expect(engine.initialIndex, 0);
-    expect(engine.initialPosition, const Duration(seconds: 41));
-    expect(engine.playing, isTrue);
-    controller.dispose();
+      expect(controller.queue, <Track>[first]);
+      expect(controller.current, first);
+      expect(engine.queue, <Track>[first]);
+      expect(engine.initialIndex, 0);
+      expect(engine.initialPosition, const Duration(seconds: 41));
+      expect(engine.playing, isTrue);
+      controller.dispose();
 
-    final restored = PlayerController(audioEngine: _FakePlaybackAudioEngine());
-    addTearDown(restored.dispose);
-    await restored.loadPersistedQueue();
-    expect(restored.queue.map((track) => track.id), <String>[first.id]);
-    expect(restored.current?.id, first.id);
-  });
+      final restored = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+      );
+      addTearDown(restored.dispose);
+      await restored.loadPersistedQueue();
+      expect(restored.queue.map((track) => track.id), <String>[first.id]);
+      expect(restored.current?.id, first.id);
+    },
+  );
 
-  test('clears the active queue, stops playback, and persists an empty queue',
-      () async {
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(audioEngine: engine);
-    final first = _track('1');
-    final second = _track('2');
-    await controller.playTrack(first, queue: <Track>[first, second]);
+  test(
+    'clears the active queue, stops playback, and persists an empty queue',
+    () async {
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(audioEngine: engine);
+      final first = _track('1');
+      final second = _track('2');
+      await controller.playTrack(first, queue: <Track>[first, second]);
 
-    await controller.clearActiveQueue();
+      await controller.clearActiveQueue();
 
-    expect(controller.queue, isEmpty);
-    expect(controller.current, isNull);
-    expect(engine.stopCalls, 1);
-    expect(engine.playing, isFalse);
-    controller.dispose();
+      expect(controller.queue, isEmpty);
+      expect(controller.current, isNull);
+      expect(engine.stopCalls, 1);
+      expect(engine.playing, isFalse);
+      controller.dispose();
 
-    final restored = PlayerController(audioEngine: _FakePlaybackAudioEngine());
-    addTearDown(restored.dispose);
-    await restored.loadPersistedQueue();
-    expect(restored.queue, isEmpty);
-    expect(restored.current, isNull);
-  });
+      final restored = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+      );
+      addTearDown(restored.dispose);
+      await restored.loadPersistedQueue();
+      expect(restored.queue, isEmpty);
+      expect(restored.current, isNull);
+    },
+  );
 
   test(
     'reconciles library metadata into active and inactive queues without losing resolved provider media',
@@ -847,7 +905,9 @@ void main() {
         externalId: 'song-1',
         streamUrl: ephemeralStream,
         streamUrlIsEphemeral: true,
-        artworkUri: Uri.parse('https://music.example.test/art/old?token=private-token'),
+        artworkUri: Uri.parse(
+          'https://music.example.test/art/old?token=private-token',
+        ),
         artworkUriIsEphemeral: true,
       );
       final inactiveQueued = _track('local-2', title: 'Original inactive');
@@ -886,9 +946,9 @@ void main() {
       expect(engine.queue.single.title, 'Updated title');
       expect(engine.initialPosition, const Duration(seconds: 27));
       expect(engine.playing, isTrue);
-      final inactiveSnapshot = controller.savedQueues.singleWhere(
-        (queue) => queue.id == savedQueue.id,
-      ).snapshot;
+      final inactiveSnapshot = controller.savedQueues
+          .singleWhere((queue) => queue.id == savedQueue.id)
+          .snapshot;
       expect(inactiveSnapshot.tracks.single.title, 'Updated inactive');
 
       final prefs = await SharedPreferences.getInstance();
@@ -942,10 +1002,10 @@ void main() {
     expect(controller.activeQueueName, 'Queue 1');
     expect(controller.queue.map((track) => track.id), <String>['1', '2']);
     expect(controller.current?.id, '2');
-    expect(
-      controller.savedQueues.map((queue) => queue.name),
-      <String>['Queue 1', 'Focus'],
-    );
+    expect(controller.savedQueues.map((queue) => queue.name), <String>[
+      'Queue 1',
+      'Focus',
+    ]);
 
     controller.dispose();
     await _flushAsyncWork();
@@ -966,7 +1026,9 @@ void main() {
   });
 
   test('persists the selected repeated occurrence in a saved queue', () async {
-    final controller = PlayerController(audioEngine: _FakePlaybackAudioEngine());
+    final controller = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+    );
     addTearDown(controller.dispose);
     final first = _track('first');
     final second = _track('second');
@@ -1046,7 +1108,10 @@ void main() {
       addTearDown(restoredController.dispose);
       await restoredController.loadPersistedQueue();
 
-      expect(restoredController.queue.every((track) => !track.isPlayable), isTrue);
+      expect(
+        restoredController.queue.every((track) => !track.isPlayable),
+        isTrue,
+      );
       await restoredController.togglePlayPause();
 
       expect(restoredEngine.queue, hasLength(2));
@@ -1073,10 +1138,10 @@ void main() {
       sourceId: 'self-hosted',
     );
     final localTrack = _track('local');
-    await controller.playTrack(privateTrack, queue: <Track>[
+    await controller.playTrack(
       privateTrack,
-      localTrack,
-    ]);
+      queue: <Track>[privateTrack, localTrack],
+    );
 
     await controller.removeTracksFromSource('self-hosted');
 
@@ -1141,8 +1206,7 @@ void main() {
           artworkUri: Uri.file('/private/cache/$oldSecret-1.png'),
           artworkUriIsEphemeral: true,
           providerArtworkId: 'cover-1',
-          streamUrl:
-              'https://music.example.test/song-1?key=$oldSecret',
+          streamUrl: 'https://music.example.test/song-1?key=$oldSecret',
           streamUrlIsEphemeral: true,
           sourceId: 'self-hosted',
           externalId: 'song-1',
@@ -1153,17 +1217,13 @@ void main() {
           artworkUri: Uri.file('/private/cache/$oldSecret-2.png'),
           artworkUriIsEphemeral: true,
           providerArtworkId: 'cover-2',
-          streamUrl:
-              'https://music.example.test/song-2?key=$oldSecret',
+          streamUrl: 'https://music.example.test/song-2?key=$oldSecret',
           streamUrlIsEphemeral: true,
           sourceId: 'self-hosted',
           externalId: 'song-2',
         ),
       ];
-      await controller.playTrack(
-        privateTracks.first,
-        queue: privateTracks,
-      );
+      await controller.playTrack(privateTracks.first, queue: privateTracks);
       await _flushAsyncWork();
       engine.positionValue = const Duration(seconds: 43);
 
@@ -1176,9 +1236,7 @@ void main() {
       expect(engine.initialPosition, const Duration(seconds: 43));
       expect(engine.playing, isTrue);
       expect(
-        engine.queue.every(
-          (track) => track.streamUrl!.contains(newSecret),
-        ),
+        engine.queue.every((track) => track.streamUrl!.contains(newSecret)),
         isTrue,
       );
       expect(
@@ -1211,38 +1269,41 @@ void main() {
     },
   );
 
-  test('stops a rotated source when its current track cannot be resolved',
-      () async {
-    const oldSecret = 'retired-api-key';
-    final engine = _FakePlaybackAudioEngine();
-    final controller = PlayerController(
-      audioEngine: engine,
-      trackResolver: (track) async => throw StateError('Provider unavailable'),
-    );
-    addTearDown(controller.dispose);
-    final privateTrack = Track(
-      id: 'private',
-      title: 'Private',
-      streamUrl: 'https://music.example.test/private?key=$oldSecret',
-      streamUrlIsEphemeral: true,
-      sourceId: 'self-hosted',
-      externalId: 'song-1',
-    );
-    await controller.playTrack(privateTrack, queue: <Track>[privateTrack]);
-    await _flushAsyncWork();
+  test(
+    'stops a rotated source when its current track cannot be resolved',
+    () async {
+      const oldSecret = 'retired-api-key';
+      final engine = _FakePlaybackAudioEngine();
+      final controller = PlayerController(
+        audioEngine: engine,
+        trackResolver: (track) async =>
+            throw StateError('Provider unavailable'),
+      );
+      addTearDown(controller.dispose);
+      final privateTrack = Track(
+        id: 'private',
+        title: 'Private',
+        streamUrl: 'https://music.example.test/private?key=$oldSecret',
+        streamUrlIsEphemeral: true,
+        sourceId: 'self-hosted',
+        externalId: 'song-1',
+      );
+      await controller.playTrack(privateTrack, queue: <Track>[privateTrack]);
+      await _flushAsyncWork();
 
-    await controller.refreshTracksFromSource('self-hosted');
+      await controller.refreshTracksFromSource('self-hosted');
 
-    expect(engine.stopCalls, 1);
-    expect(engine.setQueueCalls, 1);
-    expect(engine.playing, isFalse);
-    expect(controller.current?.streamUrl, isNull);
-    expect(controller.current?.isPlayable, isFalse);
-    final prefs = await SharedPreferences.getInstance();
-    final snapshot = prefs.getString('aethertune.player_queue.v1')!;
-    expect(snapshot, isNot(contains(oldSecret)));
-    expect(snapshot, isNot(contains('music.example.test')));
-  });
+      expect(engine.stopCalls, 1);
+      expect(engine.setQueueCalls, 1);
+      expect(engine.playing, isFalse);
+      expect(controller.current?.streamUrl, isNull);
+      expect(controller.current?.isPlayable, isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      final snapshot = prefs.getString('aethertune.player_queue.v1')!;
+      expect(snapshot, isNot(contains(oldSecret)));
+      expect(snapshot, isNot(contains('music.example.test')));
+    },
+  );
 
   test('isolates the current source for stop-at-end behavior', () async {
     final engine = _FakePlaybackAudioEngine();
@@ -1264,30 +1325,32 @@ void main() {
     expect(controller.stopAtEndOfTrackEnabled, isFalse);
   });
 
-  test('publishes sleep timer state to a system-media capable engine',
-      () async {
-    final now = DateTime.utc(2026, 7, 20, 12);
-    final engine = _FakeSystemMediaPlaybackAudioEngine();
-    final controller = PlayerController(
-      audioEngine: engine,
-      clock: () => now,
-    );
-    addTearDown(controller.dispose);
+  test(
+    'publishes sleep timer state to a system-media capable engine',
+    () async {
+      final now = DateTime.utc(2026, 7, 20, 12);
+      final engine = _FakeSystemMediaPlaybackAudioEngine();
+      final controller = PlayerController(
+        audioEngine: engine,
+        clock: () => now,
+      );
+      addTearDown(controller.dispose);
 
-    controller.startSleepTimer(const Duration(minutes: 20));
-    expect(engine.sleepTimerEndsAt, now.add(const Duration(minutes: 20)));
-    expect(engine.sleepTimerStopsAtEndOfTrack, isFalse);
-    expect(controller.sleepTimerRemaining, const Duration(minutes: 20));
+      controller.startSleepTimer(const Duration(minutes: 20));
+      expect(engine.sleepTimerEndsAt, now.add(const Duration(minutes: 20)));
+      expect(engine.sleepTimerStopsAtEndOfTrack, isFalse);
+      expect(controller.sleepTimerRemaining, const Duration(minutes: 20));
 
-    controller.stopAtEndOfTrack();
-    expect(engine.sleepTimerEndsAt, isNull);
-    expect(engine.sleepTimerStopsAtEndOfTrack, isTrue);
-    expect(controller.sleepTimerRemaining, isNull);
+      controller.stopAtEndOfTrack();
+      expect(engine.sleepTimerEndsAt, isNull);
+      expect(engine.sleepTimerStopsAtEndOfTrack, isTrue);
+      expect(controller.sleepTimerRemaining, isNull);
 
-    controller.cancelSleepTimer();
-    expect(engine.sleepTimerEndsAt, isNull);
-    expect(engine.sleepTimerStopsAtEndOfTrack, isFalse);
-  });
+      controller.cancelSleepTimer();
+      expect(engine.sleepTimerEndsAt, isNull);
+      expect(engine.sleepTimerStopsAtEndOfTrack, isFalse);
+    },
+  );
 }
 
 Future<void> _flushAsyncWork() async {
@@ -1323,11 +1386,11 @@ class _FakePlaybackAudioEngine
         PitchPlaybackAudioEngine,
         PlaybackErrorAudioEngine {
   final _stateController = StreamController<Object?>.broadcast(sync: true);
-  final _durationController =
-      StreamController<Duration?>.broadcast(sync: true);
+  final _durationController = StreamController<Duration?>.broadcast(sync: true);
   final _positionController = StreamController<Duration>.broadcast(sync: true);
-  final _processingController =
-      StreamController<ProcessingState>.broadcast(sync: true);
+  final _processingController = StreamController<ProcessingState>.broadcast(
+    sync: true,
+  );
   final _indexController = StreamController<int?>.broadcast(sync: true);
   final _errorController = StreamController<Object>.broadcast(sync: true);
 
@@ -1518,9 +1581,7 @@ class _FakePlaybackAudioEngine
   }
 
   @override
-  void setCrossfadeTrackVolumeResolver(
-    CrossfadeTrackVolumeResolver? resolver,
-  ) {
+  void setCrossfadeTrackVolumeResolver(CrossfadeTrackVolumeResolver? resolver) {
     crossfadeTrackVolumeResolver = resolver;
   }
 
@@ -1567,9 +1628,7 @@ class _FakeAudioEffectsEngine extends _FakePlaybackAudioEngine
     implements AudioEffectsPlaybackAudioEngine, VirtualizerPlaybackAudioEngine {
   bool equalizerEnabledValue = false;
   PlaybackEqualizerProfile equalizerProfileValue =
-      const PlaybackEqualizerProfile(
-        preset: PlaybackEqualizerPreset.flat,
-      );
+      const PlaybackEqualizerProfile(preset: PlaybackEqualizerPreset.flat);
   bool loudnessEnhancerEnabledValue = false;
   double loudnessEnhancerTargetGainValue = 0;
   int loudnessEnhancerEnhancerSetCalls = 0;
@@ -1672,8 +1731,7 @@ class _FakeMediaLibraryBrowseEngine extends _FakePlaybackAudioEngine
   List<Track> browseTracks = <Track>[];
   List<MediaLibraryBrowsePlaylist> browsePlaylists =
       <MediaLibraryBrowsePlaylist>[];
-  List<MediaLibraryBrowseFolder> browseFolders =
-      <MediaLibraryBrowseFolder>[];
+  List<MediaLibraryBrowseFolder> browseFolders = <MediaLibraryBrowseFolder>[];
   MediaLibraryTrackSelectionHandler? _onTrackSelected;
   MediaLibraryPlaylistTrackSelectionHandler? _onPlaylistTrackSelected;
 

@@ -55,7 +55,8 @@ final class PodcastChapterHostPolicy extends ChangeNotifier {
   static const _maximumHistoryRecords = 64;
   static const _maximumHistoryRecordsPerSubscription = 8;
 
-  PodcastChapterHostPolicy({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  PodcastChapterHostPolicy({DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
 
   final DateTime Function() _clock;
   final Set<String> _approvedHosts = <String>{};
@@ -77,10 +78,11 @@ final class PodcastChapterHostPolicy extends ChangeNotifier {
     if (subscriptionId.trim().isEmpty) {
       return const <PodcastChapterHostApproval>[];
     }
-    final history = _approvalHistory
-        .where((entry) => entry.subscriptionId == subscriptionId)
-        .toList()
-      ..sort((left, right) => right.approvedAt.compareTo(left.approvedAt));
+    final history =
+        _approvalHistory
+            .where((entry) => entry.subscriptionId == subscriptionId)
+            .toList()
+          ..sort((left, right) => right.approvedAt.compareTo(left.approvedAt));
     return List<PodcastChapterHostApproval>.unmodifiable(history);
   }
 
@@ -125,7 +127,8 @@ final class PodcastChapterHostPolicy extends ChangeNotifier {
     String value,
   ) async {
     final normalizedSubscriptionId = subscriptionId.trim();
-    if (normalizedSubscriptionId.isEmpty || normalizedSubscriptionId.length > 256) {
+    if (normalizedSubscriptionId.isEmpty ||
+        normalizedSubscriptionId.length > 256) {
       throw const FormatException('Podcast subscription is invalid.');
     }
     await _approveHost(value, subscriptionId: normalizedSubscriptionId);
@@ -140,7 +143,9 @@ final class PodcastChapterHostPolicy extends ChangeNotifier {
     if (!wasApproved && _approvedHosts.length >= _maximumHosts) {
       throw const FormatException('Only 32 chapter hosts can be approved.');
     }
-    final previousHistory = List<PodcastChapterHostApproval>.from(_approvalHistory);
+    final previousHistory = List<PodcastChapterHostApproval>.from(
+      _approvalHistory,
+    );
     if (!wasApproved) {
       _approvedHosts.add(host);
     }
@@ -202,8 +207,7 @@ final class PodcastChapterHostPolicy extends ChangeNotifier {
         approvedAt: _clock().toUtc(),
       ),
       ..._approvalHistory.where(
-        (entry) =>
-            entry.subscriptionId != subscriptionId || entry.host != host,
+        (entry) => entry.subscriptionId != subscriptionId || entry.host != host,
       ),
     ];
     _approvalHistory
@@ -246,8 +250,8 @@ final class PodcastChapterHostPolicy extends ChangeNotifier {
             hosts: hosts is List ? hosts.whereType<String>() : const <String>[],
             history: history is List
                 ? history
-                    .map(PodcastChapterHostApproval.tryFromJson)
-                    .whereType<PodcastChapterHostApproval>()
+                      .map(PodcastChapterHostApproval.tryFromJson)
+                      .whereType<PodcastChapterHostApproval>()
                 : const <PodcastChapterHostApproval>[],
           );
         }

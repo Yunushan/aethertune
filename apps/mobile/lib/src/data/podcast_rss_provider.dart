@@ -74,13 +74,13 @@ class PodcastRssProvider implements MusicSourceProvider {
     PodcastChapterLoader? chapterLoader,
     ExternalPodcastChapterUriApproval? isExternalChapterUriApproved,
     PodcastExternalChapterDocumentCache? externalChapterDocumentCache,
-  })  : id = id ?? 'podcast-${Track.stableLocalId(feedUri.toString())}',
-        _feedLoader = feedLoader ?? _loadPodcastFeed,
-        _chapterLoader = chapterLoader ?? _loadPodcastChapters,
-        _isExternalChapterUriApproved =
-            isExternalChapterUriApproved ?? _denyExternalChapterUri,
-        _externalChapterDocumentCache =
-            externalChapterDocumentCache ?? _defaultChapterCache;
+  }) : id = id ?? 'podcast-${Track.stableLocalId(feedUri.toString())}',
+       _feedLoader = feedLoader ?? _loadPodcastFeed,
+       _chapterLoader = chapterLoader ?? _loadPodcastChapters,
+       _isExternalChapterUriApproved =
+           isExternalChapterUriApproved ?? _denyExternalChapterUri,
+       _externalChapterDocumentCache =
+           externalChapterDocumentCache ?? _defaultChapterCache;
 
   final Uri feedUri;
   final PodcastFeedLoader _feedLoader;
@@ -100,23 +100,23 @@ class PodcastRssProvider implements MusicSourceProvider {
 
   @override
   Set<MusicSourceCapability> get capabilities => const <MusicSourceCapability>{
-        MusicSourceCapability.metadataSearch,
-        MusicSourceCapability.streamResolution,
-        MusicSourceCapability.directPlayback,
-        MusicSourceCapability.offlineCache,
-        MusicSourceCapability.downloads,
-        MusicSourceCapability.subscriptions,
-      };
+    MusicSourceCapability.metadataSearch,
+    MusicSourceCapability.streamResolution,
+    MusicSourceCapability.directPlayback,
+    MusicSourceCapability.offlineCache,
+    MusicSourceCapability.downloads,
+    MusicSourceCapability.subscriptions,
+  };
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: feedUri.host.isEmpty ? const <String>[] : <String>[
-          feedUri.host,
-        ],
-        dataSent: const <String>['feed request'],
-        cachesMedia: true,
-        supportsDownloads: true,
-      );
+    networkDomains: feedUri.host.isEmpty
+        ? const <String>[]
+        : <String>[feedUri.host],
+    dataSent: const <String>['feed request'],
+    cachesMedia: true,
+    supportsDownloads: true,
+  );
 
   @override
   Future<List<Track>> search(String query) async {
@@ -125,15 +125,16 @@ class PodcastRssProvider implements MusicSourceProvider {
     final tracks = feed.episodes
         .map((episode) => episode.toTrack(sourceId: id, feed: feed))
         .where((track) {
-      if (normalized.isEmpty) {
-        return true;
-      }
+          if (normalized.isEmpty) {
+            return true;
+          }
 
-      return track.title.toLowerCase().contains(normalized) ||
-          track.artist.toLowerCase().contains(normalized) ||
-          track.album.toLowerCase().contains(normalized) ||
-          track.genre.toLowerCase().contains(normalized);
-    }).toList(growable: false);
+          return track.title.toLowerCase().contains(normalized) ||
+              track.artist.toLowerCase().contains(normalized) ||
+              track.album.toLowerCase().contains(normalized) ||
+              track.genre.toLowerCase().contains(normalized);
+        })
+        .toList(growable: false);
 
     return tracks;
   }
@@ -180,10 +181,10 @@ class PodcastRssProvider implements MusicSourceProvider {
         }
         episodes.add(
           episode.withChapters(
-            TrackChapter.normalize(
-              <TrackChapter>[...episode.chapters, ...chapters],
-              maximum: episode.duration,
-            ),
+            TrackChapter.normalize(<TrackChapter>[
+              ...episode.chapters,
+              ...chapters,
+            ], maximum: episode.duration),
           ),
         );
       } on Object {
@@ -298,10 +299,7 @@ final class PodcastEpisode {
   final Uri? artworkUri;
   final DateTime? publishedAt;
 
-  Track toTrack({
-    required String sourceId,
-    required PodcastRssFeed feed,
-  }) {
+  Track toTrack({required String sourceId, required PodcastRssFeed feed}) {
     return Track(
       id: Track.stableLocalId('$sourceId|$id|$streamUri'),
       title: title,
@@ -339,10 +337,7 @@ final class PodcastEpisode {
   }
 }
 
-PodcastRssFeed parsePodcastRssFeed(
-  String xml, {
-  required Uri feedUri,
-}) {
+PodcastRssFeed parsePodcastRssFeed(String xml, {required Uri feedUri}) {
   try {
     final document = XmlDocument.parse(xml);
     final channel = _firstDescendant(document.rootElement, 'channel');
@@ -359,12 +354,7 @@ PodcastRssFeed parsePodcastRssFeed(
       author: feedAuthor,
       artworkUri: _imageUri(channel),
       episodes: _itemElements(channel)
-          .map(
-            (item) => _episodeFromItem(
-              item,
-              feedAuthor: feedAuthor,
-            ),
-          )
+          .map((item) => _episodeFromItem(item, feedAuthor: feedAuthor))
           .whereType<PodcastEpisode>()
           .toList(growable: false),
     );
@@ -468,11 +458,7 @@ _PodcastTranscript? _transcriptFromItem(XmlElement item) {
 }
 
 final class _PodcastTranscript {
-  const _PodcastTranscript({
-    required this.uri,
-    this.type,
-    this.language,
-  });
+  const _PodcastTranscript({required this.uri, this.type, this.language});
 
   final Uri uri;
   final String? type;
@@ -484,7 +470,8 @@ Uri? _chapterDocumentUri(XmlElement item) {
   final value = chapters?.getAttribute('url')?.trim();
   final uri = value == null || value.isEmpty ? null : Uri.tryParse(value);
   if (uri == null ||
-      (uri.scheme.toLowerCase() != 'http' && uri.scheme.toLowerCase() != 'https')) {
+      (uri.scheme.toLowerCase() != 'http' &&
+          uri.scheme.toLowerCase() != 'https')) {
     return null;
   }
   return uri;
@@ -496,7 +483,9 @@ List<TrackChapter> parsePodcastingChapterDocument(
 }) {
   final decoded = jsonDecode(document);
   if (decoded is! Map || decoded['chapters'] is! List) {
-    throw const FormatException('Podcast chapter document must contain chapters.');
+    throw const FormatException(
+      'Podcast chapter document must contain chapters.',
+    );
   }
 
   final chapters = <TrackChapter>[];
@@ -508,10 +497,13 @@ List<TrackChapter> parsePodcastingChapterDocument(
     final seconds = rawStart is num
         ? rawStart.toDouble()
         : rawStart is String
-            ? double.tryParse(rawStart.trim())
-            : null;
+        ? double.tryParse(rawStart.trim())
+        : null;
     final title = value['title'];
-    if (seconds == null || !seconds.isFinite || seconds < 0 || title is! String) {
+    if (seconds == null ||
+        !seconds.isFinite ||
+        seconds < 0 ||
+        title is! String) {
       continue;
     }
 
@@ -547,10 +539,11 @@ List<TrackChapter> _inlineChapters(
       }
 
       final start = _parseChapterStart(chapter.getAttribute('start'));
-      final title = (chapter.getAttribute('title') ??
-              chapter.getAttribute('name') ??
-              chapter.innerText)
-          .trim();
+      final title =
+          (chapter.getAttribute('title') ??
+                  chapter.getAttribute('name') ??
+                  chapter.innerText)
+              .trim();
       if (start == null || title.isEmpty) {
         continue;
       }

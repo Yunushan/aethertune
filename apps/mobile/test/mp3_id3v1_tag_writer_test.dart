@@ -10,7 +10,9 @@ void main() {
   late Directory temporaryDirectory;
 
   setUp(() async {
-    temporaryDirectory = await Directory.systemTemp.createTemp('aethertune-id3-');
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'aethertune-id3-',
+    );
   });
 
   tearDown(() async {
@@ -34,7 +36,12 @@ void main() {
 
     var bytes = await file.readAsBytes();
     expect(_audioPayload(bytes), <int>[1, 2, 3]);
-    expect(String.fromCharCodes(bytes.sublist(bytes.length - 128, bytes.length - 125)), 'TAG');
+    expect(
+      String.fromCharCodes(
+        bytes.sublist(bytes.length - 128, bytes.length - 125),
+      ),
+      'TAG',
+    );
     expect(_field(bytes, 3, 30), 'A title');
     expect(_field(bytes, 33, 30), 'An artist');
     expect(_field(bytes, 63, 30), 'An album');
@@ -90,17 +97,17 @@ void main() {
     final existingFrames = <int>[
       ..._id3v23Frame('TIT2', <int>[3, ...utf8.encode('Old title')]),
       ..._id3v23Frame('TXXX', <int>[3, ...utf8.encode('CUSTOM-FRAME')]),
-      ..._id3v23Frame(
-        'APIC',
-        <int>[3, ...ascii.encode('image/jpeg'), 0, 3, 0, 0xda, 0x7a],
-      ),
+      ..._id3v23Frame('APIC', <int>[
+        3,
+        ...ascii.encode('image/jpeg'),
+        0,
+        3,
+        0,
+        0xda,
+        0x7a,
+      ]),
     ];
-    await file.writeAsBytes(<int>[
-      ..._id3v23Tag(existingFrames),
-      9,
-      8,
-      7,
-    ]);
+    await file.writeAsBytes(<int>[..._id3v23Tag(existingFrames), 9, 8, 7]);
 
     await const Mp3Id3v1TagWriter().write(
       path: file.path,
@@ -116,46 +123,34 @@ void main() {
     expect(_containsBytes(bytes, <int>[0xda, 0x7a]), isTrue);
   });
 
-  test('updates supported ID3v2.4 tags without dropping custom frames',
-      () async {
-    final file = File('${temporaryDirectory.path}/v24.mp3');
-    final frames = <int>[
-      ..._id3v24Frame('TIT2', <int>[3, ...utf8.encode('Old title')]),
-      ..._id3v24Frame('TXXX', <int>[3, ...utf8.encode('V24-CUSTOM')]),
-    ];
-    await file.writeAsBytes(<int>[..._id3v24Tag(frames), 6, 5, 4]);
+  test(
+    'updates supported ID3v2.4 tags without dropping custom frames',
+    () async {
+      final file = File('${temporaryDirectory.path}/v24.mp3');
+      final frames = <int>[
+        ..._id3v24Frame('TIT2', <int>[3, ...utf8.encode('Old title')]),
+        ..._id3v24Frame('TXXX', <int>[3, ...utf8.encode('V24-CUSTOM')]),
+      ];
+      await file.writeAsBytes(<int>[..._id3v24Tag(frames), 6, 5, 4]);
 
-    await const Mp3Id3v1TagWriter().write(
-      path: file.path,
-      title: 'Updated v2.4',
-      artist: 'Artist',
-      album: 'Album',
-      genre: 'Electronic',
-    );
+      await const Mp3Id3v1TagWriter().write(
+        path: file.path,
+        title: 'Updated v2.4',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Electronic',
+      );
 
-    final bytes = await file.readAsBytes();
-    expect(bytes[3], 4);
-    expect(_audioPayload(bytes), <int>[6, 5, 4]);
-    expect(_containsBytes(bytes, ascii.encode('V24-CUSTOM')), isTrue);
-  });
+      final bytes = await file.readAsBytes();
+      expect(bytes[3], 4);
+      expect(_audioPayload(bytes), <int>[6, 5, 4]);
+      expect(_containsBytes(bytes, ascii.encode('V24-CUSTOM')), isTrue);
+    },
+  );
 
   test('leaves unsupported ID3v2 layouts untouched', () async {
     final file = File('${temporaryDirectory.path}/unsupported.mp3');
-    final original = <int>[
-      0x49,
-      0x44,
-      0x33,
-      3,
-      0,
-      0x80,
-      0,
-      0,
-      0,
-      0,
-      1,
-      2,
-      3,
-    ];
+    final original = <int>[0x49, 0x44, 0x33, 3, 0, 0x80, 0, 0, 0, 0, 1, 2, 3];
     await file.writeAsBytes(original);
 
     await expectLater(
@@ -188,15 +183,14 @@ void main() {
 
 String _field(List<int> bytes, int offset, int length) {
   final tagStart = bytes.length - 128;
-  return String.fromCharCodes(bytes.sublist(tagStart + offset, tagStart + offset + length))
-      .replaceAll(RegExp(r'\x00+$'), '');
+  return String.fromCharCodes(
+    bytes.sublist(tagStart + offset, tagStart + offset + length),
+  ).replaceAll(RegExp(r'\x00+$'), '');
 }
 
 List<int> _audioPayload(List<int> bytes) {
-  final tagSize = (bytes[6] << 21) |
-      (bytes[7] << 14) |
-      (bytes[8] << 7) |
-      bytes[9];
+  final tagSize =
+      (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
   return bytes.sublist(10 + tagSize, bytes.length - 128);
 }
 

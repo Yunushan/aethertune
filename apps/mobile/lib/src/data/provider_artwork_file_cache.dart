@@ -81,16 +81,12 @@ final class ProviderArtworkFileCache {
 
   Future<Directory> _providerDirectory(String sourceId) async {
     final root = await _artworkDirectory();
-    return Directory(
-      p.join(root.path, Track.stableLocalId(sourceId.trim())),
-    );
+    return Directory(p.join(root.path, Track.stableLocalId(sourceId.trim())));
   }
 
   Future<Directory> _artworkDirectory() async {
     final cacheRoot = await (_cacheRootRequest ??= _cacheRootLoader());
-    return Directory(
-      p.join(cacheRoot.path, 'aethertune', 'provider_artwork'),
-    );
+    return Directory(p.join(cacheRoot.path, 'aethertune', 'provider_artwork'));
   }
 
   Future<void> _prune({required File keep}) async {

@@ -11,7 +11,9 @@ void main() {
   late Directory temporaryDirectory;
 
   setUp(() async {
-    temporaryDirectory = await Directory.systemTemp.createTemp('aethertune-ogg-');
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'aethertune-ogg-',
+    );
   });
 
   tearDown(() async {
@@ -20,60 +22,68 @@ void main() {
     }
   });
 
-  test('writes Vorbis comments, preserves custom comments, and keeps audio pages',
-      () async {
-    final file = File('${temporaryDirectory.path}/unicode.ogg');
-    final audioPage = _oggPage(
-      <List<int>>[
-        <int>[0xde, 0xad, 0xbe, 0xef, 1, 2, 3],
-      ],
-      serial: 19,
-      sequence: 2,
-    );
-    await file.writeAsBytes(<int>[
-      ..._identificationPage(serial: 19),
-      ..._commentPage(
-        serial: 19,
-        comments: <String>[
-          'TITLE=Old title',
-          'CHAPTER001=00:00:01.000',
-          'CHAPTER001NAME=Existing chapter',
-          'MUSICBRAINZ_TRACKID=external-id',
+  test(
+    'writes Vorbis comments, preserves custom comments, and keeps audio pages',
+    () async {
+      final file = File('${temporaryDirectory.path}/unicode.ogg');
+      final audioPage = _oggPage(
+        <List<int>>[
+          <int>[0xde, 0xad, 0xbe, 0xef, 1, 2, 3],
         ],
-      ),
-      ...audioPage,
-    ]);
+        serial: 19,
+        sequence: 2,
+      );
+      await file.writeAsBytes(<int>[
+        ..._identificationPage(serial: 19),
+        ..._commentPage(
+          serial: 19,
+          comments: <String>[
+            'TITLE=Old title',
+            'CHAPTER001=00:00:01.000',
+            'CHAPTER001NAME=Existing chapter',
+            'MUSICBRAINZ_TRACKID=external-id',
+          ],
+        ),
+        ...audioPage,
+      ]);
 
-    await const OggVorbisCommentWriter().write(
-      path: file.path,
-      title: 'Nehir Şarkısı',
-      artist: 'Björk',
-      album: 'Canlı Kayıt',
-      albumArtist: 'Björk Ensemble',
-      year: 2024,
-      trackNumber: 7,
-      genre: 'Türkçe fusion',
-    );
+      await const OggVorbisCommentWriter().write(
+        path: file.path,
+        title: 'Nehir Şarkısı',
+        artist: 'Björk',
+        album: 'Canlı Kayıt',
+        albumArtist: 'Björk Ensemble',
+        year: 2024,
+        trackNumber: 7,
+        genre: 'Türkçe fusion',
+      );
 
-    final result = await const LocalFolderScanner().scan(
-      temporaryDirectory.path,
-      importedAt: DateTime.utc(2026, 1, 1),
-    );
-    final track = result.tracks.single;
-    expect(track.title, 'Nehir Şarkısı');
-    expect(track.artist, 'Björk');
-    expect(track.album, 'Canlı Kayıt');
-    expect(track.albumArtist, 'Björk Ensemble');
-    expect(track.year, 2024);
-    expect(track.trackNumber, 7);
-    expect(track.genre, 'Türkçe fusion');
+      final result = await const LocalFolderScanner().scan(
+        temporaryDirectory.path,
+        importedAt: DateTime.utc(2026, 1, 1),
+      );
+      final track = result.tracks.single;
+      expect(track.title, 'Nehir Şarkısı');
+      expect(track.artist, 'Björk');
+      expect(track.album, 'Canlı Kayıt');
+      expect(track.albumArtist, 'Björk Ensemble');
+      expect(track.year, 2024);
+      expect(track.trackNumber, 7);
+      expect(track.genre, 'Türkçe fusion');
 
-    final bytes = await file.readAsBytes();
-    expect(_containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')), isTrue);
-    expect(_containsBytes(bytes, ascii.encode('CHAPTER001NAME=Existing chapter')), isTrue);
-    expect(bytes.sublist(bytes.length - audioPage.length), audioPage);
-    expect(_secondPageHasValidChecksum(bytes), isTrue);
-  });
+      final bytes = await file.readAsBytes();
+      expect(
+        _containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')),
+        isTrue,
+      );
+      expect(
+        _containsBytes(bytes, ascii.encode('CHAPTER001NAME=Existing chapter')),
+        isTrue,
+      );
+      expect(bytes.sublist(bytes.length - audioPage.length), audioPage);
+      expect(_secondPageHasValidChecksum(bytes), isTrue);
+    },
+  );
 
   test('writes standard OpusTags comment metadata', () async {
     final file = File('${temporaryDirectory.path}/podcast.opus');
@@ -84,7 +94,13 @@ void main() {
         opus: true,
         comments: <String>['TITLE=Old episode'],
       ),
-      ..._oggPage(<List<int>>[<int>[9, 8, 7]], serial: 23, sequence: 2),
+      ..._oggPage(
+        <List<int>>[
+          <int>[9, 8, 7],
+        ],
+        serial: 23,
+        sequence: 2,
+      ),
     ]);
 
     await const OggVorbisCommentWriter().write(
@@ -125,7 +141,13 @@ void main() {
           'MUSICBRAINZ_TRACKID=external-id',
         ],
       ),
-      ..._oggPage(<List<int>>[<int>[9, 8, 7]], serial: 29, sequence: 2),
+      ..._oggPage(
+        <List<int>>[
+          <int>[9, 8, 7],
+        ],
+        serial: 29,
+        sequence: 2,
+      ),
     ]);
 
     await const OggVorbisCommentWriter().write(
@@ -143,9 +165,9 @@ void main() {
       ],
     );
 
-    final track = (await const LocalFolderScanner().scan(temporaryDirectory.path))
-        .tracks
-        .single;
+    final track = (await const LocalFolderScanner().scan(
+      temporaryDirectory.path,
+    )).tracks.single;
     final bytes = await file.readAsBytes();
     expect(track.chapters.map((chapter) => chapter.title), <String>[
       'Opening',
@@ -155,7 +177,10 @@ void main() {
       track.chapters[1].start,
       const Duration(seconds: 42, milliseconds: 250),
     );
-    expect(_containsBytes(bytes, ascii.encode('CHAPTER001NAME=Old chapter')), isFalse);
+    expect(
+      _containsBytes(bytes, ascii.encode('CHAPTER001NAME=Old chapter')),
+      isFalse,
+    );
     expect(
       _containsBytes(bytes, ascii.encode('MUSICBRAINZ_TRACKID=external-id')),
       isTrue,
@@ -210,12 +235,7 @@ List<int> _identificationPage({required int serial, bool opus = false}) {
   final packet = opus
       ? <int>[...'OpusHead'.codeUnits, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0]
       : <int>[1, ...'vorbis'.codeUnits, 0, 0, 0, 0];
-  return _oggPage(
-    <List<int>>[packet],
-    serial: serial,
-    sequence: 0,
-    bos: true,
-  );
+  return _oggPage(<List<int>>[packet], serial: serial, sequence: 0, bos: true);
 }
 
 List<int> _commentPage({
@@ -309,10 +329,8 @@ bool _secondPageHasValidChecksum(List<int> bytes) {
   final firstPageEnd = _pageEnd(bytes, 0);
   final secondPageEnd = _pageEnd(bytes, firstPageEnd);
   final page = List<int>.from(bytes.sublist(firstPageEnd, secondPageEnd));
-  final stored = page[22] |
-      (page[23] << 8) |
-      (page[24] << 16) |
-      (page[25] << 24);
+  final stored =
+      page[22] | (page[23] << 8) | (page[24] << 16) | (page[25] << 24);
   page[22] = 0;
   page[23] = 0;
   page[24] = 0;

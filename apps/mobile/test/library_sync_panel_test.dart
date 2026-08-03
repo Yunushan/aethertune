@@ -123,9 +123,7 @@ void main() {
       find.byKey(const Key('library-sync-profile-device-name')),
       'Pocket player',
     );
-    await tester.tap(
-      find.byKey(const Key('library-sync-profile-avatar-tone')),
-    );
+    await tester.tap(find.byKey(const Key('library-sync-profile-avatar-tone')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Emerald').last);
     await tester.pumpAndSettle();
@@ -252,8 +250,10 @@ void main() {
 
     expect(gateway.pushedBaseRevisions, <int>[0, 4]);
     expect(sync.lastKnownRevision, 5);
-    expect(find.textContaining('Replaced server with revision 5'),
-        findsOneWidget);
+    expect(
+      find.textContaining('Replaced server with revision 5'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -264,10 +264,15 @@ void main() {
     final remoteLibrary = LibraryStore();
     await remoteLibrary.load();
     await remoteLibrary.addTracks(<Track>[
-      Track(id: 'remote', title: 'Remote track', streamUrl: 'https://example.test/audio.mp3'),
+      Track(
+        id: 'remote',
+        title: 'Remote track',
+        streamUrl: 'https://example.test/audio.mp3',
+      ),
     ]);
-    final remoteSnapshot = jsonDecode(remoteLibrary.exportSyncSnapshotJson())
-        as Map<String, dynamic>;
+    final remoteSnapshot =
+        jsonDecode(remoteLibrary.exportSyncSnapshotJson())
+            as Map<String, dynamic>;
 
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final localLibrary = LibraryStore();
@@ -388,7 +393,10 @@ void main() {
     expect(gateway.deletedBaseRevisions, <int>[2]);
     expect(library.tracks.single.id, 'local');
     expect(sync.automaticUploadEnabled, isFalse);
-    expect(find.textContaining('Deleted server snapshot at revision 3'), findsOneWidget);
+    expect(
+      find.textContaining('Deleted server snapshot at revision 3'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -434,8 +442,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows and manually refreshes a joined listen-together session',
-      (tester) async {
+  testWidgets('shows and manually refreshes a joined listen-together session', (
+    tester,
+  ) async {
     _setPhoneSize(tester);
     final library = LibraryStore();
     await library.load();
@@ -500,13 +509,14 @@ Widget _harness({
       ChangeNotifierProvider<LibraryStore>.value(value: library),
       ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
       if (listenTogether != null)
-        ChangeNotifierProvider<ListenTogetherStore>.value(value: listenTogether),
-      if (player != null) ChangeNotifierProvider<PlayerController>.value(value: player),
+        ChangeNotifierProvider<ListenTogetherStore>.value(
+          value: listenTogether,
+        ),
+      if (player != null)
+        ChangeNotifierProvider<PlayerController>.value(value: player),
     ],
     child: const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(child: LibrarySyncPanel()),
-      ),
+      home: Scaffold(body: SingleChildScrollView(child: LibrarySyncPanel())),
     ),
   );
 }
@@ -569,8 +579,8 @@ class _FakeSyncGateway
     this.profile,
     List<Object> pushResults = const <Object>[],
     List<Object> deleteResults = const <Object>[],
-  })  : pushResults = List<Object>.from(pushResults),
-        deleteResults = List<Object>.from(deleteResults);
+  }) : pushResults = List<Object>.from(pushResults),
+       deleteResults = List<Object>.from(deleteResults);
 
   LibrarySyncRemoteSnapshot remote;
   LibrarySyncProfile? profile;
@@ -676,9 +686,7 @@ class _FakeSyncGateway
   }
 
   @override
-  Future<LibrarySyncRemoteSnapshot> delete({
-    required int baseRevision,
-  }) async {
+  Future<LibrarySyncRemoteSnapshot> delete({required int baseRevision}) async {
     deletedBaseRevisions.add(baseRevision);
     if (deleteResults.isNotEmpty) {
       final result = deleteResults.removeAt(0);
@@ -776,12 +784,14 @@ class _ListenTogetherTestEngine implements PlaybackAudioEngine {
   @override
   bool get hasPrevious => false;
   @override
-  Future<void> setQueue(List<Track> tracks, {
+  Future<void> setQueue(
+    List<Track> tracks, {
     required int initialIndex,
     Duration initialPosition = Duration.zero,
   }) async {
     positionValue = initialPosition;
   }
+
   @override
   Future<void> play() async => playingValue = true;
   @override

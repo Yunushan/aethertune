@@ -15,7 +15,8 @@ String safeProviderErrorMessage(
   Iterable<String> secrets = const <String>[],
 }) {
   final detail = error.toString().trim();
-  var message = '$providerName request failed: '
+  var message =
+      '$providerName request failed: '
       '${detail.isEmpty ? 'Unknown error.' : detail}';
   for (final secret in secrets.where((value) => value.isNotEmpty)) {
     final encodedSecret = Uri.encodeQueryComponent(secret);

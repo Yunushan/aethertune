@@ -7,12 +7,9 @@ typedef PodcastDirectoryLoader = Future<String> Function(Uri requestUri);
 /// validate and subscribe to through its existing open-feed adapter.
 final class ItunesPodcastDirectory {
   ItunesPodcastDirectory({PodcastDirectoryLoader? loader})
-      : _loader = loader ?? _loadDirectoryResponse;
+    : _loader = loader ?? _loadDirectoryResponse;
 
-  static final Uri searchEndpoint = Uri.https(
-    'itunes.apple.com',
-    '/search',
-  );
+  static final Uri searchEndpoint = Uri.https('itunes.apple.com', '/search');
 
   final PodcastDirectoryLoader _loader;
 
@@ -67,7 +64,9 @@ List<PodcastDirectoryResult> parseItunesPodcastDirectoryResponse(
   }
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
-    throw const FormatException('Podcast directory response must be an object.');
+    throw const FormatException(
+      'Podcast directory response must be an object.',
+    );
   }
   final rawResults = decoded['results'];
   if (rawResults is! List<dynamic>) {

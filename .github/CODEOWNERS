@@ -1,0 +1,5 @@
+# Security-sensitive changes require maintainer review.
+* @Yunushan
+/.github/workflows/ @Yunushan
+/services/server/deploy/ @Yunushan
+/scripts/ci/ @Yunushan

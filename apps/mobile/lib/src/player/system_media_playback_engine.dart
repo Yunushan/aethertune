@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
@@ -63,10 +66,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       'aethertune:android-auto:library:playlists';
   static const _androidAutoArtistsId =
       'aethertune:android-auto:library:artists';
-  static const _androidAutoAlbumsId =
-      'aethertune:android-auto:library:albums';
-  static const _androidAutoGenresId =
-      'aethertune:android-auto:library:genres';
+  static const _androidAutoAlbumsId = 'aethertune:android-auto:library:albums';
+  static const _androidAutoGenresId = 'aethertune:android-auto:library:genres';
   static const _androidAutoSourcesId =
       'aethertune:android-auto:library:sources';
   static const _androidAutoFoldersId =
@@ -180,8 +181,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   bool get supportsCrossfade =>
-      _engine is CrossfadePlaybackAudioEngine &&
-      _engine.supportsCrossfade;
+      _engine is CrossfadePlaybackAudioEngine && _engine.supportsCrossfade;
 
   @override
   Duration get crossfadeDuration => _engine is CrossfadePlaybackAudioEngine
@@ -203,8 +203,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
 
   @override
   bool get supportsSkipSilence =>
-      _engine is SkipSilencePlaybackAudioEngine &&
-      _engine.supportsSkipSilence;
+      _engine is SkipSilencePlaybackAudioEngine && _engine.supportsSkipSilence;
 
   @override
   bool get supportsVisualizer =>
@@ -357,8 +356,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   @override
-  Future<dynamic> customAction(String name,
-      [Map<String, dynamic>? extras]) async {
+  Future<dynamic> customAction(
+    String name, [
+    Map<String, dynamic>? extras,
+  ]) async {
     if (name == 'dbusVolume') {
       final value = extras?['value'];
       if (value is num) {
@@ -373,9 +374,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   }
 
   @override
-  void setCrossfadeTrackVolumeResolver(
-    CrossfadeTrackVolumeResolver? resolver,
-  ) {
+  void setCrossfadeTrackVolumeResolver(CrossfadeTrackVolumeResolver? resolver) {
     final engine = _engine;
     if (engine is CrossfadePlaybackAudioEngine) {
       engine.setCrossfadeTrackVolumeResolver(resolver);
@@ -386,7 +385,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   Future<void> setCrossfadeDuration(Duration duration) {
     final engine = _engine;
     if (engine is! CrossfadePlaybackAudioEngine || !engine.supportsCrossfade) {
-      throw UnsupportedError('Crossfade is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Crossfade is unavailable for this audio backend.',
+      );
     }
     return engine.setCrossfadeDuration(duration);
   }
@@ -405,7 +406,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final engine = _engine;
     if (engine is! AudioEffectsPlaybackAudioEngine ||
         !engine.supportsEqualizer) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     return engine.setEqualizerEnabled(enabled);
   }
@@ -415,7 +418,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final engine = _engine;
     if (engine is! AudioEffectsPlaybackAudioEngine ||
         !engine.supportsEqualizer) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     return engine.setEqualizerProfile(profile);
   }
@@ -425,7 +430,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final engine = _engine;
     if (engine is! AudioEffectsPlaybackAudioEngine ||
         !engine.supportsEqualizer) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     return engine.loadEqualizerBands();
   }
@@ -500,9 +507,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       case _androidAutoSourcesId:
         return _playlistBrowseFolders(MediaLibraryBrowseCategory.source);
       case _androidAutoFoldersId:
-        return _libraryBrowseFolders.map(_folderBrowseFolder).toList(
-          growable: false,
-        );
+        return _libraryBrowseFolders
+            .map(_folderBrowseFolder)
+            .toList(growable: false);
       default:
         final folder = _folderForMediaId(parentMediaId);
         if (folder != null) {
@@ -557,11 +564,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     }
     final libraryTrack = _libraryTrackForMediaId(mediaId);
     if (libraryTrack != null) {
-      return _mediaItemForTrack(
-        libraryTrack,
-        null,
-        mediaId: mediaId,
-      );
+      return _mediaItemForTrack(libraryTrack, null, mediaId: mediaId);
     }
     final folder = _folderForMediaId(mediaId);
     if (folder != null) {
@@ -610,7 +613,11 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       if (playlist != null &&
           playlist.tracks.isNotEmpty &&
           onPlaylistTrackSelected != null) {
-        await onPlaylistTrackSelected(playlist.tracks.first, playlist.tracks, 0);
+        await onPlaylistTrackSelected(
+          playlist.tracks.first,
+          playlist.tracks,
+          0,
+        );
         return;
       }
       final folderSelection = _folderTrackSelectionForMediaId(mediaId);
@@ -641,7 +648,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final engine = _engine;
     if (engine is! VirtualizerPlaybackAudioEngine ||
         !engine.supportsVirtualizer) {
-      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Virtualizer is unavailable for this audio backend.',
+      );
     }
     return engine.setVirtualizerEnabled(enabled);
   }
@@ -651,7 +660,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final engine = _engine;
     if (engine is! VirtualizerPlaybackAudioEngine ||
         !engine.supportsVirtualizer) {
-      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Virtualizer is unavailable for this audio backend.',
+      );
     }
     return engine.setVirtualizerStrength(strength);
   }
@@ -738,11 +749,8 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   List<MediaItem> _libraryBrowseMediaItems() {
     return _libraryBrowseTracks
         .map(
-          (track) => _mediaItemForTrack(
-            track,
-            null,
-            mediaId: _libraryMediaId(track),
-          ),
+          (track) =>
+              _mediaItemForTrack(track, null, mediaId: _libraryMediaId(track)),
         )
         .toList(growable: false);
   }
@@ -873,8 +881,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final childCount = folder.children.length;
     final directTrackCount = folder.directTracks.length;
     final subtitle = <String>[
-      if (childCount > 0)
-        childCount == 1 ? '1 folder' : '$childCount folders',
+      if (childCount > 0) childCount == 1 ? '1 folder' : '$childCount folders',
       if (directTrackCount > 0)
         directTrackCount == 1 ? '1 track' : '$directTrackCount tracks',
     ].join(', ');
@@ -1070,8 +1077,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     final lastPosition = _lastWidgetProgressPosition;
     if (!_engine.playing ||
         (lastPosition != null &&
-            (position - lastPosition).abs() <
-                _widgetProgressUpdateInterval)) {
+            (position - lastPosition).abs() < _widgetProgressUpdateInterval)) {
       return;
     }
     _publishWidgetState(position: position);

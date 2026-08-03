@@ -30,7 +30,7 @@ String? localArtworkPathForWidget(Track? track) {
 
 class AndroidPlaybackWidgetBridge implements PlaybackWidgetBridge {
   const AndroidPlaybackWidgetBridge({MethodChannel? channel})
-      : _channel = channel ?? _defaultChannel;
+    : _channel = channel ?? _defaultChannel;
 
   static const MethodChannel _defaultChannel = MethodChannel(
     'dev.aethertune/playback_widget',

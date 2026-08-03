@@ -10,8 +10,10 @@ void main() {
     final arabic = AppLocalizationsAr();
 
     expect(english.sleepTimer, 'Sleep timer');
-    expect(english.sleepTimerStopsIn(english.sleepTimerMinutes(5)),
-        'Playback stops in 5 minutes.');
+    expect(
+      english.sleepTimerStopsIn(english.sleepTimerMinutes(5)),
+      'Playback stops in 5 minutes.',
+    );
     expect(turkish.sleepTimerActive, 'Uyku zamanlayıcısı etkin');
     expect(
       turkish.sleepTimerStopsIn(turkish.sleepTimerHours(2)),

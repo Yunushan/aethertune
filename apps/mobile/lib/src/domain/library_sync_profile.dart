@@ -13,7 +13,9 @@ enum LibrarySyncProfileAvatarTone {
       return null;
     }
     if (value is! String) {
-      throw const FormatException('Library sync profile avatar tone is invalid.');
+      throw const FormatException(
+        'Library sync profile avatar tone is invalid.',
+      );
     }
     for (final tone in values) {
       if (tone.wireValue == value) {
@@ -75,8 +77,8 @@ class LibrarySyncProfile {
       maxLength: 80,
     );
     final rawAvatarToneSupported = json['avatarToneSupported'];
-    final avatarToneSupported = rawAvatarToneSupported ??
-        json.containsKey('avatarTone');
+    final avatarToneSupported =
+        rawAvatarToneSupported ?? json.containsKey('avatarTone');
     if (avatarToneSupported is! bool) {
       throw const FormatException(
         'Library sync profile avatar capability is invalid.',
@@ -91,8 +93,8 @@ class LibrarySyncProfile {
       );
     }
     final rawPublicProfileSupported = json['publicProfileSupported'];
-    final publicProfileSupported = rawPublicProfileSupported ??
-        json.containsKey('publicProfileEnabled');
+    final publicProfileSupported =
+        rawPublicProfileSupported ?? json.containsKey('publicProfileEnabled');
     if (publicProfileSupported is! bool) {
       throw const FormatException(
         'Library sync public profile capability is invalid.',
@@ -113,8 +115,8 @@ class LibrarySyncProfile {
         json['publicProfileFieldAudienceSupported'];
     final publicProfileFieldAudienceSupported =
         rawPublicProfileFieldAudienceSupported ??
-            (json.containsKey('publicDisplayNameEnabled') ||
-                json.containsKey('publicAvatarToneEnabled'));
+        (json.containsKey('publicDisplayNameEnabled') ||
+            json.containsKey('publicAvatarToneEnabled'));
     if (publicProfileFieldAudienceSupported is! bool) {
       throw const FormatException(
         'Library sync public profile audience capability is invalid.',
@@ -169,8 +171,7 @@ class LibrarySyncProfile {
       avatarToneSupported: avatarToneSupported,
       publicProfileEnabled: rawPublicProfileEnabled,
       publicProfileSupported: publicProfileSupported,
-      publicProfileFieldAudienceSupported:
-          publicProfileFieldAudienceSupported,
+      publicProfileFieldAudienceSupported: publicProfileFieldAudienceSupported,
       publicDisplayNameEnabled: rawPublicDisplayNameEnabled,
       publicAvatarToneEnabled: rawPublicAvatarToneEnabled,
       managed: managed,

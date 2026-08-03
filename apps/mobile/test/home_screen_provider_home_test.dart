@@ -150,10 +150,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Test Server from artists you follow'),
-        findsOneWidget,
-      );
+      expect(find.text('Test Server from artists you follow'), findsOneWidget);
       expect(
         find.text('Recently added albums by artists you follow'),
         findsOneWidget,
@@ -387,104 +384,106 @@ void main() {
     expect(
       tester
           .widget<IconButton>(
-            find.byKey(
-              const ValueKey<String>('home-popular-archive-refresh'),
-            ),
+            find.byKey(const ValueKey<String>('home-popular-archive-refresh')),
           )
           .onPressed,
       isNull,
     );
   });
 
-  testWidgets('loads configured Jamendo popularity discovery explicitly on Home', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 1200);
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'loads configured Jamendo popularity discovery explicitly on Home',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 1200);
+      addTearDown(tester.view.reset);
 
-    final fixture = await _HomeFixture.create(
-      provider: _FakeProviderHomeCatalog(),
-    );
-    addTearDown(fixture.dispose);
-    Uri? requestedUri;
-    final jamendo = JamendoSettingsStore(
-      credentialVault: _MemoryCredentialVault(),
-      providerFactory: (clientId) => JamendoProvider(
-        clientId: clientId,
-        loader: (uri) async {
-          requestedUri = uri;
-          return _popularJamendoTracks;
-        },
-      ),
-    );
-    await jamendo.load();
-    await jamendo.saveClientId('client-id');
-    addTearDown(jamendo.dispose);
+      final fixture = await _HomeFixture.create(
+        provider: _FakeProviderHomeCatalog(),
+      );
+      addTearDown(fixture.dispose);
+      Uri? requestedUri;
+      final jamendo = JamendoSettingsStore(
+        credentialVault: _MemoryCredentialVault(),
+        providerFactory: (clientId) => JamendoProvider(
+          clientId: clientId,
+          loader: (uri) async {
+            requestedUri = uri;
+            return _popularJamendoTracks;
+          },
+        ),
+      );
+      await jamendo.load();
+      await jamendo.saveClientId('client-id');
+      addTearDown(jamendo.dispose);
 
-    await _pumpHome(tester, fixture, jamendo: jamendo);
+      await _pumpHome(tester, fixture, jamendo: jamendo);
 
-    expect(find.text('Popular on Jamendo'), findsOneWidget);
-    expect(requestedUri, isNull);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
-    );
-    await tester.pumpAndSettle();
+      expect(find.text('Popular on Jamendo'), findsOneWidget);
+      expect(requestedUri, isNull);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(requestedUri!.path, '/v3.0/tracks/');
-    expect(requestedUri!.queryParameters['client_id'], 'client-id');
-    expect(requestedUri!.queryParameters['limit'], '6');
-    expect(requestedUri!.queryParameters['order'], 'popularity_total');
-    expect(requestedUri!.queryParameters['groupby'], 'artist_id');
-    expect(find.text('Home Jamendo track'), findsOneWidget);
-    await tester.tap(find.byTooltip('Save track to library').first);
-    await tester.pumpAndSettle();
-    expect(fixture.library.tracks.single.isPlayable, isTrue);
+      expect(requestedUri!.path, '/v3.0/tracks/');
+      expect(requestedUri!.queryParameters['client_id'], 'client-id');
+      expect(requestedUri!.queryParameters['limit'], '6');
+      expect(requestedUri!.queryParameters['order'], 'popularity_total');
+      expect(requestedUri!.queryParameters['groupby'], 'artist_id');
+      expect(find.text('Home Jamendo track'), findsOneWidget);
+      await tester.tap(find.byTooltip('Save track to library').first);
+      await tester.pumpAndSettle();
+      expect(fixture.library.tracks.single.isPlayable, isTrue);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('home-jamendo-genre-menu')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Jazz').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Featured Jazz tracks from Jamendo'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
-    );
-    await tester.pumpAndSettle();
-    expect(requestedUri!.queryParameters['featured'], '1');
-    expect(requestedUri!.queryParameters['tags'], 'jazz');
-    expect(requestedUri!.queryParameters['boost'], 'popularity_total');
-    expect(requestedUri!.queryParameters['order'], isNull);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-jamendo-genre-menu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Jazz').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Featured Jazz tracks from Jamendo'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
+      );
+      await tester.pumpAndSettle();
+      expect(requestedUri!.queryParameters['featured'], '1');
+      expect(requestedUri!.queryParameters['tags'], 'jazz');
+      expect(requestedUri!.queryParameters['boost'], 'popularity_total');
+      expect(requestedUri!.queryParameters['order'], isNull);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('home-jamendo-language')),
-    );
-    await tester.pumpAndSettle();
-    final languageField = find.byType(TextFormField);
-    await tester.enterText(languageField, 'TR');
-    await tester.tap(find.text('Apply').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Featured Jazz tracks from Jamendo / Lyrics: TR'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
-    );
-    await tester.pumpAndSettle();
-    expect(requestedUri!.queryParameters['lang'], 'tr');
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-jamendo-language')),
+      );
+      await tester.pumpAndSettle();
+      final languageField = find.byType(TextFormField);
+      await tester.enterText(languageField, 'TR');
+      await tester.tap(find.text('Apply').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Featured Jazz tracks from Jamendo / Lyrics: TR'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-jamendo-popular-refresh')),
+      );
+      await tester.pumpAndSettle();
+      expect(requestedUri!.queryParameters['lang'], 'tr');
 
-    await fixture.library.setOfflineModeEnabled(true);
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<IconButton>(
-            find.byKey(
-              const ValueKey<String>('home-jamendo-popular-refresh'),
-            ),
-          )
-          .onPressed,
-      isNull,
-    );
-  });
+      await fixture.library.setOfflineModeEnabled(true);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(
+                const ValueKey<String>('home-jamendo-popular-refresh'),
+              ),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
 
   testWidgets('loads followed YouTube channel metadata explicitly on Home', (
     tester,
@@ -575,9 +574,7 @@ void main() {
       tester
           .widget<IconButton>(
             find.byKey(
-              const ValueKey<String>(
-                'home-youtube-followed-channels-refresh',
-              ),
+              const ValueKey<String>('home-youtube-followed-channels-refresh'),
             ),
           )
           .onPressed,
@@ -664,9 +661,7 @@ void main() {
     expect(
       tester
           .widget<IconButton>(
-            find.byKey(
-              const ValueKey<String>('home-spotify-library-refresh'),
-            ),
+            find.byKey(const ValueKey<String>('home-spotify-library-refresh')),
           )
           .onPressed,
       isNull,
@@ -863,7 +858,8 @@ const _popularJamendoTracks = '''
 }
 ''';
 
-String _followedChannelPage(String title, String id, String publishedAt) => '''
+String _followedChannelPage(String title, String id, String publishedAt) =>
+    '''
 {
   "items": [{
     "id": {"videoId": "$id"},
@@ -1045,8 +1041,7 @@ final class _FakeProviderHomeCatalog implements MusicCatalogProvider {
   }
 }
 
-final class _FakeProviderHomeDiscoveryCatalog
-    extends _FakeProviderHomeCatalog
+final class _FakeProviderHomeDiscoveryCatalog extends _FakeProviderHomeCatalog
     implements MusicCatalogDiscoveryProvider {
   final List<MusicCatalogDiscoveryKind> discoveryCalls =
       <MusicCatalogDiscoveryKind>[];

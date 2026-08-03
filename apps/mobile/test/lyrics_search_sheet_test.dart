@@ -20,7 +20,10 @@ void main() {
 
     expect(find.text('Search Test Lyrics'), findsOneWidget);
     expect(find.textContaining('lyrics.example.test'), findsOneWidget);
-    expect(find.textContaining('stored locally with attribution'), findsOneWidget);
+    expect(
+      find.textContaining('stored locally with attribution'),
+      findsOneWidget,
+    );
     expect(provider.lastQuery!.keywords, 'Signal Mira Dawn');
     expect(find.text('Signal'), findsOneWidget);
     expect(find.text('Instrumental Cut'), findsOneWidget);
@@ -132,10 +135,10 @@ class _FakeLyricsProvider implements LyricsProvider {
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
-        networkDomains: <String>['lyrics.example.test'],
-        dataSent: <String>['track search terms'],
-        cachesMetadata: true,
-      );
+    networkDomains: <String>['lyrics.example.test'],
+    dataSent: <String>['track search terms'],
+    cachesMetadata: true,
+  );
 
   @override
   Future<List<LyricsSearchResult>> search(LyricsSearchQuery query) async {
@@ -167,9 +170,9 @@ class _ControlledLyricsProvider implements LyricsProvider {
 
   @override
   ProviderPrivacyDisclosure get disclosure => const ProviderPrivacyDisclosure(
-        networkDomains: <String>['lyrics.example.test'],
-        dataSent: <String>['track search terms'],
-      );
+    networkDomains: <String>['lyrics.example.test'],
+    dataSent: <String>['track search terms'],
+  );
 
   @override
   Future<List<LyricsSearchResult>> search(LyricsSearchQuery query) {

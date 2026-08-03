@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:aethertune/aethertune_provider_sdk.dart' show
-    aetherTuneProviderSdkVersion,
-    MusicAlbumFavoriteMutationProvider,
-    MusicArtistFavoriteMutationProvider,
-    MusicTrackFavoriteMutationProvider,
-    MusicSourceProviderContractIssueCode,
-    validateMusicSourceProviderContract;
+import 'package:aethertune/aethertune_provider_sdk.dart'
+    show
+        aetherTuneProviderSdkVersion,
+        MusicAlbumFavoriteMutationProvider,
+        MusicArtistFavoriteMutationProvider,
+        MusicTrackFavoriteMutationProvider,
+        MusicSourceProviderContractIssueCode,
+        validateMusicSourceProviderContract;
 import 'package:aethertune/src/data/custom_catalog_provider.dart';
 import 'package:aethertune/src/data/demo_source_provider.dart';
 import 'package:aethertune/src/data/internet_archive_provider.dart';
@@ -29,10 +30,9 @@ void main() {
   test('demo provider declares capabilities and no network access', () {
     const provider = DemoSourceProvider();
 
-    expect(
-      provider.capabilities,
-      <MusicSourceCapability>{MusicSourceCapability.metadataSearch},
-    );
+    expect(provider.capabilities, <MusicSourceCapability>{
+      MusicSourceCapability.metadataSearch,
+    });
     expect(provider.disclosure.usesNetwork, isFalse);
     expect(provider.disclosure.isLocalOnly, isTrue);
     expect(provider.disclosure.networkSummary, 'No network domains declared');
@@ -51,10 +51,7 @@ void main() {
     expect(disclosure.usesNetwork, isTrue);
     expect(disclosure.isLocalOnly, isFalse);
     expect(disclosure.cachesMetadata, isTrue);
-    expect(
-      disclosure.networkSummary,
-      'api.example.test, media.example.test',
-    );
+    expect(disclosure.networkSummary, 'api.example.test, media.example.test');
   });
 
   test('capabilities have user-facing labels', () {
@@ -99,9 +96,7 @@ void main() {
       PodcastRssProvider(
         feedUri: Uri.parse('https://podcasts.example.test/feed.xml'),
       ),
-      RadioBrowserProvider(
-        baseUri: Uri.parse('https://radio.example.test'),
-      ),
+      RadioBrowserProvider(baseUri: Uri.parse('https://radio.example.test')),
       SpotifyMetadataProvider(accessTokenReader: () async => 'access-token'),
       SubsonicProvider(
         baseUri: Uri.parse('https://music.example.test'),
@@ -185,79 +180,86 @@ void main() {
     }
   });
 
-  test('provider SDK v1 flags invalid disclosures and capability mismatches', () {
-    expect(aetherTuneProviderSdkVersion, '1.0.0');
-    const provider = _PolicyProvider(
-      id: 'Invalid provider',
-      name: '',
-      capabilities: <MusicSourceCapability>{
-        MusicSourceCapability.searchSuggestions,
-        MusicSourceCapability.offlineCache,
-        MusicSourceCapability.favoriteMutation,
-        MusicSourceCapability.albumFavoriteMutation,
-        MusicSourceCapability.artistFavoriteMutation,
-      },
-      disclosure: ProviderPrivacyDisclosure(
-        networkDomains: <String>['api.example.test', 'API.EXAMPLE.TEST'],
-        requiresUserCredentials: true,
-        dataSent: <String>[],
-      ),
-    );
-
-    final report = validateMusicSourceProviderContract(provider);
-
-    expect(report.isCompliant, isFalse);
-    expect(
-      report.issues.map((issue) => issue.code),
-      containsAll(<MusicSourceProviderContractIssueCode>[
-        MusicSourceProviderContractIssueCode.invalidId,
-        MusicSourceProviderContractIssueCode.missingName,
-        MusicSourceProviderContractIssueCode.duplicateNetworkDomain,
-        MusicSourceProviderContractIssueCode.missingNetworkDisclosure,
-        MusicSourceProviderContractIssueCode.missingAuthenticationCapability,
-        MusicSourceProviderContractIssueCode.undisclosedMediaCache,
-        MusicSourceProviderContractIssueCode.missingSuggestionExtension,
-        MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
-        MusicSourceProviderContractIssueCode.missingAlbumFavoriteMutationExtension,
-        MusicSourceProviderContractIssueCode.missingArtistFavoriteMutationExtension,
-      ]),
-    );
-  });
-
-  test('official metadata providers remain audio-free and cache-free',
-      () async {
-    final providers = <MusicSourceProvider>[
-      SpotifyMetadataProvider(accessTokenReader: () async => 'access-token'),
-      YouTubeDataMetadataProvider(apiKey: 'google-cloud-key'),
-      MusicBrainzMetadataProvider(),
-      ItunesMetadataProvider(),
-    ];
-
-    for (final provider in providers) {
-      final track = Track(
-        id: '${provider.id}-track',
-        title: 'Metadata result',
-        sourceId: provider.id,
+  test(
+    'provider SDK v1 flags invalid disclosures and capability mismatches',
+    () {
+      expect(aetherTuneProviderSdkVersion, '1.0.0');
+      const provider = _PolicyProvider(
+        id: 'Invalid provider',
+        name: '',
+        capabilities: <MusicSourceCapability>{
+          MusicSourceCapability.searchSuggestions,
+          MusicSourceCapability.offlineCache,
+          MusicSourceCapability.favoriteMutation,
+          MusicSourceCapability.albumFavoriteMutation,
+          MusicSourceCapability.artistFavoriteMutation,
+        },
+        disclosure: ProviderPrivacyDisclosure(
+          networkDomains: <String>['api.example.test', 'API.EXAMPLE.TEST'],
+          requiresUserCredentials: true,
+          dataSent: <String>[],
+        ),
       );
+
+      final report = validateMusicSourceProviderContract(provider);
+
+      expect(report.isCompliant, isFalse);
       expect(
-        provider.capabilities,
-        isNot(contains(MusicSourceCapability.directPlayback)),
+        report.issues.map((issue) => issue.code),
+        containsAll(<MusicSourceProviderContractIssueCode>[
+          MusicSourceProviderContractIssueCode.invalidId,
+          MusicSourceProviderContractIssueCode.missingName,
+          MusicSourceProviderContractIssueCode.duplicateNetworkDomain,
+          MusicSourceProviderContractIssueCode.missingNetworkDisclosure,
+          MusicSourceProviderContractIssueCode.missingAuthenticationCapability,
+          MusicSourceProviderContractIssueCode.undisclosedMediaCache,
+          MusicSourceProviderContractIssueCode.missingSuggestionExtension,
+          MusicSourceProviderContractIssueCode.missingFavoriteMutationExtension,
+          MusicSourceProviderContractIssueCode
+              .missingAlbumFavoriteMutationExtension,
+          MusicSourceProviderContractIssueCode
+              .missingArtistFavoriteMutationExtension,
+        ]),
       );
-      expect(
-        provider.capabilities,
-        isNot(contains(MusicSourceCapability.offlineCache)),
-      );
-      expect(
-        provider.capabilities,
-        isNot(contains(MusicSourceCapability.downloads)),
-      );
-      expect(await provider.resolveStream(track), isNull);
+    },
+  );
 
-      final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
-      expect(policy.canCache(track), isFalse);
-      expect(policy.canDownload(track), isFalse);
-    }
-  });
+  test(
+    'official metadata providers remain audio-free and cache-free',
+    () async {
+      final providers = <MusicSourceProvider>[
+        SpotifyMetadataProvider(accessTokenReader: () async => 'access-token'),
+        YouTubeDataMetadataProvider(apiKey: 'google-cloud-key'),
+        MusicBrainzMetadataProvider(),
+        ItunesMetadataProvider(),
+      ];
+
+      for (final provider in providers) {
+        final track = Track(
+          id: '${provider.id}-track',
+          title: 'Metadata result',
+          sourceId: provider.id,
+        );
+        expect(
+          provider.capabilities,
+          isNot(contains(MusicSourceCapability.directPlayback)),
+        );
+        expect(
+          provider.capabilities,
+          isNot(contains(MusicSourceCapability.offlineCache)),
+        );
+        expect(
+          provider.capabilities,
+          isNot(contains(MusicSourceCapability.downloads)),
+        );
+        expect(await provider.resolveStream(track), isNull);
+
+        final policy = OfflineMediaPolicy(<MusicSourceProvider>[provider]);
+        expect(policy.canCache(track), isFalse);
+        expect(policy.canDownload(track), isFalse);
+      }
+    },
+  );
 
   test('offline media policy allows local files without a provider', () {
     const policy = OfflineMediaPolicy(<MusicSourceProvider>[]);
@@ -268,7 +270,10 @@ void main() {
     );
 
     final cacheDecision = policy.evaluate(track, OfflineMediaAction.cache);
-    final downloadDecision = policy.evaluate(track, OfflineMediaAction.download);
+    final downloadDecision = policy.evaluate(
+      track,
+      OfflineMediaAction.download,
+    );
 
     expect(cacheDecision.isAllowed, isTrue);
     expect(cacheDecision.reason, contains('already available offline'));

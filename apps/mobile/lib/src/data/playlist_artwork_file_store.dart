@@ -8,16 +8,17 @@ import 'package:path_provider/path_provider.dart';
 const maxPlaylistArtworkBytes = 10 * 1024 * 1024;
 
 class PlaylistArtworkFileStore {
-  PlaylistArtworkFileStore({
-    Future<Directory> Function()? documentsDirectory,
-  }) : _documentsDirectory =
-           documentsDirectory ?? getApplicationDocumentsDirectory;
+  PlaylistArtworkFileStore({Future<Directory> Function()? documentsDirectory})
+    : _documentsDirectory =
+          documentsDirectory ?? getApplicationDocumentsDirectory;
 
   final Future<Directory> Function() _documentsDirectory;
 
   Future<Uri> save(Uint8List bytes) async {
     if (bytes.isEmpty || bytes.lengthInBytes > maxPlaylistArtworkBytes) {
-      throw const FormatException('Artwork must be an image smaller than 10 MiB.');
+      throw const FormatException(
+        'Artwork must be an image smaller than 10 MiB.',
+      );
     }
 
     final extension = _imageExtension(bytes);

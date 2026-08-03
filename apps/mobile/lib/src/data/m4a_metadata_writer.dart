@@ -127,24 +127,36 @@ Future<_M4aWritePlan> _buildWritePlan(
   try {
     final fileLength = await access.length();
     final atoms = await _readTopLevelAtoms(access, fileLength);
-    final moovAtoms = atoms.where((atom) => _hasAsciiType(atom, 'moov')).toList();
+    final moovAtoms = atoms
+        .where((atom) => _hasAsciiType(atom, 'moov'))
+        .toList();
     if (moovAtoms.length != 1) {
-      throw const FormatException('M4A must contain exactly one editable moov atom.');
+      throw const FormatException(
+        'M4A must contain exactly one editable moov atom.',
+      );
     }
     final moov = moovAtoms.single;
-    final mediaAtoms = atoms.where((atom) => _hasAsciiType(atom, 'mdat')).toList();
+    final mediaAtoms = atoms
+        .where((atom) => _hasAsciiType(atom, 'mdat'))
+        .toList();
     if (mediaAtoms.isEmpty) {
-      throw const FormatException('M4A must contain media data before it can be updated.');
+      throw const FormatException(
+        'M4A must contain media data before it can be updated.',
+      );
     }
 
     final payloadLength = moov.end - moov.payloadStart;
     if (payloadLength > _maxMoovBytes) {
-      throw const FormatException('M4A moov metadata is too large to update safely.');
+      throw const FormatException(
+        'M4A moov metadata is too large to update safely.',
+      );
     }
     await access.setPosition(moov.payloadStart);
     final payload = await access.read(payloadLength);
     if (payload.length != payloadLength) {
-      throw const FormatException('M4A moov metadata could not be read completely.');
+      throw const FormatException(
+        'M4A moov metadata could not be read completely.',
+      );
     }
 
     var updatedMoov = _updatedMoov(
@@ -176,10 +188,7 @@ Future<_M4aWritePlan> _buildWritePlan(
       );
     }
 
-    return _M4aWritePlan(
-      atoms: atoms,
-      moov: updatedMoov,
-    );
+    return _M4aWritePlan(atoms: atoms, moov: updatedMoov);
   } finally {
     await access.close();
   }
@@ -198,7 +207,9 @@ Future<List<_M4aAtom>> _readTopLevelAtoms(
     await access.setPosition(offset);
     final header = await access.read(8);
     if (header.length != 8) {
-      throw const FormatException('M4A atom header could not be read completely.');
+      throw const FormatException(
+        'M4A atom header could not be read completely.',
+      );
     }
     final declaredSize = _uint32(header, 0);
     var payloadStart = offset + 8;
@@ -254,13 +265,17 @@ Uint8List _updatedMoov(
   List<TrackChapter>? chapters,
 }) {
   final moovChildren = _childAtoms(payload);
-  final udtaAtoms = moovChildren.where((atom) => _hasAsciiType(atom, 'udta')).toList();
+  final udtaAtoms = moovChildren
+      .where((atom) => _hasAsciiType(atom, 'udta'))
+      .toList();
   if (udtaAtoms.length > 1) {
     throw const FormatException('M4A contains multiple udta metadata atoms.');
   }
   final udtaPayload = udtaAtoms.isEmpty
       ? Uint8List(0)
-      : Uint8List.fromList(payload.sublist(udtaAtoms.single.payloadStart, udtaAtoms.single.end));
+      : Uint8List.fromList(
+          payload.sublist(udtaAtoms.single.payloadStart, udtaAtoms.single.end),
+        );
   final updatedUdta = _updatedUdta(
     udtaPayload,
     title: title,
@@ -297,13 +312,17 @@ Uint8List _updatedUdta(
   List<TrackChapter>? chapters,
 }) {
   final children = _childAtoms(payload);
-  final metaAtoms = children.where((atom) => _hasAsciiType(atom, 'meta')).toList();
+  final metaAtoms = children
+      .where((atom) => _hasAsciiType(atom, 'meta'))
+      .toList();
   if (metaAtoms.length > 1) {
     throw const FormatException('M4A contains multiple meta metadata atoms.');
   }
   final metaPayload = metaAtoms.isEmpty
       ? Uint8List(0)
-      : Uint8List.fromList(payload.sublist(metaAtoms.single.payloadStart, metaAtoms.single.end));
+      : Uint8List.fromList(
+          payload.sublist(metaAtoms.single.payloadStart, metaAtoms.single.end),
+        );
   final updatedMeta = _updatedMeta(
     metaPayload,
     title: title,
@@ -344,15 +363,21 @@ Uint8List _updatedMeta(
   if (payload.isNotEmpty && payload.length < 4) {
     throw const FormatException('M4A meta atom is missing full-box flags.');
   }
-  final flags = payload.isEmpty ? Uint8List(4) : Uint8List.fromList(payload.sublist(0, 4));
+  final flags = payload.isEmpty
+      ? Uint8List(4)
+      : Uint8List.fromList(payload.sublist(0, 4));
   final children = _childAtoms(payload, startOffset: 4);
-  final ilstAtoms = children.where((atom) => _hasAsciiType(atom, 'ilst')).toList();
+  final ilstAtoms = children
+      .where((atom) => _hasAsciiType(atom, 'ilst'))
+      .toList();
   if (ilstAtoms.length > 1) {
     throw const FormatException('M4A contains multiple ilst metadata atoms.');
   }
   final ilstPayload = ilstAtoms.isEmpty
       ? Uint8List(0)
-      : Uint8List.fromList(payload.sublist(ilstAtoms.single.payloadStart, ilstAtoms.single.end));
+      : Uint8List.fromList(
+          payload.sublist(ilstAtoms.single.payloadStart, ilstAtoms.single.end),
+        );
   final updatedIlst = _updatedIlst(
     ilstPayload,
     title: title,
@@ -495,11 +520,15 @@ List<TrackChapter>? _normalizedChapters(List<TrackChapter>? chapters) {
   }
   final normalized = TrackChapter.normalize(chapters);
   if (normalized.length > _maxM4aChapters) {
-    throw const FormatException('M4A chapter markers exceed the 255-item limit.');
+    throw const FormatException(
+      'M4A chapter markers exceed the 255-item limit.',
+    );
   }
   for (final chapter in normalized) {
     if (utf8.encode(chapter.title).length > 0xff) {
-      throw const FormatException('M4A chapter titles must be at most 255 bytes.');
+      throw const FormatException(
+        'M4A chapter titles must be at most 255 bytes.',
+      );
     }
   }
   return normalized;
@@ -510,7 +539,8 @@ Uint8List _chapterListAtom(List<TrackChapter> chapters) {
     ..add(const <int>[0, 0, 0, 0])
     ..addByte(chapters.length);
   for (final chapter in chapters) {
-    final timestamp = chapter.start.inMicroseconds * _chapterTicksPerMicrosecond;
+    final timestamp =
+        chapter.start.inMicroseconds * _chapterTicksPerMicrosecond;
     if (timestamp < 0 || timestamp > _maxM4aChunkOffset) {
       throw const FormatException('M4A chapter timestamp is out of range.');
     }
@@ -557,7 +587,9 @@ Uint8List _shiftMdatChunkOffsets(
   required List<_M4aAtom> movedMediaAtoms,
 }) {
   if (moov.length < 8 || !_matchesAsciiType(moov, 4, 'moov')) {
-    throw const FormatException('M4A moov metadata could not be updated safely.');
+    throw const FormatException(
+      'M4A moov metadata could not be updated safely.',
+    );
   }
   final updated = Uint8List.fromList(moov);
   _shiftChunkOffsetContainers(
@@ -579,13 +611,17 @@ void _shiftChunkOffsetContainers(
   int depth = 0,
 }) {
   if (depth > _maxContainerDepth) {
-    throw const FormatException('M4A metadata nesting is too deep to update safely.');
+    throw const FormatException(
+      'M4A metadata nesting is too deep to update safely.',
+    );
   }
   var offset = startOffset;
   var atomCount = 0;
   while (offset < endOffset) {
     if (offset + 8 > endOffset || atomCount >= _maxChildAtoms) {
-      throw const FormatException('M4A chunk-offset container layout is invalid.');
+      throw const FormatException(
+        'M4A chunk-offset container layout is invalid.',
+      );
     }
     final size = _uint32(bytes, offset);
     if (size < 8 || size == 1 || offset + size > endOffset) {
@@ -613,7 +649,9 @@ void _shiftChunkOffsetContainers(
       var childStart = payloadStart;
       if (_matchesAsciiType(bytes, offset + 4, 'meta')) {
         if (childStart + 4 > atomEnd) {
-          throw const FormatException('M4A meta atom is missing full-box flags.');
+          throw const FormatException(
+            'M4A meta atom is missing full-box flags.',
+          );
         }
         childStart += 4;
       }
@@ -802,9 +840,13 @@ Future<void> _copyRange(
   await source.setPosition(start);
   var remaining = length;
   while (remaining > 0) {
-    final chunk = await source.read(remaining > _copyChunkBytes ? _copyChunkBytes : remaining);
+    final chunk = await source.read(
+      remaining > _copyChunkBytes ? _copyChunkBytes : remaining,
+    );
     if (chunk.isEmpty) {
-      throw const FileSystemException('M4A file ended unexpectedly while copying.');
+      throw const FileSystemException(
+        'M4A file ended unexpectedly while copying.',
+      );
     }
     await output.writeFrom(chunk);
     remaining -= chunk.length;
@@ -924,7 +966,9 @@ Uint8List _uint32Bytes(int value) {
 
 void _setUint32(Uint8List bytes, int offset, int value) {
   if (value < 0 || value > 0xffffffff) {
-    throw const FormatException('M4A 32-bit media chunk offset would overflow.');
+    throw const FormatException(
+      'M4A 32-bit media chunk offset would overflow.',
+    );
   }
   bytes[offset] = (value >> 24) & 0xff;
   bytes[offset + 1] = (value >> 16) & 0xff;
@@ -934,7 +978,9 @@ void _setUint32(Uint8List bytes, int offset, int value) {
 
 void _setUint64(Uint8List bytes, int offset, int value) {
   if (value < 0 || value > _maxM4aChunkOffset) {
-    throw const FormatException('M4A 64-bit media chunk offset would overflow.');
+    throw const FormatException(
+      'M4A 64-bit media chunk offset would overflow.',
+    );
   }
   for (var index = 7; index >= 0; index -= 1) {
     bytes[offset + index] = value & 0xff;

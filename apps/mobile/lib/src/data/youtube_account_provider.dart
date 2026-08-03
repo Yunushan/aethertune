@@ -1,13 +1,14 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'youtube_data_metadata_provider.dart';
 
 typedef YouTubeAccessTokenReader = Future<String> Function();
-typedef YouTubeAccountResponseLoader = Future<String> Function(
-  Uri uri,
-  String accessToken,
-);
+typedef YouTubeAccountResponseLoader =
+    Future<String> Function(Uri uri, String accessToken);
 
 /// Read-only, bearer-authorized views of a listener's own YouTube account.
 ///
@@ -98,14 +99,16 @@ final class YouTubeAccountProvider {
     final accessToken = await _accessTokenReader();
     return parseYouTubeDataPlaylistItemsPage(
       await _responseLoader(
-        playlistsUri.resolve('playlistItems').replace(
-          queryParameters: _queryParameters(
-            cursor: normalizedCursor,
-            part: 'snippet,contentDetails',
-            limit: limit,
-            extra: <String, String>{'playlistId': normalizedPlaylistId},
-          ),
-        ),
+        playlistsUri
+            .resolve('playlistItems')
+            .replace(
+              queryParameters: _queryParameters(
+                cursor: normalizedCursor,
+                part: 'snippet,contentDetails',
+                limit: limit,
+                extra: <String, String>{'playlistId': normalizedPlaylistId},
+              ),
+            ),
         _requireAccessToken(accessToken),
       ),
     );

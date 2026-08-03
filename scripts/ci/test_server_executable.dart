@@ -4,7 +4,9 @@ import 'dart:io';
 
 Future<void> main(List<String> arguments) async {
   if (arguments.length != 1) {
-    stderr.writeln('Usage: dart test_server_executable.dart <server-executable>');
+    stderr.writeln(
+      'Usage: dart test_server_executable.dart <server-executable>',
+    );
     exitCode = 64;
     return;
   }
@@ -44,13 +46,99 @@ Future<void> main(List<String> arguments) async {
       final client = HttpClient();
       try {
         final request = await client.getUrl(
-          Uri(scheme: 'http', host: InternetAddress.loopbackIPv4.address, port: port, path: 'health'),
+          Uri(
+            scheme: 'http',
+            host: InternetAddress.loopbackIPv4.address,
+            port: port,
+            path: 'health',
+          ),
         );
         final response = await request.close();
         await response.drain<void>();
         if (response.statusCode == HttpStatus.ok) {
-          stdout.writeln('Server executable passed the health check on port $port.');
-          return;
+          final readyRequest = await client.getUrl(
+            Uri(
+              scheme: 'http',
+              host: InternetAddress.loopbackIPv4.address,
+              port: port,
+              path: 'ready',
+            ),
+          );
+          final readyResponse = await readyRequest.close();
+          await readyResponse.drain<void>();
+          if (readyResponse.statusCode == HttpStatus.ok) {
+            final metricsRequest = await client.getUrl(
+              Uri(
+                scheme: 'http',
+                host: InternetAddress.loopbackIPv4.address,
+                port: port,
+                path: 'api/v1/metrics',
+              ),
+            );
+            final metricsResponse = await metricsRequest.close();
+            final metricsBody = await metricsResponse
+                .transform(utf8.decoder)
+                .join();
+            if (metricsResponse.statusCode != HttpStatus.ok) {
+              throw StateError(
+                'Metrics endpoint returned ${metricsResponse.statusCode}: '
+                '$metricsBody',
+              );
+            }
+            final metrics = jsonDecode(metricsBody);
+            if (metrics is! Map<String, dynamic> ||
+                metrics['requestsTotal'] is! int ||
+                metrics['responses2xx'] is! int ||
+                metrics['responses4xx'] is! int ||
+                metrics['responses5xx'] is! int ||
+                metrics['requestDurationMillisecondsTotal'] is! int) {
+              throw StateError(
+                'Metrics endpoint returned an invalid aggregate payload.',
+              );
+            }
+            final loadFailures = <String>[];
+            await Future.wait(
+              List<Future<void>>.generate(30, (_) async {
+                final loadClient = HttpClient();
+                try {
+                  for (final path in const <String>[
+                    'health',
+                    'ready',
+                    'api/v1/info',
+                  ]) {
+                    final loadRequest = await loadClient.getUrl(
+                      Uri(
+                        scheme: 'http',
+                        host: InternetAddress.loopbackIPv4.address,
+                        port: port,
+                        path: path,
+                      ),
+                    );
+                    final loadResponse = await loadRequest.close();
+                    await loadResponse.drain<void>();
+                    if (loadResponse.statusCode != HttpStatus.ok) {
+                      loadFailures.add(
+                        '$path returned ${loadResponse.statusCode}',
+                      );
+                    }
+                  }
+                } on Object catch (error) {
+                  loadFailures.add('request failed: $error');
+                } finally {
+                  loadClient.close(force: true);
+                }
+              }),
+            );
+            if (loadFailures.isNotEmpty) {
+              throw StateError(
+                'Server load probes failed: ${loadFailures.join('; ')}',
+              );
+            }
+            stdout.writeln(
+              'Server executable passed health, readiness, metrics, and 90 concurrent load probes on port $port.',
+            );
+            return;
+          }
         }
       } on SocketException {
         // The process may still be binding its loopback socket.

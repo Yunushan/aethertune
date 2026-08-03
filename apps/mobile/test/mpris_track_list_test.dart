@@ -54,20 +54,22 @@ void main() {
     expect(response, isNotNull);
   });
 
-  test('Player Seek applies a relative offset without seeking before zero',
-      () async {
-    final player = OrgMprisMediaPlayer2(identity: 'AetherTune')
-      ..position = const Duration(seconds: 10);
+  test(
+    'Player Seek applies a relative offset without seeking before zero',
+    () async {
+      final player = OrgMprisMediaPlayer2(identity: 'AetherTune')
+        ..position = const Duration(seconds: 10);
 
-    expectLater(
-      player.positionStream,
-      emitsInOrder(<Duration>[const Duration(seconds: 15), Duration.zero]),
-    );
-    await player.doSeek(const Duration(seconds: 5).inMicroseconds);
-    await player.doSeek(-const Duration(seconds: 30).inMicroseconds);
+      expectLater(
+        player.positionStream,
+        emitsInOrder(<Duration>[const Duration(seconds: 15), Duration.zero]),
+      );
+      await player.doSeek(const Duration(seconds: 5).inMicroseconds);
+      await player.doSeek(-const Duration(seconds: 30).inMicroseconds);
 
-    expect(player.position, Duration.zero);
-  });
+      expect(player.position, Duration.zero);
+    },
+  );
 
   test('Player LoopStatus validates and dispatches repeat requests', () async {
     final player = OrgMprisMediaPlayer2(identity: 'AetherTune');

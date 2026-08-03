@@ -11,12 +11,13 @@ final class SpotifyHttpResponse {
   final String body;
 }
 
-typedef SpotifyHttpRequest = Future<SpotifyHttpResponse> Function(
-  Uri uri, {
-  required String method,
-  required Map<String, String> headers,
-  String? body,
-});
+typedef SpotifyHttpRequest =
+    Future<SpotifyHttpResponse> Function(
+      Uri uri, {
+      required String method,
+      required Map<String, String> headers,
+      String? body,
+    });
 
 final class SpotifyOAuthToken {
   const SpotifyOAuthToken({
@@ -69,15 +70,16 @@ final class SpotifyAuthorizationRequest {
   final String codeChallenge;
   final List<String> scopes;
 
-  Uri get uri => Uri.https('accounts.spotify.com', '/authorize', <String, String>{
-    'client_id': clientId,
-    'response_type': 'code',
-    'redirect_uri': redirectUri.toString(),
-    'state': state,
-    'code_challenge_method': 'S256',
-    'code_challenge': codeChallenge,
-    if (scopes.isNotEmpty) 'scope': scopes.join(' '),
-  });
+  Uri get uri =>
+      Uri.https('accounts.spotify.com', '/authorize', <String, String>{
+        'client_id': clientId,
+        'response_type': 'code',
+        'redirect_uri': redirectUri.toString(),
+        'state': state,
+        'code_challenge_method': 'S256',
+        'code_challenge': codeChallenge,
+        if (scopes.isNotEmpty) 'scope': scopes.join(' '),
+      });
 
   static SpotifyAuthorizationRequest create({
     required String clientId,
@@ -119,19 +121,19 @@ String spotifyPkceChallenge(String verifier) {
   if (normalized.length < 43 || normalized.length > 128) {
     throw const FormatException('Spotify PKCE verifier has an invalid length.');
   }
-  return base64UrlEncode(sha256.convert(utf8.encode(normalized)).bytes)
-      .replaceAll('=', '');
+  return base64UrlEncode(
+    sha256.convert(utf8.encode(normalized)).bytes,
+  ).replaceAll('=', '');
 }
 
 final class SpotifyOAuthClient {
-  SpotifyOAuthClient({
-    SpotifyHttpRequest? request,
-    DateTime Function()? clock,
-  }) : _request = request ?? _sendRequest,
-       _clock = clock ?? DateTime.now;
+  SpotifyOAuthClient({SpotifyHttpRequest? request, DateTime Function()? clock})
+    : _request = request ?? _sendRequest,
+      _clock = clock ?? DateTime.now;
 
-  static final Uri tokenUri =
-      Uri.parse('https://accounts.spotify.com/api/token');
+  static final Uri tokenUri = Uri.parse(
+    'https://accounts.spotify.com/api/token',
+  );
 
   final SpotifyHttpRequest _request;
   final DateTime Function() _clock;
@@ -142,7 +144,9 @@ final class SpotifyOAuthClient {
   }) {
     final normalizedCode = code.trim();
     if (normalizedCode.isEmpty) {
-      throw const FormatException('Spotify did not return an authorization code.');
+      throw const FormatException(
+        'Spotify did not return an authorization code.',
+      );
     }
     return _requestToken(<String, String>{
       'client_id': authorization.clientId,
@@ -186,7 +190,9 @@ final class SpotifyOAuthClient {
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      throw const FormatException('Spotify returned an invalid token response.');
+      throw const FormatException(
+        'Spotify returned an invalid token response.',
+      );
     }
     final json = Map<String, Object?>.from(decoded);
     final accessToken = _nonEmpty(json['access_token']);

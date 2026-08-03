@@ -53,9 +53,7 @@ final class _SpotifySavedTracksScreenState
     final library = context.watch<LibraryStore>();
     final offlineModeEnabled = library.offlineModeEnabled;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_pageTitle),
-      ),
+      appBar: AppBar(title: Text(_pageTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
@@ -119,7 +117,10 @@ final class _SpotifySavedTracksScreenState
                 icon: const Icon(Icons.refresh),
               ),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             ListTile(
               leading: const Icon(Icons.library_music_outlined),
               title: Text(
@@ -240,8 +241,10 @@ final class _SpotifySavedTracksScreenState
           : widget.savedEpisodes
           ? await widget.provider.loadSavedEpisodesPage(offset: requestedOffset)
           : widget.show != null
-          ? await widget.provider
-                .loadShowEpisodesPage(widget.show!, offset: requestedOffset)
+          ? await widget.provider.loadShowEpisodesPage(
+              widget.show!,
+              offset: requestedOffset,
+            )
           : await widget.provider.loadSavedTracksPage(offset: requestedOffset);
       if (!mounted || request != _requestSerial) {
         return;
@@ -298,19 +301,19 @@ final class _SpotifySavedTracksScreenState
     final remaining = total - _tracks.length;
     return remaining > 0
         ? widget.topTracks
-            ? 'Load more top tracks ($remaining remaining)'
-            : widget.savedEpisodes
-            ? 'Load more saved episodes ($remaining remaining)'
-            : widget.show != null
-            ? 'Load more show episodes ($remaining remaining)'
-            : 'Load more saved tracks ($remaining remaining)'
+              ? 'Load more top tracks ($remaining remaining)'
+              : widget.savedEpisodes
+              ? 'Load more saved episodes ($remaining remaining)'
+              : widget.show != null
+              ? 'Load more show episodes ($remaining remaining)'
+              : 'Load more saved tracks ($remaining remaining)'
         : widget.topTracks
-            ? 'Load more top tracks'
-            : widget.savedEpisodes
-            ? 'Load more saved episodes'
-            : widget.show != null
-            ? 'Load more show episodes'
-            : 'Load more saved tracks';
+        ? 'Load more top tracks'
+        : widget.savedEpisodes
+        ? 'Load more saved episodes'
+        : widget.show != null
+        ? 'Load more show episodes'
+        : 'Load more saved tracks';
   }
 
   String get _pageTitle => widget.topTracks
@@ -320,9 +323,10 @@ final class _SpotifySavedTracksScreenState
       : widget.show?.title ?? 'Spotify saved tracks';
 
   String _subtitle(Track track) {
-    final parts = <String>[track.artist, track.album]
-        .where((part) => part.trim().isNotEmpty)
-        .toList(growable: false);
+    final parts = <String>[
+      track.artist,
+      track.album,
+    ].where((part) => part.trim().isNotEmpty).toList(growable: false);
     return parts.join(' - ');
   }
 

@@ -25,31 +25,70 @@ REQUIRED_AAB_ENTRIES = frozenset(
 )
 
 
-def verify_archive(path: Path, required_entries: frozenset[str], label: str) -> None:
+def verify_archive(
+    path: Path,
+    required_entries: frozenset[str],
+    label: str,
+    *,
+    require_signing: bool = False,
+) -> None:
     if not path.is_file():
         raise ValueError(f"{label} does not exist: {path}")
     try:
         with zipfile.ZipFile(path) as archive:
             entries = set(archive.namelist())
             missing = sorted(required_entries - entries)
+            if require_signing:
+                signature_entries = {
+                    entry
+                    for entry in entries
+                    if entry.startswith("META-INF/")
+                    and entry.rsplit(".", 1)[-1].upper() in {"RSA", "DSA", "EC"}
+                }
+                if not signature_entries:
+                    raise ValueError(f"{label} does not contain a signing signature")
     except zipfile.BadZipFile as error:
         raise ValueError(f"{label} is not a valid ZIP archive: {path}") from error
     if missing:
         raise ValueError(f"{label} is missing required entries: {', '.join(missing)}")
 
 
-def verify_android_release_artifacts(apk: Path, aab: Path) -> None:
-    verify_archive(apk, REQUIRED_APK_ENTRIES, "APK")
-    verify_archive(aab, REQUIRED_AAB_ENTRIES, "AAB")
+def verify_android_release_artifacts(
+    apk: Path,
+    aab: Path,
+    *,
+    require_signing: bool = False,
+) -> None:
+    verify_archive(
+        apk,
+        REQUIRED_APK_ENTRIES,
+        "APK",
+        require_signing=require_signing,
+    )
+    verify_archive(
+        aab,
+        REQUIRED_AAB_ENTRIES,
+        "AAB",
+        require_signing=require_signing,
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apk", required=True, type=Path)
     parser.add_argument("--aab", required=True, type=Path)
+    parser.add_argument(
+        "--require-signing",
+        action="store_true",
+        help="require APK/AAB signing signature entries",
+    )
     arguments = parser.parse_args()
     try:
-        verify_android_release_artifacts(arguments.apk, arguments.aab)
+        verify_android_release_artifacts(
+            arguments.apk,
+            arguments.aab,
+            require_signing=arguments.require_signing,
+        )
     except ValueError as error:
         print(error, file=sys.stderr)
         raise SystemExit(1) from error

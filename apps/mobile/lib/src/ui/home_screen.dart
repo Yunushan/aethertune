@@ -235,7 +235,8 @@ Future<void> _configureListenBrainz(BuildContext context) async {
                   final value = tokenController.text.trim();
                   if (value.isEmpty) {
                     setDialogState(
-                      () => validationError = 'Enter a ListenBrainz user token.',
+                      () =>
+                          validationError = 'Enter a ListenBrainz user token.',
                     );
                     return;
                   }
@@ -269,7 +270,9 @@ Future<void> _configureListenBrainz(BuildContext context) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not connect ListenBrainz. Check the user token.'),
+          content: Text(
+            'Could not connect ListenBrainz. Check the user token.',
+          ),
         ),
       );
     }
@@ -307,9 +310,9 @@ Future<void> _removeListenBrainz(BuildContext context) async {
   }
   await store.remove();
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ListenBrainz disconnected.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('ListenBrainz disconnected.')));
   }
 }
 
@@ -434,9 +437,7 @@ Future<void> _importListenBrainzHistory(BuildContext context) async {
   } on Object {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not import ListenBrainz history.'),
-        ),
+        const SnackBar(content: Text('Could not import ListenBrainz history.')),
       );
     }
   }
@@ -568,9 +569,9 @@ Future<void> _configureLyricsTranslation(BuildContext context) async {
     }
   } on FormatException catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     }
   } finally {
     endpointController.dispose();
@@ -690,25 +691,29 @@ const _platformTextShareService = SharePlusTextShareService();
 List<NavigationDestination> _navigationBarDestinations(
   AppLocalizations localizations,
 ) {
-  return _aetherTuneNavigationDestinations.map((destination) {
-    return NavigationDestination(
-      icon: Icon(destination.icon),
-      selectedIcon: Icon(destination.selectedIcon),
-      label: destination.label(localizations),
-    );
-  }).toList(growable: false);
+  return _aetherTuneNavigationDestinations
+      .map((destination) {
+        return NavigationDestination(
+          icon: Icon(destination.icon),
+          selectedIcon: Icon(destination.selectedIcon),
+          label: destination.label(localizations),
+        );
+      })
+      .toList(growable: false);
 }
 
 List<NavigationRailDestination> _navigationRailDestinations(
   AppLocalizations localizations,
 ) {
-  return _aetherTuneNavigationDestinations.map((destination) {
-    return NavigationRailDestination(
-      icon: Icon(destination.icon),
-      selectedIcon: Icon(destination.selectedIcon),
-      label: Text(destination.label(localizations)),
-    );
-  }).toList(growable: false);
+  return _aetherTuneNavigationDestinations
+      .map((destination) {
+        return NavigationRailDestination(
+          icon: Icon(destination.icon),
+          selectedIcon: Icon(destination.selectedIcon),
+          label: Text(destination.label(localizations)),
+        );
+      })
+      .toList(growable: false);
 }
 
 class HomeScreen extends StatefulWidget {
@@ -723,8 +728,7 @@ class HomeScreen extends StatefulWidget {
     this.podcastProviderFactory,
     this.providerSearchProviders,
   }) : assert(
-         initialTab >= 0 &&
-             initialTab < _aetherTuneNavigationDestinationCount,
+         initialTab >= 0 && initialTab < _aetherTuneNavigationDestinationCount,
        );
 
   final int initialTab;
@@ -766,8 +770,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _tabIndex = widget.initialTab;
-    _radioClickProvider = widget.radioBrowserProvider ??
-        RadioBrowserProvider();
+    _radioClickProvider = widget.radioBrowserProvider ?? RadioBrowserProvider();
     unawaited(_loadLyricsSearchCacheLifetime());
     if (widget.initialImportAudio) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -849,9 +852,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final player = _historyPlayer;
     final library = _historyLibrary;
     final track = player?.current;
-    if (player == null ||
-        library == null ||
-        track == null) {
+    if (player == null || library == null || track == null) {
       return;
     }
 
@@ -904,7 +905,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not clear cached lyrics searches.')),
+        const SnackBar(
+          content: Text('Could not clear cached lyrics searches.'),
+        ),
       );
       return;
     }
@@ -946,16 +949,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   LrcLibLyricsProvider _lyricsProviderFor(BuildContext context) {
-    final endpoint = context.read<LyricsSearchEndpointSettingsStore?>()?.endpoint;
+    final endpoint = context
+        .read<LyricsSearchEndpointSettingsStore?>()
+        ?.endpoint;
     return LrcLibLyricsProvider(
       baseUri: endpoint,
       cacheLifetime: _lyricsSearchCacheLifetime,
     );
   }
 
-  Future<void> _uploadLyricsSearchEndpointToSync(
-    BuildContext context,
-  ) async {
+  Future<void> _uploadLyricsSearchEndpointToSync(BuildContext context) async {
     final endpointSettings = context.read<LyricsSearchEndpointSettingsStore>();
     if (!endpointSettings.isConfigured) {
       return;
@@ -967,10 +970,8 @@ class _HomeScreenState extends State<HomeScreen> {
           .read<LibrarySyncStore>()
           .updateProviderConfiguration(
             context.read<LibraryStore>(),
-            (remoteSnapshot) => _lyricsSearchProviderSnapshot(
-              remoteSnapshot,
-              document,
-            ),
+            (remoteSnapshot) =>
+                _lyricsSearchProviderSnapshot(remoteSnapshot, document),
           );
       if (!context.mounted) {
         return;
@@ -986,22 +987,24 @@ class _HomeScreenState extends State<HomeScreen> {
       if (context.mounted) {
         messenger.showSnackBar(
           const SnackBar(
-            content: Text('Provider settings changed remotely. Import them before uploading again.'),
+            content: Text(
+              'Provider settings changed remotely. Import them before uploading again.',
+            ),
           ),
         );
       }
     } on Object catch (error) {
       if (context.mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Could not upload lyrics search service: $error')),
+          SnackBar(
+            content: Text('Could not upload lyrics search service: $error'),
+          ),
         );
       }
     }
   }
 
-  Future<void> _importLyricsSearchEndpointFromSync(
-    BuildContext context,
-  ) async {
+  Future<void> _importLyricsSearchEndpointFromSync(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final remote = await context
@@ -1013,7 +1016,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final snapshot = remote.snapshot;
       if (snapshot == null) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No provider configuration is stored on this sync server.')),
+          const SnackBar(
+            content: Text(
+              'No provider configuration is stored on this sync server.',
+            ),
+          ),
         );
         return;
       }
@@ -1021,7 +1028,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final document = snapshot['lyricsSearchEndpoint'];
       if (document is! Map) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No lyrics search service is stored on this sync server.')),
+          const SnackBar(
+            content: Text(
+              'No lyrics search service is stored on this sync server.',
+            ),
+          ),
         );
         return;
       }
@@ -1041,7 +1052,9 @@ class _HomeScreenState extends State<HomeScreen> {
     } on Object catch (error) {
       if (context.mounted) {
         messenger.showSnackBar(
-          SnackBar(content: Text('Could not import lyrics search service: $error')),
+          SnackBar(
+            content: Text('Could not import lyrics search service: $error'),
+          ),
         );
       }
     }
@@ -1109,14 +1122,8 @@ class _HomeScreenState extends State<HomeScreen> {
               _HomeTab(
                 onImport: () => _importAudio(context),
                 onImportFolder: () => _importAudioFolder(context),
-                onAddToPlaylist: (track) => _showAddToPlaylist(
-                  context,
-                  track,
-                ),
-                onLyrics: (track) => _showLyricsEditor(
-                  context,
-                  track,
-                ),
+                onAddToPlaylist: (track) => _showAddToPlaylist(context, track),
+                onLyrics: (track) => _showLyricsEditor(context, track),
                 internetArchiveProvider: widget.internetArchiveProvider,
                 radioBrowserProvider: widget.radioBrowserProvider,
               ),
@@ -1144,27 +1151,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 onImport: () => _importAudio(context),
                 onImportFolder: () => _importAudioFolder(context),
-                onAddToPlaylist: (track) => _showAddToPlaylist(
-                  context,
-                  track,
-                ),
-                onLyrics: (track) => _showLyricsEditor(
-                  context,
-                  track,
-                ),
-                onBatchLyrics: (tracks) => unawaited(
-                  _matchMissingLyrics(context, tracks),
-                ),
+                onAddToPlaylist: (track) => _showAddToPlaylist(context, track),
+                onLyrics: (track) => _showLyricsEditor(context, track),
+                onBatchLyrics: (tracks) =>
+                    unawaited(_matchMissingLyrics(context, tracks)),
               ),
               _PlaylistsTab(
-                onAddToPlaylist: (track) => _showAddToPlaylist(
-                  context,
-                  track,
-                ),
-                onLyrics: (track) => _showLyricsEditor(
-                  context,
-                  track,
-                ),
+                onAddToPlaylist: (track) => _showAddToPlaylist(context, track),
+                onLyrics: (track) => _showLyricsEditor(context, track),
               ),
               const _HistoryTab(),
               _SourcesTab(
@@ -1177,7 +1171,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 onRestartOnboarding: widget.onRestartOnboarding,
                 isRefreshingLocalMetadata: _isRefreshingLocalMetadata,
                 onRefreshLocalMetadata: _refreshLocalLibraryMetadata,
-                onClearLyricsSearchCache: () => _clearLyricsSearchCache(context),
+                onClearLyricsSearchCache: () =>
+                    _clearLyricsSearchCache(context),
                 onUploadLyricsSearchEndpointToSync: () =>
                     _uploadLyricsSearchEndpointToSync(context),
                 onImportLyricsSearchEndpointFromSync: () =>
@@ -1218,9 +1213,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? localizations.sleepTimerActive
                 : localizations.sleepTimer,
             onPressed: () => _showSleepTimer(context),
-            icon: Icon(
-              sleepTimerActive ? Icons.timer : Icons.bedtime_outlined,
-            ),
+            icon: Icon(sleepTimerActive ? Icons.timer : Icons.bedtime_outlined),
           ),
         ],
       ),
@@ -1501,27 +1494,27 @@ class _HomeScreenState extends State<HomeScreen> {
                         : 'Search ${_lyricsProviderFor(context).name}',
                     child: TextButton.icon(
                       onPressed: () async {
-                              final selected = await showLyricsSearchSheet(
-                                dialogContext,
-                                track: track,
-                                provider: _lyricsProviderFor(context),
-                                offlineOnly: library.offlineModeEnabled,
-                              );
-                              final lyrics = selected?.preferredLyrics;
-                              if (!dialogContext.mounted || lyrics == null) {
-                                return;
-                              }
+                        final selected = await showLyricsSearchSheet(
+                          dialogContext,
+                          track: track,
+                          provider: _lyricsProviderFor(context),
+                          offlineOnly: library.offlineModeEnabled,
+                        );
+                        final lyrics = selected?.preferredLyrics;
+                        if (!dialogContext.mounted || lyrics == null) {
+                          return;
+                        }
 
-                              controller.text = lyrics;
-                              controller.selection = TextSelection.collapsed(
-                                offset: controller.text.length,
-                              );
-                              sourceId = selected!.providerId;
-                              sourceName = selected.providerName;
-                              sourceExternalId = selected.externalId;
-                              sourceUri = selected.sourceUri;
-                              setDialogState(() {});
-                            },
+                        controller.text = lyrics;
+                        controller.selection = TextSelection.collapsed(
+                          offset: controller.text.length,
+                        );
+                        sourceId = selected!.providerId;
+                        sourceName = selected.providerName;
+                        sourceExternalId = selected.externalId;
+                        sourceUri = selected.sourceUri;
+                        setDialogState(() {});
+                      },
                       icon: const Icon(Icons.travel_explore),
                       label: const Text('Search online'),
                     ),
@@ -1610,9 +1603,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   if (initialValue.isNotEmpty)
                     TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(
-                        const _LyricsEditorResult(plainText: ''),
-                      ),
+                      onPressed: () => Navigator.of(
+                        dialogContext,
+                      ).pop(const _LyricsEditorResult(plainText: '')),
                       child: const Text('Delete'),
                     ),
                   TextButton(
@@ -1658,7 +1651,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!isSupportedLyricsDocumentName(file.name)) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Choose a .txt, .lrc, or .ttml lyrics file.')),
+        const SnackBar(
+          content: Text('Choose a .txt, .lrc, or .ttml lyrics file.'),
+        ),
       );
       return null;
     }
@@ -1678,10 +1673,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _createPlaylist(
-    BuildContext context, {
-    Track? seedTrack,
-  }) async {
+  Future<void> _createPlaylist(BuildContext context, {Track? seedTrack}) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
     final name = await _promptForPlaylistName(context);
@@ -1745,8 +1737,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showNowPlayingLyrics(BuildContext context) async {
     final player = context.read<PlayerController>();
     final library = context.read<LibraryStore>();
-    final translationSettings =
-        context.read<LyricsTranslationSettingsStore?>();
+    final translationSettings = context.read<LyricsTranslationSettingsStore?>();
     final track = player.current;
     if (track == null) {
       return;
@@ -1768,15 +1759,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Navigator.of(sheetContext).pop();
             unawaited(_showLyricsEditor(context, track));
           },
-          onShare: () => unawaited(
-            _copyLyricsShareText(context, library, track),
-          ),
+          onShare: () =>
+              unawaited(_copyLyricsShareText(context, library, track)),
           onShareRange: () => unawaited(
             _copyLyricsSelectedRangeShareText(context, library, track),
           ),
-          onAdjustTiming: () => unawaited(
-            _showLyricsTimingAdjustment(context, library, track),
-          ),
+          onAdjustTiming: () =>
+              unawaited(_showLyricsTimingAdjustment(context, library, track)),
           onSearch: () => unawaited(
             _showLyricsSearch(
               context,
@@ -1805,9 +1794,7 @@ class _HomeScreenState extends State<HomeScreen> {
             content: TextField(
               autofocus: true,
               controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Playlist name',
-              ),
+              decoration: const InputDecoration(labelText: 'Playlist name'),
               textInputAction: TextInputAction.done,
               onSubmitted: (value) {
                 final normalized = value.trim();
@@ -1842,11 +1829,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _importAudio(BuildContext context) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
-    final scanningSelectedAudio = AppLocalizations.of(context)!.scanningSelectedAudio;
+    final scanningSelectedAudio = AppLocalizations.of(
+      context,
+    )!.scanningSelectedAudio;
 
-    final result = await FilePicker.pickFiles(
-      type: FileType.audio,
-    );
+    final result = await FilePicker.pickFiles(type: FileType.audio);
 
     if (result == null || result.files.isEmpty) {
       return;
@@ -1863,10 +1850,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final progress = _showLocalImportProgress(
-      messenger,
-      scanningSelectedAudio,
-    );
+    final progress = _showLocalImportProgress(messenger, scanningSelectedAudio);
     try {
       final scanResult = await scanLocalFilesInBackground(
         filePaths,
@@ -1900,9 +1884,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final folderPath = Platform.isAndroid
         ? await _selectAndroidAudioTree(context)
-        : await FilePicker.getDirectoryPath(
-            dialogTitle: 'Import audio folder',
-          );
+        : await FilePicker.getDirectoryPath(dialogTitle: 'Import audio folder');
     if (!context.mounted || folderPath == null) {
       return;
     }
@@ -2027,9 +2009,12 @@ class _HomeScreenState extends State<HomeScreen> {
       if (report.unmatchedCount > 0) '${report.unmatchedCount} unmatched',
       if (report.failedCount > 0) '${report.failedCount} failed',
       if (skippedExisting > 0) '$skippedExisting kept existing',
-      if (report.wasLimited) 'first ${LyricsBatchMatcher.maxTracksPerBatch} searched',
+      if (report.wasLimited)
+        'first ${LyricsBatchMatcher.maxTracksPerBatch} searched',
     ].join('; ');
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(summary)));
   }
 
   Future<String?> _selectAndroidAudioTree(BuildContext context) async {
@@ -2167,8 +2152,8 @@ class _HomeScreenState extends State<HomeScreen> {
     var fadeOut = player.sleepTimerFadeOutEnabled;
     var fadeDuration =
         sleepTimerFadeDurationOptions.contains(player.sleepTimerFadeDuration)
-            ? player.sleepTimerFadeDuration
-            : defaultSleepTimerFadeDuration;
+        ? player.sleepTimerFadeDuration
+        : defaultSleepTimerFadeDuration;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -2342,7 +2327,7 @@ class _HomeScreenState extends State<HomeScreen> {
         content: Text(
           fadeOut
               ? 'Sleep timer set for ${duration.inMinutes} minute(s) '
-                  'with ${sleepTimerFadeDurationLabel(fadeDuration)} fade-out.'
+                    'with ${sleepTimerFadeDurationLabel(fadeDuration)} fade-out.'
               : 'Sleep timer set for ${duration.inMinutes} minute(s).',
         ),
       ),
@@ -2365,7 +2350,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 final duration = parseCustomSleepTimerDuration(value);
                 if (duration == null) {
                   setDialogState(() {
-                    errorText = 'Enter a whole number from '
+                    errorText =
+                        'Enter a whole number from '
                         '$minCustomSleepTimerMinutes to '
                         '$maxCustomSleepTimerMinutes.';
                   });
@@ -2382,7 +2368,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   controller: controller,
                   decoration: InputDecoration(
                     errorText: errorText,
-                    helperText: '$minCustomSleepTimerMinutes to '
+                    helperText:
+                        '$minCustomSleepTimerMinutes to '
                         '$maxCustomSleepTimerMinutes minutes',
                     labelText: 'Minutes',
                   ),
@@ -2433,10 +2420,7 @@ class _TrackMetadataDraft {
   final String genre;
 }
 
-Future<void> _showTrackMetadataEditor(
-  BuildContext context,
-  Track track,
-) async {
+Future<void> _showTrackMetadataEditor(BuildContext context, Track track) async {
   final library = context.read<LibraryStore>();
   final messenger = ScaffoldMessenger.of(context);
   final draft = await _promptForTrackMetadata(context, track);
@@ -2528,7 +2512,11 @@ Future<void> _showTrackMetadataEditor(
       } on Object catch (error) {
         if (context.mounted) {
           messenger.showSnackBar(
-            SnackBar(content: Text('Saved app metadata, but could not update embedded tags: $error')),
+            SnackBar(
+              content: Text(
+                'Saved app metadata, but could not update embedded tags: $error',
+              ),
+            ),
           );
         }
         return;
@@ -2590,15 +2578,18 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
               final trackNumber = trackNumberText.isEmpty
                   ? null
                   : int.tryParse(trackNumberText);
-              if ((yearText.isNotEmpty && (year == null || year < 1000 || year > 9999)) ||
+              if ((yearText.isNotEmpty &&
+                      (year == null || year < 1000 || year > 9999)) ||
                   (trackNumberText.isNotEmpty &&
                       (trackNumber == null || trackNumber <= 0))) {
                 setDialogState(() {
-                  yearErrorText = yearText.isNotEmpty &&
+                  yearErrorText =
+                      yearText.isNotEmpty &&
                           (year == null || year < 1000 || year > 9999)
                       ? 'Use a four-digit year'
                       : null;
-                  trackNumberErrorText = trackNumberText.isNotEmpty &&
+                  trackNumberErrorText =
+                      trackNumberText.isNotEmpty &&
                           (trackNumber == null || trackNumber <= 0)
                       ? 'Use a positive whole number'
                       : null;
@@ -2742,9 +2733,7 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
                       if (library.offlineModeEnabled)
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Offline mode prevents metadata lookup.',
-                          ),
+                          child: Text('Offline mode prevents metadata lookup.'),
                         ),
                     ],
                   ),
@@ -2755,10 +2744,7 @@ Future<_TrackMetadataDraft?> _promptForTrackMetadata(
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
-                FilledButton(
-                  onPressed: submit,
-                  child: const Text('Save'),
-                ),
+                FilledButton(onPressed: submit, child: const Text('Save')),
               ],
             );
           },
@@ -2947,7 +2933,9 @@ Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
     if (context.mounted) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Could not update embedded M4A/M4B/M4R/ALAC artwork: $error'),
+          content: Text(
+            'Could not update embedded M4A/M4B/M4R/ALAC artwork: $error',
+          ),
         ),
       );
     }
@@ -2978,7 +2966,8 @@ Future<bool?> _confirmM4aArtworkWrite(BuildContext context) {
 }
 
 Uri _m4aArtworkDataUri(List<int> artwork) {
-  final mimeType = artwork.length >= 8 &&
+  final mimeType =
+      artwork.length >= 8 &&
           artwork[0] == 0x89 &&
           artwork[1] == 0x50 &&
           artwork[2] == 0x4e &&
@@ -2993,7 +2982,8 @@ Uri _m4aArtworkDataUri(List<int> artwork) {
 }
 
 Future<void> _setTrackArtworkUrl(BuildContext context, Track track) async {
-  final initialValue = track.artworkIsUserManaged &&
+  final initialValue =
+      track.artworkIsUserManaged &&
           track.artworkUri != null &&
           _isNetworkImageUri(track.artworkUri!)
       ? track.artworkUri!.toString()
@@ -3030,9 +3020,9 @@ Future<void> _setTrackArtworkUrl(BuildContext context, Track track) async {
     );
   } on Object catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save artwork: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save artwork: $error')));
     }
   }
 }
@@ -3107,8 +3097,7 @@ Future<String?> _promptForTrackArtworkUrl(
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text),
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
               child: const Text('Save'),
             ),
           ],
@@ -3144,9 +3133,9 @@ class _SyncedLyricsPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final timestampStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: colorScheme.primary,
-        );
+    final timestampStyle = Theme.of(
+      context,
+    ).textTheme.labelMedium?.copyWith(color: colorScheme.primary);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -3184,7 +3173,6 @@ class _SyncedLyricsPreview extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _NowPlayingLyricsSheet extends StatelessWidget {
@@ -3232,10 +3220,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
             onShare: onShare,
             onShareRange: onShareRange,
             onSearch: onSearch,
-            onTranslate: _translationAction(
-              context,
-              currentLyrics.plainText,
-            ),
+            onTranslate: _translationAction(context, currentLyrics.plainText),
           );
         }
 
@@ -3279,10 +3264,7 @@ class _NowPlayingLyricsSheet extends StatelessWidget {
 }
 
 class _EmptyNowPlayingLyrics extends StatelessWidget {
-  const _EmptyNowPlayingLyrics({
-    required this.track,
-    required this.onEdit,
-  });
+  const _EmptyNowPlayingLyrics({required this.track, required this.onEdit});
 
   final Track track;
   final VoidCallback onEdit;
@@ -3470,10 +3452,9 @@ class _SyncedNowPlayingLyricsState extends State<_SyncedNowPlayingLyrics> {
         return;
       }
 
-      final targetOffset = (activeIndex * _estimatedLineExtent).clamp(
-        0.0,
-        controller.position.maxScrollExtent,
-      ).toDouble();
+      final targetOffset = (activeIndex * _estimatedLineExtent)
+          .clamp(0.0, controller.position.maxScrollExtent)
+          .toDouble();
       controller.animateTo(
         targetOffset,
         duration: const Duration(milliseconds: 220),
@@ -3529,28 +3510,29 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
             PopupMenuButton<_NowPlayingLyricsMenuAction>(
               tooltip: 'Lyrics actions',
               onSelected: _selectOverflowAction,
-              itemBuilder: (context) => <PopupMenuEntry<_NowPlayingLyricsMenuAction>>[
-                if (onShare != null)
-                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
-                    value: _NowPlayingLyricsMenuAction.share,
-                    child: Text('Copy share text'),
-                  ),
-                if (onShareRange != null)
-                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
-                    value: _NowPlayingLyricsMenuAction.shareRange,
-                    child: Text('Share selected lines'),
-                  ),
-                if (onTranslate != null)
-                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
-                    value: _NowPlayingLyricsMenuAction.translate,
-                    child: Text('Translate lyrics'),
-                  ),
-                if (onAdjustTiming != null)
-                  const PopupMenuItem<_NowPlayingLyricsMenuAction>(
-                    value: _NowPlayingLyricsMenuAction.adjustTiming,
-                    child: Text('Adjust lyric timing'),
-                  ),
-              ],
+              itemBuilder: (context) =>
+                  <PopupMenuEntry<_NowPlayingLyricsMenuAction>>[
+                    if (onShare != null)
+                      const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                        value: _NowPlayingLyricsMenuAction.share,
+                        child: Text('Copy share text'),
+                      ),
+                    if (onShareRange != null)
+                      const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                        value: _NowPlayingLyricsMenuAction.shareRange,
+                        child: Text('Share selected lines'),
+                      ),
+                    if (onTranslate != null)
+                      const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                        value: _NowPlayingLyricsMenuAction.translate,
+                        child: Text('Translate lyrics'),
+                      ),
+                    if (onAdjustTiming != null)
+                      const PopupMenuItem<_NowPlayingLyricsMenuAction>(
+                        value: _NowPlayingLyricsMenuAction.adjustTiming,
+                        child: Text('Adjust lyric timing'),
+                      ),
+                  ],
             ),
           IconButton(
             tooltip: 'Edit lyrics',
@@ -3574,7 +3556,6 @@ class _NowPlayingLyricsHeader extends StatelessWidget {
         onAdjustTiming?.call();
     }
   }
-
 }
 
 Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
@@ -3582,7 +3563,9 @@ Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
   if (store == null) {
     return;
   }
-  final controller = TextEditingController(text: store.endpoint?.toString() ?? '');
+  final controller = TextEditingController(
+    text: store.endpoint?.toString() ?? '',
+  );
   String? validationError;
   try {
     final endpoint = await showDialog<String>(
@@ -3609,7 +3592,8 @@ Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
                     labelText: 'Service URL',
                     hintText: 'https://lyrics.example',
                   ),
-                  onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+                  onSubmitted: (value) =>
+                      Navigator.of(dialogContext).pop(value),
                 ),
                 if (validationError != null) ...<Widget>[
                   const SizedBox(height: 12),
@@ -3661,9 +3645,9 @@ Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
     }
   } on FormatException catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     }
   } finally {
     controller.dispose();
@@ -3705,12 +3689,7 @@ Future<void> _removeLyricsSearchEndpoint(BuildContext context) async {
   }
 }
 
-enum _NowPlayingLyricsMenuAction {
-  share,
-  shareRange,
-  translate,
-  adjustTiming,
-}
+enum _NowPlayingLyricsMenuAction { share, shareRange, translate, adjustTiming }
 
 String _lyricsSubtitle(String base, String? sourceLabel) {
   final source = sourceLabel?.trim() ?? '';
@@ -3760,16 +3739,14 @@ Future<void> _showLyricsSearch(
             ),
         ]
       : <_LyricsSearchEntry>[
-          for (final entry in currentLyrics.plainText
-              .split(RegExp(r'\r?\n'))
-              .map((line) => line.trim())
-              .where((line) => line.isNotEmpty)
-              .toList(growable: false)
-              .indexed)
-            _LyricsSearchEntry(
-              lineNumber: entry.$1 + 1,
-              text: entry.$2,
-            ),
+          for (final entry
+              in currentLyrics.plainText
+                  .split(RegExp(r'\r?\n'))
+                  .map((line) => line.trim())
+                  .where((line) => line.isNotEmpty)
+                  .toList(growable: false)
+                  .indexed)
+            _LyricsSearchEntry(lineNumber: entry.$1 + 1, text: entry.$2),
         ];
   if (entries.isEmpty) {
     return;
@@ -3777,11 +3754,8 @@ Future<void> _showLyricsSearch(
 
   await showDialog<void>(
     context: context,
-    builder: (_) => _LyricsSearchDialog(
-      track: track,
-      entries: entries,
-      player: player,
-    ),
+    builder: (_) =>
+        _LyricsSearchDialog(track: track, entries: entries, player: player),
   );
 }
 
@@ -3839,43 +3813,37 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
               child: _query.trim().isEmpty
                   ? const SizedBox.shrink()
                   : matchingIndices.isEmpty
-                      ? const Center(child: Text('No matching lines'))
-                      : ListView.separated(
-                          itemCount: matchingIndices.length,
-                          separatorBuilder: (_, _) =>
-                              const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final entry =
-                                widget.entries[matchingIndices[index]];
-                            return ListTile(
-                              key: Key(
-                                'lyric-search-result-${entry.lineNumber}',
-                              ),
-                              dense: true,
-                              title: Text(
-                                entry.text,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                entry.timestamp == null
-                                    ? 'Line ${entry.lineNumber}'
-                                    : formatSyncedLyricTimestamp(
-                                        entry.timestamp!,
-                                      ),
-                              ),
-                              onTap: () async {
-                                if (entry.timestamp != null) {
-                                  await widget.player.seek(entry.timestamp!);
-                                }
-                                if (!mounted) {
-                                  return;
-                                }
-                                Navigator.of(this.context).pop();
-                              },
-                            );
+                  ? const Center(child: Text('No matching lines'))
+                  : ListView.separated(
+                      itemCount: matchingIndices.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final entry = widget.entries[matchingIndices[index]];
+                        return ListTile(
+                          key: Key('lyric-search-result-${entry.lineNumber}'),
+                          dense: true,
+                          title: Text(
+                            entry.text,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            entry.timestamp == null
+                                ? 'Line ${entry.lineNumber}'
+                                : formatSyncedLyricTimestamp(entry.timestamp!),
+                          ),
+                          onTap: () async {
+                            if (entry.timestamp != null) {
+                              await widget.player.seek(entry.timestamp!);
+                            }
+                            if (!mounted) {
+                              return;
+                            }
+                            Navigator.of(this.context).pop();
                           },
-                        ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -3933,30 +3901,26 @@ Future<void> _showLyricsTimingAdjustment(
                   children: <Widget>[
                     IconButton(
                       tooltip: 'Move lyrics 0.5 seconds earlier',
-                      onPressed: () => unawaited(
-                        adjust(const Duration(milliseconds: -500)),
-                      ),
+                      onPressed: () =>
+                          unawaited(adjust(const Duration(milliseconds: -500))),
                       icon: const Icon(Icons.fast_rewind_outlined),
                     ),
                     IconButton(
                       tooltip: 'Move lyrics 0.1 seconds earlier',
-                      onPressed: () => unawaited(
-                        adjust(const Duration(milliseconds: -100)),
-                      ),
+                      onPressed: () =>
+                          unawaited(adjust(const Duration(milliseconds: -100))),
                       icon: const Icon(Icons.remove_circle_outline),
                     ),
                     IconButton(
                       tooltip: 'Move lyrics 0.1 seconds later',
-                      onPressed: () => unawaited(
-                        adjust(const Duration(milliseconds: 100)),
-                      ),
+                      onPressed: () =>
+                          unawaited(adjust(const Duration(milliseconds: 100))),
                       icon: const Icon(Icons.add_circle_outline),
                     ),
                     IconButton(
                       tooltip: 'Move lyrics 0.5 seconds later',
-                      onPressed: () => unawaited(
-                        adjust(const Duration(milliseconds: 500)),
-                      ),
+                      onPressed: () =>
+                          unawaited(adjust(const Duration(milliseconds: 500))),
                       icon: const Icon(Icons.fast_forward_outlined),
                     ),
                   ],
@@ -4189,7 +4153,8 @@ class _QueueSheet extends StatelessWidget {
     final currentIndex = current == null
         ? -1
         : queue.indexWhere((track) => track.id == current.id);
-    final hasUpcomingTracks = currentIndex >= 0 && currentIndex < queue.length - 1;
+    final hasUpcomingTracks =
+        currentIndex >= 0 && currentIndex < queue.length - 1;
 
     return SafeArea(
       child: ListView(
@@ -4198,7 +4163,9 @@ class _QueueSheet extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.library_music_outlined),
             title: const Text('Queues'),
-            subtitle: Text('${savedQueues.length} saved · ${player.activeQueueName} active'),
+            subtitle: Text(
+              '${savedQueues.length} saved · ${player.activeQueueName} active',
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -4260,9 +4227,7 @@ class _QueueSheet extends StatelessWidget {
               subtitle: Text('${savedQueue.snapshot.tracks.length} track(s)'),
               onTap: savedQueue.id == player.activeQueueId
                   ? null
-                  : () => unawaited(
-                        player.switchSavedQueue(savedQueue.id),
-                      ),
+                  : () => unawaited(player.switchSavedQueue(savedQueue.id)),
             ),
           const Divider(height: 1),
           ListTile(
@@ -4274,7 +4239,9 @@ class _QueueSheet extends StatelessWidget {
             const ListTile(
               leading: Icon(Icons.queue_music_outlined),
               title: Text('Queue is empty'),
-              subtitle: Text('Play tracks from Library, Playlists, or History.'),
+              subtitle: Text(
+                'Play tracks from Library, Playlists, or History.',
+              ),
             )
           else
             for (final entry in queue.asMap().entries)
@@ -4303,7 +4270,9 @@ class _QueueSheet extends StatelessWidget {
     }
     if (created == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Use a unique queue name (up to 80 characters).')),
+        const SnackBar(
+          content: Text('Use a unique queue name (up to 80 characters).'),
+        ),
       );
       return;
     }
@@ -4331,7 +4300,9 @@ class _QueueSheet extends StatelessWidget {
         );
         if (context.mounted && !renamed) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Use a unique queue name (up to 80 characters).')),
+            const SnackBar(
+              content: Text('Use a unique queue name (up to 80 characters).'),
+            ),
           );
         }
         return;
@@ -4340,7 +4311,9 @@ class _QueueSheet extends StatelessWidget {
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Delete queue?'),
-            content: Text('Delete ${player.activeQueueName} and its saved tracks?'),
+            content: Text(
+              'Delete ${player.activeQueueName} and its saved tracks?',
+            ),
             actions: <Widget>[
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -4363,7 +4336,9 @@ class _QueueSheet extends StatelessWidget {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: Text(upcomingOnly ? 'Clear upcoming tracks?' : 'Clear queue?'),
+            title: Text(
+              upcomingOnly ? 'Clear upcoming tracks?' : 'Clear queue?',
+            ),
             content: Text(
               upcomingOnly
                   ? 'The current track will keep playing.'
@@ -4447,9 +4422,7 @@ class _QueueTrackTile extends StatelessWidget {
     final player = context.read<PlayerController>();
 
     return ListTile(
-      leading: Icon(
-        isCurrent ? Icons.graphic_eq : Icons.music_note_outlined,
-      ),
+      leading: Icon(isCurrent ? Icons.graphic_eq : Icons.music_note_outlined),
       title: Text(track.title),
       subtitle: Text(
         isCurrent
@@ -4557,8 +4530,7 @@ class _HomeTabState extends State<_HomeTab> {
     super.didChangeDependencies();
     final providerStore = context.watch<SelfHostedProviderStore>();
     final signature = _providerHomeStoreSignature(providerStore);
-    if (_providerHomeSignature != null &&
-        _providerHomeSignature != signature) {
+    if (_providerHomeSignature != null && _providerHomeSignature != signature) {
       _providerHomeRequest += 1;
       _providerHomeFeed = null;
       _providerHomeLoading = false;
@@ -4574,8 +4546,8 @@ class _HomeTabState extends State<_HomeTab> {
     final providerStore = context.watch<SelfHostedProviderStore>();
     final youtubeData = context.watch<YouTubeDataSettingsStore?>();
     final youtubeFollows = context.watch<YouTubeChannelFollowStore?>();
-    final youtubeFollowedFeed =
-        context.watch<YouTubeFollowedChannelFeedStore?>();
+    final youtubeFollowedFeed = context
+        .watch<YouTubeFollowedChannelFeedStore?>();
     final jamendo = context.watch<JamendoSettingsStore?>();
     final spotify = context.watch<SpotifySettingsStore?>();
     final player = context.read<PlayerController>();
@@ -4585,7 +4557,8 @@ class _HomeTabState extends State<_HomeTab> {
     }
 
     final sections = library.homeFeedSections();
-    final youtubeFollowingTracks = youtubeFollowedFeed?.items
+    final youtubeFollowingTracks =
+        youtubeFollowedFeed?.items
             .map((item) => item.track)
             .toList(growable: false) ??
         const <Track>[];
@@ -4601,30 +4574,29 @@ class _HomeTabState extends State<_HomeTab> {
         .map((match) => match.track)
         .toList(growable: false);
     final recommendationReasons = <String, List<LibraryRecommendationReason>>{
-      for (final match in recommendationMatches)
-        match.track.id: match.reasons,
+      for (final match in recommendationMatches) match.track.id: match.reasons,
     };
     final moodMixes = library.localMoodMixes(limit: 5);
     final providerCatalogs = _providerHomeCatalogs(providerStore);
     YouTubeDataMetadataProvider? youtubeProvider;
-    for (final provider in youtubeData?.musicProviders ??
-        const <MusicSourceProvider>[]) {
+    for (final provider
+        in youtubeData?.musicProviders ?? const <MusicSourceProvider>[]) {
       if (provider is YouTubeDataMetadataProvider) {
         youtubeProvider = provider;
         break;
       }
     }
     SpotifyMetadataProvider? spotifyProvider;
-    for (final provider in spotify?.musicProviders ??
-        const <MusicSourceProvider>[]) {
+    for (final provider
+        in spotify?.musicProviders ?? const <MusicSourceProvider>[]) {
       if (provider is SpotifyMetadataProvider) {
         spotifyProvider = provider;
         break;
       }
     }
     JamendoProvider? jamendoProvider;
-    for (final provider in jamendo?.musicProviders ??
-        const <MusicSourceProvider>[]) {
+    for (final provider
+        in jamendo?.musicProviders ?? const <MusicSourceProvider>[]) {
       if (provider is JamendoProvider) {
         jamendoProvider = provider;
         break;
@@ -4647,9 +4619,8 @@ class _HomeTabState extends State<_HomeTab> {
             onLoadMore: _loadMoreProviderHome,
             loadingMoreSectionKeys: _providerHomeLoadingMoreSections,
             failedLoadMoreSectionKeys: _providerHomeLoadMoreFailures,
-            onOpen: (provider, collection) => unawaited(
-              _openProviderHomeCollection(provider, collection),
-            ),
+            onOpen: (provider, collection) =>
+                unawaited(_openProviderHomeCollection(provider, collection)),
           ),
           const SizedBox(height: 12),
         ],
@@ -4737,9 +4708,8 @@ class _HomeTabState extends State<_HomeTab> {
                 track,
                 queue: section.tracks,
               ),
-              onStartRadio: () => unawaited(
-                _startTrackRadio(context, player, library, track),
-              ),
+              onStartRadio: () =>
+                  unawaited(_startTrackRadio(context, player, library, track)),
               onSimilarTracks: () => unawaited(
                 _showSimilarTracks(
                   context,
@@ -4748,15 +4718,13 @@ class _HomeTabState extends State<_HomeTab> {
                   onLyrics: widget.onLyrics,
                 ),
               ),
-              onShare: () => unawaited(
-                _copyTrackShareText(context, library, track),
-              ),
+              onShare: () =>
+                  unawaited(_copyTrackShareText(context, library, track)),
               onFavorite: () => library.toggleFavorite(track.id),
               onAddToPlaylist: () => widget.onAddToPlaylist(track),
               onLyrics: () => widget.onLyrics(track),
-              onEditMetadata: () => unawaited(
-                _showTrackMetadataEditor(context, track),
-              ),
+              onEditMetadata: () =>
+                  unawaited(_showTrackMetadataEditor(context, track)),
               onEditArtwork: track.sourceId == 'local'
                   ? () => unawaited(_editTrackArtwork(context, track))
                   : null,
@@ -4818,9 +4786,8 @@ class _HomeTabState extends State<_HomeTab> {
             track,
             queue: tracks,
           ),
-          onStartRadio: () => unawaited(
-            _startTrackRadio(context, player, library, track),
-          ),
+          onStartRadio: () =>
+              unawaited(_startTrackRadio(context, player, library, track)),
           onSimilarTracks: () => unawaited(
             _showSimilarTracks(
               context,
@@ -4829,15 +4796,13 @@ class _HomeTabState extends State<_HomeTab> {
               onLyrics: widget.onLyrics,
             ),
           ),
-          onShare: () => unawaited(
-            _copyTrackShareText(context, library, track),
-          ),
+          onShare: () =>
+              unawaited(_copyTrackShareText(context, library, track)),
           onFavorite: () => library.toggleFavorite(track.id),
           onAddToPlaylist: () => widget.onAddToPlaylist(track),
           onLyrics: () => widget.onLyrics(track),
-          onEditMetadata: () => unawaited(
-            _showTrackMetadataEditor(context, track),
-          ),
+          onEditMetadata: () =>
+              unawaited(_showTrackMetadataEditor(context, track)),
           onEditArtwork: track.sourceId == 'local'
               ? () => unawaited(_editTrackArtwork(context, track))
               : null,
@@ -4866,7 +4831,9 @@ class _HomeTabState extends State<_HomeTab> {
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.dynamic_feed_outlined),
         title: const Text('Following'),
-        subtitle: const Text('Newest updates from artists, podcasts, and public channels'),
+        subtitle: const Text(
+          'Newest updates from artists, podcasts, and public channels',
+        ),
         trailing: Text('${tracks.length}'),
       ),
       Wrap(
@@ -4902,9 +4869,8 @@ class _HomeTabState extends State<_HomeTab> {
               track,
               queue: tracks,
             ),
-            onStartRadio: () => unawaited(
-              _startTrackRadio(context, player, library, track),
-            ),
+            onStartRadio: () =>
+                unawaited(_startTrackRadio(context, player, library, track)),
             onSimilarTracks: () => unawaited(
               _showSimilarTracks(
                 context,
@@ -4913,15 +4879,13 @@ class _HomeTabState extends State<_HomeTab> {
                 onLyrics: widget.onLyrics,
               ),
             ),
-            onShare: () => unawaited(
-              _copyTrackShareText(context, library, track),
-            ),
+            onShare: () =>
+                unawaited(_copyTrackShareText(context, library, track)),
             onFavorite: () => library.toggleFavorite(track.id),
             onAddToPlaylist: () => widget.onAddToPlaylist(track),
             onLyrics: () => widget.onLyrics(track),
-            onEditMetadata: () => unawaited(
-              _showTrackMetadataEditor(context, track),
-            ),
+            onEditMetadata: () =>
+                unawaited(_showTrackMetadataEditor(context, track)),
             onEditArtwork: track.sourceId == 'local'
                 ? () => unawaited(_editTrackArtwork(context, track))
                 : null,
@@ -4952,9 +4916,10 @@ class _HomeTabState extends State<_HomeTab> {
     );
     if (!mounted ||
         request != _providerHomeRequest ||
-        signature != _providerHomeStoreSignature(
-          context.read<SelfHostedProviderStore>(),
-        )) {
+        signature !=
+            _providerHomeStoreSignature(
+              context.read<SelfHostedProviderStore>(),
+            )) {
       return;
     }
 
@@ -4986,9 +4951,10 @@ class _HomeTabState extends State<_HomeTab> {
     final continuation = await _providerHomeCoordinator.loadMore(section);
     if (!mounted ||
         request != _providerHomeRequest ||
-        signature != _providerHomeStoreSignature(
-          context.read<SelfHostedProviderStore>(),
-        )) {
+        signature !=
+            _providerHomeStoreSignature(
+              context.read<SelfHostedProviderStore>(),
+            )) {
       return;
     }
 
@@ -5204,9 +5170,9 @@ final class _OfficialYouTubeMusicChartShelfState
       _error = null;
     });
     try {
-      await context
-          .read<YouTubeDataSettingsStore?>()
-          ?.setPreferredRegion(_regionController.text);
+      await context.read<YouTubeDataSettingsStore?>()?.setPreferredRegion(
+        _regionController.text,
+      );
       final page = await widget.provider.loadPopularMusicPage(
         regionCode: _regionController.text,
         limit: 6,
@@ -5267,7 +5233,8 @@ final class _FollowedYouTubeChannelShelfState
     final feedStore = context.watch<YouTubeFollowedChannelFeedStore?>();
     final offline = library.offlineModeEnabled;
     final followCount = follows?.follows.length ?? 0;
-    final items = feedStore?.items.take(6).toList(growable: false) ??
+    final items =
+        feedStore?.items.take(6).toList(growable: false) ??
         const <YouTubeFollowedChannelFeedItem>[];
     final loading = feedStore?.refreshing ?? false;
     final failedChannelCount = feedStore?.lastFailedChannelCount ?? 0;
@@ -5279,9 +5246,7 @@ final class _FollowedYouTubeChannelShelfState
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.video_library_outlined),
           title: const Text('Followed YouTube channels'),
-          subtitle: Text(
-            '$followCount local public channel(s), metadata only',
-          ),
+          subtitle: Text('$followCount local public channel(s), metadata only'),
           trailing: IconButton(
             key: const Key('home-youtube-followed-channels-open'),
             tooltip: 'Open followed YouTube channels',
@@ -5324,9 +5289,7 @@ final class _FollowedYouTubeChannelShelfState
             subtitle: Text(item.subtitle),
             onTap: () => _openFullFeed(context),
             trailing: IconButton(
-              tooltip: library.tracks.any(
-                (saved) => saved.id == item.track.id,
-              )
+              tooltip: library.tracks.any((saved) => saved.id == item.track.id)
                   ? 'Saved to library'
                   : 'Save metadata to library',
               onPressed: () => unawaited(_saveTrack(context, item.track)),
@@ -5378,9 +5341,8 @@ final class _FollowedYouTubeChannelShelfState
   void _openFullFeed(BuildContext context) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => YouTubeFollowedChannelFeedScreen(
-          provider: widget.provider,
-        ),
+        builder: (_) =>
+            YouTubeFollowedChannelFeedScreen(provider: widget.provider),
       ),
     );
   }
@@ -5428,7 +5390,8 @@ final class _SpotifySavedTracksShelfState
           ),
           trailing: IconButton(
             key: const Key('home-spotify-library-open'),
-            tooltip: 'Open Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
+            tooltip:
+                'Open Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
             onPressed: () => _openSelectedView(context),
             icon: const Icon(Icons.open_in_new),
           ),
@@ -5451,7 +5414,8 @@ final class _SpotifySavedTracksShelfState
           alignment: Alignment.centerLeft,
           child: IconButton.filled(
             key: const Key('home-spotify-library-refresh'),
-            tooltip: 'Refresh Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
+            tooltip:
+                'Refresh Spotify saved ${_spotifyHomeLibraryViewLabel(_view)}',
             onPressed: _loading || offline ? null : () => unawaited(_load()),
             icon: const Icon(Icons.refresh),
           ),
@@ -5622,9 +5586,8 @@ final class _SpotifySavedTracksShelfState
       case _SpotifyHomeLibraryView.playlists:
         Navigator.of(context).push<void>(
           MaterialPageRoute<void>(
-            builder: (_) => SpotifySavedPlaylistsScreen(
-              provider: widget.provider,
-            ),
+            builder: (_) =>
+                SpotifySavedPlaylistsScreen(provider: widget.provider),
           ),
         );
         return;
@@ -5642,10 +5605,8 @@ final class _SpotifySavedTracksShelfState
   void _openAlbum(BuildContext context, SpotifySavedAlbum album) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifyAlbumTracksScreen(
-          provider: widget.provider,
-          album: album,
-        ),
+        builder: (_) =>
+            SpotifyAlbumTracksScreen(provider: widget.provider, album: album),
       ),
     );
   }
@@ -5671,9 +5632,10 @@ String _spotifyHomeLibraryViewLabel(_SpotifyHomeLibraryView view) {
 }
 
 String _spotifyTrackSubtitle(Track track) {
-  return <String>[track.artist, track.album]
-      .where((part) => part.trim().isNotEmpty)
-      .join(' - ');
+  return <String>[
+    track.artist,
+    track.album,
+  ].where((part) => part.trim().isNotEmpty).join(' - ');
 }
 
 String _spotifyAlbumSubtitle(SpotifySavedAlbum album) {
@@ -5973,8 +5935,9 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
               IconButton.filled(
                 key: const Key('home-jamendo-popular-refresh'),
                 tooltip: 'Refresh popular Jamendo tracks',
-                onPressed:
-                    _loading || offline ? null : () => unawaited(_refresh()),
+                onPressed: _loading || offline
+                    ? null
+                    : () => unawaited(_refresh()),
                 icon: const Icon(Icons.refresh),
               ),
             ],
@@ -5992,8 +5955,9 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
             title: const Text('Popular Jamendo tracks are unavailable'),
             trailing: IconButton(
               tooltip: 'Retry popular Jamendo tracks',
-              onPressed:
-                  _loading || offline ? null : () => unawaited(_refresh()),
+              onPressed: _loading || offline
+                  ? null
+                  : () => unawaited(_refresh()),
               icon: const Icon(Icons.refresh),
             ),
           ),
@@ -6008,7 +5972,9 @@ final class _JamendoPopularShelfState extends State<_JamendoPopularShelf> {
               tooltip: library.tracks.any((saved) => saved.id == track.id)
                   ? 'Saved to library'
                   : 'Save track to library',
-              onPressed: offline ? null : () => unawaited(_saveTrack(context, track)),
+              onPressed: offline
+                  ? null
+                  : () => unawaited(_saveTrack(context, track)),
               icon: Icon(
                 library.tracks.any((saved) => saved.id == track.id)
                     ? Icons.bookmark
@@ -6261,7 +6227,9 @@ final class _PopularRadioStationsShelfState
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.radio_outlined),
           title: const Text('Popular radio stations'),
-          subtitle: const Text('Public stations ranked by Radio Browser clicks'),
+          subtitle: const Text(
+            'Public stations ranked by Radio Browser clicks',
+          ),
           trailing: IconButton.filled(
             key: const Key('home-popular-radio-refresh'),
             tooltip: 'Refresh popular radio stations',
@@ -6287,7 +6255,9 @@ final class _PopularRadioStationsShelfState
             title: const Text('Popular stations are unavailable'),
             trailing: IconButton(
               tooltip: 'Retry popular radio stations',
-              onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+              onPressed: _loading || offline
+                  ? null
+                  : () => unawaited(_refresh()),
               icon: const Icon(Icons.refresh),
             ),
           ),
@@ -6297,15 +6267,10 @@ final class _PopularRadioStationsShelfState
             leading: const Icon(Icons.radio_outlined),
             title: Text(_stations[index].name),
             subtitle: Text(_radioStationSummary(_stations[index])),
-            onTap: () => _openStation(
-              context,
-              _stations[index],
-              tracks,
-            ),
+            onTap: () => _openStation(context, _stations[index], tracks),
             trailing: IconButton(
-              tooltip: library.tracks.any(
-                (saved) => saved.id == tracks[index].id,
-              )
+              tooltip:
+                  library.tracks.any((saved) => saved.id == tracks[index].id)
                   ? 'Saved to library'
                   : 'Save station to library',
               onPressed: () => unawaited(_saveTrack(context, tracks[index])),
@@ -6454,7 +6419,9 @@ final class _PopularInternetArchiveShelfState
             title: const Text('Popular Archive audio is unavailable'),
             trailing: IconButton(
               tooltip: 'Retry popular Archive audio',
-              onPressed: _loading || offline ? null : () => unawaited(_refresh()),
+              onPressed: _loading || offline
+                  ? null
+                  : () => unawaited(_refresh()),
               icon: const Icon(Icons.refresh),
             ),
           ),
@@ -6539,8 +6506,9 @@ final class _PopularInternetArchiveShelfState
 }
 
 String _archiveHomeItemSubtitle(InternetArchiveItem item) {
-  final playableFileCount =
-      item.files.where((file) => file.isPlayableAudio).length;
+  final playableFileCount = item.files
+      .where((file) => file.isPlayableAudio)
+      .length;
   final parts = <String>[
     if (item.creator.isNotEmpty) item.creator,
     if (item.year.isNotEmpty) item.year,
@@ -6573,7 +6541,8 @@ class _ProviderHomeDiscovery extends StatelessWidget {
   final void Function(
     MusicCatalogProvider provider,
     MusicCatalogCollection collection,
-  ) onOpen;
+  )
+  onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -6581,8 +6550,8 @@ class _ProviderHomeDiscovery extends StatelessWidget {
     final subtitle = offline
         ? 'Offline mode'
         : loadedSections > 0
-            ? '$loadedSections server section(s) loaded'
-            : '$providerCount configured server(s)';
+        ? '$loadedSections server section(s) loaded'
+        : '$providerCount configured server(s)';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -6618,9 +6587,7 @@ class _ProviderHomeDiscovery extends StatelessWidget {
             key: const ValueKey<String>('provider-home-errors'),
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.warning_amber_outlined),
-            title: Text(
-              '${feed!.errors.length} server section(s) unavailable',
-            ),
+            title: Text('${feed!.errors.length} server section(s) unavailable'),
             subtitle: feed!.hasContent
                 ? const Text('Available server results are shown below.')
                 : const Text('Refresh to retry the configured servers.'),
@@ -6660,7 +6627,8 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final discoveryKind = section.discoveryKind;
-    final sectionLabel = section.titleOverride ??
+    final sectionLabel =
+        section.titleOverride ??
         (discoveryKind == null
             ? _providerHomeKindLabel(section.kind)
             : _providerHomeDiscoveryLabel(discoveryKind));
@@ -6673,8 +6641,8 @@ class _ProviderHomeSectionShelf extends StatelessWidget {
             section.isFollowedArtistShelf
                 ? Icons.favorite_outline
                 : discoveryKind == null
-                    ? _providerHomeKindIcon(section.kind)
-                    : _providerHomeDiscoveryIcon(discoveryKind),
+                ? _providerHomeKindIcon(section.kind)
+                : _providerHomeDiscoveryIcon(discoveryKind),
           ),
           title: Text('${section.provider.name} $sectionLabel'),
           subtitle: Text(
@@ -6748,17 +6716,15 @@ class _ProviderHomeCollectionTile extends StatelessWidget {
     final subtitle = collection.subtitle.trim().isNotEmpty
         ? collection.subtitle.trim()
         : collection.itemCount > 0
-            ? '${collection.itemCount} item(s)'
-            : _providerHomeKindSingularLabel(collection.kind);
+        ? '${collection.itemCount} item(s)'
+        : _providerHomeKindSingularLabel(collection.kind);
 
     return SizedBox(
       width: 148,
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: InkWell(
           key: ValueKey<String>(
             'provider-home-collection-${provider.id}-'
@@ -6778,10 +6744,10 @@ class _ProviderHomeCollectionTile extends StatelessWidget {
                   loadProviderArtwork: artworkId == null
                       ? null
                       : (maxWidth) => provider.loadArtwork(
-                            artworkId,
-                            version: collection.artworkVersion,
-                            maxWidth: maxWidth,
-                          ),
+                          artworkId,
+                          version: collection.artworkVersion,
+                          maxWidth: maxWidth,
+                        ),
                   size: 130,
                   borderRadius: 4,
                   fallbackIcon: _providerHomeKindIcon(collection.kind),
@@ -6852,8 +6818,7 @@ String _providerHomeDiscoverySubtitle(MusicCatalogDiscoveryKind kind) {
       'Most-played albums reported by this server',
     MusicCatalogDiscoveryKind.recentlyPlayed =>
       'Recently played albums reported by this server',
-    MusicCatalogDiscoveryKind.random =>
-      'Random albums selected by this server',
+    MusicCatalogDiscoveryKind.random => 'Random albums selected by this server',
     MusicCatalogDiscoveryKind.favorites =>
       'Favorite albums reported by this server',
     MusicCatalogDiscoveryKind.favoriteArtists =>
@@ -6913,10 +6878,7 @@ class _LocalChartsPreview extends StatelessWidget {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            Text(
-              'Local charts',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('Local charts', style: Theme.of(context).textTheme.titleLarge),
             SizedBox(
               width: 180,
               child: DropdownButtonFormField<LibraryChartRange>(
@@ -7012,10 +6974,7 @@ class _EmptyHomeFeed extends StatelessWidget {
             const SizedBox(height: 16),
             Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
+            Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             Wrap(
               alignment: WrapAlignment.center,
@@ -7358,15 +7317,13 @@ class _LibraryTab extends StatelessWidget {
                       onLyrics: onLyrics,
                     ),
                   ),
-                  onShare: () => unawaited(
-                    _copyTrackShareText(context, library, track),
-                  ),
+                  onShare: () =>
+                      unawaited(_copyTrackShareText(context, library, track)),
                   onFavorite: () => library.toggleFavorite(track.id),
                   onAddToPlaylist: () => onAddToPlaylist(track),
                   onLyrics: () => onLyrics(track),
-                  onEditMetadata: () => unawaited(
-                    _showTrackMetadataEditor(context, track),
-                  ),
+                  onEditMetadata: () =>
+                      unawaited(_showTrackMetadataEditor(context, track)),
                   onEditArtwork: track.sourceId == 'local'
                       ? () => unawaited(_editTrackArtwork(context, track))
                       : null,
@@ -7403,9 +7360,7 @@ class _LibraryTab extends StatelessWidget {
                           sortMode: sortMode,
                         ),
                       ),
-                      onTap: () => unawaited(
-                        _createSavedLibraryView(context),
-                      ),
+                      onTap: () => unawaited(_createSavedLibraryView(context)),
                     ),
                     const Divider(height: 1),
                     if (library.savedLibraryViews.isEmpty)
@@ -7424,8 +7379,7 @@ class _LibraryTab extends StatelessWidget {
                       Expanded(
                         child: ListView.separated(
                           itemCount: library.savedLibraryViews.length,
-                          separatorBuilder: (_, _) =>
-                              const Divider(height: 1),
+                          separatorBuilder: (_, _) => const Divider(height: 1),
                           itemBuilder: (context, index) {
                             final view = library.savedLibraryViews[index];
                             return ListTile(
@@ -7439,55 +7393,64 @@ class _LibraryTab extends StatelessWidget {
                                   sortMode: view.sortMode,
                                 ),
                               ),
-                              trailing: PopupMenuButton<
-                                  _SavedLibraryViewAction>(
-                                tooltip: 'Edit saved library view',
-                                onSelected: (action) async {
-                                  switch (action) {
-                                    case _SavedLibraryViewAction.update:
-                                      await library.updateSavedLibraryView(
-                                        view.id,
-                                        name: view.name,
-                                        query: query,
-                                        favoritesOnly: favoritesOnly,
-                                        offlineOnly: offlineOnly,
-                                        sortMode: sortMode,
-                                      );
-                                      break;
-                                    case _SavedLibraryViewAction.rename:
-                                      Navigator.of(sheetContext).pop();
-                                      await _renameSavedLibraryView(
-                                        context,
-                                        view,
-                                      );
-                                      break;
-                                    case _SavedLibraryViewAction.delete:
-                                      await library.deleteSavedLibraryView(
-                                        view.id,
-                                      );
-                                      break;
-                                  }
-                                },
-                                itemBuilder: (context) =>
-                                    const <PopupMenuEntry<
-                                        _SavedLibraryViewAction>>[
-                                      PopupMenuItem<
-                                          _SavedLibraryViewAction>(
-                                        value: _SavedLibraryViewAction.update,
-                                        child: Text('Update from current'),
-                                      ),
-                                      PopupMenuItem<
-                                          _SavedLibraryViewAction>(
-                                        value: _SavedLibraryViewAction.rename,
-                                        child: Text('Rename'),
-                                      ),
-                                      PopupMenuItem<
-                                          _SavedLibraryViewAction>(
-                                        value: _SavedLibraryViewAction.delete,
-                                        child: Text('Delete'),
-                                      ),
-                                    ],
-                              ),
+                              trailing:
+                                  PopupMenuButton<_SavedLibraryViewAction>(
+                                    tooltip: 'Edit saved library view',
+                                    onSelected: (action) async {
+                                      switch (action) {
+                                        case _SavedLibraryViewAction.update:
+                                          await library.updateSavedLibraryView(
+                                            view.id,
+                                            name: view.name,
+                                            query: query,
+                                            favoritesOnly: favoritesOnly,
+                                            offlineOnly: offlineOnly,
+                                            sortMode: sortMode,
+                                          );
+                                          break;
+                                        case _SavedLibraryViewAction.rename:
+                                          Navigator.of(sheetContext).pop();
+                                          await _renameSavedLibraryView(
+                                            context,
+                                            view,
+                                          );
+                                          break;
+                                        case _SavedLibraryViewAction.delete:
+                                          await library.deleteSavedLibraryView(
+                                            view.id,
+                                          );
+                                          break;
+                                      }
+                                    },
+                                    itemBuilder: (context) =>
+                                        const <
+                                          PopupMenuEntry<
+                                            _SavedLibraryViewAction
+                                          >
+                                        >[
+                                          PopupMenuItem<
+                                            _SavedLibraryViewAction
+                                          >(
+                                            value:
+                                                _SavedLibraryViewAction.update,
+                                            child: Text('Update from current'),
+                                          ),
+                                          PopupMenuItem<
+                                            _SavedLibraryViewAction
+                                          >(
+                                            value:
+                                                _SavedLibraryViewAction.rename,
+                                            child: Text('Rename'),
+                                          ),
+                                          PopupMenuItem<
+                                            _SavedLibraryViewAction
+                                          >(
+                                            value:
+                                                _SavedLibraryViewAction.delete,
+                                            child: Text('Delete'),
+                                          ),
+                                        ],
+                                  ),
                               onTap: () {
                                 searchController
                                   ..text = view.query
@@ -7523,12 +7486,12 @@ class _LibraryTab extends StatelessWidget {
       return;
     }
     await context.read<LibraryStore>().createSavedLibraryView(
-          name: name,
-          query: query,
-          favoritesOnly: favoritesOnly,
-          offlineOnly: offlineOnly,
-          sortMode: sortMode,
-        );
+      name: name,
+      query: query,
+      favoritesOnly: favoritesOnly,
+      offlineOnly: offlineOnly,
+      sortMode: sortMode,
+    );
   }
 
   Future<void> _renameSavedLibraryView(
@@ -7544,13 +7507,13 @@ class _LibraryTab extends StatelessWidget {
       return;
     }
     await context.read<LibraryStore>().updateSavedLibraryView(
-          view.id,
-          name: name,
-          query: view.query,
-          favoritesOnly: view.favoritesOnly,
-          offlineOnly: view.offlineOnly,
-          sortMode: view.sortMode,
-        );
+      view.id,
+      name: name,
+      query: view.query,
+      favoritesOnly: view.favoritesOnly,
+      offlineOnly: view.offlineOnly,
+      sortMode: view.sortMode,
+    );
   }
 }
 
@@ -7777,23 +7740,21 @@ class _MoodMixSheet extends StatelessWidget {
                         onPressed: tracks.isEmpty
                             ? null
                             : () => unawaited(
-                                  _playTrackWithResume(
-                                    context,
-                                    player,
-                                    library,
-                                    tracks.first,
-                                    queue: tracks,
-                                  ),
+                                _playTrackWithResume(
+                                  context,
+                                  player,
+                                  library,
+                                  tracks.first,
+                                  queue: tracks,
                                 ),
+                              ),
                         icon: const Icon(Icons.play_arrow),
                       ),
                       IconButton(
                         tooltip: 'Save mix as playlist',
                         onPressed: tracks.isEmpty
                             ? null
-                            : () => unawaited(
-                                  _saveMoodMix(context, library),
-                                ),
+                            : () => unawaited(_saveMoodMix(context, library)),
                         icon: const Icon(Icons.playlist_add),
                       ),
                     ],
@@ -7832,15 +7793,13 @@ class _MoodMixSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
-                onShare: () => unawaited(
-                  _copyTrackShareText(context, library, track),
-                ),
+                onShare: () =>
+                    unawaited(_copyTrackShareText(context, library, track)),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
-                onEditMetadata: () => unawaited(
-                  _showTrackMetadataEditor(context, track),
-                ),
+                onEditMetadata: () =>
+                    unawaited(_showTrackMetadataEditor(context, track)),
                 onEditArtwork: track.sourceId == 'local'
                     ? () => unawaited(_editTrackArtwork(context, track))
                     : null,
@@ -7853,10 +7812,7 @@ class _MoodMixSheet extends StatelessWidget {
     );
   }
 
-  Future<void> _saveMoodMix(
-    BuildContext context,
-    LibraryStore library,
-  ) async {
+  Future<void> _saveMoodMix(BuildContext context, LibraryStore library) async {
     final playlist = await library.saveMoodMixAsPlaylist(mix.type);
     if (!context.mounted) {
       return;
@@ -8059,10 +8015,7 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                               ? 'Unfollow artist'
                               : 'Follow artist',
                           onPressed: () => unawaited(
-                            library.setArtistFollowed(
-                              group.label,
-                              !isFollowed,
-                            ),
+                            library.setArtistFollowed(group.label, !isFollowed),
                           ),
                           icon: Icon(
                             isFollowed
@@ -8118,15 +8071,13 @@ class _LibraryBrowseTracksSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
-                onShare: () => unawaited(
-                  _copyTrackShareText(context, library, track),
-                ),
+                onShare: () =>
+                    unawaited(_copyTrackShareText(context, library, track)),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
-                onEditMetadata: () => unawaited(
-                  _showTrackMetadataEditor(context, track),
-                ),
+                onEditMetadata: () =>
+                    unawaited(_showTrackMetadataEditor(context, track)),
                 onEditArtwork: track.sourceId == 'local'
                     ? () => unawaited(_editTrackArtwork(context, track))
                     : null,
@@ -8214,13 +8165,8 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
             onPressed: tracks.isEmpty
                 ? null
                 : () => unawaited(
-                      _copyBrowseGroupShareText(
-                        context,
-                        library,
-                        type,
-                        group,
-                      ),
-                    ),
+                    _copyBrowseGroupShareText(context, library, type, group),
+                  ),
             icon: const Icon(Icons.ios_share),
           ),
           IconButton(
@@ -8228,8 +8174,8 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
             onPressed: tracks.isEmpty
                 ? null
                 : () => unawaited(
-                      _showBrowseGroupShareCard(context, type, group, tracks),
-                    ),
+                    _showBrowseGroupShareCard(context, type, group, tracks),
+                  ),
             icon: const Icon(Icons.image_outlined),
           ),
         ],
@@ -8251,36 +8197,36 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
             onPlay: playableTracks.isEmpty
                 ? null
                 : () => unawaited(
-                      _playLibraryCollection(
-                        context,
-                        player,
-                        library,
-                        playableTracks,
-                        shuffle: false,
-                      ),
+                    _playLibraryCollection(
+                      context,
+                      player,
+                      library,
+                      playableTracks,
+                      shuffle: false,
                     ),
+                  ),
             onShuffle: playableTracks.isEmpty
                 ? null
                 : () => unawaited(
-                      _playLibraryCollection(
-                        context,
-                        player,
-                        library,
-                        playableTracks,
-                        shuffle: true,
-                      ),
+                    _playLibraryCollection(
+                      context,
+                      player,
+                      library,
+                      playableTracks,
+                      shuffle: true,
                     ),
+                  ),
             onRadio: playableTracks.isEmpty
                 ? null
                 : () => unawaited(
-                      _startBrowseGroupRadio(
-                        context,
-                        player,
-                        library,
-                        type,
-                        group,
-                      ),
+                    _startBrowseGroupRadio(
+                      context,
+                      player,
+                      library,
+                      type,
+                      group,
                     ),
+                  ),
             onSavePlaylist: tracks.isEmpty
                 ? null
                 : () => unawaited(_saveLibraryCollection(context, library)),
@@ -8409,16 +8355,10 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
   ) {
     return TrackTile(
       track: track,
-      onPlay: () => _playTrackWithResume(
-        context,
-        player,
-        library,
-        track,
-        queue: tracks,
-      ),
-      onStartRadio: () => unawaited(
-        _startTrackRadio(context, player, library, track),
-      ),
+      onPlay: () =>
+          _playTrackWithResume(context, player, library, track, queue: tracks),
+      onStartRadio: () =>
+          unawaited(_startTrackRadio(context, player, library, track)),
       onSimilarTracks: () => unawaited(
         _showSimilarTracks(
           context,
@@ -8427,15 +8367,11 @@ class _LibraryCollectionDetailScreen extends StatelessWidget {
           onLyrics: onLyrics,
         ),
       ),
-      onShare: () => unawaited(
-        _copyTrackShareText(context, library, track),
-      ),
+      onShare: () => unawaited(_copyTrackShareText(context, library, track)),
       onFavorite: () => library.toggleFavorite(track.id),
       onAddToPlaylist: () => onAddToPlaylist(track),
       onLyrics: () => onLyrics(track),
-      onEditMetadata: () => unawaited(
-        _showTrackMetadataEditor(context, track),
-      ),
+      onEditMetadata: () => unawaited(_showTrackMetadataEditor(context, track)),
       onEditArtwork: track.sourceId == 'local'
           ? () => unawaited(_editTrackArtwork(context, track))
           : null,
@@ -8529,8 +8465,8 @@ class _LibraryCollectionDetailHeader extends StatelessWidget {
             Text(
               kind,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.secondary,
-                  ),
+                color: Theme.of(context).colorScheme.secondary,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -8762,15 +8698,13 @@ class _LibraryFolderNodeTracksSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
-                onShare: () => unawaited(
-                  _copyTrackShareText(context, library, track),
-                ),
+                onShare: () =>
+                    unawaited(_copyTrackShareText(context, library, track)),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
-                onEditMetadata: () => unawaited(
-                  _showTrackMetadataEditor(context, track),
-                ),
+                onEditMetadata: () =>
+                    unawaited(_showTrackMetadataEditor(context, track)),
                 onEditArtwork: track.sourceId == 'local'
                     ? () => unawaited(_editTrackArtwork(context, track))
                     : null,
@@ -8869,15 +8803,13 @@ class _SimilarTracksSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
-                onShare: () => unawaited(
-                  _copyTrackShareText(context, library, track),
-                ),
+                onShare: () =>
+                    unawaited(_copyTrackShareText(context, library, track)),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
-                onEditMetadata: () => unawaited(
-                  _showTrackMetadataEditor(context, track),
-                ),
+                onEditMetadata: () =>
+                    unawaited(_showTrackMetadataEditor(context, track)),
                 onEditArtwork: track.sourceId == 'local'
                     ? () => unawaited(_editTrackArtwork(context, track))
                     : null,
@@ -8910,9 +8842,7 @@ String _similarityReasonText(List<LibrarySimilarityReason> reasons) {
   return 'Matches ${labels.join(', ')}';
 }
 
-String _recommendationReasonText(
-  List<LibraryRecommendationReason> reasons,
-) {
+String _recommendationReasonText(List<LibraryRecommendationReason> reasons) {
   if (reasons.isEmpty) {
     return 'Selected from your local library';
   }
@@ -9224,7 +9154,9 @@ bool _isLocalM4aM4bM4rOrAlac(Track track) {
 
 bool _isLocalOggOrOpus(Track track) {
   final path = (track.localPath?.trim() ?? '').toLowerCase();
-  return path.endsWith('.ogg') || path.endsWith('.oga') || path.endsWith('.opus');
+  return path.endsWith('.ogg') ||
+      path.endsWith('.oga') ||
+      path.endsWith('.opus');
 }
 
 bool _isLocalWav(Track track) {
@@ -9343,19 +9275,15 @@ String _customSmartPlaylistMatchModeLabel(
   };
 }
 
-String _customSmartPlaylistRuleFieldLabel(
-  CustomSmartPlaylistRuleField field,
-) {
+String _customSmartPlaylistRuleFieldLabel(CustomSmartPlaylistRuleField field) {
   return switch (field) {
     CustomSmartPlaylistRuleField.searchText => 'Search text',
     CustomSmartPlaylistRuleField.sourceId => 'Exact source ID',
     CustomSmartPlaylistRuleField.artist => 'Exact artist',
     CustomSmartPlaylistRuleField.album => 'Exact album',
     CustomSmartPlaylistRuleField.genre => 'Exact genre',
-    CustomSmartPlaylistRuleField.minimumDurationSeconds =>
-      'Minimum duration',
-    CustomSmartPlaylistRuleField.maximumDurationSeconds =>
-      'Maximum duration',
+    CustomSmartPlaylistRuleField.minimumDurationSeconds => 'Minimum duration',
+    CustomSmartPlaylistRuleField.maximumDurationSeconds => 'Maximum duration',
     CustomSmartPlaylistRuleField.favoritesOnly => 'Favorites only',
     CustomSmartPlaylistRuleField.minimumRating => 'Minimum rating',
     CustomSmartPlaylistRuleField.minimumPlayCount => 'Minimum plays',
@@ -9385,10 +9313,7 @@ String _customSmartPlaylistRuleGroupSummary(
   return parts.join(' - ');
 }
 
-String _customSmartPlaylistSubtitle(
-  CustomSmartPlaylist rule,
-  int trackCount,
-) {
+String _customSmartPlaylistSubtitle(CustomSmartPlaylist rule, int trackCount) {
   final parts = <String>['$trackCount track(s)'];
   parts.add(_customSmartPlaylistMatchModeLabel(rule.matchMode));
   if (rule.query.trim().isNotEmpty) {
@@ -9495,10 +9420,7 @@ class _TextEditingControllerOwnerState
 }
 
 class _PlaylistsTab extends StatefulWidget {
-  const _PlaylistsTab({
-    required this.onAddToPlaylist,
-    required this.onLyrics,
-  });
+  const _PlaylistsTab({required this.onAddToPlaylist, required this.onLyrics});
 
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onLyrics;
@@ -9528,17 +9450,20 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     final hasUnfiledPlaylists = library.playlists.any(
       (playlist) => playlist.folder.trim().isEmpty,
     );
-    final activeFolder = _folderFilter != null &&
+    final activeFolder =
+        _folderFilter != null &&
             _folderFilter != '' &&
             !folders.contains(_folderFilter)
         ? null
         : _folderFilter;
-    final manualPlaylists = library.playlists.where((playlist) {
-      if (activeFolder == null) {
-        return true;
-      }
-      return playlist.folder.trim() == activeFolder;
-    }).toList(growable: false);
+    final manualPlaylists = library.playlists
+        .where((playlist) {
+          if (activeFolder == null) {
+            return true;
+          }
+          return playlist.folder.trim() == activeFolder;
+        })
+        .toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -9626,20 +9551,21 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   ? () => _shareCustomSmartPlaylist(context, rule)
                   : null,
               onRefreshPublicSubscription:
-                  sharedSmartPlaylists
-                          ?.publicSubscriptionForLocalSmartPlaylist(rule.id) !=
+                  sharedSmartPlaylists?.publicSubscriptionForLocalSmartPlaylist(
+                        rule.id,
+                      ) !=
                       null
                   ? () => _refreshPublicSmartPlaylistSubscription(context, rule)
                   : null,
               onUnsubscribePublicSubscription:
-                  sharedSmartPlaylists
-                          ?.publicSubscriptionForLocalSmartPlaylist(rule.id) !=
+                  sharedSmartPlaylists?.publicSubscriptionForLocalSmartPlaylist(
+                        rule.id,
+                      ) !=
                       null
                   ? () => _unsubscribeFromPublicSmartPlaylist(context, rule)
                   : null,
-              onDuplicate: () => unawaited(
-                _duplicateCustomSmartPlaylist(context, rule),
-              ),
+              onDuplicate: () =>
+                  unawaited(_duplicateCustomSmartPlaylist(context, rule)),
               onDelete: () => _deleteCustomSmartPlaylist(context, rule),
             ),
         const SizedBox(height: 16),
@@ -9687,24 +9613,18 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               playlist: playlist,
               tracks: library.tracksForPlaylist(playlist.id),
               onOpen: () => _showPlaylist(context, playlist.id),
-              onExport: (format) => _showPlaylistExport(
-                context,
-                playlist,
-                format,
-              ),
-              onShare: () => unawaited(
-                _copyPlaylistShareText(context, library, playlist),
-              ),
+              onExport: (format) =>
+                  _showPlaylistExport(context, playlist, format),
+              onShare: () =>
+                  unawaited(_copyPlaylistShareText(context, library, playlist)),
               onCopyImportLink: () => unawaited(
                 _copyPlaylistImportLink(context, library, playlist),
               ),
-              onShareCard: () => unawaited(
-                _showPlaylistShareCard(context, playlist),
-              ),
+              onShareCard: () =>
+                  unawaited(_showPlaylistShareCard(context, playlist)),
               onArtwork: () => _editPlaylistArtwork(context, playlist),
-              onDuplicate: () => unawaited(
-                _duplicatePlaylist(context, playlist),
-              ),
+              onDuplicate: () =>
+                  unawaited(_duplicatePlaylist(context, playlist)),
               onRename: () => _renamePlaylist(context, playlist),
               onMoveToFolder: () => _movePlaylistToFolder(context, playlist),
               onDelete: () => _deletePlaylist(context, playlist),
@@ -9734,7 +9654,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ListTile(
                 leading: const Icon(Icons.link_outlined),
                 title: const Text('Paste AetherTune playlist link'),
-                subtitle: const Text('Import a portable playlist shared from AetherTune.'),
+                subtitle: const Text(
+                  'Import a portable playlist shared from AetherTune.',
+                ),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _importPlaylistLink(context);
@@ -9743,7 +9665,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ListTile(
                 leading: const Icon(Icons.filter_alt_outlined),
                 title: const Text('Paste AetherTune smart playlist link'),
-                subtitle: const Text('Import portable smart-playlist rules from AetherTune.'),
+                subtitle: const Text(
+                  'Import portable smart-playlist rules from AetherTune.',
+                ),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _importCustomSmartPlaylistLink(context);
@@ -9752,7 +9676,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ListTile(
                 leading: const Icon(Icons.public_outlined),
                 title: const Text('Paste public smart playlist link'),
-                subtitle: const Text('Import checksum-verified rules from an HTTPS public link.'),
+                subtitle: const Text(
+                  'Import checksum-verified rules from an HTTPS public link.',
+                ),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _importPublicSharedSmartPlaylistLink(context);
@@ -9761,7 +9687,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ListTile(
                 leading: const Icon(Icons.bookmark_add_outlined),
                 title: const Text('Subscribe to public smart playlist'),
-                subtitle: const Text('Store an HTTPS link securely for manual refreshes.'),
+                subtitle: const Text(
+                  'Store an HTTPS link securely for manual refreshes.',
+                ),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _subscribeToPublicSharedSmartPlaylist(context);
@@ -9788,7 +9716,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             children: <Widget>[
               ListTile(
                 leading: const Icon(Icons.folder_open_outlined),
-                title: Text('Choose ${_playlistDocumentFormatLabel(format)} file'),
+                title: Text(
+                  'Choose ${_playlistDocumentFormatLabel(format)} file',
+                ),
                 subtitle: Text(
                   'Import a .${_playlistDocumentFormatFileExtension(format)} playlist file.',
                 ),
@@ -9799,7 +9729,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ),
               ListTile(
                 leading: const Icon(Icons.content_paste_outlined),
-                title: Text('Paste ${_playlistDocumentFormatLabel(format)} content'),
+                title: Text(
+                  'Paste ${_playlistDocumentFormatLabel(format)} content',
+                ),
                 subtitle: const Text('Import a copied playlist document.'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
@@ -9848,7 +9780,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         return;
       }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Playlist files must be valid UTF-8 text.')),
+        const SnackBar(
+          content: Text('Playlist files must be valid UTF-8 text.'),
+        ),
       );
     } on Exception catch (error) {
       if (!context.mounted) {
@@ -9897,9 +9831,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         return;
       }
 
-      messenger.showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
@@ -9933,17 +9865,19 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       if (!context.mounted || link == null) {
         return;
       }
-      final playlist = await context.read<LibraryStore>().importPlaylistLink(link);
+      final playlist = await context.read<LibraryStore>().importPlaylistLink(
+        link,
+      );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imported ${playlist.name}.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Imported ${playlist.name}.')));
       }
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       controller.dispose();
@@ -9984,22 +9918,24 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           .read<LibraryStore>()
           .importCustomSmartPlaylistLink(link);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imported ${playlist.name}.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Imported ${playlist.name}.')));
       }
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       controller.dispose();
     }
   }
 
-  Future<void> _importPublicSharedSmartPlaylistLink(BuildContext context) async {
+  Future<void> _importPublicSharedSmartPlaylistLink(
+    BuildContext context,
+  ) async {
     final controller = TextEditingController();
     try {
       final link = await showDialog<String>(
@@ -10034,13 +9970,17 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           .importPublicLink(link, context.read<LibraryStore>());
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imported public smart playlist ${playlist.name}.')),
+          SnackBar(
+            content: Text('Imported public smart playlist ${playlist.name}.'),
+          ),
         );
       }
     } on Object catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not import public smart playlist: $error')),
+          SnackBar(
+            content: Text('Could not import public smart playlist: $error'),
+          ),
         );
       }
     } finally {
@@ -10096,7 +10036,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not subscribe to public smart playlist: $error'),
+            content: Text(
+              'Could not subscribe to public smart playlist: $error',
+            ),
           ),
         );
       }
@@ -10121,7 +10063,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Refreshed public smart playlist ${rule.name}.')),
+          SnackBar(
+            content: Text('Refreshed public smart playlist ${rule.name}.'),
+          ),
         );
       }
     } on Object catch (error) {
@@ -10155,7 +10099,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not unsubscribe from public smart playlist: $error'),
+            content: Text(
+              'Could not unsubscribe from public smart playlist: $error',
+            ),
           ),
         );
       }
@@ -10194,9 +10140,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text),
                 child: const Text('Import'),
               ),
             ],
@@ -10258,9 +10203,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       return;
     }
 
-    messenger.showSnackBar(
-      SnackBar(content: Text('Created ${rule.name}.')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('Created ${rule.name}.')));
   }
 
   Future<void> _editCustomSmartPlaylist(
@@ -10317,9 +10260,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       return;
     }
 
-    messenger.showSnackBar(
-      SnackBar(content: Text('Deleted ${rule.name}.')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('Deleted ${rule.name}.')));
   }
 
   Future<void> _duplicateCustomSmartPlaylist(
@@ -10333,9 +10274,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Created ${duplicate.name}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Created ${duplicate.name}.')));
   }
 
   Future<void> _joinSharedSmartPlaylist(BuildContext context) async {
@@ -10375,13 +10316,17 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Joined shared smart playlist ${binding.remoteId}.')),
+          SnackBar(
+            content: Text('Joined shared smart playlist ${binding.remoteId}.'),
+          ),
         );
       }
     } on Object catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not join shared smart playlist: $error')),
+          SnackBar(
+            content: Text('Could not join shared smart playlist: $error'),
+          ),
         );
       }
     }
@@ -10404,7 +10349,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           await store.publish(binding, library);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Published shared smart-playlist rules.')),
+              const SnackBar(
+                content: Text('Published shared smart-playlist rules.'),
+              ),
             );
           }
           return;
@@ -10412,7 +10359,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         await store.refresh(binding, library);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Refreshed shared smart-playlist rules.')),
+            const SnackBar(
+              content: Text('Refreshed shared smart-playlist rules.'),
+            ),
           );
         }
         return;
@@ -10421,7 +10370,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Share smart playlist'),
-          content: const Text('Choose private collaboration or a public rule link.'),
+          content: const Text(
+            'Choose private collaboration or a public rule link.',
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -10436,15 +10387,11 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               child: const Text('Revoke public link'),
             ),
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(
-                'viewer',
-              ),
+              onPressed: () => Navigator.of(dialogContext).pop('viewer'),
               child: const Text('Viewer'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(
-                'editor',
-              ),
+              onPressed: () => Navigator.of(dialogContext).pop('editor'),
               child: const Text('Editor'),
             ),
           ],
@@ -10477,7 +10424,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         await store.revokePublicLink(binding, library);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Revoked public smart-playlist link.')),
+            const SnackBar(
+              content: Text('Revoked public smart-playlist link.'),
+            ),
           );
         }
         return;
@@ -10511,10 +10460,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     }
   }
 
-  Future<void> _renamePlaylist(
-    BuildContext context,
-    Playlist playlist,
-  ) async {
+  Future<void> _renamePlaylist(BuildContext context, Playlist playlist) async {
     final library = context.read<LibraryStore>();
     final name = await _promptForPlaylistName(
       context,
@@ -10555,9 +10501,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text),
                 child: const Text('Move'),
               ),
             ],
@@ -10591,7 +10536,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
                 title: const Text('Choose image file'),
-                subtitle: const Text('Store a private PNG, JPEG, GIF, or WebP image.'),
+                subtitle: const Text(
+                  'Store a private PNG, JPEG, GIF, or WebP image.',
+                ),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _pickPlaylistArtworkFile(context, playlist);
@@ -10683,8 +10630,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     Playlist playlist,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final initialValue = playlist.artworkUri != null &&
-            _isNetworkImageUri(playlist.artworkUri!)
+    final initialValue =
+        playlist.artworkUri != null && _isNetworkImageUri(playlist.artworkUri!)
         ? playlist.artworkUri!.toString()
         : '';
     final value = await _promptForPlaylistArtwork(context, initialValue);
@@ -10764,10 +10711,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     );
   }
 
-  Future<void> _deletePlaylist(
-    BuildContext context,
-    Playlist playlist,
-  ) async {
+  Future<void> _deletePlaylist(BuildContext context, Playlist playlist) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 
@@ -10794,9 +10738,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Created ${duplicate.name}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Created ${duplicate.name}.')));
   }
 
   Future<void> _editCustomSmartPlaylistArtwork(
@@ -10813,7 +10757,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
               title: const Text('Choose image file'),
-              subtitle: const Text('Store a private PNG, JPEG, GIF, or WebP image.'),
+              subtitle: const Text(
+                'Store a private PNG, JPEG, GIF, or WebP image.',
+              ),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
                 await _pickCustomSmartPlaylistArtworkFile(context, rule);
@@ -10894,8 +10840,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     CustomSmartPlaylist rule,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final initialValue = rule.artworkUri != null &&
-            _isNetworkImageUri(rule.artworkUri!)
+    final initialValue =
+        rule.artworkUri != null && _isNetworkImageUri(rule.artworkUri!)
         ? rule.artworkUri!.toString()
         : '';
     final value = await _promptForPlaylistArtwork(context, initialValue);
@@ -10978,8 +10924,12 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             children: <Widget>[
               ListTile(
                 leading: const Icon(Icons.save_alt_outlined),
-                title: Text('Save ${_playlistDocumentFormatLabel(format)} file'),
-                subtitle: const Text('Write a portable playlist to a chosen location.'),
+                title: Text(
+                  'Save ${_playlistDocumentFormatLabel(format)} file',
+                ),
+                subtitle: const Text(
+                  'Write a portable playlist to a chosen location.',
+                ),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _savePlaylistExportFile(context, playlist, format);
@@ -10987,7 +10937,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
               ),
               ListTile(
                 leading: const Icon(Icons.code_outlined),
-                title: Text('View ${_playlistDocumentFormatLabel(format)} content'),
+                title: Text(
+                  'View ${_playlistDocumentFormatLabel(format)} content',
+                ),
                 subtitle: const Text('Inspect or copy the playlist document.'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
@@ -11064,9 +11016,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
           title: Text('Export ${_playlistDocumentFormatLabel(format)}'),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(document),
-            ),
+            child: SingleChildScrollView(child: SelectableText(document)),
           ),
           actions: <Widget>[
             FilledButton(
@@ -11128,10 +11078,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       context: context,
       showDragHandle: true,
       builder: (_) {
-        return _PlaylistSheet(
-          playlistId: playlistId,
-          player: player,
-        );
+        return _PlaylistSheet(playlistId: playlistId, player: player);
       },
     );
   }
@@ -11152,9 +11099,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
             content: TextField(
               autofocus: true,
               controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Playlist name',
-              ),
+              decoration: const InputDecoration(labelText: 'Playlist name'),
               textInputAction: TextInputAction.done,
               onSubmitted: (value) {
                 final normalized = value.trim();
@@ -11223,9 +11168,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text),
                 child: const Text('Save'),
               ),
             ],
@@ -11274,8 +11218,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       text: (initialRule?.limit ?? 50).toString(),
     );
     var favoritesOnly = initialRule?.favoritesOnly ?? false;
-    var matchMode =
-        initialRule?.matchMode ?? CustomSmartPlaylistMatchMode.all;
+    var matchMode = initialRule?.matchMode ?? CustomSmartPlaylistMatchMode.all;
     var ruleGroups = List<CustomSmartPlaylistRuleGroup>.from(
       initialRule?.ruleGroups ?? const <CustomSmartPlaylistRuleGroup>[],
     );
@@ -11320,13 +11263,12 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                       int.tryParse(maximumDurationController.text.trim()) ?? 0,
                   favoritesOnly: favoritesOnly,
                   minimumPlayCount:
-                      int.tryParse(minimumPlayCountController.text.trim()) ??
-                          0,
+                      int.tryParse(minimumPlayCountController.text.trim()) ?? 0,
                   minimumDaysSinceLastPlayed:
                       int.tryParse(
                         minimumDaysSinceLastPlayedController.text.trim(),
                       ) ??
-                          0,
+                      0,
                   matchMode: matchMode,
                   ruleGroups: ruleGroups,
                   sortMode: sortMode,
@@ -11347,9 +11289,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           key: const Key('smart-playlist-name'),
                           autofocus: true,
                           controller: nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Name',
-                          ),
+                          decoration: const InputDecoration(labelText: 'Name'),
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
@@ -11362,18 +11302,19 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                         ),
                         const SizedBox(height: 8),
                         SegmentedButton<CustomSmartPlaylistMatchMode>(
-                          segments: const <
-                            ButtonSegment<CustomSmartPlaylistMatchMode>
-                          >[
-                            ButtonSegment<CustomSmartPlaylistMatchMode>(
-                              value: CustomSmartPlaylistMatchMode.all,
-                              label: Text('Match all'),
-                            ),
-                            ButtonSegment<CustomSmartPlaylistMatchMode>(
-                              value: CustomSmartPlaylistMatchMode.any,
-                              label: Text('Match any'),
-                            ),
-                          ],
+                          segments:
+                              const <
+                                ButtonSegment<CustomSmartPlaylistMatchMode>
+                              >[
+                                ButtonSegment<CustomSmartPlaylistMatchMode>(
+                                  value: CustomSmartPlaylistMatchMode.all,
+                                  label: Text('Match all'),
+                                ),
+                                ButtonSegment<CustomSmartPlaylistMatchMode>(
+                                  value: CustomSmartPlaylistMatchMode.any,
+                                  label: Text('Match any'),
+                                ),
+                              ],
                           selected: <CustomSmartPlaylistMatchMode>{matchMode},
                           onSelectionChanged: (selection) {
                             setDialogState(() => matchMode = selection.first);
@@ -11390,26 +11331,28 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             ),
                             IconButton(
                               key: const Key('smart-playlist-add-rule-group'),
-                              tooltip: ruleGroups.length >=
+                              tooltip:
+                                  ruleGroups.length >=
                                       maxCustomSmartPlaylistGroupsPerGroup
                                   ? 'Rule group limit reached'
                                   : 'Add rule group',
                               icon: const Icon(Icons.account_tree_outlined),
-                              onPressed: ruleGroups.length >=
+                              onPressed:
+                                  ruleGroups.length >=
                                       maxCustomSmartPlaylistGroupsPerGroup
                                   ? null
                                   : () async {
                                       final group =
                                           await _promptForCustomSmartPlaylistRuleGroup(
-                                        context,
-                                      );
+                                            context,
+                                          );
                                       if (group != null) {
                                         setDialogState(() {
                                           ruleGroups =
                                               <CustomSmartPlaylistRuleGroup>[
-                                            ...ruleGroups,
-                                            group,
-                                          ];
+                                                ...ruleGroups,
+                                                group,
+                                              ];
                                         });
                                       }
                                     },
@@ -11422,9 +11365,11 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             child: Text('No nested groups.'),
                           )
                         else
-                          for (var index = 0;
-                              index < ruleGroups.length;
-                              index += 1)
+                          for (
+                            var index = 0;
+                            index < ruleGroups.length;
+                            index += 1
+                          )
                             ListTile(
                               key: ValueKey<String>(
                                 'smart-playlist-rule-group-$index',
@@ -11442,9 +11387,11 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                                 onPressed: () {
                                   setDialogState(() {
                                     ruleGroups = <CustomSmartPlaylistRuleGroup>[
-                                      for (var itemIndex = 0;
-                                          itemIndex < ruleGroups.length;
-                                          itemIndex += 1)
+                                      for (
+                                        var itemIndex = 0;
+                                        itemIndex < ruleGroups.length;
+                                        itemIndex += 1
+                                      )
                                         if (itemIndex != index)
                                           ruleGroups[itemIndex],
                                     ];
@@ -11454,15 +11401,17 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                               onTap: () async {
                                 final group =
                                     await _promptForCustomSmartPlaylistRuleGroup(
-                                  context,
-                                  initialGroup: ruleGroups[index],
-                                );
+                                      context,
+                                      initialGroup: ruleGroups[index],
+                                    );
                                 if (group != null) {
                                   setDialogState(() {
                                     ruleGroups = <CustomSmartPlaylistRuleGroup>[
-                                      for (var itemIndex = 0;
-                                          itemIndex < ruleGroups.length;
-                                          itemIndex += 1)
+                                      for (
+                                        var itemIndex = 0;
+                                        itemIndex < ruleGroups.length;
+                                        itemIndex += 1
+                                      )
                                         if (itemIndex == index)
                                           group
                                         else
@@ -11604,15 +11553,13 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     );
   }
 
-  Future<CustomSmartPlaylistRuleGroup?>
-      _promptForCustomSmartPlaylistRuleGroup(
+  Future<CustomSmartPlaylistRuleGroup?> _promptForCustomSmartPlaylistRuleGroup(
     BuildContext context, {
     CustomSmartPlaylistRuleGroup? initialGroup,
     int depth = 0,
   }) async {
     assert(depth >= 0 && depth < maxCustomSmartPlaylistRuleGroupDepth);
-    var matchMode =
-        initialGroup?.matchMode ?? CustomSmartPlaylistMatchMode.all;
+    var matchMode = initialGroup?.matchMode ?? CustomSmartPlaylistMatchMode.all;
     var rules = List<CustomSmartPlaylistRule>.from(
       initialGroup?.rules ?? const <CustomSmartPlaylistRule>[],
     );
@@ -11629,7 +11576,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                 rules.length < maxCustomSmartPlaylistRulesPerGroup;
             final atMaximumDepth =
                 depth + 1 >= maxCustomSmartPlaylistRuleGroupDepth;
-            final canAddNestedGroup = !atMaximumDepth &&
+            final canAddNestedGroup =
+                !atMaximumDepth &&
                 groups.length < maxCustomSmartPlaylistGroupsPerGroup;
             return AlertDialog(
               key: ValueKey<String>('smart-playlist-rule-group-dialog-$depth'),
@@ -11645,18 +11593,17 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                         key: ValueKey<String>(
                           'smart-playlist-rule-group-match-mode-$depth',
                         ),
-                        segments: const <
-                          ButtonSegment<CustomSmartPlaylistMatchMode>
-                        >[
-                          ButtonSegment<CustomSmartPlaylistMatchMode>(
-                            value: CustomSmartPlaylistMatchMode.all,
-                            label: Text('Match all'),
-                          ),
-                          ButtonSegment<CustomSmartPlaylistMatchMode>(
-                            value: CustomSmartPlaylistMatchMode.any,
-                            label: Text('Match any'),
-                          ),
-                        ],
+                        segments:
+                            const <ButtonSegment<CustomSmartPlaylistMatchMode>>[
+                              ButtonSegment<CustomSmartPlaylistMatchMode>(
+                                value: CustomSmartPlaylistMatchMode.all,
+                                label: Text('Match all'),
+                              ),
+                              ButtonSegment<CustomSmartPlaylistMatchMode>(
+                                value: CustomSmartPlaylistMatchMode.any,
+                                label: Text('Match any'),
+                              ),
+                            ],
                         selected: <CustomSmartPlaylistMatchMode>{matchMode},
                         onSelectionChanged: (selection) {
                           setDialogState(() => matchMode = selection.first);
@@ -11679,16 +11626,20 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                               'smart-playlist-rule-$depth-$index',
                             ),
                             contentPadding: EdgeInsets.zero,
-                            title: Text(_customSmartPlaylistRuleSummary(rules[index])),
+                            title: Text(
+                              _customSmartPlaylistRuleSummary(rules[index]),
+                            ),
                             trailing: IconButton(
                               tooltip: 'Remove rule',
                               icon: const Icon(Icons.close),
                               onPressed: () {
                                 setDialogState(() {
                                   rules = <CustomSmartPlaylistRule>[
-                                    for (var itemIndex = 0;
-                                        itemIndex < rules.length;
-                                        itemIndex += 1)
+                                    for (
+                                      var itemIndex = 0;
+                                      itemIndex < rules.length;
+                                      itemIndex += 1
+                                    )
                                       if (itemIndex != index) rules[itemIndex],
                                   ];
                                 });
@@ -11697,24 +11648,22 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             onTap: () async {
                               final rule =
                                   await _promptForCustomSmartPlaylistCondition(
-                                context,
-                                initialRule: rules[index],
-                              );
+                                    context,
+                                    initialRule: rules[index],
+                                  );
                               if (rule != null) {
                                 setDialogState(() => rules[index] = rule);
                               }
                             },
                           ),
                       OutlinedButton.icon(
-                        key: ValueKey<String>(
-                          'smart-playlist-add-rule-$depth',
-                        ),
+                        key: ValueKey<String>('smart-playlist-add-rule-$depth'),
                         onPressed: canAddRule
                             ? () async {
                                 final rule =
                                     await _promptForCustomSmartPlaylistCondition(
-                                  context,
-                                );
+                                      context,
+                                    );
                                 if (rule != null) {
                                   setDialogState(
                                     () => rules = <CustomSmartPlaylistRule>[
@@ -11751,9 +11700,11 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             onPressed: () {
                               setDialogState(() {
                                 groups = <CustomSmartPlaylistRuleGroup>[
-                                  for (var itemIndex = 0;
-                                      itemIndex < groups.length;
-                                      itemIndex += 1)
+                                  for (
+                                    var itemIndex = 0;
+                                    itemIndex < groups.length;
+                                    itemIndex += 1
+                                  )
                                     if (itemIndex != index) groups[itemIndex],
                                 ];
                               });
@@ -11762,10 +11713,10 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           onTap: () async {
                             final group =
                                 await _promptForCustomSmartPlaylistRuleGroup(
-                              context,
-                              initialGroup: groups[index],
-                              depth: depth + 1,
-                            );
+                                  context,
+                                  initialGroup: groups[index],
+                                  depth: depth + 1,
+                                );
                             if (group != null) {
                               setDialogState(() => groups[index] = group);
                             }
@@ -11779,16 +11730,16 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                             ? () async {
                                 final group =
                                     await _promptForCustomSmartPlaylistRuleGroup(
-                                  context,
-                                  depth: depth + 1,
-                                );
+                                      context,
+                                      depth: depth + 1,
+                                    );
                                 if (group != null) {
                                   setDialogState(
-                                    () => groups =
-                                        <CustomSmartPlaylistRuleGroup>[
-                                      ...groups,
-                                      group,
-                                    ],
+                                    () =>
+                                        groups = <CustomSmartPlaylistRuleGroup>[
+                                          ...groups,
+                                          group,
+                                        ],
                                   );
                                 }
                               }
@@ -11798,8 +11749,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                           atMaximumDepth
                               ? 'Maximum nesting depth reached'
                               : canAddNestedGroup
-                                  ? 'Add nested group'
-                                  : 'Nested group limit reached',
+                              ? 'Add nested group'
+                              : 'Nested group limit reached',
                         ),
                       ),
                     ],
@@ -11818,12 +11769,12 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                   onPressed: rules.isEmpty && groups.isEmpty
                       ? null
                       : () => Navigator.of(dialogContext).pop(
-                            CustomSmartPlaylistRuleGroup(
-                              matchMode: matchMode,
-                              rules: rules,
-                              groups: groups,
-                            ),
+                          CustomSmartPlaylistRuleGroup(
+                            matchMode: matchMode,
+                            rules: rules,
+                            groups: groups,
                           ),
+                        ),
                   child: const Text('Save'),
                 ),
               ],
@@ -11839,7 +11790,9 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     CustomSmartPlaylistRule? initialRule,
   }) async {
     var field = initialRule?.field ?? CustomSmartPlaylistRuleField.artist;
-    final valueController = TextEditingController(text: initialRule?.value ?? '');
+    final valueController = TextEditingController(
+      text: initialRule?.value ?? '',
+    );
     return showDialog<CustomSmartPlaylistRule>(
       context: context,
       builder: (dialogContext) {
@@ -11891,7 +11844,8 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
                         decoration: InputDecoration(
                           labelText: _customSmartPlaylistRuleFieldLabel(field),
                         ),
-                        keyboardType: field ==
+                        keyboardType:
+                            field ==
                                     CustomSmartPlaylistRuleField
                                         .minimumDurationSeconds ||
                                 field ==
@@ -12022,15 +11976,13 @@ class _SmartPlaylistSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
-                onShare: () => unawaited(
-                  _copyTrackShareText(context, library, track),
-                ),
+                onShare: () =>
+                    unawaited(_copyTrackShareText(context, library, track)),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
-                onEditMetadata: () => unawaited(
-                  _showTrackMetadataEditor(context, track),
-                ),
+                onEditMetadata: () =>
+                    unawaited(_showTrackMetadataEditor(context, track)),
                 onEditArtwork: track.sourceId == 'local'
                     ? () => unawaited(_editTrackArtwork(context, track))
                     : null,
@@ -12133,15 +12085,13 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
                     onLyrics: onLyrics,
                   ),
                 ),
-                onShare: () => unawaited(
-                  _copyTrackShareText(context, library, track),
-                ),
+                onShare: () =>
+                    unawaited(_copyTrackShareText(context, library, track)),
                 onFavorite: () => library.toggleFavorite(track.id),
                 onAddToPlaylist: () => onAddToPlaylist(track),
                 onLyrics: () => onLyrics(track),
-                onEditMetadata: () => unawaited(
-                  _showTrackMetadataEditor(context, track),
-                ),
+                onEditMetadata: () =>
+                    unawaited(_showTrackMetadataEditor(context, track)),
                 onEditArtwork: track.sourceId == 'local'
                     ? () => unawaited(_editTrackArtwork(context, track))
                     : null,
@@ -12156,10 +12106,7 @@ class _CustomSmartPlaylistSheet extends StatelessWidget {
 }
 
 class _PlaylistSheet extends StatefulWidget {
-  const _PlaylistSheet({
-    required this.playlistId,
-    required this.player,
-  });
+  const _PlaylistSheet({required this.playlistId, required this.player});
 
   final String playlistId;
   final PlayerController player;
@@ -12310,37 +12257,37 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
                       },
                       itemBuilder: (context) =>
                           <PopupMenuEntry<_PlaylistTrackAction>>[
-                        PopupMenuItem(
-                          value: _PlaylistTrackAction.moveUp,
-                          enabled: entry.key > 0,
-                          child: const ListTile(
-                            leading: Icon(Icons.arrow_upward),
-                            title: Text('Move up'),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: _PlaylistTrackAction.moveDown,
-                          enabled: entry.key < allTracks.length - 1,
-                          child: const ListTile(
-                            leading: Icon(Icons.arrow_downward),
-                            title: Text('Move down'),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: _PlaylistTrackAction.editMetadata,
-                          child: ListTile(
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Edit metadata'),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: _PlaylistTrackAction.remove,
-                          child: ListTile(
-                            leading: Icon(Icons.playlist_remove),
-                            title: Text('Remove from playlist'),
-                          ),
-                        ),
-                      ],
+                            PopupMenuItem(
+                              value: _PlaylistTrackAction.moveUp,
+                              enabled: entry.key > 0,
+                              child: const ListTile(
+                                leading: Icon(Icons.arrow_upward),
+                                title: Text('Move up'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: _PlaylistTrackAction.moveDown,
+                              enabled: entry.key < allTracks.length - 1,
+                              child: const ListTile(
+                                leading: Icon(Icons.arrow_downward),
+                                title: Text('Move down'),
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: _PlaylistTrackAction.editMetadata,
+                              child: ListTile(
+                                leading: Icon(Icons.edit_outlined),
+                                title: Text('Edit metadata'),
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: _PlaylistTrackAction.remove,
+                              child: ListTile(
+                                leading: Icon(Icons.playlist_remove),
+                                title: Text('Remove from playlist'),
+                              ),
+                            ),
+                          ],
                     ),
                   ),
             ],
@@ -12349,14 +12296,10 @@ class _PlaylistSheetState extends State<_PlaylistSheet> {
       },
     );
   }
-
 }
 
 class _SmartPlaylistCard extends StatelessWidget {
-  const _SmartPlaylistCard({
-    required this.smartPlaylist,
-    required this.onOpen,
-  });
+  const _SmartPlaylistCard({required this.smartPlaylist, required this.onOpen});
 
   final SmartPlaylist smartPlaylist;
   final VoidCallback onOpen;
@@ -12477,67 +12420,69 @@ class _CustomSmartPlaylistCard extends StatelessWidget {
                 break;
             }
           },
-          itemBuilder: (context) => <PopupMenuEntry<_CustomSmartPlaylistAction>>[
-            PopupMenuItem(
-              value: _CustomSmartPlaylistAction.edit,
-              child: ListTile(
-                leading: Icon(Icons.tune),
-                title: Text('Edit rules'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _CustomSmartPlaylistAction.artwork,
-              child: ListTile(
-                leading: Icon(Icons.image_outlined),
-                title: Text('Artwork'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _CustomSmartPlaylistAction.copyImportLink,
-              child: ListTile(
-                leading: Icon(Icons.link_outlined),
-                title: Text('Copy import link'),
-              ),
-            ),
-            if (onPrivateShare != null)
-              const PopupMenuItem(
-                value: _CustomSmartPlaylistAction.privateShare,
-                child: ListTile(
-                  leading: Icon(Icons.group_add_outlined),
-                  title: Text('Private collaboration'),
+          itemBuilder: (context) =>
+              <PopupMenuEntry<_CustomSmartPlaylistAction>>[
+                PopupMenuItem(
+                  value: _CustomSmartPlaylistAction.edit,
+                  child: ListTile(
+                    leading: Icon(Icons.tune),
+                    title: Text('Edit rules'),
+                  ),
                 ),
-              ),
-            if (onRefreshPublicSubscription != null)
-              const PopupMenuItem(
-                value: _CustomSmartPlaylistAction.refreshPublicSubscription,
-                child: ListTile(
-                  leading: Icon(Icons.refresh_outlined),
-                  title: Text('Refresh public subscription'),
+                PopupMenuItem(
+                  value: _CustomSmartPlaylistAction.artwork,
+                  child: ListTile(
+                    leading: Icon(Icons.image_outlined),
+                    title: Text('Artwork'),
+                  ),
                 ),
-              ),
-            if (onUnsubscribePublicSubscription != null)
-              const PopupMenuItem(
-                value: _CustomSmartPlaylistAction.unsubscribePublicSubscription,
-                child: ListTile(
-                  leading: Icon(Icons.bookmark_remove_outlined),
-                  title: Text('Unsubscribe public link'),
+                PopupMenuItem(
+                  value: _CustomSmartPlaylistAction.copyImportLink,
+                  child: ListTile(
+                    leading: Icon(Icons.link_outlined),
+                    title: Text('Copy import link'),
+                  ),
                 ),
-              ),
-            PopupMenuItem(
-              value: _CustomSmartPlaylistAction.duplicate,
-              child: ListTile(
-                leading: Icon(Icons.copy_outlined),
-                title: Text('Duplicate'),
-              ),
-            ),
-            PopupMenuItem(
-              value: _CustomSmartPlaylistAction.delete,
-              child: ListTile(
-                leading: Icon(Icons.delete_outline),
-                title: Text('Delete'),
-              ),
-            ),
-          ],
+                if (onPrivateShare != null)
+                  const PopupMenuItem(
+                    value: _CustomSmartPlaylistAction.privateShare,
+                    child: ListTile(
+                      leading: Icon(Icons.group_add_outlined),
+                      title: Text('Private collaboration'),
+                    ),
+                  ),
+                if (onRefreshPublicSubscription != null)
+                  const PopupMenuItem(
+                    value: _CustomSmartPlaylistAction.refreshPublicSubscription,
+                    child: ListTile(
+                      leading: Icon(Icons.refresh_outlined),
+                      title: Text('Refresh public subscription'),
+                    ),
+                  ),
+                if (onUnsubscribePublicSubscription != null)
+                  const PopupMenuItem(
+                    value: _CustomSmartPlaylistAction
+                        .unsubscribePublicSubscription,
+                    child: ListTile(
+                      leading: Icon(Icons.bookmark_remove_outlined),
+                      title: Text('Unsubscribe public link'),
+                    ),
+                  ),
+                PopupMenuItem(
+                  value: _CustomSmartPlaylistAction.duplicate,
+                  child: ListTile(
+                    leading: Icon(Icons.copy_outlined),
+                    title: Text('Duplicate'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _CustomSmartPlaylistAction.delete,
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('Delete'),
+                  ),
+                ),
+              ],
         ),
       ),
     );
@@ -12850,10 +12795,7 @@ class _HistoryTabState extends State<_HistoryTab> {
     };
     final stats = library.libraryStats(from: statsFrom, to: statsTo);
     final heatmapFrom = statsFrom ?? now.subtract(const Duration(days: 83));
-    final heatmapDays = library.listeningHeatmap(
-      from: heatmapFrom,
-      to: now,
-    );
+    final heatmapDays = library.listeningHeatmap(from: heatmapFrom, to: now);
     final monthlyRecaps = library.listeningRecaps(
       period: LibraryRecapPeriod.month,
       limit: 6,
@@ -12887,11 +12829,8 @@ class _HistoryTabState extends State<_HistoryTab> {
             ),
             IconButton(
               tooltip: 'Export stats',
-              onPressed: () => _showStatsExportPicker(
-                context,
-                from: statsFrom,
-                to: statsTo,
-              ),
+              onPressed: () =>
+                  _showStatsExportPicker(context, from: statsFrom, to: statsTo),
               icon: const Icon(Icons.ios_share),
             ),
             IconButton(
@@ -12921,9 +12860,8 @@ class _HistoryTabState extends State<_HistoryTab> {
           title: const Text('SponsorBlock categories'),
           subtitle: Text(library.sponsorBlockCategories.join(', ')),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => unawaited(
-            _showSponsorBlockCategoryDialog(context, library),
-          ),
+          onTap: () =>
+              unawaited(_showSponsorBlockCategoryDialog(context, library)),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -13048,10 +12986,7 @@ class _HistoryTabState extends State<_HistoryTab> {
           ),
         ],
         const SizedBox(height: 16),
-        Text(
-          'Recently played',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Recently played', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         if (recentlyPlayed.isEmpty)
           _EmptyHistory(
@@ -13069,19 +13004,11 @@ class _HistoryTabState extends State<_HistoryTab> {
               title: Text(track.title),
               subtitle: Text(
                 '${track.artist} · '
-                '${library.playCountForTrack(
-                  track.id,
-                  from: statsFrom,
-                  to: statsTo,
-                )} play(s)',
+                '${library.playCountForTrack(track.id, from: statsFrom, to: statsTo)} play(s)',
               ),
               trailing: Text(
                 _formatHistoryTime(
-                  library.lastPlayedAt(
-                    track.id,
-                    from: statsFrom,
-                    to: statsTo,
-                  ),
+                  library.lastPlayedAt(track.id, from: statsFrom, to: statsTo),
                 ),
               ),
               onTap: () => _playTrackWithResume(
@@ -13169,30 +13096,30 @@ class _HistoryTabState extends State<_HistoryTab> {
                                 break;
                             }
                           },
-                          itemBuilder: (_) => const <
-                              PopupMenuEntry<_SavedHistoryViewAction>>[
-                            PopupMenuItem<_SavedHistoryViewAction>(
-                              value: _SavedHistoryViewAction.update,
-                              child: ListTile(
-                                leading: Icon(Icons.save_outlined),
-                                title: Text('Update to current'),
-                              ),
-                            ),
-                            PopupMenuItem<_SavedHistoryViewAction>(
-                              value: _SavedHistoryViewAction.rename,
-                              child: ListTile(
-                                leading: Icon(Icons.edit_outlined),
-                                title: Text('Rename'),
-                              ),
-                            ),
-                            PopupMenuItem<_SavedHistoryViewAction>(
-                              value: _SavedHistoryViewAction.delete,
-                              child: ListTile(
-                                leading: Icon(Icons.delete_outline),
-                                title: Text('Delete'),
-                              ),
-                            ),
-                          ],
+                          itemBuilder: (_) =>
+                              const <PopupMenuEntry<_SavedHistoryViewAction>>[
+                                PopupMenuItem<_SavedHistoryViewAction>(
+                                  value: _SavedHistoryViewAction.update,
+                                  child: ListTile(
+                                    leading: Icon(Icons.save_outlined),
+                                    title: Text('Update to current'),
+                                  ),
+                                ),
+                                PopupMenuItem<_SavedHistoryViewAction>(
+                                  value: _SavedHistoryViewAction.rename,
+                                  child: ListTile(
+                                    leading: Icon(Icons.edit_outlined),
+                                    title: Text('Rename'),
+                                  ),
+                                ),
+                                PopupMenuItem<_SavedHistoryViewAction>(
+                                  value: _SavedHistoryViewAction.delete,
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline),
+                                    title: Text('Delete'),
+                                  ),
+                                ),
+                              ],
                         ),
                         onTap: () {
                           Navigator.of(sheetContext).pop();
@@ -13231,10 +13158,10 @@ class _HistoryTabState extends State<_HistoryTab> {
 
     try {
       await context.read<LibraryStore>().createSavedHistoryView(
-            name: name,
-            query: _historyQuery,
-            range: _statsRange,
-          );
+        name: name,
+        query: _historyQuery,
+        range: _statsRange,
+      );
     } on ArgumentError catch (error) {
       if (!context.mounted) {
         return;
@@ -13260,11 +13187,11 @@ class _HistoryTabState extends State<_HistoryTab> {
     }
 
     await context.read<LibraryStore>().updateSavedHistoryView(
-          view.id,
-          name: name,
-          query: view.query,
-          range: view.range,
-        );
+      view.id,
+      name: name,
+      query: view.query,
+      range: view.range,
+    );
   }
 
   Future<String?> _showSavedHistoryViewNameDialog(
@@ -13373,9 +13300,7 @@ class _HistoryTabState extends State<_HistoryTab> {
           title: Text('Export ${_statsExportFormatLabel(format)} stats'),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(document),
-            ),
+            child: SingleChildScrollView(child: SelectableText(document)),
           ),
           actions: <Widget>[
             FilledButton(
@@ -13848,12 +13773,14 @@ class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                for (var index = 0; index < charts.length; index += 1)
-                  ...<Widget>[
-                    charts[index],
-                    if (index != charts.length - 1)
-                      const SizedBox(height: 20),
-                  ],
+                for (
+                  var index = 0;
+                  index < charts.length;
+                  index += 1
+                ) ...<Widget>[
+                  charts[index],
+                  if (index != charts.length - 1) const SizedBox(height: 20),
+                ],
               ],
             );
           },
@@ -13875,8 +13802,9 @@ class _LibraryStatsChartsState extends State<LibraryStatsCharts> {
     required Duration listeningDuration,
   }) => switch (_metric) {
     LibraryStatsChartMetric.plays => '$playCount play(s)',
-    LibraryStatsChartMetric.listeningTime =>
-      _formatStatsDuration(listeningDuration),
+    LibraryStatsChartMetric.listeningTime => _formatStatsDuration(
+      listeningDuration,
+    ),
   };
 }
 
@@ -13907,14 +13835,8 @@ class _StatsMetricTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Text(
-                      value,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text(value, style: Theme.of(context).textTheme.titleMedium),
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -14087,12 +14009,8 @@ String _listeningRecapSummary(LibraryStatsSummary stats) {
   return parts.join(' · ');
 }
 
-
 class _StatsSection extends StatelessWidget {
-  const _StatsSection({
-    required this.title,
-    required this.children,
-  });
+  const _StatsSection({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;
@@ -14108,11 +14026,7 @@ class _StatsSection extends StatelessWidget {
       children: <Widget>[
         Text(title, style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
-        Card(
-          child: Column(
-            children: children,
-          ),
-        ),
+        Card(child: Column(children: children)),
       ],
     );
   }
@@ -14157,18 +14071,12 @@ class _PlaybackHistoryEntrySection extends StatelessWidget {
       );
     }
 
-    return _StatsSection(
-      title: 'Play history entries',
-      children: tiles,
-    );
+    return _StatsSection(title: 'Play history entries', children: tiles);
   }
 }
 
 class _EmptyHistory extends StatelessWidget {
-  const _EmptyHistory({
-    required this.title,
-    required this.message,
-  });
+  const _EmptyHistory({required this.title, required this.message});
 
   final String title;
   final String message;
@@ -14181,15 +14089,9 @@ class _EmptyHistory extends StatelessWidget {
         children: <Widget>[
           const Icon(Icons.history, size: 56),
           const SizedBox(height: 16),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-          ),
+          Text(message, textAlign: TextAlign.center),
         ],
       ),
     );
@@ -14255,13 +14157,7 @@ Future<void> _playTrackWithResume(
   Track track, {
   required List<Track> queue,
 }) async {
-  await _tryPlayTrackWithResume(
-    context,
-    player,
-    library,
-    track,
-    queue: queue,
-  );
+  await _tryPlayTrackWithResume(context, player, library, track, queue: queue);
 }
 
 Future<bool> _tryPlayTrackWithResume(
@@ -14331,9 +14227,8 @@ Future<void> _startTrackRadio(
       ),
       action: SnackBarAction(
         label: 'Save playlist',
-        onPressed: () => unawaited(
-          _saveTrackRadioPlaylist(context, library, seedTrack),
-        ),
+        onPressed: () =>
+            unawaited(_saveTrackRadioPlaylist(context, library, seedTrack)),
       ),
     ),
   );
@@ -14370,9 +14265,7 @@ Future<void> _startBrowseGroupRadio(
   final radioQueue = library.radioQueueForBrowseGroup(type, group.key);
   if (radioQueue == null || radioQueue.tracks.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('No playable radio queue for ${group.label}.'),
-      ),
+      SnackBar(content: Text('No playable radio queue for ${group.label}.')),
     );
     return;
   }
@@ -14488,9 +14381,9 @@ Future<void> _clearLocalDiagnostics(
   }
   await diagnostics.clear();
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cleared local diagnostics.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Cleared local diagnostics.')));
   }
 }
 
@@ -14698,7 +14591,8 @@ Future<void> _saveCollectionShareCard(
   required String fileToken,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
-  final fileName = 'aethertune-${_shareCardFileToken(kind)}-'
+  final fileName =
+      'aethertune-${_shareCardFileToken(kind)}-'
       '${_shareCardFileToken(fileToken)}.png';
   try {
     final bytes = await captureCollectionShareCardPng(boundaryKey);
@@ -14735,7 +14629,8 @@ Future<void> _shareCollectionShareCard(
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final sharePositionOrigin = platformSharePositionOrigin(context);
-  final fileName = 'aethertune-${_shareCardFileToken(kind)}-'
+  final fileName =
+      'aethertune-${_shareCardFileToken(kind)}-'
       '${_shareCardFileToken(fileToken)}.png';
   try {
     final status = await const SharePlusImageShareService().share(
@@ -14822,7 +14717,9 @@ Future<void> _copyLyricsSelectedRangeShareText(
   final lines = library.lyricsShareLines(track.id, plainText: plainText);
   if (lines.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Add lyrics before sharing selected lines.')),
+      const SnackBar(
+        content: Text('Add lyrics before sharing selected lines.'),
+      ),
     );
     return;
   }
@@ -14938,10 +14835,7 @@ Future<_LyricsShareRange?> _promptForLyricsShareRange(
               ),
               FilledButton.icon(
                 onPressed: () => Navigator.of(dialogContext).pop(
-                  _LyricsShareRange(
-                    startLine: startLine,
-                    endLine: endLine,
-                  ),
+                  _LyricsShareRange(startLine: startLine, endLine: endLine),
                 ),
                 icon: const Icon(Icons.ios_share),
                 label: const Text('Copy selected lines'),
@@ -15182,7 +15076,9 @@ Future<void> _saveLyricsDraftExportDocument(
     if (!context.mounted) {
       return;
     }
-    messenger.showSnackBar(SnackBar(content: Text('Saved ${export.fileName}.')));
+    messenger.showSnackBar(
+      SnackBar(content: Text('Saved ${export.fileName}.')),
+    );
   } on Exception catch (error) {
     if (!context.mounted) {
       return;
@@ -15201,9 +15097,9 @@ Future<void> _copyTextToClipboard(
 }) async {
   final text = value?.trim();
   if (text == null || text.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(unavailableMessage)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(unavailableMessage)));
     return;
   }
 
@@ -15235,10 +15131,7 @@ Future<void> _shareCopiedText(BuildContext context, String text) async {
       : renderBox.localToGlobal(Offset.zero) & renderBox.size;
   try {
     final status = await _platformTextShareService.share(
-      PlatformTextShareRequest(
-        text: text,
-        sharePositionOrigin: origin,
-      ),
+      PlatformTextShareRequest(text: text, sharePositionOrigin: origin),
     );
     if (!context.mounted || status != PlatformTextShareStatus.unavailable) {
       return;
@@ -15362,10 +15255,7 @@ _LocalImportProgressHandle _showLocalImportProgress(
 }
 
 final class _LocalImportProgressHandle {
-  _LocalImportProgressHandle({
-    required this.progress,
-    required this.onDismiss,
-  });
+  _LocalImportProgressHandle({required this.progress, required this.onDismiss});
 
   final ValueNotifier<LocalFolderScanProgress> progress;
   final VoidCallback onDismiss;
@@ -15513,10 +15403,7 @@ class _EmptyLibrary extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            Text(
-              _emptyLibrarySubtitle,
-              textAlign: TextAlign.center,
-            ),
+            Text(_emptyLibrarySubtitle, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             Wrap(
               alignment: WrapAlignment.center,
@@ -15731,8 +15618,8 @@ class _SourcesTabState extends State<_SourcesTab> {
     final itunesProvider = itunes?.provider ?? _itunesMetadataProvider;
     final itunesStatus =
         'Enabled - ${itunes?.storefront ?? itunesProvider.country.toUpperCase()}';
-    final youtubeProviders = youtubeData?.musicProviders ??
-        const <MusicSourceProvider>[];
+    final youtubeProviders =
+        youtubeData?.musicProviders ?? const <MusicSourceProvider>[];
     YouTubeDataMetadataProvider? youtubeProvider;
     for (final candidate in youtubeProviders) {
       if (candidate is YouTubeDataMetadataProvider) {
@@ -15741,16 +15628,16 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
     }
     JamendoProvider? jamendoProvider;
-    for (final candidate in jamendo?.musicProviders ??
-        const <MusicSourceProvider>[]) {
+    for (final candidate
+        in jamendo?.musicProviders ?? const <MusicSourceProvider>[]) {
       if (candidate is JamendoProvider) {
         jamendoProvider = candidate;
         break;
       }
     }
     final spotify = context.watch<SpotifySettingsStore?>();
-    final spotifyProviders = spotify?.musicProviders ??
-        const <MusicSourceProvider>[];
+    final spotifyProviders =
+        spotify?.musicProviders ?? const <MusicSourceProvider>[];
     SpotifyMetadataProvider? spotifyProvider;
     for (final candidate in spotifyProviders) {
       if (candidate is SpotifyMetadataProvider) {
@@ -15760,7 +15647,8 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
     final podcastSubscriptions = library.podcastSubscriptions;
     final offlineModeEnabled = library.offlineModeEnabled;
-    final selfHostedActionsEnabled = selfHosted.loaded &&
+    final selfHostedActionsEnabled =
+        selfHosted.loaded &&
         selfHosted.loadError == null &&
         !offlineModeEnabled;
     final providerSearchSources = _providerSearchSourceFacets();
@@ -15827,7 +15715,8 @@ class _SourcesTabState extends State<_SourcesTab> {
         const _ProviderCard(
           title: 'Local Files',
           status: 'Enabled',
-          description: 'Import and play files selected through the native picker.',
+          description:
+              'Import and play files selected through the native picker.',
           icon: Icons.folder_open,
           capabilities: <MusicSourceCapability>{
             MusicSourceCapability.directPlayback,
@@ -15846,7 +15735,8 @@ class _SourcesTabState extends State<_SourcesTab> {
         const _ProviderCard(
           title: 'Podcast RSS',
           status: 'Adapter foundation',
-          description: 'Parse legal RSS feeds with audio enclosures into playable episode tracks.',
+          description:
+              'Parse legal RSS feeds with audio enclosures into playable episode tracks.',
           icon: Icons.rss_feed,
           capabilities: <MusicSourceCapability>{
             MusicSourceCapability.metadataSearch,
@@ -15910,10 +15800,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           disclosure: _musicBrainzMetadataProvider.disclosure,
         ),
         const SizedBox(height: 16),
-        Text(
-          'Official APIs',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Official APIs', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         _ProviderCard(
           title: 'YouTube Data API',
@@ -15922,17 +15809,16 @@ class _SourcesTabState extends State<_SourcesTab> {
               ? 'Searches and browses official music video metadata. Playback and offline media are unavailable.'
               : 'Configure a user-owned Google Cloud API key for official video metadata search only.',
           icon: Icons.ondemand_video_outlined,
-          capabilities: youtubeProvider?.capabilities ??
+          capabilities:
+              youtubeProvider?.capabilities ??
               const <MusicSourceCapability>{
                 MusicSourceCapability.metadataSearch,
                 MusicSourceCapability.artwork,
               },
-          disclosure: youtubeProvider?.disclosure ??
+          disclosure:
+              youtubeProvider?.disclosure ??
               const ProviderPrivacyDisclosure(
-                networkDomains: <String>[
-                  'www.googleapis.com',
-                  'i.ytimg.com',
-                ],
+                networkDomains: <String>['www.googleapis.com', 'i.ytimg.com'],
               ),
           actions: PopupMenuButton<_YouTubeDataAction>(
             tooltip: 'Manage YouTube Data API',
@@ -16033,14 +15919,16 @@ class _SourcesTabState extends State<_SourcesTab> {
               ? 'Official Jamendo music search and direct stream playback. Offline media stays unavailable.'
               : 'Configure your Jamendo developer client ID for official music search and streaming.',
           icon: Icons.music_note_outlined,
-          capabilities: jamendoProvider?.capabilities ??
+          capabilities:
+              jamendoProvider?.capabilities ??
               const <MusicSourceCapability>{
                 MusicSourceCapability.metadataSearch,
                 MusicSourceCapability.streamResolution,
                 MusicSourceCapability.directPlayback,
                 MusicSourceCapability.artwork,
               },
-          disclosure: jamendoProvider?.disclosure ??
+          disclosure:
+              jamendoProvider?.disclosure ??
               const ProviderPrivacyDisclosure(
                 networkDomains: <String>[
                   'api.jamendo.com',
@@ -16113,7 +16001,8 @@ class _SourcesTabState extends State<_SourcesTab> {
         const SizedBox(height: 8),
         _ProviderCard(
           title: 'YouTube account library',
-          status: youtubeAccount?.isConfigured == true &&
+          status:
+              youtubeAccount?.isConfigured == true &&
                   youtubeAccount?.desktopOAuthSupported == true
               ? 'Enabled'
               : youtubeAccount?.desktopOAuthSupported == true
@@ -16169,7 +16058,8 @@ class _SourcesTabState extends State<_SourcesTab> {
               ),
               PopupMenuItem<_YouTubeAccountAction>(
                 value: _YouTubeAccountAction.configure,
-                enabled: youtubeAccount?.loaded == true &&
+                enabled:
+                    youtubeAccount?.loaded == true &&
                     youtubeAccount?.desktopOAuthSupported == true &&
                     !offlineModeEnabled,
                 child: ListTile(
@@ -16213,13 +16103,15 @@ class _SourcesTabState extends State<_SourcesTab> {
               ? 'Searches and reads saved Spotify track metadata. Playback and offline media are unavailable.'
               : 'Connect your own Spotify developer app for official metadata access.',
           icon: Icons.library_music_outlined,
-          capabilities: spotifyProvider?.capabilities ??
+          capabilities:
+              spotifyProvider?.capabilities ??
               const <MusicSourceCapability>{
                 MusicSourceCapability.metadataSearch,
                 MusicSourceCapability.artwork,
                 MusicSourceCapability.authentication,
               },
-          disclosure: spotifyProvider?.disclosure ??
+          disclosure:
+              spotifyProvider?.disclosure ??
               const ProviderPrivacyDisclosure(
                 networkDomains: <String>[
                   'accounts.spotify.com',
@@ -16382,7 +16274,8 @@ class _SourcesTabState extends State<_SourcesTab> {
               ),
               PopupMenuItem<_SpotifyAction>(
                 value: _SpotifyAction.configure,
-                enabled: spotify?.loaded == true &&
+                enabled:
+                    spotify?.loaded == true &&
                     !offlineModeEnabled &&
                     spotify?.connecting != true,
                 child: ListTile(
@@ -16436,9 +16329,9 @@ class _SourcesTabState extends State<_SourcesTab> {
             OutlinedButton.icon(
               onPressed: selfHostedActionsEnabled
                   ? () => _editSelfHostedAccount(
-                        context,
-                        SelfHostedProviderKind.jellyfin,
-                      )
+                      context,
+                      SelfHostedProviderKind.jellyfin,
+                    )
                   : null,
               icon: const Icon(Icons.storage_outlined),
               label: const Text('Add Jellyfin'),
@@ -16446,19 +16339,19 @@ class _SourcesTabState extends State<_SourcesTab> {
             OutlinedButton.icon(
               onPressed: selfHostedActionsEnabled
                   ? () => _editSelfHostedAccount(
-                        context,
-                        SelfHostedProviderKind.subsonic,
-                      )
+                      context,
+                      SelfHostedProviderKind.subsonic,
+                    )
                   : null,
               icon: const Icon(Icons.dns_outlined),
               label: const Text('Add Navidrome'),
             ),
             OutlinedButton.icon(
-              onPressed: selfHostedActionsEnabled &&
-                      selfHosted.accounts.isNotEmpty
+              onPressed:
+                  selfHostedActionsEnabled && selfHosted.accounts.isNotEmpty
                   ? () => unawaited(
-                        _exportSelfHostedAccountConfiguration(context),
-                      )
+                      _exportSelfHostedAccountConfiguration(context),
+                    )
                   : null,
               icon: const Icon(Icons.ios_share_outlined),
               label: const Text('Export servers'),
@@ -16466,32 +16359,34 @@ class _SourcesTabState extends State<_SourcesTab> {
             OutlinedButton.icon(
               onPressed: selfHostedActionsEnabled
                   ? () => unawaited(
-                        _showSelfHostedAccountConfigurationImport(context),
-                      )
+                      _showSelfHostedAccountConfigurationImport(context),
+                    )
                   : null,
               icon: const Icon(Icons.file_open_outlined),
               label: const Text('Import servers'),
             ),
             OutlinedButton.icon(
               key: const Key('upload-self-hosted-accounts-to-sync'),
-              onPressed: selfHosted.loaded &&
+              onPressed:
+                  selfHosted.loaded &&
                       librarySync?.isConfigured == true &&
                       !offlineModeEnabled
                   ? () => unawaited(
-                        _uploadSelfHostedAccountConfigurationToSync(context),
-                      )
+                      _uploadSelfHostedAccountConfigurationToSync(context),
+                    )
                   : null,
               icon: const Icon(Icons.cloud_upload_outlined),
               label: const Text('Upload to sync server'),
             ),
             OutlinedButton.icon(
               key: const Key('import-self-hosted-accounts-from-sync'),
-              onPressed: selfHosted.loaded &&
+              onPressed:
+                  selfHosted.loaded &&
                       librarySync?.isConfigured == true &&
                       !offlineModeEnabled
                   ? () => unawaited(
-                        _importSelfHostedAccountConfigurationFromSync(context),
-                      )
+                      _importSelfHostedAccountConfigurationFromSync(context),
+                    )
                   : null,
               icon: const Icon(Icons.cloud_download_outlined),
               label: const Text('Import from sync server'),
@@ -16535,7 +16430,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                   ? JellyfinProvider.defaultCapabilities
                   : SubsonicProvider.defaultCapabilities,
               disclosure: _selfHostedDisclosure(account),
-              onTap: selfHostedActionsEnabled &&
+              onTap:
+                  selfHostedActionsEnabled &&
                       selfHosted.hasCredential(account.id)
                   ? () => _browseSelfHostedAccount(context, account)
                   : null,
@@ -16546,9 +16442,7 @@ class _SourcesTabState extends State<_SourcesTab> {
                     case _SelfHostedAccountAction.browse:
                       if (selfHostedActionsEnabled &&
                           selfHosted.hasCredential(account.id)) {
-                        unawaited(
-                          _browseSelfHostedAccount(context, account),
-                        );
+                        unawaited(_browseSelfHostedAccount(context, account));
                       }
                       break;
                     case _SelfHostedAccountAction.edit:
@@ -16578,7 +16472,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                 itemBuilder: (_) => <PopupMenuEntry<_SelfHostedAccountAction>>[
                   PopupMenuItem<_SelfHostedAccountAction>(
                     value: _SelfHostedAccountAction.browse,
-                    enabled: selfHostedActionsEnabled &&
+                    enabled:
+                        selfHostedActionsEnabled &&
                         selfHosted.hasCredential(account.id),
                     child: const ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -16597,7 +16492,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                   ),
                   PopupMenuItem<_SelfHostedAccountAction>(
                     value: _SelfHostedAccountAction.rotateCredential,
-                    enabled: selfHostedActionsEnabled &&
+                    enabled:
+                        selfHostedActionsEnabled &&
                         selfHosted.hasCredential(account.id),
                     child: const ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -16636,7 +16532,8 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
             OutlinedButton.icon(
               key: const Key('export-custom-catalogs'),
-              onPressed: customCatalogs?.loaded == true &&
+              onPressed:
+                  customCatalogs?.loaded == true &&
                       customCatalogs!.definitions.isNotEmpty
                   ? () => unawaited(_exportCustomCatalogConfiguration(context))
                   : null,
@@ -16646,14 +16543,17 @@ class _SourcesTabState extends State<_SourcesTab> {
             OutlinedButton.icon(
               key: const Key('import-custom-catalogs'),
               onPressed: customCatalogs?.loaded == true && !offlineModeEnabled
-                  ? () => unawaited(_importCustomCatalogConfigurationFile(context))
+                  ? () => unawaited(
+                      _importCustomCatalogConfigurationFile(context),
+                    )
                   : null,
               icon: const Icon(Icons.file_download_outlined),
               label: const Text('Import catalogs'),
             ),
             OutlinedButton.icon(
               key: const Key('upload-custom-catalogs-to-sync'),
-              onPressed: customCatalogs?.loaded == true &&
+              onPressed:
+                  customCatalogs?.loaded == true &&
                       librarySync?.isConfigured == true &&
                       !offlineModeEnabled
                   ? () => unawaited(
@@ -16665,7 +16565,8 @@ class _SourcesTabState extends State<_SourcesTab> {
             ),
             OutlinedButton.icon(
               key: const Key('import-custom-catalogs-from-sync'),
-              onPressed: customCatalogs?.loaded == true &&
+              onPressed:
+                  customCatalogs?.loaded == true &&
                       librarySync?.isConfigured == true &&
                       !offlineModeEnabled
                   ? () => unawaited(
@@ -16680,16 +16581,14 @@ class _SourcesTabState extends State<_SourcesTab> {
         if (customCatalogs == null || !customCatalogs.loaded) ...<Widget>[
           const SizedBox(height: 8),
           const LinearProgressIndicator(),
-        ]
-        else if (customCatalogs.loadError != null) ...<Widget>[
+        ] else if (customCatalogs.loadError != null) ...<Widget>[
           const SizedBox(height: 8),
           ListTile(
             leading: const Icon(Icons.extension_off_outlined),
             title: const Text('Custom catalogs unavailable'),
             subtitle: Text(customCatalogs.loadError!),
           ),
-        ]
-        else if (customCatalogs.definitions.isEmpty)
+        ] else if (customCatalogs.definitions.isEmpty)
           const ListTile(
             leading: Icon(Icons.data_object_outlined),
             title: Text('No custom JSON catalogs configured'),
@@ -16752,14 +16651,12 @@ class _SourcesTabState extends State<_SourcesTab> {
         const _ProviderCard(
           title: 'Commercial services',
           status: 'Official APIs only',
-          description: 'No DRM bypass, scraping, or paid-service cloning is included.',
+          description:
+              'No DRM bypass, scraping, or paid-service cloning is included.',
           icon: Icons.verified_user_outlined,
         ),
         const SizedBox(height: 16),
-        Text(
-          'Provider search',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Provider search', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Row(
           children: <Widget>[
@@ -16778,9 +16675,7 @@ class _SourcesTabState extends State<_SourcesTab> {
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search library and providers',
-              onPressed: _providerSearchLoading
-                  ? null
-                  : _submitProviderSearch,
+              onPressed: _providerSearchLoading ? null : _submitProviderSearch,
               icon: const Icon(Icons.search),
             ),
           ],
@@ -16813,7 +16708,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  tooltip: '${suggestion.providerName} '
+                  tooltip:
+                      '${suggestion.providerName} '
                       '${suggestion.suggestion.kind.label}: '
                       '${suggestion.suggestion.value}',
                   onPressed: () => _selectProviderSearchSuggestion(suggestion),
@@ -16918,20 +16814,15 @@ class _SourcesTabState extends State<_SourcesTab> {
                 children: <Widget>[
                   IconButton(
                     tooltip: 'Save result',
-                    onPressed: () => _saveProviderSearchTrack(
-                      context,
-                      result.track,
-                    ),
+                    onPressed: () =>
+                        _saveProviderSearchTrack(context, result.track),
                     icon: const Icon(Icons.library_add_outlined),
                   ),
                   _offlineQueueMenu(
                     context: context,
                     track: result.track,
-                    decisionFor: (action) =>
-                        _providerSearchCoordinator.offlineDecision(
-                      result.track,
-                      action,
-                    ),
+                    decisionFor: (action) => _providerSearchCoordinator
+                        .offlineDecision(result.track, action),
                   ),
                   IconButton(
                     tooltip: _canPlayProviderSearchTrack(result.track)
@@ -16970,16 +16861,14 @@ class _SourcesTabState extends State<_SourcesTab> {
           Align(
             alignment: Alignment.center,
             child: OutlinedButton.icon(
-              key: const ValueKey<String>(
-                'provider-search-load-more-retry',
-              ),
+              key: const ValueKey<String>('provider-search-load-more-retry'),
               onPressed: offlineModeEnabled && !_providerSearchLocalOnly
                   ? null
                   : () => unawaited(
-                        _continueProviderCatalogSearch(
-                          continuations: visibleProviderSearchFailedContinuations,
-                        ),
+                      _continueProviderCatalogSearch(
+                        continuations: visibleProviderSearchFailedContinuations,
                       ),
+                    ),
               icon: const Icon(Icons.refresh),
               label: const Text('Retry failed providers'),
             ),
@@ -16995,20 +16884,17 @@ class _SourcesTabState extends State<_SourcesTab> {
               onPressed: offlineModeEnabled && !_providerSearchLocalOnly
                   ? null
                   : () => unawaited(
-                        _continueProviderCatalogSearch(
-                          continuations: visibleProviderSearchContinuations,
-                        ),
+                      _continueProviderCatalogSearch(
+                        continuations: visibleProviderSearchContinuations,
                       ),
+                    ),
               icon: const Icon(Icons.expand_more),
               label: const Text('Load more provider results'),
             ),
           ),
         ],
         const SizedBox(height: 16),
-        Text(
-          'Video',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Video', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           key: const Key('video-player-open'),
@@ -17091,9 +16977,10 @@ class _SourcesTabState extends State<_SourcesTab> {
               leading: const Icon(Icons.podcasts_outlined),
               title: Text(result.title),
               subtitle: Text(
-                <String>[result.author, result.genre]
-                    .where((value) => value.isNotEmpty)
-                    .join(' · '),
+                <String>[
+                  result.author,
+                  result.genre,
+                ].where((value) => value.isNotEmpty).join(' · '),
               ),
               trailing: TextButton(
                 key: ValueKey<String>(
@@ -17119,8 +17006,9 @@ class _SourcesTabState extends State<_SourcesTab> {
                 ),
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.done,
-                onSubmitted:
-                    offlineModeEnabled ? null : (_) => _addPodcastFeed(context),
+                onSubmitted: offlineModeEnabled
+                    ? null
+                    : (_) => _addPodcastFeed(context),
               ),
             ),
             const SizedBox(width: 8),
@@ -17151,7 +17039,8 @@ class _SourcesTabState extends State<_SourcesTab> {
               label: const Text('Export OPML'),
             ),
             OutlinedButton.icon(
-              onPressed: _podcastLoading ||
+              onPressed:
+                  _podcastLoading ||
                       offlineModeEnabled ||
                       podcastSubscriptions.isEmpty
                   ? null
@@ -17251,11 +17140,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                     _offlineQueueMenu(
                       context: context,
                       track: track,
-                      decisionFor: (action) => _podcastOfflineDecision(
-                        context,
-                        track,
-                        action,
-                      ),
+                      decisionFor: (action) =>
+                          _podcastOfflineDecision(context, track, action),
                     ),
                     IconButton(
                       tooltip: 'Play episode',
@@ -17283,14 +17169,16 @@ class _SourcesTabState extends State<_SourcesTab> {
                   prefixIcon: Icon(Icons.search),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted:
-                    offlineModeEnabled ? null : (_) => _searchRadioStations(),
+                onSubmitted: offlineModeEnabled
+                    ? null
+                    : (_) => _searchRadioStations(),
               ),
             ),
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Search stations',
-              onPressed: _radioLoading || _radioLoadingMore || offlineModeEnabled
+              onPressed:
+                  _radioLoading || _radioLoadingMore || offlineModeEnabled
                   ? null
                   : _searchRadioStations,
               icon: const Icon(Icons.search),
@@ -17400,7 +17288,8 @@ class _SourcesTabState extends State<_SourcesTab> {
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: _radioLoading || _radioLoadingMore || offlineModeEnabled
+              onPressed:
+                  _radioLoading || _radioLoadingMore || offlineModeEnabled
                   ? null
                   : _loadMoreRadioStations,
               icon: const Icon(Icons.expand_more),
@@ -17542,7 +17431,8 @@ class _SourcesTabState extends State<_SourcesTab> {
               label: Text(_archiveLoadMoreLabel),
             ),
           ),
-        ] else if (_archiveItems.isNotEmpty && _archiveTotalResults != null) ...<Widget>[
+        ] else if (_archiveItems.isNotEmpty &&
+            _archiveTotalResults != null) ...<Widget>[
           const SizedBox(height: 8),
           Text(
             'All $_archiveTotalResults archive results loaded.',
@@ -17609,9 +17499,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     BuildContext context,
     SelfHostedProviderAccount account,
   ) async {
-    final provider = context
-        .read<SelfHostedProviderStore>()
-        .catalogProviderFor(account.id);
+    final provider = context.read<SelfHostedProviderStore>().catalogProviderFor(
+      account.id,
+    );
     if (provider == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -17627,10 +17517,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
-  void _openJamendoCollections(
-    BuildContext context,
-    JamendoProvider provider,
-  ) {
+  void _openJamendoCollections(BuildContext context, JamendoProvider provider) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => SelfHostedBrowseScreen(
@@ -17711,8 +17598,7 @@ class _SourcesTabState extends State<_SourcesTab> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text),
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
               child: const Text('Save'),
             ),
           ],
@@ -17756,9 +17642,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       );
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       controller.dispose();
@@ -17788,7 +17674,9 @@ class _SourcesTabState extends State<_SourcesTab> {
                   obscureText: true,
                   enableSuggestions: false,
                   autocorrect: false,
-                  decoration: const InputDecoration(labelText: 'Jamendo client ID'),
+                  decoration: const InputDecoration(
+                    labelText: 'Jamendo client ID',
+                  ),
                 ),
               ],
             ),
@@ -17821,9 +17709,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       );
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       controller.dispose();
@@ -17878,9 +17766,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       _providerSearchContinuations.remove('jamendo');
       _providerSearchFailedContinuations.remove('jamendo');
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Jamendo client ID removed.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Jamendo client ID removed.')));
   }
 
   Future<void> _configureYouTubeData(BuildContext context) async {
@@ -17976,13 +17864,15 @@ class _SourcesTabState extends State<_SourcesTab> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('YouTube Data API metadata search enabled.')),
+        const SnackBar(
+          content: Text('YouTube Data API metadata search enabled.'),
+        ),
       );
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       keyController.dispose();
@@ -18143,15 +18033,15 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } on StateError catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       clientIdController.dispose();
@@ -18220,9 +18110,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (store == null) {
       return;
     }
-    await context
-        .read<PlayerController>()
-        .removeTracksFromSource('youtube-data-metadata');
+    await context.read<PlayerController>().removeTracksFromSource(
+      'youtube-data-metadata',
+    );
     await store.removeApiKey();
     if (!context.mounted) {
       return;
@@ -18343,15 +18233,15 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } on StateError catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       clientIdController.dispose();
@@ -18368,16 +18258,15 @@ class _SourcesTabState extends State<_SourcesTab> {
       ),
     );
   }
+
   void _openSpotifySavedEpisodes(
     BuildContext context,
     SpotifyMetadataProvider provider,
   ) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifySavedTracksScreen(
-          provider: provider,
-          savedEpisodes: true,
-        ),
+        builder: (_) =>
+            SpotifySavedTracksScreen(provider: provider, savedEpisodes: true),
       ),
     );
   }
@@ -18421,10 +18310,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifySavedTracksScreen(
-          provider: provider,
-          topTracks: true,
-        ),
+        builder: (_) =>
+            SpotifySavedTracksScreen(provider: provider, topTracks: true),
       ),
     );
   }
@@ -18446,10 +18333,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifyTopArtistsScreen(
-          provider: provider,
-          followedArtists: true,
-        ),
+        builder: (_) =>
+            SpotifyTopArtistsScreen(provider: provider, followedArtists: true),
       ),
     );
   }
@@ -18460,10 +18345,8 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifySavedAlbumsScreen(
-          provider: provider,
-          newReleases: true,
-        ),
+        builder: (_) =>
+            SpotifySavedAlbumsScreen(provider: provider, newReleases: true),
       ),
     );
   }
@@ -18506,9 +18389,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (store == null) {
       return;
     }
-    await context
-        .read<PlayerController>()
-        .removeTracksFromSource('spotify-metadata');
+    await context.read<PlayerController>().removeTracksFromSource(
+      'spotify-metadata',
+    );
     await store.remove();
     if (!context.mounted) {
       return;
@@ -18529,14 +18412,12 @@ class _SourcesTabState extends State<_SourcesTab> {
       _providerSearchContinuations.remove('spotify-metadata');
       _providerSearchFailedContinuations.remove('spotify-metadata');
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Spotify disconnected.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Spotify disconnected.')));
   }
 
-  Future<void> _exportCustomCatalogConfiguration(
-    BuildContext context,
-  ) async {
+  Future<void> _exportCustomCatalogConfiguration(BuildContext context) async {
     final export = context.read<CustomCatalogStore>().exportConfiguration();
     final messenger = ScaffoldMessenger.of(context);
     const fileName = 'aethertune-custom-catalogs.json';
@@ -18619,7 +18500,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Provider settings changed remotely. Import them before uploading again.'),
+          content: Text(
+            'Provider settings changed remotely. Import them before uploading again.',
+          ),
         ),
       );
     } on Object catch (error) {
@@ -18644,7 +18527,11 @@ class _SourcesTabState extends State<_SourcesTab> {
       if (snapshot == null) {
         if (context.mounted) {
           messenger.showSnackBar(
-            const SnackBar(content: Text('No provider configuration is stored on this sync server.')),
+            const SnackBar(
+              content: Text(
+                'No provider configuration is stored on this sync server.',
+              ),
+            ),
           );
         }
         return;
@@ -18653,7 +18540,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       final customCatalogs = snapshot['customCatalogs'];
       if (customCatalogs is! Map) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No custom catalogs are stored on this sync server.')),
+          const SnackBar(
+            content: Text('No custom catalogs are stored on this sync server.'),
+          ),
         );
         return;
       }
@@ -18733,7 +18622,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     final export = accounts.exportAccountConfiguration();
     final document = jsonDecode(export.json);
     if (document is! Map) {
-      throw const FormatException('Self-hosted account configuration is invalid.');
+      throw const FormatException(
+        'Self-hosted account configuration is invalid.',
+      );
     }
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -18767,7 +18658,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       }
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Provider settings changed remotely. Import them before uploading again.'),
+          content: Text(
+            'Provider settings changed remotely. Import them before uploading again.',
+          ),
         ),
       );
     } on Object catch (error) {
@@ -18792,7 +18685,11 @@ class _SourcesTabState extends State<_SourcesTab> {
       if (snapshot == null) {
         if (context.mounted) {
           messenger.showSnackBar(
-            const SnackBar(content: Text('No provider configuration is stored on this sync server.')),
+            const SnackBar(
+              content: Text(
+                'No provider configuration is stored on this sync server.',
+              ),
+            ),
           );
         }
         return;
@@ -18801,7 +18698,11 @@ class _SourcesTabState extends State<_SourcesTab> {
       final selfHostedAccounts = snapshot['selfHostedAccounts'];
       if (selfHostedAccounts is! Map) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No self-hosted servers are stored on this sync server.')),
+          const SnackBar(
+            content: Text(
+              'No self-hosted servers are stored on this sync server.',
+            ),
+          ),
         );
         return;
       }
@@ -18920,7 +18821,9 @@ class _SourcesTabState extends State<_SourcesTab> {
                       key: const Key('custom-catalog-name'),
                       controller: nameController,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: 'Catalog name'),
+                      decoration: const InputDecoration(
+                        labelText: 'Catalog name',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -19028,9 +18931,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       );
     } on StateError catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
       }
     } finally {
       nameController.dispose();
@@ -19093,9 +18996,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       _providerSearchContinuations.remove(definition.providerId);
       _providerSearchFailedContinuations.remove(definition.providerId);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Removed ${definition.name}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Removed ${definition.name}.')));
   }
 
   Future<void> _editSelfHostedAccount(
@@ -19126,8 +19029,9 @@ class _SourcesTabState extends State<_SourcesTab> {
   Future<void> _exportSelfHostedAccountConfiguration(
     BuildContext context,
   ) async {
-    final export =
-        context.read<SelfHostedProviderStore>().exportAccountConfiguration();
+    final export = context
+        .read<SelfHostedProviderStore>()
+        .exportAccountConfiguration();
     final messenger = ScaffoldMessenger.of(context);
     const fileName = 'aethertune-self-hosted-accounts.json';
 
@@ -19198,7 +19102,10 @@ class _SourcesTabState extends State<_SourcesTab> {
                   if (!context.mounted || document == null) {
                     return;
                   }
-                  await _importSelfHostedAccountConfiguration(context, document);
+                  await _importSelfHostedAccountConfiguration(
+                    context,
+                    document,
+                  );
                 },
               ),
             ],
@@ -19302,9 +19209,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text),
                 child: const Text('Import'),
               ),
             ],
@@ -19377,9 +19283,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       _providerSearchContinuations.remove(account.providerId);
       _providerSearchFailedContinuations.remove(account.providerId);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Removed ${account.name}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Removed ${account.name}.')));
   }
 
   Future<void> _rotateSelfHostedCredential(
@@ -19427,9 +19333,7 @@ class _SourcesTabState extends State<_SourcesTab> {
         return List<MusicSourceProvider>.unmodifiable(override);
       }
       return override
-          .where(
-            (provider) => provider.id == LocalLibraryProvider.providerId,
-          )
+          .where((provider) => provider.id == LocalLibraryProvider.providerId)
           .toList(growable: false);
     }
 
@@ -19478,15 +19382,12 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
     final ordered = sources.entries.toList(growable: false)
       ..sort(
-        (left, right) => left.value.toLowerCase().compareTo(
-          right.value.toLowerCase(),
-        ),
+        (left, right) =>
+            left.value.toLowerCase().compareTo(right.value.toLowerCase()),
       );
-    return Map<String, String>.unmodifiable(
-      <String, String>{
-        for (final source in ordered) source.key: source.value,
-      },
-    );
+    return Map<String, String>.unmodifiable(<String, String>{
+      for (final source in ordered) source.key: source.value,
+    });
   }
 
   Map<String, String> _filterProviderContinuations(
@@ -19546,19 +19447,13 @@ class _SourcesTabState extends State<_SourcesTab> {
     required BuildContext context,
     required Track track,
     required OfflineMediaPolicyDecision Function(OfflineMediaAction action)
-        decisionFor,
+    decisionFor,
   }) {
     return PopupMenuButton<OfflineMediaAction>(
       tooltip: 'Queue offline media',
       icon: const Icon(Icons.download_for_offline_outlined),
       onSelected: (action) {
-        unawaited(
-          _queueOfflineTrack(
-            context,
-            track,
-            decisionFor(action),
-          ),
-        );
+        unawaited(_queueOfflineTrack(context, track, decisionFor(action)));
       },
       itemBuilder: (_) => const <PopupMenuEntry<OfflineMediaAction>>[
         PopupMenuItem<OfflineMediaAction>(
@@ -19593,8 +19488,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       );
     }
 
-    final subscription =
-        context.read<LibraryStore>().podcastSubscriptionById(subscriptionId);
+    final subscription = context.read<LibraryStore>().podcastSubscriptionById(
+      subscriptionId,
+    );
     final feedUri = Uri.tryParse(subscription?.feedUrl ?? '');
     if (feedUri == null) {
       return OfflineMediaPolicyDecision(
@@ -19605,9 +19501,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
 
     final provider = PodcastRssProvider(feedUri: feedUri, id: track.sourceId);
-    return OfflineMediaPolicy(
-      <MusicSourceProvider>[provider],
-    ).evaluate(track, action);
+    return OfflineMediaPolicy(<MusicSourceProvider>[
+      provider,
+    ]).evaluate(track, action);
   }
 
   Future<void> _queueOfflineTrack(
@@ -19741,9 +19637,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
     _providerSearchSuggestionDebounce = Timer(
       const Duration(milliseconds: 350),
-      () => unawaited(
-        _loadProviderSearchSuggestions(query, requestSerial),
-      ),
+      () => unawaited(_loadProviderSearchSuggestions(query, requestSerial)),
     );
   }
 
@@ -19786,9 +19680,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     _searchProviderCatalogs();
   }
 
-  IconData _providerSearchSuggestionIcon(
-    MusicSourceSearchSuggestionKind kind,
-  ) {
+  IconData _providerSearchSuggestionIcon(MusicSourceSearchSuggestionKind kind) {
     switch (kind) {
       case MusicSourceSearchSuggestionKind.track:
         return Icons.music_note_outlined;
@@ -19894,8 +19786,8 @@ class _SourcesTabState extends State<_SourcesTab> {
     final player = context.read<PlayerController>();
 
     try {
-      final playableTrack =
-          await _providerSearchCoordinator.resolvePlayableTrack(track);
+      final playableTrack = await _providerSearchCoordinator
+          .resolvePlayableTrack(track);
       if (!context.mounted) {
         return;
       }
@@ -19933,8 +19825,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final savedTrack =
-          await _providerSearchCoordinator.resolvePlayableTrack(track);
+      final savedTrack = await _providerSearchCoordinator.resolvePlayableTrack(
+        track,
+      );
       if (!context.mounted) {
         return;
       }
@@ -20007,9 +19900,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _openLocalVideo(BuildContext context) async {
-    final file = await FilePicker.pickFile(
-      type: FileType.video,
-    );
+    final file = await FilePicker.pickFile(type: FileType.video);
     if (!context.mounted || file == null) {
       return;
     }
@@ -20048,9 +19939,7 @@ class _SourcesTabState extends State<_SourcesTab> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(
-                controller.text,
-              ),
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
               child: const Text('Open'),
             ),
           ],
@@ -20063,9 +19952,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       final source = parseLegalVideoUrl(rawUrl);
       if (source == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Enter a complete HTTPS video URL.'),
-          ),
+          const SnackBar(content: Text('Enter a complete HTTPS video URL.')),
         );
         return;
       }
@@ -20185,9 +20072,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
     _podcastDirectorySuggestionDebounce = Timer(
       const Duration(milliseconds: 300),
-      () => unawaited(
-        _loadPodcastDirectorySuggestions(query, requestSerial),
-      ),
+      () => unawaited(_loadPodcastDirectorySuggestions(query, requestSerial)),
     );
   }
 
@@ -20276,9 +20161,7 @@ class _SourcesTabState extends State<_SourcesTab> {
           title: const Text('Export OPML'),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(opml),
-            ),
+            child: SingleChildScrollView(child: SelectableText(opml)),
           ),
           actions: <Widget>[
             FilledButton(
@@ -20305,9 +20188,7 @@ class _SourcesTabState extends State<_SourcesTab> {
               child: TextField(
                 autofocus: true,
                 controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'OPML',
-                ),
+                decoration: const InputDecoration(labelText: 'OPML'),
                 keyboardType: TextInputType.multiline,
                 minLines: 8,
                 maxLines: 14,
@@ -20319,9 +20200,8 @@ class _SourcesTabState extends State<_SourcesTab> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text),
                 child: const Text('Import'),
               ),
             ],
@@ -20377,7 +20257,8 @@ class _SourcesTabState extends State<_SourcesTab> {
     final library = context.read<LibraryStore>();
     final chapterHosts = context.read<PodcastChapterHostPolicy?>();
     final messenger = ScaffoldMessenger.of(context);
-    final provider = widget.podcastProviderFactory?.call(feedUri) ??
+    final provider =
+        widget.podcastProviderFactory?.call(feedUri) ??
         PodcastRssProvider(
           feedUri: feedUri,
           isExternalChapterUriApproved: chapterHosts?.allows,
@@ -20475,8 +20356,9 @@ class _SourcesTabState extends State<_SourcesTab> {
     });
 
     final report = await PodcastSubscriptionRefreshWorker(
-      isExternalChapterUriApproved:
-          context.read<PodcastChapterHostPolicy?>()?.allows,
+      isExternalChapterUriApproved: context
+          .read<PodcastChapterHostPolicy?>()
+          ?.allows,
     ).refreshSubscriptions(library, subscriptions: subscriptions);
 
     if (!context.mounted) {
@@ -20588,7 +20470,9 @@ class _SourcesTabState extends State<_SourcesTab> {
                             for (final host in policy.approvedHosts)
                               ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.verified_user_outlined),
+                                leading: const Icon(
+                                  Icons.verified_user_outlined,
+                                ),
                                 title: Text(host),
                                 trailing: IconButton(
                                   tooltip: 'Revoke $host',
@@ -20683,9 +20567,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       });
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Removed ${subscription.title}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Removed ${subscription.title}.')));
   }
 
   Future<void> _playPodcastEpisode(BuildContext context, Track track) async {
@@ -20721,10 +20605,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     }
   }
 
-  String _podcastEpisodeSubtitle(
-    Track track,
-    PlaybackProgressEntry? progress,
-  ) {
+  String _podcastEpisodeSubtitle(Track track, PlaybackProgressEntry? progress) {
     final base = '${track.artist} / ${track.album}';
     if (progress == null) {
       return base;
@@ -20743,9 +20624,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       return;
     }
 
-    messenger.showSnackBar(
-      SnackBar(content: Text('Saved ${track.title}.')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('Saved ${track.title}.')));
   }
 
   Future<void> _searchArchiveItems() async {
@@ -20775,8 +20654,9 @@ class _SourcesTabState extends State<_SourcesTab> {
       return;
     }
 
-    final requestSerial =
-        reset ? ++_archiveRequestSerial : _archiveRequestSerial;
+    final requestSerial = reset
+        ? ++_archiveRequestSerial
+        : _archiveRequestSerial;
     final requestedPage = reset ? 1 : _archivePage + 1;
 
     setState(() {
@@ -20858,8 +20738,9 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   String _archiveItemSubtitle(InternetArchiveItem item) {
-    final playableFileCount =
-        item.files.where((file) => file.isPlayableAudio).length;
+    final playableFileCount = item.files
+        .where((file) => file.isPlayableAudio)
+        .length;
     final parts = <String>[
       if (item.creator.isNotEmpty) item.creator,
       if (item.year.isNotEmpty) item.year,
@@ -20884,10 +20765,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
-  Future<void> _openArchiveCollection(
-    BuildContext context,
-    String collection,
-  ) {
+  Future<void> _openArchiveCollection(BuildContext context, String collection) {
     final normalized = collection.trim();
     if (normalized.isEmpty) {
       return Future<void>.value();
@@ -21266,9 +21144,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       return;
     }
 
-    messenger.showSnackBar(
-      SnackBar(content: Text('Saved ${track.title}.')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('Saved ${track.title}.')));
   }
 }
 
@@ -21393,7 +21269,8 @@ class _DuplicateResolverSheet extends StatefulWidget {
   const _DuplicateResolverSheet();
 
   @override
-  State<_DuplicateResolverSheet> createState() => _DuplicateResolverSheetState();
+  State<_DuplicateResolverSheet> createState() =>
+      _DuplicateResolverSheetState();
 }
 
 class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
@@ -21448,9 +21325,8 @@ class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
                   subtitle: const Text(
                     'Restore the tracks and library state from the last duplicate merge.',
                   ),
-                  onTap: () => unawaited(
-                    _undoLastDuplicateResolution(context, library),
-                  ),
+                  onTap: () =>
+                      unawaited(_undoLastDuplicateResolution(context, library)),
                 ),
               if (groups.isEmpty)
                 const ListTile(
@@ -21468,9 +21344,7 @@ class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
                       _selectKeeper(
                         context,
                         group,
-                        group.tracks.firstWhere(
-                          (track) => track.id == trackId,
-                        ),
+                        group.tracks.firstWhere((track) => track.id == trackId),
                         groups,
                       );
                     },
@@ -21581,17 +21455,15 @@ class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
     List<DuplicateTrackGroup> groups,
   ) async {
     final resolutions = groups
-        .map(
-          (group) {
-            final keepTrackId = _keepTrackIdFor(group);
-            return DuplicateTrackResolution(
-              keepTrackId: keepTrackId,
-              duplicateTrackIds: group.tracks
-                  .where((track) => track.id != keepTrackId)
-                  .map((track) => track.id),
-            );
-          },
-        )
+        .map((group) {
+          final keepTrackId = _keepTrackIdFor(group);
+          return DuplicateTrackResolution(
+            keepTrackId: keepTrackId,
+            duplicateTrackIds: group.tracks
+                .where((track) => track.id != keepTrackId)
+                .map((track) => track.id),
+          );
+        })
         .toList(growable: false);
     final removed = await library.resolveDuplicateTrackBatch(resolutions);
     if (!context.mounted) {
@@ -21606,7 +21478,9 @@ class _DuplicateResolverSheetState extends State<_DuplicateResolverSheet> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Merged $removed duplicate(s) from ${groups.length} group(s).'),
+        content: Text(
+          'Merged $removed duplicate(s) from ${groups.length} group(s).',
+        ),
       ),
     );
   }
@@ -21729,10 +21603,7 @@ String _formatByteCount(int bytes) {
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
 
-String _offlineCacheProviderLimitLabel(
-  LibraryStore library,
-  String sourceId,
-) {
+String _offlineCacheProviderLimitLabel(LibraryStore library, String sourceId) {
   final limitBytes = library.offlineCacheProviderLimitBytesFor(sourceId);
   if (limitBytes == null) {
     return 'No provider quota';
@@ -21850,10 +21721,9 @@ class _SettingsTab extends StatelessWidget {
     // remain independent of diagnostics capture.
     final diagnostics = context.watch<LocalDiagnosticLog?>();
     final folderWatcher = context.watch<LocalFolderWatchStore?>();
-    final lyricsTranslation =
-        context.watch<LyricsTranslationSettingsStore?>();
-    final lyricsSearchEndpoint =
-        context.watch<LyricsSearchEndpointSettingsStore?>();
+    final lyricsTranslation = context.watch<LyricsTranslationSettingsStore?>();
+    final lyricsSearchEndpoint = context
+        .watch<LyricsSearchEndpointSettingsStore?>();
     final librarySync = context.watch<LibrarySyncStore?>();
     final listenBrainz = context.watch<ListenBrainzScrobblingStore?>();
     final duplicateGroups = library.duplicateTrackGroups();
@@ -21890,7 +21760,9 @@ class _SettingsTab extends StatelessWidget {
           ),
         SwitchListTile(
           title: const Text('Shuffle queue'),
-          subtitle: const Text('Randomize playback order when supported by the queue.'),
+          subtitle: const Text(
+            'Randomize playback order when supported by the queue.',
+          ),
           value: player.shuffleEnabled,
           onChanged: player.setShuffleEnabled,
         ),
@@ -21898,9 +21770,7 @@ class _SettingsTab extends StatelessWidget {
           SwitchListTile(
             secondary: const Icon(Icons.minimize_outlined),
             title: Text(localizations.desktopTrayMinimizeOnClose),
-            subtitle: Text(
-              localizations.desktopTrayMinimizeOnCloseDescription,
-            ),
+            subtitle: Text(localizations.desktopTrayMinimizeOnCloseDescription),
             value: library.desktopMinimizeToTray,
             onChanged: (enabled) =>
                 unawaited(library.setDesktopMinimizeToTray(enabled)),
@@ -21925,9 +21795,7 @@ class _SettingsTab extends StatelessWidget {
             key: const Key('desktop-tray-action-previous'),
             secondary: const Icon(Icons.skip_previous_outlined),
             title: Text(localizations.desktopTrayPrevious),
-            subtitle: Text(
-              localizations.desktopTrayPreviousDescription,
-            ),
+            subtitle: Text(localizations.desktopTrayPreviousDescription),
             value: library.desktopTrayTransportActions.contains(
               DesktopTrayTransportAction.previous,
             ),
@@ -21943,9 +21811,7 @@ class _SettingsTab extends StatelessWidget {
             key: const Key('desktop-tray-action-play-pause'),
             secondary: const Icon(Icons.play_circle_outline),
             title: Text(localizations.desktopTrayPlayPause),
-            subtitle: Text(
-              localizations.desktopTrayPlayPauseDescription,
-            ),
+            subtitle: Text(localizations.desktopTrayPlayPauseDescription),
             value: library.desktopTrayTransportActions.contains(
               DesktopTrayTransportAction.togglePlayPause,
             ),
@@ -21961,9 +21827,7 @@ class _SettingsTab extends StatelessWidget {
             key: const Key('desktop-tray-action-next'),
             secondary: const Icon(Icons.skip_next_outlined),
             title: Text(localizations.desktopTrayNext),
-            subtitle: Text(
-              localizations.desktopTrayNextDescription,
-            ),
+            subtitle: Text(localizations.desktopTrayNextDescription),
             value: library.desktopTrayTransportActions.contains(
               DesktopTrayTransportAction.next,
             ),
@@ -22078,7 +21942,9 @@ class _SettingsTab extends StatelessWidget {
         ),
         ListTile(
           title: const Text('Skip backward'),
-          subtitle: const Text('Interval used by the full player rewind control.'),
+          subtitle: const Text(
+            'Interval used by the full player rewind control.',
+          ),
           trailing: DropdownButton<Duration>(
             value: player.skipBackwardInterval,
             items: <DropdownMenuItem<Duration>>[
@@ -22097,7 +21963,9 @@ class _SettingsTab extends StatelessWidget {
         ),
         ListTile(
           title: const Text('Skip forward'),
-          subtitle: const Text('Interval used by the full player forward control.'),
+          subtitle: const Text(
+            'Interval used by the full player forward control.',
+          ),
           trailing: DropdownButton<Duration>(
             value: player.skipForwardInterval,
             items: <DropdownMenuItem<Duration>>[
@@ -22186,9 +22054,11 @@ class _SettingsTab extends StatelessWidget {
             subtitle: const Text(
               'Sends only the HTTPS endpoint to your sync server; cached lyrics stay local.',
             ),
-            enabled: !library.offlineModeEnabled &&
+            enabled:
+                !library.offlineModeEnabled &&
                 onUploadLyricsSearchEndpointToSync != null,
-            onTap: !library.offlineModeEnabled &&
+            onTap:
+                !library.offlineModeEnabled &&
                     onUploadLyricsSearchEndpointToSync != null
                 ? () => unawaited(onUploadLyricsSearchEndpointToSync!())
                 : null,
@@ -22201,9 +22071,11 @@ class _SettingsTab extends StatelessWidget {
             subtitle: const Text(
               'Replaces this device\'s configured service; no credentials are transferred.',
             ),
-            enabled: !library.offlineModeEnabled &&
+            enabled:
+                !library.offlineModeEnabled &&
                 onImportLyricsSearchEndpointFromSync != null,
-            onTap: !library.offlineModeEnabled &&
+            onTap:
+                !library.offlineModeEnabled &&
                     onImportLyricsSearchEndpointFromSync != null
                 ? () => unawaited(onImportLyricsSearchEndpointFromSync!())
                 : null,
@@ -22222,8 +22094,7 @@ class _SettingsTab extends StatelessWidget {
             trailing: listenBrainz.isConfigured
                 ? IconButton(
                     tooltip: 'Disconnect ListenBrainz',
-                    onPressed: () =>
-                        unawaited(_removeListenBrainz(context)),
+                    onPressed: () => unawaited(_removeListenBrainz(context)),
                     icon: const Icon(Icons.delete_outline),
                   )
                 : const Icon(Icons.chevron_right),
@@ -22261,8 +22132,9 @@ class _SettingsTab extends StatelessWidget {
             value: listenBrainz!.backgroundRetryEnabled,
             onChanged: listenBrainz.submitting
                 ? null
-                : (enabled) =>
-                      unawaited(_setListenBrainzBackgroundRetry(context, enabled)),
+                : (enabled) => unawaited(
+                    _setListenBrainzBackgroundRetry(context, enabled),
+                  ),
           ),
         if (listenBrainz?.isConfigured == true)
           ListTile(
@@ -22311,7 +22183,8 @@ class _SettingsTab extends StatelessWidget {
             trailing: DropdownButton<Duration>(
               value: player.crossfadeDuration,
               items: <DropdownMenuItem<Duration>>[
-                for (final duration in PlayerController.supportedCrossfadeDurations)
+                for (final duration
+                    in PlayerController.supportedCrossfadeDurations)
                   DropdownMenuItem<Duration>(
                     value: duration,
                     child: Text(
@@ -22419,7 +22292,8 @@ class _SettingsTab extends StatelessWidget {
                 children: <Widget>[
                   IconButton(
                     tooltip: 'Refresh folder',
-                    onPressed: folderWatcher == null ||
+                    onPressed:
+                        folderWatcher == null ||
                             folderWatcher.isRefreshing(rootPath)
                         ? null
                         : () => folderWatcher.refresh(rootPath),
@@ -22427,9 +22301,8 @@ class _SettingsTab extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: 'Stop watching folder',
-                    onPressed: () => unawaited(
-                      library.unwatchLocalFolder(rootPath),
-                    ),
+                    onPressed: () =>
+                        unawaited(library.unwatchLocalFolder(rootPath)),
                     icon: const Icon(Icons.folder_off_outlined),
                   ),
                 ],
@@ -22475,10 +22348,7 @@ class _SettingsTab extends StatelessWidget {
           leading: const Icon(Icons.language_outlined),
           title: Text(localizations.language),
           subtitle: Text(
-            _languagePreferenceLabel(
-              localizations,
-              library.languagePreference,
-            ),
+            _languagePreferenceLabel(localizations, library.languagePreference),
           ),
           trailing: DropdownButton<AppLanguagePreference>(
             value: library.languagePreference,
@@ -22587,13 +22457,12 @@ class _SettingsTab extends StatelessWidget {
             key: const Key('audio-output-picker'),
             leading: const Icon(Icons.speaker_group_outlined),
             title: const Text('Audio output'),
-            subtitle: const Text(
-              'Choose an available system playback route.',
-            ),
+            subtitle: const Text('Choose an available system playback route.'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => unawaited(_showMobileAudioRoutePicker(context)),
           ),
-        if (!kIsWeb && supportsDesktopAudioOutputSettings(defaultTargetPlatform))
+        if (!kIsWeb &&
+            supportsDesktopAudioOutputSettings(defaultTargetPlatform))
           ListTile(
             key: const Key('desktop-audio-output-settings'),
             leading: const Icon(Icons.speaker_group_outlined),
@@ -22613,9 +22482,8 @@ class _SettingsTab extends StatelessWidget {
               key: const Key('android-pinned-shortcut-menu'),
               tooltip: 'Choose a playback shortcut to pin',
               icon: const Icon(Icons.add),
-              onSelected: (shortcut) => unawaited(
-                _requestAndroidPinnedShortcut(context, shortcut),
-              ),
+              onSelected: (shortcut) =>
+                  unawaited(_requestAndroidPinnedShortcut(context, shortcut)),
               itemBuilder: (context) => <PopupMenuEntry<AndroidPinnedShortcut>>[
                 for (final shortcut in AndroidPinnedShortcut.values)
                   PopupMenuItem<AndroidPinnedShortcut>(
@@ -22642,7 +22510,9 @@ class _SettingsTab extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Lyrics cache retention'),
-          subtitle: const Text('How long cached searches remain available offline.'),
+          subtitle: const Text(
+            'How long cached searches remain available offline.',
+          ),
           trailing: DropdownButton<Duration>(
             value: lyricsSearchCacheLifetime,
             items: <DropdownMenuItem<Duration>>[
@@ -22692,8 +22562,8 @@ class _SettingsTab extends StatelessWidget {
             offlineQueue.isEmpty
                 ? 'No queued cache or download requests'
                 : '${offlineQueue.length} queued cache/download request(s), '
-                    '${pendingOfflineQueue.length} ready, '
-                    '$pausedOfflineQueueCount paused',
+                      '${pendingOfflineQueue.length} ready, '
+                      '$pausedOfflineQueueCount paused',
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -22703,11 +22573,11 @@ class _SettingsTab extends StatelessWidget {
                 onPressed: pendingOfflineQueue.isEmpty
                     ? null
                     : () => unawaited(
-                          _processOfflineCacheEntries(
-                            context,
-                            pendingOfflineQueue,
-                          ),
+                        _processOfflineCacheEntries(
+                          context,
+                          pendingOfflineQueue,
                         ),
+                      ),
                 icon: const Icon(Icons.cloud_download_outlined),
               ),
               IconButton(
@@ -22724,18 +22594,19 @@ class _SettingsTab extends StatelessWidget {
           future: _offlineCacheUsage(offlineQueue),
           builder: (context, snapshot) {
             final usage = snapshot.data;
-            final offlineCacheLimitLabel =
-                _formatByteCount(offlineCacheLimitBytes);
+            final offlineCacheLimitLabel = _formatByteCount(
+              offlineCacheLimitBytes,
+            );
             final canTrim =
                 usage != null && usage.byteCount > offlineCacheLimitBytes;
             final canClear = usage != null && usage.byteCount > 0;
             final subtitle = snapshot.hasError
                 ? 'Could not read cache usage.'
                 : usage == null
-                    ? 'Calculating private cache usage...'
-                    : '${_formatByteCount(usage.byteCount)} across '
-                        '${usage.cachedEntryCount} cached item(s) · '
-                        'Limit: $offlineCacheLimitLabel';
+                ? 'Calculating private cache usage...'
+                : '${_formatByteCount(usage.byteCount)} across '
+                      '${usage.cachedEntryCount} cached item(s) · '
+                      'Limit: $offlineCacheLimitLabel';
 
             return ListTile(
               leading: const Icon(Icons.storage_outlined),
@@ -22746,20 +22617,16 @@ class _SettingsTab extends StatelessWidget {
                 children: <Widget>[
                   IconButton(
                     tooltip: 'Set cache limit',
-                    onPressed: () => unawaited(
-                      _showOfflineCacheLimitDialog(context),
-                    ),
+                    onPressed: () =>
+                        unawaited(_showOfflineCacheLimitDialog(context)),
                     icon: const Icon(Icons.tune_outlined),
                   ),
                   IconButton(
                     tooltip: 'Trim cache to $offlineCacheLimitLabel',
                     onPressed: canTrim
                         ? () => unawaited(
-                              _trimOfflineCache(
-                                context,
-                                offlineCacheLimitBytes,
-                              ),
-                            )
+                            _trimOfflineCache(context, offlineCacheLimitBytes),
+                          )
                         : null,
                     icon: const Icon(Icons.cleaning_services_outlined),
                   ),
@@ -22809,11 +22676,11 @@ class _SettingsTab extends StatelessWidget {
                   tooltip: 'Cache media',
                   onPressed: _canProcessOfflineCacheEntry(entry)
                       ? () => unawaited(
-                            _processOfflineCacheEntries(
-                              context,
-                              <OfflineCacheEntry>[entry],
-                            ),
-                          )
+                          _processOfflineCacheEntries(
+                            context,
+                            <OfflineCacheEntry>[entry],
+                          ),
+                        )
                       : null,
                   icon: const Icon(Icons.cloud_download_outlined),
                 ),
@@ -22821,17 +22688,15 @@ class _SettingsTab extends StatelessWidget {
                   tooltip: _canResumeOfflineCacheEntry(entry)
                       ? 'Resume offline request'
                       : entry.status == OfflineCacheEntryStatus.processing
-                          ? 'Pause active offline request'
+                      ? 'Pause active offline request'
                       : 'Pause offline request',
                   onPressed: _canResumeOfflineCacheEntry(entry)
-                      ? () => unawaited(
-                            library.resumeOfflineCacheEntry(entry.id),
-                          )
+                      ? () =>
+                            unawaited(library.resumeOfflineCacheEntry(entry.id))
                       : _canPauseOfflineCacheEntry(entry)
-                          ? () => unawaited(
-                                library.pauseOfflineCacheEntry(entry.id),
-                              )
-                          : null,
+                      ? () =>
+                            unawaited(library.pauseOfflineCacheEntry(entry.id))
+                      : null,
                   icon: Icon(
                     _canResumeOfflineCacheEntry(entry)
                         ? Icons.play_arrow_outlined
@@ -22841,17 +22706,15 @@ class _SettingsTab extends StatelessWidget {
                 IconButton(
                   tooltip: 'Export cached media',
                   onPressed: _canExportOfflineCacheEntry(entry)
-                      ? () => unawaited(
-                            _exportOfflineCacheEntry(context, entry),
-                          )
+                      ? () =>
+                            unawaited(_exportOfflineCacheEntry(context, entry))
                       : null,
                   icon: const Icon(Icons.file_download_outlined),
                 ),
                 IconButton(
                   tooltip: 'Remove from offline queue',
-                  onPressed: () => unawaited(
-                    library.removeOfflineCacheEntry(entry.id),
-                  ),
+                  onPressed: () =>
+                      unawaited(library.removeOfflineCacheEntry(entry.id)),
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -22893,23 +22756,28 @@ class _SettingsTab extends StatelessWidget {
         const ListTile(
           leading: Icon(Icons.privacy_tip_outlined),
           title: Text('Privacy'),
-          subtitle: Text('No ads, no telemetry, no forced account in the core app.'),
+          subtitle: Text(
+            'No ads, no telemetry, no forced account in the core app.',
+          ),
         ),
         SwitchListTile.adaptive(
           secondary: const Icon(Icons.screenshot_monitor_outlined),
           title: const Text('Block screenshots'),
-          subtitle: const Text('Prevent screenshots and screen recording on Android.'),
+          subtitle: const Text(
+            'Prevent screenshots and screen recording on Android.',
+          ),
           value: library.screenshotProtectionEnabled,
           onChanged: library.loaded
-              ? (enabled) => unawaited(
-                  library.setScreenshotProtectionEnabled(enabled),
-                )
+              ? (enabled) =>
+                    unawaited(library.setScreenshotProtectionEnabled(enabled))
               : null,
         ),
         const ListTile(
           leading: Icon(Icons.balance_outlined),
           title: Text('Legal source policy'),
-          subtitle: Text('Provider adapters must use legal, documented, user-owned, or official APIs.'),
+          subtitle: Text(
+            'Provider adapters must use legal, documented, user-owned, or official APIs.',
+          ),
         ),
       ],
     );
@@ -23071,10 +22939,7 @@ class _SettingsTab extends StatelessWidget {
     }
   }
 
-  Future<void> _trimOfflineCache(
-    BuildContext context,
-    int maxBytes,
-  ) async {
+  Future<void> _trimOfflineCache(BuildContext context, int maxBytes) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
     final cacheRoot = await getApplicationDocumentsDirectory();
@@ -23097,10 +22962,10 @@ class _SettingsTab extends StatelessWidget {
 
     final message = result.evictedEntryIds.isEmpty
         ? maxBytes <= 0
-            ? 'No cached media to clear.'
-            : 'Offline cache already under ${_formatByteCount(maxBytes)}.'
+              ? 'No cached media to clear.'
+              : 'Offline cache already under ${_formatByteCount(maxBytes)}.'
         : 'Cleared ${_formatByteCount(result.evictedBytes)} from '
-            '${result.evictedEntryIds.length} cached item(s).';
+              '${result.evictedEntryIds.length} cached item(s).';
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
@@ -23368,9 +23233,7 @@ class _SettingsTab extends StatelessWidget {
           title: const Text('Export backup'),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(backupJson),
-            ),
+            child: SingleChildScrollView(child: SelectableText(backupJson)),
           ),
           actions: <Widget>[
             FilledButton(
@@ -23470,9 +23333,7 @@ class _SettingsTab extends StatelessWidget {
         return;
       }
 
-      messenger.showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
       return;
     }
 
@@ -23480,9 +23341,7 @@ class _SettingsTab extends StatelessWidget {
       return;
     }
 
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Restored backup.')),
-    );
+    messenger.showSnackBar(const SnackBar(content: Text('Restored backup.')));
   }
 
   Future<String?> _promptForBackupJson(BuildContext context) async {
@@ -23499,9 +23358,7 @@ class _SettingsTab extends StatelessWidget {
               child: TextField(
                 autofocus: true,
                 controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Backup JSON',
-                ),
+                decoration: const InputDecoration(labelText: 'Backup JSON'),
                 keyboardType: TextInputType.multiline,
                 minLines: 8,
                 maxLines: 14,
@@ -23513,9 +23370,8 @@ class _SettingsTab extends StatelessWidget {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  controller.text,
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text),
                 child: const Text('Restore'),
               ),
             ],

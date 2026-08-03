@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -20,14 +23,7 @@ class PlayerController extends ChangeNotifier {
   static const minVolume = 0.0;
   static const maxVolume = 1.0;
   static const supportedPlaybackSpeeds = supportedPlaybackSpeedValues;
-  static const supportedPlaybackPitches = <double>[
-    0.5,
-    0.75,
-    1,
-    1.25,
-    1.5,
-    2,
-  ];
+  static const supportedPlaybackPitches = <double>[0.5, 0.75, 1, 1.25, 1.5, 2];
   static const supportedSkipIntervals = <Duration>[
     Duration(seconds: 5),
     Duration(seconds: 10),
@@ -54,9 +50,9 @@ class PlayerController extends ChangeNotifier {
     PlaybackAudioEngine? audioEngine,
     TrackPlaybackResolver? trackResolver,
     DateTime Function()? clock,
-  })  : _audio = audioEngine ?? JustAudioPlaybackEngine(),
-        _trackResolver = trackResolver,
-        _clock = clock ?? DateTime.now {
+  }) : _audio = audioEngine ?? JustAudioPlaybackEngine(),
+       _trackResolver = trackResolver,
+       _clock = clock ?? DateTime.now {
     final crossfadeEngine = _audio;
     if (crossfadeEngine is CrossfadePlaybackAudioEngine &&
         crossfadeEngine.supportsCrossfade) {
@@ -168,9 +164,8 @@ class PlayerController extends ChangeNotifier {
   double get defaultPlaybackSpeed => _defaultPlaybackSpeed;
   bool get supportsPitch =>
       _audio is PitchPlaybackAudioEngine && _audio.supportsPitch;
-  double get playbackPitch => _audio is PitchPlaybackAudioEngine
-      ? _audio.pitch
-      : _defaultPlaybackPitch;
+  double get playbackPitch =>
+      _audio is PitchPlaybackAudioEngine ? _audio.pitch : _defaultPlaybackPitch;
   double get defaultPlaybackPitch => _defaultPlaybackPitch;
   Map<String, double> get trackPlaybackPitchOverrides =>
       Map<String, double>.unmodifiable(_trackPlaybackPitchOverrides);
@@ -179,8 +174,7 @@ class PlayerController extends ChangeNotifier {
   Duration? get aBRepeatStart => _aBRepeatStart;
   Duration? get aBRepeatEnd => _aBRepeatEnd;
   bool get hasABRepeatStart => _aBRepeatStart != null;
-  bool get isABRepeatActive =>
-      _aBRepeatStart != null && _aBRepeatEnd != null;
+  bool get isABRepeatActive => _aBRepeatStart != null && _aBRepeatEnd != null;
   double get volume => _volume;
   bool get loudnessNormalizationEnabled => _loudnessNormalizationEnabled;
   ReplayGainMode get replayGainMode => _replayGainMode;
@@ -213,8 +207,7 @@ class PlayerController extends ChangeNotifier {
   bool get virtualizerEnabled => _virtualizerEnabled;
   int get virtualizerStrength => _virtualizerStrength;
   bool get supportsCrossfade =>
-      _audio is CrossfadePlaybackAudioEngine &&
-      _audio.supportsCrossfade;
+      _audio is CrossfadePlaybackAudioEngine && _audio.supportsCrossfade;
   Duration get crossfadeDuration => _audio is CrossfadePlaybackAudioEngine
       ? _audio.crossfadeDuration
       : Duration.zero;
@@ -229,6 +222,7 @@ class PlayerController extends ChangeNotifier {
     final remaining = endsAt.difference(_clock());
     return remaining.isNegative ? Duration.zero : remaining;
   }
+
   bool get stopAtEndOfTrackEnabled => _stopAtEndOfTrack;
   bool get sleepTimerFadeOutEnabled => _sleepTimerFadesOut;
   Duration get sleepTimerFadeDuration => _sleepTimerFadeDuration;
@@ -258,9 +252,9 @@ class PlayerController extends ChangeNotifier {
     final browseTracks = List<Track>.unmodifiable(tracks);
     engine.setMediaLibraryBrowseTracks(
       browseTracks,
-        onTrackSelected: (track) => playTrack(track, queue: browseTracks),
-        playlists: playlists,
-        folders: folders,
+      onTrackSelected: (track) => playTrack(track, queue: browseTracks),
+      playlists: playlists,
+      folders: folders,
       onPlaylistTrackSelected: (track, queue, queueIndex) =>
           playTrack(track, queue: queue, queueIndex: queueIndex),
     );
@@ -292,7 +286,8 @@ class PlayerController extends ChangeNotifier {
     Iterable<Track> libraryTracks,
   ) {
     final libraryTrackIds = libraryTracks.map((track) => track.id).toSet();
-    final sourceCurrentIndex = _currentQueueIndex ??
+    final sourceCurrentIndex =
+        _currentQueueIndex ??
         _queue.indexWhere((track) => track.id == _current?.id);
     final trackIds = <String>[];
     var portableCurrentIndex = -1;
@@ -321,8 +316,7 @@ class PlayerController extends ChangeNotifier {
       currentTrackId: portableCurrentIndex >= 0
           ? trackIds[portableCurrentIndex]
           : null,
-      currentIndex:
-          portableCurrentIndex >= 0 ? portableCurrentIndex : null,
+      currentIndex: portableCurrentIndex >= 0 ? portableCurrentIndex : null,
       updatedAt: _queueUpdatedAt?.toUtc() ?? _clock().toUtc(),
     );
   }
@@ -342,7 +336,8 @@ class PlayerController extends ChangeNotifier {
         .map((id) => tracksById[id])
         .whereType<Track>()
         .toList(growable: false);
-    final requestedCurrentIndex = snapshot.currentIndex ??
+    final requestedCurrentIndex =
+        snapshot.currentIndex ??
         (snapshot.currentTrackId == null
             ? null
             : snapshot.trackIds.indexOf(snapshot.currentTrackId!));
@@ -364,8 +359,8 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(restoredQueue);
-    _current = restoredCurrent ??
-        (restoredQueue.isEmpty ? null : restoredQueue.first);
+    _current =
+        restoredCurrent ?? (restoredQueue.isEmpty ? null : restoredQueue.first);
     _currentQueueIndex = restoredQueue.isEmpty
         ? null
         : restoredCurrentIndex < 0
@@ -613,13 +608,13 @@ class PlayerController extends ChangeNotifier {
           settings['crossfadeMilliseconds'],
         );
         if (supportsCrossfade) {
-          await (_audio as CrossfadePlaybackAudioEngine)
-              .setCrossfadeDuration(crossfadeDuration);
+          await (_audio as CrossfadePlaybackAudioEngine).setCrossfadeDuration(
+            crossfadeDuration,
+          );
         }
         if (supportsSkipSilence) {
-          await (_audio as SkipSilencePlaybackAudioEngine).setSkipSilenceEnabled(
-            _skipSilenceEnabled,
-          );
+          await (_audio as SkipSilencePlaybackAudioEngine)
+              .setSkipSilenceEnabled(_skipSilenceEnabled);
         }
         final audioEffectsEngine = _audioEffectsEngine;
         if (audioEffectsEngine != null &&
@@ -639,7 +634,8 @@ class PlayerController extends ChangeNotifier {
           );
         }
         final virtualizerEngine = _virtualizerEngine;
-        if (virtualizerEngine != null && virtualizerEngine.supportsVirtualizer) {
+        if (virtualizerEngine != null &&
+            virtualizerEngine.supportsVirtualizer) {
           await virtualizerEngine.setVirtualizerStrength(_virtualizerStrength);
           await virtualizerEngine.setVirtualizerEnabled(_virtualizerEnabled);
         }
@@ -661,10 +657,7 @@ class PlayerController extends ChangeNotifier {
   }) async {
     _failedTrackIds.clear();
     if (_offlineModeEnabled) {
-      requireOfflineModePlaybackAllowed(
-        track,
-        offlineModeEnabled: true,
-      );
+      requireOfflineModePlaybackAllowed(track, offlineModeEnabled: true);
     }
 
     final preparedTrack = await _prepareQueueForPlayback(
@@ -681,7 +674,8 @@ class PlayerController extends ChangeNotifier {
       _clearABRepeat(notify: false);
     }
     _current = preparedTrack;
-    _currentQueueIndex = queueIndex ??
+    _currentQueueIndex =
+        queueIndex ??
         _queue.indexWhere((candidate) => candidate.id == preparedTrack.id);
     notifyListeners();
     await _saveQueueSnapshot(touch: true);
@@ -706,10 +700,7 @@ class PlayerController extends ChangeNotifier {
       await _audio.pause();
     } else {
       if (_offlineModeEnabled) {
-        requireOfflineModePlaybackAllowed(
-          _current!,
-          offlineModeEnabled: true,
-        );
+        requireOfflineModePlaybackAllowed(_current!, offlineModeEnabled: true);
       }
 
       final preparedTrack = await _prepareQueueForPlayback(_current!);
@@ -821,11 +812,7 @@ class PlayerController extends ChangeNotifier {
       _loadedPlaybackQueue.clear();
     } else if (hadLoadedQueue) {
       try {
-        await _loadQueue(
-          current,
-          initialPosition: position,
-          forceReload: true,
-        );
+        await _loadQueue(current, initialPosition: position, forceReload: true);
         if (wasPlaying) {
           unawaited(_audio.play());
         }
@@ -1170,7 +1157,9 @@ class PlayerController extends ChangeNotifier {
       );
     }
     if (!supportsCrossfade) {
-      throw UnsupportedError('Crossfade is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Crossfade is unavailable for this audio backend.',
+      );
     }
     await (_audio as CrossfadePlaybackAudioEngine).setCrossfadeDuration(
       duration,
@@ -1195,7 +1184,11 @@ class PlayerController extends ChangeNotifier {
   Future<void> setTrackPlaybackPitch(String trackId, double pitch) async {
     final normalizedTrackId = trackId.trim();
     if (normalizedTrackId.isEmpty) {
-      throw ArgumentError.value(trackId, 'trackId', 'Track ID cannot be empty.');
+      throw ArgumentError.value(
+        trackId,
+        'trackId',
+        'Track ID cannot be empty.',
+      );
     }
     _requireSupportedPlaybackPitch(pitch);
     final audio = _requirePitchEngine();
@@ -1531,8 +1524,7 @@ class PlayerController extends ChangeNotifier {
     if (track == null || !supportsPitch) {
       return;
     }
-    final pitch =
-        playbackPitchForTrack(track.id) ?? _defaultPlaybackPitch;
+    final pitch = playbackPitchForTrack(track.id) ?? _defaultPlaybackPitch;
     final audio = _audio as PitchPlaybackAudioEngine;
     if (audio.pitch == pitch) {
       return;
@@ -1605,8 +1597,11 @@ class PlayerController extends ChangeNotifier {
   void _handleABRepeatPosition(Duration position) {
     final start = _aBRepeatStart;
     final end = _aBRepeatEnd;
-    if (start == null || end == null ||
-        !_audio.playing || position < end || _aBRepeatSeeking) {
+    if (start == null ||
+        end == null ||
+        !_audio.playing ||
+        position < end ||
+        _aBRepeatSeeking) {
       return;
     }
     unawaited(_seekABRepeat(start));
@@ -1743,7 +1738,9 @@ class PlayerController extends ChangeNotifier {
             playbackQueue,
           );
     if (index < 0 || index >= playbackQueue.length) {
-      throw StateError('Track is not playable in the current mode: ${track.title}');
+      throw StateError(
+        'Track is not playable in the current mode: ${track.title}',
+      );
     }
 
     if (!forceReload && _sameQueueOrder(_loadedPlaybackQueue, playbackQueue)) {
@@ -1782,8 +1779,8 @@ class PlayerController extends ChangeNotifier {
     final candidates = queue == null
         ? List<Track>.from(_queue)
         : List<Track>.from(queue);
-    final existingIndex = queueIndex ??
-        candidates.indexWhere((item) => item.id == track.id);
+    final existingIndex =
+        queueIndex ?? candidates.indexWhere((item) => item.id == track.id);
     if (queueIndex != null &&
         (queueIndex < 0 ||
             queueIndex >= candidates.length ||
@@ -1826,7 +1823,8 @@ class PlayerController extends ChangeNotifier {
     int queueIndex,
     List<Track> playbackQueue,
   ) {
-    if (queueIndex < 0 || queueIndex >= _queue.length ||
+    if (queueIndex < 0 ||
+        queueIndex >= _queue.length ||
         _queue[queueIndex].id != track.id) {
       return -1;
     }
@@ -1874,11 +1872,7 @@ class PlayerController extends ChangeNotifier {
     final wasPlaying = _audio.playing;
     final position = _audio.position;
     try {
-      await _loadQueue(
-        track,
-        initialPosition: position,
-        forceReload: true,
-      );
+      await _loadQueue(track, initialPosition: position, forceReload: true);
       if (wasPlaying) {
         unawaited(_audio.play());
       }
@@ -2119,7 +2113,8 @@ class PlayerController extends ChangeNotifier {
       ..clear()
       ..addAll(snapshot.tracks);
     _current = snapshot.currentTrack;
-    _currentQueueIndex = snapshot.currentIndex ??
+    _currentQueueIndex =
+        snapshot.currentIndex ??
         (_current == null
             ? null
             : _queue.indexWhere((track) => track.id == _current!.id));
@@ -2140,32 +2135,30 @@ class PlayerController extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _playbackSettingsKey,
-      jsonEncode(
-        <String, Object?>{
-          'shuffleEnabled': _audio.shuffleModeEnabled,
-          'loopMode': _loopModeToJson(_audio.loopMode),
-          'playbackSpeed': _defaultPlaybackSpeed,
-          'playbackPitch': _defaultPlaybackPitch,
-          'trackPlaybackPitchOverrides': _trackPlaybackPitchOverrides,
-          'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
-          'skipForwardSeconds': _skipForwardInterval.inSeconds,
-          'skipSilenceEnabled': _skipSilenceEnabled,
-          'skipFailedTracksEnabled': _skipFailedTracksEnabled,
-          'volume': _volume,
-          'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
-          'replayGainMode': _replayGainMode.name,
-          'crossfadeMilliseconds': crossfadeDuration.inMilliseconds,
-          'equalizerEnabled': _equalizerEnabled,
-          'equalizerPreset': _equalizerPreset.name,
-          'equalizerCustomPoints': _customEqualizerPoints
-              .map((point) => point.toJson())
-              .toList(growable: false),
-          'loudnessEnhancerEnabled': _loudnessEnhancerEnabled,
-          'loudnessEnhancerTargetGainDb': _loudnessEnhancerTargetGainDb,
-          'virtualizerEnabled': _virtualizerEnabled,
-          'virtualizerStrength': _virtualizerStrength,
-        },
-      ),
+      jsonEncode(<String, Object?>{
+        'shuffleEnabled': _audio.shuffleModeEnabled,
+        'loopMode': _loopModeToJson(_audio.loopMode),
+        'playbackSpeed': _defaultPlaybackSpeed,
+        'playbackPitch': _defaultPlaybackPitch,
+        'trackPlaybackPitchOverrides': _trackPlaybackPitchOverrides,
+        'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
+        'skipForwardSeconds': _skipForwardInterval.inSeconds,
+        'skipSilenceEnabled': _skipSilenceEnabled,
+        'skipFailedTracksEnabled': _skipFailedTracksEnabled,
+        'volume': _volume,
+        'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
+        'replayGainMode': _replayGainMode.name,
+        'crossfadeMilliseconds': crossfadeDuration.inMilliseconds,
+        'equalizerEnabled': _equalizerEnabled,
+        'equalizerPreset': _equalizerPreset.name,
+        'equalizerCustomPoints': _customEqualizerPoints
+            .map((point) => point.toJson())
+            .toList(growable: false),
+        'loudnessEnhancerEnabled': _loudnessEnhancerEnabled,
+        'loudnessEnhancerTargetGainDb': _loudnessEnhancerTargetGainDb,
+        'virtualizerEnabled': _virtualizerEnabled,
+        'virtualizerStrength': _virtualizerStrength,
+      }),
     );
   }
 
@@ -2240,10 +2233,7 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  Duration _skipIntervalFromJson(
-    Object? value, {
-    required Duration fallback,
-  }) {
+  Duration _skipIntervalFromJson(Object? value, {required Duration fallback}) {
     if (value is num) {
       final interval = Duration(seconds: value.round());
       if (supportedSkipIntervals.contains(interval)) {
@@ -2350,7 +2340,9 @@ class PlayerController extends ChangeNotifier {
   AudioEffectsPlaybackAudioEngine _requireEqualizerEngine() {
     final engine = _audioEffectsEngine;
     if (engine == null || !engine.supportsEqualizer) {
-      throw UnsupportedError('Equalizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Equalizer is unavailable for this audio backend.',
+      );
     }
     return engine;
   }
@@ -2368,7 +2360,9 @@ class PlayerController extends ChangeNotifier {
   VirtualizerPlaybackAudioEngine _requireVirtualizerEngine() {
     final engine = _virtualizerEngine;
     if (engine == null || !engine.supportsVirtualizer) {
-      throw UnsupportedError('Virtualizer is unavailable for this audio backend.');
+      throw UnsupportedError(
+        'Virtualizer is unavailable for this audio backend.',
+      );
     }
     return engine;
   }
@@ -2451,15 +2445,10 @@ class PlayerController extends ChangeNotifier {
         continue;
       }
       points.add(
-        PlaybackEqualizerPoint(
-          frequencyHz: frequencyHz,
-          gainDb: gainDb,
-        ),
+        PlaybackEqualizerPoint(frequencyHz: frequencyHz, gainDb: gainDb),
       );
     }
-    points.sort(
-      (left, right) => left.frequencyHz.compareTo(right.frequencyHz),
-    );
+    points.sort((left, right) => left.frequencyHz.compareTo(right.frequencyHz));
     return points;
   }
 

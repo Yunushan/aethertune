@@ -18,11 +18,7 @@ void main() {
 
   test('applies normalization without exceeding the player range', () {
     expect(
-      replayGainAdjustedVolume(
-        baseVolume: 0.8,
-        enabled: true,
-        gainDb: -6,
-      ),
+      replayGainAdjustedVolume(baseVolume: 0.8, enabled: true, gainDb: -6),
       closeTo(0.40095, 0.0001),
     );
     expect(
@@ -68,12 +64,6 @@ void main() {
       ),
       -3,
     );
-    expect(
-      replayGainForMode(
-        mode: ReplayGainMode.album,
-        trackGainDb: -6,
-      ),
-      -6,
-    );
+    expect(replayGainForMode(mode: ReplayGainMode.album, trackGainDb: -6), -6);
   });
 }

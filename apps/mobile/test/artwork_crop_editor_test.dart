@@ -5,7 +5,9 @@ import 'package:aethertune/src/domain/artwork_crop.dart';
 import 'package:aethertune/src/ui/widgets/artwork_crop_editor.dart';
 
 void main() {
-  testWidgets('edits and returns a panned, zoomed crop profile', (tester) async {
+  testWidgets('edits and returns a panned, zoomed crop profile', (
+    tester,
+  ) async {
     ArtworkCrop? savedCrop;
     await tester.pumpWidget(
       MaterialApp(

@@ -10,10 +10,7 @@ import 'widgets/track_artwork.dart';
 
 /// Browses saved Spotify show metadata and their public episode metadata.
 final class SpotifySavedShowsScreen extends StatefulWidget {
-  const SpotifySavedShowsScreen({
-    super.key,
-    required this.provider,
-  });
+  const SpotifySavedShowsScreen({super.key, required this.provider});
 
   final SpotifyMetadataProvider provider;
 
@@ -64,7 +61,10 @@ final class _SpotifySavedShowsScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _shows.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _shows.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.podcasts_outlined),
               title: Text('No saved shows found'),
@@ -162,10 +162,8 @@ final class _SpotifySavedShowsScreenState
   void _openShow(SpotifySavedShow show) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => SpotifySavedTracksScreen(
-          provider: widget.provider,
-          show: show,
-        ),
+        builder: (_) =>
+            SpotifySavedTracksScreen(provider: widget.provider, show: show),
       ),
     );
   }

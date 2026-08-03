@@ -73,58 +73,60 @@ class _PublicProfileDiscoveryDialogState
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Find public profiles'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextField(
-                key: const Key('library-sync-profile-search-query'),
-                controller: _controller,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                decoration: const InputDecoration(labelText: 'Name'),
-                onSubmitted: (_) => _search(),
+    title: const Text('Find public profiles'),
+    content: SizedBox(
+      width: 420,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          TextField(
+            key: const Key('library-sync-profile-search-query'),
+            controller: _controller,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(labelText: 'Name'),
+            onSubmitted: (_) => _search(),
+          ),
+          if (_searching)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: CircularProgressIndicator(),
+            ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _error!,
+                key: const Key('library-sync-profile-search-error'),
               ),
-              if (_searching) const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: CircularProgressIndicator(),
-              ),
-              if (_error != null) Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  _error!,
-                  key: const Key('library-sync-profile-search-error'),
+            ),
+          if (_profiles != null) ...<Widget>[
+            const SizedBox(height: 12),
+            for (final profile in _profiles!)
+              ListTile(
+                dense: true,
+                leading: CircleAvatar(
+                  child: Text(profile.displayName[0].toUpperCase()),
                 ),
+                title: Text(profile.displayName),
+                subtitle: Text(profile.id),
               ),
-              if (_profiles != null) ...<Widget>[
-                const SizedBox(height: 12),
-                for (final profile in _profiles!) ListTile(
-                  dense: true,
-                  leading: CircleAvatar(
-                    child: Text(profile.displayName[0].toUpperCase()),
-                  ),
-                  title: Text(profile.displayName),
-                  subtitle: Text(profile.id),
-                ),
-                if (_profiles!.isEmpty)
-                  const Text('No public profiles matched.'),
-              ],
-            ],
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-          FilledButton(
-            onPressed: _searching ? null : _search,
-            child: const Text('Search'),
-          ),
+            if (_profiles!.isEmpty) const Text('No public profiles matched.'),
+          ],
         ],
-      );
+      ),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Close'),
+      ),
+      FilledButton(
+        onPressed: _searching ? null : _search,
+        child: const Text('Search'),
+      ),
+    ],
+  );
 }
 
 class LibrarySyncPanel extends StatelessWidget {
@@ -216,11 +218,8 @@ class LibrarySyncPanel extends StatelessWidget {
               key: const Key('library-sync-copy-public-profile-link'),
               tooltip: 'Copy public profile link',
               onPressed: actionsEnabled
-                  ? () => _copyPublicProfileLink(
-                      context,
-                      account,
-                      sync.profile!,
-                    )
+                  ? () =>
+                        _copyPublicProfileLink(context, account, sync.profile!)
                   : null,
               icon: const Icon(Icons.copy_outlined),
             ),
@@ -231,7 +230,9 @@ class LibrarySyncPanel extends StatelessWidget {
             dense: true,
             leading: const Icon(Icons.person_search_outlined),
             title: const Text('Find public profiles'),
-            subtitle: const Text('Search people who chose to share their name.'),
+            subtitle: const Text(
+              'Search people who chose to share their name.',
+            ),
             onTap: actionsEnabled
                 ? () => _showPublicProfileDiscovery(context)
                 : null,
@@ -317,7 +318,8 @@ class LibrarySyncPanel extends StatelessWidget {
                   IconButton(
                     key: const Key('listen-together-refresh'),
                     tooltip: 'Refresh listen together',
-                    onPressed: actionsEnabled && player != null && !listenTogether.busy
+                    onPressed:
+                        actionsEnabled && player != null && !listenTogether.busy
                         ? () => _refreshListenTogether(context)
                         : null,
                     icon: const Icon(Icons.refresh_outlined),
@@ -350,7 +352,8 @@ class LibrarySyncPanel extends StatelessWidget {
                 IconButton(
                   key: const Key('shared-playlists-host'),
                   tooltip: 'Share a playlist privately',
-                  onPressed: actionsEnabled &&
+                  onPressed:
+                      actionsEnabled &&
                           !sharedPlaylists.busy &&
                           sharedPlaylists.loaded
                       ? () => _hostSharedPlaylist(context)
@@ -360,7 +363,8 @@ class LibrarySyncPanel extends StatelessWidget {
                 IconButton(
                   key: const Key('shared-playlists-join'),
                   tooltip: 'Join with invite code',
-                  onPressed: actionsEnabled &&
+                  onPressed:
+                      actionsEnabled &&
                           !sharedPlaylists.busy &&
                           sharedPlaylists.loaded
                       ? () => _joinSharedPlaylistInvite(context)
@@ -371,7 +375,9 @@ class LibrarySyncPanel extends StatelessWidget {
             ),
           ),
           if (sharedPlaylists.busy)
-            const LinearProgressIndicator(key: Key('shared-playlists-progress')),
+            const LinearProgressIndicator(
+              key: Key('shared-playlists-progress'),
+            ),
           for (final binding in sharedPlaylists.bindings)
             _SharedPlaylistBindingTile(binding: binding),
           if (sharedPlaylists.lastError != null && !sharedPlaylists.busy)
@@ -521,9 +527,9 @@ class LibrarySyncPanel extends StatelessWidget {
     if (updatedAt == null) {
       return '$availability - waiting for an update';
     }
-    final time = MaterialLocalizations.of(context).formatTimeOfDay(
-      TimeOfDay.fromDateTime(updatedAt.toLocal()),
-    );
+    final time = MaterialLocalizations.of(
+      context,
+    ).formatTimeOfDay(TimeOfDay.fromDateTime(updatedAt.toLocal()));
     final device = listenTogether.updatedByDevice;
     return device == null || device.isEmpty
         ? '$availability - updated at $time'
@@ -625,7 +631,10 @@ class LibrarySyncPanel extends StatelessWidget {
       } else if (restored == 0) {
         _showSuccess(context, 'Shared playback is up to date.');
       } else {
-        _showSuccess(context, 'Refreshed shared playback with $restored tracks.');
+        _showSuccess(
+          context,
+          'Refreshed shared playback with $restored tracks.',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -833,7 +842,10 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on SharedPlaylistConflictException catch (_) {
       if (context.mounted) {
-        _showError(context, 'A collaborator updated it first. Refresh or merge local changes.');
+        _showError(
+          context,
+          'A collaborator updated it first. Refresh or merge local changes.',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -915,11 +927,11 @@ class LibrarySyncPanel extends StatelessWidget {
   static List<MusicSourceProvider> _sharedPlaylistProviders(
     BuildContext context,
   ) => <MusicSourceProvider>[
-      ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
-      ...?context.read<SpotifySettingsStore?>()?.musicProviders,
-      ...context.read<SelfHostedProviderStore>().musicProviders,
-      ...?context.read<CustomCatalogStore?>()?.musicProviders,
-    ];
+    ...?context.read<YouTubeDataSettingsStore?>()?.musicProviders,
+    ...?context.read<SpotifySettingsStore?>()?.musicProviders,
+    ...context.read<SelfHostedProviderStore>().musicProviders,
+    ...?context.read<CustomCatalogStore?>()?.musicProviders,
+  ];
 
   static Future<void> _queueSharedPlaylistDownloads(
     BuildContext context,
@@ -972,7 +984,10 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on Object catch (error) {
       if (context.mounted) {
-        _showError(context, 'Could not queue shared playlist downloads: $error');
+        _showError(
+          context,
+          'Could not queue shared playlist downloads: $error',
+        );
       }
     }
   }
@@ -1018,7 +1033,10 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on SharedPlaylistConflictException catch (_) {
       if (context.mounted) {
-        _showError(context, 'A collaborator updated it again. Refresh and retry the merge.');
+        _showError(
+          context,
+          'A collaborator updated it again. Refresh and retry the merge.',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -1052,38 +1070,36 @@ class LibrarySyncPanel extends StatelessWidget {
                   ? const Text('No archived revisions are available yet.')
                   : ListView(
                       children: revisions
-                          .map(
-                            (revision) {
-                              final timestamp =
-                                  '${localizations.formatMediumDate(revision.updatedAt.toLocal())} '
-                                  '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(revision.updatedAt.toLocal()))}';
-                              return ListTile(
-                                leading: const Icon(Icons.history_outlined),
-                                title: Text(
-                                  'Revision ${revision.revision} · ${revision.name}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  '${revision.trackIds.length} track(s) · ${revision.updatedByDevice} · $timestamp',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing:
-                                    binding.canEdit &&
-                                        revision.revision < binding.revision
-                                    ? const Icon(Icons.restore_outlined)
-                                    : null,
-                                onTap:
-                                    binding.canEdit &&
-                                        revision.revision < binding.revision
-                                    ? () => Navigator.of(
+                          .map((revision) {
+                            final timestamp =
+                                '${localizations.formatMediumDate(revision.updatedAt.toLocal())} '
+                                '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(revision.updatedAt.toLocal()))}';
+                            return ListTile(
+                              leading: const Icon(Icons.history_outlined),
+                              title: Text(
+                                'Revision ${revision.revision} · ${revision.name}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '${revision.trackIds.length} track(s) · ${revision.updatedByDevice} · $timestamp',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing:
+                                  binding.canEdit &&
+                                      revision.revision < binding.revision
+                                  ? const Icon(Icons.restore_outlined)
+                                  : null,
+                              onTap:
+                                  binding.canEdit &&
+                                      revision.revision < binding.revision
+                                  ? () => Navigator.of(
                                       dialogContext,
                                     ).pop(revision)
-                                    : null,
-                              );
-                            },
-                          )
+                                  : null,
+                            );
+                          })
                           .toList(growable: false),
                     ),
             ),
@@ -1144,7 +1160,10 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on SharedPlaylistConflictException catch (_) {
       if (context.mounted) {
-        _showError(context, 'A collaborator updated it first. Refresh before restoring.');
+        _showError(
+          context,
+          'A collaborator updated it first. Refresh before restoring.',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -1161,7 +1180,9 @@ class LibrarySyncPanel extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Create private invite'),
-        content: const Text('Choose what the person can do with this playlist.'),
+        content: const Text(
+          'Choose what the person can do with this playlist.',
+        ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -1303,7 +1324,10 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on SharedPlaylistConflictException catch (_) {
       if (context.mounted) {
-        _showError(context, 'A collaborator updated it first. Refresh before revoking access.');
+        _showError(
+          context,
+          'A collaborator updated it first. Refresh before revoking access.',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -1343,7 +1367,10 @@ class LibrarySyncPanel extends StatelessWidget {
           .read<SharedPlaylistStore>()
           .invalidateUnusedInvites(binding, context.read<LibraryStore>());
       if (context.mounted) {
-        _showSuccess(context, 'Invalidated $invalidated unused invite code(s).');
+        _showSuccess(
+          context,
+          'Invalidated $invalidated unused invite code(s).',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -1426,7 +1453,10 @@ class LibrarySyncPanel extends StatelessWidget {
       }
     } on SharedPlaylistConflictException catch (_) {
       if (context.mounted) {
-        _showError(context, 'A collaborator updated it first. Refresh before deleting.');
+        _showError(
+          context,
+          'A collaborator updated it first. Refresh before deleting.',
+        );
       }
     } on Object catch (error) {
       if (context.mounted) {
@@ -1576,10 +1606,7 @@ class LibrarySyncPanel extends StatelessWidget {
     }
   }
 
-  static Future<void> _setQueueSync(
-    BuildContext context,
-    bool enabled,
-  ) async {
+  static Future<void> _setQueueSync(BuildContext context, bool enabled) async {
     try {
       await context.read<LibrarySyncStore>().setQueueSyncEnabled(enabled);
     } on Object catch (error) {
@@ -1990,7 +2017,9 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
                 DropdownButtonFormField<LibrarySyncProfileAvatarTone?>(
                   key: const Key('library-sync-profile-avatar-tone'),
                   initialValue: _avatarTone,
-                  decoration: const InputDecoration(labelText: 'Initials avatar'),
+                  decoration: const InputDecoration(
+                    labelText: 'Initials avatar',
+                  ),
                   items: <DropdownMenuItem<LibrarySyncProfileAvatarTone?>>[
                     const DropdownMenuItem<LibrarySyncProfileAvatarTone?>(
                       value: null,
@@ -2023,7 +2052,9 @@ class _LibrarySyncProfileDialogState extends State<_LibrarySyncProfileDialog> {
                           _error = null;
                         }),
                 ),
-              if (widget.profile.publicProfileFieldAudienceSupported) ...<Widget>[
+              if (widget
+                  .profile
+                  .publicProfileFieldAudienceSupported) ...<Widget>[
                 SwitchListTile(
                   key: const Key('library-sync-profile-public-display-name'),
                   value: _publicDisplayNameEnabled,
@@ -2357,11 +2388,7 @@ class _LibrarySyncConfigurationDialogState
           recoveryCode,
         );
       } else {
-        await store.testAndSave(
-          context.read<LibraryStore>(),
-          account,
-          token,
-        );
+        await store.testAndSave(context.read<LibraryStore>(), account, token);
       }
       if (mounted) {
         Navigator.of(context).pop(true);

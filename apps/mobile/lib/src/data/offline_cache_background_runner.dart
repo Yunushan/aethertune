@@ -36,9 +36,7 @@ Future<void> runOfflineCacheBackgroundQueue() async {
       await listenBrainz.retryPendingListens();
     }
     if (library.automaticOfflineQueueEnabled && !library.offlineModeEnabled) {
-      podcastReport = await refreshDuePodcastSubscriptionsInBackground(
-        library,
-      );
+      podcastReport = await refreshDuePodcastSubscriptionsInBackground(library);
       final providers = SelfHostedProviderStore();
       await providers.load();
       final root = await getApplicationDocumentsDirectory();
@@ -52,7 +50,8 @@ Future<void> runOfflineCacheBackgroundQueue() async {
         library.automaticOfflineQueueEnabled &&
         !library.offlineModeEnabled &&
         library.hasPendingOfflineCacheWork;
-    hasPendingWork = hasOfflineCacheWork ||
+    hasPendingWork =
+        hasOfflineCacheWork ||
         shouldRetryListenBrainzInBackground(
           isConfigured: listenBrainz.isConfigured,
           backgroundRetryEnabled: listenBrainz.backgroundRetryEnabled,

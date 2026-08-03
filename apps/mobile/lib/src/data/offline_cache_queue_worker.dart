@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:io';
 
 import '../domain/offline_cache_cancellation.dart';
@@ -73,9 +76,8 @@ class OfflineCacheQueueWorker {
     OfflineCacheEntry entry,
   ) async {
     await library.markOfflineCacheEntryProcessing(entry.id);
-    final cancellationToken = OfflineCacheCancellationRegistry.instance.tokenFor(
-      entry.id,
-    );
+    final cancellationToken = OfflineCacheCancellationRegistry.instance
+        .tokenFor(entry.id);
     final processing = library.offlineCacheEntryById(entry.id) ?? entry;
     try {
       final resolvedTrack = await _resolveTrack(processing.track);

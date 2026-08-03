@@ -1,3 +1,6 @@
+// Public dependency names are part of the API; backing fields stay private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -62,10 +65,8 @@ class SharedPlaylistBinding {
     'updatedByDevice': updatedByDevice,
     'unavailableTrackCount': unavailableTrackCount,
     'collaborators': collaborators.map(
-      (accountId, accessRole) => MapEntry<String, String>(
-        accountId,
-        accessRole.name,
-      ),
+      (accountId, accessRole) =>
+          MapEntry<String, String>(accountId, accessRole.name),
     ),
   };
 
@@ -109,7 +110,7 @@ class SharedPlaylistBinding {
 /// credentials, and playback state remain outside this feature.
 class SharedPlaylistStore extends ChangeNotifier {
   SharedPlaylistStore({SharedPlaylistGatewayFactory? gatewayFactory})
-      : _gatewayFactory = gatewayFactory;
+    : _gatewayFactory = gatewayFactory;
 
   static const _metadataKey = 'aethertune.shared_playlists.v1';
 
@@ -139,11 +140,15 @@ class SharedPlaylistStore extends ChangeNotifier {
       return;
     }
     try {
-      final raw = (await SharedPreferences.getInstance()).getString(_metadataKey);
+      final raw = (await SharedPreferences.getInstance()).getString(
+        _metadataKey,
+      );
       if (raw != null && raw.trim().isNotEmpty) {
         final decoded = jsonDecode(raw);
         if (decoded is! List) {
-          throw const FormatException('Shared playlist bindings must be a list.');
+          throw const FormatException(
+            'Shared playlist bindings must be a list.',
+          );
         }
         final seenRemoteIds = <String>{};
         final seenLocalIds = <String>{};
@@ -177,10 +182,7 @@ class SharedPlaylistStore extends ChangeNotifier {
     return null;
   }
 
-  Future<SharedPlaylistBinding> host(
-    LibraryStore library,
-    Playlist playlist,
-  ) {
+  Future<SharedPlaylistBinding> host(LibraryStore library, Playlist playlist) {
     return _runBusy(() async {
       _requireOnline(library);
       if (bindingForLocalPlaylist(playlist.id) != null) {
@@ -211,7 +213,9 @@ class SharedPlaylistStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       _requireOnline(library);
-      final remote = await _requireGateway().joinSharedPlaylistInvite(inviteCode);
+      final remote = await _requireGateway().joinSharedPlaylistInvite(
+        inviteCode,
+      );
       final existing = _bindings.where((item) => item.remoteId == remote.id);
       if (existing.isNotEmpty) {
         final binding = existing.first;
@@ -220,10 +224,7 @@ class SharedPlaylistStore extends ChangeNotifier {
       }
       final playlist = await library.createPlaylist(remote.name);
       final resolution = _trackResolutionForRemote(library, remote);
-      await library.replacePlaylistTracks(
-        playlist.id,
-        resolution.trackIds,
-      );
+      await library.replacePlaylistTracks(playlist.id, resolution.trackIds);
       final binding = SharedPlaylistBinding(
         remoteId: remote.id,
         localPlaylistId: playlist.id,
@@ -245,7 +246,9 @@ class SharedPlaylistStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       _requireOnline(library);
-      final remote = await _requireGateway().fetchSharedPlaylist(binding.remoteId);
+      final remote = await _requireGateway().fetchSharedPlaylist(
+        binding.remoteId,
+      );
       await _applyRemote(binding, remote, library);
       return bindingForLocalPlaylist(binding.localPlaylistId)!;
     });
@@ -264,7 +267,9 @@ class SharedPlaylistStore extends ChangeNotifier {
       if (coordinator.providers.isEmpty) {
         throw StateError('Configure a searchable music provider first.');
       }
-      final remote = await _requireGateway().fetchSharedPlaylist(binding.remoteId);
+      final remote = await _requireGateway().fetchSharedPlaylist(
+        binding.remoteId,
+      );
       final references = remote.trackReferences;
       if (references == null) {
         throw StateError(
@@ -284,7 +289,8 @@ class SharedPlaylistStore extends ChangeNotifier {
 
       final unresolved = <String, SharedPlaylistTrackReference>{};
       for (final reference in references) {
-        if (_matchingTracksForReference(library.tracks, reference).length != 1) {
+        if (_matchingTracksForReference(library.tracks, reference).length !=
+            1) {
           unresolved.putIfAbsent(
             _sharedPlaylistTrackReferenceKey(reference),
             () => reference,
@@ -315,8 +321,10 @@ class SharedPlaylistStore extends ChangeNotifier {
             continue;
           }
           final nextTracks = <Track>[...workingTracks, candidate];
-          final nextUnavailableTrackCount =
-              _unavailableTrackCountForReferences(nextTracks, references);
+          final nextUnavailableTrackCount = _unavailableTrackCountForReferences(
+            nextTracks,
+            references,
+          );
           if (nextUnavailableTrackCount < workingUnavailableTrackCount &&
               !_losesSharedPlaylistResolution(
                 workingTracks,
@@ -501,7 +509,9 @@ class SharedPlaylistStore extends ChangeNotifier {
   ) {
     return _runBusy(() async {
       if (!binding.isOwner) {
-        throw StateError('Only the shared playlist owner can create invitations.');
+        throw StateError(
+          'Only the shared playlist owner can create invitations.',
+        );
       }
       return _requireGateway().issueSharedPlaylistInvite(
         playlistId: binding.remoteId,
@@ -517,7 +527,9 @@ class SharedPlaylistStore extends ChangeNotifier {
     return _runBusy(() async {
       _requireOnline(library);
       if (!binding.isOwner) {
-        throw StateError('Only the shared playlist owner can rotate invitations.');
+        throw StateError(
+          'Only the shared playlist owner can rotate invitations.',
+        );
       }
       return _requireGateway().invalidateSharedPlaylistInvites(
         playlistId: binding.remoteId,
@@ -615,9 +627,7 @@ class SharedPlaylistStore extends ChangeNotifier {
     LibraryStore library,
     List<String> trackIds,
   ) {
-    final tracksById = {
-      for (final track in library.tracks) track.id: track,
-    };
+    final tracksById = {for (final track in library.tracks) track.id: track};
     final references = <SharedPlaylistTrackReference>[];
     for (final trackId in trackIds) {
       final track = tracksById[trackId];
@@ -820,7 +830,8 @@ List<SharedPlaylistTrackReference> mergeSharedPlaylistTrackReferences(
   final remainingServerOccurrences = <String, int>{};
   for (final reference in serverReferences) {
     final key = _sharedPlaylistTrackReferenceKey(reference);
-    remainingServerOccurrences[key] = (remainingServerOccurrences[key] ?? 0) + 1;
+    remainingServerOccurrences[key] =
+        (remainingServerOccurrences[key] ?? 0) + 1;
   }
   final merged = <SharedPlaylistTrackReference>[...serverReferences];
   for (final reference in localReferences) {
@@ -837,7 +848,8 @@ List<SharedPlaylistTrackReference> mergeSharedPlaylistTrackReferences(
 
 String _sharedPlaylistTrackReferenceKey(
   SharedPlaylistTrackReference reference,
-) => '${normalizeSearchText(reference.title)}\u0000'
+) =>
+    '${normalizeSearchText(reference.title)}\u0000'
     '${normalizeSearchText(reference.artist)}\u0000'
     '${normalizeSearchText(reference.album)}\u0000'
     '${reference.durationMilliseconds}';
@@ -853,9 +865,12 @@ bool _matchesSharedPlaylistTrackReference(
   Track track,
   SharedPlaylistTrackReference reference,
 ) {
-  if (normalizeSearchText(track.title) != normalizeSearchText(reference.title) ||
-      normalizeSearchText(track.artist) != normalizeSearchText(reference.artist) ||
-      normalizeSearchText(track.album) != normalizeSearchText(reference.album)) {
+  if (normalizeSearchText(track.title) !=
+          normalizeSearchText(reference.title) ||
+      normalizeSearchText(track.artist) !=
+          normalizeSearchText(reference.artist) ||
+      normalizeSearchText(track.album) !=
+          normalizeSearchText(reference.album)) {
     return false;
   }
   return reference.durationMilliseconds == 0 ||
@@ -867,7 +882,9 @@ int _unavailableTrackCountForReferences(
   Iterable<Track> tracks,
   Iterable<SharedPlaylistTrackReference> references,
 ) => references
-    .where((reference) => _matchingTracksForReference(tracks, reference).length != 1)
+    .where(
+      (reference) => _matchingTracksForReference(tracks, reference).length != 1,
+    )
     .length;
 
 bool _losesSharedPlaylistResolution(

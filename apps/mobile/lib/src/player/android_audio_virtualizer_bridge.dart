@@ -18,13 +18,10 @@ class AndroidAudioVirtualizerBridge {
       return false;
     }
     try {
-      return await _methods.invokeMethod<bool>(
-            'attach',
-            <String, Object>{
-              'audioSessionId': audioSessionId,
-              'slot': slot.name,
-            },
-          ) ??
+      return await _methods.invokeMethod<bool>('attach', <String, Object>{
+            'audioSessionId': audioSessionId,
+            'slot': slot.name,
+          }) ??
           false;
     } on MissingPluginException {
       return false;
@@ -35,10 +32,9 @@ class AndroidAudioVirtualizerBridge {
 
   Future<bool> setEnabled(bool enabled) async {
     try {
-      return await _methods.invokeMethod<bool>(
-            'setEnabled',
-            <String, Object>{'enabled': enabled},
-          ) ??
+      return await _methods.invokeMethod<bool>('setEnabled', <String, Object>{
+            'enabled': enabled,
+          }) ??
           false;
     } on MissingPluginException {
       return false;
@@ -50,10 +46,9 @@ class AndroidAudioVirtualizerBridge {
   Future<bool> setStrength(int strength) async {
     final normalized = normalizeAndroidVirtualizerStrength(strength);
     try {
-      return await _methods.invokeMethod<bool>(
-            'setStrength',
-            <String, Object>{'strength': normalized},
-          ) ??
+      return await _methods.invokeMethod<bool>('setStrength', <String, Object>{
+            'strength': normalized,
+          }) ??
           false;
     } on MissingPluginException {
       return false;

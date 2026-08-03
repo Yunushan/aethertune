@@ -72,9 +72,7 @@ Duration sleepTimerFadeStepInterval(
     return Duration.zero;
   }
 
-  return Duration(
-    microseconds: fadeDuration.inMicroseconds ~/ steps,
-  );
+  return Duration(microseconds: fadeDuration.inMicroseconds ~/ steps);
 }
 
 double sleepTimerFadeVolume({

@@ -241,11 +241,7 @@ final class YouTubeDataMetadataProvider
     }
     final normalizedPlaylistId = playlistId.trim();
     if (normalizedPlaylistId.isEmpty) {
-      throw ArgumentError.value(
-        playlistId,
-        'playlistId',
-        'Must not be empty.',
-      );
+      throw ArgumentError.value(playlistId, 'playlistId', 'Must not be empty.');
     }
     final normalizedCursor = cursor?.trim();
     return parseYouTubeDataPlaylistItemsPage(
@@ -351,7 +347,8 @@ final class YouTubeDataMetadataProvider
   ) async {
     final ids = <String>{
       for (final track in tracks)
-        if (track.externalId?.trim().isNotEmpty == true) track.externalId!.trim(),
+        if (track.externalId?.trim().isNotEmpty == true)
+          track.externalId!.trim(),
     };
     if (ids.isEmpty) {
       return tracks;
@@ -435,10 +432,7 @@ final class YouTubeDataChannelPage {
 }
 
 final class YouTubeDataChannelVideo {
-  const YouTubeDataChannelVideo({
-    required this.track,
-    this.publishedAt,
-  });
+  const YouTubeDataChannelVideo({required this.track, this.publishedAt});
 
   final Track track;
   final DateTime? publishedAt;
@@ -548,7 +542,9 @@ YouTubeDataPopularPage parseYouTubeDataPopularPage(String jsonText) {
 Map<String, Duration> parseYouTubeDataVideoDurations(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map<dynamic, dynamic>) {
-    throw const FormatException('YouTube video details response must be a map.');
+    throw const FormatException(
+      'YouTube video details response must be a map.',
+    );
   }
   final items = decoded['items'];
   if (items is! List<dynamic>) {
@@ -599,7 +595,9 @@ YouTubeDataPlaylistPage parseYouTubeDataPlaylistPage(String jsonText) {
   final playlists = items is List<dynamic>
       ? items
             .whereType<Map<dynamic, dynamic>>()
-            .map((item) => _playlistFromSearchItem(item.cast<String, Object?>()))
+            .map(
+              (item) => _playlistFromSearchItem(item.cast<String, Object?>()),
+            )
             .whereType<YouTubeDataPlaylist>()
             .toList(growable: false)
       : const <YouTubeDataPlaylist>[];
@@ -625,9 +623,8 @@ YouTubeDataChannelVideosPage parseYouTubeDataChannelVideosPage(
       ? items
             .whereType<Map<dynamic, dynamic>>()
             .map(
-              (item) => _channelVideoFromSearchItem(
-                item.cast<String, Object?>(),
-              ),
+              (item) =>
+                  _channelVideoFromSearchItem(item.cast<String, Object?>()),
             )
             .whereType<YouTubeDataChannelVideo>()
             .toList(growable: false)
@@ -809,7 +806,8 @@ Duration? parseYouTubeDataDuration(Object? value) {
       !seconds.isFinite) {
     return null;
   }
-  final microseconds = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) *
+  final microseconds =
+      (((days * 24 + hours) * 60 + minutes) * 60 + seconds) *
       Duration.microsecondsPerSecond;
   if (!microseconds.isFinite ||
       microseconds < 0 ||

@@ -74,7 +74,8 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
           create: (_) => PodcastChapterHostPolicy()..load(),
         ),
         ChangeNotifierProvider<LocalDiagnosticLog>(
-          create: (_) => widget.diagnostics ?? LocalDiagnosticLog()..load(),
+          create: (_) => widget.diagnostics ?? LocalDiagnosticLog()
+            ..load(),
         ),
         ChangeNotifierProvider<SelfHostedProviderStore>(
           create: (_) => SelfHostedProviderStore()..load(),
@@ -128,7 +129,8 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ChangeNotifierProxyProvider<LibrarySyncStore, SharedPlaylistStore>(
           create: (_) => SharedPlaylistStore()..load(),
           update: (_, sync, sharedPlaylists) {
-            final store = sharedPlaylists ?? SharedPlaylistStore()..load();
+            final store = sharedPlaylists ?? SharedPlaylistStore()
+              ..load();
             store.updateGatewayFactory(
               sync.isConfigured ? sync.createSharedPlaylistGateway : null,
             );
@@ -138,8 +140,8 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
         ChangeNotifierProxyProvider<LibrarySyncStore, SharedSmartPlaylistStore>(
           create: (_) => SharedSmartPlaylistStore()..load(),
           update: (_, sync, sharedSmartPlaylists) {
-            final store =
-                sharedSmartPlaylists ?? SharedSmartPlaylistStore()..load();
+            final store = sharedSmartPlaylists ?? SharedSmartPlaylistStore()
+              ..load();
             store.updateGatewayFactory(
               sync.isConfigured ? sync.createSharedSmartPlaylistGateway : null,
             );
@@ -155,14 +157,16 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
           },
         ),
         ChangeNotifierProxyProvider2<
-            LibraryStore,
-            SelfHostedProviderStore,
-            PlayerController>(
+          LibraryStore,
+          SelfHostedProviderStore,
+          PlayerController
+        >(
           create: (_) => PlayerController(audioEngine: widget.audioEngine)
             ..loadPersistedQueue()
             ..loadPersistedPlaybackSettings(),
           update: (_, library, selfHosted, player) {
-            final controller = player ??
+            final controller =
+                player ??
                 (PlayerController(audioEngine: widget.audioEngine)
                   ..loadPersistedQueue()
                   ..loadPersistedPlaybackSettings());
@@ -178,7 +182,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                   .add(node);
             }
             late List<MediaLibraryBrowseFolder> Function(String? parentKey)
-                buildFolderChildren;
+            buildFolderChildren;
             buildFolderChildren = (parentKey) {
               return (folderNodesByParent[parentKey] ??
                       const <LibraryFolderNode>[])
@@ -187,7 +191,9 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                       id: node.key,
                       title: node.label,
                       queueTracks: library.tracksForFolderNode(node.key),
-                      directTracks: library.tracksDirectlyInFolderNode(node.key),
+                      directTracks: library.tracksDirectlyInFolderNode(
+                        node.key,
+                      ),
                       children: buildFolderChildren(node.key),
                     ),
                   )
@@ -288,129 +294,143 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
       ],
       child: PodcastRssRefreshWorker(
         child: AndroidScreenshotProtection(
-        child: OfflineCacheForegroundWorker(
-          child: LibrarySyncAutomaticUpload(
-          child: ListenTogetherForegroundSync(
-          child: DynamicColorBuilder(
-            builder: (lightDynamic, darkDynamic) =>
-                Consumer2<LibraryStore, PlayerController>(
-              builder: (context, library, player, _) {
-                return DesktopTrayControls(
-                  onTogglePlayPause: player.togglePlayPause,
-                  onPrevious: player.previous,
-                  onNext: player.next,
-                  minimizeToTray: library.desktopMinimizeToTray,
-                  transportActions: library.desktopTrayTransportActions,
-                  child: DesktopGlobalHotkeys(
-                    onTogglePlayPause: player.togglePlayPause,
-                    onPrevious: player.previous,
-                    onNext: player.next,
-                    child: MaterialApp(
-                    scaffoldMessengerKey: _scaffoldMessengerKey,
-                    locale: localeForLanguagePreference(
-                      library.languagePreference,
-                    ),
-                    onGenerateTitle: (context) =>
-                        AppLocalizations.of(context)!.appTitle,
-                    debugShowCheckedModeBanner: false,
-                    localizationsDelegates:
-                        AppLocalizations.localizationsDelegates,
-                    supportedLocales: AppLocalizations.supportedLocales,
-                    themeMode: _themeModeForPreference(library.themePreference),
-                    theme: _lightTheme(
-                      library.accentColor,
-                      dynamicColorScheme: lightDynamic,
-                      visualDensity: visualDensityForDesktopPreference(
-                        library.desktopDensityPreference,
-                        defaultTargetPlatform,
-                      ),
-                    ),
-                    darkTheme: _darkThemeForPreference(
-                      library.themePreference,
-                      library.accentColor,
-                      dynamicColorScheme: darkDynamic,
-                      visualDensity: visualDensityForDesktopPreference(
-                        library.desktopDensityPreference,
-                        defaultTargetPlatform,
-                      ),
-                    ),
-                    builder: (context, child) => AetherTuneDeepLinkListener(
-                      library: library,
-                      incomingUriStream: widget.incomingUriStream,
-                      onImported: (_) => _openPlaylistsFromDeepLink(),
-                      child: child ?? const SizedBox.shrink(),
-                    ),
-                    home: !library.loaded
-                        ? const _AppLoadingScreen()
-                        : CallbackShortcuts(
-                            bindings: <ShortcutActivator, VoidCallback>{
-                              const SingleActivator(
-                                LogicalKeyboardKey.mediaPlayPause,
-                              ): () => unawaited(player.togglePlayPause()),
-                              const SingleActivator(
-                                LogicalKeyboardKey.mediaTrackNext,
-                              ): () => unawaited(player.next()),
-                              const SingleActivator(
-                                LogicalKeyboardKey.mediaTrackPrevious,
-                              ): () => unawaited(player.previous()),
-                              const SingleActivator(
-                                LogicalKeyboardKey.keyK,
-                                control: true,
-                              ): () => unawaited(player.togglePlayPause()),
-                            },
-                            child: Focus(
-                              autofocus: true,
-                              child: library.onboardingCompleted
-                                  ? HomeScreen(
-                                      key: ValueKey<String>(
-                                        'home-$_homeGeneration',
-                                      ),
-                                      initialTab: _onboardingDestination,
-                                      initialImportAudio:
-                                          _startLocalImportAfterOnboarding,
-                                      onRestartOnboarding: () {
-                                        setState(() {
-                                          _startLocalImportAfterOnboarding =
-                                              false;
-                                        });
-                                        unawaited(
-                                          library.setOnboardingCompleted(false),
-                                        );
-                                      },
-                                    )
-                                  : OnboardingScreen(
-                                      onFinished: (destination) async {
-                                        setState(() {
-                                          _onboardingDestination = destination;
-                                          _startLocalImportAfterOnboarding =
-                                              false;
-                                        });
-                                        await library.setOnboardingCompleted(
-                                          true,
-                                        );
-                                      },
-                                      onImportLocalLibrary: () async {
-                                        setState(() {
-                                          _onboardingDestination = 1;
-                                          _startLocalImportAfterOnboarding =
-                                              true;
-                                        });
-                                        await library.setOnboardingCompleted(
-                                          true,
-                                        );
-                                      },
-                                    ),
+          child: OfflineCacheForegroundWorker(
+            child: LibrarySyncAutomaticUpload(
+              child: ListenTogetherForegroundSync(
+                child: DynamicColorBuilder(
+                  builder: (lightDynamic, darkDynamic) => Consumer2<LibraryStore, PlayerController>(
+                    builder: (context, library, player, _) {
+                      return DesktopTrayControls(
+                        onTogglePlayPause: player.togglePlayPause,
+                        onPrevious: player.previous,
+                        onNext: player.next,
+                        minimizeToTray: library.desktopMinimizeToTray,
+                        transportActions: library.desktopTrayTransportActions,
+                        child: DesktopGlobalHotkeys(
+                          onTogglePlayPause: player.togglePlayPause,
+                          onPrevious: player.previous,
+                          onNext: player.next,
+                          child: MaterialApp(
+                            scaffoldMessengerKey: _scaffoldMessengerKey,
+                            locale: localeForLanguagePreference(
+                              library.languagePreference,
                             ),
+                            onGenerateTitle: (context) =>
+                                AppLocalizations.of(context)!.appTitle,
+                            debugShowCheckedModeBanner: false,
+                            localizationsDelegates:
+                                AppLocalizations.localizationsDelegates,
+                            supportedLocales: AppLocalizations.supportedLocales,
+                            themeMode: _themeModeForPreference(
+                              library.themePreference,
+                            ),
+                            theme: _lightTheme(
+                              library.accentColor,
+                              dynamicColorScheme: lightDynamic,
+                              visualDensity: visualDensityForDesktopPreference(
+                                library.desktopDensityPreference,
+                                defaultTargetPlatform,
+                              ),
+                            ),
+                            darkTheme: _darkThemeForPreference(
+                              library.themePreference,
+                              library.accentColor,
+                              dynamicColorScheme: darkDynamic,
+                              visualDensity: visualDensityForDesktopPreference(
+                                library.desktopDensityPreference,
+                                defaultTargetPlatform,
+                              ),
+                            ),
+                            builder: (context, child) =>
+                                AetherTuneDeepLinkListener(
+                                  library: library,
+                                  incomingUriStream: widget.incomingUriStream,
+                                  onImported: (_) =>
+                                      _openPlaylistsFromDeepLink(),
+                                  child: child ?? const SizedBox.shrink(),
+                                ),
+                            home: !library.loaded
+                                ? const _AppLoadingScreen()
+                                : CallbackShortcuts(
+                                    bindings: <ShortcutActivator, VoidCallback>{
+                                      const SingleActivator(
+                                        LogicalKeyboardKey.mediaPlayPause,
+                                      ): () =>
+                                          unawaited(player.togglePlayPause()),
+                                      const SingleActivator(
+                                        LogicalKeyboardKey.mediaTrackNext,
+                                      ): () =>
+                                          unawaited(player.next()),
+                                      const SingleActivator(
+                                        LogicalKeyboardKey.mediaTrackPrevious,
+                                      ): () =>
+                                          unawaited(player.previous()),
+                                      const SingleActivator(
+                                        LogicalKeyboardKey.keyK,
+                                        control: true,
+                                      ): () =>
+                                          unawaited(player.togglePlayPause()),
+                                    },
+                                    child: Focus(
+                                      autofocus: true,
+                                      child: library.onboardingCompleted
+                                          ? HomeScreen(
+                                              key: ValueKey<String>(
+                                                'home-$_homeGeneration',
+                                              ),
+                                              initialTab:
+                                                  _onboardingDestination,
+                                              initialImportAudio:
+                                                  _startLocalImportAfterOnboarding,
+                                              onRestartOnboarding: () {
+                                                setState(() {
+                                                  _startLocalImportAfterOnboarding =
+                                                      false;
+                                                });
+                                                unawaited(
+                                                  library
+                                                      .setOnboardingCompleted(
+                                                        false,
+                                                      ),
+                                                );
+                                              },
+                                            )
+                                          : OnboardingScreen(
+                                              onFinished: (destination) async {
+                                                setState(() {
+                                                  _onboardingDestination =
+                                                      destination;
+                                                  _startLocalImportAfterOnboarding =
+                                                      false;
+                                                });
+                                                await library
+                                                    .setOnboardingCompleted(
+                                                      true,
+                                                    );
+                                              },
+                                              onImportLocalLibrary: () async {
+                                                setState(() {
+                                                  _onboardingDestination = 1;
+                                                  _startLocalImportAfterOnboarding =
+                                                      true;
+                                                });
+                                                await library
+                                                    .setOnboardingCompleted(
+                                                      true,
+                                                    );
+                                              },
+                                            ),
+                                    ),
+                                  ),
                           ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
+                ),
+              ),
             ),
           ),
-          ),
-        ),
         ),
       ),
     );
@@ -519,9 +539,7 @@ class _AppLoadingScreen extends StatelessWidget {
     final localizations = AppLocalizations.of(context)!;
     return Scaffold(
       body: Center(
-        child: CircularProgressIndicator(
-          semanticsLabel: localizations.loading,
-        ),
+        child: CircularProgressIndicator(semanticsLabel: localizations.loading),
       ),
     );
   }

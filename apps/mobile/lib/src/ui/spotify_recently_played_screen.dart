@@ -21,8 +21,7 @@ final class SpotifyRecentlyPlayedScreen extends StatefulWidget {
 
 final class _SpotifyRecentlyPlayedScreenState
     extends State<SpotifyRecentlyPlayedScreen> {
-  List<SpotifyRecentlyPlayedItem> _items =
-      const <SpotifyRecentlyPlayedItem>[];
+  List<SpotifyRecentlyPlayedItem> _items = const <SpotifyRecentlyPlayedItem>[];
   String? _nextBefore;
   bool _hasMore = false;
   bool _loading = false;
@@ -47,7 +46,9 @@ final class _SpotifyRecentlyPlayedScreenState
             const ListTile(
               leading: Icon(Icons.cloud_off_outlined),
               title: Text('Offline mode is on'),
-              subtitle: Text('Turn it off to load recently played Spotify tracks.'),
+              subtitle: Text(
+                'Turn it off to load recently played Spotify tracks.',
+              ),
             ),
           if (_loading && _items.isEmpty)
             const Padding(
@@ -67,7 +68,10 @@ final class _SpotifyRecentlyPlayedScreenState
                 icon: const Icon(Icons.refresh),
               ),
             ),
-          if (!_loading && _error == null && _items.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _items.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.history_outlined),
               title: Text('No recently played tracks found'),
@@ -78,9 +82,8 @@ final class _SpotifyRecentlyPlayedScreenState
               title: Text(item.track.title),
               subtitle: Text(_subtitle(context, item)),
               trailing: IconButton(
-                tooltip: library.tracks.any(
-                  (saved) => saved.id == item.track.id,
-                )
+                tooltip:
+                    library.tracks.any((saved) => saved.id == item.track.id)
                     ? 'Saved to library'
                     : 'Save metadata to library',
                 onPressed: () => unawaited(_saveTrack(item.track)),

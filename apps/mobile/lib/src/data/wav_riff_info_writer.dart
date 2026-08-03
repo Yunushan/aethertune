@@ -64,12 +64,12 @@ class _WavInputChunk {
 
 class _WavOutputChunk {
   _WavOutputChunk.source(_WavInputChunk source)
-      : id = source.id,
-        source = source,
-        payload = null;
+    : id = source.id,
+      source = source,
+      payload = null;
 
   _WavOutputChunk.generated({required this.id, required this.payload})
-      : source = null;
+    : source = null;
 
   final String id;
   final _WavInputChunk? source;
@@ -165,12 +165,17 @@ Future<_WavWritePlan> _buildWritePlan(
       ),
     ),
   ];
-  final riffSize = 4 + outputChunks.fold<int>(
-    0,
-    (total, chunk) => total + 8 + chunk.length + (chunk.length.isOdd ? 1 : 0),
-  );
+  final riffSize =
+      4 +
+      outputChunks.fold<int>(
+        0,
+        (total, chunk) =>
+            total + 8 + chunk.length + (chunk.length.isOdd ? 1 : 0),
+      );
   if (riffSize > 0xffffffff) {
-    throw const FormatException('Updated WAV file exceeds the RIFF size limit.');
+    throw const FormatException(
+      'Updated WAV file exceeds the RIFF size limit.',
+    );
   }
   return _WavWritePlan(chunks: outputChunks, riffSize: riffSize);
 }
@@ -220,7 +225,8 @@ Uint8List _updatedInfoList({
   required int? year,
   required int? trackNumber,
 }) {
-  final output = BytesBuilder(copy: false)..add(const <int>[0x49, 0x4e, 0x46, 0x4f]);
+  final output = BytesBuilder(copy: false)
+    ..add(const <int>[0x49, 0x4e, 0x46, 0x4f]);
   for (final entry in retainedEntries) {
     _writeInfoEntry(output, entry.id, entry.payload);
   }
@@ -313,9 +319,13 @@ Future<void> _copyRange(
   await source.setPosition(start);
   var remaining = length;
   while (remaining > 0) {
-    final chunk = await source.read(remaining > 64 * 1024 ? 64 * 1024 : remaining);
+    final chunk = await source.read(
+      remaining > 64 * 1024 ? 64 * 1024 : remaining,
+    );
     if (chunk.isEmpty) {
-      throw const FileSystemException('WAV file ended unexpectedly while copying.');
+      throw const FileSystemException(
+        'WAV file ended unexpectedly while copying.',
+      );
     }
     await output.writeFrom(chunk);
     remaining -= chunk.length;

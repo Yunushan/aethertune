@@ -153,7 +153,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         actions: <Widget>[
           IconButton(
             tooltip: 'Save track share card',
-            onPressed: current == null ? null : () => _showTrackShareCard(current),
+            onPressed: current == null
+                ? null
+                : () => _showTrackShareCard(current),
             icon: const Icon(Icons.image_outlined),
           ),
           IconButton(
@@ -247,17 +249,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         : () => _addBookmark(library, current, player),
                     onManageBookmarks: savedTrack == null || bookmarks.isEmpty
                         ? null
-                        : () => _showBookmarkManager(
-                              library,
-                              current.id,
-                              player,
-                            ),
+                        : () =>
+                              _showBookmarkManager(library, current.id, player),
                     onRemoveBookmark: savedTrack == null
                         ? null
                         : (bookmark) => library.removeTrackBookmark(
-                              current.id,
-                              bookmark.id,
-                            ),
+                            current.id,
+                            bookmark.id,
+                          ),
                     onOpenQueue: widget.onOpenQueue,
                     onOpenLyrics: widget.onOpenLyrics,
                     onHorizontalDragStart: () => _horizontalDragDistance = 0,
@@ -268,7 +267,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     onArtworkPrevious: currentQueueIndex > 0
                         ? () => _runPlaybackAction(player.previous)
                         : null,
-                    onArtworkNext: currentQueueIndex >= 0 &&
+                    onArtworkNext:
+                        currentQueueIndex >= 0 &&
                             currentQueueIndex < player.queue.length - 1
                         ? () => _runPlaybackAction(player.next)
                         : null,
@@ -383,7 +383,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       if (!mounted) return;
       if (imported.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No matching SponsorBlock segments found.')),
+          const SnackBar(
+            content: Text('No matching SponsorBlock segments found.'),
+          ),
         );
         return;
       }
@@ -400,7 +402,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ListTile(
                     dense: true,
                     leading: const Icon(Icons.fast_forward_outlined),
-                    title: Text(segment.label.replaceFirst('SponsorBlock: ', '')),
+                    title: Text(
+                      segment.label.replaceFirst('SponsorBlock: ', ''),
+                    ),
                     subtitle: Text(
                       '${formatTrackChapterTimestamp(segment.start)} - ${formatTrackChapterTimestamp(segment.end)}',
                     ),
@@ -427,12 +431,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Imported ${updated?.skipSegments.length ?? 0} skip segment(s).')),
+        SnackBar(
+          content: Text(
+            'Imported ${updated?.skipSegments.length ?? 0} skip segment(s).',
+          ),
+        ),
       );
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not import SponsorBlock segments.')),
+          const SnackBar(
+            content: Text('Could not import SponsorBlock segments.'),
+          ),
         );
       }
     }
@@ -443,10 +453,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     Track track,
     PlayerController player,
   ) async {
-    final label = await _promptForBookmarkLabel(
-      context,
-      title: 'Add bookmark',
-    );
+    final label = await _promptForBookmarkLabel(context, title: 'Add bookmark');
     if (!mounted || label == null) {
       return;
     }
@@ -459,7 +466,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Bookmark saved at ${_formatPlaybackTime(bookmark.position)}.')),
+      SnackBar(
+        content: Text(
+          'Bookmark saved at ${_formatPlaybackTime(bookmark.position)}.',
+        ),
+      ),
     );
   }
 
@@ -515,14 +526,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           ),
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
           OutlinedButton.icon(
-            onPressed: () => _saveTrackShareCard(dialogContext, boundaryKey, track),
+            onPressed: () =>
+                _saveTrackShareCard(dialogContext, boundaryKey, track),
             icon: const Icon(Icons.save_alt_outlined),
             label: const Text('Save PNG'),
           ),
           FilledButton.icon(
-            onPressed: () => _shareTrackShareCard(dialogContext, boundaryKey, track),
+            onPressed: () =>
+                _shareTrackShareCard(dialogContext, boundaryKey, track),
             icon: const Icon(Icons.ios_share),
             label: const Text('Share'),
           ),
@@ -531,7 +547,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Future<void> _saveTrackShareCard(BuildContext context, GlobalKey boundaryKey, Track track) async {
+  Future<void> _saveTrackShareCard(
+    BuildContext context,
+    GlobalKey boundaryKey,
+    Track track,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final bytes = await captureTrackShareCardPng(boundaryKey);
@@ -554,7 +574,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
     } on Object catch (error) {
       if (context.mounted) {
-        messenger.showSnackBar(SnackBar(content: Text('Could not save track share card: $error')));
+        messenger.showSnackBar(
+          SnackBar(content: Text('Could not save track share card: $error')),
+        );
       }
     }
   }
@@ -623,9 +645,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       if (writeToFile == true) {
         try {
           await _writeChapterMarkers(updated);
-          message = 'Saved ${updated.chapters.length} chapter(s) and updated the file.';
+          message =
+              'Saved ${updated.chapters.length} chapter(s) and updated the file.';
         } on Object catch (error) {
-          message = 'Saved chapters locally, but could not update the file: $error';
+          message =
+              'Saved chapters locally, but could not update the file: $error';
         }
       }
     }
@@ -634,11 +658,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showTrackSkipSegmentsEditor(Track track) async {
@@ -682,8 +704,9 @@ class _PodcastTranscriptSheet extends StatefulWidget {
 }
 
 class _PodcastTranscriptSheetState extends State<_PodcastTranscriptSheet> {
-  late Future<PodcastTranscriptDocument> _transcript =
-      widget.loader(widget.transcriptUri);
+  late Future<PodcastTranscriptDocument> _transcript = widget.loader(
+    widget.transcriptUri,
+  );
 
   void _retry() {
     setState(() {
@@ -746,7 +769,9 @@ class _PodcastTranscriptSheetState extends State<_PodcastTranscriptSheet> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
-                            const Text('Could not load the podcast transcript.'),
+                            const Text(
+                              'Could not load the podcast transcript.',
+                            ),
                             const SizedBox(height: 12),
                             Wrap(
                               spacing: 8,
@@ -837,29 +862,29 @@ class _NowPlayingContent {
     required VoidCallback onHorizontalDragEnd,
     required VoidCallback? onArtworkPrevious,
     required VoidCallback? onArtworkNext,
-  })  : artwork = _NowPlayingArtwork(
-          track: track,
-          onHorizontalDragStart: onHorizontalDragStart,
-          onHorizontalDragUpdate: onHorizontalDragUpdate,
-          onHorizontalDragEnd: onHorizontalDragEnd,
-          onPrevious: onArtworkPrevious,
-          onNext: onArtworkNext,
-        ),
-        controls = _NowPlayingControls(
-          track: track,
-          isFavorite: isFavorite,
-          canFavorite: canFavorite,
-          player: player,
-          chapters: chapters,
-          skipSegments: skipSegments,
-          bookmarks: bookmarks,
-          onToggleFavorite: onToggleFavorite,
-          onAddBookmark: onAddBookmark,
-          onManageBookmarks: onManageBookmarks,
-          onRemoveBookmark: onRemoveBookmark,
-          onOpenQueue: onOpenQueue,
-          onOpenLyrics: onOpenLyrics,
-        );
+  }) : artwork = _NowPlayingArtwork(
+         track: track,
+         onHorizontalDragStart: onHorizontalDragStart,
+         onHorizontalDragUpdate: onHorizontalDragUpdate,
+         onHorizontalDragEnd: onHorizontalDragEnd,
+         onPrevious: onArtworkPrevious,
+         onNext: onArtworkNext,
+       ),
+       controls = _NowPlayingControls(
+         track: track,
+         isFavorite: isFavorite,
+         canFavorite: canFavorite,
+         player: player,
+         chapters: chapters,
+         skipSegments: skipSegments,
+         bookmarks: bookmarks,
+         onToggleFavorite: onToggleFavorite,
+         onAddBookmark: onAddBookmark,
+         onManageBookmarks: onManageBookmarks,
+         onRemoveBookmark: onRemoveBookmark,
+         onOpenQueue: onOpenQueue,
+         onOpenLyrics: onOpenLyrics,
+       );
 
   final Widget artwork;
   final Widget controls;
@@ -872,18 +897,13 @@ Future<String?> _promptForBookmarkLabel(
 }) async {
   return showDialog<String>(
     context: context,
-    builder: (_) => _BookmarkLabelDialog(
-      title: title,
-      initialValue: initialValue,
-    ),
+    builder: (_) =>
+        _BookmarkLabelDialog(title: title, initialValue: initialValue),
   );
 }
 
 class _BookmarkLabelDialog extends StatefulWidget {
-  const _BookmarkLabelDialog({
-    required this.title,
-    required this.initialValue,
-  });
+  const _BookmarkLabelDialog({required this.title, required this.initialValue});
 
   final String title;
   final String initialValue;
@@ -913,9 +933,7 @@ class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
         autofocus: true,
         maxLength: TrackBookmark.maxLabelLength,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
-          labelText: 'Label (optional)',
-        ),
+        decoration: const InputDecoration(labelText: 'Label (optional)'),
       ),
       actions: <Widget>[
         TextButton(
@@ -998,7 +1016,10 @@ class _BookmarkFolderDialogState extends State<_BookmarkFolderDialog> {
           ),
           if (widget.folders.isNotEmpty) ...<Widget>[
             const SizedBox(height: 8),
-            Text('Existing folders', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              'Existing folders',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: 4),
             Wrap(
               spacing: 8,
@@ -1045,7 +1066,10 @@ class _BookmarkManagerSheet extends StatefulWidget {
   final LibraryStore library;
   final String trackId;
   final PlayerController player;
-  final Future<void> Function(TrackBookmark bookmark, BuildContext dialogContext)
+  final Future<void> Function(
+    TrackBookmark bookmark,
+    BuildContext dialogContext,
+  )
   onRename;
 
   @override
@@ -1082,7 +1106,11 @@ class _BookmarkManagerSheetState extends State<_BookmarkManagerSheet> {
     if (!mounted || folder == null) {
       return;
     }
-    await widget.library.updateTrackBookmarksFolder(widget.trackId, ids, folder);
+    await widget.library.updateTrackBookmarksFolder(
+      widget.trackId,
+      ids,
+      folder,
+    );
     if (mounted) {
       setState(() => _selectedIds.removeAll(ids));
     }
@@ -1097,7 +1125,9 @@ class _BookmarkManagerSheetState extends State<_BookmarkManagerSheet> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Remove $count bookmarks?'),
-        content: const Text('This removes the selected timestamps from this track.'),
+        content: const Text(
+          'This removes the selected timestamps from this track.',
+        ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -1229,7 +1259,9 @@ class _BookmarkManagerSheetState extends State<_BookmarkManagerSheet> {
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: Checkbox(
-                                key: Key('bookmark-manager-select-${bookmark.id}'),
+                                key: Key(
+                                  'bookmark-manager-select-${bookmark.id}',
+                                ),
                                 value: selectedIds.contains(bookmark.id),
                                 onChanged: (selected) => _toggleSelection(
                                   bookmark.id,
@@ -1249,10 +1281,9 @@ class _BookmarkManagerSheetState extends State<_BookmarkManagerSheet> {
                                   IconButton(
                                     tooltip: 'Move bookmark',
                                     onPressed: () => unawaited(
-                                      _moveBookmarks(
-                                        <String>[bookmark.id],
-                                        initialFolder: bookmark.folder,
-                                      ),
+                                      _moveBookmarks(<String>[
+                                        bookmark.id,
+                                      ], initialFolder: bookmark.folder),
                                     ),
                                     icon: const Icon(Icons.folder_outlined),
                                   ),
@@ -1435,7 +1466,9 @@ class _NowPlayingControls extends StatelessWidget {
               ),
               IconButton(
                 tooltip: canFavorite
-                    ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
+                    ? (isFavorite
+                          ? 'Remove from favorites'
+                          : 'Add to favorites')
                     : 'Save this track to the library to favorite it',
                 onPressed: onToggleFavorite,
                 icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
@@ -1467,9 +1500,9 @@ class _NowPlayingControls extends StatelessWidget {
                   Text(
                     player.isABRepeatActive
                         ? 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
-                            'B ${_formatPlaybackTime(player.aBRepeatEnd!)}'
+                              'B ${_formatPlaybackTime(player.aBRepeatEnd!)}'
                         : 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
-                            'Choose B',
+                              'Choose B',
                     style: Theme.of(context).textTheme.labelMedium,
                   ),
                 ],
@@ -1517,9 +1550,12 @@ class _NowPlayingControls extends StatelessWidget {
             children: <Widget>[
               IconButton(
                 key: const Key('now-playing-shuffle'),
-                tooltip: player.shuffleEnabled ? 'Disable shuffle' : 'Enable shuffle',
+                tooltip: player.shuffleEnabled
+                    ? 'Disable shuffle'
+                    : 'Enable shuffle',
                 isSelected: player.shuffleEnabled,
-                onPressed: () => player.setShuffleEnabled(!player.shuffleEnabled),
+                onPressed: () =>
+                    player.setShuffleEnabled(!player.shuffleEnabled),
                 icon: const Icon(Icons.shuffle),
               ),
               IconButton(
@@ -1532,7 +1568,8 @@ class _NowPlayingControls extends StatelessWidget {
               ),
               IconButton(
                 key: const Key('now-playing-skip-backward'),
-                tooltip: 'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
+                tooltip:
+                    'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
                 onPressed: player.duration > Duration.zero
                     ? player.skipBackward
                     : null,
@@ -1543,15 +1580,14 @@ class _NowPlayingControls extends StatelessWidget {
                 tooltip: player.isPlaying ? 'Pause' : 'Play',
                 iconSize: 40,
                 padding: const EdgeInsets.all(18),
-                onPressed: () => _runPlaybackAction(
-                  context,
-                  player.togglePlayPause,
-                ),
+                onPressed: () =>
+                    _runPlaybackAction(context, player.togglePlayPause),
                 icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
               ),
               IconButton(
                 key: const Key('now-playing-skip-forward'),
-                tooltip: 'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
+                tooltip:
+                    'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
                 onPressed: player.duration > Duration.zero
                     ? player.skipForward
                     : null,
@@ -1569,9 +1605,12 @@ class _NowPlayingControls extends StatelessWidget {
                 key: const Key('now-playing-repeat'),
                 tooltip: _repeatTooltip(player.loopMode),
                 isSelected: player.loopMode != LoopMode.off,
-                onPressed: () => player.setLoopMode(_nextLoopMode(player.loopMode)),
+                onPressed: () =>
+                    player.setLoopMode(_nextLoopMode(player.loopMode)),
                 icon: Icon(
-                  player.loopMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
+                  player.loopMode == LoopMode.one
+                      ? Icons.repeat_one
+                      : Icons.repeat,
                 ),
               ),
             ],
@@ -1604,7 +1643,9 @@ class _NowPlayingControls extends StatelessWidget {
                           if (!player.setABRepeatEnd()) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Choose a point at least half a second after A.'),
+                                content: Text(
+                                  'Choose a point at least half a second after A.',
+                                ),
                               ),
                             );
                           }
@@ -1940,11 +1981,13 @@ class _TrackPlaybackSpeedMenu extends StatelessWidget {
         await player.setTemporaryPlaybackSpeed(speed);
       },
       itemBuilder: (context) => <PopupMenuEntry<_TrackPlaybackSpeedSelection>>[
-          CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
-            key: const Key('now-playing-track-speed-default'),
-            value: const _TrackPlaybackSpeedSelection(),
+        CheckedPopupMenuItem<_TrackPlaybackSpeedSelection>(
+          key: const Key('now-playing-track-speed-default'),
+          value: const _TrackPlaybackSpeedSelection(),
           checked: override == null,
-          child: Text('Use default (${_formatPlaybackSpeed(player.defaultPlaybackSpeed)})'),
+          child: Text(
+            'Use default (${_formatPlaybackSpeed(player.defaultPlaybackSpeed)})',
+          ),
         ),
         const PopupMenuDivider(),
         for (final speed in PlayerController.supportedPlaybackSpeeds)
@@ -1989,25 +2032,24 @@ class _TrackPlaybackPitchMenu extends StatelessWidget {
         }
         await player.setTrackPlaybackPitch(track.id, pitch);
       },
-      itemBuilder: (context) =>
-          <PopupMenuEntry<_TrackPlaybackPitchSelection>>[
-            CheckedPopupMenuItem<_TrackPlaybackPitchSelection>(
-              key: const Key('now-playing-track-pitch-default'),
-              value: const _TrackPlaybackPitchSelection(),
-              checked: override == null,
-              child: Text(
-                'Use default (${_formatPlaybackSpeed(player.defaultPlaybackPitch)})',
-              ),
-            ),
-            const PopupMenuDivider(),
-            for (final pitch in PlayerController.supportedPlaybackPitches)
-              CheckedPopupMenuItem<_TrackPlaybackPitchSelection>(
-                key: Key('now-playing-track-pitch-$pitch'),
-                value: _TrackPlaybackPitchSelection(pitch),
-                checked: override == pitch,
-                child: Text(_formatPlaybackSpeed(pitch)),
-              ),
-          ],
+      itemBuilder: (context) => <PopupMenuEntry<_TrackPlaybackPitchSelection>>[
+        CheckedPopupMenuItem<_TrackPlaybackPitchSelection>(
+          key: const Key('now-playing-track-pitch-default'),
+          value: const _TrackPlaybackPitchSelection(),
+          checked: override == null,
+          child: Text(
+            'Use default (${_formatPlaybackSpeed(player.defaultPlaybackPitch)})',
+          ),
+        ),
+        const PopupMenuDivider(),
+        for (final pitch in PlayerController.supportedPlaybackPitches)
+          CheckedPopupMenuItem<_TrackPlaybackPitchSelection>(
+            key: Key('now-playing-track-pitch-$pitch'),
+            value: _TrackPlaybackPitchSelection(pitch),
+            checked: override == pitch,
+            child: Text(_formatPlaybackSpeed(pitch)),
+          ),
+      ],
     );
   }
 }
@@ -2100,10 +2142,7 @@ class _ChapterMarkers extends StatelessWidget {
   }
 }
 
-TrackChapter? _activeChapter(
-  List<TrackChapter> chapters,
-  Duration position,
-) {
+TrackChapter? _activeChapter(List<TrackChapter> chapters, Duration position) {
   TrackChapter? active;
   for (final chapter in chapters) {
     if (chapter.start > position) {
@@ -2138,7 +2177,9 @@ class _PlaybackProgress extends StatelessWidget {
         final maxMilliseconds = duration.inMilliseconds <= 0
             ? 1
             : duration.inMilliseconds;
-        final value = position.inMilliseconds.clamp(0, maxMilliseconds).toDouble();
+        final value = position.inMilliseconds
+            .clamp(0, maxMilliseconds)
+            .toDouble();
 
         return Column(
           children: <Widget>[
@@ -2149,23 +2190,21 @@ class _PlaybackProgress extends StatelessWidget {
               semanticFormatterCallback: (value) =>
                   '${_formatPlaybackTime(Duration(milliseconds: value.round()))} of ${_formatPlaybackTime(duration)}',
               onChanged: duration > Duration.zero
-                  ? (value) => player.seek(
-                        Duration(milliseconds: value.round()),
-                      )
+                  ? (value) =>
+                        player.seek(Duration(milliseconds: value.round()))
                   : null,
             ),
             if (duration > Duration.zero && chapters.isNotEmpty)
-              _ChapterTimelineMarkers(
-                chapters: chapters,
-                duration: duration,
-              ),
+              _ChapterTimelineMarkers(chapters: chapters, duration: duration),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   Text(_formatPlaybackTime(position)),
-                  Text('-${_formatPlaybackTime(_remaining(duration, position))}'),
+                  Text(
+                    '-${_formatPlaybackTime(_remaining(duration, position))}',
+                  ),
                 ],
               ),
             ),
@@ -2208,7 +2247,8 @@ class _ChapterTimelineMarkers extends StatelessWidget {
                       constraints.maxWidth,
                     ),
                     child: Semantics(
-                      label: '${chapter.title} at '
+                      label:
+                          '${chapter.title} at '
                           '${formatTrackChapterTimestamp(chapter.start)}',
                       child: Container(
                         key: Key(
@@ -2372,9 +2412,9 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Exported skip segments.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Exported skip segments.')));
     } on FormatException catch (error) {
       if (mounted) {
         setState(() => _errorText = error.message);
@@ -2513,10 +2553,7 @@ class _TrackChaptersDialogState extends State<_TrackChaptersDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
-          onPressed: _controller.clear,
-          child: const Text('Clear'),
-        ),
+        TextButton(onPressed: _controller.clear, child: const Text('Clear')),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),

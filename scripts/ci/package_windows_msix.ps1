@@ -5,7 +5,9 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$OutputPath,
   [Parameter(Mandatory = $true)]
-  [string]$Version
+  [string]$Version,
+  [string]$SigningCertificatePath,
+  [string]$SigningCertificatePassword
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,6 +27,25 @@ function Find-MakeAppx {
   )
   if ($candidates.Count -eq 0) {
     throw 'MakeAppx.exe from the Windows SDK is required to build an MSIX package.'
+  }
+  return $candidates[0].FullName
+}
+
+function Find-SignTool {
+  $command = Get-Command signtool.exe -ErrorAction SilentlyContinue
+  if ($null -ne $command) {
+    return $command.Source
+  }
+
+  $kitsRoot = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits\10\bin'
+  $candidates = @(
+    Get-ChildItem -LiteralPath $kitsRoot -Filter signtool.exe -Recurse `
+      -ErrorAction SilentlyContinue |
+      Where-Object { $_.DirectoryName -match '\\x64$' } |
+      Sort-Object FullName -Descending
+  )
+  if ($candidates.Count -eq 0) {
+    throw 'signtool.exe from the Windows SDK is required for signed MSIX packages.'
   }
   return $candidates[0].FullName
 }
@@ -79,6 +100,28 @@ if (-not (Test-Path -LiteralPath $assetManifestPath -PathType Leaf)) {
 }
 
 $msixVersion = Get-MsixVersion $Version
+if ([string]::IsNullOrWhiteSpace($SigningCertificatePath) -xor
+    [string]::IsNullOrWhiteSpace($SigningCertificatePassword)) {
+  throw 'SigningCertificatePath and SigningCertificatePassword must be provided together.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SigningCertificatePath) -and
+    -not (Test-Path -LiteralPath $SigningCertificatePath -PathType Leaf)) {
+  throw "Signing certificate does not exist: $SigningCertificatePath"
+}
+$publisher = 'CN=AetherTune'
+if (-not [string]::IsNullOrWhiteSpace($SigningCertificatePath)) {
+  $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+    $SigningCertificatePath,
+    $SigningCertificatePassword,
+    [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+  )
+  try {
+    $publisher = $certificate.Subject
+  } finally {
+    $certificate.Dispose()
+  }
+}
+$publisherXml = [System.Security.SecurityElement]::Escape($publisher)
 $resolvedOutputPath = [System.IO.Path]::GetFullPath($OutputPath)
 $outputDirectory = Split-Path -Parent $resolvedOutputPath
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
@@ -100,7 +143,7 @@ try {
   @"
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap rescap">
-  <Identity Name="AetherTune" Publisher="CN=AetherTune" Version="$msixVersion" ProcessorArchitecture="x64" />
+  <Identity Name="AetherTune" Publisher="$publisherXml" Version="$msixVersion" ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>AetherTune</DisplayName>
     <PublisherDisplayName>AetherTune Contributors</PublisherDisplayName>
@@ -130,6 +173,18 @@ try {
   & $makeAppx pack /d $stagingRoot /p $resolvedOutputPath /o
   if ($LASTEXITCODE -ne 0) {
     throw "MakeAppx.exe failed with exit code $LASTEXITCODE."
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($SigningCertificatePath)) {
+    $signTool = Find-SignTool
+    & $signTool sign /fd SHA256 /a /f $SigningCertificatePath /p $SigningCertificatePassword $resolvedOutputPath
+    if ($LASTEXITCODE -ne 0) {
+      throw "signtool.exe failed with exit code $LASTEXITCODE."
+    }
+    & $signTool verify /pa /all $resolvedOutputPath
+    if ($LASTEXITCODE -ne 0) {
+      throw 'signtool.exe could not verify the MSIX signature.'
+    }
   }
 
   Add-Type -AssemblyName System.IO.Compression.FileSystem

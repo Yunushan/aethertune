@@ -22,10 +22,10 @@ void main() {
     expect(requested?.queryParameters['query'], 'electronic');
     expect(requested?.queryParameters['offset'], '0');
     expect(requested?.queryParameters['limit'], '2');
-    expect(
-      page.tracks.map((track) => track.id),
-      <String>['audius:track_1', 'audius:track_2'],
-    );
+    expect(page.tracks.map((track) => track.id), <String>[
+      'audius:track_1',
+      'audius:track_2',
+    ]);
     expect(page.nextCursor, '2');
   });
 
@@ -76,7 +76,10 @@ void main() {
     expect(requests.first.queryParameters['limit'], '4');
     expect(albums.collections.single.title, 'Open Album');
     expect(albums.collections.single.itemCount, 1);
-    expect(albums.collections.single.artworkId, 'https://art.example.test/album.jpg');
+    expect(
+      albums.collections.single.artworkId,
+      'https://art.example.test/album.jpg',
+    );
     expect(albums.hasMore, isTrue);
     expect(albums.nextOffset, 6);
     expect(playlists.collections.single.title, 'Open Playlist');
@@ -84,55 +87,61 @@ void main() {
     expect(playlists.collections.single.itemCount, 2);
   });
 
-  test('searches bounded public Audius artists and named collections', () async {
-    final requests = <Uri>[];
-    final provider = AudiusProvider(
-      loader: (uri) async {
-        requests.add(uri);
-        if (uri.path == '/v1/users/search') {
-          return '''
+  test(
+    'searches bounded public Audius artists and named collections',
+    () async {
+      final requests = <Uri>[];
+      final provider = AudiusProvider(
+        loader: (uri) async {
+          requests.add(uri);
+          if (uri.path == '/v1/users/search') {
+            return '''
             {"data":[
               {"id":"artist_1","name":"Open Artist","handle":"open-artist","track_count":12,"profile_picture":{"480x480":"https://art.example.test/artist.jpg"}},
               {"id":"inactive","name":"Inactive","is_deactivated":true}
             ]}
           ''';
-        }
-        return '''
+          }
+          return '''
           {"data":[
             {"id":"album_1","playlist_name":"Open Album","is_album":true},
             {"id":"playlist_1","playlist_name":"Open Playlist","is_album":false}
           ]}
         ''';
-      },
-    );
+        },
+      );
 
-    final artists = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.artist,
-      'open',
-      offset: 3,
-      limit: 2,
-    );
-    final playlists = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.playlist,
-      'open',
-      limit: 2,
-    );
+      final artists = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.artist,
+        'open',
+        offset: 3,
+        limit: 2,
+      );
+      final playlists = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.playlist,
+        'open',
+        limit: 2,
+      );
 
-    expect(requests.first.path, '/v1/users/search');
-    expect(requests.first.queryParameters, <String, String>{
-      'query': 'open',
-      'offset': '3',
-      'limit': '2',
-    });
-    expect(artists.collections.single.title, 'Open Artist');
-    expect(artists.collections.single.subtitle, '@open-artist');
-    expect(artists.collections.single.itemCount, 12);
-    expect(artists.collections.single.artworkId, 'https://art.example.test/artist.jpg');
-    expect(artists.hasMore, isTrue);
-    expect(artists.nextOffset, 5);
-    expect(requests.last.path, '/v1/playlists/search');
-    expect(playlists.collections.single.title, 'Open Playlist');
-  });
+      expect(requests.first.path, '/v1/users/search');
+      expect(requests.first.queryParameters, <String, String>{
+        'query': 'open',
+        'offset': '3',
+        'limit': '2',
+      });
+      expect(artists.collections.single.title, 'Open Artist');
+      expect(artists.collections.single.subtitle, '@open-artist');
+      expect(artists.collections.single.itemCount, 12);
+      expect(
+        artists.collections.single.artworkId,
+        'https://art.example.test/artist.jpg',
+      );
+      expect(artists.hasMore, isTrue);
+      expect(artists.nextOffset, 5);
+      expect(requests.last.path, '/v1/playlists/search');
+      expect(playlists.collections.single.title, 'Open Playlist');
+    },
+  );
 
   test('suggests bounded public Audius artists and collections', () async {
     final requests = <Uri>[];
@@ -213,34 +222,36 @@ void main() {
     expect(detail.tracks.single.album, 'Open Artist');
   });
 
-  test('loads a bounded public collection detail and filters unavailable tracks',
-      () async {
-    Uri? requested;
-    final provider = AudiusProvider(
-      loader: (uri) async {
-        requested = uri;
-        return '''
+  test(
+    'loads a bounded public collection detail and filters unavailable tracks',
+    () async {
+      Uri? requested;
+      final provider = AudiusProvider(
+        loader: (uri) async {
+          requested = uri;
+          return '''
           {"data":[
             {"id":"public","title":"Public track"},
             {"id":"gated","title":"Gated track","is_stream_gated":true}
           ]}
         ''';
-      },
-    );
+        },
+      );
 
-    final detail = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'playlist_1',
-        title: 'Open Playlist',
-        kind: MusicCatalogCollectionKind.playlist,
-      ),
-    );
+      final detail = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'playlist_1',
+          title: 'Open Playlist',
+          kind: MusicCatalogCollectionKind.playlist,
+        ),
+      );
 
-    expect(requested?.path, '/v1/playlists/playlist_1/tracks');
-    expect(requested?.queryParameters['limit'], '100');
-    expect(detail.tracks, hasLength(1));
-    expect(detail.tracks.single.album, 'Open Playlist');
-  });
+      expect(requested?.path, '/v1/playlists/playlist_1/tracks');
+      expect(requested?.queryParameters['limit'], '100');
+      expect(detail.tracks, hasLength(1));
+      expect(detail.tracks.single.album, 'Open Playlist');
+    },
+  );
 
   test('loads only validated https Audius collection artwork', () async {
     Uri? requested;
@@ -278,7 +289,10 @@ void main() {
     expect(tracks, hasLength(2));
     expect(tracks.first.artist, 'Artist');
     expect(tracks.first.duration, const Duration(seconds: 120));
-    expect(tracks.first.artworkUri, Uri.parse('https://art.example.test/cover.jpg'));
+    expect(
+      tracks.first.artworkUri,
+      Uri.parse('https://art.example.test/cover.jpg'),
+    );
     expect(tracks[1].artworkUri, isNull);
     expect(
       () => parseAudiusTracksResponse('{"data":{}}'),
@@ -302,25 +316,27 @@ void main() {
     expect(page.nextCursor, '2');
   });
 
-  test('resolves only valid Audius track IDs through the documented stream path',
-      () async {
-    final provider = AudiusProvider();
-    final track = parseAudiusTracksResponse(
-      '{"data":[{"id":"D7KyD","title":"Track"}]}',
-    ).single;
+  test(
+    'resolves only valid Audius track IDs through the documented stream path',
+    () async {
+      final provider = AudiusProvider();
+      final track = parseAudiusTracksResponse(
+        '{"data":[{"id":"D7KyD","title":"Track"}]}',
+      ).single;
 
-    final stream = await provider.resolveStream(track);
+      final stream = await provider.resolveStream(track);
 
-    expect(stream, Uri.parse('https://api.audius.co/v1/tracks/D7KyD/stream'));
-    expect(
-      await provider.resolveStream(track.copyWith(sourceId: 'local')),
-      isNull,
-    );
-    expect(
-      await provider.resolveStream(track.copyWith(externalId: 'bad/id')),
-      isNull,
-    );
-  });
+      expect(stream, Uri.parse('https://api.audius.co/v1/tracks/D7KyD/stream'));
+      expect(
+        await provider.resolveStream(track.copyWith(sourceId: 'local')),
+        isNull,
+      );
+      expect(
+        await provider.resolveStream(track.copyWith(externalId: 'bad/id')),
+        isNull,
+      );
+    },
+  );
 }
 
 String _response(List<String> ids) {

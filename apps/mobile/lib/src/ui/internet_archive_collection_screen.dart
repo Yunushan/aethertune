@@ -87,7 +87,10 @@ class _InternetArchiveCollectionScreenState
                 icon: const Icon(Icons.refresh),
               ),
             ),
-          if (!_loading && _error == null && _items.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _items.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.archive_outlined),
               title: Text('No playable archive items found'),
@@ -217,8 +220,9 @@ class _InternetArchiveCollectionScreenState
   }
 
   String _itemSubtitle(InternetArchiveItem item) {
-    final playableFileCount =
-        item.files.where((file) => file.isPlayableAudio).length;
+    final playableFileCount = item.files
+        .where((file) => file.isPlayableAudio)
+        .length;
     final parts = <String>[
       if (item.creator.isNotEmpty) item.creator,
       if (item.year.isNotEmpty) item.year,

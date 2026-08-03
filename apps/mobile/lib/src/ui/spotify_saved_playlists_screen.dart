@@ -61,7 +61,10 @@ final class _SpotifySavedPlaylistsScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _playlists.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _playlists.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.queue_music_outlined),
               title: Text('No playlists found'),
@@ -267,7 +270,10 @@ final class _SpotifyPlaylistTracksScreenState
               enabled: !_loading && !offlineModeEnabled,
               onRetry: () => unawaited(_load(reset: true)),
             ),
-          if (!_loading && _error == null && _tracks.isEmpty && !offlineModeEnabled)
+          if (!_loading &&
+              _error == null &&
+              _tracks.isEmpty &&
+              !offlineModeEnabled)
             const ListTile(
               leading: Icon(Icons.music_note_outlined),
               title: Text('No playlist tracks found'),
@@ -355,9 +361,7 @@ final class _SpotifyPlaylistTracksScreenState
       if (!mounted) {
         return;
       }
-      final tracks = reset
-          ? page.tracks
-          : <Track>[..._tracks, ...page.tracks];
+      final tracks = reset ? page.tracks : <Track>[..._tracks, ...page.tracks];
       setState(() {
         _tracks = tracks;
         _nextOffset = page.offset + page.tracks.length;

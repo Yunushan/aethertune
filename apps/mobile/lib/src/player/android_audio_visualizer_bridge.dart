@@ -22,10 +22,9 @@ class AndroidAudioVisualizerBridge {
     if (audioSessionId <= 0) {
       return false;
     }
-    return await _methods.invokeMethod<bool>(
-          'start',
-          <String, Object>{'audioSessionId': audioSessionId},
-        ) ??
+    return await _methods.invokeMethod<bool>('start', <String, Object>{
+          'audioSessionId': audioSessionId,
+        }) ??
         false;
   }
 

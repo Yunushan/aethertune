@@ -43,7 +43,10 @@ double? parseEbuR128GainDb(String? value) {
 
 /// Returns a valid linear ReplayGain peak amplitude.
 double? sanitizeReplayGainPeak(double? value) {
-  if (value == null || !value.isFinite || value <= 0 || value > maxReplayGainPeak) {
+  if (value == null ||
+      !value.isFinite ||
+      value <= 0 ||
+      value > maxReplayGainPeak) {
     return null;
   }
   return value;
@@ -51,8 +54,9 @@ double? sanitizeReplayGainPeak(double? value) {
 
 /// Parses a native ReplayGain peak value such as `0.978642`.
 double? parseReplayGainPeak(String? value) {
-  final match = RegExp(r'^[+]?(?:\d+(?:\.\d+)?|\.\d+)$')
-      .firstMatch(value?.trim() ?? '');
+  final match = RegExp(
+    r'^[+]?(?:\d+(?:\.\d+)?|\.\d+)$',
+  ).firstMatch(value?.trim() ?? '');
   return sanitizeReplayGainPeak(double.tryParse(match?.group(0) ?? ''));
 }
 

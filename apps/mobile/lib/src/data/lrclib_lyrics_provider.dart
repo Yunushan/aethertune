@@ -7,10 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/lyrics_provider.dart';
 import '../domain/music_source_provider.dart';
 
-typedef LrcLibResponseLoader = Future<String> Function(
-  Uri uri,
-  Map<String, String> headers,
-);
+typedef LrcLibResponseLoader =
+    Future<String> Function(Uri uri, Map<String, String> headers);
 
 const defaultLyricsSearchCacheLifetime = Duration(days: 30);
 const supportedLyricsSearchCacheLifetimes = <Duration>[
@@ -22,10 +20,7 @@ const supportedLyricsSearchCacheLifetimes = <Duration>[
 ];
 
 class LrcLibCachedSearch {
-  const LrcLibCachedSearch({
-    required this.responseBody,
-    required this.savedAt,
-  });
+  const LrcLibCachedSearch({required this.responseBody, required this.savedAt});
 
   final String responseBody;
   final DateTime savedAt;
@@ -38,7 +33,8 @@ class LyricsSearchCacheSettingsStore {
   Future<Duration> loadRetention() async {
     final prefs = await SharedPreferences.getInstance();
     final retention = Duration(
-      days: prefs.getInt(_retentionDaysKey) ??
+      days:
+          prefs.getInt(_retentionDaysKey) ??
           defaultLyricsSearchCacheLifetime.inDays,
     );
     return supportedLyricsSearchCacheLifetimes.contains(retention)
@@ -119,18 +115,19 @@ class SharedPreferencesLrcLibSearchCache implements LrcLibSearchCache {
   }
 }
 
-final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvider {
+final class LrcLibLyricsProvider
+    implements LyricsProvider, OfflineLyricsProvider {
   LrcLibLyricsProvider({
     Uri? baseUri,
     LrcLibResponseLoader? responseLoader,
     LrcLibSearchCache? searchCache,
     DateTime Function()? clock,
     Duration cacheLifetime = defaultLyricsSearchCacheLifetime,
-  })  : baseUri = baseUri ?? Uri.parse('https://lrclib.net'),
-        _responseLoader = responseLoader ?? _loadLrcLibResponse,
-        _searchCache = searchCache ?? SharedPreferencesLrcLibSearchCache(),
-        _clock = clock ?? DateTime.now,
-        _cacheLifetime = _validateCacheLifetime(cacheLifetime);
+  }) : baseUri = baseUri ?? Uri.parse('https://lrclib.net'),
+       _responseLoader = responseLoader ?? _loadLrcLibResponse,
+       _searchCache = searchCache ?? SharedPreferencesLrcLibSearchCache(),
+       _clock = clock ?? DateTime.now,
+       _cacheLifetime = _validateCacheLifetime(cacheLifetime);
 
   static const userAgent =
       'AetherTune/0.1.0 (+https://github.com/Yunushan/aethertune)';
@@ -159,25 +156,23 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
 
   @override
   ProviderPrivacyDisclosure get disclosure => ProviderPrivacyDisclosure(
-        networkDomains: baseUri.host.isEmpty
-            ? const <String>[]
-            : <String>[baseUri.host],
-        dataSent: const <String>[
-          'lyrics search terms derived from track title, artist, and album',
-        ],
-        cachesMetadata: true,
-      );
+    networkDomains: baseUri.host.isEmpty
+        ? const <String>[]
+        : <String>[baseUri.host],
+    dataSent: const <String>[
+      'lyrics search terms derived from track title, artist, and album',
+    ],
+    cachesMetadata: true,
+  );
 
   @override
   Future<List<LyricsSearchResult>> search(LyricsSearchQuery query) async {
     _validateQuery(query);
-    final response = await _responseLoader(
-      _searchUri(query),
-      const <String, String>{
-        HttpHeaders.acceptHeader: 'application/json',
-        HttpHeaders.userAgentHeader: userAgent,
-      },
-    );
+    final response =
+        await _responseLoader(_searchUri(query), const <String, String>{
+          HttpHeaders.acceptHeader: 'application/json',
+          HttpHeaders.userAgentHeader: userAgent,
+        });
     final results = _parseAndRank(response, query);
     await _searchCache.write(
       _cacheKey(query),
@@ -187,11 +182,15 @@ final class LrcLibLyricsProvider implements LyricsProvider, OfflineLyricsProvide
   }
 
   @override
-  Future<List<LyricsSearchResult>> searchOffline(LyricsSearchQuery query) async {
+  Future<List<LyricsSearchResult>> searchOffline(
+    LyricsSearchQuery query,
+  ) async {
     _validateQuery(query);
     final cached = await _searchCache.read(_cacheKey(query));
     if (cached == null) {
-      throw StateError('No cached lyrics results are available for this search.');
+      throw StateError(
+        'No cached lyrics results are available for this search.',
+      );
     }
     if (_isExpired(cached)) {
       throw StateError(
@@ -316,10 +315,7 @@ List<LyricsSearchResult> parseLrcLibSearchResults(
           record['artistName'],
           fallback: 'Unknown Artist',
         ),
-        albumName: _jsonString(
-          record['albumName'],
-          fallback: 'Unknown Album',
-        ),
+        albumName: _jsonString(record['albumName'], fallback: 'Unknown Album'),
         duration: _jsonDuration(record['duration']),
         instrumental: record['instrumental'] as bool? ?? false,
         plainLyrics: _jsonString(record['plainLyrics']),
@@ -338,9 +334,10 @@ List<LyricsSearchResult> rankLrcLibSearchResults(
 ) {
   final ranked = List<LyricsSearchResult>.from(results);
   ranked.sort((left, right) {
-    final byScore = _matchScore(right, query).compareTo(
-      _matchScore(left, query),
-    );
+    final byScore = _matchScore(
+      right,
+      query,
+    ).compareTo(_matchScore(left, query));
     if (byScore != 0) {
       return byScore;
     }
@@ -358,13 +355,28 @@ List<LyricsSearchResult> rankLrcLibSearchResults(
 
 int _matchScore(LyricsSearchResult result, LyricsSearchQuery query) {
   var score = 0;
-  score += _fieldScore(result.trackName, query.trackName, exact: 100, partial: 30);
-  score += _fieldScore(result.artistName, query.artistName, exact: 60, partial: 20);
-  score += _fieldScore(result.albumName, query.albumName, exact: 20, partial: 8);
+  score += _fieldScore(
+    result.trackName,
+    query.trackName,
+    exact: 100,
+    partial: 30,
+  );
+  score += _fieldScore(
+    result.artistName,
+    query.artistName,
+    exact: 60,
+    partial: 20,
+  );
+  score += _fieldScore(
+    result.albumName,
+    query.albumName,
+    exact: 20,
+    partial: 8,
+  );
 
   if (query.duration > Duration.zero && result.duration > Duration.zero) {
-    final difference =
-        (query.duration.inSeconds - result.duration.inSeconds).abs();
+    final difference = (query.duration.inSeconds - result.duration.inSeconds)
+        .abs();
     if (difference <= 2) {
       score += 40;
     } else if (difference <= 5) {
@@ -403,10 +415,7 @@ int _fieldScore(
 }
 
 String _normalizeMatchText(String value) {
-  return value
-      .toLowerCase()
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+  return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 String _knownMetadata(String value, String unknownValue) {
@@ -453,13 +462,12 @@ Uri _lyricsRecordUri(Uri baseUri, String id) {
   );
 }
 
-Future<String> _loadLrcLibResponse(
-  Uri uri,
-  Map<String, String> headers,
-) async {
+Future<String> _loadLrcLibResponse(Uri uri, Map<String, String> headers) async {
   final client = HttpClient();
   try {
-    final request = await client.getUrl(uri).timeout(const Duration(seconds: 15));
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 15));
     for (final entry in headers.entries) {
       request.headers.set(entry.key, entry.value);
     }

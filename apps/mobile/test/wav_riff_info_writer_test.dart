@@ -10,7 +10,9 @@ void main() {
   late Directory temporaryDirectory;
 
   setUp(() async {
-    temporaryDirectory = await Directory.systemTemp.createTemp('aethertune-wav-');
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'aethertune-wav-',
+    );
   });
 
   tearDown(() async {
@@ -48,34 +50,36 @@ void main() {
     expect(_dataPayload(await file.readAsBytes()), <int>[1, 2, 3]);
   });
 
-  test('preserves non-INFO chunks, custom INFO fields, and data bytes',
-      () async {
-    final file = File('${temporaryDirectory.path}/preserved.wav');
-    final junkPayload = <int>[0xde, 0xad, 0xbe, 0xef];
-    await file.writeAsBytes(
-      _wavFile(
-        audio: <int>[9, 8, 7],
-        junkPayload: junkPayload,
-        infoEntries: <_InfoEntry>[
-          _InfoEntry('INAM', _latin1NullTerminated('Old title')),
-          _InfoEntry('ICMT', _latin1NullTerminated('custom comment')),
-        ],
-      ),
-    );
+  test(
+    'preserves non-INFO chunks, custom INFO fields, and data bytes',
+    () async {
+      final file = File('${temporaryDirectory.path}/preserved.wav');
+      final junkPayload = <int>[0xde, 0xad, 0xbe, 0xef];
+      await file.writeAsBytes(
+        _wavFile(
+          audio: <int>[9, 8, 7],
+          junkPayload: junkPayload,
+          infoEntries: <_InfoEntry>[
+            _InfoEntry('INAM', _latin1NullTerminated('Old title')),
+            _InfoEntry('ICMT', _latin1NullTerminated('custom comment')),
+          ],
+        ),
+      );
 
-    await const WavRiffInfoWriter().write(
-      path: file.path,
-      title: 'New title',
-      artist: 'Artist',
-      album: 'Album',
-      genre: 'Rock',
-    );
+      await const WavRiffInfoWriter().write(
+        path: file.path,
+        title: 'New title',
+        artist: 'Artist',
+        album: 'Album',
+        genre: 'Rock',
+      );
 
-    final bytes = await file.readAsBytes();
-    expect(_dataPayload(bytes), <int>[9, 8, 7]);
-    expect(_containsBytes(bytes, junkPayload), isTrue);
-    expect(_containsBytes(bytes, ascii.encode('custom comment')), isTrue);
-  });
+      final bytes = await file.readAsBytes();
+      expect(_dataPayload(bytes), <int>[9, 8, 7]);
+      expect(_containsBytes(bytes, junkPayload), isTrue);
+      expect(_containsBytes(bytes, ascii.encode('custom comment')), isTrue);
+    },
+  );
 
   test('leaves malformed INFO lists untouched', () async {
     final file = File('${temporaryDirectory.path}/malformed.wav');
@@ -134,10 +138,16 @@ List<int> _wavFile({
     if (rawInfoPayload != null) _Chunk('LIST', rawInfoPayload),
     if (infoEntries != null) _Chunk('LIST', _infoPayload(infoEntries)),
   ];
-  final riffSize = 4 + chunks.fold<int>(
-    0,
-    (total, chunk) => total + 8 + chunk.payload.length + (chunk.payload.length.isOdd ? 1 : 0),
-  );
+  final riffSize =
+      4 +
+      chunks.fold<int>(
+        0,
+        (total, chunk) =>
+            total +
+            8 +
+            chunk.payload.length +
+            (chunk.payload.length.isOdd ? 1 : 0),
+      );
   return <int>[
     ...ascii.encode('RIFF'),
     ..._uint32Le(riffSize),
@@ -195,7 +205,10 @@ List<int> _dataPayload(List<int> bytes) {
   while (offset + 8 <= bytes.length) {
     final id = ascii.decode(bytes.sublist(offset, offset + 4));
     final length =
-        bytes[offset + 4] | (bytes[offset + 5] << 8) | (bytes[offset + 6] << 16) | (bytes[offset + 7] << 24);
+        bytes[offset + 4] |
+        (bytes[offset + 5] << 8) |
+        (bytes[offset + 6] << 16) |
+        (bytes[offset + 7] << 24);
     final start = offset + 8;
     if (id == 'data') {
       return bytes.sublist(start, start + length);

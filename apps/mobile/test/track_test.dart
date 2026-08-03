@@ -58,7 +58,10 @@ void main() {
     expect(decoded.artworkCrop.zoom, 1.8);
     expect(decoded.isFavorite, isTrue);
     expect(decoded.hasTranscript, isTrue);
-    expect(decoded.transcriptUri, Uri.parse('https://example.test/transcript.vtt'));
+    expect(
+      decoded.transcriptUri,
+      Uri.parse('https://example.test/transcript.vtt'),
+    );
     expect(decoded.transcriptType, 'text/vtt');
     expect(decoded.transcriptLanguage, 'en');
   });

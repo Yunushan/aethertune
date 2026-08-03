@@ -21,21 +21,15 @@ void main() {
     expect(account.deviceId, 'Windows desktop');
     expect(
       account.libraryEndpointUri,
-      Uri.parse(
-        'https://sync.example.test/aethertune/api/v1/sync/library',
-      ),
+      Uri.parse('https://sync.example.test/aethertune/api/v1/sync/library'),
     );
     expect(
       account.profileEndpointUri,
-      Uri.parse(
-        'https://sync.example.test/aethertune/api/v1/auth/profile',
-      ),
+      Uri.parse('https://sync.example.test/aethertune/api/v1/auth/profile'),
     );
     expect(
       account.providerConfigurationEndpointUri,
-      Uri.parse(
-        'https://sync.example.test/aethertune/api/v1/sync/providers',
-      ),
+      Uri.parse('https://sync.example.test/aethertune/api/v1/sync/providers'),
     );
     expect(
       account.publicProfileDiscoveryEndpointUri('mira'),
@@ -61,15 +55,16 @@ void main() {
     );
   });
 
-  test('fetches a public smart playlist without an authorization header',
-      () async {
+  test('fetches a public smart playlist without an authorization header', () async {
     final document = <String, Object?>{
       'version': 2,
       'kind': 'smart',
       'name': 'Mira discoveries',
       'rule': _sharedSmartRule(),
     };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
+    final checksum = sha256
+        .convert(utf8.encode(jsonEncode(document)))
+        .toString();
     Map<String, String>? capturedHeaders;
     final publicPlaylist = await fetchPublicSharedSmartPlaylist(
       'https://sync.example.test/base/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB',
@@ -131,26 +126,22 @@ void main() {
     final client = LibrarySyncClient(
       account: _account(),
       token: token,
-      httpExecutor: (
-        capturedMethod,
-        capturedUri, {
-        required headers,
-        body,
-      }) async {
-        method = capturedMethod;
-        uri = capturedUri;
-        capturedRequestHeaders = headers;
-        return LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: jsonEncode(<String, Object?>{
-            'revision': 4,
-            'updatedAt': '2026-07-10T12:30:00.000Z',
-            'updatedByDevice': 'Android phone',
-            'checksum': checksum,
-            'snapshot': snapshot,
-          }),
-        );
-      },
+      httpExecutor:
+          (capturedMethod, capturedUri, {required headers, body}) async {
+            method = capturedMethod;
+            uri = capturedUri;
+            capturedRequestHeaders = headers;
+            return LibrarySyncHttpResponse(
+              statusCode: 200,
+              body: jsonEncode(<String, Object?>{
+                'revision': 4,
+                'updatedAt': '2026-07-10T12:30:00.000Z',
+                'updatedByDevice': 'Android phone',
+                'checksum': checksum,
+                'snapshot': snapshot,
+              }),
+            );
+          },
     );
 
     final result = await client.fetch();
@@ -164,46 +155,49 @@ void main() {
     expect(result.updatedByDevice, 'Android phone');
   });
 
-  test('fetches provider configuration through its isolated endpoint', () async {
-    const token = 'private-sync-token';
-    final snapshot = <String, Object?>{
-      'format': 'aethertune.provider_configurations',
-      'version': 1,
-      'customCatalogs': <String, Object?>{
-        'format': 'aethertune.custom_catalogs',
+  test(
+    'fetches provider configuration through its isolated endpoint',
+    () async {
+      const token = 'private-sync-token';
+      final snapshot = <String, Object?>{
+        'format': 'aethertune.provider_configurations',
         'version': 1,
-        'catalogs': <Object?>[],
-      },
-    };
-    final checksum = sha256
-        .convert(utf8.encode(jsonEncode(snapshot)))
-        .toString();
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: token,
-      httpExecutor: (method, uri, {required headers, body}) async {
-        expect(method, 'GET');
-        expect(uri, _account().providerConfigurationEndpointUri);
-        expect(headers['authorization'], 'Bearer $token');
-        expect(body, isNull);
-        return LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: jsonEncode(<String, Object?>{
-            'revision': 1,
-            'updatedAt': '2026-07-10T12:30:00.000Z',
-            'updatedByDevice': 'Desktop',
-            'checksum': checksum,
-            'snapshot': snapshot,
-          }),
-        );
-      },
-    );
+        'customCatalogs': <String, Object?>{
+          'format': 'aethertune.custom_catalogs',
+          'version': 1,
+          'catalogs': <Object?>[],
+        },
+      };
+      final checksum = sha256
+          .convert(utf8.encode(jsonEncode(snapshot)))
+          .toString();
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: token,
+        httpExecutor: (method, uri, {required headers, body}) async {
+          expect(method, 'GET');
+          expect(uri, _account().providerConfigurationEndpointUri);
+          expect(headers['authorization'], 'Bearer $token');
+          expect(body, isNull);
+          return LibrarySyncHttpResponse(
+            statusCode: 200,
+            body: jsonEncode(<String, Object?>{
+              'revision': 1,
+              'updatedAt': '2026-07-10T12:30:00.000Z',
+              'updatedByDevice': 'Desktop',
+              'checksum': checksum,
+              'snapshot': snapshot,
+            }),
+          );
+        },
+      );
 
-    final result = await client.fetchProviderConfiguration();
+      final result = await client.fetchProviderConfiguration();
 
-    expect(result.revision, 1);
-    expect(result.snapshot, snapshot);
-  });
+      expect(result.revision, 1);
+      expect(result.snapshot, snapshot);
+    },
+  );
 
   test('redeems a recovery code without bearer authentication', () async {
     Uri? uri;
@@ -213,16 +207,17 @@ void main() {
     final token = await redeemLibrarySyncRecoveryCode(
       _account(),
       'ar_recovery_secret',
-      httpExecutor: (method, capturedUri, {required headers, String? body}) async {
-        expect(method, 'POST');
-        uri = capturedUri;
-        capturedHeaders = headers;
-        requestBody = body;
-        return const LibrarySyncHttpResponse(
-          statusCode: 201,
-          body: '{"token":"at_recovered_secret"}',
-        );
-      },
+      httpExecutor:
+          (method, capturedUri, {required headers, String? body}) async {
+            expect(method, 'POST');
+            uri = capturedUri;
+            capturedHeaders = headers;
+            requestBody = body;
+            return const LibrarySyncHttpResponse(
+              statusCode: 201,
+              body: '{"token":"at_recovered_secret"}',
+            );
+          },
     );
 
     expect(uri, _account().recoveryEndpointUri);
@@ -234,33 +229,36 @@ void main() {
     expect(token, 'at_recovered_secret');
   });
 
-  test('fetches sync metadata without requesting a snapshot document', () async {
-    Uri? uri;
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: 'private-sync-token',
-      httpExecutor: (method, capturedUri, {required headers, body}) async {
-        expect(method, 'GET');
-        uri = capturedUri;
-        return LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: jsonEncode(<String, Object?>{
-            'revision': 4,
-            'updatedAt': '2026-07-10T12:30:00.000Z',
-            'updatedByDevice': 'Android phone',
-            'checksum': 'a' * 64,
-          }),
-        );
-      },
-    );
+  test(
+    'fetches sync metadata without requesting a snapshot document',
+    () async {
+      Uri? uri;
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: 'private-sync-token',
+        httpExecutor: (method, capturedUri, {required headers, body}) async {
+          expect(method, 'GET');
+          uri = capturedUri;
+          return LibrarySyncHttpResponse(
+            statusCode: 200,
+            body: jsonEncode(<String, Object?>{
+              'revision': 4,
+              'updatedAt': '2026-07-10T12:30:00.000Z',
+              'updatedByDevice': 'Android phone',
+              'checksum': 'a' * 64,
+            }),
+          );
+        },
+      );
 
-    final result = (await client.fetchMetadata())!;
+      final result = (await client.fetchMetadata())!;
 
-    expect(uri, _account().libraryMetadataEndpointUri);
-    expect(result.revision, 4);
-    expect(result.snapshot, isNull);
-    expect(result.checksum, 'a' * 64);
-  });
+      expect(uri, _account().libraryMetadataEndpointUri);
+      expect(result.revision, 4);
+      expect(result.snapshot, isNull);
+      expect(result.checksum, 'a' * 64);
+    },
+  );
 
   test('falls back when an older server lacks sync metadata', () async {
     final client = LibrarySyncClient(
@@ -491,50 +489,52 @@ void main() {
     expect(requestBody?['snapshot'], snapshot);
   });
 
-  test('fetches validated managed identity without exposing its token',
-      () async {
-    const token = 'managed-private-token';
-    Uri? requestedUri;
-    Map<String, String>? requestedHeaders;
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: token,
-      httpExecutor: (method, uri, {required headers, body}) async {
-        requestedUri = uri;
-        requestedHeaders = headers;
-        return LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: jsonEncode(<String, Object?>{
-            'account': <String, Object?>{
-              'id': 'primary',
-              'displayName': 'Primary listener',
-              'avatarTone': 'emerald',
-              'managed': true,
-              'editable': true,
-            },
-            'device': <String, Object?>{
-              'id': '0123456789abcdef01234567',
-              'deviceName': 'Windows desktop',
-              'createdAt': '2026-07-15T12:00:00.000Z',
-            },
-          }),
-        );
-      },
-    );
+  test(
+    'fetches validated managed identity without exposing its token',
+    () async {
+      const token = 'managed-private-token';
+      Uri? requestedUri;
+      Map<String, String>? requestedHeaders;
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: token,
+        httpExecutor: (method, uri, {required headers, body}) async {
+          requestedUri = uri;
+          requestedHeaders = headers;
+          return LibrarySyncHttpResponse(
+            statusCode: 200,
+            body: jsonEncode(<String, Object?>{
+              'account': <String, Object?>{
+                'id': 'primary',
+                'displayName': 'Primary listener',
+                'avatarTone': 'emerald',
+                'managed': true,
+                'editable': true,
+              },
+              'device': <String, Object?>{
+                'id': '0123456789abcdef01234567',
+                'deviceName': 'Windows desktop',
+                'createdAt': '2026-07-15T12:00:00.000Z',
+              },
+            }),
+          );
+        },
+      );
 
-    final profile = await client.fetchProfile();
+      final profile = await client.fetchProfile();
 
-    expect(requestedUri, _account().profileEndpointUri);
-    expect(requestedHeaders?['authorization'], 'Bearer $token');
-    expect(requestedUri.toString(), isNot(contains(token)));
-    expect(profile?.id, 'primary');
-    expect(profile?.effectiveDisplayName, 'Primary listener');
-    expect(profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
-    expect(profile?.managed, isTrue);
-    expect(profile?.editable, isTrue);
-    expect(profile?.device?.name, 'Windows desktop');
-    expect(profile?.device?.createdAt, DateTime.utc(2026, 7, 15, 12));
-  });
+      expect(requestedUri, _account().profileEndpointUri);
+      expect(requestedHeaders?['authorization'], 'Bearer $token');
+      expect(requestedUri.toString(), isNot(contains(token)));
+      expect(profile?.id, 'primary');
+      expect(profile?.effectiveDisplayName, 'Primary listener');
+      expect(profile?.avatarTone, LibrarySyncProfileAvatarTone.emerald);
+      expect(profile?.managed, isTrue);
+      expect(profile?.editable, isTrue);
+      expect(profile?.device?.name, 'Windows desktop');
+      expect(profile?.device?.createdAt, DateTime.utc(2026, 7, 15, 12));
+    },
+  );
 
   test('updates managed profile over authenticated PATCH', () async {
     const token = 'managed-private-token';
@@ -552,7 +552,8 @@ void main() {
         requestedBody = jsonDecode(body!) as Map<String, Object?>;
         return const LibrarySyncHttpResponse(
           statusCode: 200,
-          body: '{'
+          body:
+              '{'
               '"account":{'
               '"id":"primary",'
               '"displayName":"Shared listeners",'
@@ -606,167 +607,168 @@ void main() {
     expect(updated.editable, isTrue);
     expect(updated.device?.name, 'Pocket player');
     await expectLater(
-      client.updateProfile(
-        displayName: ' ',
-        deviceName: 'Pocket player',
-      ),
+      client.updateProfile(displayName: ' ', deviceName: 'Pocket player'),
       throwsA(isA<FormatException>()),
     );
   });
 
-  test('tolerates old servers and rejects malformed managed identity',
-      () async {
-    final oldServer = LibrarySyncClient(
-      account: _account(),
-      token: 'token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        return const LibrarySyncHttpResponse(
-          statusCode: 404,
-          body: '{"error":"not_found"}',
-        );
-      },
-    );
-    expect(await oldServer.fetchProfile(), isNull);
+  test(
+    'tolerates old servers and rejects malformed managed identity',
+    () async {
+      final oldServer = LibrarySyncClient(
+        account: _account(),
+        token: 'token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          return const LibrarySyncHttpResponse(
+            statusCode: 404,
+            body: '{"error":"not_found"}',
+          );
+        },
+      );
+      expect(await oldServer.fetchProfile(), isNull);
 
-    final staticServer = LibrarySyncClient(
-      account: _account(),
-      token: 'token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        return const LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: '{'
-              '"account":{'
-              '"id":"static-account",'
-              '"displayName":null,'
-              '"managed":false'
-              '},'
-              '"device":null'
-              '}',
-        );
-      },
-    );
-    final staticProfile = await staticServer.fetchProfile();
-    expect(staticProfile?.id, 'static-account');
-    expect(staticProfile?.effectiveDisplayName, 'static-account');
-    expect(staticProfile?.managed, isFalse);
-    expect(staticProfile?.editable, isFalse);
-    expect(staticProfile?.device, isNull);
+      final staticServer = LibrarySyncClient(
+        account: _account(),
+        token: 'token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          return const LibrarySyncHttpResponse(
+            statusCode: 200,
+            body:
+                '{'
+                '"account":{'
+                '"id":"static-account",'
+                '"displayName":null,'
+                '"managed":false'
+                '},'
+                '"device":null'
+                '}',
+          );
+        },
+      );
+      final staticProfile = await staticServer.fetchProfile();
+      expect(staticProfile?.id, 'static-account');
+      expect(staticProfile?.effectiveDisplayName, 'static-account');
+      expect(staticProfile?.managed, isFalse);
+      expect(staticProfile?.editable, isFalse);
+      expect(staticProfile?.device, isNull);
 
-    final legacyManagedProfile = LibrarySyncProfile.fromServerJson(
-      <String, Object?>{
-        'account': <String, Object?>{
-          'id': 'legacy-managed',
-          'displayName': 'Legacy listener',
-          'managed': true,
+      final legacyManagedProfile = LibrarySyncProfile.fromServerJson(
+        <String, Object?>{
+          'account': <String, Object?>{
+            'id': 'legacy-managed',
+            'displayName': 'Legacy listener',
+            'managed': true,
+          },
+          'device': <String, Object?>{
+            'id': '0123456789abcdef01234567',
+            'deviceName': 'Legacy device',
+            'createdAt': '2026-07-15T12:00:00.000Z',
+          },
         },
-        'device': <String, Object?>{
-          'id': '0123456789abcdef01234567',
-          'deviceName': 'Legacy device',
-          'createdAt': '2026-07-15T12:00:00.000Z',
-        },
-      },
-    );
-    expect(legacyManagedProfile.editable, isFalse);
-    expect(legacyManagedProfile.avatarTone, isNull);
-    expect(legacyManagedProfile.avatarToneSupported, isFalse);
-    expect(
-      () => LibrarySyncProfile.fromServerJson(<String, Object?>{
-        'account': <String, Object?>{
-          'id': 'static-account',
-          'managed': false,
-          'editable': true,
-        },
-        'device': null,
-      }),
-      throwsA(isA<FormatException>()),
-    );
-    expect(
-      () => LibrarySyncProfile.fromServerJson(<String, Object?>{
-        'account': <String, Object?>{
-          'id': 'primary',
-          'managed': true,
-          'avatarTone': 'not-a-tone',
-        },
-        'device': <String, Object?>{
-          'id': '0123456789abcdef01234567',
-          'deviceName': 'Desktop',
-          'createdAt': '2026-07-15T12:00:00.000Z',
-        },
-      }),
-      throwsA(isA<FormatException>()),
-    );
+      );
+      expect(legacyManagedProfile.editable, isFalse);
+      expect(legacyManagedProfile.avatarTone, isNull);
+      expect(legacyManagedProfile.avatarToneSupported, isFalse);
+      expect(
+        () => LibrarySyncProfile.fromServerJson(<String, Object?>{
+          'account': <String, Object?>{
+            'id': 'static-account',
+            'managed': false,
+            'editable': true,
+          },
+          'device': null,
+        }),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => LibrarySyncProfile.fromServerJson(<String, Object?>{
+          'account': <String, Object?>{
+            'id': 'primary',
+            'managed': true,
+            'avatarTone': 'not-a-tone',
+          },
+          'device': <String, Object?>{
+            'id': '0123456789abcdef01234567',
+            'deviceName': 'Desktop',
+            'createdAt': '2026-07-15T12:00:00.000Z',
+          },
+        }),
+        throwsA(isA<FormatException>()),
+      );
 
-    final malformed = LibrarySyncClient(
-      account: _account(),
-      token: 'token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        return const LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: '{'
-              '"account":{"id":"primary","managed":true},'
-              '"device":null'
-              '}',
-        );
-      },
-    );
-    await expectLater(
-      malformed.fetchProfile(),
-      throwsA(isA<FormatException>()),
-    );
-    expect(
-      () => LibrarySyncProfile.fromServerJson(<String, Object?>{
-        'account': <String, Object?>{
-          'id': 'primary',
-          'managed': true,
+      final malformed = LibrarySyncClient(
+        account: _account(),
+        token: 'token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          return const LibrarySyncHttpResponse(
+            statusCode: 200,
+            body:
+                '{'
+                '"account":{"id":"primary","managed":true},'
+                '"device":null'
+                '}',
+          );
         },
-        'device': <String, Object?>{
-          'id': '0123456789abcdef01234567',
-          'deviceName': 'Desktop',
-          'createdAt': 42,
+      );
+      await expectLater(
+        malformed.fetchProfile(),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => LibrarySyncProfile.fromServerJson(<String, Object?>{
+          'account': <String, Object?>{'id': 'primary', 'managed': true},
+          'device': <String, Object?>{
+            'id': '0123456789abcdef01234567',
+            'deviceName': 'Desktop',
+            'createdAt': 42,
+          },
+        }),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
+
+  test(
+    'omits avatar changes for a profile API that did not advertise them',
+    () async {
+      Map<String, Object?>? requestBody;
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: 'token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          requestBody = jsonDecode(body!) as Map<String, Object?>;
+          return const LibrarySyncHttpResponse(
+            statusCode: 200,
+            body:
+                '{'
+                '"account":{'
+                '"id":"primary",'
+                '"displayName":"Older server",'
+                '"managed":true,'
+                '"editable":true'
+                '},'
+                '"device":{'
+                '"id":"0123456789abcdef01234567",'
+                '"deviceName":"Desktop",'
+                '"createdAt":"2026-07-15T12:00:00.000Z"'
+                '}'
+                '}',
+          );
         },
-      }),
-      throwsA(isA<FormatException>()),
-    );
-  });
+      );
 
-  test('omits avatar changes for a profile API that did not advertise them',
-      () async {
-    Map<String, Object?>? requestBody;
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: 'token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        requestBody = jsonDecode(body!) as Map<String, Object?>;
-        return const LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: '{'
-              '"account":{'
-              '"id":"primary",'
-              '"displayName":"Older server",'
-              '"managed":true,'
-              '"editable":true'
-              '},'
-              '"device":{'
-              '"id":"0123456789abcdef01234567",'
-              '"deviceName":"Desktop",'
-              '"createdAt":"2026-07-15T12:00:00.000Z"'
-              '}'
-              '}',
-        );
-      },
-    );
+      final profile = await client.updateProfile(
+        displayName: 'Older server',
+        deviceName: 'Desktop',
+      );
 
-    final profile = await client.updateProfile(
-      displayName: 'Older server',
-      deviceName: 'Desktop',
-    );
-
-    expect(requestBody, <String, Object?>{
-      'displayName': 'Older server',
-      'deviceName': 'Desktop',
-    });
-    expect(profile.avatarToneSupported, isFalse);
-  });
+      expect(requestBody, <String, Object?>{
+        'displayName': 'Older server',
+        'deviceName': 'Desktop',
+      });
+      expect(profile.avatarToneSupported, isFalse);
+    },
+  );
 
   test('deletes a remote snapshot with the current revision', () async {
     String? method;
@@ -832,7 +834,9 @@ void main() {
       'name': 'Collaborative mix',
       'trackIds': <String>['track-1', 'track-2'],
     };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
+    final checksum = sha256
+        .convert(utf8.encode(jsonEncode(playlist)))
+        .toString();
     final client = LibrarySyncClient(
       account: _account(),
       token: 'private-sync-token',
@@ -872,60 +876,67 @@ void main() {
     expect(shared.collaborators, isEmpty);
   });
 
-  test('creates a cross-library shared playlist without device-local IDs',
-      () async {
-    final playlist = <String, Object?>{
-      'version': 3,
-      'name': 'Portable mix',
-      'tracks': <Object?>[
-        <String, Object?>{
-          'title': 'One',
-          'artist': 'Artist',
-          'album': 'Album',
-          'durationMs': 180000,
+  test(
+    'creates a cross-library shared playlist without device-local IDs',
+    () async {
+      final playlist = <String, Object?>{
+        'version': 3,
+        'name': 'Portable mix',
+        'tracks': <Object?>[
+          <String, Object?>{
+            'title': 'One',
+            'artist': 'Artist',
+            'album': 'Album',
+            'durationMs': 180000,
+          },
+        ],
+      };
+      final checksum = sha256
+          .convert(utf8.encode(jsonEncode(playlist)))
+          .toString();
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: 'private-sync-token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          final document = jsonDecode(body!)['playlist'] as Map;
+          expect(document, playlist);
+          expect(
+            jsonEncode(document),
+            isNot(contains('device-local-track-id')),
+          );
+          return LibrarySyncHttpResponse(
+            statusCode: 201,
+            body: jsonEncode(<String, Object?>{
+              'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+              'revision': 1,
+              'role': 'owner',
+              'updatedAt': '2026-07-21T10:00:00.000Z',
+              'updatedByDevice': 'Test device',
+              'checksum': checksum,
+              'playlist': playlist,
+              'collaborators': <String, Object?>{},
+            }),
+          );
         },
-      ],
-    };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: 'private-sync-token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        final document = jsonDecode(body!)['playlist'] as Map;
-        expect(document, playlist);
-        expect(jsonEncode(document), isNot(contains('device-local-track-id')));
-        return LibrarySyncHttpResponse(
-          statusCode: 201,
-          body: jsonEncode(<String, Object?>{
-            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
-            'revision': 1,
-            'role': 'owner',
-            'updatedAt': '2026-07-21T10:00:00.000Z',
-            'updatedByDevice': 'Test device',
-            'checksum': checksum,
-            'playlist': playlist,
-            'collaborators': <String, Object?>{},
-          }),
-        );
-      },
-    );
+      );
 
-    final shared = await client.createSharedPlaylist(
-      name: 'Portable mix',
-      trackIds: const <String>['device-local-track-id'],
-      trackReferences: const <SharedPlaylistTrackReference>[
-        SharedPlaylistTrackReference(
-          title: 'One',
-          artist: 'Artist',
-          album: 'Album',
-          durationMilliseconds: 180000,
-        ),
-      ],
-    );
+      final shared = await client.createSharedPlaylist(
+        name: 'Portable mix',
+        trackIds: const <String>['device-local-track-id'],
+        trackReferences: const <SharedPlaylistTrackReference>[
+          SharedPlaylistTrackReference(
+            title: 'One',
+            artist: 'Artist',
+            album: 'Album',
+            durationMilliseconds: 180000,
+          ),
+        ],
+      );
 
-    expect(shared.trackIds, isEmpty);
-    expect(shared.trackReferences?.single.title, 'One');
-  });
+      expect(shared.trackIds, isEmpty);
+      expect(shared.trackReferences?.single.title, 'One');
+    },
+  );
 
   test('searches opt-in public profiles without a sync token', () async {
     final client = LibrarySyncClient(
@@ -938,7 +949,8 @@ void main() {
         expect(body, isNull);
         return const LibrarySyncHttpResponse(
           statusCode: 200,
-          body: '{"profiles":[{"id":"mira","displayName":"Mira","avatarTone":"violet"}]}',
+          body:
+              '{"profiles":[{"id":"mira","displayName":"Mira","avatarTone":"violet"}]}',
         );
       },
     );
@@ -955,73 +967,78 @@ void main() {
     );
   });
 
-  test('creates and parses a private shared smart-playlist definition', () async {
-    final rule = <String, Object?>{
-      'query': '',
-      'sourceId': 'aethertune-source-kind:self-hosted-jellyfin',
-      'artist': 'Mira',
-      'album': '',
-      'genre': '',
-      'minimumDurationSeconds': 0,
-      'maximumDurationSeconds': 0,
-      'favoritesOnly': false,
-      'minimumPlayCount': 0,
-      'minimumDaysSinceLastPlayed': 0,
-      'matchMode': 'all',
-      'ruleGroups': <Object?>[
-        <String, Object?>{
-          'matchMode': 'any',
-          'rules': <Object?>[
-            <String, Object?>{
-              'field': 'sourceId',
-              'value': 'aethertune-source-kind:custom-catalog',
-            },
-          ],
-          'groups': <Object?>[],
+  test(
+    'creates and parses a private shared smart-playlist definition',
+    () async {
+      final rule = <String, Object?>{
+        'query': '',
+        'sourceId': 'aethertune-source-kind:self-hosted-jellyfin',
+        'artist': 'Mira',
+        'album': '',
+        'genre': '',
+        'minimumDurationSeconds': 0,
+        'maximumDurationSeconds': 0,
+        'favoritesOnly': false,
+        'minimumPlayCount': 0,
+        'minimumDaysSinceLastPlayed': 0,
+        'matchMode': 'all',
+        'ruleGroups': <Object?>[
+          <String, Object?>{
+            'matchMode': 'any',
+            'rules': <Object?>[
+              <String, Object?>{
+                'field': 'sourceId',
+                'value': 'aethertune-source-kind:custom-catalog',
+              },
+            ],
+            'groups': <Object?>[],
+          },
+        ],
+        'sortMode': 'title',
+        'limit': 25,
+      };
+      final document = <String, Object?>{
+        'version': 2,
+        'kind': 'smart',
+        'name': 'Mira discoveries',
+        'rule': rule,
+      };
+      final checksum = sha256
+          .convert(utf8.encode(jsonEncode(document)))
+          .toString();
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: 'private-sync-token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          expect(method, 'POST');
+          expect(jsonDecode(body!)['playlist'], document);
+          return LibrarySyncHttpResponse(
+            statusCode: 201,
+            body: jsonEncode(<String, Object?>{
+              'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+              'revision': 1,
+              'role': 'owner',
+              'updatedAt': '2026-07-20T12:00:00.000Z',
+              'updatedByDevice': 'Test device',
+              'checksum': checksum,
+              'playlist': document,
+              'collaborators': <String, Object?>{},
+            }),
+          );
         },
-      ],
-      'sortMode': 'title',
-      'limit': 25,
-    };
-    final document = <String, Object?>{
-      'version': 2,
-      'kind': 'smart',
-      'name': 'Mira discoveries',
-      'rule': rule,
-    };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: 'private-sync-token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        expect(method, 'POST');
-        expect(jsonDecode(body!)['playlist'], document);
-        return LibrarySyncHttpResponse(
-          statusCode: 201,
-          body: jsonEncode(<String, Object?>{
-            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
-            'revision': 1,
-            'role': 'owner',
-            'updatedAt': '2026-07-20T12:00:00.000Z',
-            'updatedByDevice': 'Test device',
-            'checksum': checksum,
-            'playlist': document,
-            'collaborators': <String, Object?>{},
-          }),
-        );
-      },
-    );
+      );
 
-    final shared = await client.createSharedSmartPlaylist(
-      name: 'Mira discoveries',
-      rule: rule,
-    );
+      final shared = await client.createSharedSmartPlaylist(
+        name: 'Mira discoveries',
+        rule: rule,
+      );
 
-    expect(shared.kind, SharedPlaylistKind.smart);
-    expect(shared.trackIds, isEmpty);
-    expect(shared.smartPlaylist?.name, 'Mira discoveries');
-    expect(shared.smartPlaylist?.rule['artist'], 'Mira');
-  });
+      expect(shared.kind, SharedPlaylistKind.smart);
+      expect(shared.trackIds, isEmpty);
+      expect(shared.smartPlaylist?.name, 'Mira discoveries');
+      expect(shared.smartPlaylist?.rule['artist'], 'Mira');
+    },
+  );
 
   test('issues private shared playlist invites and reports conflicts', () async {
     var requests = 0;
@@ -1041,7 +1058,8 @@ void main() {
           expect(jsonDecode(body!), <String, Object?>{'role': 'editor'});
           return const LibrarySyncHttpResponse(
             statusCode: 201,
-            body: '{"inviteCode":"BBBBBBBBBBBBBBBBBBBBBBBB","role":"editor","expiresAt":"2026-07-24T10:00:00.000Z"}',
+            body:
+                '{"inviteCode":"BBBBBBBBBBBBBBBBBBBBBBBB","role":"editor","expiresAt":"2026-07-24T10:00:00.000Z"}',
           );
         }
         expect(method, 'PUT');
@@ -1067,61 +1085,68 @@ void main() {
         trackIds: const <String>['track-1'],
       ),
       throwsA(
-        isA<SharedPlaylistConflictException>()
-            .having((error) => error.currentRevision, 'current revision', 4),
+        isA<SharedPlaylistConflictException>().having(
+          (error) => error.currentRevision,
+          'current revision',
+          4,
+        ),
       ),
     );
   });
 
-  test('revokes a shared playlist collaborator against the current revision',
-      () async {
-    final playlist = <String, Object?>{
-      'version': 1,
-      'name': 'Collaborative mix',
-      'trackIds': <String>['track-1'],
-    };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
-    final client = LibrarySyncClient(
-      account: _account(),
-      token: 'token',
-      httpExecutor: (method, uri, {required headers, body}) async {
-        expect(method, 'DELETE');
-        expect(
-          uri,
-          _account().sharedPlaylistCollaboratorEndpointUri(
-            'AAAAAAAAAAAAAAAAAAAAAAAA',
-            'viewer-account',
-          ),
-        );
-        expect(jsonDecode(body!), <String, Object?>{
-          'baseRevision': 4,
-          'deviceId': 'Test device',
-        });
-        return LibrarySyncHttpResponse(
-          statusCode: 200,
-          body: jsonEncode(<String, Object?>{
-            'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
-            'revision': 5,
-            'role': 'owner',
-            'updatedAt': '2026-07-17T11:00:00.000Z',
-            'updatedByDevice': 'Test device',
-            'checksum': checksum,
-            'playlist': playlist,
-            'collaborators': <String, Object?>{},
-          }),
-        );
-      },
-    );
+  test(
+    'revokes a shared playlist collaborator against the current revision',
+    () async {
+      final playlist = <String, Object?>{
+        'version': 1,
+        'name': 'Collaborative mix',
+        'trackIds': <String>['track-1'],
+      };
+      final checksum = sha256
+          .convert(utf8.encode(jsonEncode(playlist)))
+          .toString();
+      final client = LibrarySyncClient(
+        account: _account(),
+        token: 'token',
+        httpExecutor: (method, uri, {required headers, body}) async {
+          expect(method, 'DELETE');
+          expect(
+            uri,
+            _account().sharedPlaylistCollaboratorEndpointUri(
+              'AAAAAAAAAAAAAAAAAAAAAAAA',
+              'viewer-account',
+            ),
+          );
+          expect(jsonDecode(body!), <String, Object?>{
+            'baseRevision': 4,
+            'deviceId': 'Test device',
+          });
+          return LibrarySyncHttpResponse(
+            statusCode: 200,
+            body: jsonEncode(<String, Object?>{
+              'id': 'AAAAAAAAAAAAAAAAAAAAAAAA',
+              'revision': 5,
+              'role': 'owner',
+              'updatedAt': '2026-07-17T11:00:00.000Z',
+              'updatedByDevice': 'Test device',
+              'checksum': checksum,
+              'playlist': playlist,
+              'collaborators': <String, Object?>{},
+            }),
+          );
+        },
+      );
 
-    final remote = await client.revokeSharedPlaylistCollaborator(
-      playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
-      collaboratorId: 'viewer-account',
-      baseRevision: 4,
-    );
+      final remote = await client.revokeSharedPlaylistCollaborator(
+        playlistId: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+        collaboratorId: 'viewer-account',
+        baseRevision: 4,
+      );
 
-    expect(remote.revision, 5);
-    expect(remote.collaborators, isEmpty);
-  });
+      expect(remote.revision, 5);
+      expect(remote.collaborators, isEmpty);
+    },
+  );
 
   test('invalidates outstanding shared playlist invitation codes', () async {
     final client = LibrarySyncClient(
@@ -1157,7 +1182,9 @@ void main() {
       'name': 'Archive mix',
       'trackIds': <String>['track-1', 'track-2'],
     };
-    final checksum = sha256.convert(utf8.encode(jsonEncode(playlist))).toString();
+    final checksum = sha256
+        .convert(utf8.encode(jsonEncode(playlist)))
+        .toString();
     final client = LibrarySyncClient(
       account: _account(),
       token: 'token',

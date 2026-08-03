@@ -139,10 +139,9 @@ final class _YouTubeChannelFollowScreenState
                 channel: _asChannel(channel),
                 followed: true,
                 onOpen: () => _openChannelVideos(context, _asChannel(channel)),
-                onFollowChanged: (followed) =>
-                    unawaited(
-                      follows.setFollowed(_asChannel(channel), followed),
-                    ),
+                onFollowChanged: (followed) => unawaited(
+                  follows.setFollowed(_asChannel(channel), followed),
+                ),
               ),
           ],
           if (hasSearch) ...<Widget>[
@@ -433,9 +432,8 @@ final class _YouTubeChannelFollowScreenState
   void _openFollowedChannelFeed(BuildContext context) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => YouTubeFollowedChannelFeedScreen(
-          provider: widget.provider,
-        ),
+        builder: (_) =>
+            YouTubeFollowedChannelFeedScreen(provider: widget.provider),
       ),
     );
   }
@@ -488,10 +486,7 @@ YouTubeDataChannel _asChannel(YouTubeChannelFollow follow) =>
     );
 
 final class _FollowDocumentImport {
-  const _FollowDocumentImport({
-    required this.document,
-    required this.replace,
-  });
+  const _FollowDocumentImport({required this.document, required this.replace});
 
   final String document;
   final bool replace;

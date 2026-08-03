@@ -9,61 +9,67 @@ import 'package:aethertune/src/domain/music_source_provider.dart';
 import 'package:aethertune/src/domain/track.dart';
 
 void main() {
-  test('searches Jellyfin libraries and returns metadata-only tracks', () async {
-    Uri? capturedUri;
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      limit: 3,
-      requestLoader: (uri) async {
-        capturedUri = uri;
-        return _jellyfinItemsJson;
-      },
-    );
+  test(
+    'searches Jellyfin libraries and returns metadata-only tracks',
+    () async {
+      Uri? capturedUri;
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        limit: 3,
+        requestLoader: (uri) async {
+          capturedUri = uri;
+          return _jellyfinItemsJson;
+        },
+      );
 
-    expect(provider.capabilities, JellyfinProvider.defaultCapabilities);
-    expect(provider.disclosure.requiresUserCredentials, isTrue);
-    expect(provider.disclosure.cachesMedia, isTrue);
-    expect(provider.disclosure.supportsDownloads, isTrue);
-    expect(provider.disclosure.networkDomains, <String>[
-      'media.example.test',
-    ]);
+      expect(provider.capabilities, JellyfinProvider.defaultCapabilities);
+      expect(provider.disclosure.requiresUserCredentials, isTrue);
+      expect(provider.disclosure.cachesMedia, isTrue);
+      expect(provider.disclosure.supportsDownloads, isTrue);
+      expect(provider.disclosure.networkDomains, <String>[
+        'media.example.test',
+      ]);
 
-    final tracks = await provider.search(' aether ');
+      final tracks = await provider.search(' aether ');
 
-    expect(capturedUri!.path, '/jellyfin/Users/user-1/Items');
-    expect(capturedUri!.queryParameters['api_key'], 'api-secret');
-    expect(capturedUri!.queryParameters['Recursive'], 'true');
-    expect(capturedUri!.queryParameters['IncludeItemTypes'], 'Audio');
-    expect(capturedUri!.queryParameters['SearchTerm'], 'aether');
-    expect(capturedUri!.queryParameters['Fields'], contains('Genres'));
-    expect(capturedUri!.queryParameters['Fields'], isNot(contains('ImageTags')));
-    expect(capturedUri!.queryParameters['StartIndex'], '0');
-    expect(capturedUri!.queryParameters['Limit'], '3');
-    expect(capturedUri!.queryParameters['EnableTotalRecordCount'], 'true');
+      expect(capturedUri!.path, '/jellyfin/Users/user-1/Items');
+      expect(capturedUri!.queryParameters['api_key'], 'api-secret');
+      expect(capturedUri!.queryParameters['Recursive'], 'true');
+      expect(capturedUri!.queryParameters['IncludeItemTypes'], 'Audio');
+      expect(capturedUri!.queryParameters['SearchTerm'], 'aether');
+      expect(capturedUri!.queryParameters['Fields'], contains('Genres'));
+      expect(
+        capturedUri!.queryParameters['Fields'],
+        isNot(contains('ImageTags')),
+      );
+      expect(capturedUri!.queryParameters['StartIndex'], '0');
+      expect(capturedUri!.queryParameters['Limit'], '3');
+      expect(capturedUri!.queryParameters['EnableTotalRecordCount'], 'true');
 
-    expect(tracks, hasLength(1));
-    final track = tracks.single;
-    expect(track.title, 'Sea Glass');
-    expect(track.artist, 'Mira Sol, Yunus Bay');
-    expect(track.album, 'Blue Rooms');
-    expect(track.genre, 'Ambient');
-    expect(track.duration, const Duration(seconds: 245));
-    expect(track.sourceId, provider.id);
-    expect(track.externalId, 'song-1');
-    expect(track.streamUrl, isNull);
-    expect(track.artworkUri, isNull);
-    expect(track.providerArtworkId, 'song-1');
-    expect(track.providerArtworkVersion, 'image-tag');
-    expect(track.isFavorite, isTrue);
+      expect(tracks, hasLength(1));
+      final track = tracks.single;
+      expect(track.title, 'Sea Glass');
+      expect(track.artist, 'Mira Sol, Yunus Bay');
+      expect(track.album, 'Blue Rooms');
+      expect(track.genre, 'Ambient');
+      expect(track.duration, const Duration(seconds: 245));
+      expect(track.sourceId, provider.id);
+      expect(track.externalId, 'song-1');
+      expect(track.streamUrl, isNull);
+      expect(track.artworkUri, isNull);
+      expect(track.providerArtworkId, 'song-1');
+      expect(track.providerArtworkVersion, 'image-tag');
+      expect(track.isFavorite, isTrue);
 
-    final streamUri = await provider.resolveStream(track);
-    expect(streamUri!.path, '/jellyfin/Audio/song-1/stream');
-    expect(streamUri.queryParameters['api_key'], 'api-secret');
-    expect(streamUri.queryParameters['UserId'], 'user-1');
-    expect(streamUri.queryParameters['static'], 'true');
-  });
+      final streamUri = await provider.resolveStream(track);
+      expect(streamUri!.path, '/jellyfin/Audio/song-1/stream');
+      expect(streamUri.queryParameters['api_key'], 'api-secret');
+      expect(streamUri.queryParameters['UserId'], 'user-1');
+      expect(streamUri.queryParameters['static'], 'true');
+    },
+  );
 
   test('pages Jellyfin searches with server totals', () async {
     final requests = <Uri>[];
@@ -77,11 +83,7 @@ void main() {
       },
     );
 
-    final page = await provider.searchPage(
-      ' glass ',
-      cursor: '3',
-      limit: 1,
-    );
+    final page = await provider.searchPage(' glass ', cursor: '3', limit: 1);
 
     expect(provider, isA<MusicSourceSearchPagingProvider>());
     expect(page.tracks.single.title, 'Sea Glass');
@@ -92,10 +94,7 @@ void main() {
     expect(requests.single.queryParameters['SearchTerm'], 'glass');
     expect(requests.single.queryParameters['StartIndex'], '3');
     expect(requests.single.queryParameters['Limit'], '1');
-    expect(
-      requests.single.queryParameters['EnableTotalRecordCount'],
-      'true',
-    );
+    expect(requests.single.queryParameters['EnableTotalRecordCount'], 'true');
     expect(requests.single.queryParameters['EnableUserData'], 'true');
 
     await expectLater(
@@ -137,10 +136,11 @@ void main() {
       'Audio,MusicAlbum,MusicArtist',
     );
     expect(capturedUri!.queryParameters['Limit'], '3');
-    expect(
-      suggestions.map((suggestion) => suggestion.value),
-      <String>['Mira Sol', 'Blue Rooms', 'Sea Glass'],
-    );
+    expect(suggestions.map((suggestion) => suggestion.value), <String>[
+      'Mira Sol',
+      'Blue Rooms',
+      'Sea Glass',
+    ]);
     expect(
       suggestions.map((suggestion) => suggestion.kind),
       <MusicSourceSearchSuggestionKind>[
@@ -151,10 +151,7 @@ void main() {
     );
     expect(suggestions.last.subtitle, 'Mira Sol');
 
-    await expectLater(
-      provider.suggest('mira', limit: 0),
-      throwsArgumentError,
-    );
+    await expectLater(provider.suggest('mira', limit: 0), throwsArgumentError);
   });
 
   test('redacts authenticated request URLs from provider errors', () async {
@@ -240,288 +237,294 @@ void main() {
     );
   });
 
-  test('pages Jellyfin artists albums and playlists with server totals',
-      () async {
-    final requests = <Uri>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (uri) async {
-        requests.add(uri);
-        if (uri.path.endsWith('/Artists')) {
-          return _jellyfinArtistPageJson;
-        }
-        return switch (uri.queryParameters['IncludeItemTypes']) {
-          'MusicAlbum' => _jellyfinAlbumPageJson,
-          'Playlist' => _jellyfinPlaylistPageJson,
-          _ => throw StateError('Unexpected request: $uri'),
-        };
-      },
-    );
+  test(
+    'pages Jellyfin artists albums and playlists with server totals',
+    () async {
+      final requests = <Uri>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (uri) async {
+          requests.add(uri);
+          if (uri.path.endsWith('/Artists')) {
+            return _jellyfinArtistPageJson;
+          }
+          return switch (uri.queryParameters['IncludeItemTypes']) {
+            'MusicAlbum' => _jellyfinAlbumPageJson,
+            'Playlist' => _jellyfinPlaylistPageJson,
+            _ => throw StateError('Unexpected request: $uri'),
+          };
+        },
+      );
 
-    final artists = await provider.browseCollectionsPage(
-      MusicCatalogCollectionKind.artist,
-      offset: 2,
-      limit: 1,
-    );
-    final albums = await provider.browseCollectionsPage(
-      MusicCatalogCollectionKind.album,
-      offset: 2,
-      limit: 1,
-    );
-    final playlists = await provider.browseCollectionsPage(
-      MusicCatalogCollectionKind.playlist,
-      offset: 2,
-      limit: 1,
-    );
-
-    expect(
-      provider.pagedCollectionKinds,
-      MusicCatalogCollectionKind.values.toSet(),
-    );
-    expect(artists.collections.single.id, 'artist-page');
-    expect(artists.nextOffset, 3);
-    expect(artists.totalCount, 5);
-    expect(artists.hasMore, isTrue);
-    expect(albums.collections.single.id, 'album-page');
-    expect(albums.nextOffset, 3);
-    expect(albums.totalCount, 3);
-    expect(albums.hasMore, isFalse);
-    expect(playlists.collections.single.id, 'playlist-page');
-    expect(playlists.totalCount, 10);
-    expect(playlists.hasMore, isTrue);
-    expect(
-      requests.every(
-        (request) =>
-            request.queryParameters['StartIndex'] == '2' &&
-            request.queryParameters['Limit'] == '1' &&
-            request.queryParameters['EnableTotalRecordCount'] == 'true' &&
-            request.queryParameters['api_key'] == 'api-secret',
-      ),
-      isTrue,
-    );
-    expect(requests.first.path, '/jellyfin/Artists');
-    expect(requests[1].path, '/jellyfin/Users/user-1/Items');
-
-    await expectLater(
-      provider.browseCollectionsPage(
-        MusicCatalogCollectionKind.album,
-        offset: -1,
-      ),
-      throwsArgumentError,
-    );
-    await expectLater(
-      provider.browseCollectionsPage(
-        MusicCatalogCollectionKind.album,
-        limit: 0,
-      ),
-      throwsArgumentError,
-    );
-    expect(requests, hasLength(3));
-  });
-
-  test('searches Jellyfin catalog collections with explicit bounded queries',
-      () async {
-    final requests = <Uri>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (uri) async {
-        requests.add(uri);
-        if (uri.path.endsWith('/Artists')) {
-          return _jellyfinArtistPageJson;
-        }
-        return switch (uri.queryParameters['IncludeItemTypes']) {
-          'MusicAlbum' => _jellyfinAlbumPageJson,
-          'Playlist' => _jellyfinPlaylistPageJson,
-          _ => throw StateError('Unexpected request: $uri'),
-        };
-      },
-    );
-
-    final artists = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.artist,
-      '  aether  ',
-      offset: 2,
-      limit: 1,
-    );
-    final albums = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.album,
-      'aether',
-      offset: 2,
-      limit: 1,
-    );
-    final playlists = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.playlist,
-      'aether',
-      offset: 2,
-      limit: 1,
-    );
-
-    expect(provider, isA<MusicCatalogCollectionSearchProvider>());
-    expect(
-      provider.searchableCollectionKinds,
-      MusicCatalogCollectionKind.values.toSet(),
-    );
-    expect(artists.collections.single.id, 'artist-page');
-    expect(albums.collections.single.id, 'album-page');
-    expect(playlists.collections.single.id, 'playlist-page');
-    expect(
-      requests.every(
-        (request) =>
-            request.queryParameters['SearchTerm'] == 'aether' &&
-            request.queryParameters['StartIndex'] == '2' &&
-            request.queryParameters['Limit'] == '1' &&
-            request.queryParameters['EnableTotalRecordCount'] == 'true' &&
-            request.queryParameters['api_key'] == 'api-secret',
-      ),
-      isTrue,
-    );
-    expect(requests.first.path, '/jellyfin/Artists');
-    expect(requests[1].path, '/jellyfin/Users/user-1/Items');
-
-    final empty = await provider.searchCollectionsPage(
-      MusicCatalogCollectionKind.artist,
-      '   ',
-    );
-    expect(empty.collections, isEmpty);
-    expect(requests, hasLength(3));
-    await expectLater(
-      provider.searchCollectionsPage(
-        MusicCatalogCollectionKind.album,
-        'aether',
-        offset: -1,
-      ),
-      throwsArgumentError,
-    );
-
-    final suggestions = await provider.suggestCollections(
-      MusicCatalogCollectionKind.playlist,
-      ' aether ',
-      limit: 99,
-    );
-    expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
-    expect(
-      provider.suggestionCollectionKinds,
-      MusicCatalogCollectionKind.values.toSet(),
-    );
-    expect(suggestions.single.id, 'playlist-page');
-    expect(requests.last.path, '/jellyfin/Users/user-1/Items');
-    expect(requests.last.queryParameters['SearchTerm'], 'aether');
-    expect(requests.last.queryParameters['StartIndex'], '0');
-    expect(requests.last.queryParameters['Limit'], '10');
-    await expectLater(
-      provider.suggestCollections(
+      final artists = await provider.browseCollectionsPage(
         MusicCatalogCollectionKind.artist,
+        offset: 2,
+        limit: 1,
+      );
+      final albums = await provider.browseCollectionsPage(
+        MusicCatalogCollectionKind.album,
+        offset: 2,
+        limit: 1,
+      );
+      final playlists = await provider.browseCollectionsPage(
+        MusicCatalogCollectionKind.playlist,
+        offset: 2,
+        limit: 1,
+      );
+
+      expect(
+        provider.pagedCollectionKinds,
+        MusicCatalogCollectionKind.values.toSet(),
+      );
+      expect(artists.collections.single.id, 'artist-page');
+      expect(artists.nextOffset, 3);
+      expect(artists.totalCount, 5);
+      expect(artists.hasMore, isTrue);
+      expect(albums.collections.single.id, 'album-page');
+      expect(albums.nextOffset, 3);
+      expect(albums.totalCount, 3);
+      expect(albums.hasMore, isFalse);
+      expect(playlists.collections.single.id, 'playlist-page');
+      expect(playlists.totalCount, 10);
+      expect(playlists.hasMore, isTrue);
+      expect(
+        requests.every(
+          (request) =>
+              request.queryParameters['StartIndex'] == '2' &&
+              request.queryParameters['Limit'] == '1' &&
+              request.queryParameters['EnableTotalRecordCount'] == 'true' &&
+              request.queryParameters['api_key'] == 'api-secret',
+        ),
+        isTrue,
+      );
+      expect(requests.first.path, '/jellyfin/Artists');
+      expect(requests[1].path, '/jellyfin/Users/user-1/Items');
+
+      await expectLater(
+        provider.browseCollectionsPage(
+          MusicCatalogCollectionKind.album,
+          offset: -1,
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        provider.browseCollectionsPage(
+          MusicCatalogCollectionKind.album,
+          limit: 0,
+        ),
+        throwsArgumentError,
+      );
+      expect(requests, hasLength(3));
+    },
+  );
+
+  test(
+    'searches Jellyfin catalog collections with explicit bounded queries',
+    () async {
+      final requests = <Uri>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (uri) async {
+          requests.add(uri);
+          if (uri.path.endsWith('/Artists')) {
+            return _jellyfinArtistPageJson;
+          }
+          return switch (uri.queryParameters['IncludeItemTypes']) {
+            'MusicAlbum' => _jellyfinAlbumPageJson,
+            'Playlist' => _jellyfinPlaylistPageJson,
+            _ => throw StateError('Unexpected request: $uri'),
+          };
+        },
+      );
+
+      final artists = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.artist,
+        '  aether  ',
+        offset: 2,
+        limit: 1,
+      );
+      final albums = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.album,
         'aether',
-        limit: 0,
-      ),
-      throwsArgumentError,
-    );
-  });
+        offset: 2,
+        limit: 1,
+      );
+      final playlists = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.playlist,
+        'aether',
+        offset: 2,
+        limit: 1,
+      );
 
-  test('loads Jellyfin home discovery album shelves with bounded ordering',
-      () async {
-    final requests = <Uri>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (uri) async {
-        requests.add(uri);
-        if (uri.path.endsWith('/Items/Latest')) {
-          return _jellyfinLatestAlbumsJson;
-        }
-        return uri.path.endsWith('/Artists')
-            ? _jellyfinArtistsJson
-            : _jellyfinAlbumsJson;
-      },
-    );
+      expect(provider, isA<MusicCatalogCollectionSearchProvider>());
+      expect(
+        provider.searchableCollectionKinds,
+        MusicCatalogCollectionKind.values.toSet(),
+      );
+      expect(artists.collections.single.id, 'artist-page');
+      expect(albums.collections.single.id, 'album-page');
+      expect(playlists.collections.single.id, 'playlist-page');
+      expect(
+        requests.every(
+          (request) =>
+              request.queryParameters['SearchTerm'] == 'aether' &&
+              request.queryParameters['StartIndex'] == '2' &&
+              request.queryParameters['Limit'] == '1' &&
+              request.queryParameters['EnableTotalRecordCount'] == 'true' &&
+              request.queryParameters['api_key'] == 'api-secret',
+        ),
+        isTrue,
+      );
+      expect(requests.first.path, '/jellyfin/Artists');
+      expect(requests[1].path, '/jellyfin/Users/user-1/Items');
 
-    final recentlyAdded = await provider.browseDiscoveryCollections(
-      MusicCatalogDiscoveryKind.recentlyAdded,
-      limit: 7,
-    );
-    final frequentlyPlayed = await provider.browseDiscoveryCollections(
-      MusicCatalogDiscoveryKind.frequentlyPlayed,
-      limit: 7,
-    );
-    final recentlyPlayed = await provider.browseDiscoveryCollections(
-      MusicCatalogDiscoveryKind.recentlyPlayed,
-      limit: 7,
-    );
-    final favorites = await provider.browseDiscoveryCollections(
-      MusicCatalogDiscoveryKind.favorites,
-      limit: 7,
-    );
-    final random = await provider.browseDiscoveryCollections(
-      MusicCatalogDiscoveryKind.random,
-      limit: 7,
-    );
-    final favoriteArtists = await provider.browseDiscoveryCollections(
-      MusicCatalogDiscoveryKind.favoriteArtists,
-      limit: 7,
-    );
+      final empty = await provider.searchCollectionsPage(
+        MusicCatalogCollectionKind.artist,
+        '   ',
+      );
+      expect(empty.collections, isEmpty);
+      expect(requests, hasLength(3));
+      await expectLater(
+        provider.searchCollectionsPage(
+          MusicCatalogCollectionKind.album,
+          'aether',
+          offset: -1,
+        ),
+        throwsArgumentError,
+      );
 
-    expect(provider.discoveryKinds, <MusicCatalogDiscoveryKind>[
-      MusicCatalogDiscoveryKind.recentlyAdded,
-      MusicCatalogDiscoveryKind.frequentlyPlayed,
-      MusicCatalogDiscoveryKind.recentlyPlayed,
-      MusicCatalogDiscoveryKind.favorites,
-      MusicCatalogDiscoveryKind.favoriteArtists,
-      MusicCatalogDiscoveryKind.random,
-    ]);
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.recommendations),
-    );
-    expect(recentlyAdded.single.id, 'album-latest');
-    expect(frequentlyPlayed.single.id, 'album-1');
-    expect(recentlyPlayed.single.id, 'album-1');
-    expect(favorites.single.id, 'album-1');
-    expect(random.single.id, 'album-1');
-    expect(favoriteArtists.single.id, 'artist-1');
+      final suggestions = await provider.suggestCollections(
+        MusicCatalogCollectionKind.playlist,
+        ' aether ',
+        limit: 99,
+      );
+      expect(provider, isA<MusicCatalogCollectionSuggestionProvider>());
+      expect(
+        provider.suggestionCollectionKinds,
+        MusicCatalogCollectionKind.values.toSet(),
+      );
+      expect(suggestions.single.id, 'playlist-page');
+      expect(requests.last.path, '/jellyfin/Users/user-1/Items');
+      expect(requests.last.queryParameters['SearchTerm'], 'aether');
+      expect(requests.last.queryParameters['StartIndex'], '0');
+      expect(requests.last.queryParameters['Limit'], '10');
+      await expectLater(
+        provider.suggestCollections(
+          MusicCatalogCollectionKind.artist,
+          'aether',
+          limit: 0,
+        ),
+        throwsArgumentError,
+      );
+    },
+  );
 
-    final latestRequest = requests[0];
-    expect(latestRequest.path, '/jellyfin/Items/Latest');
-    expect(latestRequest.queryParameters['userId'], 'user-1');
-    expect(latestRequest.queryParameters['includeItemTypes'], 'MusicAlbum');
-    expect(latestRequest.queryParameters['limit'], '7');
-    expect(latestRequest.queryParameters['groupItems'], 'false');
-    expect(latestRequest.queryParameters['api_key'], 'api-secret');
+  test(
+    'loads Jellyfin home discovery album shelves with bounded ordering',
+    () async {
+      final requests = <Uri>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (uri) async {
+          requests.add(uri);
+          if (uri.path.endsWith('/Items/Latest')) {
+            return _jellyfinLatestAlbumsJson;
+          }
+          return uri.path.endsWith('/Artists')
+              ? _jellyfinArtistsJson
+              : _jellyfinAlbumsJson;
+        },
+      );
 
-    final frequentRequest = requests[1];
-    expect(frequentRequest.path, '/jellyfin/Users/user-1/Items');
-    expect(frequentRequest.queryParameters['IncludeItemTypes'], 'MusicAlbum');
-    expect(frequentRequest.queryParameters['SortBy'], 'PlayCount');
-    expect(frequentRequest.queryParameters['SortOrder'], 'Descending');
-    expect(frequentRequest.queryParameters['IsPlayed'], 'true');
-    expect(frequentRequest.queryParameters['Limit'], '7');
+      final recentlyAdded = await provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.recentlyAdded,
+        limit: 7,
+      );
+      final frequentlyPlayed = await provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        limit: 7,
+      );
+      final recentlyPlayed = await provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        limit: 7,
+      );
+      final favorites = await provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.favorites,
+        limit: 7,
+      );
+      final random = await provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.random,
+        limit: 7,
+      );
+      final favoriteArtists = await provider.browseDiscoveryCollections(
+        MusicCatalogDiscoveryKind.favoriteArtists,
+        limit: 7,
+      );
 
-    final recentRequest = requests[2];
-    expect(recentRequest.queryParameters['SortBy'], 'DatePlayed');
-    expect(recentRequest.queryParameters['SortOrder'], 'Descending');
-    expect(recentRequest.queryParameters['IsPlayed'], 'true');
+      expect(provider.discoveryKinds, <MusicCatalogDiscoveryKind>[
+        MusicCatalogDiscoveryKind.recentlyAdded,
+        MusicCatalogDiscoveryKind.frequentlyPlayed,
+        MusicCatalogDiscoveryKind.recentlyPlayed,
+        MusicCatalogDiscoveryKind.favorites,
+        MusicCatalogDiscoveryKind.favoriteArtists,
+        MusicCatalogDiscoveryKind.random,
+      ]);
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.recommendations),
+      );
+      expect(recentlyAdded.single.id, 'album-latest');
+      expect(frequentlyPlayed.single.id, 'album-1');
+      expect(recentlyPlayed.single.id, 'album-1');
+      expect(favorites.single.id, 'album-1');
+      expect(random.single.id, 'album-1');
+      expect(favoriteArtists.single.id, 'artist-1');
 
-    final favoriteRequest = requests[3];
-    expect(favoriteRequest.queryParameters['SortBy'], 'SortName');
-    expect(favoriteRequest.queryParameters['SortOrder'], 'Descending');
-    expect(favoriteRequest.queryParameters['IsFavorite'], 'true');
-    expect(favoriteRequest.queryParameters['IsPlayed'], isNull);
+      final latestRequest = requests[0];
+      expect(latestRequest.path, '/jellyfin/Items/Latest');
+      expect(latestRequest.queryParameters['userId'], 'user-1');
+      expect(latestRequest.queryParameters['includeItemTypes'], 'MusicAlbum');
+      expect(latestRequest.queryParameters['limit'], '7');
+      expect(latestRequest.queryParameters['groupItems'], 'false');
+      expect(latestRequest.queryParameters['api_key'], 'api-secret');
 
-    final randomRequest = requests[4];
-    expect(randomRequest.queryParameters['SortBy'], 'Random');
-    expect(randomRequest.queryParameters['SortOrder'], 'Descending');
-    expect(randomRequest.queryParameters['IsPlayed'], isNull);
+      final frequentRequest = requests[1];
+      expect(frequentRequest.path, '/jellyfin/Users/user-1/Items');
+      expect(frequentRequest.queryParameters['IncludeItemTypes'], 'MusicAlbum');
+      expect(frequentRequest.queryParameters['SortBy'], 'PlayCount');
+      expect(frequentRequest.queryParameters['SortOrder'], 'Descending');
+      expect(frequentRequest.queryParameters['IsPlayed'], 'true');
+      expect(frequentRequest.queryParameters['Limit'], '7');
 
-    final favoriteArtistsRequest = requests[5];
-    expect(favoriteArtistsRequest.path, '/jellyfin/Artists');
-    expect(favoriteArtistsRequest.queryParameters['UserId'], 'user-1');
-    expect(favoriteArtistsRequest.queryParameters['Filters'], 'IsFavorite');
-    expect(favoriteArtistsRequest.queryParameters['EnableUserData'], 'true');
-  });
+      final recentRequest = requests[2];
+      expect(recentRequest.queryParameters['SortBy'], 'DatePlayed');
+      expect(recentRequest.queryParameters['SortOrder'], 'Descending');
+      expect(recentRequest.queryParameters['IsPlayed'], 'true');
+
+      final favoriteRequest = requests[3];
+      expect(favoriteRequest.queryParameters['SortBy'], 'SortName');
+      expect(favoriteRequest.queryParameters['SortOrder'], 'Descending');
+      expect(favoriteRequest.queryParameters['IsFavorite'], 'true');
+      expect(favoriteRequest.queryParameters['IsPlayed'], isNull);
+
+      final randomRequest = requests[4];
+      expect(randomRequest.queryParameters['SortBy'], 'Random');
+      expect(randomRequest.queryParameters['SortOrder'], 'Descending');
+      expect(randomRequest.queryParameters['IsPlayed'], isNull);
+
+      final favoriteArtistsRequest = requests[5];
+      expect(favoriteArtistsRequest.path, '/jellyfin/Artists');
+      expect(favoriteArtistsRequest.queryParameters['UserId'], 'user-1');
+      expect(favoriteArtistsRequest.queryParameters['Filters'], 'IsFavorite');
+      expect(favoriteArtistsRequest.queryParameters['EnableUserData'], 'true');
+    },
+  );
 
   test('pages Jellyfin query-backed discovery shelves', () async {
     Uri? capturedUri;
@@ -555,15 +558,12 @@ void main() {
       limit: 1,
     );
 
-    expect(
-      provider.pagedDiscoveryKinds,
-      <MusicCatalogDiscoveryKind>{
-        MusicCatalogDiscoveryKind.frequentlyPlayed,
-        MusicCatalogDiscoveryKind.recentlyPlayed,
-        MusicCatalogDiscoveryKind.favorites,
-        MusicCatalogDiscoveryKind.random,
-      },
-    );
+    expect(provider.pagedDiscoveryKinds, <MusicCatalogDiscoveryKind>{
+      MusicCatalogDiscoveryKind.frequentlyPlayed,
+      MusicCatalogDiscoveryKind.recentlyPlayed,
+      MusicCatalogDiscoveryKind.favorites,
+      MusicCatalogDiscoveryKind.random,
+    });
     expect(page.collections.single.id, 'album-continued');
     expect(page.nextOffset, 10);
     expect(page.totalCount, 12);
@@ -598,398 +598,393 @@ void main() {
     );
   });
 
-  test('loads Jellyfin instant-mix radio for track artist and album seeds',
-      () async {
-    final requests = <Uri>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (uri) async {
-        requests.add(uri);
-        return _jellyfinItemsJson;
-      },
-    );
+  test(
+    'loads Jellyfin instant-mix radio for track artist and album seeds',
+    () async {
+      final requests = <Uri>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (uri) async {
+          requests.add(uri);
+          return _jellyfinItemsJson;
+        },
+      );
 
-    final trackRadio = await provider.loadRadio(
-      const MusicCatalogRadioSeed(
-        kind: MusicCatalogRadioSeedKind.track,
-        id: ' song-1 ',
-      ),
-      limit: 7,
-    );
-    final artistRadio = await provider.loadRadio(
-      const MusicCatalogRadioSeed(
-        kind: MusicCatalogRadioSeedKind.artist,
-        id: 'artist-1',
-      ),
-      limit: 8,
-    );
-    final albumRadio = await provider.loadRadio(
-      const MusicCatalogRadioSeed(
-        kind: MusicCatalogRadioSeedKind.album,
-        id: 'album-1',
-      ),
-      limit: 9,
-    );
-
-    expect(provider, isA<MusicCatalogRadioProvider>());
-    expect(
-      provider.radioSeedKinds,
-      MusicCatalogRadioSeedKind.values.toSet(),
-    );
-    expect(trackRadio.single.title, 'Sea Glass');
-    expect(artistRadio.single.sourceId, provider.id);
-    expect(albumRadio.single.streamUrl, isNull);
-    expect(
-      requests.map((request) => request.path),
-      <String>[
-        '/jellyfin/Songs/song-1/InstantMix',
-        '/jellyfin/Artists/artist-1/InstantMix',
-        '/jellyfin/Albums/album-1/InstantMix',
-      ],
-    );
-    expect(
-      requests.map((request) => request.queryParameters['limit']),
-      <String>['7', '8', '9'],
-    );
-    expect(
-      requests.every(
-        (request) =>
-            request.queryParameters['userId'] == 'user-1' &&
-            request.queryParameters['fields'] == 'Genres' &&
-            request.queryParameters['enableImages'] == 'true' &&
-            request.queryParameters['enableImageTypes'] == 'Primary' &&
-            request.queryParameters['imageTypeLimit'] == '1' &&
-            request.queryParameters['api_key'] == 'api-secret',
-      ),
-      isTrue,
-    );
-
-    await expectLater(
-      provider.loadRadio(
+      final trackRadio = await provider.loadRadio(
         const MusicCatalogRadioSeed(
-          kind: MusicCatalogRadioSeedKind.album,
-          id: ' ',
+          kind: MusicCatalogRadioSeedKind.track,
+          id: ' song-1 ',
         ),
-      ),
-      throwsArgumentError,
-    );
-    await expectLater(
-      provider.loadRadio(
+        limit: 7,
+      );
+      final artistRadio = await provider.loadRadio(
         const MusicCatalogRadioSeed(
           kind: MusicCatalogRadioSeedKind.artist,
           id: 'artist-1',
         ),
-        limit: 0,
-      ),
-      throwsArgumentError,
-    );
-    expect(requests, hasLength(3));
-  });
+        limit: 8,
+      );
+      final albumRadio = await provider.loadRadio(
+        const MusicCatalogRadioSeed(
+          kind: MusicCatalogRadioSeedKind.album,
+          id: 'album-1',
+        ),
+        limit: 9,
+      );
 
-  test('loads Jellyfin artist albums, album tracks, and playlist tracks',
-      () async {
-    final requests = <Uri>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (uri) async {
-        requests.add(uri);
-        if (uri.path.endsWith('/Playlists/playlist-1/Items')) {
-          return _jellyfinItemsJson;
-        }
-        if (uri.queryParameters['ArtistIds'] == 'artist-1') {
-          return _jellyfinAlbumsJson;
-        }
-        if (uri.queryParameters['ParentId'] == 'album-1') {
-          return _jellyfinItemsJson;
-        }
-        throw StateError('Unexpected request: $uri');
-      },
-    );
+      expect(provider, isA<MusicCatalogRadioProvider>());
+      expect(provider.radioSeedKinds, MusicCatalogRadioSeedKind.values.toSet());
+      expect(trackRadio.single.title, 'Sea Glass');
+      expect(artistRadio.single.sourceId, provider.id);
+      expect(albumRadio.single.streamUrl, isNull);
+      expect(requests.map((request) => request.path), <String>[
+        '/jellyfin/Songs/song-1/InstantMix',
+        '/jellyfin/Artists/artist-1/InstantMix',
+        '/jellyfin/Albums/album-1/InstantMix',
+      ]);
+      expect(
+        requests.map((request) => request.queryParameters['limit']),
+        <String>['7', '8', '9'],
+      );
+      expect(
+        requests.every(
+          (request) =>
+              request.queryParameters['userId'] == 'user-1' &&
+              request.queryParameters['fields'] == 'Genres' &&
+              request.queryParameters['enableImages'] == 'true' &&
+              request.queryParameters['enableImageTypes'] == 'Primary' &&
+              request.queryParameters['imageTypeLimit'] == '1' &&
+              request.queryParameters['api_key'] == 'api-secret',
+        ),
+        isTrue,
+      );
 
-    final artist = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'artist-1',
-        title: 'Mira Sol',
-        kind: MusicCatalogCollectionKind.artist,
-      ),
-    );
-    final album = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'album-1',
-        title: 'Blue Rooms',
-        kind: MusicCatalogCollectionKind.album,
-      ),
-    );
-    final playlist = await provider.loadCollection(
-      const MusicCatalogCollection(
-        id: 'playlist-1',
-        title: 'Night Focus',
-        kind: MusicCatalogCollectionKind.playlist,
-      ),
-    );
+      await expectLater(
+        provider.loadRadio(
+          const MusicCatalogRadioSeed(
+            kind: MusicCatalogRadioSeedKind.album,
+            id: ' ',
+          ),
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        provider.loadRadio(
+          const MusicCatalogRadioSeed(
+            kind: MusicCatalogRadioSeedKind.artist,
+            id: 'artist-1',
+          ),
+          limit: 0,
+        ),
+        throwsArgumentError,
+      );
+      expect(requests, hasLength(3));
+    },
+  );
 
-    expect(artist.collections.single.title, 'Blue Rooms');
-    expect(artist.tracks, isEmpty);
-    expect(album.tracks.single.title, 'Sea Glass');
-    expect(album.tracks.single.streamUrl, isNull);
-    expect(album.tracks.single.artworkUri, isNull);
-    expect(album.tracks.single.providerArtworkId, 'song-1');
-    expect(playlist.tracks.single.externalId, 'song-1');
-    expect(requests[0].queryParameters['ArtistIds'], 'artist-1');
-    expect(requests[0].queryParameters['IncludeItemTypes'], 'MusicAlbum');
-    expect(requests[1].queryParameters['ParentId'], 'album-1');
-    expect(requests[1].queryParameters['IncludeItemTypes'], 'Audio');
-    expect(
-      requests[2].path,
-      '/jellyfin/Playlists/playlist-1/Items',
-    );
-    expect(requests[2].queryParameters['UserId'], 'user-1');
-  });
+  test(
+    'loads Jellyfin artist albums, album tracks, and playlist tracks',
+    () async {
+      final requests = <Uri>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (uri) async {
+          requests.add(uri);
+          if (uri.path.endsWith('/Playlists/playlist-1/Items')) {
+            return _jellyfinItemsJson;
+          }
+          if (uri.queryParameters['ArtistIds'] == 'artist-1') {
+            return _jellyfinAlbumsJson;
+          }
+          if (uri.queryParameters['ParentId'] == 'album-1') {
+            return _jellyfinItemsJson;
+          }
+          throw StateError('Unexpected request: $uri');
+        },
+      );
 
-  test('creates edits and deletes Jellyfin playlists through documented APIs',
-      () async {
-    final requests = <Uri>[];
-    final methods = <String>[];
-    final bodies = <Map<String, Object?>?>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (_) async => '{"Items":[]}',
-      mutationLoader: (uri, method, body) async {
-        requests.add(uri);
-        methods.add(method);
-        bodies.add(body);
-      },
-    );
+      final artist = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'artist-1',
+          title: 'Mira Sol',
+          kind: MusicCatalogCollectionKind.artist,
+        ),
+      );
+      final album = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'album-1',
+          title: 'Blue Rooms',
+          kind: MusicCatalogCollectionKind.album,
+        ),
+      );
+      final playlist = await provider.loadCollection(
+        const MusicCatalogCollection(
+          id: 'playlist-1',
+          title: 'Night Focus',
+          kind: MusicCatalogCollectionKind.playlist,
+        ),
+      );
 
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.playlistMutation),
-    );
+      expect(artist.collections.single.title, 'Blue Rooms');
+      expect(artist.tracks, isEmpty);
+      expect(album.tracks.single.title, 'Sea Glass');
+      expect(album.tracks.single.streamUrl, isNull);
+      expect(album.tracks.single.artworkUri, isNull);
+      expect(album.tracks.single.providerArtworkId, 'song-1');
+      expect(playlist.tracks.single.externalId, 'song-1');
+      expect(requests[0].queryParameters['ArtistIds'], 'artist-1');
+      expect(requests[0].queryParameters['IncludeItemTypes'], 'MusicAlbum');
+      expect(requests[1].queryParameters['ParentId'], 'album-1');
+      expect(requests[1].queryParameters['IncludeItemTypes'], 'Audio');
+      expect(requests[2].path, '/jellyfin/Playlists/playlist-1/Items');
+      expect(requests[2].queryParameters['UserId'], 'user-1');
+    },
+  );
 
-    await provider.createPlaylist(
-      '  Morning Focus  ',
-      trackIds: const <String>['song-1', 'song-2'],
-    );
-    await provider.renamePlaylist('playlist-1', 'Deep Focus');
-    await provider.addPlaylistTracks(
-      'playlist-1',
-      const <String>['song-3', 'song-4'],
-    );
-    await provider.replacePlaylistTracks(
-      'playlist-1',
-      const <String>['song-2', 'song-1', 'song-2'],
-    );
-    await provider.deletePlaylist('playlist-1');
-    await provider.addPlaylistTracks('playlist-1', const <String>[]);
+  test(
+    'creates edits and deletes Jellyfin playlists through documented APIs',
+    () async {
+      final requests = <Uri>[];
+      final methods = <String>[];
+      final bodies = <Map<String, Object?>?>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (_) async => '{"Items":[]}',
+        mutationLoader: (uri, method, body) async {
+          requests.add(uri);
+          methods.add(method);
+          bodies.add(body);
+        },
+      );
 
-    expect(methods, <String>['POST', 'POST', 'POST', 'POST', 'DELETE']);
-    expect(requests.map((request) => request.path), <String>[
-      '/jellyfin/Playlists',
-      '/jellyfin/Playlists/playlist-1',
-      '/jellyfin/Playlists/playlist-1/Items',
-      '/jellyfin/Playlists/playlist-1',
-      '/jellyfin/Items/playlist-1',
-    ]);
-    expect(bodies[0], <String, Object?>{
-      'Name': 'Morning Focus',
-      'Ids': <String>['song-1', 'song-2'],
-      'UserId': 'user-1',
-      'MediaType': 'Audio',
-    });
-    expect(bodies[1], <String, Object?>{'Name': 'Deep Focus'});
-    expect(bodies[2], isNull);
-    expect(requests[2].queryParameters['ids'], 'song-3,song-4');
-    expect(requests[2].queryParameters['userId'], 'user-1');
-    expect(bodies[3], <String, Object?>{
-      'Ids': <String>['song-2', 'song-1', 'song-2'],
-    });
-    expect(bodies[4], isNull);
-    expect(
-      requests.every(
-        (request) => request.queryParameters['api_key'] == 'api-secret',
-      ),
-      isTrue,
-    );
-    expect(
-      () => provider.createPlaylist('   '),
-      throwsArgumentError,
-    );
-    expect(
-      () => provider.replacePlaylistTracks(
-        'playlist-1',
-        const <String>[''],
-      ),
-      throwsArgumentError,
-    );
-  });
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.playlistMutation),
+      );
 
-  test('loads Jellyfin artwork with header auth and a credential-free URI',
-      () async {
-    Uri? capturedUri;
-    Map<String, String>? capturedHeaders;
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (_) async => '{"Items":[]}',
-      artworkLoader: (uri, headers) async {
-        capturedUri = uri;
-        capturedHeaders = headers;
-        return Uint8List.fromList(<int>[1, 2, 3]);
-      },
-    );
+      await provider.createPlaylist(
+        '  Morning Focus  ',
+        trackIds: const <String>['song-1', 'song-2'],
+      );
+      await provider.renamePlaylist('playlist-1', 'Deep Focus');
+      await provider.addPlaylistTracks('playlist-1', const <String>[
+        'song-3',
+        'song-4',
+      ]);
+      await provider.replacePlaylistTracks('playlist-1', const <String>[
+        'song-2',
+        'song-1',
+        'song-2',
+      ]);
+      await provider.deletePlaylist('playlist-1');
+      await provider.addPlaylistTracks('playlist-1', const <String>[]);
 
-    final bytes = await provider.loadArtwork(
-      'album-1',
-      version: 'image-tag',
-      maxWidth: 320,
-    );
+      expect(methods, <String>['POST', 'POST', 'POST', 'POST', 'DELETE']);
+      expect(requests.map((request) => request.path), <String>[
+        '/jellyfin/Playlists',
+        '/jellyfin/Playlists/playlist-1',
+        '/jellyfin/Playlists/playlist-1/Items',
+        '/jellyfin/Playlists/playlist-1',
+        '/jellyfin/Items/playlist-1',
+      ]);
+      expect(bodies[0], <String, Object?>{
+        'Name': 'Morning Focus',
+        'Ids': <String>['song-1', 'song-2'],
+        'UserId': 'user-1',
+        'MediaType': 'Audio',
+      });
+      expect(bodies[1], <String, Object?>{'Name': 'Deep Focus'});
+      expect(bodies[2], isNull);
+      expect(requests[2].queryParameters['ids'], 'song-3,song-4');
+      expect(requests[2].queryParameters['userId'], 'user-1');
+      expect(bodies[3], <String, Object?>{
+        'Ids': <String>['song-2', 'song-1', 'song-2'],
+      });
+      expect(bodies[4], isNull);
+      expect(
+        requests.every(
+          (request) => request.queryParameters['api_key'] == 'api-secret',
+        ),
+        isTrue,
+      );
+      expect(() => provider.createPlaylist('   '), throwsArgumentError);
+      expect(
+        () => provider.replacePlaylistTracks('playlist-1', const <String>['']),
+        throwsArgumentError,
+      );
+    },
+  );
 
-    expect(bytes, <int>[1, 2, 3]);
-    expect(capturedUri!.path, '/jellyfin/Items/album-1/Images/Primary');
-    expect(capturedUri!.queryParameters['maxWidth'], '320');
-    expect(capturedUri!.queryParameters['quality'], '90');
-    expect(capturedUri!.queryParameters['tag'], 'image-tag');
-    expect(capturedUri!.queryParameters.containsKey('api_key'), isFalse);
-    expect(capturedUri.toString(), isNot(contains('api-secret')));
-    expect(capturedHeaders, <String, String>{
-      'X-Emby-Token': 'api-secret',
-    });
-  });
+  test(
+    'loads Jellyfin artwork with header auth and a credential-free URI',
+    () async {
+      Uri? capturedUri;
+      Map<String, String>? capturedHeaders;
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (_) async => '{"Items":[]}',
+        artworkLoader: (uri, headers) async {
+          capturedUri = uri;
+          capturedHeaders = headers;
+          return Uint8List.fromList(<int>[1, 2, 3]);
+        },
+      );
 
-  test('syncs Jellyfin track favorites through the user favorite endpoint',
-      () async {
-    final requests = <Uri>[];
-    final methods = <String>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (_) async => _jellyfinItemsJson,
-      mutationLoader: (uri, method, body) async {
-        requests.add(uri);
-        methods.add(method);
-        expect(body, isNull);
-      },
-    );
+      final bytes = await provider.loadArtwork(
+        'album-1',
+        version: 'image-tag',
+        maxWidth: 320,
+      );
 
-    expect(provider, isA<MusicTrackFavoriteMutationProvider>());
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.favoriteMutation),
-    );
-    expect(provider.disclosure.dataSent, contains('favorite track changes'));
-    expect((await provider.search('sea')).single.isFavorite, isTrue);
+      expect(bytes, <int>[1, 2, 3]);
+      expect(capturedUri!.path, '/jellyfin/Items/album-1/Images/Primary');
+      expect(capturedUri!.queryParameters['maxWidth'], '320');
+      expect(capturedUri!.queryParameters['quality'], '90');
+      expect(capturedUri!.queryParameters['tag'], 'image-tag');
+      expect(capturedUri!.queryParameters.containsKey('api_key'), isFalse);
+      expect(capturedUri.toString(), isNot(contains('api-secret')));
+      expect(capturedHeaders, <String, String>{'X-Emby-Token': 'api-secret'});
+    },
+  );
 
-    await provider.setTrackFavorite('song-1', isFavorite: true);
-    await provider.setTrackFavorite('song-1', isFavorite: false);
+  test(
+    'syncs Jellyfin track favorites through the user favorite endpoint',
+    () async {
+      final requests = <Uri>[];
+      final methods = <String>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (_) async => _jellyfinItemsJson,
+        mutationLoader: (uri, method, body) async {
+          requests.add(uri);
+          methods.add(method);
+          expect(body, isNull);
+        },
+      );
 
-    expect(methods, <String>['POST', 'DELETE']);
-    expect(requests.map((request) => request.path), <String>[
-      '/jellyfin/Users/user-1/FavoriteItems/song-1',
-      '/jellyfin/Users/user-1/FavoriteItems/song-1',
-    ]);
-    expect(
-      requests.every(
-        (request) => request.queryParameters['api_key'] == 'api-secret',
-      ),
-      isTrue,
-    );
-    expect(
-      () => provider.setTrackFavorite(' ', isFavorite: true),
-      throwsArgumentError,
-    );
-  });
+      expect(provider, isA<MusicTrackFavoriteMutationProvider>());
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.favoriteMutation),
+      );
+      expect(provider.disclosure.dataSent, contains('favorite track changes'));
+      expect((await provider.search('sea')).single.isFavorite, isTrue);
 
-  test('syncs Jellyfin album favorites through the user favorite endpoint',
-      () async {
-    final requests = <Uri>[];
-    final methods = <String>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (_) async => _jellyfinAlbumsJson,
-      mutationLoader: (uri, method, body) async {
-        requests.add(uri);
-        methods.add(method);
-        expect(body, isNull);
-      },
-    );
+      await provider.setTrackFavorite('song-1', isFavorite: true);
+      await provider.setTrackFavorite('song-1', isFavorite: false);
 
-    expect(provider, isA<MusicAlbumFavoriteMutationProvider>());
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.albumFavoriteMutation),
-    );
-    expect(
-      (await provider.browseCollections(MusicCatalogCollectionKind.album))
-          .single
-          .isFavorite,
-      isTrue,
-    );
+      expect(methods, <String>['POST', 'DELETE']);
+      expect(requests.map((request) => request.path), <String>[
+        '/jellyfin/Users/user-1/FavoriteItems/song-1',
+        '/jellyfin/Users/user-1/FavoriteItems/song-1',
+      ]);
+      expect(
+        requests.every(
+          (request) => request.queryParameters['api_key'] == 'api-secret',
+        ),
+        isTrue,
+      );
+      expect(
+        () => provider.setTrackFavorite(' ', isFavorite: true),
+        throwsArgumentError,
+      );
+    },
+  );
 
-    await provider.setAlbumFavorite('album-1', isFavorite: true);
-    await provider.setAlbumFavorite('album-1', isFavorite: false);
+  test(
+    'syncs Jellyfin album favorites through the user favorite endpoint',
+    () async {
+      final requests = <Uri>[];
+      final methods = <String>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (_) async => _jellyfinAlbumsJson,
+        mutationLoader: (uri, method, body) async {
+          requests.add(uri);
+          methods.add(method);
+          expect(body, isNull);
+        },
+      );
 
-    expect(methods, <String>['POST', 'DELETE']);
-    expect(requests.map((request) => request.path), <String>[
-      '/jellyfin/Users/user-1/FavoriteItems/album-1',
-      '/jellyfin/Users/user-1/FavoriteItems/album-1',
-    ]);
-  });
+      expect(provider, isA<MusicAlbumFavoriteMutationProvider>());
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.albumFavoriteMutation),
+      );
+      expect(
+        (await provider.browseCollections(
+          MusicCatalogCollectionKind.album,
+        )).single.isFavorite,
+        isTrue,
+      );
 
-  test('syncs Jellyfin artist favorites through the user favorite endpoint',
-      () async {
-    final catalogRequests = <Uri>[];
-    final requests = <Uri>[];
-    final methods = <String>[];
-    final provider = JellyfinProvider(
-      baseUri: Uri.parse('https://media.example.test/jellyfin'),
-      userId: 'user-1',
-      apiKey: 'api-secret',
-      requestLoader: (uri) async {
-        catalogRequests.add(uri);
-        return _jellyfinArtistsJson;
-      },
-      mutationLoader: (uri, method, body) async {
-        requests.add(uri);
-        methods.add(method);
-        expect(body, isNull);
-      },
-    );
+      await provider.setAlbumFavorite('album-1', isFavorite: true);
+      await provider.setAlbumFavorite('album-1', isFavorite: false);
 
-    expect(provider, isA<MusicArtistFavoriteMutationProvider>());
-    expect(
-      provider.capabilities,
-      contains(MusicSourceCapability.artistFavoriteMutation),
-    );
-    expect(
-      (await provider.browseCollections(MusicCatalogCollectionKind.artist))
-          .single
-          .isFavorite,
-      isTrue,
-    );
-    expect(
-      catalogRequests.single.queryParameters['EnableUserData'],
-      'true',
-    );
+      expect(methods, <String>['POST', 'DELETE']);
+      expect(requests.map((request) => request.path), <String>[
+        '/jellyfin/Users/user-1/FavoriteItems/album-1',
+        '/jellyfin/Users/user-1/FavoriteItems/album-1',
+      ]);
+    },
+  );
 
-    await provider.setArtistFavorite('artist-1', isFavorite: true);
-    await provider.setArtistFavorite('artist-1', isFavorite: false);
+  test(
+    'syncs Jellyfin artist favorites through the user favorite endpoint',
+    () async {
+      final catalogRequests = <Uri>[];
+      final requests = <Uri>[];
+      final methods = <String>[];
+      final provider = JellyfinProvider(
+        baseUri: Uri.parse('https://media.example.test/jellyfin'),
+        userId: 'user-1',
+        apiKey: 'api-secret',
+        requestLoader: (uri) async {
+          catalogRequests.add(uri);
+          return _jellyfinArtistsJson;
+        },
+        mutationLoader: (uri, method, body) async {
+          requests.add(uri);
+          methods.add(method);
+          expect(body, isNull);
+        },
+      );
 
-    expect(methods, <String>['POST', 'DELETE']);
-    expect(requests.map((request) => request.path), <String>[
-      '/jellyfin/Users/user-1/FavoriteItems/artist-1',
-      '/jellyfin/Users/user-1/FavoriteItems/artist-1',
-    ]);
-  });
+      expect(provider, isA<MusicArtistFavoriteMutationProvider>());
+      expect(
+        provider.capabilities,
+        contains(MusicSourceCapability.artistFavoriteMutation),
+      );
+      expect(
+        (await provider.browseCollections(
+          MusicCatalogCollectionKind.artist,
+        )).single.isFavorite,
+        isTrue,
+      );
+      expect(catalogRequests.single.queryParameters['EnableUserData'], 'true');
+
+      await provider.setArtistFavorite('artist-1', isFavorite: true);
+      await provider.setArtistFavorite('artist-1', isFavorite: false);
+
+      expect(methods, <String>['POST', 'DELETE']);
+      expect(requests.map((request) => request.path), <String>[
+        '/jellyfin/Users/user-1/FavoriteItems/artist-1',
+        '/jellyfin/Users/user-1/FavoriteItems/artist-1',
+      ]);
+    },
+  );
 
   test('handles empty responses and offline policy for user-owned media', () {
     expect(parseJellyfinItemsResponse('{"Items":[]}'), isEmpty);

@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('renders and captures a collection share card PNG', (tester) async {
+  testWidgets('renders and captures a collection share card PNG', (
+    tester,
+  ) async {
     final boundaryKey = GlobalKey();
     await tester.pumpWidget(
       MaterialApp(

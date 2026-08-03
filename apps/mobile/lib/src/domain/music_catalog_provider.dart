@@ -8,10 +8,7 @@ enum MusicCatalogCollectionKind { artist, album, playlist }
 enum MusicCatalogRadioSeedKind { track, artist, album }
 
 final class MusicCatalogRadioSeed {
-  const MusicCatalogRadioSeed({
-    required this.kind,
-    required this.id,
-  });
+  const MusicCatalogRadioSeed({required this.kind, required this.id});
 
   final MusicCatalogRadioSeedKind kind;
   final String id;
@@ -70,9 +67,7 @@ abstract interface class MusicCatalogProvider implements MusicSourceProvider {
     MusicCatalogCollectionKind kind,
   );
 
-  Future<MusicCatalogDetail> loadCollection(
-    MusicCatalogCollection collection,
-  );
+  Future<MusicCatalogDetail> loadCollection(MusicCatalogCollection collection);
 
   Future<Uint8List?> loadArtwork(
     String artworkId, {
@@ -128,10 +123,7 @@ abstract interface class MusicCatalogRadioProvider
     implements MusicCatalogProvider {
   Set<MusicCatalogRadioSeedKind> get radioSeedKinds;
 
-  Future<List<Track>> loadRadio(
-    MusicCatalogRadioSeed seed, {
-    int limit = 50,
-  });
+  Future<List<Track>> loadRadio(MusicCatalogRadioSeed seed, {int limit = 50});
 }
 
 abstract interface class MusicPlaylistMutationProvider {
@@ -144,38 +136,23 @@ abstract interface class MusicPlaylistMutationProvider {
 
   Future<void> deletePlaylist(String playlistId);
 
-  Future<void> addPlaylistTracks(
-    String playlistId,
-    List<String> trackIds,
-  );
+  Future<void> addPlaylistTracks(String playlistId, List<String> trackIds);
 
-  Future<void> replacePlaylistTracks(
-    String playlistId,
-    List<String> trackIds,
-  );
+  Future<void> replacePlaylistTracks(String playlistId, List<String> trackIds);
 }
 
 /// Optional extension for user-owned catalogs that can persist a track's
 /// favorite state on the remote server.
 abstract interface class MusicTrackFavoriteMutationProvider {
-  Future<void> setTrackFavorite(
-    String trackId, {
-    required bool isFavorite,
-  });
+  Future<void> setTrackFavorite(String trackId, {required bool isFavorite});
 }
 
 /// Optional extension for user-owned catalogs that can persist an album's
 /// favorite state on the remote server.
 abstract interface class MusicAlbumFavoriteMutationProvider {
-  Future<void> setAlbumFavorite(
-    String albumId, {
-    required bool isFavorite,
-  });
+  Future<void> setAlbumFavorite(String albumId, {required bool isFavorite});
 }
 
 abstract interface class MusicArtistFavoriteMutationProvider {
-  Future<void> setArtistFavorite(
-    String artistId, {
-    required bool isFavorite,
-  });
+  Future<void> setArtistFavorite(String artistId, {required bool isFavorite});
 }
