@@ -134,6 +134,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("aethertune-linux-x64.tar.gz", workflow)
         self.assertIn("scripts/ci/package_linux_deb.sh", workflow)
         self.assertIn("aethertune-linux-x64.deb", workflow)
+        self.assertLess(
+            workflow.index("scripts/ci/package_linux_deb.sh"),
+            workflow.index("scripts/ci/package_linux_tarball.sh"),
+        )
         self.assertIn("scripts/ci/package_windows_zip.ps1", workflow)
         self.assertIn("aethertune-windows-x64.zip", workflow)
         self.assertIn("scripts/ci/package_windows_msix.ps1", workflow)
