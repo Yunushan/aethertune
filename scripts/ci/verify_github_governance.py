@@ -97,11 +97,23 @@ def verify_governance_payloads(
         failures.append("CODEOWNERS does not cover all security-sensitive paths")
 
     rules = environment.get("protection_rules")
-    if not isinstance(rules, list) or not any(
-        isinstance(rule, dict) and rule.get("type") == "required_reviewers"
-        for rule in rules
+    reviewer_rule = next(
+        (
+            rule
+            for rule in rules or []
+            if isinstance(rule, dict) and rule.get("type") == "required_reviewers"
+        ),
+        None,
+    )
+    reviewers = reviewer_rule.get("reviewers") if isinstance(reviewer_rule, dict) else None
+    if (
+        not isinstance(reviewers, list)
+        or not reviewers
+        or reviewer_rule.get("prevent_self_review") is not True
     ):
-        failures.append("production environment requires an independent reviewer")
+        failures.append(
+            "production environment requires an independent reviewer who cannot self-approve"
+        )
     if environment.get("can_admins_bypass") is not False:
         failures.append("production environment prevents administrator bypass")
     if not any(

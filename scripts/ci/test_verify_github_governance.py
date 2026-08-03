@@ -40,7 +40,13 @@ def valid_environment() -> dict[str, object]:
     return {
         "can_admins_bypass": False,
         "protection_rules": [
-            {"type": "required_reviewers"},
+            {
+                "type": "required_reviewers",
+                "prevent_self_review": True,
+                "reviewers": [
+                    {"type": "User", "reviewer": {"login": "release-approver"}}
+                ],
+            },
             {"type": "wait_timer", "wait_timer": 5},
         ],
         "deployment_branch_policy": {
@@ -109,6 +115,19 @@ class GithubGovernanceTest(unittest.TestCase):
         environment = valid_environment()
         environment["can_admins_bypass"] = True
         with self.assertRaisesRegex(ValueError, "administrator bypass"):
+            verify_governance_payloads(
+                valid_branch_protection(),
+                environment,
+                CODEOWNERS,
+            )
+
+    def test_rejects_environment_without_reviewer_details(self) -> None:
+        environment = valid_environment()
+        environment["protection_rules"] = [
+            {"type": "required_reviewers", "prevent_self_review": False},
+            {"type": "wait_timer", "wait_timer": 5},
+        ]
+        with self.assertRaisesRegex(ValueError, "cannot self-approve"):
             verify_governance_payloads(
                 valid_branch_protection(),
                 environment,
