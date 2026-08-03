@@ -134,6 +134,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("aethertune-linux-x64.tar.gz", workflow)
         self.assertIn("scripts/ci/package_linux_deb.sh", workflow)
         self.assertIn("aethertune-linux-x64.deb", workflow)
+        self.assertIn("Reclaim Linux packaging space", workflow)
+        self.assertIn("sudo apt-get clean", workflow)
+        self.assertIn("apps/mobile/.dart_tool", workflow)
+        self.assertIn("! -name bundle", workflow)
         self.assertLess(
             workflow.index("scripts/ci/package_linux_deb.sh"),
             workflow.index("scripts/ci/package_linux_tarball.sh"),

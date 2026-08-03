@@ -340,6 +340,19 @@ jobs:
             -SigningCertificatePassword $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
           "WINDOWS_SIGNING_CERTIFICATE_PATH=$certificatePath" >> $env:GITHUB_ENV
 
+      - name: Reclaim Linux packaging space
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          rm -rf "$HOME/.pub-cache" apps/mobile/.dart_tool
+          find apps/mobile/build/linux/x64/release \
+            -mindepth 1 -maxdepth 1 ! -name bundle -exec rm -rf {} +
+          df -h "$GITHUB_WORKSPACE"
+          du -sh apps/mobile/build/linux/x64/release/bundle
+
       - name: Package Linux desktop app
         if: matrix.target == 'linux'
         shell: bash
