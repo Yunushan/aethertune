@@ -23,7 +23,8 @@ output_path="$(cd "$output_directory" && pwd)/$(basename "$output_path")"
 # Keep the staging directory beside the bundle so regular files can be
 # hard-linked instead of duplicating the entire Flutter bundle on disk.
 package_root="$(mktemp -d "$output_directory/.aethertune-deb.XXXXXX")"
-trap 'rm -rf "$package_root"' EXIT
+archive_root="$(mktemp -d "$output_directory/.aethertune-deb-archives.XXXXXX")"
+trap 'rm -rf "$package_root" "$archive_root"' EXIT
 mkdir -p "$package_root/DEBIAN" "$package_root/opt/aethertune" \
   "$package_root/usr/share/applications"
 cp -al "$bundle_dir/." "$package_root/opt/aethertune/"
@@ -50,10 +51,22 @@ Categories=AudioVideo;Audio;Player;
 StartupNotify=true
 EOF
 
-# Keep data.tar uncompressed. The Flutter bundle is already compact, and this
-# avoids the runner-specific gzip pipe failure seen while dpkg-deb builds the
-# package under constrained CI process limits.
-dpkg-deb --build --root-owner-group -Znone "$package_root" "$output_path"
+# Assemble the ar container explicitly. This avoids a runner-specific
+# dpkg-deb tar pipe failure while preserving the standard Debian package
+# members and metadata.
+if ! command -v ar >/dev/null 2>&1; then
+  echo "The ar utility is required to build a Debian package." >&2
+  exit 1
+fi
+printf '2.0\n' > "$archive_root/debian-binary"
+tar --format=gnu --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' \
+  -C "$package_root/DEBIAN" -cf "$archive_root/control.tar" .
+tar --format=gnu --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' \
+  --exclude='./DEBIAN' -C "$package_root" -cf "$archive_root/data.tar" .
+(
+  cd "$archive_root"
+  ar rD "$output_path" debian-binary control.tar data.tar
+)
 dpkg-deb --info "$output_path" >/dev/null
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/data/flutter_assets/AssetManifest.bin$'
