@@ -24,10 +24,14 @@ Future<void> main() async {
     <SyncAuthenticator>[syncAuthenticator, managedSyncAccounts],
   );
   final operationsToken = Platform.environment['AETHERTUNE_OPS_TOKEN'];
-  final operationsAuthenticator =
-      operationsToken == null || operationsToken.isEmpty
-      ? const DisabledOperationsAuthenticator()
-      : StaticOperationsAuthenticator(operationsToken);
+  if (operationsToken == null || operationsToken.isEmpty) {
+    throw const FormatException(
+      'AETHERTUNE_OPS_TOKEN is required for server deployments.',
+    );
+  }
+  final operationsAuthenticator = StaticOperationsAuthenticator(
+    operationsToken,
+  );
   final requestRateLimiter = serverRequestRateLimiterFromEnvironment(
     Platform.environment,
   );

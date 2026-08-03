@@ -23,7 +23,9 @@ docker compose ps
 curl http://127.0.0.1:8080/health
 ```
 
-The service rejects the `.env.example` operations-token placeholder at startup.
+The service rejects a missing or placeholder `AETHERTUNE_OPS_TOKEN` at startup.
+This operations token protects metrics and all managed-account administration;
+keep it separate from device sync tokens and never expose it to clients.
 Replace `replace-with-a-separate-long-random-token` before starting the server;
 the operations token must be different from every managed-account token.
 

@@ -18,6 +18,8 @@ Future<void> main(List<String> arguments) async {
     return;
   }
 
+  await _assertMissingOperationsTokenRejected(executable);
+
   final reservation = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final port = reservation.port;
   await reservation.close();
@@ -36,6 +38,7 @@ Future<void> main(List<String> arguments) async {
         'AETHERTUNE_DATA_DIR': dataDirectory.path,
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'PORT': '$port',
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-executable-metrics-token',
       },
     );
     unawaited(process.stdout.transform(utf8.decoder).forEach(output.write));
@@ -67,6 +70,25 @@ Future<void> main(List<String> arguments) async {
           final readyResponse = await readyRequest.close();
           await readyResponse.drain<void>();
           if (readyResponse.statusCode == HttpStatus.ok) {
+            final unauthorizedMetricsRequest = await client.getUrl(
+              Uri(
+                scheme: 'http',
+                host: InternetAddress.loopbackIPv4.address,
+                port: port,
+                path: 'api/v1/metrics',
+              ),
+            );
+            final unauthorizedMetricsResponse =
+                await unauthorizedMetricsRequest.close();
+            await unauthorizedMetricsResponse.drain<void>();
+            if (unauthorizedMetricsResponse.statusCode !=
+                HttpStatus.unauthorized) {
+              throw StateError(
+                'Metrics endpoint accepted an unauthenticated request: '
+                '${unauthorizedMetricsResponse.statusCode}',
+              );
+            }
+
             final metricsRequest = await client.getUrl(
               Uri(
                 scheme: 'http',
@@ -74,6 +96,10 @@ Future<void> main(List<String> arguments) async {
                 port: port,
                 path: 'api/v1/metrics',
               ),
+            );
+            metricsRequest.headers.set(
+              HttpHeaders.authorizationHeader,
+              'Bearer ci-only-executable-metrics-token',
             );
             final metricsResponse = await metricsRequest.close();
             final metricsBody = await metricsResponse
@@ -159,6 +185,35 @@ Future<void> main(List<String> arguments) async {
         onTimeout: () => -1,
       );
     }
+    await dataDirectory.delete(recursive: true);
+  }
+}
+
+Future<void> _assertMissingOperationsTokenRejected(File executable) async {
+  final dataDirectory = await Directory.systemTemp.createTemp(
+    'aethertune-server-missing-ops-token-',
+  );
+  try {
+    final result = await Process.run(
+      executable.path,
+      const <String>[],
+      environment: <String, String>{
+        ...Platform.environment,
+        'AETHERTUNE_DATA_DIR': dataDirectory.path,
+        'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
+        'AETHERTUNE_OPS_TOKEN': '',
+        'AETHERTUNE_SYNC_USERS': '{}',
+        'PORT': '0',
+      },
+    );
+    final output = '${result.stdout}\n${result.stderr}';
+    if (result.exitCode == 0 ||
+        !output.contains('AETHERTUNE_OPS_TOKEN is required')) {
+      throw StateError(
+        'Server executable did not reject a missing operations token.\n$output',
+      );
+    }
+  } finally {
     await dataDirectory.delete(recursive: true);
   }
 }
