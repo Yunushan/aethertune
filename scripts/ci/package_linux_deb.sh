@@ -68,6 +68,8 @@ tar --format=gnu --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' \
   ar rD "$output_path" debian-binary control.tar data.tar
 )
 dpkg-deb --info "$output_path" >/dev/null
-dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'
-dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/data/flutter_assets/AssetManifest.bin$'
-dpkg-deb --contents "$output_path" | grep -q '/usr/share/applications/aethertune.desktop$'
+contents_file="$archive_root/contents.txt"
+dpkg-deb --contents "$output_path" > "$contents_file"
+grep -q '/opt/aethertune/aethertune$' "$contents_file"
+grep -q '/opt/aethertune/data/flutter_assets/AssetManifest.bin$' "$contents_file"
+grep -q '/usr/share/applications/aethertune.desktop$' "$contents_file"
