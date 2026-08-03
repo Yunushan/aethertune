@@ -83,7 +83,7 @@ Future<void> main() async {
 Future<bool> _isDirectoryWritable(Directory directory) async {
   await directory.create(recursive: true);
   final probeId =
-      '${DateTime.now().microsecondsSinceEpoch}-${ProcessInfo.currentPid}-'
+      '${DateTime.now().microsecondsSinceEpoch}-$pid-'
       '${_readinessProbeSequence++}';
   final probe = File(
     '${directory.path}${Platform.pathSeparator}.readiness-$probeId.tmp',
