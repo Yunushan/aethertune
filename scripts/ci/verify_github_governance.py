@@ -72,6 +72,8 @@ def verify_governance_payloads(
             failures.append("main requires code-owner review")
         if reviews.get("dismiss_stale_reviews") is not True:
             failures.append("main dismisses stale reviews")
+        if reviews.get("require_last_push_approval") is not True:
+            failures.append("main requires approval after the last push")
 
     checks = branch_protection.get("required_status_checks")
     contexts = (

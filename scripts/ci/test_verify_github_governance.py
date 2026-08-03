@@ -24,6 +24,7 @@ def valid_branch_protection() -> dict[str, object]:
             "required_approving_review_count": 1,
             "require_code_owner_reviews": True,
             "dismiss_stale_reviews": True,
+            "require_last_push_approval": True,
         },
         "required_status_checks": {
             "strict": True,
@@ -77,6 +78,17 @@ class GithubGovernanceTest(unittest.TestCase):
             "contexts": list(REQUIRED_STATUS_CHECKS[:-1]),
         }
         with self.assertRaisesRegex(ValueError, "missing required check"):
+            verify_governance_payloads(protection, valid_environment(), CODEOWNERS)
+
+    def test_rejects_review_without_last_push_approval(self) -> None:
+        protection = valid_branch_protection()
+        protection["required_pull_request_reviews"] = {
+            "required_approving_review_count": 1,
+            "require_code_owner_reviews": True,
+            "dismiss_stale_reviews": True,
+            "require_last_push_approval": False,
+        }
+        with self.assertRaisesRegex(ValueError, "last push"):
             verify_governance_payloads(protection, valid_environment(), CODEOWNERS)
 
     def test_rejects_unprotected_production_environment(self) -> None:
