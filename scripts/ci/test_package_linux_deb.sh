@@ -21,6 +21,11 @@ if [[ ! -s "$package" ]]; then
   exit 1
 fi
 
+if ! dpkg-deb --info "$package" | grep -q 'Package: aethertune'; then
+  echo "Expected a valid AetherTune Debian package." >&2
+  exit 1
+fi
+
 relative_package="release/aethertune-linux-x64.deb"
 (
   cd "$workspace"

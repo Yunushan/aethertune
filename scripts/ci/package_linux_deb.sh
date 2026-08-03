@@ -50,7 +50,10 @@ Categories=AudioVideo;Audio;Player;
 StartupNotify=true
 EOF
 
-dpkg-deb --build --root-owner-group -Zgzip "$package_root" "$output_path"
+# Keep data.tar uncompressed. The Flutter bundle is already compact, and this
+# avoids the runner-specific gzip pipe failure seen while dpkg-deb builds the
+# package under constrained CI process limits.
+dpkg-deb --build --root-owner-group -Znone "$package_root" "$output_path"
 dpkg-deb --info "$output_path" >/dev/null
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/aethertune$'
 dpkg-deb --contents "$output_path" | grep -q '/opt/aethertune/data/flutter_assets/AssetManifest.bin$'
