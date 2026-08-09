@@ -134,6 +134,27 @@ class GithubGovernanceTest(unittest.TestCase):
                 CODEOWNERS,
             )
 
+    def test_rejects_repository_owner_as_the_only_production_reviewer(self) -> None:
+        with self.assertRaisesRegex(ValueError, "limited to the repository owner"):
+            verify_governance_payloads(
+                valid_branch_protection(),
+                {
+                    **valid_environment(),
+                    "protection_rules": [
+                        {
+                            "type": "required_reviewers",
+                            "prevent_self_review": True,
+                            "reviewers": [
+                                {"type": "User", "reviewer": {"login": "Yunushan"}}
+                            ],
+                        },
+                        {"type": "wait_timer", "wait_timer": 5},
+                    ],
+                },
+                CODEOWNERS,
+                repository_owner="yunushan",
+            )
+
     def test_rejects_environment_without_wait_timer(self) -> None:
         environment = valid_environment()
         environment["protection_rules"] = [{"type": "required_reviewers"}]

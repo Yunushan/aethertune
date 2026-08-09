@@ -59,6 +59,7 @@ def verify_governance_payloads(
     branch_protection: dict[str, Any],
     environment: dict[str, Any],
     codeowners: str,
+    repository_owner: str | None = None,
 ) -> None:
     """Validate API responses and checked-in ownership policy without network I/O."""
     failures: list[str] = []
@@ -114,6 +115,13 @@ def verify_governance_payloads(
         failures.append(
             "production environment requires an independent reviewer who cannot self-approve"
         )
+    elif repository_owner and not _has_independent_reviewer(
+        reviewers,
+        repository_owner,
+    ):
+        failures.append(
+            "production environment reviewers are limited to the repository owner"
+        )
     if environment.get("can_admins_bypass") is not False:
         failures.append("production environment prevents administrator bypass")
     if not any(
@@ -133,6 +141,27 @@ def verify_governance_payloads(
 
     if failures:
         raise ValueError("; ".join(failures))
+
+
+def _has_independent_reviewer(
+    reviewers: list[Any],
+    repository_owner: str,
+) -> bool:
+    """Require at least one reviewer that is not the repository owner."""
+    normalized_owner = repository_owner.casefold()
+    for entry in reviewers:
+        if not isinstance(entry, dict):
+            continue
+        reviewer_type = entry.get("type")
+        reviewer = entry.get("reviewer")
+        if reviewer_type == "Team" and isinstance(reviewer, dict):
+            return True
+        if not isinstance(reviewer, dict):
+            continue
+        login = reviewer.get("login")
+        if isinstance(login, str) and login.casefold() != normalized_owner:
+            return True
+    return False
 
 
 def _get_json(url: str, token: str) -> dict[str, Any]:
@@ -166,12 +195,22 @@ def verify_github_governance(
         raise ValueError(f"CODEOWNERS file does not exist: {codeowners_path}")
     base = api_url.rstrip("/") + "/repos/" + repository
     branch_path = urllib.parse.quote(branch, safe="")
+    repository_payload = _get_json(base, token)
+    owner_payload = repository_payload.get("owner")
+    repository_owner = (
+        owner_payload.get("login")
+        if isinstance(owner_payload, dict)
+        else None
+    )
+    if not isinstance(repository_owner, str) or not repository_owner.strip():
+        raise RuntimeError("GitHub repository metadata did not include an owner login")
     protection = _get_json(f"{base}/branches/{branch_path}/protection", token)
     environment = _get_json(f"{base}/environments/production", token)
     verify_governance_payloads(
         protection,
         environment,
         codeowners_path.read_text(encoding="utf-8"),
+        repository_owner=repository_owner,
     )
 
 
