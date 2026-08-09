@@ -377,12 +377,15 @@ jobs:
 
       - name: Run server recovery evidence drill
         shell: bash
+        env:
+          SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -u -o pipefail
           mkdir -p build/server-recovery-drill
           {
             printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
-            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             printf 'result=starting\n'
           } > build/server-recovery-drill/metadata.txt
@@ -401,7 +404,8 @@ jobs:
           fi
           {
             printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
-            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             printf 'backup_restore_status=%s\n' "$backup_restore_status"
             printf 'rollback_status=%s\n' "$rollback_status"

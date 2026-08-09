@@ -27,6 +27,10 @@ class RecoveryDrillWorkflowTest(unittest.TestCase):
         self.assertIn("timeout-minutes: 15", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn(
+            "SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+        )
+        self.assertIn(
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             workflow,
         )
@@ -40,6 +44,8 @@ class RecoveryDrillWorkflowTest(unittest.TestCase):
         self.assertIn("rollback_status=${PIPESTATUS[0]}", workflow)
         self.assertIn("result=passed", workflow)
         self.assertIn("result=failed", workflow)
+        self.assertIn("workflow_commit=%s", workflow)
+        self.assertIn("source_commit=%s", workflow)
         self.assertIn("if: ${{ always() }}", workflow)
         self.assertIn("retention-days: 90", workflow)
         self.assertIn("if-no-files-found: error", workflow)
@@ -50,9 +56,15 @@ class RecoveryDrillWorkflowTest(unittest.TestCase):
 
         self.assertIn("name: Run server recovery evidence drill", workflow)
         self.assertIn("name: Upload server recovery evidence", workflow)
+        self.assertIn(
+            "SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+        )
         self.assertIn("retention-days: 30", workflow)
         self.assertIn("bash scripts/ci/test_server_backup_restore.sh", workflow)
         self.assertIn("bash scripts/ci/test_server_rollback.sh", workflow)
+        self.assertIn("workflow_commit=%s", workflow)
+        self.assertIn("source_commit=%s", workflow)
         self.assertIn("path: build/server-recovery-drill/", workflow)
 
 

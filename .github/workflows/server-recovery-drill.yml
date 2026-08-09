@@ -17,6 +17,8 @@ jobs:
     name: Backup restore and rollback drill
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -30,7 +32,8 @@ jobs:
           mkdir -p build/server-recovery-drill
           {
             printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
-            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             printf 'result=starting\n'
           } > build/server-recovery-drill/metadata.txt
@@ -55,7 +58,8 @@ jobs:
           fi
           {
             printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
-            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             printf 'backup_restore_status=%s\n' "$backup_restore_status"
             printf 'rollback_status=%s\n' "$rollback_status"
