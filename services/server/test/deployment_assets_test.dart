@@ -51,7 +51,9 @@ void main() {
       expect(caddy, contains('encode zstd gzip'));
       expect(
         caddy,
-        contains('Strict-Transport-Security "max-age=31536000; includeSubDomains"'),
+        contains(
+          'Strict-Transport-Security "max-age=31536000; includeSubDomains"',
+        ),
       );
       expect(caddy, contains('-Server'));
       expect(
