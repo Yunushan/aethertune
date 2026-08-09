@@ -112,6 +112,14 @@ The release workflow uploads native server executables as:
 - `aethertune-server-macos`
 - `aethertune-server-windows-x64`
 
+After a real deployment, set the protected `production` environment variable
+`AETHERTUNE_PRODUCTION_BASE_URL` to the public HTTPS service URL and store the
+raw operations token as the environment secret `AETHERTUNE_OPS_PROBE_TOKEN`.
+The `Production operations probe` workflow runs every 15 minutes and on manual
+dispatch, uses the protected environment, and fails closed when either value
+is missing. Keep a separate off-host alerting path as well; a workflow or
+systemd timer cannot detect a complete GitHub or host outage by itself.
+
 ## GitHub release workflow
 
 Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts`
@@ -223,5 +231,6 @@ AetherTune is 0BSD licensed and has no telemetry. To prepare for F-Droid:
 - [ ] The scheduled repository governance audit passes with `AETHERTUNE_GOVERNANCE_TOKEN`.
 - [ ] A signed tag release has been installed on representative Android, iOS, macOS, and Windows hosts.
 - [ ] The server has been deployed behind TLS, and both public and loopback health/readiness probes pass.
+- [ ] The protected production operations probe has passed from GitHub Actions and its failure notifications reach the on-call path.
 - [ ] A fresh server backup has been restored into an isolated data directory and its checksum verified.
 - [ ] Load, alerting, rollback, and release recovery procedures have been exercised and recorded.

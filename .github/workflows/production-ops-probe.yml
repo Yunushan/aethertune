@@ -1,0 +1,40 @@
+name: Production operations probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-ops-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Probe production service
+    if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    env:
+      AETHERTUNE_PRODUCTION_BASE_URL: ${{ vars.AETHERTUNE_PRODUCTION_BASE_URL }}
+      AETHERTUNE_OPS_PROBE_TOKEN: ${{ secrets.AETHERTUNE_OPS_PROBE_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Validate probe configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AETHERTUNE_PRODUCTION_BASE_URL:?AETHERTUNE_PRODUCTION_BASE_URL is required}"
+          : "${AETHERTUNE_OPS_PROBE_TOKEN:?AETHERTUNE_OPS_PROBE_TOKEN is required}"
+
+      - name: Run production operations probe
+        shell: bash
+        run: bash services/server/deploy/aethertune-ops-probe.sh "$AETHERTUNE_PRODUCTION_BASE_URL"

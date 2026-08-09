@@ -97,6 +97,9 @@ jobs:
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 
+      - name: Test production operations workflow
+        run: python3 scripts/ci/test_production_ops_workflow.py
+
       - name: Test provider contract workflow
         run: python3 scripts/ci/test_provider_contract_workflow.py
 
