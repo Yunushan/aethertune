@@ -37,9 +37,11 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: |
-          dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+          format_status=0
+          dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test || format_status=$?
           mkdir -p build/dart-format
           git diff --binary > build/dart-format/dart-format.patch
+          exit "$format_status"
 
       - name: Upload Dart formatting patch
         if: ${{ always() }}
@@ -341,6 +343,7 @@ jobs:
         run: |
           sudo install -D -m 0755 services/server/build/aethertune-server /usr/local/bin/aethertune-server
           sudo install -D -m 0755 services/server/deploy/aethertune-backup.sh /usr/local/libexec/aethertune-backup.sh
+          sudo install -D -m 0755 services/server/deploy/aethertune-verify-backups.sh /usr/local/libexec/aethertune-verify-backups.sh
 
       - name: Validate systemd deployment units
         run: >-
