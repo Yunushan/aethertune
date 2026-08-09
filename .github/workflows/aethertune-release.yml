@@ -557,6 +557,18 @@ jobs:
           fi
           python3 scripts/ci/verify_release_metadata.py "${metadata_args[@]}"
 
+      - name: Verify GitHub production tag provenance
+        if: >-
+          github.event_name == 'push' &&
+          startsWith(github.ref, 'refs/tags/v') &&
+          vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/verify_github_tag.py
+
       - name: Require production tag to be based on main
         if: >-
           github.event_name == 'push' &&

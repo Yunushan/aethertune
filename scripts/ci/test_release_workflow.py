@@ -30,6 +30,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("- name: Checkout release policy", assembly)
         self.assertIn("Verify production release metadata", assembly)
         self.assertIn("scripts/ci/verify_release_metadata.py", assembly)
+        self.assertIn("Verify GitHub production tag provenance", assembly)
+        self.assertIn("scripts/ci/verify_github_tag.py", assembly)
         self.assertIn("actions: read", assembly)
         self.assertIn("actions: read", publish)
         self.assertIn(
@@ -223,6 +225,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("name: Checkout release policy", workflow)
         self.assertIn("Verify production release metadata", workflow)
         self.assertIn("metadata_args+=(--tag \"$GITHUB_REF_NAME\")", workflow)
+        self.assertIn("startsWith(github.ref, 'refs/tags/v')", workflow)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn(
             "refusing to overwrite immutable production assets",

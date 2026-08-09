@@ -91,6 +91,9 @@ jobs:
       - name: Test release metadata verifier
         run: python3 scripts/ci/test_verify_release_metadata.py
 
+      - name: Test GitHub tag verifier
+        run: python3 scripts/ci/test_verify_github_tag.py
+
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 

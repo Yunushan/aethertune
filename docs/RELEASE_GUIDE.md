@@ -158,6 +158,9 @@ exception; they are not silently accepted.
 After checksums are generated, the release workflow creates a signed GitHub
 artifact attestation for every subject listed in `SHA256SUMS.txt`. A release
 bundle is not considered verified if the OIDC-backed attestation step fails.
+Production tag runs also require an annotated tag whose GitHub verification
+record is valid and whose target is the workflow commit; lightweight or
+unverified tags remain candidate-only.
 
 The scheduled `Repository governance audit` workflow verifies that `main`
 requires code-owner review, all client/server/security checks, administrator
