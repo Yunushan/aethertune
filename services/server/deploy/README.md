@@ -84,11 +84,14 @@ sudo install -m 0644 deploy/aethertune-backup.service /etc/systemd/system/aether
 sudo install -m 0644 deploy/aethertune-backup.timer /etc/systemd/system/aethertune-backup.timer
 sudo install -m 0644 deploy/aethertune-backup-verify.service /etc/systemd/system/aethertune-backup-verify.service
 sudo install -m 0644 deploy/aethertune-backup-verify.timer /etc/systemd/system/aethertune-backup-verify.timer
+sudo install -m 0644 deploy/aethertune-ops-probe.service /etc/systemd/system/aethertune-ops-probe.service
+sudo install -m 0644 deploy/aethertune-ops-probe.timer /etc/systemd/system/aethertune-ops-probe.timer
 sudo install -d -m 0700 /var/backups/aethertune
 sudo systemctl daemon-reload
 sudo systemctl enable --now aethertune-backup.timer
 sudo systemctl enable --now aethertune-backup-verify.timer
-systemctl list-timers aethertune-backup.timer aethertune-backup-verify.timer
+sudo systemctl enable --now aethertune-ops-probe.timer
+systemctl list-timers aethertune-backup.timer aethertune-backup-verify.timer aethertune-ops-probe.timer
 ```
 
 Before a restore, stop `aethertune.service`, move the existing data directory
@@ -124,13 +127,24 @@ sudo systemctl start aethertune-backup-verify.service
 ```
 
 Run the same health, readiness, and authenticated metrics contract used by
-Compose against the deployed endpoint. The probe accepts HTTPS for remote
-hosts and loopback HTTP for local checks only:
+Compose against the deployed endpoint. The scheduled systemd probe checks the
+loopback service every five minutes and exits non-zero when any endpoint or
+metrics counter is unhealthy; collect its journal/failure state in the host's
+monitoring system. Set `AETHERTUNE_OPS_PROBE_TOKEN` in the root-only env file
+to the raw operations token. This is required when the server's
+`AETHERTUNE_OPS_TOKEN` is stored as a `sha256:` digest; never put the probe
+token in a unit file or command-line argument. The probe accepts HTTPS for
+remote hosts and loopback HTTP for local checks only:
 
 ```bash
-AETHERTUNE_OPS_TOKEN='your-operations-token' \
+AETHERTUNE_OPS_PROBE_TOKEN='your-operations-token' \
   /usr/local/libexec/aethertune-ops-probe.sh https://sync.example.com
 ```
+
+For a remote monitor, run the same probe against the public HTTPS URL from a
+separate host or monitoring worker. Local systemd timers cannot detect a
+complete host outage, so retain an off-host alert for public `/ready` failures,
+5xx responses, rate-limit spikes, and missing probe/backup timer runs.
 
 Test updates on a backup first. After an update, verify `/health` locally and
 through HTTPS before configuring the AetherTune app in Options with the public

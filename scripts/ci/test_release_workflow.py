@@ -28,6 +28,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish = workflow.split("  publish:\n", 1)[1]
 
         self.assertIn("- name: Checkout release policy", assembly)
+        self.assertIn("Verify production release metadata", assembly)
+        self.assertIn("scripts/ci/verify_release_metadata.py", assembly)
         self.assertIn("actions: read", assembly)
         self.assertIn("actions: read", publish)
         self.assertIn(
@@ -219,6 +221,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
             workflow,
         )
         self.assertIn("name: Checkout release policy", workflow)
+        self.assertIn("Verify production release metadata", workflow)
+        self.assertIn("metadata_args+=(--tag \"$GITHUB_REF_NAME\")", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn(
             "refusing to overwrite immutable production assets",

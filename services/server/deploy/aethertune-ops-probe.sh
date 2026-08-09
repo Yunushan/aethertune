@@ -2,7 +2,11 @@
 set -euo pipefail
 
 base_url="${1:?Usage: aethertune-ops-probe.sh BASE_URL}"
-ops_token="${AETHERTUNE_OPS_TOKEN:?AETHERTUNE_OPS_TOKEN is required}"
+ops_token="${AETHERTUNE_OPS_PROBE_TOKEN:-${AETHERTUNE_OPS_TOKEN:-}}"
+if [[ -z "$ops_token" ]]; then
+  echo 'AETHERTUNE_OPS_PROBE_TOKEN or AETHERTUNE_OPS_TOKEN is required' >&2
+  exit 2
+fi
 
 case "$base_url" in
   https://*|http://127.0.0.1:*|http://localhost:*) ;;
@@ -13,9 +17,10 @@ case "$base_url" in
 esac
 
 base_url="${base_url%/}"
-curl --fail --silent --show-error "$base_url/health" >/dev/null
-curl --fail --silent --show-error "$base_url/ready" >/dev/null
-metrics_body="$(curl --fail --silent --show-error \
+curl_options=(--fail --silent --show-error --connect-timeout 5 --max-time 15)
+curl "${curl_options[@]}" "$base_url/health" >/dev/null
+curl "${curl_options[@]}" "$base_url/ready" >/dev/null
+metrics_body="$(curl "${curl_options[@]}" \
   -H "Authorization: Bearer $ops_token" \
   "$base_url/api/v1/metrics")"
 

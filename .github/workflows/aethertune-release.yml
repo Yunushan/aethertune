@@ -546,6 +546,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify production release metadata
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata_args=()
+          if [[ "$GITHUB_REF_TYPE" == 'tag' ]]; then
+            metadata_args+=(--tag "$GITHUB_REF_NAME")
+          fi
+          python3 scripts/ci/verify_release_metadata.py "${metadata_args[@]}"
+
       - name: Require production tag to be based on main
         if: >-
           github.event_name == 'push' &&

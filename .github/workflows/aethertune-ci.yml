@@ -88,6 +88,9 @@ jobs:
         shell: bash
         run: bash scripts/ci/test_verify_release_version.sh
 
+      - name: Test release metadata verifier
+        run: python3 scripts/ci/test_verify_release_metadata.py
+
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 
@@ -330,6 +333,9 @@ jobs:
       - name: Build and smoke-test Docker deployment
         run: bash scripts/ci/test_server_compose.sh
 
+      - name: Test operations probe deployment contract
+        run: python3 scripts/ci/test_server_ops_probe_contract.py
+
       - name: Analyze server
         run: cd services/server && dart analyze
 
@@ -344,6 +350,7 @@ jobs:
           sudo install -D -m 0755 services/server/build/aethertune-server /usr/local/bin/aethertune-server
           sudo install -D -m 0755 services/server/deploy/aethertune-backup.sh /usr/local/libexec/aethertune-backup.sh
           sudo install -D -m 0755 services/server/deploy/aethertune-verify-backups.sh /usr/local/libexec/aethertune-verify-backups.sh
+          sudo install -D -m 0755 services/server/deploy/aethertune-ops-probe.sh /usr/local/libexec/aethertune-ops-probe.sh
 
       - name: Validate systemd deployment units
         run: >-
@@ -353,6 +360,8 @@ jobs:
           services/server/deploy/aethertune-backup.timer
           services/server/deploy/aethertune-backup-verify.service
           services/server/deploy/aethertune-backup-verify.timer
+          services/server/deploy/aethertune-ops-probe.service
+          services/server/deploy/aethertune-ops-probe.timer
 
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server

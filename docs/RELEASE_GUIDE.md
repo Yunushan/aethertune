@@ -132,7 +132,9 @@ disabled unless the repository variable
 `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is exactly `true`. When enabled, the
 publish job also targets the `production` environment; configure that
 environment to allow protected branches and require a separate release
-approval. Configure the repository variable only after platform signing,
+approval. Production runs also require a non-empty versioned `CHANGELOG.md`
+section matching the tag plus the checked-in feature matrix, 0BSD license, and
+NOTICE. Configure the repository variable only after platform signing,
 notarization, installer validation, store metadata, and physical-device smoke
 tests are complete. Manual dispatch remains artifact-only, so it can validate a
 candidate without publishing it. Verify a
@@ -210,6 +212,7 @@ AetherTune is 0BSD licensed and has no telemetry. To prepare for F-Droid:
 - [ ] `dart compile exe` passes in `services/server`.
 - [ ] Feature matrix is current.
 - [ ] Changelog is written.
+- [ ] The production tag has a non-empty matching `CHANGELOG.md` section and the release metadata preflight passes.
 - [ ] APK/AAB/IPA build instructions are verified.
 - [ ] License and third-party notices are updated.
 - [ ] `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is enabled only after signed-release approval.
