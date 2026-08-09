@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -26,6 +29,39 @@ class ServerOpsProbeContractTest(unittest.TestCase):
         self.assertIn("requestsTotal", probe)
         self.assertIn("requestsRateLimited", probe)
         self.assertIn("responses5xx", probe)
+
+    def test_probe_rejects_unsafe_urls_before_network_access(self) -> None:
+        bash = shutil.which("bash")
+        if os.name == "nt" or bash is None:
+            self.skipTest("A POSIX Bash runtime is unavailable on this host")
+
+        probe_path = DEPLOY / "aethertune-ops-probe.sh"
+        environment = os.environ.copy()
+        environment["AETHERTUNE_OPS_PROBE_TOKEN"] = "test-secret"
+
+        for base_url in (
+            "https://user:test-secret@example.test",
+            "https://example.test/path?token=test-secret",
+            "https://example.test/path#fragment",
+        ):
+            with self.subTest(base_url=base_url):
+                result = subprocess.run(
+                    [bash, str(probe_path), base_url],
+                    capture_output=True,
+                    check=False,
+                    env=environment,
+                    text=True,
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(
+                    "BASE_URL must not contain credentials, query parameters, or fragments.",
+                    result.stderr,
+                )
+                self.assertNotIn(
+                    "test-secret",
+                    result.stdout + result.stderr,
+                )
 
     def test_systemd_probe_runs_as_a_bounded_local_timer(self) -> None:
         service = (DEPLOY / "aethertune-ops-probe.service").read_text(
