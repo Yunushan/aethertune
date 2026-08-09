@@ -7,7 +7,7 @@ Future<PlatformFile?> pickSingleFile({
   List<String>? allowedExtensions,
   String? dialogTitle,
 }) async {
-  final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
     type: type,
     allowedExtensions: allowedExtensions,
     dialogTitle: dialogTitle,

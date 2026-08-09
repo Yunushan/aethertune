@@ -557,7 +557,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     try {
       final bytes = await captureTrackShareCardPng(boundaryKey);
       final fileName = 'aethertune-track-${track.id}.png';
-      final outputPath = await FilePicker.saveFile(
+      final outputPath = await FilePicker.platform.saveFile(
         dialogTitle: 'Save track share card',
         fileName: fileName,
         type: FileType.custom,
@@ -2397,7 +2397,7 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
       );
       final contents = formatTrackSkipSegments(segments);
       final bytes = Uint8List.fromList(utf8.encode(contents));
-      final outputPath = await FilePicker.saveFile(
+      final outputPath = await FilePicker.platform.saveFile(
         allowedExtensions: supportedTrackSkipSegmentDocumentExtensions,
         bytes: bytes,
         dialogTitle: 'Export skip segments',

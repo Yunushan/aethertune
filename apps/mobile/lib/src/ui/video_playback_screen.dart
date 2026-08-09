@@ -373,7 +373,7 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
   }
 
   Future<void> _saveFrame(Uint8List bytes) async {
-    final outputPath = await FilePicker.saveFile(
+    final outputPath = await FilePicker.platform.saveFile(
       dialogTitle: 'Save video frame',
       fileName: 'aethertune-video-frame.png',
       type: FileType.custom,
