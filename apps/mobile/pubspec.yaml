@@ -21,7 +21,7 @@ dependencies:
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
   audio_session: ^0.2.4
-  file_picker: 11.0.3
+  file_picker: 10.3.10
   provider: ^6.1.2
   shared_preferences: ^2.3.2
   flutter_secure_storage: ^10.3.1
