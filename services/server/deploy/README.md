@@ -79,6 +79,7 @@ sudo install -m 0755 deploy/aethertune-backup.sh /usr/local/libexec/aethertune-b
 sudo install -m 0755 deploy/aethertune-restore.sh /usr/local/libexec/aethertune-restore.sh
 sudo install -m 0755 deploy/aethertune-verify-backups.sh /usr/local/libexec/aethertune-verify-backups.sh
 sudo install -m 0755 deploy/aethertune-rollback.sh /usr/local/libexec/aethertune-rollback.sh
+sudo install -m 0755 deploy/aethertune-ops-probe.sh /usr/local/libexec/aethertune-ops-probe.sh
 sudo install -m 0644 deploy/aethertune-backup.service /etc/systemd/system/aethertune-backup.service
 sudo install -m 0644 deploy/aethertune-backup.timer /etc/systemd/system/aethertune-backup.timer
 sudo install -m 0644 deploy/aethertune-backup-verify.service /etc/systemd/system/aethertune-backup-verify.service
@@ -120,6 +121,15 @@ authentication registry:
 ```bash
 sudo systemctl start aethertune-backup.service
 sudo systemctl start aethertune-backup-verify.service
+```
+
+Run the same health, readiness, and authenticated metrics contract used by
+Compose against the deployed endpoint. The probe accepts HTTPS for remote
+hosts and loopback HTTP for local checks only:
+
+```bash
+AETHERTUNE_OPS_TOKEN='your-operations-token' \
+  /usr/local/libexec/aethertune-ops-probe.sh https://sync.example.com
 ```
 
 Test updates on a backup first. After an update, verify `/health` locally and

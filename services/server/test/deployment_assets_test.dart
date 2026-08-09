@@ -8,6 +8,9 @@ void main() {
     final dockerfile = await File('Dockerfile').readAsString();
     final systemd = await File('deploy/aethertune.service').readAsString();
     final backup = await File('deploy/aethertune-backup.sh').readAsString();
+    final opsProbe = await File(
+      'deploy/aethertune-ops-probe.sh',
+    ).readAsString();
     final rollback = await File('deploy/aethertune-rollback.sh').readAsString();
     final verifyBackups = await File(
       'deploy/aethertune-verify-backups.sh',
@@ -35,6 +38,11 @@ void main() {
     expect(systemd, contains('ReadWritePaths=/var/lib/aethertune'));
     expect(systemd, contains('RestrictAddressFamilies=AF_INET AF_INET6'));
     expect(systemd, contains('PrivateDevices=yes'));
+    expect(opsProbe, contains('BASE_URL must use HTTPS'));
+    expect(opsProbe, contains('/health'));
+    expect(opsProbe, contains('/ready'));
+    expect(opsProbe, contains('/api/v1/metrics'));
+    expect(opsProbe, contains('responses5xx'));
     expect(caddy, contains('reverse_proxy 127.0.0.1:8080'));
     expect(caddy, contains('Strict-Transport-Security'));
     expect(caddy, contains('X-Content-Type-Options "nosniff"'));

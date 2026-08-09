@@ -52,6 +52,8 @@ for metric in requestsTotal requestsRateLimited responses5xx; do
     exit 1
   fi
 done
+AETHERTUNE_OPS_TOKEN="$AETHERTUNE_OPS_TOKEN" \
+  bash "$root/services/server/deploy/aethertune-ops-probe.sh" "$base_url"
 container_id="$("${compose[@]}" ps -q aethertune-server)"
 if [[ -z "$container_id" ]]; then
   echo 'Docker Compose did not report a server container.' >&2
