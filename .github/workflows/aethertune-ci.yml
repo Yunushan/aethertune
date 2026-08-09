@@ -348,6 +348,8 @@ jobs:
           services/server/deploy/aethertune.service
           services/server/deploy/aethertune-backup.service
           services/server/deploy/aethertune-backup.timer
+          services/server/deploy/aethertune-backup-verify.service
+          services/server/deploy/aethertune-backup-verify.timer
 
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server
@@ -355,3 +357,7 @@ jobs:
       - name: Test server backup and restore
         shell: bash
         run: bash scripts/ci/test_server_backup_restore.sh
+
+      - name: Test server rollback
+        shell: bash
+        run: bash scripts/ci/test_server_rollback.sh

@@ -34,9 +34,12 @@ trap 'rm -f "$temporary_archive" "$temporary_checksum"' EXIT
 # Writes use temporary files and renames, so incomplete temporary snapshots are excluded.
 tar -C "$data_dir" --exclude='*.tmp' -czf "$temporary_archive" .
 mv "$temporary_archive" "$archive"
-sha256sum "$archive" > "$temporary_checksum"
+(
+  cd "$backup_dir"
+  sha256sum "$(basename "$archive")" > "$(basename "$temporary_checksum")"
+  sha256sum --check "$(basename "$temporary_checksum")"
+)
 mv "$temporary_checksum" "$archive.sha256"
-sha256sum --check "$archive.sha256"
 
 find "$backup_dir" -maxdepth 1 -type f \
   \( -name 'aethertune-server-data-*.tar.gz' -o -name 'aethertune-server-data-*.tar.gz.sha256' \) \

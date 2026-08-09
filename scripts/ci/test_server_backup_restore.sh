@@ -15,8 +15,35 @@ if [[ -z "$archive" ]]; then
   echo 'Backup script did not create an archive.' >&2
   exit 1
 fi
+bash services/server/deploy/aethertune-verify-backups.sh "$backup_dir"
 bash services/server/deploy/aethertune-restore.sh "$archive" "$restore_dir"
 cmp "$data_dir/library.json" "$restore_dir/library.json"
+
+relocated_backup_dir="$root/relocated-backups"
+relocated_restore_dir="$root/relocated-restored"
+mkdir -p "$relocated_backup_dir"
+cp "$archive" "$archive.sha256" "$relocated_backup_dir/"
+relocated_archive="$relocated_backup_dir/$(basename "$archive")"
+bash services/server/deploy/aethertune-verify-backups.sh "$relocated_backup_dir"
+bash services/server/deploy/aethertune-restore.sh "$relocated_archive" "$relocated_restore_dir"
+cmp "$data_dir/library.json" "$relocated_restore_dir/library.json"
+
+missing_checksum_archive="$backup_dir/aethertune-server-data-missing-checksum.tar.gz"
+cp "$archive" "$missing_checksum_archive"
+if bash services/server/deploy/aethertune-verify-backups.sh "$backup_dir"; then
+  echo 'Backup verification unexpectedly accepted an archive without a checksum sidecar.' >&2
+  exit 1
+fi
+rm -f "$missing_checksum_archive"
+
+tampered_backup="$backup_dir/aethertune-server-data-tampered.tar.gz"
+cp "$archive" "$tampered_backup"
+printf 'tampered\n' >> "$tampered_backup"
+printf '%s  %s\n' "$(sha256sum "$archive" | awk '{print $1}')" "$(basename "$tampered_backup")" > "$tampered_backup.sha256"
+if bash services/server/deploy/aethertune-verify-backups.sh "$backup_dir"; then
+  echo 'Backup verification unexpectedly accepted a checksum-mismatched archive.' >&2
+  exit 1
+fi
 
 non_empty_restore="$root/non-empty-restore"
 mkdir -p "$non_empty_restore"

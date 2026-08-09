@@ -77,18 +77,28 @@ directory. The timer creates a checksum-verified archive every day and keeps
 ```bash
 sudo install -m 0755 deploy/aethertune-backup.sh /usr/local/libexec/aethertune-backup.sh
 sudo install -m 0755 deploy/aethertune-restore.sh /usr/local/libexec/aethertune-restore.sh
+sudo install -m 0755 deploy/aethertune-verify-backups.sh /usr/local/libexec/aethertune-verify-backups.sh
+sudo install -m 0755 deploy/aethertune-rollback.sh /usr/local/libexec/aethertune-rollback.sh
 sudo install -m 0644 deploy/aethertune-backup.service /etc/systemd/system/aethertune-backup.service
 sudo install -m 0644 deploy/aethertune-backup.timer /etc/systemd/system/aethertune-backup.timer
+sudo install -m 0644 deploy/aethertune-backup-verify.service /etc/systemd/system/aethertune-backup-verify.service
+sudo install -m 0644 deploy/aethertune-backup-verify.timer /etc/systemd/system/aethertune-backup-verify.timer
 sudo install -d -m 0700 /var/backups/aethertune
 sudo systemctl daemon-reload
 sudo systemctl enable --now aethertune-backup.timer
-systemctl list-timers aethertune-backup.timer
+sudo systemctl enable --now aethertune-backup-verify.timer
+systemctl list-timers aethertune-backup.timer aethertune-backup-verify.timer
 ```
 
 Before a restore, stop `aethertune.service`, move the existing data directory
 aside, and run `aethertune-restore.sh` with the archive and an empty target.
 The restore refuses missing checksums, unsafe archive paths, and non-empty
 targets.
+
+The separate verification timer checks every retained archive's checksum
+sidecar and tar index each day after the backup timer. This detects later
+archive corruption; copy verified archives to storage outside the host if
+host-loss recovery is required.
 
 ## Tokens, Backups, and Updates
 
@@ -109,8 +119,34 @@ authentication registry:
 
 ```bash
 sudo systemctl start aethertune-backup.service
+sudo systemctl start aethertune-backup-verify.service
 ```
 
 Test updates on a backup first. After an update, verify `/health` locally and
 through HTTPS before configuring the AetherTune app in Options with the public
 `https://` URL, a device name, and its matching bearer token.
+
+Keep the previous server executable beside the live one before an update so an
+atomic rollback is available:
+
+```bash
+sudo install -m 0755 /usr/local/bin/aethertune-server /usr/local/libexec/aethertune-server.previous
+sudo systemctl restart aethertune.service
+curl --fail http://127.0.0.1:8080/ready
+```
+
+If the updated binary fails readiness, restore the previous executable and
+restart the service:
+
+```bash
+sudo /usr/local/libexec/aethertune-rollback.sh \
+  /usr/local/bin/aethertune-server \
+  /usr/local/libexec/aethertune-server.previous
+sudo systemctl restart aethertune.service
+curl --fail http://127.0.0.1:8080/ready
+```
+
+The rollback helper installs beside the live binary and renames it into place
+on the same filesystem, avoiding a partially written executable. Record the
+release, readiness result, rollback decision, and final checksum in the
+deployment log.
