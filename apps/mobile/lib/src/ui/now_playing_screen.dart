@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/flac_vorbis_comment_writer.dart';
+import '../data/file_picker_adapter.dart';
 import '../data/library_store.dart';
 import '../data/m4a_metadata_writer.dart';
 import '../data/ogg_vorbis_comment_writer.dart';
@@ -2352,7 +2353,7 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
   }
 
   Future<void> _importFile() async {
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       allowedExtensions: supportedTrackSkipSegmentDocumentExtensions,
       dialogTitle: 'Import skip segments',
       type: FileType.custom,
@@ -2363,7 +2364,7 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
 
     try {
       final source = decodeTrackSkipSegmentDocumentBytes(
-        await file.readAsBytes(),
+        await readPickedFileBytes(file),
         fileName: file.name,
       );
       final segments = parseTrackSkipSegments(

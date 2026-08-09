@@ -8,6 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'android_video_picture_in_picture.dart';
+import '../data/file_picker_adapter.dart';
 import '../domain/legal_video_captions.dart';
 import '../domain/video_frame_capture.dart';
 import '../domain/video_track_selection.dart';
@@ -200,7 +201,7 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
         break;
     }
 
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       type: FileType.custom,
       allowedExtensions: const <String>['srt', 'vtt'],
     );
@@ -209,7 +210,7 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
     }
 
     try {
-      final bytes = await file.readAsBytes();
+      final bytes = await readPickedFileBytes(file);
       if (!mounted) {
         return;
       }

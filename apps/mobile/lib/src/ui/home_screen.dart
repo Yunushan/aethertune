@@ -18,6 +18,7 @@ import '../data/custom_catalog_store.dart';
 import '../data/android_audio_library_access.dart';
 import '../data/android_system_downloads_exporter.dart';
 import '../data/audius_provider.dart';
+import '../data/file_picker_adapter.dart';
 import '../data/flac_vorbis_comment_writer.dart';
 import '../data/internet_archive_provider.dart';
 import '../data/itunes_metadata_provider.dart';
@@ -1639,7 +1640,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<String?> _importLyricsDocument(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       allowedExtensions: supportedLyricsDocumentExtensions,
       dialogTitle: 'Import lyrics file',
       type: FileType.custom,
@@ -1659,7 +1660,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final bytes = await file.readAsBytes();
+      final bytes = await readPickedFileBytes(file);
       return decodeLyricsDocumentBytes(bytes, fileName: file.name);
     } on Object catch (error) {
       if (!context.mounted) {
@@ -2843,7 +2844,7 @@ Future<void> _editTrackArtwork(BuildContext context, Track track) async {
 
 Future<void> _pickTrackArtworkFile(BuildContext context, Track track) async {
   final messenger = ScaffoldMessenger.of(context);
-  final file = await FilePicker.pickFile(
+  final file = await pickSingleFile(
     type: FileType.image,
     dialogTitle: 'Choose track artwork',
   );
@@ -2853,7 +2854,9 @@ Future<void> _pickTrackArtworkFile(BuildContext context, Track track) async {
 
   Uri? savedArtwork;
   try {
-    savedArtwork = await _trackArtworkFileStore.save(await file.readAsBytes());
+    savedArtwork = await _trackArtworkFileStore.save(
+      await readPickedFileBytes(file),
+    );
     if (!context.mounted) {
       await _trackArtworkFileStore.delete(savedArtwork);
       return;
@@ -2893,7 +2896,7 @@ Future<void> _pickTrackArtworkFile(BuildContext context, Track track) async {
 Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
   final messenger = ScaffoldMessenger.of(context);
   final library = context.read<LibraryStore>();
-  final file = await FilePicker.pickFile(
+  final file = await pickSingleFile(
     type: FileType.image,
     dialogTitle: 'Choose M4A/M4B/M4R/ALAC cover artwork',
   );
@@ -2901,7 +2904,7 @@ Future<void> _writeM4aArtwork(BuildContext context, Track track) async {
     return;
   }
 
-  final artwork = await file.readAsBytes();
+  final artwork = await readPickedFileBytes(file);
   if (!context.mounted) {
     return;
   }
@@ -9751,7 +9754,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final extension = _playlistDocumentFormatFileExtension(format);
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       allowedExtensions: <String>[extension],
       dialogTitle: 'Import ${_playlistDocumentFormatLabel(format)} playlist',
       type: FileType.custom,
@@ -9768,7 +9771,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
 
     try {
       final document = utf8.decode(
-        await file.readAsBytes(),
+        await readPickedFileBytes(file),
         allowMalformed: false,
       );
       if (!context.mounted) {
@@ -10583,7 +10586,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     Playlist playlist,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       type: FileType.image,
       dialogTitle: 'Choose playlist artwork',
     );
@@ -10593,7 +10596,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
 
     try {
       final artworkUri = await _playlistArtworkFileStore.save(
-        await file.readAsBytes(),
+        await readPickedFileBytes(file),
       );
       if (!context.mounted) {
         return;
@@ -10794,7 +10797,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     CustomSmartPlaylist rule,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       type: FileType.image,
       dialogTitle: 'Choose smart playlist artwork',
     );
@@ -10802,7 +10805,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
       return;
     }
     try {
-      final bytes = await file.readAsBytes();
+      final bytes = await readPickedFileBytes(file);
       if (!context.mounted) {
         return;
       }
@@ -18752,7 +18755,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       if (files == null || files.isEmpty) {
         return;
       }
-      final document = utf8.decode(await files.first.readAsBytes());
+      final document = utf8.decode(await readPickedFileBytes(files.first));
       if (!context.mounted) {
         return;
       }
@@ -19128,7 +19131,7 @@ class _SourcesTabState extends State<_SourcesTab> {
       if (files == null || files.isEmpty) {
         return;
       }
-      final document = utf8.decode(await files.first.readAsBytes());
+      final document = utf8.decode(await readPickedFileBytes(files.first));
       if (!context.mounted) {
         return;
       }
@@ -19900,7 +19903,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _openLocalVideo(BuildContext context) async {
-    final file = await FilePicker.pickFile(type: FileType.video);
+    final file = await pickSingleFile(type: FileType.video);
     if (!context.mounted || file == null) {
       return;
     }
@@ -23296,7 +23299,7 @@ class _SettingsTab extends StatelessWidget {
       }
 
       final file = files.first;
-      final bytes = await file.readAsBytes();
+      final bytes = await readPickedFileBytes(file);
       if (!context.mounted) {
         return;
       }

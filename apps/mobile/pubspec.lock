@@ -220,10 +220,10 @@ packages:
     dependency: "direct main"
     description:
       name: file_picker
-      sha256: fdc6a37f715d19f35b131decf1ce39242eeed5ddae18c0818c3eccb731ab76be
+      sha256: 29cc1fdb20613876cc7afc529738c1c0f11a9ca159b010edad0c566ac330847e
       url: "https://pub.dev"
     source: hosted
-    version: "12.0.0-beta.7"
+    version: "11.0.3"
   fixnum:
     dependency: transitive
     description:
@@ -1157,10 +1157,10 @@ packages:
     dependency: transitive
     description:
       name: win32
-      sha256: ba6f4bba816c8d7e3c1580e170f3786d216951cc6b94babc3b814c08d2cb2738
+      sha256: d7cb55e04cd34096cd3a79b3330245f54cb96a370a1c27adb3c84b917de8b08e
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.0"
+    version: "5.15.0"
   window_manager:
     dependency: "direct main"
     description:
