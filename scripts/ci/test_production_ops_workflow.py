@@ -41,6 +41,26 @@ class ProductionOpsWorkflowTest(unittest.TestCase):
             workflow,
         )
 
+    def test_persists_non_secret_probe_evidence(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("mkdir -p build/production-ops-probe", workflow)
+        self.assertIn("workflow_run_id=%s", workflow)
+        self.assertIn("commit=%s", workflow)
+        self.assertIn("base_url=%s", workflow)
+        self.assertIn("result=configuration-invalid", workflow)
+        self.assertIn("result=passed", workflow)
+        self.assertIn("result=failed", workflow)
+        self.assertIn("tee build/production-ops-probe/probe.log", workflow)
+        self.assertIn("if: ${{ always() }}", workflow)
+        self.assertIn(
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            workflow,
+        )
+        self.assertIn("retention-days: 30", workflow)
+        self.assertIn("if-no-files-found: error", workflow)
+        self.assertIn("path: build/production-ops-probe/", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
