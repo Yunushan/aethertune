@@ -118,7 +118,7 @@ raw operations token as the environment secret `AETHERTUNE_OPS_PROBE_TOKEN`.
 The `Production operations probe` workflow runs every 15 minutes and on manual
 dispatch, uses the protected environment, and fails closed when either value
 is missing. Each run uploads a 30-day, non-secret evidence artifact containing
-the run ID, commit, endpoint, timestamp, probe log, and result. Keep a
+the run ID, commit, endpoint host, timestamp, probe log, and result. Keep a
 separate off-host alerting path as well; a workflow or systemd timer cannot
 detect a complete GitHub or host outage by itself.
 

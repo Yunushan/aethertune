@@ -17,6 +17,12 @@ case "$base_url" in
 esac
 
 base_url="${base_url%/}"
+case "$base_url" in
+  *'?'*|*'#'*|*'@'*)
+    echo 'BASE_URL must not contain credentials, query parameters, or fragments.' >&2
+    exit 2
+    ;;
+esac
 curl_options=(--fail --silent --show-error --connect-timeout 5 --max-time 15)
 curl "${curl_options[@]}" "$base_url/health" >/dev/null
 curl "${curl_options[@]}" "$base_url/ready" >/dev/null

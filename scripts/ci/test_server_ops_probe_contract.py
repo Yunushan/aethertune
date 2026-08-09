@@ -17,6 +17,10 @@ class ServerOpsProbeContractTest(unittest.TestCase):
 
         self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN", probe)
         self.assertIn("https://*|http://127.0.0.1:*|http://localhost:*", probe)
+        self.assertIn(
+            "BASE_URL must not contain credentials, query parameters, or fragments.",
+            probe,
+        )
         self.assertIn("--connect-timeout 5 --max-time 15", probe)
         self.assertIn('Authorization: Bearer $ops_token', probe)
         self.assertIn("requestsTotal", probe)

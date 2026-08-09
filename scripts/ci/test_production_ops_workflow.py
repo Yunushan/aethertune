@@ -47,7 +47,7 @@ class ProductionOpsWorkflowTest(unittest.TestCase):
         self.assertIn("mkdir -p build/production-ops-probe", workflow)
         self.assertIn("workflow_run_id=%s", workflow)
         self.assertIn("commit=%s", workflow)
-        self.assertIn("base_url=%s", workflow)
+        self.assertIn("base_url_host=%s", workflow)
         self.assertIn("result=configuration-invalid", workflow)
         self.assertIn("result=passed", workflow)
         self.assertIn("result=failed", workflow)

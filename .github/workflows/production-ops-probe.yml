@@ -37,7 +37,7 @@ jobs:
             printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
             printf 'commit=%s\n' "$GITHUB_SHA"
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            printf 'base_url=%s\n' "${AETHERTUNE_PRODUCTION_BASE_URL:-}"
+            printf 'base_url_host=not-validated\n'
             printf 'result=configuration-invalid\n'
           } > build/production-ops-probe/metadata.txt
 
@@ -57,7 +57,8 @@ jobs:
             printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
             printf 'commit=%s\n' "$GITHUB_SHA"
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            printf 'base_url=%s\n' "$AETHERTUNE_PRODUCTION_BASE_URL"
+            base_url_host="$(python3 -c 'from urllib.parse import urlsplit; import sys; print(urlsplit(sys.argv[1]).hostname or "unknown")' "$AETHERTUNE_PRODUCTION_BASE_URL")"
+            printf 'base_url_host=%s\n' "$base_url_host"
             printf 'result=starting\n'
           } > build/production-ops-probe/metadata.txt
           probe_status=0
