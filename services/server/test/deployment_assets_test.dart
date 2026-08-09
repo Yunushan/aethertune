@@ -80,10 +80,10 @@ void main() {
       expect(dockerfile, contains('RUN mkdir -p /out'));
       expect(dockerfile, contains('http://127.0.0.1:8080/ready'));
       expect(backup, contains("--exclude='*.tmp'"));
-      expect(backup, contains('sha256sum "$(basename "$archive")"'));
+      expect(backup, contains(r'sha256sum "$(basename "$archive")"'));
       expect(backup, contains('sha256sum --check'));
       expect(rollback, contains('install -m 0755'));
-      expect(rollback, contains('mv -f "$temporary_path"'));
+      expect(rollback, contains(r'mv -f "$temporary_path"'));
       expect(
         rollback,
         contains('Current and previous binaries must be different paths'),
@@ -96,7 +96,7 @@ void main() {
       expect(restore, contains('Unsafe archive entry type'));
       expect(restore, contains('Missing checksum sidecar'));
       expect(restore, contains('archive_dir='));
-      expect(restore, contains('sha256sum --check "$checksum_name"'));
+      expect(restore, contains(r'sha256sum --check "$checksum_name"'));
       expect(backupService, contains('aethertune-backup.sh'));
       expect(backupService, contains('ProtectSystem=strict'));
       expect(backupService, contains('ReadWritePaths=/var/backups/aethertune'));
