@@ -47,6 +47,13 @@ void main() {
       expect(compose, contains('no-new-privileges:true'));
       expect(compose, contains('stop_grace_period: 30s'));
       expect(compose, contains('http://127.0.0.1:8080/ready'));
+      expect(caddy, contains('sync.example.com {'));
+      expect(caddy, contains('encode zstd gzip'));
+      expect(
+        caddy,
+        contains('Strict-Transport-Security "max-age=31536000; includeSubDomains"'),
+      );
+      expect(caddy, contains('-Server'));
       expect(
         dockerfile,
         matches(RegExp(r'FROM dart:3\.12\.2@sha256:[0-9a-f]{64} AS build')),
