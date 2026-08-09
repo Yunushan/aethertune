@@ -30,7 +30,7 @@ dependencies:
   collection: ^1.18.0
   crypto: ^3.0.7
   xml: ^6.5.0
-  share_plus: ^13.2.0
+  share_plus: ^12.0.2
   dynamic_color: ^1.8.1
   hotkey_manager: ^0.2.3
   tray_manager: ^0.5.3
