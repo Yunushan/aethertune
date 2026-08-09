@@ -100,6 +100,9 @@ jobs:
       - name: Test production operations workflow
         run: python3 scripts/ci/test_production_ops_workflow.py
 
+      - name: Test server recovery drill workflow
+        run: python3 scripts/ci/test_recovery_drill_workflow.py
+
       - name: Test provider contract workflow
         run: python3 scripts/ci/test_provider_contract_workflow.py
 
