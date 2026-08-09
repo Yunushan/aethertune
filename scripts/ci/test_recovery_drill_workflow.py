@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "server-recovery-drill.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "aethertune-ci.yml"
 
 
 class RecoveryDrillWorkflowTest(unittest.TestCase):
@@ -42,6 +43,16 @@ class RecoveryDrillWorkflowTest(unittest.TestCase):
         self.assertIn("if: ${{ always() }}", workflow)
         self.assertIn("retention-days: 90", workflow)
         self.assertIn("if-no-files-found: error", workflow)
+        self.assertIn("path: build/server-recovery-drill/", workflow)
+
+    def test_pull_request_ci_executes_the_same_evidence_drill(self) -> None:
+        workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("name: Run server recovery evidence drill", workflow)
+        self.assertIn("name: Upload server recovery evidence", workflow)
+        self.assertIn("retention-days: 30", workflow)
+        self.assertIn("bash scripts/ci/test_server_backup_restore.sh", workflow)
+        self.assertIn("bash scripts/ci/test_server_rollback.sh", workflow)
         self.assertIn("path: build/server-recovery-drill/", workflow)
 
 

@@ -375,10 +375,47 @@ jobs:
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server
 
-      - name: Test server backup and restore
+      - name: Run server recovery evidence drill
         shell: bash
-        run: bash scripts/ci/test_server_backup_restore.sh
+        run: |
+          set -u -o pipefail
+          mkdir -p build/server-recovery-drill
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'result=starting\n'
+          } > build/server-recovery-drill/metadata.txt
 
-      - name: Test server rollback
-        shell: bash
-        run: bash scripts/ci/test_server_rollback.sh
+          bash scripts/ci/test_server_backup_restore.sh 2>&1 \
+            | tee build/server-recovery-drill/backup-restore.log
+          backup_restore_status=${PIPESTATUS[0]}
+
+          bash scripts/ci/test_server_rollback.sh 2>&1 \
+            | tee build/server-recovery-drill/rollback.log
+          rollback_status=${PIPESTATUS[0]}
+
+          result=passed
+          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 ]]; then
+            result=failed
+          fi
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'backup_restore_status=%s\n' "$backup_restore_status"
+            printf 'rollback_status=%s\n' "$rollback_status"
+            printf 'result=%s\n' "$result"
+          } > build/server-recovery-drill/metadata.txt
+          if [[ "$result" != 'passed' ]]; then
+            exit 1
+          fi
+
+      - name: Upload server recovery evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-server-recovery-drill-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/server-recovery-drill/
