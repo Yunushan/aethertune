@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from verify_github_governance import (
+    REQUIRED_SECURITY_FEATURES,
     REQUIRED_STATUS_CHECKS,
     verify_github_governance,
     verify_governance_payloads,
@@ -60,12 +61,22 @@ def valid_environment() -> dict[str, object]:
     }
 
 
+def valid_repository_payload() -> dict[str, object]:
+    return {
+        "security_and_analysis": {
+            feature: {"status": "enabled"}
+            for feature, _ in REQUIRED_SECURITY_FEATURES
+        },
+    }
+
+
 class GithubGovernanceTest(unittest.TestCase):
     def test_accepts_protected_main_and_production_environment(self) -> None:
         verify_governance_payloads(
             valid_branch_protection(),
             valid_environment(),
             CODEOWNERS,
+            valid_repository_payload(),
         )
 
     def test_accepts_workflow_and_job_status_check_name(self) -> None:
@@ -83,6 +94,7 @@ class GithubGovernanceTest(unittest.TestCase):
             protection,
             valid_environment(),
             CODEOWNERS,
+            valid_repository_payload(),
         )
 
     def test_rejects_missing_required_status_check(self) -> None:
@@ -92,7 +104,12 @@ class GithubGovernanceTest(unittest.TestCase):
             "contexts": list(REQUIRED_STATUS_CHECKS[:-1]),
         }
         with self.assertRaisesRegex(ValueError, "missing required check"):
-            verify_governance_payloads(protection, valid_environment(), CODEOWNERS)
+            verify_governance_payloads(
+                protection,
+                valid_environment(),
+                CODEOWNERS,
+                valid_repository_payload(),
+            )
 
     def test_rejects_review_without_last_push_approval(self) -> None:
         protection = valid_branch_protection()
@@ -103,7 +120,12 @@ class GithubGovernanceTest(unittest.TestCase):
             "require_last_push_approval": False,
         }
         with self.assertRaisesRegex(ValueError, "last push"):
-            verify_governance_payloads(protection, valid_environment(), CODEOWNERS)
+            verify_governance_payloads(
+                protection,
+                valid_environment(),
+                CODEOWNERS,
+                valid_repository_payload(),
+            )
 
     def test_rejects_unprotected_production_environment(self) -> None:
         environment = valid_environment()
@@ -113,6 +135,7 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_branch_protection(),
                 environment,
                 CODEOWNERS,
+                valid_repository_payload(),
             )
 
     def test_rejects_environment_admin_bypass(self) -> None:
@@ -123,6 +146,7 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_branch_protection(),
                 environment,
                 CODEOWNERS,
+                valid_repository_payload(),
             )
 
     def test_rejects_environment_without_reviewer_details(self) -> None:
@@ -136,6 +160,7 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_branch_protection(),
                 environment,
                 CODEOWNERS,
+                valid_repository_payload(),
             )
 
     def test_rejects_repository_owner_as_the_only_production_reviewer(self) -> None:
@@ -156,6 +181,7 @@ class GithubGovernanceTest(unittest.TestCase):
                     ],
                 },
                 CODEOWNERS,
+                valid_repository_payload(),
                 repository_owner="yunushan",
             )
 
@@ -175,7 +201,10 @@ class GithubGovernanceTest(unittest.TestCase):
         }
         with patch("verify_github_governance._get_json") as get_json:
             get_json.side_effect = [
-                {"owner": {"login": "Yunushan"}},
+                {
+                    "owner": {"login": "Yunushan"},
+                    **valid_repository_payload(),
+                },
                 valid_branch_protection(),
                 owner_environment,
             ]
@@ -196,6 +225,20 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_branch_protection(),
                 environment,
                 CODEOWNERS,
+                valid_repository_payload(),
+            )
+
+    def test_rejects_disabled_repository_security_feature(self) -> None:
+        repository = valid_repository_payload()
+        security = repository["security_and_analysis"]
+        assert isinstance(security, dict)
+        security["secret_scanning_push_protection"] = {"status": "disabled"}
+        with self.assertRaisesRegex(ValueError, "push protection"):
+            verify_governance_payloads(
+                valid_branch_protection(),
+                valid_environment(),
+                CODEOWNERS,
+                repository,
             )
 
 

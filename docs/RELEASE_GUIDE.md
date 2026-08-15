@@ -227,9 +227,11 @@ The scheduled `Repository governance audit` workflow verifies that `main`
 requires code-owner review, all client/server/security checks, administrator
 enforcement, and no force-push or deletion, and that the `production`
 environment requires an independent reviewer and approved deployment refs. It
-also rejects a reviewer list containing only the repository owner, because
-`prevent_self_review` alone would otherwise leave the release unable to obtain
-an independent approval.
+also verifies that Dependabot security updates, secret scanning, push
+protection, non-provider secret scanning, and supported-token validity checks
+are enabled. It rejects a reviewer list containing only the repository owner,
+because `prevent_self_review` alone would otherwise leave the release unable
+to obtain an independent approval.
 Production release runs also execute this audit as a blocking dependency before
 assembling artifacts. Configure the repository secret
 `AETHERTUNE_GOVERNANCE_TOKEN` with read access to those repository settings;

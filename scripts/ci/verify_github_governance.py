@@ -25,6 +25,13 @@ REQUIRED_STATUS_CHECKS = (
     "Dependency review",
     "New OSV vulnerabilities and license violations",
 )
+REQUIRED_SECURITY_FEATURES = (
+    ("dependabot_security_updates", "Dependabot security updates"),
+    ("secret_scanning", "secret scanning"),
+    ("secret_scanning_push_protection", "secret scanning push protection"),
+    ("secret_scanning_non_provider_patterns", "non-provider secret scanning"),
+    ("secret_scanning_validity_checks", "secret-scanning validity checks"),
+)
 CODEOWNER_PATHS = (
     "/.github/workflows/",
     "/scripts/ci/",
@@ -59,10 +66,20 @@ def verify_governance_payloads(
     branch_protection: dict[str, Any],
     environment: dict[str, Any],
     codeowners: str,
+    repository_payload: dict[str, Any],
     repository_owner: str | None = None,
 ) -> None:
     """Validate API responses and checked-in ownership policy without network I/O."""
     failures: list[str] = []
+    security = repository_payload.get("security_and_analysis")
+    if not isinstance(security, dict):
+        failures.append("repository security and analysis settings are unavailable")
+    else:
+        for feature, label in REQUIRED_SECURITY_FEATURES:
+            status = security.get(feature)
+            if not isinstance(status, dict) or status.get("status") != "enabled":
+                failures.append(f"repository requires {label}")
+
     reviews = branch_protection.get("required_pull_request_reviews")
     if not isinstance(reviews, dict):
         failures.append("main requires pull-request reviews")
@@ -210,6 +227,7 @@ def verify_github_governance(
         protection,
         environment,
         codeowners_path.read_text(encoding="utf-8"),
+        repository_payload,
         repository_owner=repository_owner,
     )
 
