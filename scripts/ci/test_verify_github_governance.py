@@ -218,6 +218,51 @@ class GithubGovernanceTest(unittest.TestCase):
                 repository_owner="yunushan",
             )
 
+    def test_accepts_sole_owner_policy(self) -> None:
+        protection = valid_branch_protection()
+        protection.pop("required_pull_request_reviews")
+        environment = {
+            **valid_environment(),
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": False,
+                    "reviewers": [
+                        {"type": "User", "reviewer": {"login": "Yunushan"}}
+                    ],
+                },
+                {"type": "wait_timer", "wait_timer": 5},
+            ],
+        }
+        verify_governance_payloads(
+            protection,
+            environment,
+            CODEOWNERS,
+            valid_repository_payload(),
+            valid_actions_permissions(),
+            valid_selected_actions(),
+            repository_owner="Yunushan",
+            direct_collaborators=[{"login": "Yunushan"}],
+        )
+
+    def test_rejects_owner_policy_when_another_collaborator_exists(self) -> None:
+        protection = valid_branch_protection()
+        protection.pop("required_pull_request_reviews")
+        with self.assertRaisesRegex(ValueError, "main requires pull-request reviews"):
+            verify_governance_payloads(
+                protection,
+                valid_environment(),
+                CODEOWNERS,
+                valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
+                repository_owner="Yunushan",
+                direct_collaborators=[
+                    {"login": "Yunushan"},
+                    {"login": "another-collaborator"},
+                ],
+            )
+
     def test_network_audit_fetches_repository_owner_before_review_check(self) -> None:
         owner_environment = {
             **valid_environment(),
@@ -232,7 +277,10 @@ class GithubGovernanceTest(unittest.TestCase):
                 {"type": "wait_timer", "wait_timer": 5},
             ],
         }
-        with patch("verify_github_governance._get_json") as get_json:
+        with (
+            patch("verify_github_governance._get_json") as get_json,
+            patch("verify_github_governance._get_list") as get_list,
+        ):
             get_json.side_effect = [
                 {
                     "owner": {"login": "Yunushan"},
@@ -243,7 +291,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_actions_permissions(),
                 valid_selected_actions(),
             ]
-            with self.assertRaisesRegex(ValueError, "limited to the repository owner"):
+            get_list.return_value = [{"login": "Yunushan"}]
+            with self.assertRaisesRegex(ValueError, "allow owner approval"):
                 verify_github_governance(
                     "Yunushan/aethertune",
                     "test-token",
@@ -251,6 +300,7 @@ class GithubGovernanceTest(unittest.TestCase):
                     ROOT / ".github" / "CODEOWNERS",
                 )
             self.assertEqual(get_json.call_count, 5)
+            get_list.assert_called_once()
 
     def test_rejects_environment_without_wait_timer(self) -> None:
         environment = valid_environment()

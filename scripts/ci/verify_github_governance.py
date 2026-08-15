@@ -77,9 +77,14 @@ def verify_governance_payloads(
     actions_permissions: dict[str, Any],
     selected_actions: dict[str, Any],
     repository_owner: str | None = None,
+    direct_collaborators: list[Any] | None = None,
 ) -> None:
     """Validate API responses and checked-in ownership policy without network I/O."""
     failures: list[str] = []
+    sole_owner_mode = _is_sole_owner_repository(
+        repository_owner,
+        direct_collaborators,
+    )
     security = repository_payload.get("security_and_analysis")
     if not isinstance(security, dict):
         failures.append("repository security and analysis settings are unavailable")
@@ -105,7 +110,10 @@ def verify_governance_payloads(
 
     reviews = branch_protection.get("required_pull_request_reviews")
     if not isinstance(reviews, dict):
-        failures.append("main requires pull-request reviews")
+        if not sole_owner_mode:
+            failures.append("main requires pull-request reviews")
+    elif sole_owner_mode:
+        failures.append("sole-owner main must not require pull-request reviews")
     else:
         if int(reviews.get("required_approving_review_count", 0)) < 1:
             failures.append("main requires at least one approving review")
@@ -147,9 +155,24 @@ def verify_governance_payloads(
         None,
     )
     reviewers = reviewer_rule.get("reviewers") if isinstance(reviewer_rule, dict) else None
-    if (
+    if sole_owner_mode:
+        if (
+            not isinstance(reviewers, list)
+            or not reviewers
+            or reviewer_rule is None
+            or reviewer_rule.get("prevent_self_review") is not False
+        ):
+            failures.append(
+                "sole-owner production environment must allow owner approval"
+            )
+        elif repository_owner and not _has_reviewer(reviewers, repository_owner):
+            failures.append(
+                "sole-owner production environment must require the repository owner"
+            )
+    elif (
         not isinstance(reviewers, list)
         or not reviewers
+        or reviewer_rule is None
         or reviewer_rule.get("prevent_self_review") is not True
     ):
         failures.append(
@@ -204,7 +227,41 @@ def _has_independent_reviewer(
     return False
 
 
-def _get_json(url: str, token: str) -> dict[str, Any]:
+def _has_reviewer(reviewers: list[Any], repository_owner: str) -> bool:
+    normalized_owner = repository_owner.casefold()
+    return any(
+        isinstance(entry, dict)
+        and entry.get("type") == "User"
+        and isinstance(entry.get("reviewer"), dict)
+        and isinstance(entry["reviewer"].get("login"), str)
+        and entry["reviewer"]["login"].casefold() == normalized_owner
+        for entry in reviewers
+    )
+
+
+def _is_sole_owner_repository(
+    repository_owner: str | None,
+    direct_collaborators: list[Any] | None,
+) -> bool:
+    """Enable owner-only policy only when GitHub confirms no other collaborators."""
+    if not repository_owner or not isinstance(direct_collaborators, list):
+        return False
+    normalized_owner = repository_owner.casefold()
+    owner_seen = False
+    for entry in direct_collaborators:
+        if not isinstance(entry, dict):
+            return False
+        login = entry.get("login")
+        if not isinstance(login, str):
+            return False
+        if login.casefold() == normalized_owner:
+            owner_seen = True
+        else:
+            return False
+    return owner_seen
+
+
+def _request_json(url: str, token: str) -> Any:
     request = urllib.request.Request(
         url,
         headers={
@@ -216,11 +273,22 @@ def _get_json(url: str, token: str) -> dict[str, Any]:
     )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
-            payload = json.load(response)
+            return json.load(response)
     except urllib.error.HTTPError as error:
         raise RuntimeError(f"GitHub governance API returned HTTP {error.code}: {error.reason}") from error
+
+
+def _get_json(url: str, token: str) -> dict[str, Any]:
+    payload = _request_json(url, token)
     if not isinstance(payload, dict):
         raise RuntimeError(f"GitHub governance API returned a non-object for {url}")
+    return payload
+
+
+def _get_list(url: str, token: str) -> list[Any]:
+    payload = _request_json(url, token)
+    if not isinstance(payload, list):
+        raise RuntimeError(f"GitHub governance API returned a non-list for {url}")
     return payload
 
 
@@ -244,6 +312,10 @@ def verify_github_governance(
     )
     if not isinstance(repository_owner, str) or not repository_owner.strip():
         raise RuntimeError("GitHub repository metadata did not include an owner login")
+    direct_collaborators = _get_list(
+        f"{base}/collaborators?affiliation=direct&per_page=100",
+        token,
+    )
     protection = _get_json(f"{base}/branches/{branch_path}/protection", token)
     environment = _get_json(f"{base}/environments/production", token)
     actions_permissions = _get_json(f"{base}/actions/permissions", token)
@@ -256,6 +328,7 @@ def verify_github_governance(
         actions_permissions,
         selected_actions,
         repository_owner=repository_owner,
+        direct_collaborators=direct_collaborators,
     )
 
 
