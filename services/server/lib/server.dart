@@ -126,9 +126,7 @@ int serverPort(String? configuredPort) {
   }
   final port = int.tryParse(normalized);
   if (port == null || port < 1 || port > 65535) {
-    throw FormatException(
-      'PORT must be an integer from 1 through 65535.',
-    );
+    throw FormatException('PORT must be an integer from 1 through 65535.');
   }
   return port;
 }

@@ -23,18 +23,9 @@ void main() {
     test('requires a valid TCP port configuration', () {
       expect(serverPort(null), defaultServerPort);
       expect(serverPort(' 9090 '), 9090);
-      expect(
-        () => serverPort('not-a-port'),
-        throwsA(isA<FormatException>()),
-      );
-      expect(
-        () => serverPort('0'),
-        throwsA(isA<FormatException>()),
-      );
-      expect(
-        () => serverPort('65536'),
-        throwsA(isA<FormatException>()),
-      );
+      expect(() => serverPort('not-a-port'), throwsA(isA<FormatException>()));
+      expect(() => serverPort('0'), throwsA(isA<FormatException>()));
+      expect(() => serverPort('65536'), throwsA(isA<FormatException>()));
     });
 
     test('health endpoint reports ok', () async {
