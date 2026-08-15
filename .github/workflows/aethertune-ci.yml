@@ -379,6 +379,9 @@ jobs:
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server
 
+      - name: Run authenticated operations probe
+        run: bash scripts/ci/test_server_ops_probe_runtime.sh services/server/build/aethertune-server
+
       - name: Run server recovery evidence drill
         shell: bash
         env:

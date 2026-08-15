@@ -12,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY = ROOT / "services" / "server" / "deploy"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "aethertune-ci.yml"
+RUNTIME_PROBE = ROOT / "scripts" / "ci" / "test_server_ops_probe_runtime.sh"
 
 
 class ServerOpsProbeContractTest(unittest.TestCase):
@@ -89,6 +91,17 @@ class ServerOpsProbeContractTest(unittest.TestCase):
         self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN=", env_example)
         self.assertIn("raw operations token", deploy_readme)
         self.assertIn("off-host alert", deploy_readme)
+
+    def test_runtime_probe_is_exercised_against_the_compiled_server(self) -> None:
+        workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+        runtime_probe = RUNTIME_PROBE.read_text(encoding="utf-8")
+
+        self.assertTrue(RUNTIME_PROBE.is_file())
+        self.assertIn("test_server_ops_probe_runtime.sh", workflow)
+        self.assertIn("AETHERTUNE_OPS_TOKEN", runtime_probe)
+        self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN", runtime_probe)
+        self.assertIn("/ready", runtime_probe)
+        self.assertIn("aethertune-ops-probe.sh", runtime_probe)
 
 
 if __name__ == "__main__":
