@@ -1885,9 +1885,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final folderPath = Platform.isAndroid
         ? await _selectAndroidAudioTree(context)
-        : await FilePicker.getDirectoryPath(
-            dialogTitle: 'Import audio folder',
-          );
+        : await FilePicker.getDirectoryPath(dialogTitle: 'Import audio folder');
     if (!context.mounted || folderPath == null) {
       return;
     }
