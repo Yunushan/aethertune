@@ -120,7 +120,10 @@ dispatch, uses the protected environment, and fails closed when either value
 is missing. Each run uploads a 30-day, non-secret evidence artifact containing
 the run ID, commit, endpoint host, timestamp, probe log, and result. Keep a
 separate off-host alerting path as well; a workflow or systemd timer cannot
-detect a complete GitHub or host outage by itself.
+detect a complete GitHub or host outage by itself. The checked-in `Production
+operations alert` workflow sends failed, cancelled, or timed-out probe-run
+notifications to the configured HTTPS webhook. It sends only repository, run,
+commit, conclusion, and run-URL metadata, never the probe token or endpoint.
 
 ## GitHub release workflow
 
@@ -169,6 +172,9 @@ secret. The release and probe jobs read these secrets from the protected
 `production` environment:
 
 - Operations: `AETHERTUNE_OPS_PROBE_TOKEN`
+- Alerting: repository secret `AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL`, an
+  HTTPS endpoint that accepts a JSON body with a Slack-compatible `text` field
+  and the non-secret probe-run metadata
 - Android: `AETHERTUNE_ANDROID_KEYSTORE_BASE64`, `AETHERTUNE_ANDROID_KEYSTORE_PASSWORD`, `AETHERTUNE_ANDROID_KEY_ALIAS`, and `AETHERTUNE_ANDROID_KEY_PASSWORD`
 - Apple signing: `AETHERTUNE_APPLE_KEYCHAIN_PASSWORD`,
   `AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64`,
