@@ -7,32 +7,14 @@ Future<PlatformFile?> pickSingleFile({
   List<String>? allowedExtensions,
   String? dialogTitle,
 }) async {
-  final result = await FilePicker.platform.pickFiles(
+  final file = await FilePicker.pickFile(
     type: type,
     allowedExtensions: allowedExtensions,
     dialogTitle: dialogTitle,
-    allowMultiple: false,
-    withReadStream: true,
   );
-  if (result == null || result.files.isEmpty) {
-    return null;
-  }
-  return result.files.first;
+  return file;
 }
 
 Future<Uint8List> readPickedFileBytes(PlatformFile file) async {
-  final bytes = file.bytes;
-  if (bytes != null) {
-    return bytes;
-  }
-
-  final readStream = file.readStream;
-  if (readStream != null) {
-    final chunks = await readStream.toList();
-    return Uint8List.fromList(
-      chunks.expand((chunk) => chunk).toList(growable: false),
-    );
-  }
-
-  return file.xFile.readAsBytes();
+  return file.readAsBytes();
 }

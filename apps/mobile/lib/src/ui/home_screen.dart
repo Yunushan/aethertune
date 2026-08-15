@@ -1834,7 +1834,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
     )!.scanningSelectedAudio;
 
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final result = await FilePicker.pickFiles(type: FileType.audio);
 
     if (result == null || result.files.isEmpty) {
       return;
@@ -1885,7 +1885,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final folderPath = Platform.isAndroid
         ? await _selectAndroidAudioTree(context)
-        : await FilePicker.platform.getDirectoryPath(
+        : await FilePicker.getDirectoryPath(
             dialogTitle: 'Import audio folder',
           );
     if (!context.mounted || folderPath == null) {
@@ -10977,7 +10977,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
     final bytes = Uint8List.fromList(utf8.encode(document));
 
     try {
-      final outputPath = await FilePicker.platform.saveFile(
+      final outputPath = await FilePicker.saveFile(
         dialogTitle: 'Save ${_playlistDocumentFormatLabel(format)} playlist',
         fileName: fileName,
         type: FileType.custom,
@@ -13400,7 +13400,7 @@ class _HistoryTabState extends State<_HistoryTab> {
 
     try {
       final bytes = await captureListeningRecapPng(boundaryKey);
-      final outputPath = await FilePicker.platform.saveFile(
+      final outputPath = await FilePicker.saveFile(
         dialogTitle: 'Save listening recap image',
         fileName: listeningRecapPngFileName(recap),
         type: FileType.custom,
@@ -14329,7 +14329,7 @@ Future<void> _exportLocalDiagnostics(
 ) async {
   final messenger = ScaffoldMessenger.of(context);
   final bytes = Uint8List.fromList(utf8.encode(diagnostics.exportJson()));
-  final outputPath = await FilePicker.platform.saveFile(
+  final outputPath = await FilePicker.saveFile(
     dialogTitle: 'Export local diagnostics',
     fileName: 'aethertune-local-diagnostics.json',
     type: FileType.custom,
@@ -14601,7 +14601,7 @@ Future<void> _saveCollectionShareCard(
       '${_shareCardFileToken(fileToken)}.png';
   try {
     final bytes = await captureCollectionShareCardPng(boundaryKey);
-    final outputPath = await FilePicker.platform.saveFile(
+    final outputPath = await FilePicker.saveFile(
       dialogTitle: 'Save $kind share card',
       fileName: fileName,
       type: FileType.custom,
@@ -14959,7 +14959,7 @@ Future<void> _saveLyricsShareCard(
   try {
     final bytes = await captureLyricsShareCardPng(boundaryKey);
     final fileName = 'aethertune-lyrics-${track.id}.png';
-    final outputPath = await FilePicker.platform.saveFile(
+    final outputPath = await FilePicker.saveFile(
       dialogTitle: 'Save lyrics share card',
       fileName: fileName,
       type: FileType.custom,
@@ -15064,7 +15064,7 @@ Future<void> _saveLyricsDraftExportDocument(
   final messenger = ScaffoldMessenger.of(context);
   final bytes = Uint8List.fromList(export.bytes);
   try {
-    final outputPath = await FilePicker.platform.saveFile(
+    final outputPath = await FilePicker.saveFile(
       dialogTitle: 'Save lyrics file',
       fileName: export.fileName,
       type: FileType.custom,
@@ -18428,7 +18428,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     const fileName = 'aethertune-custom-catalogs.json';
     try {
       final bytes = Uint8List.fromList(utf8.encode(export.json));
-      final outputPath = await FilePicker.platform.saveFile(
+      final outputPath = await FilePicker.saveFile(
         dialogTitle: 'Export custom catalogs',
         fileName: fileName,
         type: FileType.custom,
@@ -18749,7 +18749,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>['json'],
       );
@@ -19042,7 +19042,7 @@ class _SourcesTabState extends State<_SourcesTab> {
 
     try {
       final bytes = Uint8List.fromList(utf8.encode(export.json));
-      final outputPath = await FilePicker.platform.saveFile(
+      final outputPath = await FilePicker.saveFile(
         dialogTitle: 'Export self-hosted servers',
         fileName: fileName,
         type: FileType.custom,
@@ -19125,7 +19125,7 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>['json'],
       );
@@ -23015,7 +23015,7 @@ class _SettingsTab extends StatelessWidget {
         }
       }
 
-      final destinationPath = await FilePicker.platform.getDirectoryPath(
+      final destinationPath = await FilePicker.getDirectoryPath(
         dialogTitle: 'Export cached media',
       );
       if (!context.mounted || destinationPath == null) {
@@ -23199,7 +23199,7 @@ class _SettingsTab extends StatelessWidget {
 
     try {
       final bytes = encodeAetherTuneBackupFile(backupJson);
-      final outputPath = await FilePicker.platform.saveFile(
+      final outputPath = await FilePicker.saveFile(
         dialogTitle: 'Save AetherTune backup',
         fileName: fileName,
         type: FileType.custom,
@@ -23291,7 +23291,7 @@ class _SettingsTab extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>[aetherTuneBackupFileExtension],
       );
