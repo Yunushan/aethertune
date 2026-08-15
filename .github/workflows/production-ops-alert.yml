@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          payload="$(python3 -c 'import json, os; print(json.dumps({"text": f"AetherTune production operations probe {os.environ[\"PROBE_CONCLUSION\"]}: {os.environ[\"PROBE_REPOSITORY\"]} run {os.environ[\"PROBE_RUN_ID\"]}", "repository": os.environ["PROBE_REPOSITORY"], "run_id": os.environ["PROBE_RUN_ID"], "run_url": os.environ["PROBE_RUN_URL"], "commit": os.environ["PROBE_SHA"], "conclusion": os.environ["PROBE_CONCLUSION"]}, separators=(",", ":")))')"
+          payload="$(python3 -c 'import json, os; conclusion=os.environ["PROBE_CONCLUSION"]; repository=os.environ["PROBE_REPOSITORY"]; run_id=os.environ["PROBE_RUN_ID"]; print(json.dumps({"text": "AetherTune production operations probe " + conclusion + ": " + repository + " run " + run_id, "repository": repository, "run_id": run_id, "run_url": os.environ["PROBE_RUN_URL"], "commit": os.environ["PROBE_SHA"], "conclusion": conclusion}, separators=(",", ":")))')"
           curl --fail-with-body --silent --show-error --max-time 15 \
             --header 'Content-Type: application/json' \
             --data "$payload" \
