@@ -1,0 +1,42 @@
+name: New OSV vulnerabilities and license violations
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  osv-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run scanner
+        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --output=results.json
+            --format=json
+            -r
+            ./
+            --allow-no-lockfiles
+            --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
+
+      - name: Enforce vulnerability and license policy
+        uses: google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        with:
+          scan-args: |-
+            --output=results.sarif
+            --new=results.json
+            --gh-annotations=false
+            --fail-on-vuln=true
