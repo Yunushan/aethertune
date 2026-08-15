@@ -17,8 +17,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         self.assertIn("concurrency:", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertEqual(workflow.count("timeout-minutes:"), 6)
-        self.assertEqual(workflow.count("persist-credentials: false"), 6)
+        self.assertEqual(workflow.count("timeout-minutes:"), 7)
+        self.assertEqual(workflow.count("persist-credentials: false"), 7)
 
     def test_assembly_checks_out_release_policy_before_running_verifiers(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -28,6 +28,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish = workflow.split("  publish:\n", 1)[1]
 
         self.assertIn("- name: Checkout release policy", assembly)
+        self.assertIn("Verify production release metadata", assembly)
+        self.assertIn("scripts/ci/verify_release_metadata.py", assembly)
+        self.assertIn("Verify GitHub production tag provenance", assembly)
+        self.assertIn("scripts/ci/verify_github_tag.py", assembly)
         self.assertIn("actions: read", assembly)
         self.assertIn("actions: read", publish)
         self.assertIn(
@@ -46,6 +50,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         android = workflow.split("  android:\n", 1)[1].split(
             "  desktop:\n", 1
         )[0]
+        publish = workflow.split("  publish:\n", 1)[1]
 
         self.assertIn(
             "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -70,7 +75,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("scripts/ci/verify_release_version.sh", workflow)
         self.assertIn("scripts/ci/verify_release_manifest.py", workflow)
         self.assertIn(
-            "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
+            "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
             workflow,
         )
         self.assertIn("subject-checksums: release/SHA256SUMS.txt", workflow)
@@ -134,6 +139,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("aethertune-linux-x64.tar.gz", workflow)
         self.assertIn("scripts/ci/package_linux_deb.sh", workflow)
         self.assertIn("aethertune-linux-x64.deb", workflow)
+        self.assertIn("Reclaim Linux packaging space", workflow)
+        self.assertIn("sudo apt-get clean", workflow)
+        self.assertIn("apps/mobile/.dart_tool", workflow)
+        self.assertIn("! -name bundle", workflow)
+        self.assertLess(
+            workflow.index("scripts/ci/package_linux_deb.sh"),
+            workflow.index("scripts/ci/package_linux_tarball.sh"),
+        )
         self.assertIn("scripts/ci/package_windows_zip.ps1", workflow)
         self.assertIn("aethertune-windows-x64.zip", workflow)
         self.assertIn("scripts/ci/package_windows_msix.ps1", workflow)
@@ -174,28 +187,52 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'", workflow)
         self.assertIn("name: production", workflow)
         self.assertIn("'production' || 'candidate'", workflow)
+        self.assertIn("  governance:\n", workflow)
+        self.assertIn("Verify protected governance for production", workflow)
+        governance = workflow.split("  governance:\n", 1)[1].split(
+            "  android:\n", 1
+        )[0]
+        self.assertIn(
+            "vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||",
+            governance,
+        )
+        self.assertIn(
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+            governance,
+        )
+        self.assertNotIn(
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            governance,
+        )
+        self.assertIn(
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            workflow,
+        )
+        self.assertIn(
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+            workflow,
+        )
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", workflow)
+        self.assertIn("AETHERTUNE_GOVERNANCE_TOKEN", workflow)
+        self.assertIn("verify_github_governance.py", workflow)
+        self.assertIn("needs: [provenance, osv-scan, governance, android, desktop, server]", workflow)
         self.assertIn("  osv-scan:", workflow)
         osv_lines = workflow.split("  osv-scan:\n", 1)[1].split(
             "  android:\n", 1
         )[0].splitlines()
         self.assertTrue(
-            any(line.startswith("    uses: google/osv-scanner-action/") for line in osv_lines)
-        )
-        self.assertTrue(
             any(
-                line.startswith(
-                    "    uses: google/osv-scanner-action/.github/workflows/"
-                )
-                and line.endswith(
-                    "@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8"
-                )
+                line == "    uses: ./.github/workflows/osv-scan-reusable.yml"
                 for line in osv_lines
             )
         )
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
         self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)
         self.assertIn("--licenses=", workflow)
-        self.assertIn("needs: [provenance, osv-scan, android, desktop, server]", workflow)
+        self.assertIn(
+            "needs: [provenance, osv-scan, governance, android, desktop, server]",
+            workflow,
+        )
         self.assertIn("scripts/ci/verify_production_release.py", workflow)
         self.assertIn(
             "- name: Test production release preflight\n"
@@ -203,6 +240,10 @@ class ReleaseWorkflowTest(unittest.TestCase):
             workflow,
         )
         self.assertIn("name: Checkout release policy", workflow)
+        self.assertIn("Verify production release metadata", workflow)
+        self.assertIn("metadata_args+=(--tag \"$GITHUB_REF_NAME\")", workflow)
+        self.assertIn("startsWith(github.ref, 'refs/tags/v')", workflow)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn(
             "refusing to overwrite immutable production assets",
@@ -213,6 +254,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn('exit 1', workflow)
         self.assertNotIn("gh release upload", workflow)
         self.assertIn('gh release create "$RELEASE_TAG" release/*', workflow)
+        self.assertIn("- name: Probe production before publication", publish)
+        self.assertIn("AETHERTUNE_PRODUCTION_BASE_URL is required before publication", publish)
+        self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN is required before publication", publish)
+        self.assertIn(
+            "bash services/server/deploy/aethertune-ops-probe.sh \"$AETHERTUNE_PRODUCTION_BASE_URL\"",
+            publish,
+        )
+        self.assertLess(
+            publish.index("Probe production before publication"),
+            publish.index("Create immutable GitHub release"),
+        )
 
 
 if __name__ == "__main__":

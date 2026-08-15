@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+FLUTTER_SETUP_SCRIPT = ROOT / "scripts" / "ci" / "setup_flutter.sh"
+FLUTTER_SETUP_SCRIPT_WINDOWS = ROOT / "scripts" / "ci" / "setup_flutter.ps1"
 WORKFLOWS = (
     ROOT / ".github" / "workflows" / "aethertune-ci.yml",
     ROOT / ".github" / "workflows" / "aethertune-release.yml",
@@ -41,8 +43,19 @@ class ToolchainPolicyTest(unittest.TestCase):
             workflow = workflow_path.read_text(encoding="utf-8")
             self.assertNotIn("channel: stable", workflow, workflow_path)
             self.assertNotIn("sdk: stable", workflow, workflow_path)
-            self.assertEqual(3, workflow.count("flutter-version: '3.44.6'"), workflow_path)
+            self.assertIn("scripts/ci/setup_flutter.sh", workflow, workflow_path)
+            self.assertTrue(
+                "scripts/ci/setup_flutter.ps1" in workflow
+                or "scripts\\ci\\setup_flutter.ps1" in workflow,
+                workflow_path,
+            )
             self.assertEqual(1, workflow.count("sdk: '3.12.2'"), workflow_path)
+        for setup_script in (
+            FLUTTER_SETUP_SCRIPT.read_text(encoding="utf-8"),
+            FLUTTER_SETUP_SCRIPT_WINDOWS.read_text(encoding="utf-8"),
+        ):
+            self.assertIn("3.44.6", setup_script)
+            self.assertIn("ee80f08bbf97172ec030b8751ceab557177a34a6", setup_script)
 
     def test_ci_and_release_verify_dart_formatting(self) -> None:
         command = "dart format --output=none --set-exit-if-changed"
@@ -92,6 +105,11 @@ class ToolchainPolicyTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("cron: '17 4 * * 1'", workflow)
+        self.assertIn(
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            workflow,
+        )
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", workflow)
         self.assertIn("AETHERTUNE_GOVERNANCE_TOKEN", workflow)
         self.assertIn("verify_github_governance.py", workflow)
 

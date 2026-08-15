@@ -99,7 +99,20 @@ void main() {
       'false',
     );
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    expect(
+      gradle,
+      contains('compileSdk = maxOf(flutter.compileSdkVersion, 37)'),
+    );
     expect(gradle, contains('minSdk = maxOf(flutter.minSdkVersion, 23)'));
+    final settings = File('android/settings.gradle.kts').readAsStringSync();
+    expect(
+      settings,
+      contains('id("com.android.application") version "9.1.1" apply false'),
+    );
+    final wrapper = File(
+      'android/gradle/wrapper/gradle-wrapper.properties',
+    ).readAsStringSync();
+    expect(wrapper, contains('gradle-9.3.1-all.zip'));
   });
 
   test('generated iOS wrapper enables background audio', () {

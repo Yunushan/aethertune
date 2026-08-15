@@ -1,0 +1,22 @@
+[Unit]
+Description=Probe AetherTune server health, readiness, and metrics
+After=aethertune.service
+Requires=aethertune.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/aethertune/server.env
+ExecStart=/usr/local/libexec/aethertune-ops-probe.sh http://127.0.0.1:8080
+NoNewPrivileges=yes
+LockPersonality=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictSUIDSGID=yes
+UMask=0077

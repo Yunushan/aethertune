@@ -1,0 +1,51 @@
+name: Production operations alert
+
+on:
+  workflow_run:
+    workflows:
+      - Production operations probe
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-ops-alert-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    name: Notify off-host incident monitor
+    if: >-
+      github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      ALERT_WEBHOOK_URL: ${{ secrets.AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL }}
+      PROBE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      PROBE_REPOSITORY: ${{ github.repository }}
+      PROBE_RUN_ID: ${{ github.event.workflow_run.id }}
+      PROBE_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      PROBE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Validate alert configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ALERT_WEBHOOK_URL:?AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL is required for probe failure alerts}"
+          case "$ALERT_WEBHOOK_URL" in
+            https://*) ;;
+            *) echo 'AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL must use HTTPS.' >&2; exit 1 ;;
+          esac
+
+      - name: Send off-host alert
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(python3 -c 'import json, os; conclusion=os.environ["PROBE_CONCLUSION"]; repository=os.environ["PROBE_REPOSITORY"]; run_id=os.environ["PROBE_RUN_ID"]; print(json.dumps({"text": "AetherTune production operations probe " + conclusion + ": " + repository + " run " + run_id, "repository": repository, "run_id": run_id, "run_url": os.environ["PROBE_RUN_URL"], "commit": os.environ["PROBE_SHA"], "conclusion": conclusion}, separators=(",", ":")))')"
+          curl --fail-with-body --silent --show-error --max-time 15 \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "$ALERT_WEBHOOK_URL"

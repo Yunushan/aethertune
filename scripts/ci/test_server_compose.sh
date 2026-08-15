@@ -43,9 +43,17 @@ if [[ "$unauthorized_status" != '401' ]]; then
   echo "Docker metrics endpoint returned $unauthorized_status without authentication." >&2
   exit 1
 fi
-curl --fail --silent \
+metrics_body="$(curl --fail --silent \
   -H "Authorization: Bearer $AETHERTUNE_OPS_TOKEN" \
-  "$base_url/api/v1/metrics" >/dev/null
+  "$base_url/api/v1/metrics")"
+for metric in requestsTotal requestsRateLimited responses5xx; do
+  if ! grep -Fq "\"$metric\"" <<< "$metrics_body"; then
+    echo "Authenticated metrics response is missing $metric." >&2
+    exit 1
+  fi
+done
+AETHERTUNE_OPS_TOKEN="$AETHERTUNE_OPS_TOKEN" \
+  bash "$root/services/server/deploy/aethertune-ops-probe.sh" "$base_url"
 container_id="$("${compose[@]}" ps -q aethertune-server)"
 if [[ -z "$container_id" ]]; then
   echo 'Docker Compose did not report a server container.' >&2

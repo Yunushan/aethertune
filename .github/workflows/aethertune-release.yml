@@ -25,9 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Flutter and Dart
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: '3.44.6'
+        run: bash scripts/ci/setup_flutter.sh
 
       - name: Verify Dart formatting
         run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
@@ -68,7 +66,7 @@ jobs:
 
   osv-scan:
     name: OSV vulnerability and license scan
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    uses: ./.github/workflows/osv-scan-reusable.yml
     with:
       fail-on-vuln: true
       scan-args: |-
@@ -80,8 +78,37 @@ jobs:
       contents: read
       security-events: write
 
+  governance:
+    name: Verify production governance
+    if: >-
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Verify protected governance for production
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.AETHERTUNE_GOVERNANCE_TOKEN }}
+        run: python3 scripts/ci/verify_github_governance.py
+
+      - name: Confirm candidate governance bypass is non-publishing
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true'
+        run: echo 'Candidate mode does not publish a GitHub release or require production governance.'
+
   android:
     name: Android release artifacts
+    if: >-
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment:
@@ -93,9 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: '3.44.6'
+        run: bash scripts/ci/setup_flutter.sh
 
       - name: Generate platform wrappers
         run: bash ./scripts/bootstrap_client.sh
@@ -179,6 +204,10 @@ jobs:
 
   desktop:
     name: Desktop release artifact (${{ matrix.target }})
+    if: >-
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     environment:
@@ -209,9 +238,14 @@ jobs:
           sudo apt-get install -y clang cmake libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: '3.44.6'
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/ci/setup_flutter.sh
+
+      - name: Set up Flutter on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\ci\setup_flutter.ps1
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
@@ -319,15 +353,29 @@ jobs:
             -SigningCertificatePassword $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD
           "WINDOWS_SIGNING_CERTIFICATE_PATH=$certificatePath" >> $env:GITHUB_ENV
 
+      - name: Reclaim Linux packaging space
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          rm -rf "$HOME/.pub-cache" apps/mobile/.dart_tool
+          find apps/mobile/build/linux/x64/release \
+            -mindepth 1 -maxdepth 1 ! -name bundle -exec rm -rf {} +
+          df -h "$GITHUB_WORKSPACE"
+          du -sh apps/mobile/build/linux/x64/release/bundle
+
       - name: Package Linux desktop app
         if: matrix.target == 'linux'
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
-          bash scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.tar.gz
           version="$(awk '/^version:/ {print $2}' apps/mobile/pubspec.yaml | cut -d+ -f1)"
           bash scripts/ci/package_linux_deb.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.deb "$version"
+          # Build the second archive after dpkg-deb removes its temporary copy.
+          bash scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.tar.gz
 
       - name: Sign and notarize macOS production app
         if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
@@ -441,6 +489,10 @@ jobs:
 
   server:
     name: Server executable (${{ matrix.label }})
+    if: >-
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -463,7 +515,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
         with:
           sdk: '3.12.2'
 
@@ -495,7 +547,7 @@ jobs:
 
   assemble-release:
     name: Assemble verified release bundle
-    needs: [provenance, osv-scan, android, desktop, server]
+    needs: [provenance, osv-scan, governance, android, desktop, server]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -510,6 +562,29 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Verify production release metadata
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata_args=()
+          if [[ "$GITHUB_REF_TYPE" == 'tag' ]]; then
+            metadata_args+=(--tag "$GITHUB_REF_NAME")
+          fi
+          python3 scripts/ci/verify_release_metadata.py "${metadata_args[@]}"
+
+      - name: Verify GitHub production tag provenance
+        if: >-
+          github.event_name == 'push' &&
+          startsWith(github.ref, 'refs/tags/v') &&
+          vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/verify_github_tag.py
 
       - name: Require production tag to be based on main
         if: >-
@@ -553,7 +628,7 @@ jobs:
           cd ..
 
       - name: Attest verified release subjects
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-checksums: release/SHA256SUMS.txt
 
@@ -595,6 +670,17 @@ jobs:
         with:
           name: aethertune-release-bundle
           path: release
+
+      - name: Probe production before publication
+        shell: bash
+        env:
+          AETHERTUNE_PRODUCTION_BASE_URL: ${{ vars.AETHERTUNE_PRODUCTION_BASE_URL }}
+          AETHERTUNE_OPS_PROBE_TOKEN: ${{ secrets.AETHERTUNE_OPS_PROBE_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${AETHERTUNE_PRODUCTION_BASE_URL:?AETHERTUNE_PRODUCTION_BASE_URL is required before publication}"
+          : "${AETHERTUNE_OPS_PROBE_TOKEN:?AETHERTUNE_OPS_PROBE_TOKEN is required before publication}"
+          bash services/server/deploy/aethertune-ops-probe.sh "$AETHERTUNE_PRODUCTION_BASE_URL"
 
       - name: Create immutable GitHub release
         shell: bash

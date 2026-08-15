@@ -1,0 +1,79 @@
+name: Server recovery drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-recovery-drill
+  cancel-in-progress: true
+
+jobs:
+  recovery:
+    name: Backup restore and rollback drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Initialize recovery evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/server-recovery-drill
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'result=starting\n'
+          } > build/server-recovery-drill/metadata.txt
+
+      - name: Run backup restore and rollback drills
+        shell: bash
+        run: |
+          set -u -o pipefail
+          mkdir -p build/server-recovery-drill
+
+          bash scripts/ci/test_server_backup_restore.sh 2>&1 \
+            | tee build/server-recovery-drill/backup-restore.log
+          backup_restore_status=${PIPESTATUS[0]}
+
+          bash scripts/ci/test_server_rollback.sh 2>&1 \
+            | tee build/server-recovery-drill/rollback.log
+          rollback_status=${PIPESTATUS[0]}
+
+          result=passed
+          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 ]]; then
+            result=failed
+          fi
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'backup_restore_status=%s\n' "$backup_restore_status"
+            printf 'rollback_status=%s\n' "$rollback_status"
+            printf 'result=%s\n' "$result"
+          } > build/server-recovery-drill/metadata.txt
+          if [[ "$result" != 'passed' ]]; then
+            exit 1
+          fi
+
+      - name: Upload recovery evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-server-recovery-drill-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 90
+          path: build/server-recovery-drill/

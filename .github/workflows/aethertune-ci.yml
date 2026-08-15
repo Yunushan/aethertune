@@ -26,9 +26,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Flutter and Dart
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: '3.44.6'
+        run: bash scripts/ci/setup_flutter.sh
 
       - name: Verify Dart formatting
         run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
@@ -37,9 +35,11 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: |
-          dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+          format_status=0
+          dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test || format_status=$?
           mkdir -p build/dart-format
           git diff --binary > build/dart-format/dart-format.patch
+          exit "$format_status"
 
       - name: Upload Dart formatting patch
         if: ${{ always() }}
@@ -86,8 +86,26 @@ jobs:
         shell: bash
         run: bash scripts/ci/test_verify_release_version.sh
 
+      - name: Test release metadata verifier
+        run: python3 scripts/ci/test_verify_release_metadata.py
+
+      - name: Test GitHub tag verifier
+        run: python3 scripts/ci/test_verify_github_tag.py
+
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
+
+      - name: Test production operations workflow
+        run: python3 scripts/ci/test_production_ops_workflow.py
+
+      - name: Test server load contract
+        run: python3 scripts/ci/test_server_load_contract.py
+
+      - name: Test production operations alert workflow
+        run: python3 scripts/ci/test_production_ops_alert_workflow.py
+
+      - name: Test server recovery drill workflow
+        run: python3 scripts/ci/test_recovery_drill_workflow.py
 
       - name: Test provider contract workflow
         run: python3 scripts/ci/test_provider_contract_workflow.py
@@ -146,9 +164,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: '3.44.6'
+        run: bash scripts/ci/setup_flutter.sh
 
       - name: Verify generated platform wrappers
         run: python3 scripts/test_configure_audio_service_platforms.py
@@ -240,12 +256,17 @@ jobs:
         if: matrix.target == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config
+          sudo apt-get install -y clang cmake libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config xvfb
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          flutter-version: '3.44.6'
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/ci/setup_flutter.sh
+
+      - name: Set up Flutter on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\ci\setup_flutter.ps1
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
@@ -262,6 +283,14 @@ jobs:
 
       - name: Build desktop app
         run: cd apps/mobile && flutter build ${{ matrix.target }} --debug
+
+      - name: Run Linux desktop integration smoke test
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/mobile
+          xvfb-run -a flutter test integration_test/onboarding_smoke_test.dart -d linux
 
       - name: Test Linux release packaging
         if: matrix.target == 'linux'
@@ -311,7 +340,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1.7.2
+        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
         with:
           sdk: '3.12.2'
 
@@ -328,6 +357,9 @@ jobs:
       - name: Build and smoke-test Docker deployment
         run: bash scripts/ci/test_server_compose.sh
 
+      - name: Test operations probe deployment contract
+        run: python3 scripts/ci/test_server_ops_probe_contract.py
+
       - name: Analyze server
         run: cd services/server && dart analyze
 
@@ -341,6 +373,8 @@ jobs:
         run: |
           sudo install -D -m 0755 services/server/build/aethertune-server /usr/local/bin/aethertune-server
           sudo install -D -m 0755 services/server/deploy/aethertune-backup.sh /usr/local/libexec/aethertune-backup.sh
+          sudo install -D -m 0755 services/server/deploy/aethertune-verify-backups.sh /usr/local/libexec/aethertune-verify-backups.sh
+          sudo install -D -m 0755 services/server/deploy/aethertune-ops-probe.sh /usr/local/libexec/aethertune-ops-probe.sh
 
       - name: Validate systemd deployment units
         run: >-
@@ -348,10 +382,78 @@ jobs:
           services/server/deploy/aethertune.service
           services/server/deploy/aethertune-backup.service
           services/server/deploy/aethertune-backup.timer
+          services/server/deploy/aethertune-backup-verify.service
+          services/server/deploy/aethertune-backup-verify.timer
+          services/server/deploy/aethertune-ops-probe.service
+          services/server/deploy/aethertune-ops-probe.timer
 
       - name: Smoke test server executable
         run: dart scripts/ci/test_server_executable.dart services/server/build/aethertune-server
 
-      - name: Test server backup and restore
+      - name: Run authenticated operations probe
+        run: bash scripts/ci/test_server_ops_probe_runtime.sh services/server/build/aethertune-server
+
+      - name: Run bounded server load smoke test
+        run: |
+          mkdir -p build/server-load
+          bash scripts/ci/test_server_load.sh \
+            services/server/build/aethertune-server \
+            build/server-load
+
+      - name: Upload server load evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-server-load-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/server-load/
+
+      - name: Run server recovery evidence drill
         shell: bash
-        run: bash scripts/ci/test_server_backup_restore.sh
+        env:
+          SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -u -o pipefail
+          mkdir -p build/server-recovery-drill
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'result=starting\n'
+          } > build/server-recovery-drill/metadata.txt
+
+          bash scripts/ci/test_server_backup_restore.sh 2>&1 \
+            | tee build/server-recovery-drill/backup-restore.log
+          backup_restore_status=${PIPESTATUS[0]}
+
+          bash scripts/ci/test_server_rollback.sh 2>&1 \
+            | tee build/server-recovery-drill/rollback.log
+          rollback_status=${PIPESTATUS[0]}
+
+          result=passed
+          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 ]]; then
+            result=failed
+          fi
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'workflow_commit=%s\n' "$GITHUB_SHA"
+            printf 'source_commit=%s\n' "$SOURCE_COMMIT_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'backup_restore_status=%s\n' "$backup_restore_status"
+            printf 'rollback_status=%s\n' "$rollback_status"
+            printf 'result=%s\n' "$result"
+          } > build/server-recovery-drill/metadata.txt
+          if [[ "$result" != 'passed' ]]; then
+            exit 1
+          fi
+
+      - name: Upload server recovery evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-server-recovery-drill-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/server-recovery-drill/

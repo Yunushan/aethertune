@@ -338,10 +338,18 @@ void main() {
     expect(state.duration, const Duration(minutes: 3));
     expect(state.canGoNext, isTrue);
 
+    await desktopSession.send(DesktopMediaSessionCommand.play);
+    expect(delegate.playingValue, isTrue);
+    await desktopSession.send(DesktopMediaSessionCommand.pause);
+    expect(delegate.playingValue, isFalse);
     await desktopSession.send(DesktopMediaSessionCommand.seekForward);
     expect(delegate.positionValue, const Duration(seconds: 42));
+    await desktopSession.send(DesktopMediaSessionCommand.seekBackward);
+    expect(delegate.positionValue, const Duration(seconds: 32));
     await desktopSession.send(DesktopMediaSessionCommand.next);
     expect(delegate.currentIndex, 1);
+    await desktopSession.send(DesktopMediaSessionCommand.previous);
+    expect(delegate.currentIndex, 0);
     await desktopSession.send(DesktopMediaSessionCommand.stop);
     expect(delegate.playingValue, isFalse);
   });

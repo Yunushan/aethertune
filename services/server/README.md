@@ -23,7 +23,9 @@ docker compose ps
 curl http://127.0.0.1:8080/health
 ```
 
-The service rejects the `.env.example` operations-token placeholder at startup.
+The service rejects a missing or placeholder `AETHERTUNE_OPS_TOKEN` at startup.
+This operations token protects metrics and all managed-account administration;
+keep it separate from device sync tokens and never expose it to clients.
 Replace `replace-with-a-separate-long-random-token` before starting the server;
 the operations token must be different from every managed-account token.
 
@@ -56,15 +58,20 @@ deployment needs another interface. Docker sets its own listener to `0.0.0.0`
 inside the container; its published host port remains controlled separately by
 `AETHERTUNE_BIND_ADDRESS`.
 
+`PORT` defaults to `8080` and must be an integer from `1` through `65535` when
+configured. Invalid values stop startup instead of silently selecting a
+different port. Idle HTTP connections are closed after 60 seconds.
+
 The in-process request limiter defaults to 120 requests per minute for each
 bearer-token digest and one anonymous bucket. Set
 `AETHERTUNE_RATE_LIMIT_PER_MINUTE` to a positive integer to tune that budget;
 invalid values stop startup. Keep an additional rate limit at the reverse
 proxy for IP-based protection.
 
-Managed device tokens do not expire by default for compatibility. Set
+Managed device tokens expire after 365 days by default. Set
 `AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` to an integer from 1 through 3650 to reject
-managed tokens at that age; issue a replacement token before the deadline.
+managed tokens at that age, or to `0` to disable expiry entirely; issue a
+replacement token before the deadline.
 Static `AETHERTUNE_SYNC_USERS` credentials are unaffected.
 
 For managed accounts, operations can issue a single-use recovery code through

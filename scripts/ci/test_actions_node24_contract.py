@@ -29,7 +29,11 @@ class ActionsNode24ContractTest(unittest.TestCase):
             for workflow in sorted(workflow_dir.glob("*.yml"))
         )
 
-        references = ACTION_REFERENCE.findall(workflow_text)
+        references = [
+            reference
+            for reference in ACTION_REFERENCE.findall(workflow_text)
+            if not reference.startswith("./")
+        ]
         self.assertTrue(references)
         self.assertTrue(
             all(IMMUTABLE_REF.search(reference) for reference in references),
@@ -58,13 +62,14 @@ class ActionsNode24ContractTest(unittest.TestCase):
             workflows,
         )
         self.assertIn(
-            "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
+            "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
             workflows,
         )
         self.assertIn(
-            "dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260",
+            "dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1",
             workflows,
         )
+        self.assertNotIn("subosito/flutter-action@", workflows)
         self.assertNotIn("actions/checkout@v4", workflows)
         self.assertNotIn("actions/upload-artifact@v4", workflows)
         self.assertNotIn("actions/download-artifact@v4", workflows)

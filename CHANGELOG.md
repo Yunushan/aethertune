@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Hardened the self-hosted sync server for production: graceful SIGTERM/SIGINT
+  shutdown with in-flight request draining and readiness failover, an exclusive
+  data-directory lock that refuses concurrent instances, per-client-address
+  bucketing for anonymous rate limiting, and a 365-day default managed-token
+  lifetime (opt out with `AETHERTUNE_MANAGED_TOKEN_TTL_DAYS=0`).
+- Added Docker Compose CPU/memory resource limits and excluded the runtime lock
+  file from verified backups.
+- Added Trivy container-vulnerability scanning and CodeQL native-platform
+  analysis workflows. **Deployment note:** before merging, add
+  `aquasecurity/trivy-action@*` to the repository's GitHub Actions allowlist
+  ("Allow specified actions and reusable workflows"), otherwise the Trivy job
+  and the weekly governance audit fail closed.
+- Fixed macOS release networking by granting the sandboxed client the
+  `network.client` and `files.user-selected.read-write` entitlements.
+- Fixed Android release networking by declaring the `INTERNET` permission in
+  the main manifest instead of only debug/profile variants.
+- Added a versioned library-persistence schema with forward-compatible
+  migrations and fail-closed rejection of newer schemas.
+- Added a device-level first-run onboarding integration test wired into the
+  Linux desktop CI job under xvfb.
+
+
 - Changed the project source license to 0BSD.
 - Added a Now Playing track share-card preview with native PNG save support.
 - Added persisted **Match all** and **Match any** modes to custom smart playlist rules.

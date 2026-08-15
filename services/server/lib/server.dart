@@ -22,6 +22,11 @@ const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 const maxManagedAuthRequestBytes = 16 * 1024;
 const maxListenTogetherSessionBytes = 32 * 1024;
 const maxSharedPlaylistBytes = 64 * 1024;
+const defaultServerPort = 8080;
+const serverIdleTimeout = Duration(seconds: 60);
+
+/// File name of the exclusive runtime lock held on a server data directory.
+const serverDataDirectoryLockFileName = '.server.lock';
 final _listenTogetherInviteRandom = Random.secure();
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
@@ -49,17 +54,23 @@ final class ServerRequestRateLimiter {
   Duration? check(Request request) {
     final now = _clock().toUtc();
     final token = _bearerToken(request.headers['authorization'] ?? '');
-    final key = token == null
-        ? 'anonymous'
-        : sha256.convert(utf8.encode(token)).toString();
-    _windows.removeWhere(
-      (_, entry) => !now.isBefore(entry.startedAt.add(window)),
-    );
-    final current = _windows[key];
-    if (current == null && _windows.length >= maximumBuckets) {
-      return window;
+    final String key;
+    if (token != null) {
+      key = sha256.convert(utf8.encode(token)).toString();
+    } else {
+      final remoteAddress = _remoteAddress(request);
+      key = remoteAddress == null ? 'anonymous' : 'ip:${remoteAddress.address}';
     }
+    final current = _windows[key];
     if (current == null || !now.isBefore(current.startedAt.add(window))) {
+      if (current == null && _windows.length >= maximumBuckets) {
+        _windows.removeWhere(
+          (_, entry) => !now.isBefore(entry.startedAt.add(window)),
+        );
+        if (_windows.length >= maximumBuckets) {
+          _windows.remove(_windows.keys.first);
+        }
+      }
       _windows[key] = _RateLimitWindow(now, 1);
       return null;
     }
@@ -69,6 +80,14 @@ final class ServerRequestRateLimiter {
     current.requests += 1;
     return null;
   }
+}
+
+InternetAddress? _remoteAddress(Request request) {
+  final connectionInfo = request.context['shelf.io.connection_info'];
+  if (connectionInfo is HttpConnectionInfo) {
+    return connectionInfo.remoteAddress;
+  }
+  return null;
 }
 
 ServerRequestRateLimiter serverRequestRateLimiterFromEnvironment(
@@ -115,6 +134,18 @@ InternetAddress serverListenAddress(String? configuredAddress) {
     );
   }
   return address;
+}
+
+int serverPort(String? configuredPort) {
+  final normalized = configuredPort?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return defaultServerPort;
+  }
+  final port = int.tryParse(normalized);
+  if (port == null || port < 1 || port > 65535) {
+    throw FormatException('PORT must be an integer from 1 through 65535.');
+  }
+  return port;
 }
 
 class ServerRequestLogEntry {

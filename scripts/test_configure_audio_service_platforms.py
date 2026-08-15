@@ -57,6 +57,7 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
             )
             gradle_path.write_text(
                 """android {
+    compileSdk = flutter.compileSdkVersion
     defaultConfig {
         // TODO: Specify your own unique Application ID
         applicationId = "com.example.example"
@@ -151,6 +152,10 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
             self.assertIn("requestPinShortcut", activity_text)
             self.assertIn(
                 "minSdk = maxOf(flutter.minSdkVersion, 23)",
+                gradle_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "compileSdk = maxOf(flutter.compileSdkVersion, 37)",
                 gradle_path.read_text(encoding="utf-8"),
             )
             gradle_text = gradle_path.read_text(encoding="utf-8")
@@ -268,6 +273,10 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
                 manifest_path.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'android.permission.INTERNET',
+                manifest_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 'android.permission.READ_MEDIA_AUDIO',
                 manifest_path.read_text(encoding="utf-8"),
             )
@@ -297,6 +306,41 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
                 for shortcut in shortcut_root.findall("shortcut")
             }
             self.assertEqual(shortcut_ids, {"previous", "play_pause", "next"})
+
+    def test_configures_and_verifies_android_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            settings_path = root / "settings.gradle.kts"
+            wrapper_path = root / "gradle/wrapper/gradle-wrapper.properties"
+            wrapper_path.parent.mkdir(parents=True)
+            settings_path.write_text(
+                'id("com.android.application") version "9.0.1" apply false\n',
+                encoding="utf-8",
+            )
+            wrapper_path.write_text(
+                "distributionUrl=https\\://services.gradle.org/distributions/"
+                "gradle-9.1.0-all.zip\n",
+                encoding="utf-8",
+            )
+
+            platform_config.configure_android_toolchain(
+                settings_path,
+                wrapper_path,
+            )
+            platform_config.verify_android_toolchain(
+                settings_path,
+                wrapper_path,
+            )
+
+            self.assertIn(
+                'id("com.android.application") version "9.1.1" apply false',
+                settings_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "distributionUrl=https\\://services.gradle.org/distributions/"
+                "gradle-9.3.1-all.zip",
+                wrapper_path.read_text(encoding="utf-8"),
+            )
 
     def test_configures_ios_and_macos_url_schemes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -330,6 +374,64 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
 
             platform_config.configure_macos(info_path)
             platform_config.verify_macos(info_path)
+
+    def test_configures_macos_network_and_file_access_entitlements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            debug_path = Path(temporary_directory) / "DebugProfile.entitlements"
+            release_path = Path(temporary_directory) / "Release.entitlements"
+            for path in (debug_path, release_path):
+                with path.open("wb") as stream:
+                    platform_config.plistlib.dump({}, stream)
+
+            platform_config.configure_macos_network_entitlements(
+                debug_path,
+                include_file_access=False,
+            )
+            platform_config.configure_macos_network_entitlements(
+                release_path,
+                include_file_access=True,
+            )
+            platform_config.verify_macos_network_entitlements(
+                debug_path,
+                require_file_access=False,
+            )
+            platform_config.verify_macos_network_entitlements(
+                release_path,
+                require_file_access=True,
+            )
+
+            with debug_path.open("rb") as stream:
+                debug = platform_config.plistlib.load(stream)
+            self.assertTrue(
+                debug[platform_config.MACOS_NETWORK_CLIENT_ENTITLEMENT]
+            )
+            self.assertNotIn(
+                platform_config.MACOS_USER_SELECTED_FILES_ENTITLEMENT,
+                debug,
+            )
+            with release_path.open("rb") as stream:
+                release = platform_config.plistlib.load(stream)
+            self.assertTrue(
+                release[platform_config.MACOS_NETWORK_CLIENT_ENTITLEMENT]
+            )
+            self.assertTrue(
+                release[platform_config.MACOS_USER_SELECTED_FILES_ENTITLEMENT]
+            )
+
+    def test_rejects_macos_entitlements_without_file_access(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            release_path = Path(temporary_directory) / "Release.entitlements"
+            with release_path.open("wb") as stream:
+                platform_config.plistlib.dump({}, stream)
+            platform_config.configure_macos_network_entitlements(
+                release_path,
+                include_file_access=False,
+            )
+            with self.assertRaisesRegex(RuntimeError, "user-selected files"):
+                platform_config.verify_macos_network_entitlements(
+                    release_path,
+                    require_file_access=True,
+                )
 
     def test_configures_linux_and_windows_deep_link_forwarding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
