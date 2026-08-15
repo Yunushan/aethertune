@@ -35,7 +35,7 @@ REQUIRED_SECURITY_FEATURES = (
 REQUIRED_ACTION_PATTERNS = frozenset(
     {
         "dart-lang/setup-dart@*",
-        "google/osv-scanner-action@*",
+        "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@*",
         "subosito/flutter-action@*",
     }
 )

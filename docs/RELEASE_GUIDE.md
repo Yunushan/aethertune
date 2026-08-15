@@ -244,9 +244,10 @@ files are enforced so a floating SDK or dependency resolution cannot silently
 change a release build.
 
 The repository Actions policy allows GitHub-owned actions plus only the pinned
-Flutter, Dart, and OSV action owners used by these workflows. GitHub also
-requires every action reference to use a full-length commit SHA; changing the
-allowlist or disabling SHA pinning is a production-governance failure.
+Flutter and Dart actions and the pinned OSV reusable workflow path used by
+these workflows. GitHub also requires every action reference to use a
+full-length commit SHA; changing the allowlist or disabling SHA pinning is a
+production-governance failure.
 
 The CI client suite publishes an LCOV report and fails below the current 70%
 line-coverage floor. This is a regression guard, not a claim of complete
