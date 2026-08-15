@@ -112,85 +112,94 @@ void main() {
       );
     });
 
-    test('evicts the oldest bucket when distinct traffic exceeds the cap', () async {
-      final handler = createServerHandler(
-        requestRateLimiter: ServerRequestRateLimiter(
-          maximumRequests: 10,
-          maximumBuckets: 1,
-        ),
-      );
-      expect(
-        (await handler(_request('GET', '/health', token: 'one'))).statusCode,
-        200,
-      );
-      expect(
-        (await handler(_request('GET', '/health', token: 'two'))).statusCode,
-        200,
-      );
-      expect(
-        (await handler(_request('GET', '/health', token: 'one'))).statusCode,
-        200,
-      );
-    });
+    test(
+      'evicts the oldest bucket when distinct traffic exceeds the cap',
+      () async {
+        final handler = createServerHandler(
+          requestRateLimiter: ServerRequestRateLimiter(
+            maximumRequests: 10,
+            maximumBuckets: 1,
+          ),
+        );
+        expect(
+          (await handler(_request('GET', '/health', token: 'one'))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(_request('GET', '/health', token: 'two'))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(_request('GET', '/health', token: 'one'))).statusCode,
+          200,
+        );
+      },
+    );
 
-    test('keeps serving anonymous clients when bucket cap is exhausted', () async {
-      final handler = createServerHandler(
-        requestRateLimiter: ServerRequestRateLimiter(
-          maximumRequests: 1,
-          maximumBuckets: 1,
-        ),
-      );
-      Request requestFrom(InternetAddress address) => Request(
-        'GET',
-        Uri.parse('http://localhost/health'),
-        context: <String, Object>{
-          'shelf.io.connection_info': _FakeConnectionInfo(address, 1234),
-        },
-      );
+    test(
+      'keeps serving anonymous clients when bucket cap is exhausted',
+      () async {
+        final handler = createServerHandler(
+          requestRateLimiter: ServerRequestRateLimiter(
+            maximumRequests: 1,
+            maximumBuckets: 1,
+          ),
+        );
+        Request requestFrom(InternetAddress address) => Request(
+          'GET',
+          Uri.parse('http://localhost/health'),
+          context: <String, Object>{
+            'shelf.io.connection_info': _FakeConnectionInfo(address, 1234),
+          },
+        );
 
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
-        200,
-      );
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
-        429,
-      );
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.2')))).statusCode,
-        200,
-      );
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.3')))).statusCode,
-        200,
-      );
-    });
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          429,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.2')))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.3')))).statusCode,
+          200,
+        );
+      },
+    );
 
-    test('buckets anonymous traffic per client address when available', () async {
-      final handler = createServerHandler(
-        requestRateLimiter: ServerRequestRateLimiter(maximumRequests: 1),
-      );
-      Request requestFrom(InternetAddress address) => Request(
-        'GET',
-        Uri.parse('http://localhost/health'),
-        context: <String, Object>{
-          'shelf.io.connection_info': _FakeConnectionInfo(address, 1234),
-        },
-      );
+    test(
+      'buckets anonymous traffic per client address when available',
+      () async {
+        final handler = createServerHandler(
+          requestRateLimiter: ServerRequestRateLimiter(maximumRequests: 1),
+        );
+        Request requestFrom(InternetAddress address) => Request(
+          'GET',
+          Uri.parse('http://localhost/health'),
+          context: <String, Object>{
+            'shelf.io.connection_info': _FakeConnectionInfo(address, 1234),
+          },
+        );
 
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
-        200,
-      );
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
-        429,
-      );
-      expect(
-        (await handler(requestFrom(InternetAddress('10.0.0.2')))).statusCode,
-        200,
-      );
-    });
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          429,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.2')))).statusCode,
+          200,
+        );
+      },
+    );
 
     test(
       'metrics reports aggregate process state without request details',

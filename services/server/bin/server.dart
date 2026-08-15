@@ -79,9 +79,8 @@ Future<void> main() async {
           '${dataDirectory.path}${Platform.pathSeparator}shared-playlist-invites',
         ),
       ),
-      readinessCheck: () => draining
-          ? Future.value(false)
-          : _isDirectoryWritable(dataDirectory),
+      readinessCheck: () =>
+          draining ? Future.value(false) : _isDirectoryWritable(dataDirectory),
       requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
     ),
     listenAddress,

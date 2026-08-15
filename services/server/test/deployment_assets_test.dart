@@ -85,10 +85,7 @@ void main() {
     expect(dockerfile, contains('RUN mkdir -p /out'));
     expect(dockerfile, contains('http://127.0.0.1:8080/ready'));
     expect(backup, contains("--exclude='*.tmp'"));
-    expect(
-      backup,
-      contains("--exclude='$serverDataDirectoryLockFileName'"),
-    );
+    expect(backup, contains("--exclude='$serverDataDirectoryLockFileName'"));
     expect(backup, contains(r'sha256sum "$(basename "$archive")"'));
     expect(backup, contains('sha256sum --check'));
     expect(rollback, contains('install -m 0755'));

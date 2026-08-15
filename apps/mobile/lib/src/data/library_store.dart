@@ -1959,7 +1959,7 @@ class LibraryStore extends ChangeNotifier {
   }
 
   static const Map<int, Future<void> Function(SharedPreferences)>
-      _schemaMigrations = <int, Future<void> Function(SharedPreferences)>{};
+  _schemaMigrations = <int, Future<void> Function(SharedPreferences)>{};
 
   Future<void> addTracks(List<Track> incoming) async {
     final knownIds = _tracks.map((track) => track.id).toSet();

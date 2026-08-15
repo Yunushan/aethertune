@@ -21,18 +21,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [c-cpp, java-kotlin]
+        language: [java-kotlin]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
+      - name: Set up Flutter
+        shell: bash
+        run: bash scripts/ci/setup_flutter.sh
+
+      - name: Generate platform wrappers and resolve dependencies
+        shell: bash
+        run: bash scripts/bootstrap_client.sh
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
         with:
           languages: ${{ matrix.language }}
-          build-mode: none
+          build-mode: manual
+
+      - name: Build Android sources for CodeQL
+        if: matrix.language == 'java-kotlin'
+        shell: bash
+        run: cd apps/mobile && flutter build apk --debug --no-pub
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10

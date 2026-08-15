@@ -59,9 +59,7 @@ final class ServerRequestRateLimiter {
       key = sha256.convert(utf8.encode(token)).toString();
     } else {
       final remoteAddress = _remoteAddress(request);
-      key = remoteAddress == null
-          ? 'anonymous'
-          : 'ip:${remoteAddress.address}';
+      key = remoteAddress == null ? 'anonymous' : 'ip:${remoteAddress.address}';
     }
     final current = _windows[key];
     if (current == null || !now.isBefore(current.startedAt.add(window))) {
