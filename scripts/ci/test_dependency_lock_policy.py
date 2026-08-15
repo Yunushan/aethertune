@@ -131,6 +131,10 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("merge_group:", workflow)
         self.assertIn("  osv-scan:\n", workflow)
         self.assertIn(
+            "name: New OSV vulnerabilities and license violations / osv-scan",
+            workflow,
+        )
+        self.assertIn(
             "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
             workflow,
         )
