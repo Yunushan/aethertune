@@ -57,6 +57,7 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
             )
             gradle_path.write_text(
                 """android {
+    compileSdk = flutter.compileSdkVersion
     defaultConfig {
         // TODO: Specify your own unique Application ID
         applicationId = "com.example.example"
@@ -150,7 +151,11 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
             self.assertIn("ShortcutManager", activity_text)
             self.assertIn("requestPinShortcut", activity_text)
             self.assertIn(
-                "minSdk = maxOf(flutter.minSdkVersion, 23)",
+                "minSdk = maxOf(flutter.minSdkVersion, 24)",
+                gradle_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "compileSdk = maxOf(flutter.compileSdkVersion, 37)",
                 gradle_path.read_text(encoding="utf-8"),
             )
             gradle_text = gradle_path.read_text(encoding="utf-8")
@@ -301,6 +306,41 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
                 for shortcut in shortcut_root.findall("shortcut")
             }
             self.assertEqual(shortcut_ids, {"previous", "play_pause", "next"})
+
+    def test_configures_and_verifies_android_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            settings_path = root / "settings.gradle.kts"
+            wrapper_path = root / "gradle/wrapper/gradle-wrapper.properties"
+            wrapper_path.parent.mkdir(parents=True)
+            settings_path.write_text(
+                'id("com.android.application") version "9.0.1" apply false\n',
+                encoding="utf-8",
+            )
+            wrapper_path.write_text(
+                "distributionUrl=https\\://services.gradle.org/distributions/"
+                "gradle-9.1.0-all.zip\n",
+                encoding="utf-8",
+            )
+
+            platform_config.configure_android_toolchain(
+                settings_path,
+                wrapper_path,
+            )
+            platform_config.verify_android_toolchain(
+                settings_path,
+                wrapper_path,
+            )
+
+            self.assertIn(
+                'id("com.android.application") version "9.1.1" apply false',
+                settings_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "distributionUrl=https\\://services.gradle.org/distributions/"
+                "gradle-9.3.1-all.zip",
+                wrapper_path.read_text(encoding="utf-8"),
+            )
 
     def test_configures_ios_and_macos_url_schemes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

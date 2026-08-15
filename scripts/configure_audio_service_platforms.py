@@ -33,7 +33,10 @@ OFFLINE_CACHE_JOB_SERVICE_NAME = (
     "dev.aethertune.aethertune.AetherTuneOfflineCacheJobService"
 )
 IOS_DEPLOYMENT_TARGET = "14.0"
-ANDROID_MIN_SDK = 23
+ANDROID_MIN_SDK = 24
+ANDROID_COMPILE_SDK = 37
+ANDROID_GRADLE_PLUGIN_VERSION = "9.1.1"
+ANDROID_GRADLE_VERSION = "9.3.1"
 KEYCHAIN_ACCESS_GROUPS = "keychain-access-groups"
 MACOS_NETWORK_CLIENT_ENTITLEMENT = "com.apple.security.network.client"
 MACOS_USER_SELECTED_FILES_ENTITLEMENT = (
@@ -1922,6 +1925,7 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
     tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
 
     gradle = gradle_path.read_text(encoding="utf-8")
+    gradle = _configure_android_compile_sdk(gradle)
     gradle, replacements = re.subn(
         r"minSdk\s*=\s*flutter\.minSdkVersion",
         f"minSdk = maxOf(flutter.minSdkVersion, {ANDROID_MIN_SDK})",
@@ -2024,6 +2028,24 @@ def _normalize_android_identity(gradle: str) -> str:
     return gradle
 
 
+def _configure_android_compile_sdk(gradle: str) -> str:
+    declaration = (
+        "compileSdk = "
+        f"maxOf(flutter.compileSdkVersion, {ANDROID_COMPILE_SDK})"
+    )
+    if declaration in gradle:
+        return gradle
+    gradle, replacements = re.subn(
+        r"compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)",
+        declaration,
+        gradle,
+        count=1,
+    )
+    if replacements == 0:
+        raise RuntimeError("Android compile SDK declaration is missing")
+    return gradle
+
+
 def _has_android_min_sdk_floor(gradle: str) -> bool:
     minimum = ANDROID_MIN_SDK
     patterns = (
@@ -2032,6 +2054,72 @@ def _has_android_min_sdk_floor(gradle: str) -> bool:
         rf"minSdkVersion\s+Math\.max\(\s*flutter\.minSdkVersion\s*,\s*{minimum}\s*\)",
     )
     return any(re.search(pattern, gradle) for pattern in patterns)
+
+
+def configure_android_toolchain(
+    settings_path: Path,
+    wrapper_path: Path,
+) -> None:
+    settings = settings_path.read_text(encoding="utf-8")
+    plugin_declaration = (
+        'id("com.android.application") version '
+        f'"{ANDROID_GRADLE_PLUGIN_VERSION}" apply false'
+    )
+    if plugin_declaration not in settings:
+        settings, replacements = re.subn(
+            r'id\("com\.android\.application"\)\s+version\s+"[^"]+"\s+apply false',
+            plugin_declaration,
+            settings,
+            count=1,
+        )
+        if replacements == 0:
+            raise RuntimeError(
+                f"Android application plugin declaration is missing from {settings_path}"
+            )
+        settings_path.write_text(settings, encoding="utf-8")
+
+    wrapper = wrapper_path.read_text(encoding="utf-8")
+    wrapper_declaration = (
+        "distributionUrl=https\\://services.gradle.org/distributions/"
+        f"gradle-{ANDROID_GRADLE_VERSION}-all.zip"
+    )
+    if wrapper_declaration not in wrapper:
+        wrapper, replacements = re.subn(
+            r"distributionUrl=https\\://services\.gradle\.org/distributions/"
+            r"gradle-[^\r\n]+-all\.zip",
+            wrapper_declaration,
+            wrapper,
+            count=1,
+        )
+        if replacements == 0:
+            raise RuntimeError(
+                f"Gradle wrapper distribution is missing from {wrapper_path}"
+            )
+        wrapper_path.write_text(wrapper, encoding="utf-8")
+
+
+def verify_android_toolchain(
+    settings_path: Path,
+    wrapper_path: Path,
+) -> None:
+    settings = settings_path.read_text(encoding="utf-8")
+    expected_plugin = (
+        'id("com.android.application") version '
+        f'"{ANDROID_GRADLE_PLUGIN_VERSION}" apply false'
+    )
+    if expected_plugin not in settings:
+        raise RuntimeError(
+            f"Android application plugin must be {ANDROID_GRADLE_PLUGIN_VERSION}"
+        )
+    wrapper = wrapper_path.read_text(encoding="utf-8")
+    expected_wrapper = (
+        "distributionUrl=https\\://services.gradle.org/distributions/"
+        f"gradle-{ANDROID_GRADLE_VERSION}-all.zip"
+    )
+    if expected_wrapper not in wrapper:
+        raise RuntimeError(
+            f"Gradle wrapper must use {ANDROID_GRADLE_VERSION}"
+        )
 
 
 def configure_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
@@ -2313,6 +2401,15 @@ def configure_ios_code_sign_entitlements(project_path: Path) -> None:
 
 
 def verify_android(manifest_path: Path, gradle_path: Path) -> None:
+    gradle = gradle_path.read_text(encoding="utf-8")
+    expected_compile_sdk = (
+        "compileSdk = "
+        f"maxOf(flutter.compileSdkVersion, {ANDROID_COMPILE_SDK})"
+    )
+    if expected_compile_sdk not in gradle:
+        raise RuntimeError(
+            f"Android compile SDK must be at least {ANDROID_COMPILE_SDK}"
+        )
     root = ET.parse(manifest_path).getroot()
     permissions = {
         item.get(f"{ANDROID}name") for item in root.findall("uses-permission")
@@ -2693,6 +2790,8 @@ def main() -> int:
     app_dir = Path(sys.argv[1]).resolve()
     android_manifest = app_dir / "android/app/src/main/AndroidManifest.xml"
     android_gradle = app_dir / "android/app/build.gradle.kts"
+    android_settings = app_dir / "android/settings.gradle.kts"
+    android_wrapper = app_dir / "android/gradle/wrapper/gradle-wrapper.properties"
     ios_info = app_dir / "ios/Runner/Info.plist"
     ios_app_delegate = app_dir / "ios/Runner/AppDelegate.swift"
     ios_project = app_dir / "ios/Runner.xcodeproj/project.pbxproj"
@@ -2708,6 +2807,8 @@ def main() -> int:
     for path in (
         android_manifest,
         android_gradle,
+        android_settings,
+        android_wrapper,
         ios_info,
         ios_app_delegate,
         ios_project,
@@ -2723,6 +2824,7 @@ def main() -> int:
             raise FileNotFoundError(path)
 
     configure_android(android_manifest, android_gradle)
+    configure_android_toolchain(android_settings, android_wrapper)
     configure_ios(ios_info, ios_app_delegate)
     configure_macos(macos_info)
     configure_linux_deep_links(linux_application)
@@ -2742,6 +2844,7 @@ def main() -> int:
     )
     configure_ios_code_sign_entitlements(ios_project)
     verify_android(android_manifest, android_gradle)
+    verify_android_toolchain(android_settings, android_wrapper)
     verify_ios(ios_info, ios_app_delegate)
     verify_macos(macos_info)
     verify_linux_deep_links(linux_application)
