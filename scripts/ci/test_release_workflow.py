@@ -75,7 +75,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("scripts/ci/verify_release_version.sh", workflow)
         self.assertIn("scripts/ci/verify_release_manifest.py", workflow)
         self.assertIn(
-            "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
+            "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
             workflow,
         )
         self.assertIn("subject-checksums: release/SHA256SUMS.txt", workflow)
