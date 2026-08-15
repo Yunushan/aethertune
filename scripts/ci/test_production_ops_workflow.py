@@ -18,12 +18,20 @@ class ProductionOpsWorkflowTest(unittest.TestCase):
         self.assertIn("cron: '*/15 * * * *'", workflow)
         self.assertIn("environment: production", workflow)
         self.assertIn("timeout-minutes: 5", workflow)
+        self.assertIn(
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            workflow,
+        )
+        self.assertIn(
+            "ref: ${{ github.event.repository.default_branch }}",
+            workflow,
+        )
 
     def test_is_disabled_until_production_is_explicitly_enabled(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn(
-            "if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'",
+            "vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'",
             workflow,
         )
         self.assertIn("AETHERTUNE_PRODUCTION_BASE_URL", workflow)

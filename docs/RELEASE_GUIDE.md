@@ -167,6 +167,12 @@ have a five-minute wait timer, protected-branch restriction, and at least one
 required reviewer with self-approval disabled; the approver must be a separate
 human or team from the release author.
 
+Credentialed governance and operations jobs only run from the default branch;
+production release jobs additionally accept pushed `v*` tags. Those jobs check
+out the default-branch policy files before using governance or operations
+credentials, so a manual dispatch from an arbitrary branch cannot execute
+branch-local policy code with production access.
+
 The governance audit reads `AETHERTUNE_GOVERNANCE_TOKEN` as a repository
 secret. The release and probe jobs read these secrets from the protected
 `production` environment:

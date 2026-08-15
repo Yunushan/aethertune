@@ -92,6 +92,11 @@ class ToolchainPolicyTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("cron: '17 4 * * 1'", workflow)
+        self.assertIn(
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            workflow,
+        )
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", workflow)
         self.assertIn("AETHERTUNE_GOVERNANCE_TOKEN", workflow)
         self.assertIn("verify_github_governance.py", workflow)
 

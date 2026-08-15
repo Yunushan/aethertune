@@ -188,6 +188,22 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("'production' || 'candidate'", workflow)
         self.assertIn("  governance:\n", workflow)
         self.assertIn("Verify protected governance for production", workflow)
+        governance = workflow.split("  governance:\n", 1)[1].split(
+            "  android:\n", 1
+        )[0]
+        self.assertIn(
+            "vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||",
+            governance,
+        )
+        self.assertIn(
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            workflow,
+        )
+        self.assertIn(
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+            workflow,
+        )
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", workflow)
         self.assertIn("AETHERTUNE_GOVERNANCE_TOKEN", workflow)
         self.assertIn("verify_github_governance.py", workflow)
         self.assertIn("needs: [provenance, osv-scan, governance, android, desktop, server]", workflow)
