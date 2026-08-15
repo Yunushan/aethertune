@@ -32,7 +32,8 @@ temporary_checksum="$archive.sha256.tmp"
 trap 'rm -f "$temporary_archive" "$temporary_checksum"' EXIT
 
 # Writes use temporary files and renames, so incomplete temporary snapshots are excluded.
-tar -C "$data_dir" --exclude='*.tmp' -czf "$temporary_archive" .
+# The runtime lock file is transient and must not be restored.
+tar -C "$data_dir" --exclude='*.tmp' --exclude='.server.lock' -czf "$temporary_archive" .
 mv "$temporary_archive" "$archive"
 (
   cd "$backup_dir"

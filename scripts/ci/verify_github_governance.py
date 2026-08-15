@@ -34,6 +34,7 @@ REQUIRED_SECURITY_FEATURES = (
 )
 REQUIRED_ACTION_PATTERNS = frozenset(
     {
+        "aquasecurity/trivy-action@*",
         "dart-lang/setup-dart@*",
         "google/osv-scanner-action/osv-reporter-action@*",
         "google/osv-scanner-action/osv-scanner-action@*",

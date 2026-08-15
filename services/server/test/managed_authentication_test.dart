@@ -80,6 +80,44 @@ void main() {
     expect(registry.authenticate(issued.token), isNull);
   });
 
+  test(
+    'tokens issued before expiry existed stay non-expiring after upgrade',
+    () async {
+      var current = DateTime.utc(2026, 7, 18, 12);
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-legacy-token-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final registry = await ManagedSyncAccountRegistry.open(
+        root,
+        clock: () => current,
+        tokenGenerator: () => 'at_legacy_secret',
+        tokenLifetime: const Duration(hours: 1),
+      );
+      final issued = await registry.issueToken(
+        accountId: 'primary',
+        deviceName: 'Legacy phone',
+      );
+
+      final registryFile = (await _registryFiles(root)).single;
+      final stored = jsonDecode(await registryFile.readAsString());
+      for (final account in (stored['accounts'] as List).cast<Map>()) {
+        for (final token in (account['tokens'] as List).cast<Map>()) {
+          token.remove('expiresAt');
+        }
+      }
+      await registryFile.writeAsString(jsonEncode(stored));
+
+      current = current.add(const Duration(hours: 2));
+      final restarted = await ManagedSyncAccountRegistry.open(
+        root,
+        clock: () => current,
+        tokenLifetime: const Duration(hours: 1),
+      );
+      expect(restarted.authenticate(issued.token), 'primary');
+    },
+  );
+
   test('recovery code is single-use and replaces every device token', () async {
     final generatedTokens = Queue<String>.of(<String>[
       'at_original_secret',
@@ -170,7 +208,7 @@ void main() {
   test('validates the managed token lifetime environment setting', () {
     expect(
       managedTokenLifetimeFromEnvironment(const <String, String>{}),
-      isNull,
+      const Duration(days: defaultManagedTokenLifetimeDays),
     );
     expect(
       managedTokenLifetimeFromEnvironment(const <String, String>{
@@ -179,8 +217,14 @@ void main() {
       const Duration(days: 30),
     );
     expect(
-      () => managedTokenLifetimeFromEnvironment(const <String, String>{
+      managedTokenLifetimeFromEnvironment(const <String, String>{
         'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS': '0',
+      }),
+      isNull,
+    );
+    expect(
+      () => managedTokenLifetimeFromEnvironment(const <String, String>{
+        'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS': '3651',
       }),
       throwsA(isA<FormatException>()),
     );

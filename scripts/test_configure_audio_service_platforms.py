@@ -268,6 +268,10 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
                 manifest_path.read_text(encoding="utf-8"),
             )
             self.assertIn(
+                'android.permission.INTERNET',
+                manifest_path.read_text(encoding="utf-8"),
+            )
+            self.assertIn(
                 'android.permission.READ_MEDIA_AUDIO',
                 manifest_path.read_text(encoding="utf-8"),
             )
@@ -330,6 +334,64 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
 
             platform_config.configure_macos(info_path)
             platform_config.verify_macos(info_path)
+
+    def test_configures_macos_network_and_file_access_entitlements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            debug_path = Path(temporary_directory) / "DebugProfile.entitlements"
+            release_path = Path(temporary_directory) / "Release.entitlements"
+            for path in (debug_path, release_path):
+                with path.open("wb") as stream:
+                    platform_config.plistlib.dump({}, stream)
+
+            platform_config.configure_macos_network_entitlements(
+                debug_path,
+                include_file_access=False,
+            )
+            platform_config.configure_macos_network_entitlements(
+                release_path,
+                include_file_access=True,
+            )
+            platform_config.verify_macos_network_entitlements(
+                debug_path,
+                require_file_access=False,
+            )
+            platform_config.verify_macos_network_entitlements(
+                release_path,
+                require_file_access=True,
+            )
+
+            with debug_path.open("rb") as stream:
+                debug = platform_config.plistlib.load(stream)
+            self.assertTrue(
+                debug[platform_config.MACOS_NETWORK_CLIENT_ENTITLEMENT]
+            )
+            self.assertNotIn(
+                platform_config.MACOS_USER_SELECTED_FILES_ENTITLEMENT,
+                debug,
+            )
+            with release_path.open("rb") as stream:
+                release = platform_config.plistlib.load(stream)
+            self.assertTrue(
+                release[platform_config.MACOS_NETWORK_CLIENT_ENTITLEMENT]
+            )
+            self.assertTrue(
+                release[platform_config.MACOS_USER_SELECTED_FILES_ENTITLEMENT]
+            )
+
+    def test_rejects_macos_entitlements_without_file_access(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            release_path = Path(temporary_directory) / "Release.entitlements"
+            with release_path.open("wb") as stream:
+                platform_config.plistlib.dump({}, stream)
+            platform_config.configure_macos_network_entitlements(
+                release_path,
+                include_file_access=False,
+            )
+            with self.assertRaisesRegex(RuntimeError, "user-selected files"):
+                platform_config.verify_macos_network_entitlements(
+                    release_path,
+                    require_file_access=True,
+                )
 
     def test_configures_linux_and_windows_deep_link_forwarding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

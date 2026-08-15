@@ -1359,6 +1359,8 @@ class LibraryStore extends ChangeNotifier {
   static const _syncSnapshotVersion = 1;
   static const _playlistDocumentVersion = 1;
   static const _libraryStatsDocumentVersion = 1;
+  static const _schemaVersionKey = 'aethertune.library_schema_version.v1';
+  static const currentLibrarySchemaVersion = 1;
   static const _tracksKey = 'aethertune.tracks.v1';
   static const _playlistsKey = 'aethertune.playlists.v1';
   static const _customSmartPlaylistsKey =
@@ -1477,8 +1479,13 @@ class LibraryStore extends ChangeNotifier {
   _DuplicateResolutionSnapshot? _lastDuplicateResolution;
   int _stateRevision = 0;
   bool _loaded = false;
+  String? _loadError;
 
   bool get loaded => _loaded;
+
+  /// Describes why the persisted library could not be opened, or null when
+  /// loading succeeded or has not been attempted yet.
+  String? get loadError => _loadError;
   bool get canUndoDuplicateResolution {
     final resolution = _lastDuplicateResolution;
     return resolution != null && resolution.stateRevision == _stateRevision;
@@ -1583,6 +1590,19 @@ class LibraryStore extends ChangeNotifier {
     }
 
     final prefs = await SharedPreferences.getInstance();
+    final storedSchemaVersion = prefs.getInt(_schemaVersionKey) ?? 0;
+    if (storedSchemaVersion > currentLibrarySchemaVersion) {
+      _loadError =
+          'This library was saved by a newer version of AetherTune and '
+          'cannot be opened here.';
+      notifyListeners();
+      return;
+    }
+    await _migrateLibrarySchema(
+      prefs,
+      fromVersion: storedSchemaVersion,
+      toVersion: currentLibrarySchemaVersion,
+    );
     final rawTracks = prefs.getString(_tracksKey);
     if (rawTracks != null && rawTracks.isNotEmpty) {
       final decoded = jsonDecode(rawTracks) as List<dynamic>;
@@ -1910,12 +1930,36 @@ class LibraryStore extends ChangeNotifier {
     _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
     _sortOfflineCacheQueue();
+    if (storedSchemaVersion != currentLibrarySchemaVersion) {
+      await prefs.setInt(_schemaVersionKey, currentLibrarySchemaVersion);
+    }
     _loaded = true;
     if (restoredInterruptedOfflineCacheWork) {
       await _save();
     }
     notifyListeners();
   }
+
+  /// Migrates persisted library state from [fromVersion] to [toVersion].
+  ///
+  /// Each entry in [_schemaMigrations] upgrades the store from the previous
+  /// version to the version it is keyed by. Version 1 establishes the schema
+  /// envelope itself, so no data transformation is required to reach it.
+  Future<void> _migrateLibrarySchema(
+    SharedPreferences prefs, {
+    required int fromVersion,
+    required int toVersion,
+  }) async {
+    for (var version = fromVersion + 1; version <= toVersion; version++) {
+      final migration = _schemaMigrations[version];
+      if (migration != null) {
+        await migration(prefs);
+      }
+    }
+  }
+
+  static const Map<int, Future<void> Function(SharedPreferences)>
+      _schemaMigrations = <int, Future<void> Function(SharedPreferences)>{};
 
   Future<void> addTracks(List<Track> incoming) async {
     final knownIds = _tracks.map((track) => track.id).toSet();

@@ -68,9 +68,10 @@ bearer-token digest and one anonymous bucket. Set
 invalid values stop startup. Keep an additional rate limit at the reverse
 proxy for IP-based protection.
 
-Managed device tokens do not expire by default for compatibility. Set
+Managed device tokens expire after 365 days by default. Set
 `AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` to an integer from 1 through 3650 to reject
-managed tokens at that age; issue a replacement token before the deadline.
+managed tokens at that age, or to `0` to disable expiry entirely; issue a
+replacement token before the deadline.
 Static `AETHERTUNE_SYNC_USERS` credentials are unaffected.
 
 For managed accounts, operations can issue a single-use recovery code through

@@ -41,6 +41,47 @@ void main() {
     },
   );
 
+  test('writes the current library schema version on first load', () async {
+    final store = LibraryStore();
+    await store.load();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getInt('aethertune.library_schema_version.v1'),
+      LibraryStore.currentLibrarySchemaVersion,
+    );
+  });
+
+  test('migrates pre-versioned persistence without data loss', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.onboarding_completed.v1': true,
+    });
+
+    final store = LibraryStore();
+    await store.load();
+
+    expect(store.onboardingCompleted, isTrue);
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getInt('aethertune.library_schema_version.v1'),
+      LibraryStore.currentLibrarySchemaVersion,
+    );
+  });
+
+  test('surfaces a newer schema version as a load error', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.library_schema_version.v1':
+          LibraryStore.currentLibrarySchemaVersion + 1,
+    });
+
+    final store = LibraryStore();
+    await store.load();
+
+    expect(store.loaded, isFalse);
+    expect(store.loadError, isNotNull);
+    expect(store.loadError, contains('newer version'));
+  });
+
   test('persists, merges, sorts, and filters user track ratings', () async {
     final local = LibraryStore();
     final remote = LibraryStore();

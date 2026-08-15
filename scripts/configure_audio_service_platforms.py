@@ -16,6 +16,7 @@ ANDROID = f"{{{ANDROID_NAMESPACE}}}"
 TOOLS = f"{{{TOOLS_NAMESPACE}}}"
 
 ANDROID_PERMISSIONS = (
+    "android.permission.INTERNET",
     "android.permission.WAKE_LOCK",
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
@@ -34,6 +35,10 @@ OFFLINE_CACHE_JOB_SERVICE_NAME = (
 IOS_DEPLOYMENT_TARGET = "14.0"
 ANDROID_MIN_SDK = 23
 KEYCHAIN_ACCESS_GROUPS = "keychain-access-groups"
+MACOS_NETWORK_CLIENT_ENTITLEMENT = "com.apple.security.network.client"
+MACOS_USER_SELECTED_FILES_ENTITLEMENT = (
+    "com.apple.security.files.user-selected.read-write"
+)
 DEEP_LINK_SCHEME = "aethertune"
 DEEP_LINK_URL_NAME = "dev.aethertune.aethertune"
 
@@ -2249,6 +2254,24 @@ def configure_keychain_entitlements(entitlements_path: Path) -> None:
         plistlib.dump(entitlements, stream, sort_keys=False)
 
 
+def configure_macos_network_entitlements(
+    entitlements_path: Path,
+    *,
+    include_file_access: bool,
+) -> None:
+    if entitlements_path.is_file():
+        with entitlements_path.open("rb") as stream:
+            entitlements = plistlib.load(stream)
+    else:
+        entitlements = {}
+        entitlements_path.parent.mkdir(parents=True, exist_ok=True)
+    entitlements[MACOS_NETWORK_CLIENT_ENTITLEMENT] = True
+    if include_file_access:
+        entitlements[MACOS_USER_SELECTED_FILES_ENTITLEMENT] = True
+    with entitlements_path.open("wb") as stream:
+        plistlib.dump(entitlements, stream, sort_keys=False)
+
+
 def configure_ios_code_sign_entitlements(project_path: Path) -> None:
     project = project_path.read_text(encoding="utf-8")
     pattern = re.compile(
@@ -2631,6 +2654,26 @@ def verify_keychain_entitlements(entitlements_path: Path) -> None:
         )
 
 
+def verify_macos_network_entitlements(
+    entitlements_path: Path,
+    *,
+    require_file_access: bool,
+) -> None:
+    with entitlements_path.open("rb") as stream:
+        entitlements = plistlib.load(stream)
+    if not entitlements.get(MACOS_NETWORK_CLIENT_ENTITLEMENT):
+        raise RuntimeError(
+            f"macOS network client entitlement missing from {entitlements_path}"
+        )
+    if require_file_access and not entitlements.get(
+        MACOS_USER_SELECTED_FILES_ENTITLEMENT
+    ):
+        raise RuntimeError(
+            f"macOS user-selected files entitlement missing from "
+            f"{entitlements_path}"
+        )
+
+
 def verify_ios_code_sign_entitlements(project_path: Path) -> None:
     project = project_path.read_text(encoding="utf-8")
     declarations = set(
@@ -2689,6 +2732,14 @@ def main() -> int:
     configure_keychain_entitlements(ios_release_entitlements)
     configure_keychain_entitlements(macos_debug_entitlements)
     configure_keychain_entitlements(macos_release_entitlements)
+    configure_macos_network_entitlements(
+        macos_debug_entitlements,
+        include_file_access=False,
+    )
+    configure_macos_network_entitlements(
+        macos_release_entitlements,
+        include_file_access=True,
+    )
     configure_ios_code_sign_entitlements(ios_project)
     verify_android(android_manifest, android_gradle)
     verify_ios(ios_info, ios_app_delegate)
@@ -2700,6 +2751,14 @@ def main() -> int:
     verify_keychain_entitlements(ios_release_entitlements)
     verify_keychain_entitlements(macos_debug_entitlements)
     verify_keychain_entitlements(macos_release_entitlements)
+    verify_macos_network_entitlements(
+        macos_debug_entitlements,
+        require_file_access=False,
+    )
+    verify_macos_network_entitlements(
+        macos_release_entitlements,
+        require_file_access=True,
+    )
     verify_ios_code_sign_entitlements(ios_project)
     print("Configured media controls and cross-platform secure storage.")
     return 0

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:aethertune_server/server.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -60,6 +61,8 @@ void main() {
     expect(compose, contains('cap_drop:'));
     expect(compose, contains('no-new-privileges:true'));
     expect(compose, contains('stop_grace_period: 30s'));
+    expect(compose, contains('cpus:'));
+    expect(compose, contains('memory:'));
     expect(compose, contains('http://127.0.0.1:8080/ready'));
     expect(caddy, contains('sync.example.com {'));
     expect(caddy, contains('encode zstd gzip'));
@@ -82,6 +85,10 @@ void main() {
     expect(dockerfile, contains('RUN mkdir -p /out'));
     expect(dockerfile, contains('http://127.0.0.1:8080/ready'));
     expect(backup, contains("--exclude='*.tmp'"));
+    expect(
+      backup,
+      contains("--exclude='$serverDataDirectoryLockFileName'"),
+    );
     expect(backup, contains(r'sha256sum "$(basename "$archive")"'));
     expect(backup, contains('sha256sum --check'));
     expect(rollback, contains('install -m 0755'));
