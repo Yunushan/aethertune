@@ -72,6 +72,8 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("branches: [main]", workflow)
         self.assertIn("tags:", workflow)
         self.assertIn("- 'v*'", workflow)
+        self.assertIn("pull_request:", workflow)
+        self.assertIn("merge_group:", workflow)
         self.assertIn("schedule:", workflow)
         self.assertIn("actions: read", workflow)
         self.assertIn("contents: read", workflow)
@@ -115,6 +117,8 @@ class DependencyLockPolicyTest(unittest.TestCase):
             "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
             reusable_workflow,
         )
+        self.assertNotIn("Upload to code-scanning", reusable_workflow)
+        self.assertNotIn("github/codeql-action/upload-sarif@", reusable_workflow)
         self.assertIn("fail-on-vuln: true", workflow)
         self.assertIn("        -r\n        ./", workflow)
         self.assertIn("--allow-no-lockfiles", workflow)

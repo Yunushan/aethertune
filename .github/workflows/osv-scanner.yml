@@ -6,6 +6,10 @@ on:
     branches: [main]
     tags:
       - 'v*'
+  pull_request:
+    branches: [main]
+  merge_group:
+    branches: [main]
   schedule:
     - cron: '30 12 * * 1'
 
@@ -55,7 +59,10 @@ jobs:
           retention-days: 5
 
       - name: Upload to code-scanning
-        if: ${{ !cancelled() }}
+        if: >-
+          !cancelled() &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
         with:
           sarif_file: results.sarif

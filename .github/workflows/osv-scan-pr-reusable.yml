@@ -102,18 +102,6 @@ jobs:
           path: new-results.json
           retention-days: 5
 
-      - name: Upload to code-scanning
-        if: ${{ !cancelled() }}
-        uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
-        with:
-          sarif_file: results.sarif
-
-      - name: Print Code Scanning PR URL
-        if: ${{ !cancelled() }}
-        run: |
-          echo "View the OSV-Scanner results for this PR in the 'Security' tab, using the following link:"
-          echo "${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=pr%3A${{ github.event.pull_request.number }}"
-
       - name: Error troubleshooter
         if: ${{ always() && steps.upload_artifact.outcome == 'failure' }}
         run: |
