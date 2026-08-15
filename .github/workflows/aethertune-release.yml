@@ -672,6 +672,17 @@ jobs:
           name: aethertune-release-bundle
           path: release
 
+      - name: Probe production before publication
+        shell: bash
+        env:
+          AETHERTUNE_PRODUCTION_BASE_URL: ${{ vars.AETHERTUNE_PRODUCTION_BASE_URL }}
+          AETHERTUNE_OPS_PROBE_TOKEN: ${{ secrets.AETHERTUNE_OPS_PROBE_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${AETHERTUNE_PRODUCTION_BASE_URL:?AETHERTUNE_PRODUCTION_BASE_URL is required before publication}"
+          : "${AETHERTUNE_OPS_PROBE_TOKEN:?AETHERTUNE_OPS_PROBE_TOKEN is required before publication}"
+          bash services/server/deploy/aethertune-ops-probe.sh "$AETHERTUNE_PRODUCTION_BASE_URL"
+
       - name: Create immutable GitHub release
         shell: bash
         env:

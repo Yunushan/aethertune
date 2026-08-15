@@ -50,6 +50,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         android = workflow.split("  android:\n", 1)[1].split(
             "  desktop:\n", 1
         )[0]
+        publish = workflow.split("  publish:\n", 1)[1]
 
         self.assertIn(
             "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -245,6 +246,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn('exit 1', workflow)
         self.assertNotIn("gh release upload", workflow)
         self.assertIn('gh release create "$RELEASE_TAG" release/*', workflow)
+        self.assertIn("- name: Probe production before publication", publish)
+        self.assertIn("AETHERTUNE_PRODUCTION_BASE_URL is required before publication", publish)
+        self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN is required before publication", publish)
+        self.assertIn(
+            "bash services/server/deploy/aethertune-ops-probe.sh \"$AETHERTUNE_PRODUCTION_BASE_URL\"",
+            publish,
+        )
+        self.assertLess(
+            publish.index("Probe production before publication"),
+            publish.index("Create immutable GitHub release"),
+        )
 
 
 if __name__ == "__main__":

@@ -145,7 +145,10 @@ disabled unless the repository variable
 `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is exactly `true`. When enabled, the
 publish job also targets the `production` environment; configure that
 environment to allow protected branches and require a separate release
-approval. Production runs also require a non-empty versioned `CHANGELOG.md`
+approval. Immediately before creating the immutable GitHub release, the
+publish job reruns the authenticated production operations probe so a stale
+scheduled result cannot mask a current outage. Production runs also require a
+non-empty versioned `CHANGELOG.md`
 section matching the tag plus the checked-in feature matrix, 0BSD license, and
 NOTICE. Configure the repository variable only after platform signing,
 notarization, installer validation, store metadata, and physical-device smoke
