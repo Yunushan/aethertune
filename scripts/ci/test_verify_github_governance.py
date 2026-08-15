@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from verify_github_governance import (
     REQUIRED_STATUS_CHECKS,
+    verify_github_governance,
     verify_governance_payloads,
 )
 
@@ -16,6 +19,7 @@ CODEOWNERS = """* @Yunushan
 /scripts/ci/ @Yunushan
 /services/server/deploy/ @Yunushan
 """
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def valid_branch_protection() -> dict[str, object]:
@@ -154,6 +158,35 @@ class GithubGovernanceTest(unittest.TestCase):
                 CODEOWNERS,
                 repository_owner="yunushan",
             )
+
+    def test_network_audit_fetches_repository_owner_before_review_check(self) -> None:
+        owner_environment = {
+            **valid_environment(),
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": True,
+                    "reviewers": [
+                        {"type": "User", "reviewer": {"login": "Yunushan"}}
+                    ],
+                },
+                {"type": "wait_timer", "wait_timer": 5},
+            ],
+        }
+        with patch("verify_github_governance._get_json") as get_json:
+            get_json.side_effect = [
+                {"owner": {"login": "Yunushan"}},
+                valid_branch_protection(),
+                owner_environment,
+            ]
+            with self.assertRaisesRegex(ValueError, "limited to the repository owner"):
+                verify_github_governance(
+                    "Yunushan/aethertune",
+                    "test-token",
+                    "https://api.github.com",
+                    ROOT / ".github" / "CODEOWNERS",
+                )
+            self.assertEqual(get_json.call_count, 3)
 
     def test_rejects_environment_without_wait_timer(self) -> None:
         environment = valid_environment()
