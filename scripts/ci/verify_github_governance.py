@@ -32,6 +32,13 @@ REQUIRED_SECURITY_FEATURES = (
     ("secret_scanning_non_provider_patterns", "non-provider secret scanning"),
     ("secret_scanning_validity_checks", "secret-scanning validity checks"),
 )
+REQUIRED_ACTION_PATTERNS = frozenset(
+    {
+        "dart-lang/setup-dart@*",
+        "google/osv-scanner-action@*",
+        "subosito/flutter-action@*",
+    }
+)
 CODEOWNER_PATHS = (
     "/.github/workflows/",
     "/scripts/ci/",
@@ -67,6 +74,8 @@ def verify_governance_payloads(
     environment: dict[str, Any],
     codeowners: str,
     repository_payload: dict[str, Any],
+    actions_permissions: dict[str, Any],
+    selected_actions: dict[str, Any],
     repository_owner: str | None = None,
 ) -> None:
     """Validate API responses and checked-in ownership policy without network I/O."""
@@ -79,6 +88,20 @@ def verify_governance_payloads(
             status = security.get(feature)
             if not isinstance(status, dict) or status.get("status") != "enabled":
                 failures.append(f"repository requires {label}")
+
+    if actions_permissions.get("enabled") is not True:
+        failures.append("repository GitHub Actions are enabled")
+    if actions_permissions.get("allowed_actions") != "selected":
+        failures.append("repository GitHub Actions use a selected allowlist")
+    if actions_permissions.get("sha_pinning_required") is not True:
+        failures.append("repository GitHub Actions require full-length SHA pins")
+    if selected_actions.get("github_owned_allowed") is not True:
+        failures.append("repository GitHub Actions allow GitHub-owned actions")
+    if selected_actions.get("verified_allowed") is not False:
+        failures.append("repository GitHub Actions do not allow arbitrary verified actions")
+    patterns = selected_actions.get("patterns_allowed")
+    if not isinstance(patterns, list) or set(patterns) != REQUIRED_ACTION_PATTERNS:
+        failures.append("repository GitHub Actions allowlist does not match pinned external actions")
 
     reviews = branch_protection.get("required_pull_request_reviews")
     if not isinstance(reviews, dict):
@@ -223,11 +246,15 @@ def verify_github_governance(
         raise RuntimeError("GitHub repository metadata did not include an owner login")
     protection = _get_json(f"{base}/branches/{branch_path}/protection", token)
     environment = _get_json(f"{base}/environments/production", token)
+    actions_permissions = _get_json(f"{base}/actions/permissions", token)
+    selected_actions = _get_json(f"{base}/actions/permissions/selected-actions", token)
     verify_governance_payloads(
         protection,
         environment,
         codeowners_path.read_text(encoding="utf-8"),
         repository_payload,
+        actions_permissions,
+        selected_actions,
         repository_owner=repository_owner,
     )
 

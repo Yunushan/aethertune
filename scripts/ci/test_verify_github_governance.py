@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from verify_github_governance import (
+    REQUIRED_ACTION_PATTERNS,
     REQUIRED_SECURITY_FEATURES,
     REQUIRED_STATUS_CHECKS,
     verify_github_governance,
@@ -70,6 +71,22 @@ def valid_repository_payload() -> dict[str, object]:
     }
 
 
+def valid_actions_permissions() -> dict[str, object]:
+    return {
+        "enabled": True,
+        "allowed_actions": "selected",
+        "sha_pinning_required": True,
+    }
+
+
+def valid_selected_actions() -> dict[str, object]:
+    return {
+        "github_owned_allowed": True,
+        "verified_allowed": False,
+        "patterns_allowed": sorted(REQUIRED_ACTION_PATTERNS),
+    }
+
+
 class GithubGovernanceTest(unittest.TestCase):
     def test_accepts_protected_main_and_production_environment(self) -> None:
         verify_governance_payloads(
@@ -77,6 +94,8 @@ class GithubGovernanceTest(unittest.TestCase):
             valid_environment(),
             CODEOWNERS,
             valid_repository_payload(),
+            valid_actions_permissions(),
+            valid_selected_actions(),
         )
 
     def test_accepts_workflow_and_job_status_check_name(self) -> None:
@@ -95,6 +114,8 @@ class GithubGovernanceTest(unittest.TestCase):
             valid_environment(),
             CODEOWNERS,
             valid_repository_payload(),
+            valid_actions_permissions(),
+            valid_selected_actions(),
         )
 
     def test_rejects_missing_required_status_check(self) -> None:
@@ -109,6 +130,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_environment(),
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
             )
 
     def test_rejects_review_without_last_push_approval(self) -> None:
@@ -125,6 +148,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_environment(),
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
             )
 
     def test_rejects_unprotected_production_environment(self) -> None:
@@ -136,6 +161,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 environment,
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
             )
 
     def test_rejects_environment_admin_bypass(self) -> None:
@@ -147,6 +174,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 environment,
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
             )
 
     def test_rejects_environment_without_reviewer_details(self) -> None:
@@ -161,6 +190,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 environment,
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
             )
 
     def test_rejects_repository_owner_as_the_only_production_reviewer(self) -> None:
@@ -182,6 +213,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 },
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
                 repository_owner="yunushan",
             )
 
@@ -207,6 +240,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 },
                 valid_branch_protection(),
                 owner_environment,
+                valid_actions_permissions(),
+                valid_selected_actions(),
             ]
             with self.assertRaisesRegex(ValueError, "limited to the repository owner"):
                 verify_github_governance(
@@ -215,7 +250,7 @@ class GithubGovernanceTest(unittest.TestCase):
                     "https://api.github.com",
                     ROOT / ".github" / "CODEOWNERS",
                 )
-            self.assertEqual(get_json.call_count, 3)
+            self.assertEqual(get_json.call_count, 5)
 
     def test_rejects_environment_without_wait_timer(self) -> None:
         environment = valid_environment()
@@ -226,6 +261,8 @@ class GithubGovernanceTest(unittest.TestCase):
                 environment,
                 CODEOWNERS,
                 valid_repository_payload(),
+                valid_actions_permissions(),
+                valid_selected_actions(),
             )
 
     def test_rejects_disabled_repository_security_feature(self) -> None:
@@ -239,6 +276,21 @@ class GithubGovernanceTest(unittest.TestCase):
                 valid_environment(),
                 CODEOWNERS,
                 repository,
+                valid_actions_permissions(),
+                valid_selected_actions(),
+            )
+
+    def test_rejects_unpinned_or_unrestricted_actions(self) -> None:
+        permissions = valid_actions_permissions()
+        permissions["sha_pinning_required"] = False
+        with self.assertRaisesRegex(ValueError, "full-length SHA pins"):
+            verify_governance_payloads(
+                valid_branch_protection(),
+                valid_environment(),
+                CODEOWNERS,
+                valid_repository_payload(),
+                permissions,
+                valid_selected_actions(),
             )
 
 
