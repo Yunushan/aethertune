@@ -151,7 +151,7 @@ val releaseStoreFile = System.getenv("AETHERTUNE_RELEASE_STORE_FILE")
             self.assertIn("ShortcutManager", activity_text)
             self.assertIn("requestPinShortcut", activity_text)
             self.assertIn(
-                "minSdk = maxOf(flutter.minSdkVersion, 23)",
+                "minSdk = maxOf(flutter.minSdkVersion, 24)",
                 gradle_path.read_text(encoding="utf-8"),
             )
             self.assertIn(

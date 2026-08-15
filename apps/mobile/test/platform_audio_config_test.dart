@@ -103,7 +103,7 @@ void main() {
       gradle,
       contains('compileSdk = maxOf(flutter.compileSdkVersion, 37)'),
     );
-    expect(gradle, contains('minSdk = maxOf(flutter.minSdkVersion, 23)'));
+    expect(gradle, contains('minSdk = maxOf(flutter.minSdkVersion, 24)'));
     final settings = File('android/settings.gradle.kts').readAsStringSync();
     expect(
       settings,

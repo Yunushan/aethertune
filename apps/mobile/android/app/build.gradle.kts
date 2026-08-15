@@ -44,8 +44,8 @@ android {
     defaultConfig {
         // Keep this identifier stable so future releases upgrade the same app.
         applicationId = "dev.aethertune.aethertune"
-        // Audio and secure-storage plugins require API 23.
-        minSdk = maxOf(flutter.minSdkVersion, 23)
+        // Audio and secure-storage plugins require API 24.
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
