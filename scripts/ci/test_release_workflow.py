@@ -197,6 +197,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
             governance,
         )
         self.assertIn(
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+            governance,
+        )
+        self.assertNotIn(
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            governance,
+        )
+        self.assertIn(
             "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
             workflow,
         )
