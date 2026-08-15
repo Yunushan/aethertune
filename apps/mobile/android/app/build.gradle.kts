@@ -21,7 +21,8 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "dev.aethertune.aethertune"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage 11 requires Android API 37 at compile time.
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
 
     signingConfigs {
@@ -43,8 +44,8 @@ android {
     defaultConfig {
         // Keep this identifier stable so future releases upgrade the same app.
         applicationId = "dev.aethertune.aethertune"
-        // Audio and secure-storage plugins require API 23.
-        minSdk = maxOf(flutter.minSdkVersion, 23)
+        // Audio and secure-storage plugins require API 24.
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
