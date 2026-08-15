@@ -10986,7 +10986,7 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -13410,7 +13410,7 @@ class _HistoryTabState extends State<_HistoryTab> {
       }
 
       if (!Platform.isAndroid && !Platform.isIOS) {
-      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -14606,9 +14606,9 @@ Future<void> _saveCollectionShareCard(
       allowedExtensions: const <String>['png'],
       bytes: bytes,
     );
-      if (outputPath == null) {
-        return;
-      }
+    if (outputPath == null) {
+      return;
+    }
     if (!Platform.isAndroid && !Platform.isIOS) {
       await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
     }
@@ -14964,9 +14964,9 @@ Future<void> _saveLyricsShareCard(
       allowedExtensions: const <String>['png'],
       bytes: bytes,
     );
-      if (outputPath == null) {
-        return;
-      }
+    if (outputPath == null) {
+      return;
+    }
     if (!Platform.isAndroid && !Platform.isIOS) {
       await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
     }
@@ -15069,9 +15069,9 @@ Future<void> _saveLyricsDraftExportDocument(
       allowedExtensions: <String>[export.extension],
       bytes: bytes,
     );
-      if (outputPath == null) {
-        return;
-      }
+    if (outputPath == null) {
+      return;
+    }
 
     if (!Platform.isAndroid && !Platform.isIOS) {
       await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
@@ -18437,7 +18437,7 @@ class _SourcesTabState extends State<_SourcesTab> {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -19050,7 +19050,7 @@ class _SourcesTabState extends State<_SourcesTab> {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -23207,7 +23207,7 @@ class _SettingsTab extends StatelessWidget {
       }
 
       if (!Platform.isAndroid && !Platform.isIOS) {
-      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;

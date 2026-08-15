@@ -5,11 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 base class _TestPlatformFile extends PlatformFile {
-  _TestPlatformFile({
-    required this.fileName,
-    this.bytes,
-    this.byteStream,
-  });
+  _TestPlatformFile({required this.fileName, this.bytes, this.byteStream});
 
   final String fileName;
   final Uint8List? bytes;
