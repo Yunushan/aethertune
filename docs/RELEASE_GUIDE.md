@@ -265,6 +265,11 @@ signature evidence. This is intentionally
 fail-closed: missing credentials or incomplete platform evidence cannot turn a
 candidate bundle into a store release.
 
+Pull-request CI also runs a bounded concurrent load smoke test against the
+compiled loopback server and uploads its latency/status evidence. This proves
+the local request path remains responsive under a small controlled burst; it is
+not a substitute for load testing the deployed public service.
+
 Dependency maintenance is configured in [`.github/dependabot.yml`](../.github/dependabot.yml)
 for the Flutter client, Dart server, server container definitions, and GitHub
 Actions. Keep Dependabot alerts and security updates enabled in the repository
