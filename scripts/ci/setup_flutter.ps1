@@ -12,8 +12,8 @@ if (-not (Test-Path (Join-Path $FlutterRoot '.git'))) {
     New-Item -ItemType Directory -Path $FlutterRoot -Force | Out-Null
     git -C $FlutterRoot init --quiet
     git -C $FlutterRoot remote add origin https://github.com/flutter/flutter.git
-    git -C $FlutterRoot fetch --depth=1 origin $FlutterCommit
-    git -C $FlutterRoot checkout --quiet --detach FETCH_HEAD
+    git -C $FlutterRoot fetch --depth=1 origin "refs/tags/$FlutterVersion:refs/tags/$FlutterVersion"
+    git -C $FlutterRoot checkout --quiet --detach "refs/tags/$FlutterVersion"
 }
 
 $ActualCommit = (git -C $FlutterRoot rev-parse HEAD).Trim()

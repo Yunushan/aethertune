@@ -10,8 +10,8 @@ if [[ ! -d "$FLUTTER_ROOT/.git" ]]; then
   mkdir -p "$FLUTTER_ROOT"
   git -C "$FLUTTER_ROOT" init --quiet
   git -C "$FLUTTER_ROOT" remote add origin https://github.com/flutter/flutter.git
-  git -C "$FLUTTER_ROOT" fetch --depth=1 origin "$FLUTTER_COMMIT"
-  git -C "$FLUTTER_ROOT" checkout --quiet --detach FETCH_HEAD
+  git -C "$FLUTTER_ROOT" fetch --depth=1 origin "refs/tags/$FLUTTER_VERSION:refs/tags/$FLUTTER_VERSION"
+  git -C "$FLUTTER_ROOT" checkout --quiet --detach "refs/tags/$FLUTTER_VERSION"
 fi
 
 actual_commit="$(git -C "$FLUTTER_ROOT" rev-parse HEAD)"
