@@ -67,13 +67,6 @@ class DependencyLockPolicyTest(unittest.TestCase):
 
     def test_osv_scan_covers_locked_pub_graphs_and_license_policy(self) -> None:
         workflow = OSV_WORKFLOW.read_text(encoding="utf-8")
-        osv_job = workflow.split("  osv-scan:\n", 1)[1]
-        self.assertTrue(
-            any(
-                line == "    uses: ./.github/workflows/osv-scan-reusable.yml"
-                for line in osv_job.splitlines()
-            )
-        )
         reusable_workflow = OSV_REUSABLE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("branches: [main]", workflow)
@@ -85,13 +78,17 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("security-events: write", workflow)
         self.assertIn(
             "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
-            reusable_workflow,
+            workflow,
         )
         self.assertIn(
             "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
-            reusable_workflow,
+            workflow,
         )
-        self.assertIn("fail-on-vuln: true", workflow)
+        self.assertIn("runs-on: ubuntu-latest", workflow)
+        self.assertIn("Upload to code-scanning", workflow)
+        self.assertIn("github/codeql-action/upload-sarif@", workflow)
+        self.assertIn("google/osv-scanner-action/osv-scanner-action@", reusable_workflow)
+        self.assertIn("--fail-on-vuln=true", workflow)
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
         self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)
         self.assertIn("--licenses=", workflow)
