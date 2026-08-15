@@ -1,0 +1,84 @@
+name: Production operations probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-ops-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Probe production service
+    if: >-
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    env:
+      AETHERTUNE_PRODUCTION_BASE_URL: ${{ vars.AETHERTUNE_PRODUCTION_BASE_URL }}
+      AETHERTUNE_OPS_PROBE_TOKEN: ${{ secrets.AETHERTUNE_OPS_PROBE_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Initialize production probe evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/production-ops-probe
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'base_url_host=not-validated\n'
+            printf 'result=configuration-invalid\n'
+          } > build/production-ops-probe/metadata.txt
+
+      - name: Validate probe configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AETHERTUNE_PRODUCTION_BASE_URL:?AETHERTUNE_PRODUCTION_BASE_URL is required}"
+          : "${AETHERTUNE_OPS_PROBE_TOKEN:?AETHERTUNE_OPS_PROBE_TOKEN is required}"
+
+      - name: Run production operations probe
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/production-ops-probe
+          {
+            printf 'workflow_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'commit=%s\n' "$GITHUB_SHA"
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            base_url_host="$(python3 -c 'from urllib.parse import urlsplit; import sys; print(urlsplit(sys.argv[1]).hostname or "unknown")' "$AETHERTUNE_PRODUCTION_BASE_URL")"
+            printf 'base_url_host=%s\n' "$base_url_host"
+            printf 'result=starting\n'
+          } > build/production-ops-probe/metadata.txt
+          probe_status=0
+          bash services/server/deploy/aethertune-ops-probe.sh "$AETHERTUNE_PRODUCTION_BASE_URL" 2>&1 \
+            | tee build/production-ops-probe/probe.log || probe_status=$?
+          if [ "$probe_status" -eq 0 ]; then
+            sed -i 's/^result=.*/result=passed/' build/production-ops-probe/metadata.txt
+          else
+            sed -i 's/^result=.*/result=failed/' build/production-ops-probe/metadata.txt
+          fi
+          exit "$probe_status"
+
+      - name: Upload production probe evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-production-ops-probe-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/production-ops-probe/

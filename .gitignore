@@ -33,6 +33,9 @@ DerivedData/
 .vscode/
 *.iml
 
+# Kilo local tool state
+.kilo/
+
 # OS
 .DS_Store
 Thumbs.db

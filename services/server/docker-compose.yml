@@ -21,6 +21,11 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${AETHERTUNE_CPU_LIMIT:-1.0}"
+          memory: "${AETHERTUNE_MEMORY_LIMIT:-256m}"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/ready"]
       interval: 30s

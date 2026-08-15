@@ -18,6 +18,10 @@ Future<void> main(List<String> arguments) async {
     return;
   }
 
+  await _assertMissingOperationsTokenRejected(executable);
+  await _assertGracefulShutdown(executable);
+  await _assertDataDirectoryLock(executable);
+
   final reservation = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final port = reservation.port;
   await reservation.close();
@@ -36,6 +40,7 @@ Future<void> main(List<String> arguments) async {
         'AETHERTUNE_DATA_DIR': dataDirectory.path,
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'PORT': '$port',
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-executable-metrics-token',
       },
     );
     unawaited(process.stdout.transform(utf8.decoder).forEach(output.write));
@@ -67,6 +72,25 @@ Future<void> main(List<String> arguments) async {
           final readyResponse = await readyRequest.close();
           await readyResponse.drain<void>();
           if (readyResponse.statusCode == HttpStatus.ok) {
+            final unauthorizedMetricsRequest = await client.getUrl(
+              Uri(
+                scheme: 'http',
+                host: InternetAddress.loopbackIPv4.address,
+                port: port,
+                path: 'api/v1/metrics',
+              ),
+            );
+            final unauthorizedMetricsResponse =
+                await unauthorizedMetricsRequest.close();
+            await unauthorizedMetricsResponse.drain<void>();
+            if (unauthorizedMetricsResponse.statusCode !=
+                HttpStatus.unauthorized) {
+              throw StateError(
+                'Metrics endpoint accepted an unauthenticated request: '
+                '${unauthorizedMetricsResponse.statusCode}',
+              );
+            }
+
             final metricsRequest = await client.getUrl(
               Uri(
                 scheme: 'http',
@@ -74,6 +98,10 @@ Future<void> main(List<String> arguments) async {
                 port: port,
                 path: 'api/v1/metrics',
               ),
+            );
+            metricsRequest.headers.set(
+              HttpHeaders.authorizationHeader,
+              'Bearer ci-only-executable-metrics-token',
             );
             final metricsResponse = await metricsRequest.close();
             final metricsBody = await metricsResponse
@@ -161,4 +189,184 @@ Future<void> main(List<String> arguments) async {
     }
     await dataDirectory.delete(recursive: true);
   }
+}
+
+Future<void> _assertMissingOperationsTokenRejected(File executable) async {
+  final dataDirectory = await Directory.systemTemp.createTemp(
+    'aethertune-server-missing-ops-token-',
+  );
+  try {
+    final result = await Process.run(
+      executable.path,
+      const <String>[],
+      environment: <String, String>{
+        ...Platform.environment,
+        'AETHERTUNE_DATA_DIR': dataDirectory.path,
+        'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
+        'AETHERTUNE_OPS_TOKEN': '',
+        'AETHERTUNE_SYNC_USERS': '{}',
+        'PORT': '8080',
+      },
+    );
+    final output = '${result.stdout}\n${result.stderr}';
+    if (result.exitCode == 0 ||
+        !output.contains('AETHERTUNE_OPS_TOKEN is required')) {
+      throw StateError(
+        'Server executable did not reject a missing operations token.\n$output',
+      );
+    }
+  } finally {
+    await dataDirectory.delete(recursive: true);
+  }
+}
+
+Future<void> _assertGracefulShutdown(File executable) async {
+  if (Platform.isWindows) {
+    stdout.writeln(
+      'Skipping SIGTERM graceful-shutdown assertion on Windows.',
+    );
+    return;
+  }
+  final port = await _reservePort();
+  final dataDirectory = await Directory.systemTemp.createTemp(
+    'aethertune-server-shutdown-',
+  );
+  final output = StringBuffer();
+  Process? process;
+  try {
+    process = await Process.start(
+      executable.path,
+      const <String>[],
+      environment: <String, String>{
+        ...Platform.environment,
+        'AETHERTUNE_DATA_DIR': dataDirectory.path,
+        'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
+        'PORT': '$port',
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-shutdown-token',
+      },
+    );
+    unawaited(process.stdout.transform(utf8.decoder).forEach(output.write));
+    unawaited(process.stderr.transform(utf8.decoder).forEach(output.write));
+    await _waitForHealth(port, output);
+    process.kill(ProcessSignal.sigterm);
+    final exitCode = await process.exitCode.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => -1,
+    );
+    if (exitCode != 0) {
+      throw StateError(
+        'Server did not exit cleanly on SIGTERM (exit code $exitCode).\n$output',
+      );
+    }
+    if (!output.toString().contains('AetherTune server stopped')) {
+      throw StateError(
+        'Server did not report a graceful stop on SIGTERM.\n$output',
+      );
+    }
+    stdout.writeln('Server executable shut down gracefully on SIGTERM.');
+  } finally {
+    if (process != null) {
+      process.kill();
+      await process.exitCode.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => -1,
+      );
+    }
+    await dataDirectory.delete(recursive: true);
+  }
+}
+
+Future<void> _assertDataDirectoryLock(File executable) async {
+  final port = await _reservePort();
+  final dataDirectory = await Directory.systemTemp.createTemp(
+    'aethertune-server-lock-',
+  );
+  final output = StringBuffer();
+  Process? first;
+  try {
+    first = await Process.start(
+      executable.path,
+      const <String>[],
+      environment: <String, String>{
+        ...Platform.environment,
+        'AETHERTUNE_DATA_DIR': dataDirectory.path,
+        'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
+        'PORT': '$port',
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-lock-token',
+      },
+    );
+    unawaited(first.stdout.transform(utf8.decoder).forEach(output.write));
+    unawaited(first.stderr.transform(utf8.decoder).forEach(output.write));
+    await _waitForHealth(port, output);
+
+    final secondPort = await _reservePort();
+    final second = await Process.run(
+      executable.path,
+      const <String>[],
+      environment: <String, String>{
+        ...Platform.environment,
+        'AETHERTUNE_DATA_DIR': dataDirectory.path,
+        'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
+        'PORT': '$secondPort',
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-lock-token',
+      },
+    );
+    final secondOutput = '${second.stdout}\n${second.stderr}';
+    if (second.exitCode != 1 ||
+        !secondOutput.contains('Refusing to start')) {
+      throw StateError(
+        'A second server instance was not rejected for the same data '
+        'directory (exit code ${second.exitCode}).\n$secondOutput',
+      );
+    }
+    stdout.writeln(
+      'Server executable refused a second instance on the same data directory.',
+    );
+  } finally {
+    if (first != null) {
+      first.kill();
+      await first.exitCode.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => -1,
+      );
+    }
+    await dataDirectory.delete(recursive: true);
+  }
+}
+
+Future<int> _reservePort() async {
+  final reservation = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final port = reservation.port;
+  await reservation.close();
+  return port;
+}
+
+Future<void> _waitForHealth(int port, StringBuffer output) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 15));
+  while (DateTime.now().isBefore(deadline)) {
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(
+        Uri(
+          scheme: 'http',
+          host: InternetAddress.loopbackIPv4.address,
+          port: port,
+          path: 'health',
+        ),
+      );
+      final response = await request.close();
+      await response.drain<void>();
+      if (response.statusCode == HttpStatus.ok) {
+        return;
+      }
+    } on SocketException {
+      // The process may still be binding its loopback socket.
+    } finally {
+      client.close(force: true);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
+  throw StateError(
+    'Server executable did not pass its health check within 15 seconds.\n$output',
+  );
 }

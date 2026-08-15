@@ -226,19 +226,28 @@ class ManagedSyncProfileUpdate {
 typedef ManagedSyncTokenGenerator = String Function();
 typedef ManagedRecoveryCodeGenerator = String Function();
 
-/// Parses the optional managed-token lifetime configured by server operators.
+/// Default managed-token lifetime applied when operators do not configure
+/// [managedTokenLifetimeFromEnvironment] explicitly.
+const defaultManagedTokenLifetimeDays = 365;
+
+/// Parses the managed-token lifetime configured by server operators.
 ///
-/// Omission intentionally retains the historic non-expiring behavior.
+/// When the setting is omitted, managed device tokens expire after
+/// [defaultManagedTokenLifetimeDays] days. Operators can set any value from 1
+/// through 3650 days, or explicitly opt out of expiry with `0`.
 Duration? managedTokenLifetimeFromEnvironment(Map<String, String> environment) {
   final rawDays = environment['AETHERTUNE_MANAGED_TOKEN_TTL_DAYS'];
   if (rawDays == null || rawDays.trim().isEmpty) {
-    return null;
+    return const Duration(days: defaultManagedTokenLifetimeDays);
   }
   final days = int.tryParse(rawDays.trim());
-  if (days == null || days < 1 || days > 3650) {
+  if (days == null || days < 0 || days > 3650) {
     throw const FormatException(
-      'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS must be between 1 and 3650.',
+      'AETHERTUNE_MANAGED_TOKEN_TTL_DAYS must be between 0 and 3650.',
     );
+  }
+  if (days == 0) {
+    return null;
   }
   return Duration(days: days);
 }
@@ -375,8 +384,8 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
   }
 
   bool _isTokenExpired(_ManagedTokenRecord token, DateTime now) {
-    final lifetime = _tokenLifetime;
-    return lifetime != null && !now.isBefore(token.createdAt.add(lifetime));
+    final expiresAt = token.expiresAt;
+    return expiresAt != null && !now.isBefore(expiresAt);
   }
 
   /// Records the most recent successful use of a managed device token.
@@ -495,6 +504,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         deviceName: normalizedDeviceName,
         createdAt: now,
         lastAuthenticatedAt: null,
+        expiresAt: _tokenLifetime == null ? null : now.add(_tokenLifetime),
         tokenHash: tokenHash,
       );
       account.tokens.add(storedToken);
@@ -1254,6 +1264,7 @@ class _ManagedTokenRecord {
     required this.createdAt,
     required this.lastAuthenticatedAt,
     required this.tokenHash,
+    this.expiresAt,
   });
 
   factory _ManagedTokenRecord.fromStorageJson(Map<String, Object?> json) {
@@ -1264,12 +1275,17 @@ class _ManagedTokenRecord {
     final lastAuthenticatedAt = rawLastAuthenticatedAt == null
         ? null
         : DateTime.tryParse(rawLastAuthenticatedAt as String? ?? '');
+    final rawExpiresAt = json['expiresAt'];
+    final expiresAt = rawExpiresAt == null
+        ? null
+        : DateTime.tryParse(rawExpiresAt as String? ?? '');
     final digest = json['sha256'];
     if (id is! String ||
         !RegExp(r'^[0-9a-f]{24}$').hasMatch(id) ||
         deviceName is! String ||
         createdAt == null ||
         (rawLastAuthenticatedAt != null && lastAuthenticatedAt == null) ||
+        (rawExpiresAt != null && expiresAt == null) ||
         digest is! String ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(digest)) {
       throw const FormatException('Stored authentication token is invalid.');
@@ -1288,6 +1304,7 @@ class _ManagedTokenRecord {
       ),
       createdAt: createdAt.toUtc(),
       lastAuthenticatedAt: lastAuthenticatedAt?.toUtc(),
+      expiresAt: expiresAt?.toUtc(),
       tokenHash: _bytesFromHex(digest),
     );
   }
@@ -1296,6 +1313,7 @@ class _ManagedTokenRecord {
   final String deviceName;
   final DateTime createdAt;
   final DateTime? lastAuthenticatedAt;
+  final DateTime? expiresAt;
   final List<int> tokenHash;
 
   ManagedSyncTokenMetadata get metadata => ManagedSyncTokenMetadata(
@@ -1311,6 +1329,7 @@ class _ManagedTokenRecord {
         deviceName: deviceName,
         createdAt: createdAt,
         lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+        expiresAt: expiresAt,
         tokenHash: List<int>.from(tokenHash),
       );
 
@@ -1319,6 +1338,7 @@ class _ManagedTokenRecord {
     deviceName: deviceName,
     createdAt: createdAt,
     lastAuthenticatedAt: lastAuthenticatedAt,
+    expiresAt: expiresAt,
     tokenHash: List<int>.from(tokenHash),
   );
 
@@ -1328,6 +1348,7 @@ class _ManagedTokenRecord {
     'createdAt': createdAt.toUtc().toIso8601String(),
     if (lastAuthenticatedAt != null)
       'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
+    if (expiresAt != null) 'expiresAt': expiresAt!.toUtc().toIso8601String(),
     'sha256': _hex(tokenHash),
   };
 }

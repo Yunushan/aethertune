@@ -11,6 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OSV_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scanner.yml"
 OSV_PR_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scanner-pr.yml"
+OSV_REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scan-reusable.yml"
+OSV_PR_REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scan-pr-reusable.yml"
+OSV_REQUIRED_CONTEXT_WORKFLOW = (
+    ROOT / ".github" / "workflows" / "osv-required-context.yml"
+)
 LOCKFILES = (
     ROOT / "apps" / "mobile" / "pubspec.lock",
     ROOT / "services" / "server" / "pubspec.lock",
@@ -62,26 +67,30 @@ class DependencyLockPolicyTest(unittest.TestCase):
 
     def test_osv_scan_covers_locked_pub_graphs_and_license_policy(self) -> None:
         workflow = OSV_WORKFLOW.read_text(encoding="utf-8")
-        osv_job = workflow.split("  osv-scan:\n", 1)[1]
-        self.assertTrue(
-            any(
-                line.startswith("    uses: google/osv-scanner-action/")
-                for line in osv_job.splitlines()
-            )
-        )
+        reusable_workflow = OSV_REUSABLE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn("tags:", workflow)
         self.assertIn("- 'v*'", workflow)
+        self.assertIn("pull_request:", workflow)
+        self.assertIn("merge_group:", workflow)
         self.assertIn("schedule:", workflow)
         self.assertIn("actions: read", workflow)
         self.assertIn("contents: read", workflow)
         self.assertIn("security-events: write", workflow)
         self.assertIn(
-            "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2",
+            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
             workflow,
         )
-        self.assertIn("fail-on-vuln: true", workflow)
+        self.assertIn(
+            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            workflow,
+        )
+        self.assertIn("runs-on: ubuntu-latest", workflow)
+        self.assertIn("Upload to code-scanning", workflow)
+        self.assertIn("github/codeql-action/upload-sarif@", workflow)
+        self.assertIn("google/osv-scanner-action/osv-scanner-action@", reusable_workflow)
+        self.assertIn("--fail-on-vuln=true", workflow)
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
         self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)
         self.assertIn("--licenses=", workflow)
@@ -92,22 +101,50 @@ class DependencyLockPolicyTest(unittest.TestCase):
         osv_job = workflow.split("  osv-scan:\n", 1)[1]
         self.assertTrue(
             any(
-                line.startswith("    uses: google/osv-scanner-action/")
+                line == "    uses: ./.github/workflows/osv-scan-pr-reusable.yml"
                 for line in osv_job.splitlines()
             )
         )
+        reusable_workflow = OSV_PR_REUSABLE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("pull_request:", workflow)
         self.assertIn("merge_group:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn(
-            "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2",
-            workflow,
+            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            reusable_workflow,
         )
+        self.assertIn(
+            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            reusable_workflow,
+        )
+        self.assertNotIn("Upload to code-scanning", reusable_workflow)
+        self.assertNotIn("github/codeql-action/upload-sarif@", reusable_workflow)
         self.assertIn("fail-on-vuln: true", workflow)
         self.assertIn("        -r\n        ./", workflow)
         self.assertIn("--allow-no-lockfiles", workflow)
         self.assertIn("--licenses=", workflow)
         self.assertIn(",UNKNOWN", workflow)
+
+    def test_legacy_required_osv_context_remains_pinned_and_enforced(self) -> None:
+        workflow = OSV_REQUIRED_CONTEXT_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("name: New OSV vulnerabilities and license violations", workflow)
+        self.assertIn("pull_request:", workflow)
+        self.assertIn("merge_group:", workflow)
+        self.assertIn("  osv-scan:\n", workflow)
+        self.assertIn(
+            "name: New OSV vulnerabilities and license violations / osv-scan",
+            workflow,
+        )
+        self.assertIn(
+            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            workflow,
+        )
+        self.assertIn(
+            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            workflow,
+        )
+        self.assertIn("--fail-on-vuln=true", workflow)
+        self.assertIn("--licenses=", workflow)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ permissions:
 jobs:
   osv-scan:
     name: New OSV vulnerabilities and license violations
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    uses: ./.github/workflows/osv-scan-pr-reusable.yml
     with:
       fail-on-vuln: true
       scan-args: |-

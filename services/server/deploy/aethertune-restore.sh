@@ -8,10 +8,17 @@ if [[ ! -f "$archive" ]]; then
   echo "Backup archive does not exist: $archive" >&2
   exit 1
 fi
-if [[ -f "$archive.sha256" ]]; then
-  sha256sum --check "$archive.sha256"
+archive_dir="$(cd "$(dirname "$archive")" && pwd -P)"
+archive_name="$(basename "$archive")"
+archive="$archive_dir/$archive_name"
+checksum_name="$archive_name.sha256"
+if [[ -f "$archive_dir/$checksum_name" ]]; then
+  (
+    cd "$archive_dir"
+    sha256sum --check "$checksum_name"
+  )
 else
-  echo "Missing checksum sidecar: $archive.sha256" >&2
+  echo "Missing checksum sidecar: $archive_dir/$checksum_name" >&2
   exit 1
 fi
 

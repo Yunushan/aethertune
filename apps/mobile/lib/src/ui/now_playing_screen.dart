@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/flac_vorbis_comment_writer.dart';
+import '../data/file_picker_adapter.dart';
 import '../data/library_store.dart';
 import '../data/m4a_metadata_writer.dart';
 import '../data/ogg_vorbis_comment_writer.dart';
@@ -556,7 +557,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     try {
       final bytes = await captureTrackShareCardPng(boundaryKey);
       final fileName = 'aethertune-track-${track.id}.png';
-      final outputPath = await FilePicker.saveFile(
+      final outputPath = await FilePicker.platform.saveFile(
         dialogTitle: 'Save track share card',
         fileName: fileName,
         type: FileType.custom,
@@ -2352,7 +2353,7 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
   }
 
   Future<void> _importFile() async {
-    final file = await FilePicker.pickFile(
+    final file = await pickSingleFile(
       allowedExtensions: supportedTrackSkipSegmentDocumentExtensions,
       dialogTitle: 'Import skip segments',
       type: FileType.custom,
@@ -2363,7 +2364,7 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
 
     try {
       final source = decodeTrackSkipSegmentDocumentBytes(
-        await file.readAsBytes(),
+        await readPickedFileBytes(file),
         fileName: file.name,
       );
       final segments = parseTrackSkipSegments(
@@ -2396,7 +2397,7 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
       );
       final contents = formatTrackSkipSegments(segments);
       final bytes = Uint8List.fromList(utf8.encode(contents));
-      final outputPath = await FilePicker.saveFile(
+      final outputPath = await FilePicker.platform.saveFile(
         allowedExtensions: supportedTrackSkipSegmentDocumentExtensions,
         bytes: bytes,
         dialogTitle: 'Export skip segments',

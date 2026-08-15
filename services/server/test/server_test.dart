@@ -20,6 +20,14 @@ void main() {
       );
     });
 
+    test('requires a valid TCP port configuration', () {
+      expect(serverPort(null), defaultServerPort);
+      expect(serverPort(' 9090 '), 9090);
+      expect(() => serverPort('not-a-port'), throwsA(isA<FormatException>()));
+      expect(() => serverPort('0'), throwsA(isA<FormatException>()));
+      expect(() => serverPort('65536'), throwsA(isA<FormatException>()));
+    });
+
     test('health endpoint reports ok', () async {
       final handler = createServerHandler(
         clock: () => DateTime.utc(2026, 1, 2, 3, 4, 5),
@@ -104,22 +112,94 @@ void main() {
       );
     });
 
-    test('bounds rate-limit buckets under distinct-token traffic', () async {
-      final handler = createServerHandler(
-        requestRateLimiter: ServerRequestRateLimiter(
-          maximumRequests: 10,
-          maximumBuckets: 1,
-        ),
-      );
-      expect(
-        (await handler(_request('GET', '/health', token: 'one'))).statusCode,
-        200,
-      );
-      expect(
-        (await handler(_request('GET', '/health', token: 'two'))).statusCode,
-        429,
-      );
-    });
+    test(
+      'evicts the oldest bucket when distinct traffic exceeds the cap',
+      () async {
+        final handler = createServerHandler(
+          requestRateLimiter: ServerRequestRateLimiter(
+            maximumRequests: 10,
+            maximumBuckets: 1,
+          ),
+        );
+        expect(
+          (await handler(_request('GET', '/health', token: 'one'))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(_request('GET', '/health', token: 'two'))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(_request('GET', '/health', token: 'one'))).statusCode,
+          200,
+        );
+      },
+    );
+
+    test(
+      'keeps serving anonymous clients when bucket cap is exhausted',
+      () async {
+        final handler = createServerHandler(
+          requestRateLimiter: ServerRequestRateLimiter(
+            maximumRequests: 1,
+            maximumBuckets: 1,
+          ),
+        );
+        Request requestFrom(InternetAddress address) => Request(
+          'GET',
+          Uri.parse('http://localhost/health'),
+          context: <String, Object>{
+            'shelf.io.connection_info': _FakeConnectionInfo(address, 1234),
+          },
+        );
+
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          429,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.2')))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.3')))).statusCode,
+          200,
+        );
+      },
+    );
+
+    test(
+      'buckets anonymous traffic per client address when available',
+      () async {
+        final handler = createServerHandler(
+          requestRateLimiter: ServerRequestRateLimiter(maximumRequests: 1),
+        );
+        Request requestFrom(InternetAddress address) => Request(
+          'GET',
+          Uri.parse('http://localhost/health'),
+          context: <String, Object>{
+            'shelf.io.connection_info': _FakeConnectionInfo(address, 1234),
+          },
+        );
+
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          200,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.1')))).statusCode,
+          429,
+        );
+        expect(
+          (await handler(requestFrom(InternetAddress('10.0.0.2')))).statusCode,
+          200,
+        );
+      },
+    );
 
     test(
       'metrics reports aggregate process state without request details',
@@ -2005,4 +2085,17 @@ String _checksum(Map<String, Object?> snapshot) {
 
 Future<Map<String, dynamic>> _json(Response response) async {
   return jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+}
+
+class _FakeConnectionInfo implements HttpConnectionInfo {
+  _FakeConnectionInfo(this.remoteAddress, this.remotePort);
+
+  @override
+  final InternetAddress remoteAddress;
+
+  @override
+  final int remotePort;
+
+  @override
+  int get localPort => 0;
 }

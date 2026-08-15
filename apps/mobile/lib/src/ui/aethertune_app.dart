@@ -349,7 +349,11 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                                       _openPlaylistsFromDeepLink(),
                                   child: child ?? const SizedBox.shrink(),
                                 ),
-                            home: !library.loaded
+                            home: library.loadError != null
+                                ? _AppLoadErrorScreen(
+                                    message: library.loadError!,
+                                  )
+                                : !library.loaded
                                 ? const _AppLoadingScreen()
                                 : CallbackShortcuts(
                                     bindings: <ShortcutActivator, VoidCallback>{
@@ -540,6 +544,24 @@ class _AppLoadingScreen extends StatelessWidget {
     return Scaffold(
       body: Center(
         child: CircularProgressIndicator(semanticsLabel: localizations.loading),
+      ),
+    );
+  }
+}
+
+class _AppLoadErrorScreen extends StatelessWidget {
+  const _AppLoadErrorScreen({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(message, textAlign: TextAlign.center),
+        ),
       ),
     );
   }

@@ -96,8 +96,9 @@ Future<Uint8List> captureTrackShareCardPng(GlobalKey boundaryKey) async {
   final image = await renderObject.toImage(pixelRatio: 3);
   try {
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (bytes == null)
+    if (bytes == null) {
       throw StateError('Flutter could not encode the track share PNG.');
+    }
     return bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
   } finally {
     image.dispose();
