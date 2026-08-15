@@ -22,6 +22,8 @@ const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 const maxManagedAuthRequestBytes = 16 * 1024;
 const maxListenTogetherSessionBytes = 32 * 1024;
 const maxSharedPlaylistBytes = 64 * 1024;
+const defaultServerPort = 8080;
+const serverIdleTimeout = Duration(seconds: 60);
 final _listenTogetherInviteRandom = Random.secure();
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
@@ -115,6 +117,20 @@ InternetAddress serverListenAddress(String? configuredAddress) {
     );
   }
   return address;
+}
+
+int serverPort(String? configuredPort) {
+  final normalized = configuredPort?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return defaultServerPort;
+  }
+  final port = int.tryParse(normalized);
+  if (port == null || port < 1 || port > 65535) {
+    throw FormatException(
+      'PORT must be an integer from 1 through 65535.',
+    );
+  }
+  return port;
 }
 
 class ServerRequestLogEntry {

@@ -58,6 +58,10 @@ deployment needs another interface. Docker sets its own listener to `0.0.0.0`
 inside the container; its published host port remains controlled separately by
 `AETHERTUNE_BIND_ADDRESS`.
 
+`PORT` defaults to `8080` and must be an integer from `1` through `65535` when
+configured. Invalid values stop startup instead of silently selecting a
+different port. Idle HTTP connections are closed after 60 seconds.
+
 The in-process request limiter defaults to 120 requests per minute for each
 bearer-token digest and one anonymous bucket. Set
 `AETHERTUNE_RATE_LIMIT_PER_MINUTE` to a positive integer to tune that budget;

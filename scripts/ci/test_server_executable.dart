@@ -203,7 +203,7 @@ Future<void> _assertMissingOperationsTokenRejected(File executable) async {
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'AETHERTUNE_OPS_TOKEN': '',
         'AETHERTUNE_SYNC_USERS': '{}',
-        'PORT': '0',
+        'PORT': '8080',
       },
     );
     final output = '${result.stdout}\n${result.stderr}';

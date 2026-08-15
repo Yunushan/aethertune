@@ -65,7 +65,8 @@ sudo systemctl enable --now aethertune
 sudo systemctl status aethertune
 ```
 
-The native service listens on `PORT` (default `8080`) and
+The native service listens on `PORT` (default `8080`; configured values must be
+from `1` through `65535`) and
 `AETHERTUNE_LISTEN_ADDRESS` (default `127.0.0.1`), then writes snapshots to the
 systemd-managed `/var/lib/aethertune` state directory. Place the supplied
 `Caddyfile` in front of the service exactly as in the Docker setup.

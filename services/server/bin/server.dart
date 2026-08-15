@@ -5,7 +5,7 @@ import 'package:aethertune_server/server.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
 Future<void> main() async {
-  final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
+  final port = serverPort(Platform.environment['PORT']);
   final listenAddress = serverListenAddress(
     Platform.environment['AETHERTUNE_LISTEN_ADDRESS'],
   );
@@ -75,6 +75,7 @@ Future<void> main() async {
   );
 
   server.autoCompress = true;
+  server.idleTimeout = serverIdleTimeout;
   stdout.writeln(
     'AetherTune server listening on http://${server.address.host}:${server.port}',
   );
