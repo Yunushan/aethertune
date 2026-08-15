@@ -29,6 +29,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: '3.44.6'
+          cache: false
 
       - name: Verify Dart formatting
         run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
@@ -166,6 +167,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: '3.44.6'
+          cache: false
 
       - name: Verify generated platform wrappers
         run: python3 scripts/test_configure_audio_service_platforms.py
@@ -263,6 +265,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: '3.44.6'
+          cache: false
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
