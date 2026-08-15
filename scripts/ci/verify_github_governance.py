@@ -37,7 +37,6 @@ REQUIRED_ACTION_PATTERNS = frozenset(
         "dart-lang/setup-dart@*",
         "google/osv-scanner-action/osv-reporter-action@*",
         "google/osv-scanner-action/osv-scanner-action@*",
-        "subosito/flutter-action@*",
     }
 )
 CODEOWNER_PATHS = (

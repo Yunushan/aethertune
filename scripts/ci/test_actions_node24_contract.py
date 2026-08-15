@@ -69,7 +69,7 @@ class ActionsNode24ContractTest(unittest.TestCase):
             "dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260",
             workflows,
         )
-        self.assertEqual(6, workflows.count("cache: false"))
+        self.assertNotIn("subosito/flutter-action@", workflows)
         self.assertNotIn("actions/checkout@v4", workflows)
         self.assertNotIn("actions/upload-artifact@v4", workflows)
         self.assertNotIn("actions/download-artifact@v4", workflows)
