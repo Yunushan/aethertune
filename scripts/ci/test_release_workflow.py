@@ -212,16 +212,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "  android:\n", 1
         )[0].splitlines()
         self.assertTrue(
-            any(line.startswith("    uses: google/osv-scanner-action/") for line in osv_lines)
-        )
-        self.assertTrue(
             any(
-                line.startswith(
-                    "    uses: google/osv-scanner-action/.github/workflows/"
-                )
-                and line.endswith(
-                    "@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8"
-                )
+                line == "    uses: ./.github/workflows/osv-scan-reusable.yml"
                 for line in osv_lines
             )
         )

@@ -29,7 +29,11 @@ class ActionsNode24ContractTest(unittest.TestCase):
             for workflow in sorted(workflow_dir.glob("*.yml"))
         )
 
-        references = ACTION_REFERENCE.findall(workflow_text)
+        references = [
+            reference
+            for reference in ACTION_REFERENCE.findall(workflow_text)
+            if not reference.startswith("./")
+        ]
         self.assertTrue(references)
         self.assertTrue(
             all(IMMUTABLE_REF.search(reference) for reference in references),

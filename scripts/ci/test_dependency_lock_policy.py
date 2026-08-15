@@ -11,6 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OSV_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scanner.yml"
 OSV_PR_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scanner-pr.yml"
+OSV_REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scan-reusable.yml"
+OSV_PR_REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "osv-scan-pr-reusable.yml"
 LOCKFILES = (
     ROOT / "apps" / "mobile" / "pubspec.lock",
     ROOT / "services" / "server" / "pubspec.lock",
@@ -65,10 +67,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         osv_job = workflow.split("  osv-scan:\n", 1)[1]
         self.assertTrue(
             any(
-                line.startswith("    uses: google/osv-scanner-action/")
+                line == "    uses: ./.github/workflows/osv-scan-reusable.yml"
                 for line in osv_job.splitlines()
             )
         )
+        reusable_workflow = OSV_REUSABLE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn("tags:", workflow)
@@ -78,8 +81,12 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("contents: read", workflow)
         self.assertIn("security-events: write", workflow)
         self.assertIn(
-            "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2",
-            workflow,
+            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            reusable_workflow,
+        )
+        self.assertIn(
+            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            reusable_workflow,
         )
         self.assertIn("fail-on-vuln: true", workflow)
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
@@ -92,16 +99,21 @@ class DependencyLockPolicyTest(unittest.TestCase):
         osv_job = workflow.split("  osv-scan:\n", 1)[1]
         self.assertTrue(
             any(
-                line.startswith("    uses: google/osv-scanner-action/")
+                line == "    uses: ./.github/workflows/osv-scan-pr-reusable.yml"
                 for line in osv_job.splitlines()
             )
         )
+        reusable_workflow = OSV_PR_REUSABLE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("pull_request:", workflow)
         self.assertIn("merge_group:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn(
-            "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2",
-            workflow,
+            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            reusable_workflow,
+        )
+        self.assertIn(
+            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            reusable_workflow,
         )
         self.assertIn("fail-on-vuln: true", workflow)
         self.assertIn("        -r\n        ./", workflow)
