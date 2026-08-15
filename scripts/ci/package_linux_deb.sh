@@ -63,6 +63,9 @@ tar --format=gnu --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' \
   -C "$package_root/DEBIAN" -cf "$archive_root/control.tar" .
 tar --format=gnu --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' \
   --exclude='./DEBIAN' -C "$package_root" -cf "$archive_root/data.tar" .
+# `ar r` replaces named members but retains unrelated members from an older
+# archive, so remove a reused destination before assembling the package.
+rm -f "$output_path"
 (
   cd "$archive_root"
   ar rD "$output_path" debian-binary control.tar data.tar

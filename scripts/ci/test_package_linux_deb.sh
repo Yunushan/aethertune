@@ -26,6 +26,24 @@ if ! dpkg-deb --info "$package" | grep -q 'Package: aethertune'; then
   exit 1
 fi
 
+printf 'stale archive member\n' > "$workspace/stale.txt"
+(
+  cd "$workspace"
+  ar rD "$package" stale.txt
+)
+
+if ! ar t "$package" | grep -qx 'stale.txt'; then
+  echo "Expected the fixture to add a stale archive member." >&2
+  exit 1
+fi
+
+bash "$package_script" "$bundle" "$package" '0.0.1'
+
+if ar t "$package" | grep -qx 'stale.txt'; then
+  echo "The Debian package retained a stale archive member." >&2
+  exit 1
+fi
+
 relative_package="release/aethertune-linux-x64.deb"
 (
   cd "$workspace"
