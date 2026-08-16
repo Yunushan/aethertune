@@ -564,11 +564,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         allowedExtensions: const <String>['png'],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) {
+      if (outputPath == null) {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (context.mounted) {
         messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
@@ -2404,11 +2404,11 @@ class _TrackSkipSegmentsDialogState extends State<_TrackSkipSegmentsDialog> {
         fileName: 'aethertune-skip-segments.txt',
         type: FileType.custom,
       );
-      if (!mounted || outputPath == null || outputPath.isEmpty) {
+      if (!mounted || outputPath == null) {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!mounted) {
         return;

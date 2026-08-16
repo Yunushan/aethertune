@@ -1834,13 +1834,13 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
     )!.scanningSelectedAudio;
 
-    final result = await FilePicker.pickFiles(type: FileType.audio);
+    final files = await FilePicker.pickFiles(type: FileType.audio);
 
-    if (result == null || result.files.isEmpty) {
+    if (files.isEmpty) {
       return;
     }
 
-    final filePaths = result.files
+    final filePaths = files
         .map((file) => file.path)
         .whereType<String>()
         .toList(growable: false);
@@ -10982,11 +10982,11 @@ class _PlaylistsTabState extends State<_PlaylistsTab> {
         allowedExtensions: <String>[extension],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) {
+      if (outputPath == null) {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -13405,12 +13405,12 @@ class _HistoryTabState extends State<_HistoryTab> {
         allowedExtensions: const <String>['png'],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) {
+      if (outputPath == null) {
         return;
       }
 
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -14340,7 +14340,7 @@ Future<void> _exportLocalDiagnostics(
 
   try {
     if (!Platform.isAndroid && !Platform.isIOS) {
-      await File(outputPath).writeAsBytes(bytes, flush: true);
+      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
     }
     if (context.mounted) {
       messenger.showSnackBar(
@@ -14606,11 +14606,11 @@ Future<void> _saveCollectionShareCard(
       allowedExtensions: const <String>['png'],
       bytes: bytes,
     );
-    if (outputPath == null || outputPath.isEmpty) {
+    if (outputPath == null) {
       return;
     }
     if (!Platform.isAndroid && !Platform.isIOS) {
-      await File(outputPath).writeAsBytes(bytes, flush: true);
+      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
     }
     if (context.mounted) {
       messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
@@ -14964,11 +14964,11 @@ Future<void> _saveLyricsShareCard(
       allowedExtensions: const <String>['png'],
       bytes: bytes,
     );
-    if (outputPath == null || outputPath.isEmpty) {
+    if (outputPath == null) {
       return;
     }
     if (!Platform.isAndroid && !Platform.isIOS) {
-      await File(outputPath).writeAsBytes(bytes, flush: true);
+      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
     }
     if (context.mounted) {
       messenger.showSnackBar(SnackBar(content: Text('Saved $fileName.')));
@@ -15069,12 +15069,12 @@ Future<void> _saveLyricsDraftExportDocument(
       allowedExtensions: <String>[export.extension],
       bytes: bytes,
     );
-    if (outputPath == null || outputPath.isEmpty) {
+    if (outputPath == null) {
       return;
     }
 
     if (!Platform.isAndroid && !Platform.isIOS) {
-      await File(outputPath).writeAsBytes(bytes, flush: true);
+      await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
     }
     if (!context.mounted) {
       return;
@@ -18433,11 +18433,11 @@ class _SourcesTabState extends State<_SourcesTab> {
         allowedExtensions: const <String>['json'],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) {
+      if (outputPath == null) {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -18747,12 +18747,11 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await FilePicker.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>['json'],
       );
-      final files = result?.files;
-      if (files == null || files.isEmpty) {
+      if (files.isEmpty) {
         return;
       }
       final document = utf8.decode(await readPickedFileBytes(files.first));
@@ -19047,11 +19046,11 @@ class _SourcesTabState extends State<_SourcesTab> {
         allowedExtensions: const <String>['json'],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) {
+      if (outputPath == null) {
         return;
       }
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -19123,12 +19122,11 @@ class _SourcesTabState extends State<_SourcesTab> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await FilePicker.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>['json'],
       );
-      final files = result?.files;
-      if (files == null || files.isEmpty) {
+      if (files.isEmpty) {
         return;
       }
       final document = utf8.decode(await readPickedFileBytes(files.first));
@@ -23204,12 +23202,12 @@ class _SettingsTab extends StatelessWidget {
         allowedExtensions: const <String>[aetherTuneBackupFileExtension],
         bytes: bytes,
       );
-      if (outputPath == null || outputPath.isEmpty) {
+      if (outputPath == null) {
         return;
       }
 
       if (!Platform.isAndroid && !Platform.isIOS) {
-        await File(outputPath).writeAsBytes(bytes, flush: true);
+        await File.fromUri(outputPath).writeAsBytes(bytes, flush: true);
       }
       if (!context.mounted) {
         return;
@@ -23289,12 +23287,11 @@ class _SettingsTab extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final result = await FilePicker.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>[aetherTuneBackupFileExtension],
       );
-      final files = result?.files;
-      if (files == null || files.isEmpty) {
+      if (files.isEmpty) {
         return;
       }
 
