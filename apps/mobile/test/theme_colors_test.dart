@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart' as material_ui;
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/ui/theme_colors.dart';
@@ -56,6 +57,25 @@ void main() {
       ),
       ColorScheme.fromSeed(seedColor: Colors.pink, brightness: Brightness.dark),
     );
+  });
+
+  test('converts dynamic_color schemes to Flutter Material schemes', () {
+    final materialScheme = material_ui.ColorScheme.fromSeed(
+      seedColor: Colors.orange,
+      brightness: Brightness.dark,
+    );
+
+    final flutterScheme = flutterColorSchemeFromDynamicColor(materialScheme);
+
+    expect(flutterScheme, isNotNull);
+    expect(flutterScheme!.brightness, materialScheme.brightness);
+    expect(flutterScheme.primary, materialScheme.primary);
+    expect(flutterScheme.onSurface, materialScheme.onSurface);
+    expect(
+      flutterScheme.surfaceContainerHighest,
+      materialScheme.surfaceContainerHighest,
+    );
+    expect(flutterColorSchemeFromDynamicColor(null), isNull);
   });
 
   test('falls back safely when a platform has no dynamic scheme', () {

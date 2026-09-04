@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart' as material_ui;
 
 import '../data/library_store.dart';
 
@@ -23,6 +24,73 @@ Color seedColorForAccent(AppAccentColor accentColor) {
 
 bool usesSystemAccent(AppAccentColor accentColor) {
   return accentColor == AppAccentColor.system;
+}
+
+/// Converts the dynamic_color package's Material UI scheme to Flutter's scheme.
+///
+/// dynamic_color 2.x uses the extracted Material UI package, while the app
+/// still builds its themes with Flutter's Material library. Both schemes use
+/// the same dart:ui colors, so copying the roles preserves the platform palette
+/// without mixing the two ColorScheme types.
+ColorScheme? flutterColorSchemeFromDynamicColor(
+  material_ui.ColorScheme? dynamicColorScheme,
+) {
+  if (dynamicColorScheme == null) {
+    return null;
+  }
+
+  return ColorScheme(
+    brightness: dynamicColorScheme.brightness,
+    primary: dynamicColorScheme.primary,
+    onPrimary: dynamicColorScheme.onPrimary,
+    primaryContainer: dynamicColorScheme.primaryContainer,
+    onPrimaryContainer: dynamicColorScheme.onPrimaryContainer,
+    primaryFixed: dynamicColorScheme.primaryFixed,
+    primaryFixedDim: dynamicColorScheme.primaryFixedDim,
+    onPrimaryFixed: dynamicColorScheme.onPrimaryFixed,
+    onPrimaryFixedVariant: dynamicColorScheme.onPrimaryFixedVariant,
+    secondary: dynamicColorScheme.secondary,
+    onSecondary: dynamicColorScheme.onSecondary,
+    secondaryContainer: dynamicColorScheme.secondaryContainer,
+    onSecondaryContainer: dynamicColorScheme.onSecondaryContainer,
+    secondaryFixed: dynamicColorScheme.secondaryFixed,
+    secondaryFixedDim: dynamicColorScheme.secondaryFixedDim,
+    onSecondaryFixed: dynamicColorScheme.onSecondaryFixed,
+    onSecondaryFixedVariant: dynamicColorScheme.onSecondaryFixedVariant,
+    tertiary: dynamicColorScheme.tertiary,
+    onTertiary: dynamicColorScheme.onTertiary,
+    tertiaryContainer: dynamicColorScheme.tertiaryContainer,
+    onTertiaryContainer: dynamicColorScheme.onTertiaryContainer,
+    tertiaryFixed: dynamicColorScheme.tertiaryFixed,
+    tertiaryFixedDim: dynamicColorScheme.tertiaryFixedDim,
+    onTertiaryFixed: dynamicColorScheme.onTertiaryFixed,
+    onTertiaryFixedVariant: dynamicColorScheme.onTertiaryFixedVariant,
+    error: dynamicColorScheme.error,
+    onError: dynamicColorScheme.onError,
+    errorContainer: dynamicColorScheme.errorContainer,
+    onErrorContainer: dynamicColorScheme.onErrorContainer,
+    surface: dynamicColorScheme.surface,
+    onSurface: dynamicColorScheme.onSurface,
+    surfaceDim: dynamicColorScheme.surfaceDim,
+    surfaceBright: dynamicColorScheme.surfaceBright,
+    surfaceContainerLowest: dynamicColorScheme.surfaceContainerLowest,
+    surfaceContainerLow: dynamicColorScheme.surfaceContainerLow,
+    surfaceContainer: dynamicColorScheme.surfaceContainer,
+    surfaceContainerHigh: dynamicColorScheme.surfaceContainerHigh,
+    surfaceContainerHighest: dynamicColorScheme.surfaceContainerHighest,
+    onSurfaceVariant: dynamicColorScheme.onSurfaceVariant,
+    outline: dynamicColorScheme.outline,
+    outlineVariant: dynamicColorScheme.outlineVariant,
+    shadow: dynamicColorScheme.shadow,
+    scrim: dynamicColorScheme.scrim,
+    inverseSurface: dynamicColorScheme.inverseSurface,
+    onInverseSurface: dynamicColorScheme.onInverseSurface,
+    inversePrimary: dynamicColorScheme.inversePrimary,
+    surfaceTint: dynamicColorScheme.surfaceTint,
+    background: dynamicColorScheme.background,
+    onBackground: dynamicColorScheme.onBackground,
+    surfaceVariant: dynamicColorScheme.surfaceVariant,
+  );
 }
 
 ColorScheme lightColorSchemeForAccent(
