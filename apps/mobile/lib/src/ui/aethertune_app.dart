@@ -326,7 +326,10 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                             ),
                             theme: _lightTheme(
                               library.accentColor,
-                              dynamicColorScheme: lightDynamic,
+                              dynamicColorScheme:
+                                  flutterColorSchemeFromDynamicColor(
+                                    lightDynamic,
+                                  ),
                               visualDensity: visualDensityForDesktopPreference(
                                 library.desktopDensityPreference,
                                 defaultTargetPlatform,
@@ -335,7 +338,10 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                             darkTheme: _darkThemeForPreference(
                               library.themePreference,
                               library.accentColor,
-                              dynamicColorScheme: darkDynamic,
+                              dynamicColorScheme:
+                                  flutterColorSchemeFromDynamicColor(
+                                    darkDynamic,
+                                  ),
                               visualDensity: visualDensityForDesktopPreference(
                                 library.desktopDensityPreference,
                                 defaultTargetPlatform,

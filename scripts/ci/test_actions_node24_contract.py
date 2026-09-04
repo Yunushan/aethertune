@@ -58,7 +58,7 @@ class ActionsNode24ContractTest(unittest.TestCase):
             workflows,
         )
         self.assertIn(
-            "actions/dependency-review-action@595b5aeba73380359d98a5e087f648dbb0edce1b",
+            "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
             workflows,
         )
         self.assertIn(

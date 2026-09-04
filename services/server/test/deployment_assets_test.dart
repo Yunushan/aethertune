@@ -75,7 +75,11 @@ void main() {
     expect(caddy, contains('-Server'));
     expect(
       dockerfile,
-      matches(RegExp(r'FROM dart:3\.12\.2@sha256:[0-9a-f]{64} AS build')),
+      matches(
+        RegExp(
+          r'FROM dart:[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64} AS build',
+        ),
+      ),
     );
     expect(
       dockerfile,
