@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import queue
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -25,6 +27,32 @@ def require(condition, message):
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def stage_probe_bundle(executable, destination):
+    require(executable.parent.name == 'bin', 'Expected a Dart CLI bundle/bin executable')
+    source = executable.parent.parent
+    require(not source.is_symlink(), 'Probe bundle must not be a symbolic link')
+    destination.mkdir(mode=0o755)
+    destination.chmod(0o755)
+    hashes = {}
+    for path in sorted(source.rglob('*')):
+        mode = path.lstat().st_mode
+        require(not path.is_symlink(), f'Probe bundle contains a symbolic link: {path.name}')
+        target = destination / path.relative_to(source)
+        if stat.S_ISDIR(mode):
+            target.mkdir(mode=0o755)
+            target.chmod(0o755)
+        else:
+            require(stat.S_ISREG(mode), f'Probe bundle contains a non-regular file: {path.name}')
+            expected = digest(path)
+            shutil.copyfile(path, target, follow_symlinks=False)
+            target.chmod(0o755 if path == executable else 0o644)
+            require(digest(target) == expected, 'Staging changed probe bundle bytes')
+            hashes[path.relative_to(source).as_posix()] = expected
+    staged = destination / executable.relative_to(source)
+    require(staged.is_file(), 'Staged probe executable is missing')
+    return staged, hashes
 
 
 def values(label, tracks=3):
@@ -333,11 +361,14 @@ def run(executable, evidence, disk_full=False):
               'scope': 'native production file backend; not installed Flutter, power loss, or physical disk failure'}
     fixture = Fixture(executable, evidence)
     try:
-        with tempfile.TemporaryDirectory(prefix='aethertune-storage-') as temporary:
+        with tempfile.TemporaryDirectory(prefix='aethertune-storage-', dir='/tmp' if disk_full else None) as temporary:
             root = Path(temporary)
-            if disk_full:
-                root.chmod(0o755)
             try:
+                if disk_full:
+                    # The nobody fixture cannot traverse a private runner checkout.
+                    # Keep the executable and its relative native assets off the noexec tmpfs.
+                    root.chmod(0o755)
+                    fixture.executable, report['probe_bundle_sha256'] = stage_probe_bundle(executable, root / 'probe')
                 process_acceptance(fixture, root / 'library', checks, metrics)
                 if disk_full:
                     disk_acceptance(fixture, root / 'bounded', checks, metrics)

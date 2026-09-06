@@ -47,6 +47,11 @@ class NativeTransportPolicyTest(unittest.TestCase):
         for path in ("Makefile", "scripts/check.sh", ".github/workflows/aethertune-ci.yml"):
             self.assertIn("build_native_transport.py", (ROOT / path).read_text())
 
+    def test_android_compile_sdk_uses_typed_api_not_display_string(self) -> None:
+        plugin = (APP / 'packages/rhttp/cargokit/gradle/plugin.gradle').read_text()
+        self.assertIn('compileSdkVersion = plugin.project.android.compileSdk\n', plugin)
+        self.assertNotIn('compileSdkVersion.substring', plugin)
+
 
 if __name__ == "__main__":
     unittest.main()

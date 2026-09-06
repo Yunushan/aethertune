@@ -53,6 +53,19 @@ native CycloneDX inventory lists the locked all-target transport packages and
 registry checksums; it does not claim to describe all native dependencies of the
 application or the exact linked packages of any single platform binary.
 
+The license policy includes Unicode-3.0 (the ICU4X/Unicode data dependencies)
+and CDLA-Permissive-2.0 (the `webpki-root-certs` root-certificate data). Their
+published license texts were reviewed against the
+[Unicode-3.0](https://spdx.org/licenses/Unicode-3.0.html) and
+[CDLA-Permissive-2.0](https://spdx.org/licenses/CDLA-Permissive-2.0.html) definitions.
+Existing notice and redistribution requirements still apply.
+The Cargo-adjacent `osv-scanner.toml` corrects only `allo-isolate` 0.1.27's
+license metadata: its published `LICENSE` is Apache-2.0, while its Cargo manifest
+uses `license-file` rather than an SPDX expression. The exact license hash is
+recorded in that configuration. No vulnerability or package is ignored, and
+`non-standard` licenses are not generally allowed. Re-review this correction
+when updating that crate.
+
 ## Acceptance
 
 The application suite includes raw HTTP/TLS cancellation, size/UTF-8 limits,

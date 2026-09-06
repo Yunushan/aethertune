@@ -51,7 +51,8 @@ Future<List<Map<String, Object?>>> _certificates(
     trusted.listen((request) async {
       acceptedRequests++;
       authorized =
-          request.headers.value('authorization') == nativeSyncAcceptanceHeaders['authorization'];
+          request.headers.value('authorization') ==
+          nativeSyncAcceptanceHeaders['authorization'];
       correctBody =
           request.method == 'PUT' &&
           await utf8.decoder.bind(request).join() ==

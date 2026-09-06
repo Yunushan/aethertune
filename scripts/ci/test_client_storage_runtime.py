@@ -3,7 +3,12 @@
 
 import errno
 import json
+import os
 from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
 from types import SimpleNamespace
 import tempfile
 import unittest
@@ -13,6 +18,93 @@ import client_storage_runtime as runtime
 
 
 class StorageFixtureTest(unittest.TestCase):
+    def test_staging_preserves_native_assets_and_source_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / 'private-checkout' / 'bundle'
+            executable = source / 'bin' / 'probe'
+            library = source / 'lib' / 'libsqlite3.so'
+            executable.parent.mkdir(parents=True)
+            library.parent.mkdir()
+            executable.write_bytes(b'compiled fixture')
+            library.write_bytes(b'native asset')
+            before = {path: (path.read_bytes(), path.stat().st_mode) for path in (executable, library)}
+            staged, hashes = runtime.stage_probe_bundle(executable, root / 'staged')
+            self.assertEqual(staged, root / 'staged/bin/probe')
+            self.assertEqual(hashes, {'bin/probe': runtime.digest(executable),
+                                      'lib/libsqlite3.so': runtime.digest(library)})
+            for path, (data, mode) in before.items():
+                self.assertEqual(path.read_bytes(), data)
+                self.assertEqual(path.stat().st_mode, mode)
+                target = root / 'staged' / path.relative_to(source)
+                self.assertEqual(target.read_bytes(), data)
+                if os.name == 'posix':
+                    self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755 if path == executable else 0o644)
+            if os.name == 'posix':
+                for directory in (staged.parent, staged.parent.parent, root / 'staged/lib'):
+                    self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o755)
+            with self.assertRaises(FileExistsError):
+                runtime.stage_probe_bundle(executable, root / 'staged')
+
+    def test_staging_rejects_links_and_non_bundle_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / 'bundle/bin/probe'
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b'fixture')
+            with patch.object(Path, 'is_symlink', side_effect=lambda: True):
+                with self.assertRaisesRegex(AssertionError, 'symbolic link'):
+                    runtime.stage_probe_bundle(executable, root / 'staged')
+            with self.assertRaisesRegex(AssertionError, 'CLI bundle/bin'):
+                runtime.stage_probe_bundle(root / 'probe', root / 'staged')
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX file types')
+    def test_staging_rejects_special_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / 'bundle/bin/probe'
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b'fixture')
+            os.mkfifo(executable.parent / 'pipe')
+            with self.assertRaisesRegex(AssertionError, 'non-regular file'):
+                runtime.stage_probe_bundle(executable, root / 'staged')
+
+    def test_staging_detects_copy_corruption(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / 'bundle/bin/probe'
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b'fixture')
+            with patch.object(runtime.shutil, 'copyfile', side_effect=lambda source, target, **kwargs: target.write_bytes(b'bad')):
+                with self.assertRaisesRegex(AssertionError, 'changed probe bundle bytes'):
+                    runtime.stage_probe_bundle(executable, root / 'staged')
+
+    @unittest.skipUnless(sys.platform == 'linux' and getattr(os, 'geteuid', lambda: -1)() == 0,
+                         'Requires Linux root to launch the unprivileged fixture')
+    def test_unprivileged_process_uses_staged_bundle_from_private_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            root.chmod(0o755)
+            private = root / 'checkout'
+            private.mkdir(mode=0o700)
+            executable = private / 'bundle/bin/probe'
+            executable.parent.mkdir(parents=True)
+            shutil.copyfile(Path(sys.executable).resolve(), executable)
+            executable.chmod(0o700)
+            library = private / 'bundle/lib/marker'
+            library.parent.mkdir()
+            library.write_text('native fixture asset')
+            options = {'user': 65534, 'group': 65534, 'extra_groups': [], 'timeout': 5,
+                       'check': True, 'capture_output': True, 'text': True}
+            with self.assertRaises(PermissionError):
+                subprocess.run([str(executable), '-c', 'pass'], **options)
+            staged, _ = runtime.stage_probe_bundle(executable, root / 'staged')
+            result = subprocess.run([str(staged), '-c',
+                'import os,pathlib,sys; print(os.getuid(), (pathlib.Path(sys.executable).parent.parent / "lib/marker").read_text())'],
+                **options)
+            self.assertEqual(result.stdout.strip(), '65534 native fixture asset')
+            self.assertEqual(stat.S_IMODE(private.stat().st_mode), 0o700)
+
     def test_kill_requires_a_live_process_and_waits_for_its_exit(self):
         probe = object.__new__(runtime.Probe)
         probe.process = Mock()

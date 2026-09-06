@@ -31,7 +31,7 @@ jobs:
             -r
             ./
             --allow-no-lockfiles
-            --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
+            --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,CDLA-Permissive-2.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-3.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
 
       - name: Enforce vulnerability and license policy
         uses: google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8

@@ -18,6 +18,8 @@ Local changes:
 - Return errors for invalid HTTP methods and absent request-body streams instead
   of aborting the host process. Connection errors do not unwrap an absent cause.
 - Android verifier discovery uses locked Cargo metadata resolution.
+- Read Android Gradle's numeric `compileSdk` property; legacy display strings
+  such as `android-37.0` are not integer API levels.
 - Resolve native advisories with h2 0.4.16, quinn-proto 0.11.15 and anyhow 1.0.103.
 - Add optional `maxStreamResponseBytes` (uint32) for decoded stream responses.
   It rejects known oversize lengths and enforces cumulative chunk size before

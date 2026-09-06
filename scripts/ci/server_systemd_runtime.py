@@ -85,6 +85,16 @@ def mutation(revision, name):
             'snapshot': {'syncVersion': 1, 'version': 1, 'name': name, 'tracks': []}}
 
 
+def publish_evidence(evidence, names, owner):
+    require(evidence.is_dir() and not evidence.is_symlink(), 'Evidence must be a real directory')
+    for name in names:
+        require(Path(name).name == name, 'Evidence name must not escape its directory')
+        path = evidence / name
+        require(path.is_file() and not path.is_symlink(), 'Evidence must be a regular file')
+        os.chown(path, owner.st_uid, owner.st_gid, follow_symlinks=False)
+    os.chown(evidence, owner.st_uid, owner.st_gid, follow_symlinks=False)
+
+
 def run(executable, evidence):
     require(sys.platform == 'linux' and os.geteuid() == 0, 'Run as root on a Linux systemd test host.')
     command('systemctl', 'show', '--property=Version')
@@ -96,7 +106,8 @@ def run(executable, evidence):
     unit_paths = [Path('/run/systemd/system') / unit for unit in units]
     for path in [assets, data, private_data, *unit_paths]:
         require(not path.exists() and not path.is_symlink(), f'Fixture path already exists: {path}')
-    evidence.mkdir(parents=True, exist_ok=True)
+    evidence_owner = evidence.parent.stat()
+    evidence.mkdir(mode=0o700, exist_ok=False)
     assets.mkdir(mode=0o755)
     assets.chmod(0o755)
     backups = assets / 'backups'
@@ -104,6 +115,7 @@ def run(executable, evidence):
     installed_units = []
     original = None
     credentials = []
+    evidence_names = []
     report = {'result': 'failed', 'fixture': identity, 'checks': [],
               'scope': 'Isolated systemd deployment fixture; not production load or RPO/RTO.'}
     try:
@@ -212,6 +224,7 @@ def run(executable, evidence):
                 for secret in credentials:
                     log = log.replace(secret, '[redacted]')
                 (evidence / (unit + '.log')).write_text(log + '\n', encoding='utf-8')
+                evidence_names.append(unit + '.log')
                 require(not exposed, 'Service journal exposed a fixture credential.')
             except Exception as error:
                 cleanup_errors.append(str(error))
@@ -239,6 +252,8 @@ def run(executable, evidence):
         if cleanup_errors:
             report['result'] = 'failed'
         (evidence / 'systemd-runtime.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+        # Preserve private report modes while allowing the non-root artifact uploader to read them.
+        publish_evidence(evidence, [*evidence_names, 'systemd-runtime.json'], evidence_owner)
         require(not cleanup_errors, f'Fixture cleanup failed: {cleanup_errors}; inspect {identity}.')
     require(report['result'] == 'passed', 'Systemd runtime validation failed.')
     print(json.dumps(report, indent=2))

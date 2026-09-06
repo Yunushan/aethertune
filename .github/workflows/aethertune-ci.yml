@@ -110,6 +110,11 @@ jobs:
       - name: Test native client storage fixture
         run: python3 scripts/ci/test_client_storage_runtime.py
 
+      - name: Test Linux fixture permissions and evidence ownership
+        run: |
+          sudo -n python3 scripts/ci/test_client_storage_runtime.py
+          sudo -n python3 scripts/ci/test_server_systemd_runtime.py
+
       - name: Test production operations workflow
         run: python3 scripts/ci/test_production_ops_workflow.py
 
