@@ -20,6 +20,61 @@ SPEC.loader.exec_module(platform_config)
 
 
 class AndroidPlaybackWidgetTest(unittest.TestCase):
+    def test_ios_background_engine_runs_before_registering_handlers(self) -> None:
+        source = platform_config._APP_DELEGATE_SWIFT
+        startup = source.split("private func runOfflineCacheTask(", 1)[1].split(
+            "private func finishOfflineCacheTask(", 1
+        )[0]
+        self.assertLess(
+            startup.index("engine.run("),
+            startup.index("GeneratedPluginRegistrant.register(with: engine)"),
+        )
+        self.assertLess(
+            startup.index("engine.run("),
+            startup.index("configureOfflineCacheChannel("),
+        )
+        self.assertIn(
+            'guard engine.run(withEntrypoint: "offlineCacheBackgroundEntrypoint") else {\n'
+            '            gate.terminate()\n'
+            '            return\n'
+            '        }',
+            startup,
+        )
+
+    def test_android_background_plugins_are_registered_once(self) -> None:
+        source = platform_config._OFFLINE_CACHE_JOB_KOTLIN
+        self.assertIn("FlutterEngine(applicationContext, null, false)", source)
+        self.assertEqual(source.count("GeneratedPluginRegistrant.registerWith(engine)"), 1)
+        self.assertLess(
+            source.index("GeneratedPluginRegistrant.registerWith(engine)"),
+            source.index("engine.dartExecutor.executeDartEntrypoint("),
+        )
+
+    def test_ios_startup_verifier_rejects_unsafe_registration_and_cleanup(self) -> None:
+        source = platform_config._APP_DELEGATE_SWIFT
+        platform_config._verify_ios_background_startup(source)
+        registration = "        GeneratedPluginRegistrant.register(with: engine)\n"
+        guard = '        guard engine.run(withEntrypoint: "offlineCacheBackgroundEntrypoint") else {'
+        wrong_order = source.replace(registration, "").replace(guard, registration + guard)
+        no_cleanup = source.replace("            gate.terminate()\n", "")
+        no_return = source.replace("            gate.terminate()\n            return\n", "            gate.terminate()\n")
+        for mutation in (wrong_order, no_cleanup, no_return):
+            with self.subTest(source=mutation[mutation.index(guard):][:100]):
+                with self.assertRaisesRegex(RuntimeError, "successful engine startup"):
+                    platform_config._verify_ios_background_startup(mutation)
+
+    def test_background_shutdown_helpers_match_generated_sources(self) -> None:
+        self.assertTrue(platform_config._OFFLINE_CACHE_JOB_KOTLIN.endswith(
+            platform_config._OFFLINE_CACHE_SHUTDOWN_KOTLIN
+        ))
+        self.assertTrue(platform_config._APP_DELEGATE_SWIFT.endswith(
+            platform_config._OFFLINE_CACHE_SHUTDOWN_SWIFT
+        ))
+        self.assertNotIn("override fun onResume()", platform_config._MAIN_ACTIVITY_KOTLIN)
+        self.assertIn("result.success(stopped)", platform_config._MAIN_ACTIVITY_KOTLIN)
+        self.assertIn("activeEngine !== engine || activeGate !== gate", platform_config._OFFLINE_CACHE_JOB_KOTLIN)
+        self.assertIn("self.activeOfflineCacheEngine !== engine", platform_config._APP_DELEGATE_SWIFT)
+
     def test_stale_android_signing_configuration_fails_closed(self) -> None:
         stale_gradle = """android {
     defaultConfig {

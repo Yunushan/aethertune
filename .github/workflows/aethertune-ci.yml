@@ -29,14 +29,14 @@ jobs:
         run: bash scripts/ci/setup_flutter.sh
 
       - name: Verify Dart formatting
-        run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+        run: dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test apps/mobile/integration_test services/server/bin services/server/lib services/server/test scripts/ci/library_storage_probe/bin scripts/ci/library_storage_probe/tool
 
       - name: Capture Dart formatting patch
         if: ${{ always() }}
         shell: bash
         run: |
           format_status=0
-          dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test || format_status=$?
+          dart format apps/mobile/lib apps/mobile/test apps/mobile/integration_test services/server/bin services/server/lib services/server/test scripts/ci/library_storage_probe/bin scripts/ci/library_storage_probe/tool || format_status=$?
           mkdir -p build/dart-format
           git diff --binary > build/dart-format/dart-format.patch
           exit "$format_status"
@@ -51,6 +51,12 @@ jobs:
 
       - name: Test SBOM generator
         run: python3 scripts/ci/test_generate_dart_sbom.py
+
+      - name: Test native transport provenance
+        run: |
+          python3 scripts/ci/test_native_transport_policy.py
+          python3 scripts/ci/test_generate_native_transport_sbom.py
+          python3 scripts/ci/test_windows_sync_acceptance.py
 
       - name: Test release manifest generator
         run: python3 scripts/ci/test_generate_release_manifest.py
@@ -95,6 +101,15 @@ jobs:
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 
+      - name: Test container vulnerability gate
+        run: python3 scripts/ci/test_scan_server_container.py
+
+      - name: Test container runtime fixture
+        run: python3 scripts/ci/test_server_container_runtime.py
+
+      - name: Test native client storage fixture
+        run: python3 scripts/ci/test_client_storage_runtime.py
+
       - name: Test production operations workflow
         run: python3 scripts/ci/test_production_ops_workflow.py
 
@@ -119,6 +134,22 @@ jobs:
       - name: Test toolchain pin policy
         run: python3 scripts/ci/test_toolchain_policy.py
 
+      - name: Execute native background shutdown state machines
+        run: |
+          python3 scripts/ci/test_native_background_shutdown.py --language kotlin --evidence build/native-background-shutdown/kotlin
+          python3 scripts/ci/test_native_background_shutdown.py --language swift --evidence build/native-background-shutdown/swift
+
+      - name: Upload native background shutdown evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-native-background-shutdown-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/native-background-shutdown/**/*.json
+            build/native-background-shutdown/**/*.log
+
       - name: Test shell syntax
         run: bash scripts/ci/test_shell_syntax.sh
 
@@ -141,6 +172,8 @@ jobs:
 
       - name: Generate reproducible SBOMs
         run: |
+          python3 scripts/ci/generate_native_transport_sbom.py --output build/provenance/aethertune-native-transport.cdx.json
+          python3 scripts/ci/generate_native_transport_sbom.py --output build/provenance/aethertune-native-transport.cdx.json --check
           python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output build/provenance/aethertune-mobile.cdx.json
           python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-server-dependencies.json --component-name aethertune-server --output build/provenance/aethertune-server.cdx.json
           python3 scripts/ci/generate_dart_sbom.py --deps-json build/provenance/aethertune-mobile-dependencies.json --component-name aethertune-mobile --output build/provenance/aethertune-mobile.cdx.json --check
@@ -177,7 +210,10 @@ jobs:
           cd apps/mobile
           bash ../../scripts/ci/flutter_analyze_with_annotations.sh
 
-      - name: Test
+      - name: Build and test native transport
+        run: python3 scripts/ci/build_native_transport.py --install-toolchain --test
+
+      - name: Test Flutter application
         run: cd apps/mobile && flutter test --coverage
 
       - name: Enforce mobile line coverage floor
@@ -256,7 +292,7 @@ jobs:
         if: matrix.target == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config xvfb
+          sudo apt-get install -y build-essential clang cmake dbus-x11 gnome-keyring libasound2-dev libayatana-appindicator3-dev libgtk-3-dev libkeybinder-3.0-dev liblzma-dev libmpv-dev libsecret-1-0 libsecret-1-dev ninja-build pkg-config pulseaudio pulseaudio-utils xauth xvfb
 
       - name: Set up Flutter
         if: runner.os != 'Windows'
@@ -270,6 +306,45 @@ jobs:
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: Build native client storage probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd scripts/ci/library_storage_probe
+          dart pub get --enforce-lockfile
+          dart run tool/verify_dependencies.dart
+          dart run tool/test_dependency_policy.dart
+          dart analyze
+          dart build cli --target bin/library_storage_probe.dart --output ../../../build/client-storage-probe
+
+      - name: Verify native client storage interruption
+        if: matrix.target != 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe=build/client-storage-probe/bundle/bin/library_storage_probe
+          if [[ "$RUNNER_OS" == 'Windows' ]]; then probe+='.exe'; fi
+          python scripts/ci/client_storage_runtime.py --executable "$probe" --evidence build/client-storage-runtime
+
+      - name: Verify Linux client storage interruption and real ENOSPC
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n --preserve-env=GITHUB_SHA unshare --mount --propagation private \
+            python3 scripts/ci/client_storage_runtime.py \
+            --executable build/client-storage-probe/bundle/bin/library_storage_probe \
+            --evidence build/client-storage-runtime --disk-full
+
+      - name: Upload native client storage evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-client-storage-${{ matrix.target }}-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/client-storage-runtime/
 
       - name: Verify Windows SMTC toolchain
         if: matrix.target == 'windows'
@@ -301,10 +376,30 @@ jobs:
           bash ./scripts/ci/test_package_linux_deb.sh
           bash ./scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/debug/bundle build/aethertune-linux-x64-debug.tar.gz
 
+      - name: Verify Linux native startup storage and playback
+        if: matrix.target == 'linux'
+        timeout-minutes: 20
+        shell: bash
+        run: bash scripts/ci/run_linux_native_acceptance.sh --evidence build/linux-native-acceptance
+
+      - name: Upload Linux native acceptance evidence
+        if: ${{ always() && matrix.target == 'linux' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-linux-native-acceptance-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/linux-native-acceptance/*.json
+            build/linux-native-acceptance/*.log
+            build/linux-native-acceptance/*.png
+
       - name: Test Windows ZIP packaging
         if: matrix.target == 'windows'
         shell: pwsh
         run: |
+          ./scripts/ci/test_windows_runtime.ps1
+          ./scripts/ci/test_windows_native_dependencies.ps1
           ./scripts/ci/test_package_windows_zip.ps1
           ./scripts/ci/test_package_windows_msix.ps1
 
@@ -332,7 +427,7 @@ jobs:
   server:
     name: Server analyze and test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -357,6 +452,20 @@ jobs:
       - name: Build and smoke-test Docker deployment
         run: bash scripts/ci/test_server_compose.sh
 
+      - name: Enforce container vulnerability policy
+        run: >-
+          python3 scripts/ci/scan_server_container.py
+          --evidence build/container-scan
+
+      - name: Upload container scan evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-ci-container-scan-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/container-scan/
+
       - name: Test operations probe deployment contract
         run: python3 scripts/ci/test_server_ops_probe_contract.py
 
@@ -373,6 +482,7 @@ jobs:
         run: |
           sudo install -D -m 0755 services/server/build/aethertune-server /usr/local/bin/aethertune-server
           sudo install -D -m 0755 services/server/deploy/aethertune-backup.sh /usr/local/libexec/aethertune-backup.sh
+          sudo install -D -m 0644 services/server/deploy/aethertune-backup.py /usr/local/libexec/aethertune-backup.py
           sudo install -D -m 0755 services/server/deploy/aethertune-verify-backups.sh /usr/local/libexec/aethertune-verify-backups.sh
           sudo install -D -m 0755 services/server/deploy/aethertune-ops-probe.sh /usr/local/libexec/aethertune-ops-probe.sh
 
@@ -424,6 +534,27 @@ jobs:
             printf 'result=starting\n'
           } > build/server-recovery-drill/metadata.txt
 
+          python3 scripts/ci/test_server_backup.py 2>&1 \
+            | tee build/server-recovery-drill/backup-unit.log
+          backup_unit_status=${PIPESTATUS[0]}
+
+          sudo -n python3 scripts/ci/test_server_backup_privileges.py 2>&1 \
+            | tee build/server-recovery-drill/backup-privileges.log
+          backup_privileges_status=${PIPESTATUS[0]}
+
+          sudo -n env SOURCE_COMMIT_SHA="$SOURCE_COMMIT_SHA" \
+            python3 scripts/ci/server_systemd_runtime.py \
+            --executable services/server/build/aethertune-server \
+            --evidence build/server-recovery-drill/systemd 2>&1 \
+            | tee build/server-recovery-drill/systemd.log
+          systemd_status=${PIPESTATUS[0]}
+
+          python3 scripts/ci/server_recovery_runtime.py \
+            --executable services/server/build/aethertune-server \
+            --evidence build/server-recovery-drill/runtime 2>&1 \
+            | tee build/server-recovery-drill/runtime.log
+          runtime_status=${PIPESTATUS[0]}
+
           bash scripts/ci/test_server_backup_restore.sh 2>&1 \
             | tee build/server-recovery-drill/backup-restore.log
           backup_restore_status=${PIPESTATUS[0]}
@@ -433,7 +564,7 @@ jobs:
           rollback_status=${PIPESTATUS[0]}
 
           result=passed
-          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 ]]; then
+          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 || "$backup_unit_status" -ne 0 || "$runtime_status" -ne 0 || "$backup_privileges_status" -ne 0 || "$systemd_status" -ne 0 ]]; then
             result=failed
           fi
           {
@@ -443,6 +574,10 @@ jobs:
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             printf 'backup_restore_status=%s\n' "$backup_restore_status"
             printf 'rollback_status=%s\n' "$rollback_status"
+            printf 'backup_unit_status=%s\n' "$backup_unit_status"
+            printf 'backup_privileges_status=%s\n' "$backup_privileges_status"
+            printf 'systemd_status=%s\n' "$systemd_status"
+            printf 'runtime_status=%s\n' "$runtime_status"
             printf 'result=%s\n' "$result"
           } > build/server-recovery-drill/metadata.txt
           if [[ "$result" != 'passed' ]]; then

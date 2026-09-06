@@ -49,11 +49,6 @@ class MainActivity : AudioServiceActivity() {
         dispatchLauncherShortcut(intent)
     }
 
-    override fun onResume() {
-        super.onResume()
-        AetherTuneOfflineCacheJobService.cancel(applicationContext)
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         EventChannel(
@@ -204,8 +199,9 @@ class MainActivity : AudioServiceActivity() {
                     ),
                 )
                 "cancel" -> {
-                    AetherTuneOfflineCacheJobService.cancel(applicationContext)
-                    result.success(null)
+                    AetherTuneOfflineCacheJobService.cancel(applicationContext) { stopped ->
+                        result.success(stopped)
+                    }
                 }
                 else -> result.notImplemented()
             }

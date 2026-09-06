@@ -60,10 +60,10 @@ class DependencyLockPolicyTest(unittest.TestCase):
         )
         self.assertRegex(
             dockerfile,
-            r"FROM debian:bookworm-slim@sha256:[0-9a-f]{64}",
+            r"FROM gcr.io/distroless/cc-debian13:nonroot@sha256:[0-9a-f]{64}",
         )
         self.assertNotRegex(dockerfile, r"FROM dart:[^@\s]+ AS build")
-        self.assertNotIn("FROM debian:bookworm-slim\n", dockerfile)
+        self.assertNotRegex(dockerfile, r"FROM gcr.io/distroless/[^@\s]+\n")
 
     def test_osv_scan_covers_locked_pub_graphs_and_license_policy(self) -> None:
         workflow = OSV_WORKFLOW.read_text(encoding="utf-8")

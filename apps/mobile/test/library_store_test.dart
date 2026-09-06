@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/internet_archive_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
+import 'package:aethertune/src/data/library_storage.dart';
 import 'package:aethertune/src/domain/desktop_tray_action.dart';
 import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/domain/artwork_crop.dart';
@@ -16,6 +17,7 @@ import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/domain/track_chapter.dart';
 import 'package:aethertune/src/domain/track_lyrics.dart';
 import 'package:aethertune/src/domain/track_skip_segment.dart';
+import 'support/library_storage_fixture.dart';
 
 void main() {
   setUp(() {
@@ -45,9 +47,9 @@ void main() {
     final store = LibraryStore();
     await store.load();
 
-    final prefs = await SharedPreferences.getInstance();
+    final persisted = (await createLibraryStorage().read())!;
     expect(
-      prefs.getInt('aethertune.library_schema_version.v1'),
+      persisted.values['aethertune.library_schema_version.v1'],
       LibraryStore.currentLibrarySchemaVersion,
     );
   });
@@ -61,9 +63,9 @@ void main() {
     await store.load();
 
     expect(store.onboardingCompleted, isTrue);
-    final prefs = await SharedPreferences.getInstance();
+    final persisted = (await createLibraryStorage().read())!;
     expect(
-      prefs.getInt('aethertune.library_schema_version.v1'),
+      persisted.values['aethertune.library_schema_version.v1'],
       LibraryStore.currentLibrarySchemaVersion,
     );
   });
@@ -84,7 +86,9 @@ void main() {
 
   test('persists, merges, sorts, and filters user track ratings', () async {
     final local = LibraryStore();
-    final remote = LibraryStore();
+    final remote = LibraryStore(
+      storage: PreferencesLibraryStorageFixture(key: 'test.remote'),
+    );
     await Future.wait<void>(<Future<void>>[local.load(), remote.load()]);
     await local.addTracks(<Track>[
       _track('three', title: 'Three'),
@@ -191,7 +195,10 @@ void main() {
     () async {
       final now = DateTime.utc(2026, 2, 1);
       final local = LibraryStore(clock: () => now);
-      final remote = LibraryStore(clock: () => now);
+      final remote = LibraryStore(
+        clock: () => now,
+        storage: PreferencesLibraryStorageFixture(key: 'test.remote'),
+      );
       await local.load();
       await remote.load();
       await local.addTracks(<Track>[_track('local'), _track('shared')]);
@@ -293,7 +300,10 @@ void main() {
       var now = DateTime.utc(2026, 7, 18, 9);
       DateTime clock() => now;
       final local = LibraryStore(clock: clock);
-      final remote = LibraryStore(clock: clock);
+      final remote = LibraryStore(
+        clock: clock,
+        storage: PreferencesLibraryStorageFixture(key: 'test.remote'),
+      );
       await local.load();
       await remote.load();
       await local.addTracks(<Track>[_track('shared')]);
@@ -3677,6 +3687,7 @@ void main() {
       'Highlights',
     );
 
+    await restored.reloadSavedLibrary();
     final secondBookmark = await restored.addTrackBookmark(
       'podcast',
       const Duration(minutes: 18),
@@ -4344,6 +4355,7 @@ void main() {
       ..remove('languagePreference')
       ..remove('offlineCacheLimitMegabytes')
       ..remove('offlineCacheProviderLimitMegabytes');
+    await secondStore.reloadSavedLibrary();
     await secondStore.restoreBackupJson(jsonEncode(legacyBackup));
 
     expect(secondStore.offlineModeEnabled, isFalse);
@@ -4635,6 +4647,7 @@ void main() {
       expect(legacyStore.offlineCacheQueue.single.cachedByteCount, 0);
       expect(legacyStore.offlineCacheQueue.single.cachedMediaChecksum, '');
 
+      await thirdStore.reloadSavedLibrary();
       await thirdStore.removeOfflineCacheEntry(entry.id);
       expect(thirdStore.offlineCacheQueue, isEmpty);
 
@@ -4753,18 +4766,19 @@ void main() {
       reason: 'Evicted to keep cache under 500.0 MB.',
     );
 
-    expect(evicted!.status, OfflineCacheEntryStatus.queued);
+    expect(evicted!.status, OfflineCacheEntryStatus.paused);
     expect(evicted.reason, 'Evicted to keep cache under 500.0 MB.');
     expect(evicted.track.localPath, '');
     expect(evicted.cachedByteCount, 0);
     expect(evicted.cachedMediaChecksum, '');
     expect(store.tracks.single.localPath, '');
     expect(store.search('', offlineOnly: true), isEmpty);
+    expect(store.hasPendingOfflineCacheWork, isFalse);
 
     now = DateTime.utc(2026, 1, 16, 17);
     final paused = await store.pauseOfflineCacheEntry(queued.id);
     expect(paused!.status, OfflineCacheEntryStatus.paused);
-    expect(paused.reason, 'Paused by user.');
+    expect(paused.reason, 'Evicted to keep cache under 500.0 MB.');
 
     final persistedPausedStore = LibraryStore(clock: clock);
     await persistedPausedStore.load();

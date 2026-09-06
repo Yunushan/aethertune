@@ -483,11 +483,6 @@ class MainActivity : AudioServiceActivity() {
         dispatchLauncherShortcut(intent)
     }
 
-    override fun onResume() {
-        super.onResume()
-        AetherTuneOfflineCacheJobService.cancel(applicationContext)
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         EventChannel(
@@ -638,8 +633,9 @@ class MainActivity : AudioServiceActivity() {
                     ),
                 )
                 "cancel" -> {
-                    AetherTuneOfflineCacheJobService.cancel(applicationContext)
-                    result.success(null)
+                    AetherTuneOfflineCacheJobService.cancel(applicationContext) { stopped ->
+                        result.success(stopped)
+                    }
                 }
                 else -> result.notImplemented()
             }
@@ -1376,6 +1372,83 @@ private class AetherTuneAudioVirtualizer {
 }
 """
 
+_OFFLINE_CACHE_SHUTDOWN_KOTLIN = """
+// All calls are serialized on the platform main thread.
+internal class OfflineCacheShutdownGate(
+    private val requestStop: ((Boolean) -> Unit) -> Unit,
+    private val armDeadline: (() -> Unit) -> (() -> Unit),
+    private val finish: (Boolean, Boolean) -> Boolean,
+) {
+    var stopRequested = false
+        private set
+    private var ready = false
+    private var stopSent = false
+    private var closed = false
+    private var acknowledged = false
+    private var cancelDeadline: (() -> Unit)? = null
+    private val waiters = mutableListOf<(Boolean) -> Unit>()
+
+    fun cancel(reply: (Boolean) -> Unit) {
+        if (closed) {
+            reply(acknowledged)
+            return
+        }
+        stopRequested = true
+        waiters.add(reply)
+        if (cancelDeadline == null) {
+            cancelDeadline = armDeadline {
+                cancelDeadline = null
+                // Timeout is not evidence of quiescence. Leave the engine alive.
+                replyAll(false)
+            }
+        }
+        sendStopIfReady()
+    }
+
+    fun markReady(): Boolean {
+        if (closed) return false
+        ready = true
+        sendStopIfReady()
+        return !stopRequested && !closed
+    }
+
+    private fun sendStopIfReady() {
+        if (!ready || !stopRequested || stopSent || closed) return
+        stopSent = true
+        requestStop { stopped ->
+            if (closed) return@requestStop
+            if (stopped) {
+                complete()
+            } else {
+                stopSent = false
+                cancelDeadline?.invoke()
+                cancelDeadline = null
+                replyAll(false)
+            }
+        }
+    }
+
+    fun complete() = settle(true)
+    fun terminate() = settle(false)
+
+    private fun settle(graceful: Boolean) {
+        if (closed) return
+        closed = true
+        cancelDeadline?.invoke()
+        cancelDeadline = null
+        val disposed = try { finish(graceful, stopRequested) } catch (_: Exception) { false }
+        acknowledged = graceful && disposed
+        replyAll(acknowledged)
+    }
+
+    private fun replyAll(stopped: Boolean) {
+        val replies = waiters.toList()
+        waiters.clear()
+        replies.forEach { it(stopped) }
+    }
+}
+"""
+
 _OFFLINE_CACHE_JOB_KOTLIN = """package dev.aethertune.aethertune
 
 import android.app.job.JobInfo
@@ -1384,76 +1457,138 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.os.PersistableBundle
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugins.GeneratedPluginRegistrant
+import java.util.UUID
 
 class AetherTuneOfflineCacheJobService : JobService() {
     private var activeEngine: FlutterEngine? = null
     private var activeParameters: JobParameters? = null
+    private var activeGate: OfflineCacheShutdownGate? = null
+    private var jobStopped = false
+    private var hasPendingWork = true
+    private var nextRunDelayMillis: Long? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onStartJob(parameters: JobParameters): Boolean {
-        if (activeEngine != null) {
+        if (activeEngine != null || activeService != null || foregroundRequested) {
             return false
         }
+        jobStopped = false
+        hasPendingWork = true
+        nextRunDelayMillis = null
         activeParameters = parameters
-        val engine = FlutterEngine(applicationContext)
+        // Register once, after this service owns the engine and its cleanup gate.
+        val engine = FlutterEngine(applicationContext, null, false)
         activeEngine = engine
-        GeneratedPluginRegistrant.registerWith(engine)
-        MethodChannel(
+        activeService = this
+        val channel = MethodChannel(
             engine.dartExecutor.binaryMessenger,
             channelName,
-        ).setMethodCallHandler { call, result ->
-            if (call.method != "complete") {
-                result.notImplemented()
+        )
+        val gate = OfflineCacheShutdownGate(
+            requestStop = { reply ->
+                channel.invokeMethod("stop", null, object : MethodChannel.Result {
+                    override fun success(value: Any?) { reply(value == true) }
+                    override fun error(code: String, message: String?, details: Any?) { reply(false) }
+                    override fun notImplemented() { reply(false) }
+                })
+            },
+            armDeadline = { expired ->
+                val timeout = Runnable { expired() }
+                handler.postDelayed(timeout, 10_000L)
+                val cancel: () -> Unit = { handler.removeCallbacks(timeout) }
+                cancel
+            },
+            finish = { graceful, stopping -> finish(engine, graceful, stopping) },
+        )
+        activeGate = gate
+        channel.setMethodCallHandler { call, result ->
+            if (activeEngine !== engine || activeGate !== gate) {
+                result.error("stale-background-engine", "Background engine is no longer active.", null)
                 return@setMethodCallHandler
             }
-            val hasPendingWork = call.argument<Boolean>("hasPendingWork") ?: true
-            val nextRunDelayMillis =
-                call.argument<Number>("nextRunDelayMilliseconds")?.toLong()
-            result.success(null)
-            finish(hasPendingWork, nextRunDelayMillis)
+            when (call.method) {
+                "ready" -> result.success(gate.markReady())
+                "complete" -> {
+                    hasPendingWork = call.argument<Boolean>("hasPendingWork") ?: true
+                    nextRunDelayMillis = call.argument<Number>("nextRunDelayMilliseconds")?.toLong()
+                    result.success(null)
+                    gate.complete()
+                }
+                else -> result.notImplemented()
+            }
         }
-        engine.dartExecutor.executeDartEntrypoint(
-            DartExecutor.DartEntrypoint(
-                FlutterInjector.instance().flutterLoader().findAppBundlePath(),
-                dartEntrypoint,
-            ),
-        )
+        try {
+            GeneratedPluginRegistrant.registerWith(engine)
+            engine.dartExecutor.executeDartEntrypoint(
+                DartExecutor.DartEntrypoint(
+                    FlutterInjector.instance().flutterLoader().findAppBundlePath(),
+                    dartEntrypoint,
+                ),
+            )
+        } catch (_: Exception) {
+            jobStopped = true
+            gate.terminate()
+            return false
+        }
         return true
     }
 
     override fun onStopJob(parameters: JobParameters): Boolean {
-        disposeEngine()
-        return true
+        val active = activeParameters ?: return false
+        if (parameters.extras.getString(generationKey) != active.extras.getString(generationKey)) {
+            return false
+        }
+        jobStopped = true
+        activeGate?.terminate()
+        return !foregroundRequested
     }
 
-    private fun finish(hasPendingWork: Boolean, nextRunDelayMillis: Long?) {
-        val parameters = activeParameters ?: return
+    override fun onDestroy() {
+        jobStopped = true
+        activeGate?.terminate()
+        super.onDestroy()
+    }
+
+    private fun finish(engine: FlutterEngine, graceful: Boolean, stopping: Boolean): Boolean {
+        if (activeEngine !== engine) return false
+        // Never acknowledge a failed engine destruction as a successful handoff.
+        engine.destroy()
+        val parameters = activeParameters
         activeParameters = null
-        disposeEngine()
-        jobFinished(parameters, hasPendingWork)
-        if (!hasPendingWork && nextRunDelayMillis != null) {
+        activeEngine = null
+        activeGate = null
+        if (activeService === this) activeService = null
+        val reschedule = graceful && !stopping && !foregroundRequested
+        if (!jobStopped && parameters != null) {
+            jobFinished(parameters, reschedule && hasPendingWork)
+        }
+        if (reschedule && !hasPendingWork && nextRunDelayMillis != null) {
             schedule(applicationContext, nextRunDelayMillis)
         }
-    }
-
-    private fun disposeEngine() {
-        activeEngine?.destroy()
-        activeEngine = null
+        return true
     }
 
     companion object {
         private const val jobId = 18472
         private const val channelName = "dev.aethertune/offline_cache_background"
         private const val dartEntrypoint = "offlineCacheBackgroundEntrypoint"
+        private const val generationKey = "aethertune.offline-cache.generation"
+        private var activeService: AetherTuneOfflineCacheJobService? = null
+        private var foregroundRequested = false
 
         fun schedule(
             context: Context,
             requestedMinimumLatencyMillis: Long? = null,
         ): Boolean {
+            if (activeService != null) return false
             val scheduler = context.getSystemService(JobScheduler::class.java)
                 ?: return false
             val minimumLatencyMillis = (requestedMinimumLatencyMillis
@@ -1466,19 +1601,123 @@ class AetherTuneOfflineCacheJobService : JobService() {
                 ComponentName(context, AetherTuneOfflineCacheJobService::class.java),
             )
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setExtras(PersistableBundle().apply {
+                    putString(generationKey, UUID.randomUUID().toString())
+                })
                 .setMinimumLatency(minimumLatencyMillis)
                 .setPersisted(true)
                 .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
                 .build()
-            return scheduler.schedule(job) == JobScheduler.RESULT_SUCCESS
+            val scheduled = scheduler.schedule(job) == JobScheduler.RESULT_SUCCESS
+            if (scheduled) foregroundRequested = false
+            return scheduled
         }
 
-        fun cancel(context: Context) {
-            context.getSystemService(JobScheduler::class.java)?.cancel(jobId)
+        fun cancel(context: Context, reply: (Boolean) -> Unit) {
+            foregroundRequested = true
+            val scheduler = context.getSystemService(JobScheduler::class.java)
+            val service = activeService
+            if (service == null) {
+                scheduler?.cancel(jobId)
+                reply(true)
+                return
+            }
+            val gate = service.activeGate
+            if (gate == null) {
+                reply(false)
+                return
+            }
+            gate.cancel { stopped ->
+                if (stopped) scheduler?.cancel(jobId)
+                reply(stopped)
+            }
         }
 
         private const val defaultMinimumLatencyMillis = 30_000L
         private const val maximumMinimumLatencyMillis = 7 * 24 * 60 * 60 * 1_000L
+    }
+}
+""" + _OFFLINE_CACHE_SHUTDOWN_KOTLIN
+
+_OFFLINE_CACHE_SHUTDOWN_SWIFT = """
+// All calls are serialized on the platform main thread.
+final class OfflineCacheShutdownGate {
+    private let requestStop: (@escaping (Bool) -> Void) -> Void
+    private let armDeadline: (@escaping () -> Void) -> (() -> Void)
+    private let finish: (Bool, Bool) -> Bool
+    private(set) var stopRequested = false
+    private var ready = false
+    private var stopSent = false
+    private var closed = false
+    private var acknowledged = false
+    private var cancelDeadline: (() -> Void)?
+    private var waiters: [(Bool) -> Void] = []
+
+    init(
+        requestStop: @escaping (@escaping (Bool) -> Void) -> Void,
+        armDeadline: @escaping (@escaping () -> Void) -> (() -> Void),
+        finish: @escaping (Bool, Bool) -> Bool
+    ) {
+        self.requestStop = requestStop
+        self.armDeadline = armDeadline
+        self.finish = finish
+    }
+
+    func cancel(_ reply: @escaping (Bool) -> Void) {
+        guard !closed else { reply(acknowledged); return }
+        stopRequested = true
+        waiters.append(reply)
+        if cancelDeadline == nil {
+            cancelDeadline = armDeadline { [weak self] in
+                guard let self else { return }
+                self.cancelDeadline = nil
+                // Timeout is not evidence of quiescence. Leave the engine alive.
+                self.replyAll(false)
+            }
+        }
+        sendStopIfReady()
+    }
+
+    func markReady() -> Bool {
+        guard !closed else { return false }
+        ready = true
+        sendStopIfReady()
+        return !stopRequested && !closed
+    }
+
+    private func sendStopIfReady() {
+        guard ready && stopRequested && !stopSent && !closed else { return }
+        stopSent = true
+        requestStop { [weak self] stopped in
+            guard let self, !self.closed else { return }
+            if stopped {
+                self.complete()
+            } else {
+                self.stopSent = false
+                self.cancelDeadline?()
+                self.cancelDeadline = nil
+                self.replyAll(false)
+            }
+        }
+    }
+
+    func complete() { settle(graceful: true) }
+    func terminate() { settle(graceful: false) }
+
+    private func settle(graceful: Bool) {
+        guard !closed else { return }
+        closed = true
+        cancelDeadline?()
+        cancelDeadline = nil
+        let disposed = finish(graceful, stopRequested)
+        acknowledged = graceful && disposed
+        replyAll(acknowledged)
+    }
+
+    private func replyAll(_ stopped: Bool) {
+        let replies = waiters
+        waiters.removeAll()
+        for reply in replies { reply(stopped) }
     }
 }
 """
@@ -1494,6 +1733,10 @@ import UIKit
     private var audioRoutePickerController: UIViewController?
     private var activeOfflineCacheTask: BGProcessingTask?
     private var activeOfflineCacheEngine: FlutterEngine?
+    private var activeOfflineCacheGate: OfflineCacheShutdownGate?
+    private var foregroundOfflineCacheRequested = false
+    private var offlineCacheHasPendingWork = true
+    private var offlineCacheNextDelay: Double?
 
     override func application(
         _ application: UIApplication,
@@ -1527,7 +1770,7 @@ import UIKit
     private func registerOfflineCacheTask() {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.offlineCacheTaskIdentifier,
-            using: nil
+            using: .main
         ) { [weak self] task in
             guard let processingTask = task as? BGProcessingTask else {
                 task.setTaskCompleted(success: false)
@@ -1541,31 +1784,49 @@ import UIKit
         }
     }
 
-    private func configureOfflineCacheChannel(messenger: FlutterBinaryMessenger) {
+    private func configureOfflineCacheChannel(
+        messenger: FlutterBinaryMessenger,
+        engine: FlutterEngine? = nil
+    ) {
+        let isBackground = engine != nil
         let channel = FlutterMethodChannel(
             name: "dev.aethertune/offline_cache_background",
             binaryMessenger: messenger
         )
-        channel.setMethodCallHandler { [weak self] call, result in
+        channel.setMethodCallHandler { [weak self, weak engine] call, result in
+            guard let self else {
+                result(FlutterError(code: "engine-unavailable", message: nil, details: nil))
+                return
+            }
+            if isBackground && (engine == nil || self.activeOfflineCacheEngine !== engine) {
+                result(FlutterError(code: "stale-background-engine", message: nil, details: nil))
+                return
+            }
             switch call.method {
-            case "schedule":
+            case "schedule" where !isBackground:
                 let arguments = call.arguments as? [String: Any]
                 let delay = (arguments?["minimumLatencyMilliseconds"] as? NSNumber)?.doubleValue
-                result(self?.scheduleOfflineCacheTask(afterMilliseconds: delay) ?? false)
-            case "cancel":
+                result(self.scheduleOfflineCacheTask(afterMilliseconds: delay))
+            case "cancel" where !isBackground:
+                self.foregroundOfflineCacheRequested = true
                 BGTaskScheduler.shared.cancel(
                     taskRequestWithIdentifier: Self.offlineCacheTaskIdentifier
                 )
-                result(nil)
-            case "complete":
+                if let gate = self.activeOfflineCacheGate {
+                    gate.cancel { stopped in result(stopped) }
+                } else {
+                    result(self.activeOfflineCacheEngine == nil)
+                }
+            case "ready" where isBackground:
+                result(self.activeOfflineCacheGate?.markReady() ?? false)
+            case "complete" where isBackground:
                 let arguments = call.arguments as? [String: Any]
                 let hasPendingWork = (arguments?["hasPendingWork"] as? Bool) ?? true
                 let nextDelay = (arguments?["nextRunDelayMilliseconds"] as? NSNumber)?.doubleValue
-                self?.completeOfflineCacheTask(
-                    hasPendingWork: hasPendingWork,
-                    nextRunDelayMilliseconds: nextDelay
-                )
+                self.offlineCacheHasPendingWork = hasPendingWork
+                self.offlineCacheNextDelay = nextDelay
                 result(nil)
+                self.activeOfflineCacheGate?.complete()
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -1573,6 +1834,7 @@ import UIKit
     }
 
     private func scheduleOfflineCacheTask(afterMilliseconds delay: Double?) -> Bool {
+        guard activeOfflineCacheEngine == nil else { return false }
         let request = BGProcessingTaskRequest(
             identifier: Self.offlineCacheTaskIdentifier
         )
@@ -1584,6 +1846,7 @@ import UIKit
         )
         do {
             try BGTaskScheduler.shared.submit(request)
+            foregroundOfflineCacheRequested = false
             return true
         } catch {
             return false
@@ -1591,41 +1854,71 @@ import UIKit
     }
 
     private func runOfflineCacheTask(_ task: BGProcessingTask) {
-        guard activeOfflineCacheTask == nil else {
+        guard activeOfflineCacheTask == nil && !foregroundOfflineCacheRequested else {
             task.setTaskCompleted(success: false)
             return
         }
         let engine = FlutterEngine(name: "aethertune-offline-cache")
         activeOfflineCacheTask = task
         activeOfflineCacheEngine = engine
-        task.expirationHandler = { [weak self] in
-            self?.finishOfflineCacheTask(success: false)
+        offlineCacheHasPendingWork = true
+        offlineCacheNextDelay = nil
+        let channel = FlutterMethodChannel(
+            name: "dev.aethertune/offline_cache_background",
+            binaryMessenger: engine.binaryMessenger
+        )
+        let gate = OfflineCacheShutdownGate(
+            requestStop: { reply in
+                channel.invokeMethod("stop", arguments: nil) { value in
+                    reply((value as? Bool) == true)
+                }
+            },
+            armDeadline: { expired in
+                let timeout = DispatchWorkItem(block: expired)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
+                return { timeout.cancel() }
+            },
+            finish: { [weak self, weak engine] graceful, stopping in
+                guard let self, let engine else { return false }
+                return self.finishOfflineCacheTask(engine: engine, graceful: graceful, stopping: stopping)
+            }
+        )
+        activeOfflineCacheGate = gate
+        task.expirationHandler = { [weak self, weak engine] in
+            DispatchQueue.main.async {
+                guard let self, let engine, self.activeOfflineCacheEngine === engine else { return }
+                self.activeOfflineCacheGate?.terminate()
+            }
+        }
+        // iOS cannot install plugin or method-channel handlers before run succeeds.
+        guard engine.run(withEntrypoint: "offlineCacheBackgroundEntrypoint") else {
+            gate.terminate()
+            return
         }
         GeneratedPluginRegistrant.register(with: engine)
-        configureOfflineCacheChannel(messenger: engine.binaryMessenger)
-        if !engine.run(withEntrypoint: "offlineCacheBackgroundEntrypoint") {
-            finishOfflineCacheTask(success: false)
-        }
+        configureOfflineCacheChannel(messenger: engine.binaryMessenger, engine: engine)
     }
 
-    private func completeOfflineCacheTask(
-        hasPendingWork: Bool,
-        nextRunDelayMilliseconds: Double?
-    ) {
-        if hasPendingWork {
-            _ = scheduleOfflineCacheTask(afterMilliseconds: 30_000)
-        } else if let nextRunDelayMilliseconds {
-            _ = scheduleOfflineCacheTask(afterMilliseconds: nextRunDelayMilliseconds)
-        }
-        finishOfflineCacheTask(success: true)
-    }
-
-    private func finishOfflineCacheTask(success: Bool) {
+    private func finishOfflineCacheTask(
+        engine: FlutterEngine,
+        graceful: Bool,
+        stopping: Bool
+    ) -> Bool {
+        guard activeOfflineCacheEngine === engine else { return false }
         let task = activeOfflineCacheTask
+        engine.destroyContext()
         activeOfflineCacheTask = nil
-        activeOfflineCacheEngine?.destroyContext()
         activeOfflineCacheEngine = nil
-        task?.setTaskCompleted(success: success)
+        activeOfflineCacheGate = nil
+        task?.setTaskCompleted(success: graceful)
+        if graceful && !stopping && !foregroundOfflineCacheRequested {
+            if offlineCacheHasPendingWork {
+                _ = scheduleOfflineCacheTask(afterMilliseconds: 30_000)
+            } else if let delay = offlineCacheNextDelay {
+                _ = scheduleOfflineCacheTask(afterMilliseconds: delay)
+            }
+        }
+        return true
     }
 
     private func showAudioRoutePicker(from controller: UIViewController) -> Bool {
@@ -1660,7 +1953,7 @@ import UIKit
         audioRoutePickerController = nil
     }
 }
-"""
+""" + _OFFLINE_CACHE_SHUTDOWN_SWIFT
 
 
 def _find_named(
@@ -2590,15 +2883,23 @@ def verify_android(manifest_path: Path, gradle_path: Path) -> None:
         "setPersisted(true)",
         "setMinimumLatency(minimumLatencyMillis)",
         "setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)",
+        "FlutterEngine(applicationContext, null, false)",
         "GeneratedPluginRegistrant.registerWith",
         "offlineCacheBackgroundEntrypoint",
         "hasPendingWork",
         "nextRunDelayMillis",
         "maximumMinimumLatencyMillis",
-        "jobFinished(parameters, hasPendingWork)",
+        "jobFinished(parameters, reschedule && hasPendingWork)",
+        "OfflineCacheShutdownGate",
+        'channel.invokeMethod("stop"',
+        '"ready" -> result.success(gate.markReady())',
+        "handler.postDelayed(timeout, 10_000L)",
+        "replyAll(false)",
     )
     if not all(snippet in background_job_text for snippet in required_background_job_snippets):
         raise RuntimeError("Android offline-cache job source is incomplete")
+    if background_job_text.count("GeneratedPluginRegistrant.registerWith(engine)") != 1:
+        raise RuntimeError("Android background plugins must be registered exactly once")
     (
         shortcuts_xml,
         shortcut_strings,
@@ -2679,9 +2980,37 @@ def verify_ios(info_plist_path: Path, app_delegate_path: Path) -> None:
         "requiresNetworkConnectivity = true",
         "expirationHandler",
         "setTaskCompleted",
+        "OfflineCacheShutdownGate",
+        'channel.invokeMethod("stop"',
+        'case "ready" where isBackground:',
+        "using: .main",
+        "DispatchQueue.main.asyncAfter(deadline: .now() + 10",
+        "self.replyAll(false)",
     )
     if not all(snippet in app_delegate_source for snippet in required_route_picker_snippets):
         raise RuntimeError("iOS audio route picker is not configured")
+    _verify_ios_background_startup(app_delegate_source)
+
+
+def _verify_ios_background_startup(source: str) -> None:
+    _, start, remainder = source.partition("private func runOfflineCacheTask(")
+    startup, end, _ = remainder.partition("private func finishOfflineCacheTask(")
+    if not start or not end:
+        raise RuntimeError("iOS background startup method is missing")
+    required_order = (
+        'guard engine.run(withEntrypoint: "offlineCacheBackgroundEntrypoint") else {\n'
+        '            gate.terminate()\n'
+        '            return\n'
+        '        }',
+        "GeneratedPluginRegistrant.register(with: engine)",
+        "configureOfflineCacheChannel(messenger: engine.binaryMessenger, engine: engine)",
+    )
+    after = 0
+    for snippet in required_order:
+        offset = startup.find(snippet)
+        if offset < after or startup.count(snippet) != 1:
+            raise RuntimeError("iOS background handlers require successful engine startup first")
+        after = offset + len(snippet)
 
 
 def verify_macos(info_plist_path: Path) -> None:

@@ -208,7 +208,7 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
   ///
   /// Foreground retries are always explicit. Native background callers must
   /// first verify the separate user opt-in and library privacy policy.
-  Future<int> retryPendingListens() async {
+  Future<int> retryPendingListens({bool Function()? shouldContinue}) async {
     final token = _token;
     if (token == null || _pendingListens.isEmpty || _submitting) {
       return 0;
@@ -219,6 +219,7 @@ final class ListenBrainzScrobblingStore extends ChangeNotifier {
     var submitted = 0;
     try {
       for (final pending in List<_PendingListen>.from(_pendingListens)) {
+        if (shouldContinue?.call() == false) break;
         try {
           await _clientFactory(token).submitListen(
             track: pending.toTrack(),

@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
+import 'support/library_storage_fixture.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
 import 'package:aethertune/src/data/library_sync_credential_vault.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
@@ -408,7 +409,9 @@ void main() {
       expect(pushedJson, isNot(contains('/phone/local-first.mp3')));
       expect(pushedJson, isNot(contains('private.example.test')));
 
-      final remoteLibrary = LibraryStore();
+      final remoteLibrary = LibraryStore(
+        storage: PreferencesLibraryStorageFixture(key: 'test.remote'),
+      );
       await remoteLibrary.load();
       await remoteLibrary.addTracks(<Track>[
         Track(id: 'remote-first', title: 'Remote first'),

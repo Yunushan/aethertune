@@ -18,24 +18,40 @@ enum _CaptionAction { choose, embedded, automatic, disabled }
 
 enum _FrameAction { save, share }
 
+typedef VideoPlayback = ({
+  Player player,
+  Widget video,
+  Future<void> firstFrame,
+});
+typedef VideoPlaybackFactory = VideoPlayback Function();
+
 /// Full-screen-capable renderer for user-selected local or HTTPS video.
 class VideoPlaybackScreen extends StatefulWidget {
   const VideoPlaybackScreen({
     super.key,
     required this.source,
     required this.title,
+    this.playbackFactory,
   });
 
   final Uri source;
   final String title;
+  @visibleForTesting
+  final VideoPlaybackFactory? playbackFactory;
 
   @override
   State<VideoPlaybackScreen> createState() => _VideoPlaybackScreenState();
 }
 
 class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
-  late final Player _player = Player();
-  late final VideoController _controller = VideoController(_player);
+  static const _startupTimeout = Duration(seconds: 30);
+  static const _cleanupTimeout = Duration(seconds: 10);
+  VideoPlayback? _playback;
+  StreamSubscription<String>? _errorSubscription;
+  Future<void> _pendingDisposal = Future<void>.value();
+  Completer<void>? _cancelOpen;
+  int _generation = 0;
+  Player get _player => _playback!.player;
   final _pictureInPicture = AndroidVideoPictureInPictureBridge();
   Object? _error;
   var _opening = true;
@@ -47,34 +63,131 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant VideoPlaybackScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) unawaited(_open());
+  }
+
+  @override
   void dispose() {
-    unawaited(_player.dispose());
+    _generation++;
+    _cancelOpeningWait();
+    _retirePlayback();
     super.dispose();
   }
 
   Future<void> _open() async {
+    final generation = ++_generation;
+    _cancelOpeningWait();
+    final cancelled = _cancelOpen = Completer<void>();
+    final cleanup = _retirePlayback();
     setState(() {
       _opening = true;
       _error = null;
     });
     try {
-      await _player.open(Media(widget.source.toString()));
-      final sidecar = await loadLocalVideoCaptionSidecar(widget.source);
-      if (sidecar != null) {
-        await _player.setSubtitleTrack(
-          SubtitleTrack.data(sidecar.text, title: sidecar.title),
-        );
-      }
-      if (mounted) {
+      await _waitFor(cleanup, cancelled, _cleanupTimeout);
+      if (!_isCurrent(generation)) return;
+      final source = widget.source;
+      final playback = widget.playbackFactory?.call() ?? _createPlayback();
+      setState(() => _playback = playback);
+      _errorSubscription = playback.player.stream.error.listen((_) {
+        _fail(generation);
+      });
+      await _waitFor(
+        _initializePlayback(playback, source, generation),
+        cancelled,
+        _startupTimeout,
+      );
+      if (_isCurrent(generation)) {
         setState(() => _opening = false);
       }
-    } on Object catch (error) {
-      if (mounted) {
-        setState(() {
-          _opening = false;
-          _error = error;
-        });
+    } on Object {
+      _fail(generation);
+    }
+  }
+
+  bool _isCurrent(int generation) =>
+      mounted && generation == _generation && _error == null;
+
+  void _cancelOpeningWait() {
+    final cancelled = _cancelOpen;
+    _cancelOpen = null;
+    if (cancelled != null && !cancelled.isCompleted) cancelled.complete();
+  }
+
+  static Future<void> _waitFor(
+    Future<void> operation,
+    Completer<void> cancelled,
+    Duration timeout,
+  ) => Future.any<void>([operation, cancelled.future]).timeout(timeout);
+
+  Future<void> _initializePlayback(
+    VideoPlayback playback,
+    Uri source,
+    int generation,
+  ) async {
+    // Native open accepts the source before decoding/rendering necessarily ends.
+    await Future.wait<void>([
+      playback.player.open(Media(source.toString())),
+      playback.firstFrame,
+    ], eagerError: true);
+    if (!_isCurrent(generation)) return;
+    final sidecar = await loadLocalVideoCaptionSidecar(source);
+    if (!_isCurrent(generation)) return;
+    if (sidecar != null) {
+      await playback.player.setSubtitleTrack(
+        SubtitleTrack.data(sidecar.text, title: sidecar.title),
+      );
+    }
+  }
+
+  Future<void> _retirePlayback() {
+    final playback = _playback;
+    if (playback == null) return _pendingDisposal;
+    final subscription = _errorSubscription;
+    _playback = null;
+    _errorSubscription = null;
+    // A timeout stops waiting, not native cleanup. Keep this future across
+    // retries/source changes and never allocate a successor before it succeeds.
+    _pendingDisposal = () async {
+      try {
+        await subscription?.cancel();
+      } finally {
+        await playback.player.dispose();
       }
+    }();
+    // Unmount has no waiter. Keep cleanup errors observed, but retries still
+    // await the original failed future and cannot accumulate native players.
+    _pendingDisposal.ignore();
+    return _pendingDisposal;
+  }
+
+  static VideoPlayback _createPlayback() {
+    final player = Player();
+    final controller = VideoController(player);
+    return (
+      player: player,
+      video: Video(controller: controller),
+      firstFrame: controller.waitUntilFirstFrameRendered,
+    );
+  }
+
+  void _fail(int generation) {
+    if (!mounted || generation != _generation || _error != null) return;
+    setState(() {
+      _opening = false;
+      _error = const FormatException('Video playback failed.');
+    });
+    _cancelOpeningWait();
+    unawaited(_stopFailedPlayer(_playback?.player));
+  }
+
+  static Future<void> _stopFailedPlayer(Player? player) async {
+    try {
+      await player?.stop();
+    } on Object {
+      // The error UI remains available when the native device cannot stop.
     }
   }
 
@@ -154,23 +267,38 @@ class _VideoPlaybackScreenState extends State<VideoPlaybackScreen> {
               ? Stack(
                   alignment: Alignment.center,
                   children: <Widget>[
-                    Video(controller: _controller),
+                    _playback?.video ?? const SizedBox.shrink(),
                     if (_opening) const CircularProgressIndicator(),
                   ],
                 )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Icon(Icons.video_file_outlined, size: 48),
-                    const SizedBox(height: 12),
-                    const Text('Could not open this video.'),
-                    const SizedBox(height: 8),
-                    IconButton(
-                      tooltip: 'Retry video',
-                      onPressed: () => unawaited(_open()),
-                      icon: const Icon(Icons.refresh),
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.video_file_outlined,
+                          size: 48,
+                          color: Colors.white70,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Could not open this video.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        IconButton(
+                          tooltip: 'Retry video',
+                          onPressed: () => unawaited(_open()),
+                          color: Colors.white,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
         ),
       ),

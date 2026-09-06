@@ -14,79 +14,33 @@ permissions:
   security-events: write
 
 jobs:
-  trivy:
-    name: Trivy container scan (report)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - name: Build server image
-        run: docker build -t aethertune-server:scan services/server
-
-      - name: Run Trivy vulnerability scanner
-        shell: bash
-        env:
-          TRIVY_IMAGE: aquasec/trivy:0.70.0@sha256:85e87be1a96459c38a4eea47dc64eb2d342bb14cd4b4cef96adcf6ff03378b7c
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/trivy"
-          docker run --rm \
-            --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-            --mount type=bind,src="$GITHUB_WORKSPACE",dst=/workspace \
-            --mount type=bind,src="$HOME/.cache/trivy",dst=/root/.cache/trivy \
-            "$TRIVY_IMAGE" image \
-            --format sarif \
-            --output /workspace/trivy-results.sarif \
-            --exit-code 0 \
-            --ignore-unfixed \
-            --vuln-type os,library \
-            --severity CRITICAL,HIGH \
-            aethertune-server:scan
-
-      - name: Upload Trivy scan results to code scanning
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
-        with:
-          sarif_file: trivy-results.sarif
-
   trivy-fail-closed:
     name: Trivy container scan (fail closed)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      - name: Build server image
-        run: docker build -t aethertune-server:scan services/server
+      - name: Enforce container vulnerability policy
+        run: >-
+          python3 scripts/ci/scan_server_container.py
+          --evidence build/container-scan
 
-      - name: Run Trivy vulnerability scanner
-        shell: bash
-        env:
-          TRIVY_IMAGE: aquasec/trivy:0.70.0@sha256:85e87be1a96459c38a4eea47dc64eb2d342bb14cd4b4cef96adcf6ff03378b7c
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.cache/trivy"
-          docker run --rm \
-            --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-            --mount type=bind,src="$GITHUB_WORKSPACE",dst=/workspace \
-            --mount type=bind,src="$HOME/.cache/trivy",dst=/root/.cache/trivy \
-            "$TRIVY_IMAGE" image \
-            --format sarif \
-            --output /workspace/trivy-results.sarif \
-            --exit-code 1 \
-            --ignore-unfixed \
-            --vuln-type os,library \
-            --severity CRITICAL,HIGH \
-            aethertune-server:scan
+      - name: Upload container scan evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-container-scan-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/container-scan/
 
       - name: Upload Trivy scan results to code scanning
+        if: ${{ always() && hashFiles('build/container-scan/trivy.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: build/container-scan/trivy.sarif
+          category: server-container

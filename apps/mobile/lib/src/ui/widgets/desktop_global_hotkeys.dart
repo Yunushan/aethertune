@@ -45,23 +45,26 @@ class DesktopGlobalHotkeyController {
   }) : _registry = registry ?? const SystemDesktopHotkeyRegistry(),
        _bindings = <_DesktopHotkeyBinding>[
          _DesktopHotkeyBinding(
-           HotKey(
+           _DesktopMediaHotKey(
              identifier: 'aethertune.media_play_pause',
              key: PhysicalKeyboardKey.mediaPlayPause,
+             windowsVirtualKey: 0xb3,
            ),
            onTogglePlayPause,
          ),
          _DesktopHotkeyBinding(
-           HotKey(
+           _DesktopMediaHotKey(
              identifier: 'aethertune.media_previous',
              key: PhysicalKeyboardKey.mediaTrackPrevious,
+             windowsVirtualKey: 0xb1,
            ),
            onPrevious,
          ),
          _DesktopHotkeyBinding(
-           HotKey(
+           _DesktopMediaHotKey(
              identifier: 'aethertune.media_next',
              key: PhysicalKeyboardKey.mediaTrackNext,
+             windowsVirtualKey: 0xb0,
            ),
            onNext,
          ),
@@ -151,6 +154,25 @@ class _DesktopGlobalHotkeysState extends State<DesktopGlobalHotkeys> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+// The pinned plugin requires non-null native arguments. Its key-code lookup
+// misses Windows previous/next media keys with the current Flutter key map.
+class _DesktopMediaHotKey extends HotKey {
+  _DesktopMediaHotKey({
+    required super.identifier,
+    required super.key,
+    required this.windowsVirtualKey,
+  }) : super(modifiers: const <HotKeyModifier>[]);
+
+  final int windowsVirtualKey;
+
+  @override
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    ...super.toJson(),
+    if (defaultTargetPlatform == TargetPlatform.windows)
+      'keyCode': windowsVirtualKey,
+  };
 }
 
 class _DesktopHotkeyBinding {

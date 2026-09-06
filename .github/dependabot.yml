@@ -1,14 +1,16 @@
 version: 2
 updates:
   - package-ecosystem: pub
-    directory: /apps/mobile
+    directories:
+      - /apps/mobile
+      - /scripts/ci/library_storage_probe
     schedule:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
     groups:
       flutter-client:
-        dependency-type: production
+        patterns: ['*']
 
   - package-ecosystem: pub
     directory: /services/server
@@ -18,7 +20,7 @@ updates:
     open-pull-requests-limit: 3
     groups:
       dart-server:
-        dependency-type: production
+        patterns: ['*']
 
   - package-ecosystem: docker
     directory: /services/server

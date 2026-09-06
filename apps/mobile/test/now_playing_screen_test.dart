@@ -35,6 +35,7 @@ void main() {
     final engine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
     final player = PlayerController(audioEngine: engine);
     final library = LibraryStore();
+    await library.load();
     final first = _track('first', title: 'First Song', durationSeconds: 240)
         .copyWith(
           chapters: <TrackChapter>[
@@ -382,6 +383,7 @@ void main() {
     final engine = _FakePlaybackAudioEngine();
     final player = PlayerController(audioEngine: engine);
     final library = LibraryStore();
+    await library.load();
     final track = _track(
       'transcript',
       title: 'Transcript episode',
@@ -504,6 +506,7 @@ Recovered transcript
   ) async {
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     final library = LibraryStore();
+    await library.load();
     final track = _track('hero', title: 'Hero Song', durationSeconds: 180);
     await library.addTracks(<Track>[track]);
     await player.playTrack(track, queue: <Track>[track]);

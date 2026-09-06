@@ -276,6 +276,52 @@ void main() {
     },
   );
 
+  test(
+    'stopping retries persists the in-flight success but does not submit the next listen',
+    () async {
+      final vault = _MemoryVault();
+      final client = _FakeListenBrainzClient();
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+      );
+      addTearDown(store.dispose);
+      await store.configure('token');
+      for (var index = 0; index < 2; index++) {
+        client.failNextSubmission = true;
+        await store.submitIfEligible(
+          track: Track(
+            id: 'stop-$index',
+            title: 'Stop $index',
+            artist: 'Fixture',
+            duration: const Duration(minutes: 2),
+          ),
+          startedAt: DateTime.now().subtract(Duration(minutes: index + 3)),
+          position: const Duration(minutes: 1),
+        );
+      }
+      expect(store.pendingListenCount, 2);
+      var running = true;
+      client.onSubmit = () {
+        running = false;
+      };
+      expect(await store.retryPendingListens(shouldContinue: () => running), 1);
+      expect(client.submitted, hasLength(1));
+      final reopened = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+      );
+      addTearDown(reopened.dispose);
+      await reopened.load();
+      expect(reopened.pendingListenCount, 1);
+      expect(
+        await reopened.retryPendingListens(shouldContinue: () => false),
+        0,
+      );
+      expect(client.submitted, hasLength(1));
+    },
+  );
+
   test('uses the shorter of half the track and four minutes', () {
     expect(
       ListenBrainzScrobblingStore.completionThreshold(
@@ -330,6 +376,7 @@ final class _FakeListenBrainzClient extends ListenBrainzClient {
   final List<_SubmittedListen> submitted = <_SubmittedListen>[];
   String? requestedUserName;
   int? requestedHistoryCount;
+  void Function()? onSubmit;
 
   @override
   Future<String?> validateToken() async {
@@ -347,6 +394,7 @@ final class _FakeListenBrainzClient extends ListenBrainzClient {
       throw StateError('network failed');
     }
     submitted.add(_SubmittedListen(track: track, startedAt: startedAt));
+    onSubmit?.call();
   }
 
   @override

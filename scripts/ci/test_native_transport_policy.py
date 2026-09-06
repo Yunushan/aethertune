@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Guard native transport source builds and dependency scanning."""
+
+from __future__ import annotations
+
+import tempfile
+import tomllib
+import unittest
+from pathlib import Path
+
+from build_native_transport import APP, ROOT, build_commands
+
+
+class NativeTransportPolicyTest(unittest.TestCase):
+    def test_host_build_and_tests_are_version_and_lock_pinned(self) -> None:
+        commands = build_commands(APP, install=True, test=True)
+        self.assertEqual(commands[0][:4], ["rustup", "toolchain", "install", "1.95.0"])
+        for command in commands[1:]:
+            self.assertEqual(command[:4], ["rustup", "run", "1.95.0", "cargo"])
+            self.assertIn("--locked", command)
+            self.assertIn("--release", command)
+            self.assertEqual(command[command.index("--target-dir") + 1], str(APP / "rust/target"))
+        self.assertEqual(commands[-1][-1], "--lib")
+
+    def test_floating_toolchain_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory)
+            (app / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
+            with self.assertRaises(ValueError):
+                build_commands(app, install=False, test=False)
+
+    def test_native_lock_has_the_audited_versions(self) -> None:
+        lock = tomllib.loads((APP / "packages/rhttp/rust/Cargo.lock").read_text())
+        versions = {(entry["name"], entry["version"]) for entry in lock["package"]}
+        for entry in [("h2", "0.4.16"), ("quinn-proto", "0.11.15"), ("anyhow", "1.0.103")]:
+            self.assertIn(entry, versions)
+
+    def test_platform_builds_and_scanners_include_native_lock(self) -> None:
+        config = (APP / "packages/rhttp/rust/cargokit.yaml").read_text()
+        for mode in ("debug", "release"):
+            self.assertIn(f'{mode}:\n    extra_flags: ["--locked"]', config)
+        for workflow in ("osv-scanner.yml", "aethertune-release.yml"):
+            text = (ROOT / ".github/workflows" / workflow).read_text()
+            self.assertIn("--lockfile=./apps/mobile/packages/rhttp/rust/Cargo.lock", text)
+
+    def test_test_entrypoints_build_the_host_library(self) -> None:
+        for path in ("Makefile", "scripts/check.sh", ".github/workflows/aethertune-ci.yml"):
+            self.assertIn("build_native_transport.py", (ROOT / path).read_text())
+
+
+if __name__ == "__main__":
+    unittest.main()

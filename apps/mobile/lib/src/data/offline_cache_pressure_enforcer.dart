@@ -1,6 +1,34 @@
 import 'library_store.dart';
 import 'offline_cache_manager.dart';
 
+OfflineCacheBudget offlineCacheBudget(
+  LibraryStore library,
+) => OfflineCacheBudget(
+  totalBytes: library.offlineCacheLimitBytes,
+  entries: library.offlineCacheQueue,
+  providerBytes: {
+    for (final limit in library.offlineCacheProviderLimitMegabytes.entries)
+      limit.key: limit.value * 1024 * 1024,
+  },
+  onEvicted: (ids) async {
+    for (final id in ids) {
+      await library.markOfflineCacheEntryEvicted(
+        id,
+        reason:
+            'Evicted automatically to reserve space for an offline download.',
+      );
+    }
+  },
+);
+
+int offlineCacheTransferLimitBytes(LibraryStore library, String sourceId) {
+  final providerLimit = library.offlineCacheProviderLimitBytesFor(sourceId);
+  final appLimit = library.offlineCacheLimitBytes;
+  return providerLimit != null && providerLimit < appLimit
+      ? providerLimit
+      : appLimit;
+}
+
 Future<OfflineCacheEvictionResult> enforceOfflineCacheLimit({
   required LibraryStore library,
   required OfflineCacheManager manager,
@@ -18,6 +46,7 @@ Future<OfflineCacheEvictionResult> enforceOfflineCacheLimit({
     final providerResult = await manager.evictToSize(
       entries: providerEntries,
       maxBytes: providerLimit.value * 1024 * 1024,
+      skipIfBusy: true,
     );
     if (providerResult.evictedEntryIds.isEmpty) {
       continue;
@@ -36,6 +65,7 @@ Future<OfflineCacheEvictionResult> enforceOfflineCacheLimit({
   final appResult = await manager.evictToSize(
     entries: library.offlineCacheQueue,
     maxBytes: library.offlineCacheLimitBytes,
+    skipIfBusy: true,
   );
   if (appResult.evictedEntryIds.isNotEmpty) {
     final reason =
