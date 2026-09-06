@@ -52,6 +52,16 @@ class NativeTransportPolicyTest(unittest.TestCase):
         self.assertIn('compileSdkVersion = plugin.project.android.compileSdk\n', plugin)
         self.assertNotIn('compileSdkVersion.substring', plugin)
 
+    def test_linux_acceptance_defines_a_real_unavailable_documents_fixture(self) -> None:
+        launcher = (ROOT / 'scripts/ci/run_linux_native_acceptance.sh').read_text()
+        self.assertIn('XDG_DOCUMENTS_DIR="$HOME/unavailable-documents"', launcher)
+        self.assertIn('> "$fixture/config/user-dirs.dirs"', launcher)
+        self.assertIn('> "$fixture/unavailable-documents"', launcher)
+        test = (APP / 'integration_test/linux_native_acceptance_test.dart').read_text()
+        self.assertIn("expect(documents.path, p.join(home, 'unavailable-documents'))", test)
+        self.assertIn('FileSystemEntityType.file', test)
+        self.assertIn("find.text('Could not read cache usage.')", test)
+
 
 if __name__ == "__main__":
     unittest.main()

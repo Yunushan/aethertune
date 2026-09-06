@@ -68,7 +68,7 @@ if [[ "${1:-}" != '--evidence' || $# != 2 ]]; then
   exit 2
 fi
 [[ "$(uname -s)" == Linux ]]
-for tool in flutter python3 openssl rustup dbus-run-session gnome-keyring-daemon pulseaudio pactl parec xvfb-run gdbus; do
+for tool in flutter python3 openssl rustup dbus-run-session gnome-keyring-daemon pulseaudio pactl parec xvfb-run gdbus xdg-user-dir; do
   command -v "$tool" >/dev/null
 done
 evidence="$(realpath -m -- "$2")"
@@ -96,6 +96,10 @@ trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 mkdir -m 700 "$fixture/config" "$fixture/data" "$fixture/cache" "$fixture/runtime"
+# A real file at the configured Documents path makes cache I/O fail predictably;
+# an unset XDG directory can legitimately resolve to the writable fixture home.
+printf 'XDG_DOCUMENTS_DIR="$HOME/unavailable-documents"\n' > "$fixture/config/user-dirs.dirs"
+printf 'fixture-only-not-a-directory\n' > "$fixture/unavailable-documents"
 # Keep build toolchains separate from the disposable application profile.
 export PUB_CACHE="${PUB_CACHE:-$HOME/.pub-cache}"
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"

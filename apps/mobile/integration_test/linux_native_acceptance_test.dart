@@ -45,6 +45,12 @@ void main() {
     );
     final support = await getApplicationSupportDirectory();
     expect(p.isWithin(home, support.path), isTrue);
+    final documents = await getApplicationDocumentsDirectory();
+    expect(documents.path, p.join(home, 'unavailable-documents'));
+    expect(
+      await FileSystemEntity.type(documents.path, followLinks: false),
+      FileSystemEntityType.file,
+    );
     final evidence = Directory(p.join(home, 'evidence'));
     await evidence.create(recursive: true);
     final checks = <String>[];
@@ -162,7 +168,7 @@ void main() {
           () => find.text('Could not read cache usage.').evaluate().isNotEmpty,
         );
         expect(tester.takeException(), isNull);
-        checks.add('missing-documents-directory-does-not-break-startup');
+        checks.add('unavailable-documents-directory-does-not-break-startup');
         await _selectNavigation(tester, 1);
         await tester.pump(const Duration(milliseconds: 300));
         final scanned = await scanLocalFilesInBackground([
