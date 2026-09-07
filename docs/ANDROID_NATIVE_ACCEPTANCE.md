@@ -4,8 +4,10 @@
 
 **Android emulator acceptance passed; 100/100 production readiness is still
 unproven.** This work is based on main `e25bf1718056cd889565838a9547407d61b0f733`.
-It does not establish signed distribution, physical-device behavior, Android TLS
-trust, installed-version upgrades, accessibility, or deployed hosted-sync safety.
+It does not establish signed distribution, physical-device behavior,
+installed-version upgrades, accessibility, or deployed hosted-sync safety.
+The later platform TLS follow-up below adds bounded Android certificate evidence
+to the original HTTP-only run.
 
 The separate server-load PR #31 also passed all seven GitHub workflows at
 `2106789975af194759a4cb06b1f78eea33d7c7a5`. Those checks do not cover these new
@@ -118,3 +120,92 @@ Do not disable TLS validation to work around a build-machine trust failure.
 Physical Android/iOS lifecycle and audio, signed/notarized releases, installed
 upgrades and rollback, assistive-technology acceptance, deployed TLS/load/alerts,
 independent-host restore and a real pilot remain open production requirements.
+
+## Platform TLS Follow-Up: September 7, 17:27 UTC
+
+The real application and unchanged shared production executor passed a separate
+Android platform TLS test twice, in Android processes **2345** and **2479**.
+Each report contains nine passing checks: home-screen startup, trusted HTTPS
+UTF-8 upload/status/authorization/redirect behavior, untrusted-root rejection,
+hostname rejection, no HTTP credentials reaching rejected TLS peers, three
+stalled-handshake cleanup attempts, and three independent Dart-isolate requests.
+
+The trusted root was a newly generated, two-day synthetic CA installed only in
+the owned AOSP guest's **user** certificate store. The packaged verifier reads
+Android's `AndroidCAStore`; no extra roots, insecure verifier, network-security
+override, or application transport change was used for the positive control.
+The untrusted fixture CA was never installed. This exercises the dependency's
+[Android platform verifier integration](https://github.com/rustls/rustls-platform-verifier#android),
+not an alternative Dart HTTP implementation.
+
+The three handshake-stall checks use a shortened **300 ms test transfer
+deadline**. Caller completion was 303-306 ms and peer-observed disconnect was
+304-307 ms across the two runs. These measurements do not establish every
+production deadline, normal Activity shutdown, background-engine behavior,
+Internet/proxy connectivity, revocation, every Android version, or physical-device
+reliability. Synthetic platform trust is not deployed hosted-sync TLS acceptance.
+
+The successful APK SHA-256 is
+`83e4b81dc014b3b99fe40ad2bc7eb69a97d4430e9cd0b58c24ea45bbc83bf42f`.
+Retained local evidence is under `build/readiness-android-tls-2026-09-07/`:
+`android-sync-b.json`, `android-sync-c.json`, `drive-b.log`, `drive-c.log`,
+`app-sync-probe-b.apk`, and `fixture-b/cleanup.json`. Fixture private keys and
+raw local debug logs are not committed or intended for publication.
+
+Two setup failures were preserved, not counted as TLS evidence: an ADB stdin
+transfer timed out, and the first app fixture wrote legacy preferences despite
+an existing native snapshot. Non-PTY shell input and the production `LibraryStore`
+API corrected those fixture issues. The passing runs retain all original shared
+transport assertions.
+
+### Repeat Platform TLS
+
+Use only a newly provisioned, disposable AOSP **userdebug** AVD with the required
+`AetherTune_Acceptance_` prefix. The helper requires an explicit emulator serial,
+matching Android properties, a fresh output directory below this repo's `build`,
+and an installed debug application. It rejects a preexisting certificate at the
+generated subject-hash path. Never use this on a personal AVD or physical device.
+
+From `apps/mobile`, with `adb`, `openssl`, Python and the pinned Flutter on PATH:
+
+```bash
+set -euo pipefail
+flutter build apk --debug --target-platform android-x64 \
+  --target integration_test/android_sync_transport_acceptance_test.dart \
+  --dart-define=AETHERTUNE_ANDROID_AVD=AetherTune_Acceptance_API35
+python ../../scripts/ci/verify_android_release_artifacts.py \
+  --apk build/app/outputs/flutter-apk/app-debug.apk
+adb -s emulator-5580 install -r build/app/outputs/flutter-apk/app-debug.apk
+evidence="$PWD/../../build/android-tls-new-fixture"
+cleanup() {
+  if [[ -f "$evidence/receipt.json" ]]; then
+    python ../../scripts/ci/prepare_android_sync_fixture.py cleanup \
+      --adb "$(command -v adb)" --serial emulator-5580 \
+      --avd AetherTune_Acceptance_API35 --output "$evidence"
+  fi
+}
+trap cleanup EXIT
+python ../../scripts/ci/prepare_android_sync_fixture.py prepare \
+  --adb "$(command -v adb)" --openssl "$(command -v openssl)" \
+  --serial emulator-5580 --avd AetherTune_Acceptance_API35 --output "$evidence"
+flutter drive --no-pub -d emulator-5580 \
+  --target integration_test/android_sync_transport_acceptance_test.dart \
+  --driver test_driver/native_acceptance_driver.dart \
+  --use-application-binary build/app/outputs/flutter-apk/app-debug.apk \
+  --keep-app-running
+adb -s emulator-5580 exec-out run-as dev.aethertune.aethertune \
+  cat files/android-sync.json
+```
+
+Preserve the result before cleanup; use a different unused evidence directory
+for each fixture. The helper compares the guest certificate's binary SHA-256
+before removing that exact file, removes only named app fixture inputs, then
+verifies that guest ADB root is disabled. Retain any cleanup failure for manual
+inspection rather than deleting a mismatched certificate. The verified run
+completed cleanup successfully. Rebuild the normal `lib/main.dart` APK and stop
+the owned emulator afterward; never distribute the test entry point.
+
+Eight fixture-safety regressions and focused Dart analysis/formatting pass. Full
+local Python CI discovery now has **238 tests: 226 passed, 12 platform skips**.
+CI runs the helper's safety regressions, not this manual emulator test. No
+application or dependency runtime code changed in this TLS follow-up.

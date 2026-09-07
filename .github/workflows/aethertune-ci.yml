@@ -76,6 +76,9 @@ jobs:
       - name: Test Android release artifact verifier
         run: python3 scripts/ci/test_verify_android_release_artifacts.py
 
+      - name: Test disposable Android TLS fixture safety
+        run: python3 scripts/ci/test_android_sync_fixture.py
+
       - name: Test iOS release artifact verifier
         run: python3 scripts/ci/test_verify_ios_release_artifact.py
 
