@@ -17,7 +17,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         self.assertIn("concurrency:", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertEqual(workflow.count("timeout-minutes:"), 7)
+        # Additional step deadlines do not replace the seven job deadlines.
+        self.assertEqual(workflow.count("\n    timeout-minutes:"), 7)
         self.assertEqual(workflow.count("persist-credentials: false"), 7)
 
     def test_assembly_checks_out_release_policy_before_running_verifiers(self) -> None:
@@ -182,6 +183,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("aethertune-ios-unsigned.zip", workflow)
         self.assertIn("scripts/ci/test_server_executable.dart", workflow)
         self.assertIn("scripts/ci/test_server_backup_restore.sh", workflow)
+        self.assertIn("scripts/ci/server_recovery_runtime.py", workflow)
+        self.assertIn('name: Test compiled server recovery', workflow)
+        self.assertIn('name: aethertune-server-recovery-${{ matrix.label }}', workflow)
         self.assertIn("name: aethertune-release-bundle", workflow)
         self.assertIn("startsWith(github.ref, 'refs/tags/v')", workflow)
         self.assertIn("vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'", workflow)
@@ -265,6 +269,18 @@ class ReleaseWorkflowTest(unittest.TestCase):
             publish.index("Probe production before publication"),
             publish.index("Create immutable GitHub release"),
         )
+
+
+class SystemdReleaseGateTest(unittest.TestCase):
+    def test_linux_release_binary_must_pass_real_deployment_recovery(self):
+        workflow = WORKFLOW.read_text(encoding='utf-8')
+        step = workflow.split('      - name: Test Linux deployment identity and recovery\n', 1)[1].split('      - name:', 1)[0]
+        self.assertIn("if: matrix.label == 'linux-x64'", step)
+        self.assertIn('set -euo pipefail', step)
+        self.assertIn('sudo -n python3 scripts/ci/test_server_backup_privileges.py', step)
+        self.assertIn('python3 scripts/ci/server_systemd_runtime.py', step)
+        self.assertIn('services/server/build/${{ matrix.binary_name }}', step)
+        self.assertIn('build/server-recovery-${{ matrix.label }}/systemd', step)
 
 
 if __name__ == "__main__":

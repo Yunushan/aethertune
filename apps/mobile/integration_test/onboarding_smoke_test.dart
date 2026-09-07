@@ -20,9 +20,7 @@ void main() {
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: OnboardingScreen(
-          onFinished: (tab) async => destination = tab,
-        ),
+        home: OnboardingScreen(onFinished: (tab) async => destination = tab),
       ),
     );
     await tester.pumpAndSettle();

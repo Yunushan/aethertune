@@ -136,12 +136,14 @@ class ManagedSyncTokenMetadata {
     required this.deviceName,
     required this.createdAt,
     required this.lastAuthenticatedAt,
+    this.expiresAt,
   });
 
   final String id;
   final String deviceName;
   final DateTime createdAt;
   final DateTime? lastAuthenticatedAt;
+  final DateTime? expiresAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
@@ -149,6 +151,7 @@ class ManagedSyncTokenMetadata {
     'createdAt': createdAt.toUtc().toIso8601String(),
     if (lastAuthenticatedAt != null)
       'lastAuthenticatedAt': lastAuthenticatedAt!.toUtc().toIso8601String(),
+    if (expiresAt != null) 'expiresAt': expiresAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -595,6 +598,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
         deviceName: normalizedDeviceName,
         createdAt: now,
         lastAuthenticatedAt: null,
+        expiresAt: _tokenLifetime == null ? null : now.add(_tokenLifetime),
         tokenHash: tokenHash,
       );
       recoveredAccount.tokens.add(token);
@@ -730,6 +734,7 @@ class ManagedSyncAccountRegistry implements SyncAuthenticator {
           deviceName: normalizedDeviceName,
           createdAt: currentToken.createdAt,
           lastAuthenticatedAt: currentToken.lastAuthenticatedAt,
+          expiresAt: currentToken.expiresAt,
           tokenHash: currentToken.tokenHash,
         );
       }
@@ -1264,7 +1269,7 @@ class _ManagedTokenRecord {
     required this.createdAt,
     required this.lastAuthenticatedAt,
     required this.tokenHash,
-    this.expiresAt,
+    required this.expiresAt,
   });
 
   factory _ManagedTokenRecord.fromStorageJson(Map<String, Object?> json) {
@@ -1321,6 +1326,7 @@ class _ManagedTokenRecord {
     deviceName: deviceName,
     createdAt: createdAt,
     lastAuthenticatedAt: lastAuthenticatedAt,
+    expiresAt: expiresAt,
   );
 
   _ManagedTokenRecord copyWith({DateTime? lastAuthenticatedAt}) =>

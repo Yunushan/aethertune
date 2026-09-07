@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,7 +18,7 @@ void main() {
         call,
       ) async {
         calls.add(call);
-        return call.method == 'schedule';
+        return call.method == 'schedule' || call.method == 'cancel';
       });
       addTearDown(
         () => messenger.setMockMethodCallHandler(
@@ -60,5 +62,57 @@ void main() {
     expect(await scheduler.schedule(), isFalse);
     await scheduler.cancel();
     await scheduler.complete(hasPendingWork: false);
+  });
+
+  for (final reply in <Object?>[null, false]) {
+    test('rejects an unacknowledged native stop reply: $reply', () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        offlineCacheBackgroundChannel,
+        (_) async => reply,
+      );
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          offlineCacheBackgroundChannel,
+          null,
+        ),
+      );
+      await expectLater(
+        OfflineCacheBackgroundScheduler(isSupported: true).cancel(),
+        throwsStateError,
+      );
+    });
+  }
+
+  test('times out without treating a stalled engine as stopped', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final reply = Completer<bool>();
+    messenger.setMockMethodCallHandler(
+      offlineCacheBackgroundChannel,
+      (_) => reply.future,
+    );
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(
+        offlineCacheBackgroundChannel,
+        null,
+      ),
+    );
+    await expectLater(
+      OfflineCacheBackgroundScheduler(
+        isSupported: true,
+        cancellationTimeout: const Duration(milliseconds: 20),
+      ).cancel(),
+      throwsA(isA<TimeoutException>()),
+    );
+    reply.complete(true);
+  });
+
+  test('missing native stop implementation fails closed', () async {
+    await expectLater(
+      OfflineCacheBackgroundScheduler(isSupported: true).cancel(),
+      throwsA(isA<MissingPluginException>()),
+    );
   });
 }

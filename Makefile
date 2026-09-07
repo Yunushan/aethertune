@@ -26,6 +26,7 @@ server-analyze:
 test: client-test server-test
 
 client-test:
+	python3 scripts/ci/build_native_transport.py --install-toolchain --test
 	cd apps/mobile && flutter test
 
 server-test:
@@ -35,10 +36,10 @@ server-build:
 	cd services/server && mkdir -p build && dart compile exe bin/server.dart -o build/aethertune-server
 
 format:
-	dart format apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+	dart format apps/mobile/lib apps/mobile/test apps/mobile/integration_test services/server/bin services/server/lib services/server/test
 
 format-check:
-	dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test services/server/bin services/server/lib services/server/test
+	dart format --output=none --set-exit-if-changed apps/mobile/lib apps/mobile/test apps/mobile/integration_test services/server/bin services/server/lib services/server/test
 
 desktop-linux:
 	flutter config --enable-linux-desktop

@@ -7,10 +7,12 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$Version,
   [string]$SigningCertificatePath,
-  [string]$SigningCertificatePassword
+  [string]$SigningCertificatePassword,
+  [string]$RuntimeDirectory
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows_native_dependencies.ps1')
 
 function Find-MakeAppx {
   $command = Get-Command MakeAppx.exe -ErrorAction SilentlyContinue
@@ -127,12 +129,15 @@ $outputDirectory = Split-Path -Parent $resolvedOutputPath
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 Remove-Item -LiteralPath $resolvedOutputPath -Force -ErrorAction SilentlyContinue
 
-$stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) "aethertune-msix-$([guid]::NewGuid())"
+$temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+$stagingRoot = Join-Path $temporaryRoot "aethertune-msix-$([guid]::NewGuid())"
 try {
   $appRoot = Join-Path $stagingRoot 'VFS/ProgramFilesX64/AetherTune'
   $assetRoot = Join-Path $stagingRoot 'Assets'
   New-Item -ItemType Directory -Force -Path $appRoot, $assetRoot | Out-Null
   Copy-Item -Path (Join-Path $bundle.Path '*') -Destination $appRoot -Recurse -Force
+  Add-WindowsRuntimeFiles -DestinationPath $appRoot -RuntimeDirectory $RuntimeDirectory
+  Prepare-WindowsNativeDependencies -StagingPath $appRoot
 
   New-Logo -Path (Join-Path $assetRoot 'Square44x44Logo.png') -Width 44 -Height 44
   New-Logo -Path (Join-Path $assetRoot 'Square150x150Logo.png') -Width 150 -Height 150
@@ -204,9 +209,17 @@ try {
         throw "The Windows MSIX is missing $entry."
       }
     }
+    foreach ($file in ($WindowsRuntimeRequiredFiles + 'aethertune-windows-runtime.json' + 'aethertune-windows-native.json')) {
+      $entry = "VFS/ProgramFilesX64/AetherTune/$file"
+      if ($entries -notcontains $entry) { throw "The Windows MSIX is missing $entry." }
+    }
   } finally {
     $archive.Dispose()
   }
 } finally {
+  if ((Split-Path -Parent ([System.IO.Path]::GetFullPath($stagingRoot))).TrimEnd('\') -ne $temporaryRoot.TrimEnd('\') -or
+      (Split-Path -Leaf $stagingRoot) -notmatch '^aethertune-msix-[0-9a-f-]{36}$') {
+    throw 'Refusing to remove an unexpected MSIX staging directory.'
+  }
   Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

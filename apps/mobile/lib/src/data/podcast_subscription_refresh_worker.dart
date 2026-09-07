@@ -41,11 +41,15 @@ final class PodcastSubscriptionRefreshWorker {
   final DateTime Function() _clock;
   final ExternalPodcastChapterUriApproval? _isExternalChapterUriApproved;
 
-  Future<PodcastRefreshReport> refreshDue(LibraryStore library) {
+  Future<PodcastRefreshReport> refreshDue(
+    LibraryStore library, {
+    bool Function()? shouldContinue,
+  }) {
     return refreshSubscriptions(
       library,
       subscriptions: library.podcastSubscriptions,
       dueOnly: true,
+      shouldContinue: shouldContinue,
     );
   }
 
@@ -53,6 +57,7 @@ final class PodcastSubscriptionRefreshWorker {
     LibraryStore library, {
     required Iterable<PodcastSubscription> subscriptions,
     bool dueOnly = false,
+    bool Function()? shouldContinue,
   }) async {
     if (!library.loaded || library.offlineModeEnabled) {
       return const PodcastRefreshReport.empty();
@@ -64,6 +69,7 @@ final class PodcastSubscriptionRefreshWorker {
     final now = _clock();
 
     for (final requestedSubscription in subscriptions) {
+      if (shouldContinue?.call() == false) break;
       final subscription = library.podcastSubscriptionById(
         requestedSubscription.id,
       );
@@ -87,6 +93,7 @@ final class PodcastSubscriptionRefreshWorker {
 
       try {
         final feed = await (_feedFetcher?.call(feedUri) ?? _fetchFeed(feedUri));
+        if (shouldContinue?.call() == false) break;
         if (library.podcastSubscriptionById(subscription.id) == null) {
           skipped += 1;
           continue;
@@ -114,6 +121,8 @@ final class PodcastSubscriptionRefreshWorker {
         await library.markPodcastSubscriptionFetched(saved.id);
         refreshed += 1;
       } catch (error) {
+        if (library.saveError != null) rethrow;
+        if (shouldContinue?.call() == false) break;
         failed += 1;
         await library.markPodcastSubscriptionFetchFailed(
           subscription.id,

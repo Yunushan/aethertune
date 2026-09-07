@@ -73,6 +73,18 @@ Open a track menu and choose **Favorite**. Use the heart button in the search ba
 
 ## Queue controls
 
+Saved queues and playback settings use a device-local snapshot separate from
+the library. On first use, existing preference values are migrated without
+deleting the originals. A failed save shows an error and preserves the last
+saved data; further player saves remain blocked until you reload. Queue-save
+failure also stops playback when the audio device accepts the stop request.
+
+Use **Reload saved player data** after resolving a storage problem. To recover
+an earlier snapshot, choose **Restore previous player data** and confirm.
+Recovery stops playback, archives the current files, and restores the previous
+queues and settings without autoplay. This is local recovery, not an off-device
+backup or a guarantee against physical disk failure.
+
 When you play a track from the library, the current filtered list becomes one lazy native playlist so the audio engine can prepare and transition to the next item without AetherTune reloading each track. Android, iOS, and macOS use the native `just_audio` backends; Windows and Linux use the bundled MediaKit audio backend with playlist prefetch. Open a track menu and choose **Start radio** to build a local seed queue from playable tracks with matching artist, genre, or album, ranked by favorites and play history. The start confirmation offers **Save playlist** to retain that generated queue as an editable playlist. Use **Copy share text** from a track menu to copy track metadata and a web link when one exists; local paths are redacted. The copy confirmation also offers **Share** to open the native platform share sheet with that same privacy-safe text. The **Similar tracks** sheet can also play its matched result list as the queue. AetherTune restores the current queue when you reopen the app. Tap the artwork/title area in the compact player to open the full Now Playing screen. It shows large artwork, elapsed and remaining time, seeking, queue position, favorite, lyrics, queue, shuffle, repeat, volume, and transport controls; swipe artwork left for the next track or right for the previous track. Saved current tracks can also store chapter lines as a timestamp and title; the **Chapters** panel highlights the active section and seeks directly to any marker. After saving chapters for a supported local M4A/M4B/M4R/ALAC/FLAC/Ogg/Opus track, confirm **Update file** to replace its embedded chapter list. The compact player keeps only the essential controls on narrow phones and exposes the wider action set on larger screens. Use the queue to move tracks up/down or remove upcoming tracks while preserving the current position, or use the compact player's playlist-add button on larger screens to save the current queue as a playlist. Offline mode rebuilds the native queue with local files only.
 
 Podcast RSS episodes with inline Podlove Simple Chapters or same-origin Podcasting 2.0 chapter documents show their markers automatically in Now Playing. The seek timeline displays proportional chapter ticks beneath its slider. AetherTune does not request chapter documents hosted outside the feed's declared origin. A Podcasting 2.0 episode transcript URL appears as **Open podcast transcript** in Now Playing when the feed provides a valid HTTP(S) link. Selecting it opens a bounded in-app reader; the document is fetched only then, must be valid UTF-8 text, is limited to 256 KiB, and is never fetched in the background or saved to disk. WebVTT, SRT, and TTML cue text is rendered as readable transcript text; timed cues highlight with playback and seek when selected. The reader can fall back to the system browser when needed.
@@ -116,6 +128,31 @@ In Options, configure a self-hosted AetherTune server with its URL, a device nam
 ## Options
 
 The Options tab contains playback settings such as shuffle, repeat mode, a persisted default playback speed from 0.5x to 3x, a persisted independent playback pitch from 0.5x to 2x on Android, Linux, and Windows, persisted 5/10/15/30/45/60-second backward and forward skip intervals, and a persisted 0-100% playback volume, plus a **Language** selector for System default, English, Turkish, or Arabic, a **Theme** selector for System, Light, Dark, or AMOLED, and an **Accent color** selector with persisted swatches. On Android 8 or later, choose **Pin playback shortcut** and select Previous track, Play or pause, or Next track to ask the launcher to pin that transport command. The full player exposes the same default speed, pitch, and volume controls, plus track-speed and track-pitch controls that can apply a device-local override to the current track or return it to the default without changing that default. The applicable pitch override follows the current track through queue transitions. Dedicated rewind/forward controls use the configured intervals. Unsupported hosts omit the pitch controls. **Use favorites in For you** and **Use listening history in For you** independently control local recommendation inputs without deleting favorites or history. Turn on **Pause listening history** to stop new plays and resume progress from being stored until the toggle is turned off. Turn on **Offline mode** to pause network-backed source searches, feed refreshes, and saved stream playback from every player surface while keeping local file playback available. The Offline queue section shows provider-approved cache/download requests, lets you pause or resume queued requests, lets you turn on **Automatic foreground downloads** to process a bounded batch of eligible items sequentially while AetherTune is open, lets you cache queued direct media URLs into private app storage with post-write checksum verification, resumes retried direct HTTP(S) cache writes from saved `.part` bytes when the server supports Range requests, export verified cached media to a user-chosen folder, shows private cache usage, lets you set the private cache limit from 50 MB to 50 GB, lets you set per-provider private cache quotas for queued providers, and lets you trim the private cache to the app limit, clear cached media, remove one item, or clear the queue. After successful cache writes, AetherTune automatically evicts the oldest private cached files when usage exceeds a provider quota or the app limit. **Local diagnostics** shows the bounded, redacted error reports saved on this device; use its export action only when you choose to share a support file, or clear the reports at any time. The app never uploads those reports. AetherTune restores those playback settings, recommendation-signal and pause-listening-history preferences, theme, accent, and language preferences, offline mode, offline cache limits, cache metadata, paused queue state, and the offline queue when you reopen the app.
+
+### Local diagnostic privacy
+
+Diagnostic format v2 records the error category, timestamp, numeric OS/platform
+error code when available, and up to 12 validated Dart package/SDK source
+locations. Raw exception text, request/response bodies, network URLs, and local
+file paths are not retained. Unsupported stack formats are omitted, so these
+reports may not contain enough detail to diagnose every native crash.
+
+The history retains at most 40 reports. During a burst of errors, captures
+beyond the 40-operation pending limit are discarded; the export includes a
+`discardedReports` count. Clearing diagnostics resets that count too.
+
+When the updated app opens, it removes the old v1 diagnostic history, which may
+contain credentials missed by the previous redactor. This does not remove your
+library or provider credentials. A storage/cleanup warning means the operation
+could not be confirmed; use **Clear local diagnostics** to retry. Captured
+reports may remain memory-only when storage is unavailable. Diagnostics never
+upload automatically.
+
+Previously exported files and OS/device backups are not modified by this
+cleanup. Inspect old support files before sharing them, and revoke or rotate
+credentials that were actually exposed in a shared file. This policy covers
+the application's diagnostic store/export, not Flutter developer-console or
+operating-system crash logs.
 
 ## Provider plugins
 

@@ -24,9 +24,14 @@ import '../domain/track_chapter.dart';
 import '../domain/track_lyrics.dart';
 import '../domain/track_skip_segment.dart';
 import 'local_media_uri.dart';
+import 'library_storage.dart';
 import 'sponsorblock_segment_provider.dart' as sponsor_block;
 
 enum LibrarySortMode { recentlyAdded, title, artist, album, rating }
+
+final class _NewerLibrarySchema implements Exception {
+  const _NewerLibrarySchema();
+}
 
 final class _LibrarySearchQuery {
   const _LibrarySearchQuery._({
@@ -1353,7 +1358,9 @@ AppLanguagePreference _appLanguagePreferenceFromName(String? value) {
 }
 
 class LibraryStore extends ChangeNotifier {
-  LibraryStore({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  LibraryStore({DateTime Function()? clock, LibraryStorage? storage})
+    : _clock = clock ?? DateTime.now,
+      _storage = storage ?? createLibraryStorage();
 
   static const _backupVersion = 1;
   static const _syncSnapshotVersion = 1;
@@ -1452,6 +1459,15 @@ class LibraryStore extends ChangeNotifier {
   final List<OfflineCacheEntry> _offlineCacheQueue = <OfflineCacheEntry>[];
   final List<String> _watchedLocalFolderPaths = <String>[];
   final DateTime Function() _clock;
+  final LibraryStorage _storage;
+  String? _storageRevision;
+  Map<String, Object?>? _durableValues;
+  Future<void> _saveTail = Future<void>.value();
+  Future<void>? _loadFuture;
+  String? _saveError;
+  int _saveEpoch = 0;
+  bool _recoverySave = false;
+  bool _disposed = false;
   bool _pauseListeningHistory = false;
   bool _recommendationFavoriteSignalsEnabled = true;
   bool _recommendationHistorySignalsEnabled = true;
@@ -1486,6 +1502,19 @@ class LibraryStore extends ChangeNotifier {
   /// Describes why the persisted library could not be opened, or null when
   /// loading succeeded or has not been attempted yet.
   String? get loadError => _loadError;
+  String? get saveError => _saveError;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   bool get canUndoDuplicateResolution {
     final resolution = _lastDuplicateResolution;
     return resolution != null && resolution.stateRevision == _stateRevision;
@@ -1584,25 +1613,78 @@ class LibraryStore extends ChangeNotifier {
   Map<String, int> get offlineCacheProviderLimitMegabytes =>
       Map.unmodifiable(_offlineCacheProviderLimitMegabytes);
 
-  Future<void> load() async {
-    if (_loaded) {
-      return;
-    }
+  Future<void> load() {
+    if (_loaded) return Future<void>.value();
+    return _loadFuture ??= _load().whenComplete(() => _loadFuture = null);
+  }
 
+  Future<Map<String, Object?>> _legacyValues() async {
     final prefs = await SharedPreferences.getInstance();
+    return {
+      for (final key in _captureValues().keys)
+        if (prefs.containsKey(key)) key: prefs.get(key),
+    };
+  }
+
+  Future<void> _load({bool retryConflict = true}) async {
+    _loadError = null;
+    try {
+      final snapshot = await _storage.read();
+      final values = snapshot?.values ?? await _legacyValues();
+      final interrupted = _decodeValues(LibraryValues(values));
+      _storageRevision = snapshot?.revision;
+      if (snapshot == null ||
+          interrupted ||
+          values[_schemaVersionKey] != currentLibrarySchemaVersion) {
+        final migrated = await _storage.write(
+          _captureValues(),
+          expectedRevision: _storageRevision,
+        );
+        _storageRevision = migrated.revision;
+      }
+      _durableValues = _captureValues();
+      _saveError = null;
+      _loaded = true;
+    } on Object catch (error) {
+      if (error is LibraryStorageConflict && retryConflict) {
+        return _load(retryConflict: false);
+      }
+      _decodeValues(
+        LibraryValues(_durableValues ?? {}),
+        resumeInterrupted: false,
+      );
+      _loadError = error is LibraryStorageException
+          ? error.message
+          : 'The saved library could not be opened. Your stored data has been kept. '
+                'Retry, restore a previous snapshot, or import a backup.';
+      if (error is _NewerLibrarySchema) {
+        _loadError =
+            'This library was saved by a newer version of AetherTune and cannot be opened here.';
+      }
+    }
+    notifyListeners();
+  }
+
+  bool _decodeValues(LibraryValues prefs, {bool resumeInterrupted = true}) {
     final storedSchemaVersion = prefs.getInt(_schemaVersionKey) ?? 0;
     if (storedSchemaVersion > currentLibrarySchemaVersion) {
-      _loadError =
-          'This library was saved by a newer version of AetherTune and '
-          'cannot be opened here.';
-      notifyListeners();
-      return;
+      throw const _NewerLibrarySchema();
     }
-    await _migrateLibrarySchema(
-      prefs,
-      fromVersion: storedSchemaVersion,
-      toVersion: currentLibrarySchemaVersion,
-    );
+    _validateStoredCollections(prefs);
+    _tracks.clear();
+    _playlists.clear();
+    _customSmartPlaylists.clear();
+    _savedHistoryViews.clear();
+    _savedLibraryViews.clear();
+    _podcastSubscriptions.clear();
+    _lyricsByTrackId.clear();
+    _history.clear();
+    _searchQueryHistory.clear();
+    _progressByTrackId.clear();
+    _bookmarksByTrackId.clear();
+    _bookmarkTombstonesById.clear();
+    _offlineCacheQueue.clear();
+    _sponsorBlockCategories = Set.of(sponsor_block.sponsorBlockCategories);
     final rawTracks = prefs.getString(_tracksKey);
     if (rawTracks != null && rawTracks.isNotEmpty) {
       final decoded = jsonDecode(rawTracks) as List<dynamic>;
@@ -1899,7 +1981,8 @@ class LibraryStore extends ChangeNotifier {
         );
       for (var index = 0; index < _offlineCacheQueue.length; index += 1) {
         final entry = _offlineCacheQueue[index];
-        if (entry.status != OfflineCacheEntryStatus.processing) {
+        if (!resumeInterrupted ||
+            entry.status != OfflineCacheEntryStatus.processing) {
           continue;
         }
         _offlineCacheQueue[index] = entry.copyWith(
@@ -1930,36 +2013,95 @@ class LibraryStore extends ChangeNotifier {
     _sortCustomSmartPlaylists();
     _sortPodcastSubscriptions();
     _sortOfflineCacheQueue();
-    if (storedSchemaVersion != currentLibrarySchemaVersion) {
-      await prefs.setInt(_schemaVersionKey, currentLibrarySchemaVersion);
-    }
-    _loaded = true;
-    if (restoredInterruptedOfflineCacheWork) {
-      await _save();
-    }
-    notifyListeners();
+    return restoredInterruptedOfflineCacheWork;
   }
 
-  /// Migrates persisted library state from [fromVersion] to [toVersion].
-  ///
-  /// Each entry in [_schemaMigrations] upgrades the store from the previous
-  /// version to the version it is keyed by. Version 1 establishes the schema
-  /// envelope itself, so no data transformation is required to reach it.
-  Future<void> _migrateLibrarySchema(
-    SharedPreferences prefs, {
-    required int fromVersion,
-    required int toVersion,
-  }) async {
-    for (var version = fromVersion + 1; version <= toVersion; version++) {
-      final migration = _schemaMigrations[version];
-      if (migration != null) {
-        await migration(prefs);
+  void _validateStoredCollections(LibraryValues prefs) {
+    for (final key in [
+      _tracksKey,
+      _playlistsKey,
+      _customSmartPlaylistsKey,
+      _savedHistoryViewsKey,
+      _savedLibraryViewsKey,
+      _podcastSubscriptionsKey,
+      _lyricsKey,
+      _historyKey,
+      _progressKey,
+      _trackBookmarksKey,
+      _trackBookmarkTombstonesKey,
+      _offlineCacheQueueKey,
+      _searchQueryHistoryKey,
+    ]) {
+      final raw = prefs.getString(key);
+      if (raw == null) continue;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List ||
+          decoded.any(
+            (item) =>
+                key == _searchQueryHistoryKey ? item is! String : item is! Map,
+          )) {
+        throw FormatException('Invalid saved library collection: $key');
+      }
+    }
+    for (final key in [
+      _trackPlaybackSpeedOverridesKey,
+      _offlineCacheProviderLimitMegabytesKey,
+    ]) {
+      final raw = prefs.getString(key);
+      if (raw == null) continue;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map || decoded.values.any((value) => value is! num)) {
+        throw FormatException('Invalid saved library settings: $key');
       }
     }
   }
 
-  static const Map<int, Future<void> Function(SharedPreferences)>
-  _schemaMigrations = <int, Future<void> Function(SharedPreferences)>{};
+  Future<void> reloadSavedLibrary() async {
+    await _saveTail;
+    _loaded = false;
+    _saveEpoch++;
+    await load();
+  }
+
+  Future<String> exportRecoveryJson() async =>
+      const JsonEncoder.withIndent('  ').convert({
+        'recoveryVersion': 1,
+        'legacy': await _legacyValues(),
+        'snapshots': await _storage.recoveryData(),
+      });
+
+  Future<void> recoverPreviousLibrary() async {
+    await _saveTail;
+    await _storage.recoverPrevious();
+    await reloadSavedLibrary();
+  }
+
+  Future<void> resetAfterLoadFailure() async {
+    if (_loaded || _loadError == null) {
+      throw StateError('Library recovery is not active.');
+    }
+    final snapshot = await _storage.replaceForRecovery({
+      _schemaVersionKey: currentLibrarySchemaVersion,
+    });
+    _storageRevision = snapshot.revision;
+    _durableValues = snapshot.values;
+    await load();
+  }
+
+  Future<void> restoreBackupForRecovery(String backup) async {
+    if (_loaded || _loadError == null) {
+      throw StateError('Library recovery is not active.');
+    }
+    _recoverySave = true;
+    try {
+      await restoreBackupJson(backup);
+      _loaded = true;
+      _loadError = null;
+      notifyListeners();
+    } finally {
+      _recoverySave = false;
+    }
+  }
 
   Future<void> addTracks(List<Track> incoming) async {
     final knownIds = _tracks.map((track) => track.id).toSet();
@@ -2667,7 +2809,9 @@ class LibraryStore extends ChangeNotifier {
     return _updateOfflineCacheEntry(
       id,
       track: entry.track.copyWith(localPath: ''),
-      status: OfflineCacheEntryStatus.queued,
+      // Eviction is not a new download request; automatic retry would churn
+      // indefinitely when the requested library is larger than the quota.
+      status: OfflineCacheEntryStatus.paused,
       reason: reason,
       cachedByteCount: 0,
       cachedMediaChecksum: '',
@@ -2685,6 +2829,43 @@ class LibraryStore extends ChangeNotifier {
     final current = _tracks[index];
     _tracks[index] = current.copyWith(isFavorite: !current.isFavorite);
     await _save();
+    notifyListeners();
+  }
+
+  Future<void> forgetClearedOfflineFiles(Iterable<String> deletedPaths) async {
+    String key(String value) {
+      final normalized = path.normalize(value);
+      return path.context.style == path.Style.windows
+          ? normalized.toLowerCase()
+          : normalized;
+    }
+
+    final deleted = deletedPaths.map(key).toSet();
+    bool cleared(Track track) =>
+        track.hasLocalSource && deleted.contains(key(track.localPath!));
+    var changed = false;
+    for (var i = 0; i < _tracks.length; i++) {
+      if (cleared(_tracks[i])) {
+        _tracks[i] = _tracks[i].copyWith(localPath: '');
+        changed = true;
+      }
+    }
+    for (var i = 0; i < _offlineCacheQueue.length; i++) {
+      final entry = _offlineCacheQueue[i];
+      if (cleared(entry.track)) {
+        _offlineCacheQueue[i] = entry.copyWith(
+          track: entry.track.copyWith(localPath: ''),
+          status: OfflineCacheEntryStatus.paused,
+          reason: 'Cached media cleared.',
+          cachedByteCount: 0,
+          cachedMediaChecksum: '',
+          updatedAt: _clock(),
+        );
+        changed = true;
+      }
+    }
+    if (changed) await _save();
+    // Orphan/partial removal also changes the displayed physical cache usage.
     notifyListeners();
   }
 
@@ -10406,8 +10587,71 @@ class LibraryStore extends ChangeNotifier {
     _sortTracks();
   }
 
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _save() {
+    Map<String, Object?>? values;
+    Object? captureError;
+    StackTrace? captureStack;
+    try {
+      values = _captureValues();
+    } on Object catch (error, stack) {
+      captureError = error;
+      captureStack = stack;
+    }
+    final epoch = _saveEpoch;
+    final recovery = _recoverySave;
+    final operation = _saveTail.then((_) async {
+      if (epoch != _saveEpoch ||
+          (!_loaded && !recovery) ||
+          (_saveError != null && !recovery)) {
+        if (_durableValues != null) {
+          _decodeValues(
+            LibraryValues(_durableValues!),
+            resumeInterrupted: false,
+          );
+        }
+        throw const LibraryStorageException(
+          'The library change was not saved. Reload the saved library before trying again.',
+        );
+      }
+      try {
+        // Encoding failures follow queue order too: earlier valid saves may
+        // still commit before this change is rolled back.
+        if (captureError != null) {
+          Error.throwWithStackTrace(captureError, captureStack!);
+        }
+        final capturedValues = values!;
+        final snapshot = recovery
+            ? await _storage.replaceForRecovery(capturedValues)
+            : await _storage.write(
+                capturedValues,
+                expectedRevision: _storageRevision,
+              );
+        _storageRevision = snapshot.revision;
+        _durableValues = capturedValues;
+        _stateRevision++;
+        _saveError = null;
+      } on Object catch (error) {
+        _saveEpoch++;
+        _lastDuplicateResolution = null;
+        _decodeValues(
+          LibraryValues(_durableValues ?? {}),
+          resumeInterrupted: false,
+        );
+        _saveError = error is LibraryStorageConflict
+            ? error.toString()
+            : 'The library change could not be saved. The last saved state has been restored. Check available storage and reload before retrying.';
+        notifyListeners();
+        rethrow;
+      }
+    });
+    _saveTail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
+  Map<String, Object?> _captureValues() {
     final encodedTracks = jsonEncode(
       _tracks.map((track) => track.toJson()).toList(),
     );
@@ -10447,87 +10691,48 @@ class LibraryStore extends ChangeNotifier {
     final encodedOfflineCacheQueue = jsonEncode(
       _offlineCacheQueue.map((entry) => entry.toJson()).toList(),
     );
-    await prefs.setString(_tracksKey, encodedTracks);
-    await prefs.setString(_playlistsKey, encodedPlaylists);
-    await prefs.setString(
-      _customSmartPlaylistsKey,
-      encodedCustomSmartPlaylists,
-    );
-    await prefs.setString(_savedHistoryViewsKey, encodedSavedHistoryViews);
-    await prefs.setString(_savedLibraryViewsKey, encodedSavedLibraryViews);
-    await prefs.setString(
-      _podcastSubscriptionsKey,
-      encodedPodcastSubscriptions,
-    );
-    await prefs.setStringList(_followedArtistsKey, followedArtists);
-    await prefs.setString(_historyKey, encodedHistory);
-    await prefs.setString(_searchQueryHistoryKey, encodedSearchQueryHistory);
-    await prefs.setString(_progressKey, encodedProgress);
-    await prefs.setString(_trackBookmarksKey, encodedTrackBookmarks);
-    await prefs.setString(
-      _trackBookmarkTombstonesKey,
-      encodedBookmarkTombstones,
-    );
-    await prefs.setString(_lyricsKey, encodedLyrics);
-    await prefs.setBool(_pauseListeningHistoryKey, _pauseListeningHistory);
-    await prefs.setBool(
-      _recommendationFavoriteSignalsKey,
-      _recommendationFavoriteSignalsEnabled,
-    );
-    await prefs.setBool(
-      _recommendationHistorySignalsKey,
-      _recommendationHistorySignalsEnabled,
-    );
-    await prefs.setBool(_offlineModeKey, _offlineModeEnabled);
-    await prefs.setBool(_screenshotProtectionKey, _screenshotProtectionEnabled);
-    await prefs.setBool(
-      _automaticOfflineQueueKey,
-      _automaticOfflineQueueEnabled,
-    );
-    await prefs.setStringList(
-      _sponsorBlockCategoriesKey,
-      _sponsorBlockCategories.toList()..sort(),
-    );
-    await prefs.setString(_themePreferenceKey, _themePreference.name);
-    await prefs.setString(_accentColorKey, _accentColor.name);
-    await prefs.setString(
-      _listeningRecapVisualThemeKey,
-      _listeningRecapVisualTheme.name,
-    );
-    await prefs.setString(_languagePreferenceKey, _languagePreference.name);
-    await prefs.setString(
-      _trackPlaybackSpeedOverridesKey,
-      jsonEncode(_trackPlaybackSpeedOverrides),
-    );
-    await prefs.setDouble(_desktopQueuePaneWidthKey, _desktopQueuePaneWidth);
-    await prefs.setBool(_desktopMinimizeToTrayKey, _desktopMinimizeToTray);
-    await prefs.setBool(
-      _desktopArtistReleaseRefreshKey,
-      _desktopArtistReleaseRefreshEnabled,
-    );
-    await prefs.setStringList(
-      _desktopTrayTransportActionsKey,
-      desktopTrayTransportActionsToStorage(_desktopTrayTransportActions),
-    );
-    await prefs.setString(
-      _desktopDensityPreferenceKey,
-      _desktopDensityPreference.name,
-    );
-    await prefs.setBool(_onboardingCompletedKey, _onboardingCompleted);
-    await prefs.setInt(
-      _offlineCacheLimitMegabytesKey,
-      _offlineCacheLimitMegabytes,
-    );
-    await prefs.setString(
-      _offlineCacheProviderLimitMegabytesKey,
-      jsonEncode(_offlineCacheProviderLimitMegabytes),
-    );
-    await prefs.setString(_offlineCacheQueueKey, encodedOfflineCacheQueue);
-    await prefs.setStringList(
-      _watchedLocalFolderPathsKey,
-      _watchedLocalFolderPaths,
-    );
-    _stateRevision += 1;
+    return {
+      _schemaVersionKey: currentLibrarySchemaVersion,
+      _tracksKey: encodedTracks,
+      _playlistsKey: encodedPlaylists,
+      _customSmartPlaylistsKey: encodedCustomSmartPlaylists,
+      _savedHistoryViewsKey: encodedSavedHistoryViews,
+      _savedLibraryViewsKey: encodedSavedLibraryViews,
+      _podcastSubscriptionsKey: encodedPodcastSubscriptions,
+      _followedArtistsKey: followedArtists,
+      _historyKey: encodedHistory,
+      _searchQueryHistoryKey: encodedSearchQueryHistory,
+      _progressKey: encodedProgress,
+      _trackBookmarksKey: encodedTrackBookmarks,
+      _trackBookmarkTombstonesKey: encodedBookmarkTombstones,
+      _lyricsKey: encodedLyrics,
+      _pauseListeningHistoryKey: _pauseListeningHistory,
+      _recommendationFavoriteSignalsKey: _recommendationFavoriteSignalsEnabled,
+      _recommendationHistorySignalsKey: _recommendationHistorySignalsEnabled,
+      _offlineModeKey: _offlineModeEnabled,
+      _screenshotProtectionKey: _screenshotProtectionEnabled,
+      _automaticOfflineQueueKey: _automaticOfflineQueueEnabled,
+      _sponsorBlockCategoriesKey: _sponsorBlockCategories.toList()..sort(),
+      _themePreferenceKey: _themePreference.name,
+      _accentColorKey: _accentColor.name,
+      _listeningRecapVisualThemeKey: _listeningRecapVisualTheme.name,
+      _languagePreferenceKey: _languagePreference.name,
+      _trackPlaybackSpeedOverridesKey: jsonEncode(_trackPlaybackSpeedOverrides),
+      _desktopQueuePaneWidthKey: _desktopQueuePaneWidth,
+      _desktopMinimizeToTrayKey: _desktopMinimizeToTray,
+      _desktopArtistReleaseRefreshKey: _desktopArtistReleaseRefreshEnabled,
+      _desktopTrayTransportActionsKey: desktopTrayTransportActionsToStorage(
+        _desktopTrayTransportActions,
+      ),
+      _desktopDensityPreferenceKey: _desktopDensityPreference.name,
+      _onboardingCompletedKey: _onboardingCompleted,
+      _offlineCacheLimitMegabytesKey: _offlineCacheLimitMegabytes,
+      _offlineCacheProviderLimitMegabytesKey: jsonEncode(
+        _offlineCacheProviderLimitMegabytes,
+      ),
+      _offlineCacheQueueKey: encodedOfflineCacheQueue,
+      _watchedLocalFolderPathsKey: List<String>.of(_watchedLocalFolderPaths),
+    };
   }
 
   String _normalizeWatchedLocalFolderPath(String rootPath) {

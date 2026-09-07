@@ -2,8 +2,9 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-compose=(docker compose --env-file .env.example)
-test_port="${AETHERTUNE_TEST_PORT:-18080}"
+project="aethertune-ci-$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
+compose=(docker compose --project-name "$project" --env-file .env.example)
+test_port="${AETHERTUNE_TEST_PORT:-0}"
 
 cleanup() {
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -20,7 +21,13 @@ export AETHERTUNE_OPS_TOKEN='ci-only-compose-metrics-token'
 "${compose[@]}" config --quiet
 "${compose[@]}" up --build --detach
 
-base_url="http://127.0.0.1:${AETHERTUNE_PORT}"
+published_address="$("${compose[@]}" port aethertune-server 8080)"
+published_port="${published_address##*:}"
+if [[ ! "$published_port" =~ ^[0-9]+$ ]]; then
+  echo 'Docker Compose did not publish a valid fixture port.' >&2
+  exit 1
+fi
+base_url="http://127.0.0.1:${published_port}"
 ready=0
 for _ in $(seq 1 45); do
   if curl --fail --silent "$base_url/health" >/dev/null \
@@ -60,8 +67,8 @@ if [[ -z "$container_id" ]]; then
   exit 1
 fi
 
-if [[ "$(docker inspect --format '{{.Config.User}}' "$container_id")" != 'aethertune' ]]; then
-  echo 'Docker server is not running as the unprivileged aethertune user.' >&2
+if [[ "$(docker inspect --format '{{.Config.User}}' "$container_id")" != '10001:999' ]]; then
+  echo 'Docker server did not preserve the unprivileged volume UID/GID.' >&2
   exit 1
 fi
 if [[ "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$container_id")" != 'true' ]]; then
@@ -72,5 +79,7 @@ if ! docker inspect --format '{{json .HostConfig.CapDrop}}' "$container_id" | gr
   echo 'Docker server did not drop all Linux capabilities.' >&2
   exit 1
 fi
+
+"${compose[@]}" exec -T aethertune-server /usr/local/bin/aethertune-healthcheck
 
 echo 'Docker Compose server passed health, readiness, API, and container-hardening checks.'
