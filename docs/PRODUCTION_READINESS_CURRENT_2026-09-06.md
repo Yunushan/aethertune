@@ -1,5 +1,18 @@
 # Production Readiness Assessment
 
+## Publication Update: 2026-09-07
+
+PR #20 has merged into `main` at
+`e25bf1718056cd889565838a9547407d61b0f733`. Its
+[post-merge CI run](https://github.com/Yunushan/aethertune/actions/runs/34125664745)
+passed, along with CodeQL, OSV, and container scanning on that SHA. The findings
+below describing the old `c95f7ac` main and unpublished fixes are historical;
+they must not be presented as an assessment of the current main. The full
+production-readiness goal remains incomplete. Passing CI does not establish
+signed installation, physical-device acceptance, or deployed operations.
+See [the September 7 checkpoint](PRODUCTION_READINESS_CHECKPOINT_2026-09-07.md)
+for the new authenticated load/restart gate and its bounded Windows/Linux results.
+
 ## Current Decision: 2026-09-06, 18:12 UTC
 
 **Published GitHub main: 54/100. Unpublished local candidate: 73/100,
