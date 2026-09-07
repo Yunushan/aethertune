@@ -21,6 +21,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/ios_acceptance_control.dart';
 import 'support/native_sync_transport_contracts.dart';
 
 const _secretKey = 'aethertune.ios.acceptance.secret';
@@ -29,24 +30,25 @@ const _seeded = 'aethertune.ios.acceptance.seeded';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  final phase = Platform.environment['AETHERTUNE_ACCEPTANCE_PHASE'];
-  final device = Platform.environment['AETHERTUNE_ACCEPTANCE_UDID'];
+  const device = String.fromEnvironment('AETHERTUNE_ACCEPTANCE_UDID');
+  const fixtureName = String.fromEnvironment('AETHERTUNE_ACCEPTANCE_NAME');
   const source = String.fromEnvironment('AETHERTUNE_ACCEPTANCE_SHA');
 
-  testWidgets('native iOS acceptance: $phase', (tester) async {
-    // Physical devices do not provide these Simulator-only identity variables.
+  testWidgets('native iOS acceptance', (tester) async {
     expect(Platform.isIOS, isTrue);
-    expect(device, matches(RegExp(r'^[0-9A-Fa-f-]{36}$')));
-    expect(Platform.environment['SIMULATOR_UDID'], device);
-    expect(
-      Platform.environment['SIMULATOR_DEVICE_NAME'],
-      startsWith('AetherTune_Acceptance_'),
-    );
-    expect(source, matches(RegExp(r'^[0-9a-f]{40}$')));
-    expect(['seed', 'reopen', 'sync'], contains(phase));
     final support = await getApplicationSupportDirectory();
-    expect(support.path, contains('/CoreSimulator/Devices/$device/'));
     final fixture = Directory(p.join(support.path, 'aethertune-ios-fixture'));
+    // Dart's iOS runtime exposes an empty Platform.environment. Read the
+    // host-owned control file, bound to this binary and the actual guest path.
+    final phase = iosAcceptancePhase(
+      controlJson: await File(
+        p.join(fixture.path, 'control.json'),
+      ).readAsString(),
+      supportPath: support.path,
+      device: device,
+      fixtureName: fixtureName,
+      source: source,
+    );
     expect(
       await File(p.join(fixture.path, 'marker')).readAsString(),
       'aethertune-ios-native-acceptance-v1\n',

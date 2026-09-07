@@ -197,6 +197,12 @@ class FakeCommands:
         if args[:3] == ["flutter", "build", "ios"]:
             if "lib/main.dart" in args and self.failure == "restore":
                 raise RuntimeError("ordinary build failed")
+            if ios.TARGET in args:
+                if f"--dart-define=AETHERTUNE_ACCEPTANCE_UDID={DEVICE}" not in args:
+                    raise AssertionError("Probe binary must be bound to the owned guest")
+                name = self.data["devices"][RUNTIME][0]["name"]
+                if f"--dart-define=AETHERTUNE_ACCEPTANCE_NAME={name}" not in args:
+                    raise AssertionError("Probe binary must be bound to the fixture name")
             self.bundle.mkdir(parents=True, exist_ok=True)
             with (self.bundle / "Info.plist").open("wb") as stream:
                 plistlib.dump({"CFBundleIdentifier": ios.BUNDLE, "CFBundleExecutable": "Runner"}, stream)
@@ -205,10 +211,11 @@ class FakeCommands:
         if args[:2] == ["flutter", "drive"]:
             if "--keep-app-running" not in args:
                 raise AssertionError("Driver would uninstall and invalidate persistence")
-            env = kwargs["env"]
-            phase = env["SIMCTL_CHILD_AETHERTUNE_ACCEPTANCE_PHASE"]
-            if env["SIMCTL_CHILD_AETHERTUNE_ACCEPTANCE_UDID"] != DEVICE:
-                raise AssertionError("Wrong device environment")
+            control = json.loads((self.support / "aethertune-ios-fixture/control.json").read_text())
+            phase = control["phase"]
+            name = self.data["devices"][RUNTIME][0]["name"]
+            if control != {"phase": phase, "device": DEVICE, "fixtureName": name, "sourceCommit": SOURCE}:
+                raise AssertionError("Wrong app-container control identity")
             payload = report(phase, 100 + ios.PHASES.index(phase))
             if self.failure == phase:
                 payload["status"] = "failed"

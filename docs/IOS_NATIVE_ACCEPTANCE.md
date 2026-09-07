@@ -8,10 +8,19 @@ file-backed library storage, preferences, decoder/player and Rust TLS transport.
 It does not replace physical-device audio/lifecycle, accessibility, signed
 installation, upgrade/rollback or deployed hosted-sync acceptance.
 
-The initial implementation has local launcher regression tests and Dart static
-analysis. **An actual passing iOS run is not yet established.** Passing the
-Python launcher tests does not count as native runtime evidence, and no readiness
-score increase is claimed merely for adding this workflow.
+The first hosted run built and installed the probe on iOS 26.5 with Xcode 26.6,
+then rejected missing fixture identity before touching the library. The pinned
+Dart runtime returns an empty `Platform.environment` on iOS, so environment-based
+control could not work. The follow-up uses a JSON receipt in the owned app
+container, checked against the compiled guest UUID, fixture name, source commit
+and native application-support path. A physical-device container cannot satisfy
+that path check. The failed run restored ordinary output and deleted its guest.
+
+**An actual passing iOS run is not yet established.** Passing the launcher and
+control-parser tests does not count as native runtime evidence, and no readiness
+score increase is claimed merely for adding this workflow. First-run evidence:
+[run 34149732012](https://github.com/Yunushan/aethertune/actions/runs/34149732012),
+artifact SHA-256 `e6c4f5a59cfd507844bcff97416fd9579f506e639cbc6c7d3311e88c22713f9b`.
 
 ## Execution
 
@@ -29,8 +38,11 @@ self-hosted runners. Do not spoof the hosted-runner environment to bypass this
 guard. Installed runtime inventory determines the available compatible iPhone;
 the exact runtime, type, UUID, Xcode version and Flutter SDK are retained.
 
-One probe app is built and installed. The same binary executes three times,
-without uninstalling or clearing its data between phases:
+One probe app is built and installed with the owned simulator's UUID/name and
+source commit compiled into the binary. Before each launch the host writes only
+the fixture control receipt, not library/preferences/keychain state. The same
+binary executes three times, without uninstalling or clearing its data between
+phases:
 
 | Phase | Required behavior |
 | --- | --- |

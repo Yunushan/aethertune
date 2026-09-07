@@ -270,7 +270,9 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
         sim.command("keychain", "add-root-cert", str(certs / "trusted-ca.pem"))
         build_attempted = True
         run(["flutter", "build", "ios", "--simulator", "--debug", "--no-pub",
-             "--target", TARGET, f"--dart-define=AETHERTUNE_ACCEPTANCE_SHA={source}"],
+             "--target", TARGET, f"--dart-define=AETHERTUNE_ACCEPTANCE_SHA={source}",
+             f"--dart-define=AETHERTUNE_ACCEPTANCE_UDID={sim.device}",
+             f"--dart-define=AETHERTUNE_ACCEPTANCE_NAME={sim.name}"],
             cwd=APP, timeout=1200)
         bundles = list((APP / "build/ios/iphonesimulator").glob("*.app"))
         if len(bundles) != 1:
@@ -291,13 +293,16 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
             shutil.copyfile(certs / name, fixture / name)
         pids: set[int] = set()
         for phase in PHASES:
-            env = dict(os.environ, SIMCTL_CHILD_AETHERTUNE_ACCEPTANCE_PHASE=phase,
-                       SIMCTL_CHILD_AETHERTUNE_ACCEPTANCE_UDID=sim.device)
+            current_fixture = contained(sim.support() / "aethertune-ios-fixture", sim.support())
+            write_json(current_fixture / "control.json", {
+                "phase": phase, "device": sim.device, "fixtureName": sim.name,
+                "sourceCommit": source,
+            })
             try:
                 run(["flutter", "drive", "--no-pub", "-d", sim.device,
                      "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
                      "--use-application-binary", str(bundle), "--keep-app-running"],
-                    cwd=APP, timeout=360, env=env)
+                    cwd=APP, timeout=360)
             except Exception:
                 try:
                     collect(sim, evidence, phase)
