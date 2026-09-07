@@ -14,7 +14,7 @@ void main() {
         .findAllElements('uses-permission')
         .map(
           (element) =>
-              element.getAttribute('name', namespace: _androidNamespace),
+              element.getAttribute('name', namespaceUri: _androidNamespace),
         )
         .toSet();
     expect(permissions, contains('android.permission.WAKE_LOCK'));
@@ -32,7 +32,7 @@ void main() {
     expect(
       activityElement.getAttribute(
         'supportsPictureInPicture',
-        namespace: _androidNamespace,
+        namespaceUri: _androidNamespace,
       ),
       'true',
     );
@@ -64,7 +64,7 @@ void main() {
           .map(
             (element) => element.getAttribute(
               'shortcutId',
-              namespace: _androidNamespace,
+              namespaceUri: _androidNamespace,
             ),
           )
           .toSet(),
@@ -76,7 +76,7 @@ void main() {
             (element) => element
                 .findElements('intent')
                 .single
-                .getAttribute('action', namespace: _androidNamespace),
+                .getAttribute('action', namespaceUri: _androidNamespace),
           )
           .toSet(),
       <String?>{
@@ -95,7 +95,7 @@ void main() {
     );
     final application = document.findAllElements('application').single;
     expect(
-      application.getAttribute('allowBackup', namespace: _androidNamespace),
+      application.getAttribute('allowBackup', namespaceUri: _androidNamespace),
       'false',
     );
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
@@ -189,7 +189,8 @@ Set<String?> _componentNames(XmlDocument document, String elementName) {
   return document
       .findAllElements(elementName)
       .map(
-        (element) => element.getAttribute('name', namespace: _androidNamespace),
+        (element) =>
+            element.getAttribute('name', namespaceUri: _androidNamespace),
       )
       .toSet();
 }

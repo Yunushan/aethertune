@@ -9,10 +9,12 @@ dart run bin/server.dart
 
 ## Docker deployment
 
-The checked-in Docker image compiles a self-contained server executable and
-runs it as an unprivileged user. It uses a named Docker volume for durable
-snapshots and separate `/health` liveness and `/ready` persistence-readiness
-checks.
+The checked-in Docker image compiles the server and readiness probe, then runs
+them in a digest-pinned Distroless Debian 13 runtime without a shell or package
+manager. Numeric UID/GID `10001:999` preserves access to volumes created by the
+previous image. New data directories are private (`0700`). It uses a named Docker
+volume for durable snapshots and separate `/health` liveness and `/ready`
+persistence-readiness checks.
 
 ```bash
 cd services/server
@@ -21,7 +23,14 @@ cp .env.example .env
 docker compose up --build -d
 docker compose ps
 curl http://127.0.0.1:8080/health
+docker compose exec -T aethertune-server /usr/local/bin/aethertune-healthcheck
 ```
+
+The compiled probe exits zero only for the expected local readiness response;
+it requires no credentials. Use host-side tools for HTTP diagnostics rather
+than `docker exec sh` or `curl` inside the runtime. The shared container gate
+verifies the base publisher's signature, exercises the exact built image, and
+enforces its vulnerability scan; see the [release guide](../../docs/RELEASE_GUIDE.md).
 
 The service rejects a missing or placeholder `AETHERTUNE_OPS_TOKEN` at startup.
 This operations token protects metrics and all managed-account administration;
@@ -61,17 +70,39 @@ inside the container; its published host port remains controlled separately by
 `PORT` defaults to `8080` and must be an integer from `1` through `65535` when
 configured. Invalid values stop startup instead of silently selecting a
 different port. Idle HTTP connections are closed after 60 seconds.
+JSON request bodies also have a 30-second total read deadline, including clients
+that keep trickling bytes. Expiry cancels the body stream and records HTTP 408;
+the native HTTP adapter may close the unfinished connection before delivering
+the response. No partial snapshot is committed. Clients should treat either
+outcome as a failed upload and refresh the revision before retrying.
+
+The backup helper coordinates first-byte OS record locks with the running
+executable. Existing data requests drain before snapshots are read, while new
+data requests receive retryable HTTP 503 and `/health` remains available.
+See the deployment guide for installation, legacy-binary compatibility,
+bounded archive validation, and the compiled-service recovery drill.
 
 The in-process request limiter defaults to 120 requests per minute for each
-bearer-token digest and one anonymous bucket. Set
-`AETHERTUNE_RATE_LIMIT_PER_MINUTE` to a positive integer to tune that budget;
-invalid values stop startup. Keep an additional rate limit at the reverse
-proxy for IP-based protection.
+verified account. Anonymous requests and invalid bearer tokens share a bucket
+per connection IP, or one shared bucket if connection information is absent.
+Set `AETHERTUNE_RATE_LIMIT_PER_MINUTE` to tune that budget. All requests also
+pass a per-connection-IP ingress limit before token verification; its default
+is ten times the account budget and can be set independently with
+`AETHERTUNE_INGRESS_RATE_LIMIT_PER_MINUTE`. Both settings require positive
+integers. Rotating tokens does not reset either limit. When the bounded bucket
+table is full, new identities receive HTTP 429 until a bucket expires; live
+buckets are never evicted to admit new traffic.
 
-Managed device tokens expire after 365 days by default. Set
-`AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` to an integer from 1 through 3650 to reject
-managed tokens at that age, or to `0` to disable expiry entirely; issue a
-replacement token before the deadline.
+Forwarded IP headers are not trusted. Behind Caddy or another reverse proxy,
+the ingress budget is shared by clients using that proxy address. Size it for
+the deployment and retain a client-IP limit at the trusted reverse proxy.
+
+New managed device tokens expire after 365 days by default. Set
+`AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` to an integer from 1 through 3650 to assign
+that lifetime at issuance, or to `0` to issue non-expiring tokens. This applies
+to both ordinary and recovery issuance. Issue a replacement before its deadline.
+Renaming a device, editing a profile, recording activity, restarting the server
+or changing this setting does not reset an already assigned expiration.
 Static `AETHERTUNE_SYNC_USERS` credentials are unaffected.
 
 For managed accounts, operations can issue a single-use recovery code through
@@ -79,6 +110,8 @@ For managed accounts, operations can issue a single-use recovery code through
 once, stored only as a digest, and expires after 24 hours. Redeem it with
 `POST /api/v1/sync/recovery` using `recoveryCode` and `deviceName`; redemption
 revokes every prior device token before returning one replacement bearer token.
+The replacement's configured lifetime starts at redemption, not when the lost
+device's token was originally issued.
 
 Put the service behind a TLS-terminating reverse proxy before exposing it
 outside a trusted LAN. Do not publish the container port directly to the
@@ -192,6 +225,9 @@ List account and non-secret device metadata with
 `GET /api/v1/admin/sync-accounts`. Rotate a device token by repeating the
 `POST` with `replaceTokenId` set to its listed token ID. The replacement is
 committed atomically, and the old token stops authenticating immediately.
+Token metadata includes `expiresAt` as a UTC timestamp when a deadline is
+assigned. An absent field on this server means that the saved token is
+non-expiring; this can be an intentional setting or a legacy credential.
 Each managed token also reports its last successful authentication time. The
 server updates that operational field at most once per 24 hours per device, so
 normal sync traffic does not create a registry write for every request. It
@@ -206,6 +242,33 @@ curl --fail-with-body -X DELETE \
   --data '{"accountId":"primary","tokenId":"listed-token-id"}' \
   https://sync.example.com/api/v1/admin/sync-tokens
 ```
+
+### Upgrading token-expiry enforcement
+
+Older builds could issue recovery tokens without an expiration or remove a
+token's expiration when its device was renamed. The fixes apply to new
+recovery issuance and future renames; they cannot reconstruct deadlines already
+lost from stored records. Such records cannot be reliably distinguished from
+intentionally non-expiring or pre-expiry legacy tokens. An upgrade therefore
+does not silently expire them or lock out existing devices.
+
+Before exposing an upgraded service with an expiring-token policy:
+
+1. Confirm `AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` is nonzero, or leave it unset for
+   the default 365 days, and restart with that configuration.
+2. Use the authenticated operations account list to review devices whose token
+   metadata has no `expiresAt`. Never publish raw registry files or responses
+   from token issuance.
+3. Rotate each retained non-expiring device token using `replaceTokenId`, and
+   update that device's client credentials. Revoke unused devices instead.
+4. Confirm each replacement has an `expiresAt`, the old credential receives
+   HTTP 401, and the replacement can still read the account after a restart.
+
+Do not edit registry JSON while the server is running. Existing recovery codes
+remain digest-only and single-use; redeeming one on the fixed server revokes
+all previous device tokens and issues a replacement with the current policy.
+
+### Device profiles
 
 An authenticated device can call `GET /api/v1/auth/profile` to verify its
 account and device identity. Managed profile responses advertise

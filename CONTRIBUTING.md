@@ -17,6 +17,12 @@ Thanks for helping build a free and open music app.
 ./scripts/check.sh
 ```
 
+Client checks require Python 3.11+ and Rustup on PATH. `scripts/check.sh` and
+`make client-test` prepare the pinned, source-built native sync transport before
+Flutter tests. For direct `flutter test` invocations, first run
+`python3 scripts/ci/build_native_transport.py --install-toolchain --test` from
+the repository root. See [native transport maintenance](docs/NATIVE_SYNC_TRANSPORT.md).
+
 ## Branch naming
 
 Use clear names:

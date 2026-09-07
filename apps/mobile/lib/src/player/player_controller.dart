@@ -6,7 +6,6 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/sleep_timer_duration.dart';
 import '../domain/playback_speed.dart';
@@ -16,6 +15,7 @@ import '../domain/track_queue.dart';
 import 'offline_playback_policy.dart';
 import 'playback_audio_effects.dart';
 import 'playback_audio_engine.dart';
+import 'player_state_store.dart';
 
 typedef TrackPlaybackResolver = Future<Track> Function(Track track);
 
@@ -48,9 +48,11 @@ class PlayerController extends ChangeNotifier {
 
   PlayerController({
     PlaybackAudioEngine? audioEngine,
+    PlayerStateStore? stateStore,
     TrackPlaybackResolver? trackResolver,
     DateTime Function()? clock,
   }) : _audio = audioEngine ?? JustAudioPlaybackEngine(),
+       _stateStore = stateStore ?? PlayerStateStore(),
        _trackResolver = trackResolver,
        _clock = clock ?? DateTime.now {
     final crossfadeEngine = _audio;
@@ -82,13 +84,23 @@ class PlayerController extends ChangeNotifier {
     _savedQueues.add(_emptySavedQueue());
   }
 
-  static const _queueSnapshotKey = 'aethertune.player_queue.v1';
-  static const _savedQueuesSnapshotKey = 'aethertune.player_queues.v2';
-  static const _playbackSettingsKey = 'aethertune.playback_settings.v1';
+  static const _queueSnapshotKey = PlayerStateStore.queueKey;
+  static const _savedQueuesSnapshotKey = PlayerStateStore.queuesKey;
+  static const _playbackSettingsKey = PlayerStateStore.settingsKey;
   static const _defaultQueueId = 'default';
   static const _defaultQueueName = 'Queue 1';
 
   final PlaybackAudioEngine _audio;
+  final PlayerStateStore _stateStore;
+  Future<void>? _queueRestore;
+  Future<void>? _settingsRestore;
+  String? _initialPlaybackSettings;
+  bool _restoringPlayerState = false;
+  bool _disposed = false;
+  int _persistenceEpoch = 0;
+
+  String? get persistenceError => _stateStore.error;
+  bool get restoringPlayerState => _restoringPlayerState;
   TrackPlaybackResolver? _trackResolver;
   final DateTime Function() _clock;
   final List<Track> _queue = <Track>[];
@@ -120,6 +132,8 @@ class PlayerController extends ChangeNotifier {
   bool _playbackSettingsLoaded = false;
   bool _offlineModeEnabled = false;
   bool _isLoadingQueue = false;
+  Completer<void>? _queueLoadCompletion;
+  bool _queueReloadRequested = false;
   int _playbackStartSerial = 0;
   double? _sleepFadeStartVolume;
   double _volume = maxVolume;
@@ -329,6 +343,7 @@ class PlayerController extends ChangeNotifier {
     TrackQueueReferenceSnapshot snapshot,
     Iterable<Track> libraryTracks,
   ) async {
+    if (!await _ensureQueueReady()) return 0;
     final tracksById = <String, Track>{
       for (final track in libraryTracks) track.id: track,
     };
@@ -370,7 +385,7 @@ class PlayerController extends ChangeNotifier {
     _loadedTrackId = null;
     _loadedPlaybackQueue.clear();
     _duration = Duration.zero;
-    await _saveQueueSnapshot();
+    if (!await _saveQueueSnapshot()) return 0;
     notifyListeners();
     return restoredQueue.length;
   }
@@ -396,60 +411,66 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadPersistedQueue() async {
-    if (_queueSnapshotLoaded) {
-      return;
-    }
+  Future<void> loadPersistedQueue() => _queueRestore ??= _loadPersistedQueue();
 
-    final prefs = await SharedPreferences.getInstance();
-    final rawCollection = prefs.getString(_savedQueuesSnapshotKey);
+  Future<void> _loadPersistedQueue() async {
+    if (_queueSnapshotLoaded) return;
+    try {
+      if (!await _stateStore.load()) return;
+      _restoreQueueValues(_stateStore.values);
+      _queueSnapshotLoaded = true;
+      if (!_restoringPlayerState) await _reconcileQueuedTracksFromLibrary();
+    } on Object {
+      _stateStore.reportLoadFailure();
+    } finally {
+      _notifyPersistenceChanged();
+    }
+  }
+
+  void _restoreQueueValues(Map<String, Object?> values) {
+    final rawCollection = values[_savedQueuesSnapshotKey] as String?;
     if (rawCollection != null && rawCollection.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(rawCollection) as Map;
-        final collection = SavedTrackQueueCollection.fromJson(
+      final decoded = jsonDecode(rawCollection) as Map;
+      final collection = SavedTrackQueueCollection.fromJson(
+        Map<String, Object?>.from(decoded),
+      );
+      _savedQueues
+        ..clear()
+        ..addAll(collection.queues);
+      _activeQueueId = collection.activeQueueId;
+      _restoreActiveSavedQueue();
+    } else {
+      final rawSnapshot = values[_queueSnapshotKey] as String?;
+      if (rawSnapshot != null && rawSnapshot.isNotEmpty) {
+        final decoded = jsonDecode(rawSnapshot) as Map;
+        final snapshot = TrackQueueSnapshot.fromJson(
           Map<String, Object?>.from(decoded),
         );
         _savedQueues
           ..clear()
-          ..addAll(collection.queues);
-        _activeQueueId = collection.activeQueueId;
+          ..add(
+            SavedTrackQueue(
+              id: _defaultQueueId,
+              name: _defaultQueueName,
+              snapshot: snapshot,
+            ),
+          );
+        _activeQueueId = _defaultQueueId;
         _restoreActiveSavedQueue();
-      } catch (_) {
-        await prefs.remove(_savedQueuesSnapshotKey);
+      } else {
         _resetSavedQueues();
       }
-    } else {
-      final rawSnapshot = prefs.getString(_queueSnapshotKey);
-      if (rawSnapshot != null && rawSnapshot.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(rawSnapshot) as Map;
-          final snapshot = TrackQueueSnapshot.fromJson(
-            Map<String, Object?>.from(decoded),
-          );
-          _savedQueues
-            ..clear()
-            ..add(
-              SavedTrackQueue(
-                id: _defaultQueueId,
-                name: _defaultQueueName,
-                snapshot: snapshot,
-              ),
-            );
-          _activeQueueId = _defaultQueueId;
-          _restoreActiveSavedQueue();
-        } catch (_) {
-          await prefs.remove(_queueSnapshotKey);
-          _resetSavedQueues();
-        }
-      }
     }
+  }
 
-    _queueSnapshotLoaded = true;
-    await _reconcileQueuedTracksFromLibrary();
-    notifyListeners();
+  Future<bool> _ensureQueueReady() async {
+    if (_restoringPlayerState || _disposed) return false;
+    await loadPersistedQueue();
+    return _queueSnapshotLoaded && _stateStore.ready;
   }
 
   Future<SavedTrackQueue?> createSavedQueue(String name) async {
+    if (!await _ensureQueueReady()) return null;
     final normalizedName = _normalizeSavedQueueName(name);
     if (normalizedName == null ||
         _savedQueues.length >= SavedTrackQueueCollection.maxQueues) {
@@ -462,18 +483,24 @@ class PlayerController extends ChangeNotifier {
     }
 
     _captureActiveSavedQueue();
+    final timestamp = _clock().toUtc().microsecondsSinceEpoch;
+    String id;
+    do {
+      id = '$timestamp-${_nextSavedQueueSerial += 1}';
+    } while (_savedQueues.any((queue) => queue.id == id));
     final created = SavedTrackQueue(
-      id: '${_clock().toUtc().microsecondsSinceEpoch}-${_nextSavedQueueSerial += 1}',
+      id: id,
       name: normalizedName,
       snapshot: const TrackQueueSnapshot(tracks: <Track>[]),
     );
     _savedQueues.add(created);
-    await _saveQueueSnapshot();
+    if (!await _saveQueueSnapshot()) return null;
     notifyListeners();
     return created;
   }
 
   Future<bool> renameSavedQueue(String queueId, String name) async {
+    if (!await _ensureQueueReady()) return false;
     final normalizedName = _normalizeSavedQueueName(name);
     if (normalizedName == null ||
         _savedQueues.any(
@@ -489,12 +516,13 @@ class PlayerController extends ChangeNotifier {
     }
     _captureActiveSavedQueue();
     _savedQueues[index] = _savedQueues[index].copyWith(name: normalizedName);
-    await _saveQueueSnapshot();
+    if (!await _saveQueueSnapshot()) return false;
     notifyListeners();
     return true;
   }
 
   Future<bool> switchSavedQueue(String queueId) async {
+    if (!await _ensureQueueReady()) return false;
     if (queueId == _activeQueueId ||
         !_savedQueues.any((queue) => queue.id == queueId)) {
       return false;
@@ -504,12 +532,13 @@ class PlayerController extends ChangeNotifier {
     _activeQueueId = queueId;
     _restoreActiveSavedQueue();
     _duration = Duration.zero;
-    await _saveQueueSnapshot();
+    if (!await _saveQueueSnapshot()) return false;
     notifyListeners();
     return true;
   }
 
   Future<bool> deleteSavedQueue(String queueId) async {
+    if (!await _ensureQueueReady()) return false;
     if (_savedQueues.length <= 1) {
       return false;
     }
@@ -528,125 +557,128 @@ class PlayerController extends ChangeNotifier {
     } else {
       _savedQueues.removeAt(index);
     }
-    await _saveQueueSnapshot();
+    if (!await _saveQueueSnapshot()) return false;
     notifyListeners();
     return true;
   }
 
-  Future<void> loadPersistedPlaybackSettings() async {
-    if (_playbackSettingsLoaded) {
-      return;
-    }
+  Future<void> loadPersistedPlaybackSettings() =>
+      _settingsRestore ??= _loadPersistedPlaybackSettings();
 
-    final prefs = await SharedPreferences.getInstance();
-    final rawSettings = prefs.getString(_playbackSettingsKey);
+  Future<void> _loadPersistedPlaybackSettings() async {
+    if (_playbackSettingsLoaded) return;
+    try {
+      if (!await _stateStore.load()) return;
+      _initialPlaybackSettings ??= _capturePlaybackSettings();
+      await _applyPersistedPlaybackSettings(
+        _stateStore.values[_playbackSettingsKey] as String?,
+      );
+      _playbackSettingsLoaded = true;
+    } on Object {
+      _stateStore.reportPlaybackRestoreFailure();
+    } finally {
+      _notifyPersistenceChanged();
+    }
+  }
+
+  Future<bool> _ensureSettingsReady() async {
+    if (_restoringPlayerState || _disposed) return false;
+    await loadPersistedPlaybackSettings();
+    return _playbackSettingsLoaded && _stateStore.ready;
+  }
+
+  Future<void> _applyPersistedPlaybackSettings(String? rawSettings) async {
     if (rawSettings != null && rawSettings.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(rawSettings) as Map;
-        final settings = Map<String, Object?>.from(decoded);
-        await _audio.setShuffleModeEnabled(
-          settings['shuffleEnabled'] as bool? ?? false,
+      final decoded = jsonDecode(rawSettings) as Map;
+      final settings = Map<String, Object?>.from(decoded);
+      await _audio.setShuffleModeEnabled(
+        settings['shuffleEnabled'] as bool? ?? false,
+      );
+      await _audio.setLoopMode(
+        _loopModeFromJson(settings['loopMode'] as String?),
+      );
+      _defaultPlaybackSpeed = _playbackSpeedFromJson(settings['playbackSpeed']);
+      await _audio.setSpeed(_defaultPlaybackSpeed);
+      _defaultPlaybackPitch = _playbackPitchFromJson(settings['playbackPitch']);
+      _trackPlaybackPitchOverrides
+        ..clear()
+        ..addAll(
+          _trackPlaybackPitchOverridesFromJson(
+            settings['trackPlaybackPitchOverrides'],
+          ),
         );
-        await _audio.setLoopMode(
-          _loopModeFromJson(settings['loopMode'] as String?),
+      if (supportsPitch) {
+        await (_audio as PitchPlaybackAudioEngine).setPitch(
+          _defaultPlaybackPitch,
         );
-        _defaultPlaybackSpeed = _playbackSpeedFromJson(
-          settings['playbackSpeed'],
-        );
-        await _audio.setSpeed(_defaultPlaybackSpeed);
-        _defaultPlaybackPitch = _playbackPitchFromJson(
-          settings['playbackPitch'],
-        );
-        _trackPlaybackPitchOverrides
-          ..clear()
-          ..addAll(
-            _trackPlaybackPitchOverridesFromJson(
-              settings['trackPlaybackPitchOverrides'],
-            ),
-          );
-        if (supportsPitch) {
-          await (_audio as PitchPlaybackAudioEngine).setPitch(
-            _defaultPlaybackPitch,
-          );
-        }
-        _skipBackwardInterval = _skipIntervalFromJson(
-          settings['skipBackwardSeconds'],
-          fallback: _skipBackwardInterval,
-        );
-        _skipForwardInterval = _skipIntervalFromJson(
-          settings['skipForwardSeconds'],
-          fallback: _skipForwardInterval,
-        );
-        _skipSilenceEnabled = settings['skipSilenceEnabled'] as bool? ?? false;
-        _skipFailedTracksEnabled =
-            settings['skipFailedTracksEnabled'] as bool? ?? true;
-        _volume = _volumeFromJson(settings['volume']);
-        _loudnessNormalizationEnabled =
-            settings['loudnessNormalizationEnabled'] as bool? ?? false;
-        _replayGainMode = _replayGainModeFromJson(settings['replayGainMode']);
-        _equalizerEnabled = settings['equalizerEnabled'] as bool? ?? false;
-        _equalizerPreset = _equalizerPresetFromJson(
-          settings['equalizerPreset'],
-        );
-        _customEqualizerPoints = _equalizerPointsFromJson(
-          settings['equalizerCustomPoints'],
-        );
-        if (_equalizerPreset == PlaybackEqualizerPreset.custom &&
-            _customEqualizerPoints.isEmpty) {
-          _equalizerPreset = PlaybackEqualizerPreset.flat;
-        }
-        _loudnessEnhancerEnabled =
-            settings['loudnessEnhancerEnabled'] as bool? ?? false;
-        _loudnessEnhancerTargetGainDb = _loudnessEnhancerGainFromJson(
-          settings['loudnessEnhancerTargetGainDb'],
-        );
-        _virtualizerEnabled = settings['virtualizerEnabled'] as bool? ?? false;
-        _virtualizerStrength = _virtualizerStrengthFromJson(
-          settings['virtualizerStrength'],
-        );
-        final crossfadeDuration = _crossfadeDurationFromJson(
-          settings['crossfadeMilliseconds'],
-        );
-        if (supportsCrossfade) {
-          await (_audio as CrossfadePlaybackAudioEngine).setCrossfadeDuration(
-            crossfadeDuration,
-          );
-        }
-        if (supportsSkipSilence) {
-          await (_audio as SkipSilencePlaybackAudioEngine)
-              .setSkipSilenceEnabled(_skipSilenceEnabled);
-        }
-        final audioEffectsEngine = _audioEffectsEngine;
-        if (audioEffectsEngine != null &&
-            audioEffectsEngine.supportsEqualizer) {
-          await audioEffectsEngine.setEqualizerProfile(
-            _currentEqualizerProfile,
-          );
-          await audioEffectsEngine.setEqualizerEnabled(_equalizerEnabled);
-        }
-        if (audioEffectsEngine != null &&
-            audioEffectsEngine.supportsLoudnessEnhancer) {
-          await audioEffectsEngine.setLoudnessEnhancerTargetGain(
-            _loudnessEnhancerTargetGainDb,
-          );
-          await audioEffectsEngine.setLoudnessEnhancerEnabled(
-            _loudnessEnhancerEnabled,
-          );
-        }
-        final virtualizerEngine = _virtualizerEngine;
-        if (virtualizerEngine != null &&
-            virtualizerEngine.supportsVirtualizer) {
-          await virtualizerEngine.setVirtualizerStrength(_virtualizerStrength);
-          await virtualizerEngine.setVirtualizerEnabled(_virtualizerEnabled);
-        }
-        await _applyOutputVolume();
-      } catch (_) {
-        await prefs.remove(_playbackSettingsKey);
       }
+      _skipBackwardInterval = _skipIntervalFromJson(
+        settings['skipBackwardSeconds'],
+        fallback: _skipBackwardInterval,
+      );
+      _skipForwardInterval = _skipIntervalFromJson(
+        settings['skipForwardSeconds'],
+        fallback: _skipForwardInterval,
+      );
+      _skipSilenceEnabled = settings['skipSilenceEnabled'] as bool? ?? false;
+      _skipFailedTracksEnabled =
+          settings['skipFailedTracksEnabled'] as bool? ?? true;
+      _volume = _volumeFromJson(settings['volume']);
+      _loudnessNormalizationEnabled =
+          settings['loudnessNormalizationEnabled'] as bool? ?? false;
+      _replayGainMode = _replayGainModeFromJson(settings['replayGainMode']);
+      _equalizerEnabled = settings['equalizerEnabled'] as bool? ?? false;
+      _equalizerPreset = _equalizerPresetFromJson(settings['equalizerPreset']);
+      _customEqualizerPoints = _equalizerPointsFromJson(
+        settings['equalizerCustomPoints'],
+      );
+      if (_equalizerPreset == PlaybackEqualizerPreset.custom &&
+          _customEqualizerPoints.isEmpty) {
+        _equalizerPreset = PlaybackEqualizerPreset.flat;
+      }
+      _loudnessEnhancerEnabled =
+          settings['loudnessEnhancerEnabled'] as bool? ?? false;
+      _loudnessEnhancerTargetGainDb = _loudnessEnhancerGainFromJson(
+        settings['loudnessEnhancerTargetGainDb'],
+      );
+      _virtualizerEnabled = settings['virtualizerEnabled'] as bool? ?? false;
+      _virtualizerStrength = _virtualizerStrengthFromJson(
+        settings['virtualizerStrength'],
+      );
+      final crossfadeDuration = _crossfadeDurationFromJson(
+        settings['crossfadeMilliseconds'],
+      );
+      if (supportsCrossfade) {
+        await (_audio as CrossfadePlaybackAudioEngine).setCrossfadeDuration(
+          crossfadeDuration,
+        );
+      }
+      if (supportsSkipSilence) {
+        await (_audio as SkipSilencePlaybackAudioEngine).setSkipSilenceEnabled(
+          _skipSilenceEnabled,
+        );
+      }
+      final audioEffectsEngine = _audioEffectsEngine;
+      if (audioEffectsEngine != null && audioEffectsEngine.supportsEqualizer) {
+        await audioEffectsEngine.setEqualizerProfile(_currentEqualizerProfile);
+        await audioEffectsEngine.setEqualizerEnabled(_equalizerEnabled);
+      }
+      if (audioEffectsEngine != null &&
+          audioEffectsEngine.supportsLoudnessEnhancer) {
+        await audioEffectsEngine.setLoudnessEnhancerTargetGain(
+          _loudnessEnhancerTargetGainDb,
+        );
+        await audioEffectsEngine.setLoudnessEnhancerEnabled(
+          _loudnessEnhancerEnabled,
+        );
+      }
+      final virtualizerEngine = _virtualizerEngine;
+      if (virtualizerEngine != null && virtualizerEngine.supportsVirtualizer) {
+        await virtualizerEngine.setVirtualizerStrength(_virtualizerStrength);
+        await virtualizerEngine.setVirtualizerEnabled(_virtualizerEnabled);
+      }
+      await _applyOutputVolume();
     }
-
-    _playbackSettingsLoaded = true;
-    notifyListeners();
   }
 
   Future<void> playTrack(
@@ -655,6 +687,8 @@ class PlayerController extends ChangeNotifier {
     int? queueIndex,
     Duration? initialPosition,
   }) async {
+    if (!await _ensureQueueReady()) return;
+    final persistenceEpoch = _persistenceEpoch;
     _failedTrackIds.clear();
     if (_offlineModeEnabled) {
       requireOfflineModePlaybackAllowed(track, offlineModeEnabled: true);
@@ -665,6 +699,7 @@ class PlayerController extends ChangeNotifier {
       queue: queue,
       queueIndex: queueIndex,
     );
+    if (_disposed || persistenceEpoch != _persistenceEpoch) return;
     requireOfflineModePlaybackAllowed(
       preparedTrack,
       offlineModeEnabled: _offlineModeEnabled,
@@ -678,20 +713,28 @@ class PlayerController extends ChangeNotifier {
         queueIndex ??
         _queue.indexWhere((candidate) => candidate.id == preparedTrack.id);
     notifyListeners();
-    await _saveQueueSnapshot(touch: true);
+    if (!await _saveQueueSnapshot(touch: true)) return;
 
     await _loadQueue(
       preparedTrack,
       initialPosition: initialPosition ?? Duration.zero,
       queueIndex: queueIndex,
     );
+    if (_disposed ||
+        persistenceEpoch != _persistenceEpoch ||
+        _stateStore.error != null) {
+      return;
+    }
     await _applyOutputVolume();
+    if (_disposed || persistenceEpoch != _persistenceEpoch) return;
     unawaited(_audio.play());
     _playbackStartSerial += 1;
     notifyListeners();
   }
 
   Future<void> togglePlayPause() async {
+    if (_stateStore.error != null || _restoringPlayerState) return;
+    final persistenceEpoch = _persistenceEpoch;
     if (_current == null) {
       return;
     }
@@ -704,6 +747,7 @@ class PlayerController extends ChangeNotifier {
       }
 
       final preparedTrack = await _prepareQueueForPlayback(_current!);
+      if (_disposed || persistenceEpoch != _persistenceEpoch) return;
       _current = preparedTrack;
       requireOfflineModePlaybackAllowed(
         preparedTrack,
@@ -712,11 +756,15 @@ class PlayerController extends ChangeNotifier {
 
       final wasLoaded = _loadedTrackId == preparedTrack.id;
       if (!wasLoaded) {
-        await _saveQueueSnapshot();
+        if (!await _saveQueueSnapshot()) return;
         await _loadQueue(preparedTrack);
       }
       await _applyOutputVolume();
-
+      if (_disposed ||
+          persistenceEpoch != _persistenceEpoch ||
+          _stateStore.error != null) {
+        return;
+      }
       unawaited(_audio.play());
       if (!wasLoaded) {
         _playbackStartSerial += 1;
@@ -732,6 +780,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> removeTracksFromSource(String sourceId) async {
+    if (!await _ensureQueueReady()) return;
     _removeTracksFromInactiveSavedQueues(sourceId);
     final removesCurrent = _current?.sourceId == sourceId;
     _queue.removeWhere((track) => track.sourceId == sourceId);
@@ -749,6 +798,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> refreshTracksFromSource(String sourceId) async {
+    if (!await _ensureQueueReady()) return;
     final normalizedSourceId = sourceId.trim();
     if (normalizedSourceId.isEmpty ||
         !_queue.any((track) => track.sourceId == normalizedSourceId)) {
@@ -878,6 +928,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> skipForward() => seekBy(_skipForwardInterval);
 
   Future<void> next() async {
+    if (_stateStore.error != null || _restoringPlayerState) return;
     if (_queue.isEmpty || _current == null) {
       await stop();
       return;
@@ -916,6 +967,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> previous() async {
+    if (_stateStore.error != null || _restoringPlayerState) return;
     if (_queue.isEmpty || _current == null) {
       return;
     }
@@ -940,6 +992,7 @@ class PlayerController extends ChangeNotifier {
   /// A Play Next insertion follows the current item when one is selected;
   /// otherwise the added track becomes the selected item.
   Future<void> enqueueTrack(Track track, {bool playNext = false}) async {
+    if (!await _ensureQueueReady()) return;
     if (_offlineModeEnabled) {
       requireOfflineModePlaybackAllowed(track, offlineModeEnabled: true);
     }
@@ -959,7 +1012,7 @@ class PlayerController extends ChangeNotifier {
       }
     }
 
-    await _saveQueueSnapshot(touch: true);
+    if (!await _saveQueueSnapshot(touch: true)) return;
     if (_loadedPlaybackQueue.isNotEmpty) {
       await _reloadQueuePreservingPlayback();
     }
@@ -971,6 +1024,7 @@ class PlayerController extends ChangeNotifier {
   /// This is intentionally a no-op when no selected item has following tracks,
   /// so a saved queue that has not begun playback is never cleared by mistake.
   Future<void> clearUpcomingTracks() async {
+    if (!await _ensureQueueReady()) return;
     final current = _current;
     if (current == null) {
       return;
@@ -981,7 +1035,7 @@ class PlayerController extends ChangeNotifier {
     }
 
     _queue.removeRange(currentIndex + 1, _queue.length);
-    await _saveQueueSnapshot(touch: true);
+    if (!await _saveQueueSnapshot(touch: true)) return;
     if (_loadedPlaybackQueue.isNotEmpty) {
       await _reloadQueuePreservingPlayback();
     }
@@ -990,6 +1044,7 @@ class PlayerController extends ChangeNotifier {
 
   /// Stops playback and clears the currently active saved queue.
   Future<void> clearActiveQueue() async {
+    if (!await _ensureQueueReady()) return;
     if (_queue.isEmpty && _current == null) {
       return;
     }
@@ -1006,6 +1061,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   void moveTrackInQueue(int fromIndex, int toIndex) {
+    if (!_stateStore.ready || _restoringPlayerState) return;
     final reordered = moveQueueItem(_queue, fromIndex, toIndex);
     if (_sameQueueOrder(_queue, reordered)) {
       return;
@@ -1014,12 +1070,12 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(reordered);
-    unawaited(_saveQueueSnapshot(touch: true));
-    unawaited(_reloadQueuePreservingPlayback());
+    unawaited(_saveQueueAndReload());
     notifyListeners();
   }
 
   void removeTrackFromQueue(String trackId) {
+    if (!_stateStore.ready || _restoringPlayerState) return;
     if (_current?.id == trackId) {
       return;
     }
@@ -1032,24 +1088,26 @@ class PlayerController extends ChangeNotifier {
     _queue
       ..clear()
       ..addAll(remaining);
-    unawaited(_saveQueueSnapshot(touch: true));
-    unawaited(_reloadQueuePreservingPlayback());
+    unawaited(_saveQueueAndReload());
     notifyListeners();
   }
 
   Future<void> setShuffleEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     await _audio.setShuffleModeEnabled(enabled);
     await _savePlaybackSettings();
     notifyListeners();
   }
 
   Future<void> setLoopMode(LoopMode mode) async {
+    if (!await _ensureSettingsReady()) return;
     await _audio.setLoopMode(mode);
     await _savePlaybackSettings();
     notifyListeners();
   }
 
   Future<void> setPlaybackSpeed(double speed) async {
+    if (!await _ensureSettingsReady()) return;
     _requireSupportedPlaybackSpeed(speed);
     _defaultPlaybackSpeed = speed;
     await _audio.setSpeed(speed);
@@ -1067,6 +1125,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setSkipBackwardInterval(Duration interval) async {
+    if (!await _ensureSettingsReady()) return;
     _requireSupportedSkipInterval(interval);
     if (_skipBackwardInterval == interval) {
       return;
@@ -1077,6 +1136,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setSkipForwardInterval(Duration interval) async {
+    if (!await _ensureSettingsReady()) return;
     _requireSupportedSkipInterval(interval);
     if (_skipForwardInterval == interval) {
       return;
@@ -1087,6 +1147,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setSkipSilenceEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _audio;
     if (engine is! SkipSilencePlaybackAudioEngine ||
         !engine.supportsSkipSilence) {
@@ -1111,6 +1172,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setSkipFailedTracksEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     if (_skipFailedTracksEnabled == enabled) {
       return;
     }
@@ -1123,6 +1185,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> previewVolume(double volume) async {
+    if (!await _ensureSettingsReady()) return;
     _validateVolume(volume);
     _volume = volume;
     await _applyOutputVolume();
@@ -1135,6 +1198,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setLoudnessNormalizationEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     _loudnessNormalizationEnabled = enabled;
     await _applyOutputVolume();
     await _savePlaybackSettings();
@@ -1142,6 +1206,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setReplayGainMode(ReplayGainMode mode) async {
+    if (!await _ensureSettingsReady()) return;
     _replayGainMode = mode;
     await _applyOutputVolume();
     await _savePlaybackSettings();
@@ -1149,6 +1214,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setCrossfadeDuration(Duration duration) async {
+    if (!await _ensureSettingsReady()) return;
     if (!supportedCrossfadeDurations.contains(duration)) {
       throw ArgumentError.value(
         duration,
@@ -1169,6 +1235,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setPlaybackPitch(double pitch) async {
+    if (!await _ensureSettingsReady()) return;
     _requireSupportedPlaybackPitch(pitch);
     final audio = _requirePitchEngine();
     _defaultPlaybackPitch = pitch;
@@ -1182,6 +1249,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setTrackPlaybackPitch(String trackId, double pitch) async {
+    if (!await _ensureSettingsReady()) return;
     final normalizedTrackId = trackId.trim();
     if (normalizedTrackId.isEmpty) {
       throw ArgumentError.value(
@@ -1215,6 +1283,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> clearTrackPlaybackPitch(String trackId) async {
+    if (!await _ensureSettingsReady()) return;
     final normalizedTrackId = trackId.trim();
     final previous = _trackPlaybackPitchOverrides.remove(normalizedTrackId);
     if (previous == null) {
@@ -1245,6 +1314,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setEqualizerEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireEqualizerEngine();
     if (_equalizerEnabled == enabled) {
       return;
@@ -1263,6 +1333,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setEqualizerPreset(PlaybackEqualizerPreset preset) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireEqualizerEngine();
     if (preset == PlaybackEqualizerPreset.custom &&
         _customEqualizerPoints.isEmpty) {
@@ -1291,6 +1362,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> previewEqualizerBandGain(int bandIndex, double gainDb) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireEqualizerEngine();
     final index = _equalizerBands.indexWhere((band) => band.index == bandIndex);
     if (index == -1) {
@@ -1335,6 +1407,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> persistEqualizerBandGains() => _savePlaybackSettings();
 
   Future<void> setLoudnessEnhancerEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireLoudnessEnhancerEngine();
     if (_loudnessEnhancerEnabled == enabled) {
       return;
@@ -1353,6 +1426,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> previewLoudnessEnhancerTargetGain(double gainDb) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireLoudnessEnhancerEngine();
     _validateLoudnessEnhancerGain(gainDb);
     final previous = _loudnessEnhancerTargetGainDb;
@@ -1373,6 +1447,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setVirtualizerEnabled(bool enabled) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireVirtualizerEngine();
     if (_virtualizerEnabled == enabled) {
       return;
@@ -1391,6 +1466,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> previewVirtualizerStrength(int strength) async {
+    if (!await _ensureSettingsReady()) return;
     final engine = _requireVirtualizerEngine();
     _validateVirtualizerStrength(strength);
     final previous = _virtualizerStrength;
@@ -1725,8 +1801,45 @@ class PlayerController extends ChangeNotifier {
     Duration initialPosition = Duration.zero,
     int? queueIndex,
     bool forceReload = false,
+    bool isolateCurrent = false,
   }) async {
-    final playbackQueue = _playbackQueueForCurrentMode();
+    while (_queueLoadCompletion != null) {
+      await _queueLoadCompletion!.future;
+    }
+    final completion = Completer<void>();
+    _queueLoadCompletion = completion;
+    _isLoadingQueue = true;
+    try {
+      var reload = forceReload;
+      do {
+        _queueReloadRequested = false;
+        await _loadQueueSnapshot(
+          track,
+          initialPosition: initialPosition,
+          queueIndex: queueIndex,
+          forceReload: reload,
+          isolateCurrent: isolateCurrent,
+        );
+        reload = true;
+      } while (_queueReloadRequested);
+    } finally {
+      _isLoadingQueue = false;
+      _queueLoadCompletion = null;
+      // This signals completion, not success; the initiating caller owns errors.
+      completion.complete();
+    }
+  }
+
+  Future<void> _loadQueueSnapshot(
+    Track track, {
+    required Duration initialPosition,
+    required int? queueIndex,
+    required bool forceReload,
+    required bool isolateCurrent,
+  }) async {
+    final playbackQueue = isolateCurrent
+        ? <Track>[_reconcileLibraryTrack(track)]
+        : _playbackQueueForCurrentMode();
     final firstMatchingIndex = playbackQueue.indexWhere(
       (item) => item.id == track.id,
     );
@@ -1752,7 +1865,6 @@ class PlayerController extends ChangeNotifier {
     _loadedPlaybackQueue
       ..clear()
       ..addAll(playbackQueue);
-    _isLoadingQueue = true;
     try {
       await _audio.setQueue(
         playbackQueue,
@@ -1766,8 +1878,6 @@ class PlayerController extends ChangeNotifier {
       _loadedPlaybackQueue.clear();
       _loadedTrackId = null;
       rethrow;
-    } finally {
-      _isLoadingQueue = false;
     }
   }
 
@@ -1860,6 +1970,15 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _reloadQueuePreservingPlayback() async {
+    if (_stateStore.error != null || _restoringPlayerState) return;
+    final loading = _queueLoadCompletion;
+    if (loading != null) {
+      // Library notifications may arrive while just_audio is still loading.
+      // Fold them into that load before its caller starts playback.
+      _queueReloadRequested = true;
+      await loading.future;
+      return;
+    }
     final track = _current;
     if (track == null ||
         !offlineModeAllowsPlayback(
@@ -1889,29 +2008,23 @@ class PlayerController extends ChangeNotifier {
 
     final wasPlaying = _audio.playing;
     final position = _audio.position;
-    _loadedPlaybackQueue
-      ..clear()
-      ..add(track);
-    _isLoadingQueue = true;
     try {
-      await _audio.setQueue(
-        <Track>[track],
-        initialIndex: 0,
+      await _loadQueue(
+        track,
         initialPosition: position,
+        forceReload: true,
+        isolateCurrent: true,
       );
-      await _refreshEqualizerBands(notify: false);
       if (wasPlaying) {
         unawaited(_audio.play());
       }
     } on Object catch (error) {
       debugPrint('Could not isolate sleep-timer track: $error');
-    } finally {
-      _isLoadingQueue = false;
     }
   }
 
-  Future<void> _saveQueueSnapshot({bool touch = false}) async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<bool> _saveQueueSnapshot({bool touch = false}) async {
+    if (_restoringPlayerState || _disposed) return false;
     if (touch || _queueUpdatedAt == null) {
       _queueUpdatedAt = _clock().toUtc();
     }
@@ -1920,22 +2033,34 @@ class PlayerController extends ChangeNotifier {
       activeQueueId: _activeQueueId,
       queues: _savedQueues,
     );
-    await prefs.setString(
-      _savedQueuesSnapshotKey,
-      jsonEncode(collection.toJson()),
-    );
-    if (_queue.isEmpty) {
-      await prefs.remove(_queueSnapshotKey);
-      return;
-    }
-
     final snapshot = TrackQueueSnapshot(
       tracks: _queue,
       currentTrackId: _current?.id,
       currentIndex: _currentQueueIndex,
       updatedAt: _queueUpdatedAt,
     );
-    await prefs.setString(_queueSnapshotKey, jsonEncode(snapshot.toJson()));
+    final saved = await _stateStore.write({
+      _savedQueuesSnapshotKey: jsonEncode(collection.toJson()),
+      _queueSnapshotKey: _queue.isEmpty ? null : jsonEncode(snapshot.toJson()),
+    });
+    if (!saved && !_disposed) {
+      _persistenceEpoch++;
+      try {
+        await _audio.stop();
+      } on Object {
+        _stateStore.reportPlaybackRestoreFailure();
+      }
+      _restoreQueueValues(_stateStore.values);
+      _duration = Duration.zero;
+      _notifyPersistenceChanged();
+    }
+    return saved;
+  }
+
+  Future<void> _saveQueueAndReload() async {
+    if (await _saveQueueSnapshot(touch: true)) {
+      await _reloadQueuePreservingPlayback();
+    }
   }
 
   SavedTrackQueue get _activeSavedQueue {
@@ -2009,6 +2134,9 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<bool> _reconcileQueuedTracksFromLibrary() async {
+    if (!_queueSnapshotLoaded || !_stateStore.ready || _restoringPlayerState) {
+      return false;
+    }
     if (_libraryTracksById.isEmpty) {
       return false;
     }
@@ -2056,7 +2184,7 @@ class PlayerController extends ChangeNotifier {
         _current = _reconcileLibraryTrack(current);
       }
     }
-    await _saveQueueSnapshot();
+    if (!await _saveQueueSnapshot()) return false;
     if (activeQueueChanged && _loadedPlaybackQueue.isNotEmpty) {
       await _reloadQueuePreservingPlayback();
     }
@@ -2132,34 +2260,82 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _savePlaybackSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _playbackSettingsKey,
-      jsonEncode(<String, Object?>{
-        'shuffleEnabled': _audio.shuffleModeEnabled,
-        'loopMode': _loopModeToJson(_audio.loopMode),
-        'playbackSpeed': _defaultPlaybackSpeed,
-        'playbackPitch': _defaultPlaybackPitch,
-        'trackPlaybackPitchOverrides': _trackPlaybackPitchOverrides,
-        'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
-        'skipForwardSeconds': _skipForwardInterval.inSeconds,
-        'skipSilenceEnabled': _skipSilenceEnabled,
-        'skipFailedTracksEnabled': _skipFailedTracksEnabled,
-        'volume': _volume,
-        'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
-        'replayGainMode': _replayGainMode.name,
-        'crossfadeMilliseconds': crossfadeDuration.inMilliseconds,
-        'equalizerEnabled': _equalizerEnabled,
-        'equalizerPreset': _equalizerPreset.name,
-        'equalizerCustomPoints': _customEqualizerPoints
-            .map((point) => point.toJson())
-            .toList(growable: false),
-        'loudnessEnhancerEnabled': _loudnessEnhancerEnabled,
-        'loudnessEnhancerTargetGainDb': _loudnessEnhancerTargetGainDb,
-        'virtualizerEnabled': _virtualizerEnabled,
-        'virtualizerStrength': _virtualizerStrength,
-      }),
-    );
+    if (_restoringPlayerState || _disposed) return;
+    if (!await _ensureSettingsReady()) return;
+    final saved = await _stateStore.write({
+      _playbackSettingsKey: _capturePlaybackSettings(),
+    });
+    if (!saved && !_disposed) {
+      _persistenceEpoch++;
+      try {
+        await _applyPersistedPlaybackSettings(
+          _stateStore.values[_playbackSettingsKey] as String? ??
+              _initialPlaybackSettings,
+        );
+      } on Object {
+        _stateStore.reportPlaybackRestoreFailure();
+      }
+      _notifyPersistenceChanged();
+    }
+  }
+
+  String _capturePlaybackSettings() => jsonEncode(<String, Object?>{
+    'shuffleEnabled': _audio.shuffleModeEnabled,
+    'loopMode': _loopModeToJson(_audio.loopMode),
+    'playbackSpeed': _defaultPlaybackSpeed,
+    'playbackPitch': _defaultPlaybackPitch,
+    'trackPlaybackPitchOverrides': _trackPlaybackPitchOverrides,
+    'skipBackwardSeconds': _skipBackwardInterval.inSeconds,
+    'skipForwardSeconds': _skipForwardInterval.inSeconds,
+    'skipSilenceEnabled': _skipSilenceEnabled,
+    'skipFailedTracksEnabled': _skipFailedTracksEnabled,
+    'volume': _volume,
+    'loudnessNormalizationEnabled': _loudnessNormalizationEnabled,
+    'replayGainMode': _replayGainMode.name,
+    'crossfadeMilliseconds': crossfadeDuration.inMilliseconds,
+    'equalizerEnabled': _equalizerEnabled,
+    'equalizerPreset': _equalizerPreset.name,
+    'equalizerCustomPoints': _customEqualizerPoints
+        .map((point) => point.toJson())
+        .toList(growable: false),
+    'loudnessEnhancerEnabled': _loudnessEnhancerEnabled,
+    'loudnessEnhancerTargetGainDb': _loudnessEnhancerTargetGainDb,
+    'virtualizerEnabled': _virtualizerEnabled,
+    'virtualizerStrength': _virtualizerStrength,
+  });
+
+  Future<void> reloadSavedPlayerState({bool previous = false}) async {
+    if (_restoringPlayerState || _disposed) return;
+    _restoringPlayerState = true;
+    _persistenceEpoch++;
+    _notifyPersistenceChanged();
+    try {
+      await _queueRestore;
+      await _settingsRestore;
+      await _audio.stop();
+      if (!await _stateStore.reload(previous: previous)) return;
+      _queueSnapshotLoaded = false;
+      _playbackSettingsLoaded = false;
+      _queueRestore = null;
+      _settingsRestore = null;
+      await loadPersistedQueue();
+      await loadPersistedPlaybackSettings();
+      _duration = Duration.zero;
+    } on Object {
+      _stateStore.reportPlaybackRestoreFailure();
+    } finally {
+      _restoringPlayerState = false;
+      _notifyPersistenceChanged();
+    }
+  }
+
+  void _notifyPersistenceChanged() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
   }
 
   LoopMode _loopModeFromJson(String? value) {
@@ -2596,6 +2772,7 @@ class PlayerController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _cancelSleepTimerState(restoreVolume: false);
     _playerStateSub?.cancel();
     _durationSub?.cancel();

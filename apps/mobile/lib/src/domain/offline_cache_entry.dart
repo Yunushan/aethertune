@@ -81,6 +81,8 @@ final class OfflineCacheEntry {
   }
 
   factory OfflineCacheEntry.fromJson(Map<String, Object?> json) {
+    final id = _jsonString(json, 'id');
+    validateId(id);
     final rawTrack = json['track'];
     if (rawTrack is! Map) {
       throw const FormatException(
@@ -89,7 +91,7 @@ final class OfflineCacheEntry {
     }
 
     return OfflineCacheEntry(
-      id: _jsonString(json, 'id'),
+      id: id,
       track: Track.fromJson(Map<String, Object?>.from(rawTrack)),
       action: _offlineMediaActionFromName(_jsonString(json, 'action')),
       status: _offlineCacheEntryStatusFromName(
@@ -112,6 +114,12 @@ final class OfflineCacheEntry {
     return Track.stableLocalId(
       '${action.name}|${track.sourceId}|$providerLocator',
     );
+  }
+
+  static void validateId(String id) {
+    if (id.isEmpty || RegExp(r'[^A-Za-z0-9_-]').hasMatch(id)) {
+      throw const FormatException('Offline cache entry ID is not safe.');
+    }
   }
 }
 

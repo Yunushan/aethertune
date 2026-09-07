@@ -24,76 +24,83 @@ Future<void> main() async {
     exitCode = 1;
     return;
   }
-  final syncAuthenticator = StaticSyncAuthenticator.fromJson(
-    Platform.environment['AETHERTUNE_SYNC_USERS'],
-  );
-  final managedSyncAccounts = await ManagedSyncAccountRegistry.open(
-    Directory('${dataDirectory.path}${Platform.pathSeparator}authentication'),
-    tokenLifetime: managedTokenLifetimeFromEnvironment(Platform.environment),
-  );
-  final combinedSyncAuthenticator = CompositeSyncAuthenticator(
-    <SyncAuthenticator>[syncAuthenticator, managedSyncAccounts],
-  );
-  final operationsToken = Platform.environment['AETHERTUNE_OPS_TOKEN'];
-  if (operationsToken == null || operationsToken.isEmpty) {
-    throw const FormatException(
-      'AETHERTUNE_OPS_TOKEN is required for server deployments.',
+  try {
+    final syncAuthenticator = StaticSyncAuthenticator.fromJson(
+      Platform.environment['AETHERTUNE_SYNC_USERS'],
     );
-  }
-  final operationsAuthenticator = StaticOperationsAuthenticator(
-    operationsToken,
-  );
-  final requestRateLimiter = serverRequestRateLimiterFromEnvironment(
-    Platform.environment,
-  );
-  var draining = false;
-  final server = await shelf_io.serve(
-    createServerHandler(
-      syncAuthenticator: combinedSyncAuthenticator,
-      managedSyncAccounts: managedSyncAccounts,
-      operationsAuthenticator: operationsAuthenticator,
-      requestRateLimiter: requestRateLimiter,
-      syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
-      providerConfigurationStore: FileLibrarySyncSnapshotStore(
-        Directory(
-          '${dataDirectory.path}${Platform.pathSeparator}provider-configurations',
+    final managedSyncAccounts = await ManagedSyncAccountRegistry.open(
+      Directory('${dataDirectory.path}${Platform.pathSeparator}authentication'),
+      tokenLifetime: managedTokenLifetimeFromEnvironment(Platform.environment),
+    );
+    final combinedSyncAuthenticator = CompositeSyncAuthenticator(
+      <SyncAuthenticator>[syncAuthenticator, managedSyncAccounts],
+    );
+    final operationsToken = Platform.environment['AETHERTUNE_OPS_TOKEN'];
+    if (operationsToken == null || operationsToken.isEmpty) {
+      throw const FormatException(
+        'AETHERTUNE_OPS_TOKEN is required for server deployments.',
+      );
+    }
+    final operationsAuthenticator = StaticOperationsAuthenticator(
+      operationsToken,
+    );
+    final requestRateLimiter = serverRequestRateLimiterFromEnvironment(
+      Platform.environment,
+    );
+    var draining = false;
+    final server = await shelf_io.serve(
+      dataDirectoryLock.middleware(
+        createServerHandler(
+          syncAuthenticator: combinedSyncAuthenticator,
+          managedSyncAccounts: managedSyncAccounts,
+          operationsAuthenticator: operationsAuthenticator,
+          requestRateLimiter: requestRateLimiter,
+          syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
+          providerConfigurationStore: FileLibrarySyncSnapshotStore(
+            Directory(
+              '${dataDirectory.path}${Platform.pathSeparator}provider-configurations',
+            ),
+          ),
+          listenTogetherStore: FileLibrarySyncSnapshotStore(
+            Directory(
+              '${dataDirectory.path}${Platform.pathSeparator}listen-together',
+            ),
+          ),
+          listenTogetherInviteStore: FileListenTogetherInviteStore(
+            Directory(
+              '${dataDirectory.path}${Platform.pathSeparator}listen-together-invites',
+            ),
+          ),
+          sharedPlaylistStore: FileSharedPlaylistStore(
+            Directory(
+              '${dataDirectory.path}${Platform.pathSeparator}shared-playlists',
+            ),
+          ),
+          sharedPlaylistInviteStore: FileSharedPlaylistInviteStore(
+            Directory(
+              '${dataDirectory.path}${Platform.pathSeparator}shared-playlist-invites',
+            ),
+          ),
+          readinessCheck: () => draining
+              ? Future.value(false)
+              : _isDirectoryWritable(dataDirectory),
+          requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
         ),
       ),
-      listenTogetherStore: FileLibrarySyncSnapshotStore(
-        Directory(
-          '${dataDirectory.path}${Platform.pathSeparator}listen-together',
-        ),
-      ),
-      listenTogetherInviteStore: FileListenTogetherInviteStore(
-        Directory(
-          '${dataDirectory.path}${Platform.pathSeparator}listen-together-invites',
-        ),
-      ),
-      sharedPlaylistStore: FileSharedPlaylistStore(
-        Directory(
-          '${dataDirectory.path}${Platform.pathSeparator}shared-playlists',
-        ),
-      ),
-      sharedPlaylistInviteStore: FileSharedPlaylistInviteStore(
-        Directory(
-          '${dataDirectory.path}${Platform.pathSeparator}shared-playlist-invites',
-        ),
-      ),
-      readinessCheck: () =>
-          draining ? Future.value(false) : _isDirectoryWritable(dataDirectory),
-      requestLogger: (entry) => stdout.writeln(jsonEncode(entry.toJson())),
-    ),
-    listenAddress,
-    port,
-  );
+      listenAddress,
+      port,
+    );
 
-  server.autoCompress = true;
-  server.idleTimeout = serverIdleTimeout;
-  stdout.writeln(
-    'AetherTune server listening on http://${server.address.host}:${server.port}',
-  );
-  await _shutdownWhenSignaled(server, onDraining: () => draining = true);
-  await dataDirectoryLock.close();
+    server.autoCompress = true;
+    server.idleTimeout = serverIdleTimeout;
+    await dataDirectoryLock.initializationComplete();
+    stdout.writeln(
+      'AetherTune server listening on http://${server.address.host}:${server.port}',
+    );
+    await _shutdownWhenSignaled(server, onDraining: () => draining = true);
+  } finally {
+    await dataDirectoryLock.close();
+  }
 }
 
 const _shutdownDrainTimeout = Duration(seconds: 25);
@@ -144,23 +151,12 @@ Future<void> _shutdownWhenSignaled(
   stdout.writeln('AetherTune server stopped.');
 }
 
-Future<RandomAccessFile?> _acquireDataDirectoryLock(
+Future<ServerDataDirectoryGuard?> _acquireDataDirectoryLock(
   Directory dataDirectory,
 ) async {
-  await dataDirectory.create(recursive: true);
-  final lockFile = File(
-    '${dataDirectory.path}${Platform.pathSeparator}'
-    '$serverDataDirectoryLockFileName',
-  );
-  final handle = await lockFile.open(mode: FileMode.write);
   try {
-    await handle.setPosition(0);
-    await handle.writeString('$pid\n');
-    await handle.flush();
-    await handle.lock(FileLock.exclusive);
-    return handle;
+    return await ServerDataDirectoryGuard.open(dataDirectory);
   } on FileSystemException {
-    await handle.close();
     return null;
   }
 }
