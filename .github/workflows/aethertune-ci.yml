@@ -119,7 +119,9 @@ jobs:
         run: python3 scripts/ci/test_production_ops_workflow.py
 
       - name: Test server load contract
-        run: python3 scripts/ci/test_server_load_contract.py
+        run: |
+          python3 scripts/ci/test_server_load_contract.py
+          python3 scripts/ci/test_server_sync_load_runtime.py
 
       - name: Test production operations alert workflow
         run: python3 scripts/ci/test_production_ops_alert_workflow.py
@@ -516,6 +518,14 @@ jobs:
           bash scripts/ci/test_server_load.sh \
             services/server/build/aethertune-server \
             build/server-load
+
+      - name: Run authenticated sync load and restart acceptance
+        env:
+          SOURCE_COMMIT_SHA: ${{ github.sha }}
+        run: >-
+          python3 scripts/ci/server_sync_load_runtime.py
+          --executable services/server/build/aethertune-server
+          --evidence build/server-load/authenticated
 
       - name: Upload server load evidence
         if: ${{ always() }}
