@@ -12,6 +12,7 @@ import 'src/authentication.dart';
 import 'src/shared_playlists.dart';
 
 export 'src/authentication.dart';
+export 'src/data_directory_guard.dart';
 export 'src/shared_playlists.dart';
 
 const _jsonHeaders = <String, String>{
@@ -24,9 +25,8 @@ const maxListenTogetherSessionBytes = 32 * 1024;
 const maxSharedPlaylistBytes = 64 * 1024;
 const defaultServerPort = 8080;
 const serverIdleTimeout = Duration(seconds: 60);
+const serverBodyReadTimeout = Duration(seconds: 30);
 
-/// File name of the exclusive runtime lock held on a server data directory.
-const serverDataDirectoryLockFileName = '.server.lock';
 final _listenTogetherInviteRandom = Random.secure();
 
 typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
@@ -34,11 +34,14 @@ typedef ServerRequestLogger = void Function(ServerRequestLogEntry entry);
 final class ServerRequestRateLimiter {
   ServerRequestRateLimiter({
     this.maximumRequests = 120,
+    int? maximumIngressRequests,
     this.maximumBuckets = 4096,
     this.window = const Duration(minutes: 1),
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now {
+  }) : maximumIngressRequests = maximumIngressRequests ?? maximumRequests * 10,
+       _clock = clock ?? DateTime.now {
     if (maximumRequests <= 0 ||
+        this.maximumIngressRequests <= 0 ||
         maximumBuckets <= 0 ||
         window <= Duration.zero) {
       throw ArgumentError('Rate limit bounds must be positive.');
@@ -46,35 +49,58 @@ final class ServerRequestRateLimiter {
   }
 
   final int maximumRequests;
+  final int maximumIngressRequests;
   final int maximumBuckets;
   final Duration window;
   final DateTime Function() _clock;
   final Map<String, _RateLimitWindow> _windows = <String, _RateLimitWindow>{};
+  final Map<String, _RateLimitWindow> _ingressWindows =
+      <String, _RateLimitWindow>{};
 
-  Duration? check(Request request) {
+  Duration? checkIngress(Request request) => _checkBucket(
+    _ingressWindows,
+    _addressKey(request),
+    maximumIngressRequests,
+  );
+
+  Duration? check(Request request, {String? authenticatedAccountId}) {
+    // Only server-verified identities get an independent allowance. Invalid
+    // tokens and anonymous traffic share their actual connection address.
+    final key = authenticatedAccountId == null
+        ? _addressKey(request)
+        : 'account:${sha256.convert(utf8.encode(authenticatedAccountId))}';
+    return _checkBucket(_windows, key, maximumRequests);
+  }
+
+  static String _addressKey(Request request) {
+    final remoteAddress = _remoteAddress(request);
+    return remoteAddress == null ? 'anonymous' : 'ip:${remoteAddress.address}';
+  }
+
+  Duration? _checkBucket(
+    Map<String, _RateLimitWindow> windows,
+    String key,
+    int limit,
+  ) {
     final now = _clock().toUtc();
-    final token = _bearerToken(request.headers['authorization'] ?? '');
-    final String key;
-    if (token != null) {
-      key = sha256.convert(utf8.encode(token)).toString();
-    } else {
-      final remoteAddress = _remoteAddress(request);
-      key = remoteAddress == null ? 'anonymous' : 'ip:${remoteAddress.address}';
-    }
-    final current = _windows[key];
+    final current = windows[key];
     if (current == null || !now.isBefore(current.startedAt.add(window))) {
-      if (current == null && _windows.length >= maximumBuckets) {
-        _windows.removeWhere(
+      if (current == null && windows.length >= maximumBuckets) {
+        windows.removeWhere(
           (_, entry) => !now.isBefore(entry.startedAt.add(window)),
         );
-        if (_windows.length >= maximumBuckets) {
-          _windows.remove(_windows.keys.first);
+        if (windows.length >= maximumBuckets) {
+          // Evicting live buckets lets rotating identities reset their limits.
+          final firstExpiry = windows.values
+              .map((entry) => entry.startedAt.add(window))
+              .reduce((left, right) => left.isBefore(right) ? left : right);
+          return firstExpiry.difference(now);
         }
       }
-      _windows[key] = _RateLimitWindow(now, 1);
+      windows[key] = _RateLimitWindow(now, 1);
       return null;
     }
-    if (current.requests >= maximumRequests) {
+    if (current.requests >= limit) {
       return current.startedAt.add(window).difference(now);
     }
     current.requests += 1;
@@ -94,18 +120,21 @@ ServerRequestRateLimiter serverRequestRateLimiterFromEnvironment(
   Map<String, String> environment, {
   DateTime Function()? clock,
 }) {
-  final raw = environment['AETHERTUNE_RATE_LIMIT_PER_MINUTE'];
-  if (raw == null || raw.trim().isEmpty) {
-    return ServerRequestRateLimiter(clock: clock);
+  int? positiveLimit(String key) {
+    final raw = environment[key];
+    if (raw == null || raw.trim().isEmpty) return null;
+    final value = int.tryParse(raw.trim());
+    if (value == null || value <= 0) {
+      throw FormatException('$key must be a positive integer.');
+    }
+    return value;
   }
-  final maximumRequests = int.tryParse(raw.trim());
-  if (maximumRequests == null || maximumRequests <= 0) {
-    throw const FormatException(
-      'AETHERTUNE_RATE_LIMIT_PER_MINUTE must be a positive integer.',
-    );
-  }
+
   return ServerRequestRateLimiter(
-    maximumRequests: maximumRequests,
+    maximumRequests: positiveLimit('AETHERTUNE_RATE_LIMIT_PER_MINUTE') ?? 120,
+    maximumIngressRequests: positiveLimit(
+      'AETHERTUNE_INGRESS_RATE_LIMIT_PER_MINUTE',
+    ),
     clock: clock,
   );
 }
@@ -212,7 +241,11 @@ Handler createServerHandler({
   Future<bool> Function()? readinessCheck,
   ServerRequestLogger? requestLogger,
   ServerRequestRateLimiter? requestRateLimiter,
+  Duration bodyReadTimeout = serverBodyReadTimeout,
 }) {
+  if (bodyReadTimeout <= Duration.zero) {
+    throw ArgumentError.value(bodyReadTimeout, 'bodyReadTimeout');
+  }
   final now = clock ?? DateTime.now;
   final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
   final operations =
@@ -465,7 +498,16 @@ Handler createServerHandler({
     requestsTotal += 1;
     final requestStartedAt = now().toUtc();
     try {
-      final retryAfter = rateLimiter.check(request);
+      var retryAfter = rateLimiter.checkIngress(request);
+      if (retryAfter == null) {
+        final token = _bearerToken(request.headers['authorization'] ?? '');
+        retryAfter = rateLimiter.check(
+          request,
+          authenticatedAccountId: token == null
+              ? null
+              : authenticator.authenticate(token),
+        );
+      }
       if (retryAfter != null) {
         requestsRateLimited += 1;
         final response = _jsonResponse(
@@ -494,7 +536,25 @@ Handler createServerHandler({
         authenticator: authenticator,
         managedAccounts: managedSyncAccounts,
       );
-      final response = await route(request);
+      Response response;
+      try {
+        response = await route(
+          request.change(
+            context: {'aethertune.bodyReadTimeout': bodyReadTimeout},
+          ),
+        );
+      } on _BodyReadTimeout {
+        response = _jsonResponse(
+          408,
+          {'error': 'request_body_timeout'},
+          headers: {'connection': 'close'},
+        );
+      } on _PayloadTooLarge catch (error) {
+        response = _jsonResponse(413, {
+          'error': 'payload_too_large',
+          'maxBytes': error.maxBytes,
+        });
+      }
       final finishedAt = now().toUtc();
       recordResponseMetrics(
         response: response,
@@ -1970,12 +2030,27 @@ Future<Map<String, Object?>> _readBoundedJson(
 }) async {
   final builder = BytesBuilder(copy: false);
   var byteCount = 0;
-  await for (final chunk in request.read()) {
-    byteCount += chunk.length;
-    if (byteCount > maxBytes) {
-      throw _PayloadTooLarge(maxBytes);
+  final timeout =
+      request.context['aethertune.bodyReadTimeout'] as Duration? ??
+      serverBodyReadTimeout;
+  final elapsed = Stopwatch()..start();
+  final input = StreamIterator(request.read());
+  try {
+    while (true) {
+      final remaining = timeout - elapsed.elapsed;
+      if (remaining <= Duration.zero) throw const _BodyReadTimeout();
+      if (!await input.moveNext().timeout(remaining)) break;
+      final chunk = input.current;
+      byteCount += chunk.length;
+      if (byteCount > maxBytes) {
+        throw _PayloadTooLarge(maxBytes);
+      }
+      builder.add(chunk);
     }
-    builder.add(chunk);
+  } on TimeoutException {
+    throw const _BodyReadTimeout();
+  } finally {
+    await input.cancel();
   }
 
   final decoded = jsonDecode(utf8.decode(builder.takeBytes()));
@@ -1983,6 +2058,10 @@ Future<Map<String, Object?>> _readBoundedJson(
     throw const FormatException('Request body must be an object.');
   }
   return Map<String, Object?>.from(decoded);
+}
+
+final class _BodyReadTimeout implements Exception {
+  const _BodyReadTimeout();
 }
 
 void _validateSyncSnapshot(Map<String, Object?> snapshot) {

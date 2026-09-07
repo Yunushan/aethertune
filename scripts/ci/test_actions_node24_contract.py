@@ -19,6 +19,12 @@ ACTION_REFERENCE = re.compile(
     r"^\s*uses:\s+(?P<action>[^\s#]+)(?:\s+#.*)?$", re.MULTILINE
 )
 IMMUTABLE_REF = re.compile(r"@[0-9a-f]{40}$")
+NODE24_SETUP_DART_PINS = frozenset(
+    {
+        "7654d458321ee25acccccfdb86cd48bd95768ff1",  # v1.8.0
+        "6afc89df92d6eb3834022f73cd65adc8cdfcb92d",  # v1.8.1
+    }
+)
 
 
 class ActionsNode24ContractTest(unittest.TestCase):
@@ -65,9 +71,19 @@ class ActionsNode24ContractTest(unittest.TestCase):
             "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
             workflows,
         )
-        self.assertIn(
-            "dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1",
-            workflows,
+        setup_dart_references = [
+            reference
+            for reference in ACTION_REFERENCE.findall(workflows)
+            if reference.startswith("dart-lang/setup-dart@")
+        ]
+        self.assertTrue(setup_dart_references)
+        self.assertEqual(
+            [],
+            [
+                reference
+                for reference in setup_dart_references
+                if reference.rsplit("@", 1)[1] not in NODE24_SETUP_DART_PINS
+            ],
         )
         self.assertNotIn("subosito/flutter-action@", workflows)
         self.assertNotIn("actions/checkout@v4", workflows)
@@ -79,7 +95,8 @@ class ActionsNode24ContractTest(unittest.TestCase):
 
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("concurrency:", workflow)
-        self.assertEqual(workflow.count("timeout-minutes:"), 4)
+        # Additional step deadlines do not replace the four job deadlines.
+        self.assertEqual(workflow.count("\n    timeout-minutes:"), 4)
         self.assertEqual(workflow.count("persist-credentials: false"), 4)
 
     def test_dependency_review_is_pull_request_only_and_bounded(self) -> None:

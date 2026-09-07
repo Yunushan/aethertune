@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -24,7 +25,25 @@ ALL_WORKFLOWS = (
 )
 
 
+def script_reference_exists(path: Path) -> bool:
+    if path.suffix:
+        return path.is_file()
+    return path.is_file() or path.is_dir()
+
+
 class ToolchainPolicyTest(unittest.TestCase):
+    def test_directory_references_do_not_weaken_executable_file_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'probe').mkdir()
+            (root / 'not_a_script.py').mkdir()
+            (root / 'actual.py').write_text('pass\n')
+            self.assertTrue(script_reference_exists(root / 'probe'))
+            self.assertTrue(script_reference_exists(root / 'actual.py'))
+            self.assertFalse(script_reference_exists(root / 'not_a_script.py'))
+            self.assertFalse(script_reference_exists(root / 'missing.py'))
+            self.assertFalse(script_reference_exists(root / 'missing'))
+
     def test_workflow_script_references_exist(self) -> None:
         script_reference = re.compile(
             r"(?<![\w/])(?:\./)?scripts/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*"
@@ -34,8 +53,8 @@ class ToolchainPolicyTest(unittest.TestCase):
             for reference in sorted(set(script_reference.findall(workflow))):
                 relative_path = reference.removeprefix("./")
                 self.assertTrue(
-                    (ROOT / relative_path).is_file(),
-                    f"{workflow_path} references missing script {reference}",
+                    script_reference_exists(ROOT / relative_path),
+                    f"{workflow_path} references missing script or directory {reference}",
                 )
 
     def test_workflows_pin_flutter_and_dart_versions(self) -> None:
@@ -62,12 +81,19 @@ class ToolchainPolicyTest(unittest.TestCase):
         for workflow_path in WORKFLOWS:
             workflow = workflow_path.read_text(encoding="utf-8")
             self.assertIn(command, workflow, workflow_path)
+            for line in workflow.splitlines():
+                if "dart format " in line:
+                    self.assertIn("apps/mobile/integration_test", line, workflow_path)
             self.assertIn("bash scripts/ci/test_shell_syntax.sh", workflow)
         check_script = (ROOT / "scripts" / "check.sh").read_text(encoding="utf-8")
         self.assertIn(command, check_script)
+        self.assertIn(f"{command} lib test integration_test", check_script)
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("format-check:", makefile)
         self.assertIn(command, makefile)
+        for line in makefile.splitlines():
+            if "dart format " in line:
+                self.assertIn("apps/mobile/integration_test", line)
 
     def test_flutter_analysis_does_not_fail_on_informational_lints(self) -> None:
         script = (
@@ -117,6 +143,30 @@ class ToolchainPolicyTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("git clone https://github.com/Yunushan/aethertune.git", readme)
         self.assertNotIn("YOUR_NAME/aethertune", readme)
+
+    def test_linux_native_acceptance_is_a_ci_and_release_gate(self) -> None:
+        for workflow_path in WORKFLOWS:
+            workflow = workflow_path.read_text(encoding="utf-8")
+            self.assertIn("run_linux_native_acceptance.sh --evidence build/linux-native-acceptance", workflow)
+            self.assertIn("build/linux-native-acceptance/*.json", workflow)
+            self.assertIn("build/linux-native-acceptance/*.png", workflow)
+            self.assertIn("build-essential", workflow)
+            self.assertIn("gnome-keyring", workflow)
+            self.assertIn("pulseaudio-utils", workflow)
+            step = workflow.split("- name: Verify Linux native startup storage and playback", 1)[1].split("- name:", 1)[0]
+            self.assertIn("if: matrix.target == 'linux'", step)
+            self.assertNotIn("continue-on-error", step)
+        fixture = (ROOT / 'apps/mobile/integration_test/linux_native_acceptance_test.dart').read_text(encoding='utf-8')
+        self.assertIn('await app.main()', fixture)
+        self.assertIn('isA<FileLibraryStorage>()', fixture)
+        self.assertNotIn('setMockInitialValues', fixture)
+        self.assertNotIn('libraryStorageFactory =', fixture)
+        runner = (ROOT / 'scripts/ci/run_linux_native_acceptance.sh').read_text(encoding='utf-8')
+        self.assertIn('for phase in seed migrate reopen', runner)
+        self.assertIn('dbus-run-session', runner)
+        self.assertIn('module-null-sink', runner)
+        self.assertIn('verify_native_audio.py', runner)
+        self.assertIn('Evidence destination already exists', runner)
 
 
 if __name__ == "__main__":

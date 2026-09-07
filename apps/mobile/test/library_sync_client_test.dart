@@ -515,6 +515,7 @@ void main() {
                 'id': '0123456789abcdef01234567',
                 'deviceName': 'Windows desktop',
                 'createdAt': '2026-07-15T12:00:00.000Z',
+                'expiresAt': '2027-07-15T12:00:00.000Z',
               },
             }),
           );

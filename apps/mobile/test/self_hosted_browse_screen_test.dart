@@ -33,6 +33,7 @@ void main() {
 
     final provider = _FakeCatalogProvider();
     final library = LibraryStore();
+    await library.load();
     final engine = _FakePlaybackAudioEngine();
     final player = PlayerController(
       audioEngine: engine,
@@ -896,6 +897,7 @@ void main() {
     (tester) async {
       final provider = _FakeCatalogProvider();
       final library = LibraryStore();
+      await library.load();
       final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
       addTearDown(player.dispose);
       await tester.pumpWidget(
@@ -1044,6 +1046,7 @@ void main() {
   testWidgets('offline mode performs no catalog requests', (tester) async {
     final provider = _FakePagedCatalogProvider();
     final library = LibraryStore();
+    await library.load();
     await library.setOfflineModeEnabled(true);
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);
@@ -1067,6 +1070,7 @@ void main() {
   ) async {
     final provider = _FakeCatalogProvider();
     final library = LibraryStore();
+    await library.load();
     await library.setOfflineModeEnabled(true);
     final player = PlayerController(audioEngine: _FakePlaybackAudioEngine());
     addTearDown(player.dispose);

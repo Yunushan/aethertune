@@ -9,6 +9,9 @@ void main() {
     final dockerfile = await File('Dockerfile').readAsString();
     final systemd = await File('deploy/aethertune.service').readAsString();
     final backup = await File('deploy/aethertune-backup.sh').readAsString();
+    final backupImplementation = await File(
+      'deploy/aethertune-backup.py',
+    ).readAsString();
     final opsProbe = await File(
       'deploy/aethertune-ops-probe.sh',
     ).readAsString();
@@ -63,7 +66,10 @@ void main() {
     expect(compose, contains('stop_grace_period: 30s'));
     expect(compose, contains('cpus:'));
     expect(compose, contains('memory:'));
-    expect(compose, contains('http://127.0.0.1:8080/ready'));
+    expect(
+      compose,
+      contains('["CMD", "/usr/local/bin/aethertune-healthcheck"]'),
+    );
     expect(caddy, contains('sync.example.com {'));
     expect(caddy, contains('encode zstd gzip'));
     expect(
@@ -83,30 +89,48 @@ void main() {
     );
     expect(
       dockerfile,
-      matches(RegExp(r'FROM debian:bookworm-slim@sha256:[0-9a-f]{64}')),
+      matches(
+        RegExp(
+          r'FROM gcr.io/distroless/cc-debian13:nonroot@sha256:[0-9a-f]{64}',
+        ),
+      ),
     );
     expect(dockerfile, contains('dart pub get --enforce-lockfile'));
     expect(dockerfile, contains('RUN mkdir -p /out'));
-    expect(dockerfile, contains('http://127.0.0.1:8080/ready'));
-    expect(backup, contains("--exclude='*.tmp'"));
-    expect(backup, contains("--exclude='$serverDataDirectoryLockFileName'"));
-    expect(backup, contains(r'sha256sum "$(basename "$archive")"'));
-    expect(backup, contains('sha256sum --check'));
+    expect(
+      dockerfile,
+      contains('CMD ["/usr/local/bin/aethertune-healthcheck"]'),
+    );
+    expect(dockerfile, contains('USER 10001:999'));
+    expect(dockerfile, contains('--chown=10001:999 /out/data /data'));
+    expect(dockerfile, contains('dart compile exe bin/healthcheck.dart'));
+    expect(dockerfile, isNot(contains('apt-get')));
+    expect(backup, contains('aethertune-backup.py" backup'));
+    expect(backupImplementation, contains('def snapshot_lock('));
+    expect(backupImplementation, contains('fcntl.lockf'));
+    expect(backupImplementation, contains('LockFileEx'));
+    for (final name in [
+      serverDataDirectoryLockFileName,
+      serverInstanceLockFileName,
+      serverBackupIntentLockFileName,
+      serverBackupSnapshotLockFileName,
+    ]) {
+      expect(backupImplementation, contains(name));
+    }
+    expect(backupImplementation, contains("name.endswith('.tmp')"));
+    expect(backupImplementation, contains('os.fsync'));
     expect(rollback, contains('install -m 0755'));
     expect(rollback, contains(r'mv -f "$temporary_path"'));
     expect(
       rollback,
       contains('Current and previous binaries must be different paths'),
     );
-    expect(verifyBackups, contains('sha256sum --check'));
-    expect(verifyBackups, contains('tar -tzf'));
-    expect(verifyBackups, contains('Missing checksum sidecar'));
-    expect(restore, contains('Unsafe archive entry'));
-    expect(restore, contains('tar -tvzf'));
-    expect(restore, contains('Unsafe archive entry type'));
-    expect(restore, contains('Missing checksum sidecar'));
-    expect(restore, contains('archive_dir='));
-    expect(restore, contains(r'sha256sum --check "$checksum_name"'));
+    expect(verifyBackups, contains('aethertune-backup.py" verify'));
+    expect(restore, contains('aethertune-backup.py" restore'));
+    expect(backupImplementation, contains('Missing checksum sidecar'));
+    expect(backupImplementation, contains('Unsafe archive entry type'));
+    expect(backupImplementation, contains('def _verify_checksum('));
+    expect(backupImplementation, contains('os.replace(staging, target)'));
     expect(backupService, contains('aethertune-backup.sh'));
     expect(backupService, contains('ProtectSystem=strict'));
     expect(backupService, contains('ReadWritePaths=/var/backups/aethertune'));

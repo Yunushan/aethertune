@@ -25,6 +25,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
+        with:
+          sdk: '3.12.2'
+
+      - name: Compile recovery server
+        working-directory: services/server
+        run: |
+          dart pub get --enforce-lockfile
+          mkdir -p build
+          dart compile exe bin/server.dart -o build/aethertune-server
+
       - name: Initialize recovery evidence
         shell: bash
         run: |
@@ -44,6 +56,27 @@ jobs:
           set -u -o pipefail
           mkdir -p build/server-recovery-drill
 
+          python3 scripts/ci/test_server_backup.py 2>&1 \
+            | tee build/server-recovery-drill/backup-unit.log
+          backup_unit_status=${PIPESTATUS[0]}
+
+          sudo -n python3 scripts/ci/test_server_backup_privileges.py 2>&1 \
+            | tee build/server-recovery-drill/backup-privileges.log
+          backup_privileges_status=${PIPESTATUS[0]}
+
+          sudo -n env SOURCE_COMMIT_SHA="$SOURCE_COMMIT_SHA" \
+            python3 scripts/ci/server_systemd_runtime.py \
+            --executable services/server/build/aethertune-server \
+            --evidence build/server-recovery-drill/systemd 2>&1 \
+            | tee build/server-recovery-drill/systemd.log
+          systemd_status=${PIPESTATUS[0]}
+
+          python3 scripts/ci/server_recovery_runtime.py \
+            --executable services/server/build/aethertune-server \
+            --evidence build/server-recovery-drill/runtime 2>&1 \
+            | tee build/server-recovery-drill/runtime.log
+          runtime_status=${PIPESTATUS[0]}
+
           bash scripts/ci/test_server_backup_restore.sh 2>&1 \
             | tee build/server-recovery-drill/backup-restore.log
           backup_restore_status=${PIPESTATUS[0]}
@@ -53,7 +86,7 @@ jobs:
           rollback_status=${PIPESTATUS[0]}
 
           result=passed
-          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 ]]; then
+          if [[ "$backup_restore_status" -ne 0 || "$rollback_status" -ne 0 || "$backup_unit_status" -ne 0 || "$runtime_status" -ne 0 || "$backup_privileges_status" -ne 0 || "$systemd_status" -ne 0 ]]; then
             result=failed
           fi
           {
@@ -63,6 +96,10 @@ jobs:
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             printf 'backup_restore_status=%s\n' "$backup_restore_status"
             printf 'rollback_status=%s\n' "$rollback_status"
+            printf 'backup_unit_status=%s\n' "$backup_unit_status"
+            printf 'backup_privileges_status=%s\n' "$backup_privileges_status"
+            printf 'systemd_status=%s\n' "$systemd_status"
+            printf 'runtime_status=%s\n' "$runtime_status"
             printf 'result=%s\n' "$result"
           } > build/server-recovery-drill/metadata.txt
           if [[ "$result" != 'passed' ]]; then

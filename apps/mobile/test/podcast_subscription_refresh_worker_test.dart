@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +18,59 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
+
+  for (final fails in [false, true]) {
+    test(
+      'background stop drains feed and prevents later writes: failure=$fails',
+      () async {
+        final library = LibraryStore();
+        addTearDown(library.dispose);
+        await library.load();
+        final first = await _saveSubscription(
+          library,
+          feedUrl: 'https://feeds.example.test/first.xml',
+        );
+        await _saveSubscription(
+          library,
+          feedUrl: 'https://feeds.example.test/second.xml',
+        );
+        final started = Completer<void>();
+        final feed = Completer<PodcastRssFeed>();
+        var requests = 0;
+        var running = true;
+        final worker = PodcastSubscriptionRefreshWorker(
+          feedFetcher: (_) {
+            requests++;
+            started.complete();
+            return feed.future;
+          },
+        );
+        final refresh = refreshDuePodcastSubscriptionsInBackground(
+          library,
+          worker: worker,
+          shouldContinue: () => running,
+        );
+        await started.future;
+        running = false;
+        if (fails) {
+          feed.completeError(StateError('Feed stopped'));
+        } else {
+          feed.complete(await _feed(Uri.parse(first.feedUrl)));
+        }
+        final report = await refresh;
+        expect(requests, 1);
+        expect(report.attemptedCount, 0);
+        expect(
+          library.podcastSubscriptionById(first.id)!.lastFetchedAt,
+          first.lastFetchedAt,
+        );
+        expect(
+          library.podcastSubscriptionById(first.id)!.lastFetchError,
+          first.lastFetchError,
+        );
+      },
+    );
+  }
 
   test(
     'refreshes only due feeds and continues after individual failures',

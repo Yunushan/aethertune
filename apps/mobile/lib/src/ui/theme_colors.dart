@@ -87,9 +87,6 @@ ColorScheme? flutterColorSchemeFromDynamicColor(
     onInverseSurface: dynamicColorScheme.onInverseSurface,
     inversePrimary: dynamicColorScheme.inversePrimary,
     surfaceTint: dynamicColorScheme.surfaceTint,
-    background: dynamicColorScheme.background,
-    onBackground: dynamicColorScheme.onBackground,
-    surfaceVariant: dynamicColorScheme.surfaceVariant,
   );
 }
 

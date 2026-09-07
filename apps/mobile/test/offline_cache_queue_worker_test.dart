@@ -75,6 +75,80 @@ void main() {
   });
 
   test(
+    'stopping waits for resolver cleanup without starting the next entry',
+    () async {
+      final root = await Directory.systemTemp.createTemp('aethertune-handoff-');
+      addTearDown(() => root.delete(recursive: true));
+      final library = LibraryStore();
+      addTearDown(library.dispose);
+      await library.load();
+      await _queueLocalEntry(library, 'first');
+      await _queueLocalEntry(library, 'second');
+      final started = Completer<void>();
+      final lookup = Completer<Track>();
+      var resolutions = 0;
+      final worker = OfflineCacheQueueWorker(
+        cacheRoot: root,
+        resolveTrack: (_) {
+          resolutions++;
+          started.complete();
+          return lookup.future;
+        },
+      );
+      final pass = worker.processPending(library);
+      await started.future;
+      worker.stop();
+      var drained = false;
+      unawaited(pass.then((_) => drained = true));
+      await Future<void>.delayed(Duration.zero);
+      expect(drained, isFalse);
+      expect(worker.busy, isTrue);
+      lookup.completeError(StateError('Provider failure during shutdown'));
+      final result = await pass.timeout(const Duration(seconds: 2));
+      expect(result, hasLength(1));
+      expect(resolutions, 1);
+      expect(worker.busy, isFalse);
+      expect(await root.list().toList(), isEmpty);
+      await library.requeueProcessingOfflineCacheEntriesForBackground();
+      expect(
+        library.offlineCacheQueue.map((entry) => entry.status),
+        everyElement(OfflineCacheEntryStatus.queued),
+      );
+      expect(library.saveError, isNull);
+    },
+  );
+
+  test('a stopped worker can run a new explicitly requested pass', () async {
+    final root = await Directory.systemTemp.createTemp('aethertune-handoff-');
+    addTearDown(() => root.delete(recursive: true));
+    final library = LibraryStore();
+    addTearDown(library.dispose);
+    await library.load();
+    await _queueLocalEntry(library, 'retry');
+    final started = Completer<void>();
+    final lookup = Completer<Track>();
+    var resolutions = 0;
+    final worker = OfflineCacheQueueWorker(
+      cacheRoot: root,
+      resolveTrack: (track) {
+        resolutions++;
+        if (resolutions > 1) return Future.value(track);
+        started.complete();
+        return lookup.future;
+      },
+    );
+    final first = worker.processPending(library);
+    await started.future;
+    worker.stop();
+    lookup.complete(library.offlineCacheQueue.single.track);
+    await first;
+    await library.requeueProcessingOfflineCacheEntriesForBackground();
+    final second = await worker.processNext(library);
+    expect(second!.status, OfflineCacheEntryStatus.cached);
+    expect(resolutions, 2);
+  });
+
+  test(
     'continues past a failed entry without retrying it in the same pass',
     () async {
       final root = await Directory.systemTemp.createTemp('aethertune-worker-');
@@ -238,6 +312,50 @@ void main() {
         library.offlineCacheEntryById(entry.id)!.reason,
         'Paused by user.',
       );
+    },
+  );
+
+  test(
+    'evicted media stays paused across restart until explicitly resumed',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'aethertune-eviction-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final library = LibraryStore();
+      await library.load();
+      final entry = await _queueLocalEntry(library, 'evicted');
+      await library.markOfflineCacheEntryCached(
+        entry.id,
+        entry.track,
+        reason: 'Cached',
+      );
+      await library.markOfflineCacheEntryEvicted(
+        entry.id,
+        reason: 'Cache budget',
+      );
+      final reopened = LibraryStore();
+      await reopened.load();
+      var resolved = 0;
+      final worker = OfflineCacheQueueWorker(
+        cacheRoot: root,
+        resolveTrack: (track) async {
+          resolved++;
+          return track.copyWith(localPath: 'C:/fixture/evicted.mp3');
+        },
+      );
+      expect(reopened.hasPendingOfflineCacheWork, isFalse);
+      expect(await worker.processPending(reopened), isEmpty);
+      expect(resolved, 0);
+      await reopened.resumeOfflineCacheEntry(entry.id);
+      expect(reopened.hasPendingOfflineCacheWork, isTrue);
+      expect(
+        (await worker.processNext(reopened))!.status,
+        OfflineCacheEntryStatus.cached,
+      );
+      expect(resolved, 1);
+      library.dispose();
+      reopened.dispose();
     },
   );
 }

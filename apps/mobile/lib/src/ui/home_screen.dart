@@ -99,6 +99,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/android_pinned_shortcut_bridge.dart';
 import '../player/player_controller.dart';
 import 'now_playing_screen.dart';
+import 'offline_cache_maintenance_dialog.dart';
 import 'desktop_audio_output_settings.dart';
 import 'desktop_navigation_shortcuts.dart';
 import 'internet_archive_item_screen.dart';
@@ -4272,6 +4273,7 @@ class _QueueSheet extends StatelessWidget {
       return;
     }
     if (created == null) {
+      if (player.persistenceError != null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Use a unique queue name (up to 80 characters).'),
@@ -4301,7 +4303,7 @@ class _QueueSheet extends StatelessWidget {
           player.activeQueueId,
           name,
         );
-        if (context.mounted && !renamed) {
+        if (context.mounted && !renamed && player.persistenceError == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Use a unique queue name (up to 80 characters).'),
@@ -14382,11 +14384,17 @@ Future<void> _clearLocalDiagnostics(
   if (confirmed != true || !context.mounted) {
     return;
   }
-  await diagnostics.clear();
+  final cleared = await diagnostics.clear();
   if (context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Cleared local diagnostics.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          cleared
+              ? 'Cleared local diagnostics.'
+              : 'Could not clear saved diagnostics. Check device storage and retry.',
+        ),
+      ),
+    );
   }
 }
 
@@ -22317,7 +22325,9 @@ class _SettingsTab extends StatelessWidget {
             leading: const Icon(Icons.bug_report_outlined),
             title: const Text('Local diagnostics'),
             subtitle: Text(
-              diagnostics.entries.isEmpty
+              diagnostics.persistenceError
+                  ? 'Diagnostic storage or legacy report cleanup failed. Clear to retry.'
+                  : diagnostics.entries.isEmpty
                   ? 'No reports. Nothing is sent from this device.'
                   : '${diagnostics.entries.length} local report(s). Nothing is sent automatically.',
             ),
@@ -22335,7 +22345,9 @@ class _SettingsTab extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Clear local diagnostics',
-                  onPressed: diagnostics.entries.isEmpty
+                  onPressed:
+                      diagnostics.entries.isEmpty &&
+                          !diagnostics.persistenceError
                       ? null
                       : () => unawaited(
                           _clearLocalDiagnostics(context, diagnostics),
@@ -22591,57 +22603,66 @@ class _SettingsTab extends StatelessWidget {
             ],
           ),
         ),
-        FutureBuilder<OfflineCacheUsage>(
-          future: _offlineCacheUsage(offlineQueue),
-          builder: (context, snapshot) {
-            final usage = snapshot.data;
-            final offlineCacheLimitLabel = _formatByteCount(
-              offlineCacheLimitBytes,
-            );
-            final canTrim =
-                usage != null && usage.byteCount > offlineCacheLimitBytes;
-            final canClear = usage != null && usage.byteCount > 0;
-            final subtitle = snapshot.hasError
-                ? 'Could not read cache usage.'
-                : usage == null
-                ? 'Calculating private cache usage...'
-                : '${_formatByteCount(usage.byteCount)} across '
-                      '${usage.cachedEntryCount} cached item(s) · '
-                      'Limit: $offlineCacheLimitLabel';
+        // ListView mounts this row lazily. Start I/O only after its error
+        // handler can be attached, not while constructing off-screen children.
+        Builder(
+          builder: (context) => FutureBuilder<OfflineCacheUsage>(
+            future: _offlineCacheUsage(offlineQueue),
+            builder: (context, snapshot) {
+              final usage = snapshot.data;
+              final offlineCacheLimitLabel = _formatByteCount(
+                offlineCacheLimitBytes,
+              );
+              final canTrim =
+                  usage != null && usage.byteCount > offlineCacheLimitBytes;
+              final canClear = usage != null && usage.byteCount > 0;
+              final subtitle = snapshot.hasError
+                  ? 'Could not read cache usage.'
+                  : usage == null
+                  ? 'Calculating private cache usage...'
+                  : '${_formatByteCount(usage.byteCount)} across '
+                        '${usage.cachedEntryCount} cached item(s), '
+                        '${_formatByteCount(usage.partialByteCount)} partial, '
+                        '${_formatByteCount(usage.unindexedByteCount)} unindexed · '
+                        'Limit: $offlineCacheLimitLabel';
 
-            return ListTile(
-              leading: const Icon(Icons.storage_outlined),
-              title: const Text('Offline cache storage'),
-              subtitle: Text(subtitle),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  IconButton(
-                    tooltip: 'Set cache limit',
-                    onPressed: () =>
-                        unawaited(_showOfflineCacheLimitDialog(context)),
-                    icon: const Icon(Icons.tune_outlined),
-                  ),
-                  IconButton(
-                    tooltip: 'Trim cache to $offlineCacheLimitLabel',
-                    onPressed: canTrim
-                        ? () => unawaited(
-                            _trimOfflineCache(context, offlineCacheLimitBytes),
-                          )
-                        : null,
-                    icon: const Icon(Icons.cleaning_services_outlined),
-                  ),
-                  IconButton(
-                    tooltip: 'Clear cached media',
-                    onPressed: canClear
-                        ? () => unawaited(_trimOfflineCache(context, 0))
-                        : null,
-                    icon: const Icon(Icons.delete_sweep_outlined),
-                  ),
-                ],
-              ),
-            );
-          },
+              return ListTile(
+                leading: const Icon(Icons.storage_outlined),
+                title: const Text('Offline cache storage'),
+                subtitle: Text(subtitle),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    IconButton(
+                      tooltip: 'Set cache limit',
+                      onPressed: () =>
+                          unawaited(_showOfflineCacheLimitDialog(context)),
+                      icon: const Icon(Icons.tune_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Trim cache to $offlineCacheLimitLabel',
+                      onPressed: canTrim
+                          ? () => unawaited(
+                              _trimOfflineCache(
+                                context,
+                                offlineCacheLimitBytes,
+                              ),
+                            )
+                          : null,
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Clear cached media',
+                      onPressed: canClear
+                          ? () => unawaited(_trimOfflineCache(context, 0))
+                          : null,
+                      icon: const Icon(Icons.delete_sweep_outlined),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
         for (final sourceId in _offlineCacheProviderIds(offlineQueue))
           ListTile(
@@ -22788,7 +22809,7 @@ class _SettingsTab extends StatelessWidget {
     List<OfflineCacheEntry> entries,
   ) async {
     final cacheRoot = await getApplicationDocumentsDirectory();
-    return OfflineCacheManager(cacheRoot: cacheRoot).usage(entries);
+    return OfflineCacheManager(cacheRoot: cacheRoot).storageUsage(entries);
   }
 
   Future<void> _showOfflineCacheLimitDialog(BuildContext context) async {
@@ -22943,31 +22964,56 @@ class _SettingsTab extends StatelessWidget {
   Future<void> _trimOfflineCache(BuildContext context, int maxBytes) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
-    final cacheRoot = await getApplicationDocumentsDirectory();
-    final manager = OfflineCacheManager(cacheRoot: cacheRoot);
-    final result = await manager.evictToSize(
-      entries: library.offlineCacheQueue,
-      maxBytes: maxBytes,
-    );
-    final reason = maxBytes <= 0
-        ? 'Cached media cleared.'
-        : 'Evicted to keep cache under ${_formatByteCount(maxBytes)}.';
-
-    for (final entryId in result.evictedEntryIds) {
-      await library.markOfflineCacheEntryEvicted(entryId, reason: reason);
+    if (maxBytes <= 0) {
+      final confirmed = await confirmOfflineCacheClear(context);
+      if (confirmed != true || !context.mounted) return;
     }
+    try {
+      final cacheRoot = await getApplicationDocumentsDirectory();
+      final manager = OfflineCacheManager(cacheRoot: cacheRoot);
+      if (maxBytes <= 0) {
+        final result = await manager.clearPrivateMedia();
+        await library.forgetClearedOfflineFiles(result.deletedPaths);
+        if (!context.mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cleared ${_formatByteCount(result.byteCount)} of private media.'
+              '${result.failedFileCount > 0 ? ' ${result.failedFileCount} file(s) could not be removed.' : ''}',
+            ),
+          ),
+        );
+        return;
+      }
+      final result = await manager.evictToSize(
+        entries: library.offlineCacheQueue,
+        maxBytes: maxBytes,
+      );
+      final reason =
+          'Evicted to keep cache under ${_formatByteCount(maxBytes)}.';
 
-    if (!context.mounted) {
-      return;
+      for (final entryId in result.evictedEntryIds) {
+        await library.markOfflineCacheEntryEvicted(entryId, reason: reason);
+      }
+
+      if (!context.mounted) {
+        return;
+      }
+
+      final actual = await manager.storageUsage(library.offlineCacheQueue);
+      final message = actual.byteCount > maxBytes
+          ? 'Private storage is still over the limit. Clear private media to remove partial and unindexed files.'
+          : result.evictedEntryIds.isEmpty
+          ? 'Offline cache already under ${_formatByteCount(maxBytes)}.'
+          : 'Cleared ${_formatByteCount(result.evictedBytes)} from '
+                '${result.evictedEntryIds.length} cached item(s).';
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    } on Object catch (error) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(_offlineCacheErrorMessage(error))),
+      );
     }
-
-    final message = result.evictedEntryIds.isEmpty
-        ? maxBytes <= 0
-              ? 'No cached media to clear.'
-              : 'Offline cache already under ${_formatByteCount(maxBytes)}.'
-        : 'Cleared ${_formatByteCount(result.evictedBytes)} from '
-              '${result.evictedEntryIds.length} cached item(s).';
-    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _exportOfflineCacheEntry(
@@ -23082,6 +23128,11 @@ class _SettingsTab extends StatelessWidget {
         final materialization = await manager.materialize(
           processingEntry.copyWith(track: resolvedTrack),
           cancellationToken: cancellationToken,
+          budget: offlineCacheBudget(library),
+          maxBytes: offlineCacheTransferLimitBytes(
+            library,
+            resolvedTrack.sourceId,
+          ),
         );
         if (library.offlineCacheEntryById(entry.id)?.status !=
             OfflineCacheEntryStatus.processing) {
@@ -23103,6 +23154,8 @@ class _SettingsTab extends StatelessWidget {
         );
         evicted += evictionResult.evictedEntryIds.length;
         evictedBytes += evictionResult.evictedBytes;
+        evicted += materialization.evictedEntryIds.length;
+        evictedBytes += materialization.evictedBytes;
         cached += 1;
       } on OfflineCacheCancelled {
         // The Options control has already persisted the paused state.

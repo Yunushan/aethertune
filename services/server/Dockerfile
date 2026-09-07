@@ -8,26 +8,24 @@ RUN dart pub get --enforce-lockfile
 COPY bin ./bin
 COPY lib ./lib
 RUN mkdir -p /out \
-    && dart compile exe bin/server.dart -o /out/aethertune-server
+    && dart compile exe bin/server.dart -o /out/aethertune-server \
+    && dart compile exe bin/healthcheck.dart -o /out/aethertune-healthcheck \
+    && mkdir -m 0700 /out/data
 
-FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
-
-RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --create-home aethertune \
-    && mkdir /data \
-    && chown aethertune:aethertune /data
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:c31ff9abcb1910f3ab25c7957bdaf0bfe12a01eb546e8df2282f1c8f682b606c
 
 COPY --from=build /out/aethertune-server /usr/local/bin/aethertune-server
+COPY --from=build /out/aethertune-healthcheck /usr/local/bin/aethertune-healthcheck
+COPY --from=build --chown=10001:999 /out/data /data
 
-USER aethertune
+# Preserve the previous image's numeric identity for existing data volumes.
+USER 10001:999
 ENV PORT=8080
 ENV AETHERTUNE_DATA_DIR=/data
 
 VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["curl", "--fail", "--silent", "http://127.0.0.1:8080/ready"]
+  CMD ["/usr/local/bin/aethertune-healthcheck"]
 
-CMD ["aethertune-server"]
+CMD ["/usr/local/bin/aethertune-server"]

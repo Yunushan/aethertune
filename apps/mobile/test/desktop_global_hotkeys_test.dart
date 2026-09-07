@@ -1,9 +1,91 @@
 import 'package:aethertune/src/ui/widgets/desktop_global_hotkeys.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'sends valid Windows media codes and modifier lists to the native channel',
+    () async {
+      const channel = MethodChannel('dev.leanflutter.plugins/hotkey_manager');
+      const events = MethodChannel(
+        'dev.leanflutter.plugins/hotkey_manager_event',
+      );
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final calls = <MethodCall>[];
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return true;
+      });
+      messenger.setMockMethodCallHandler(events, (_) async => null);
+      final controller = DesktopGlobalHotkeyController(
+        onTogglePlayPause: () async {},
+        onPrevious: () async {},
+        onNext: () async {},
+      );
+      try {
+        await controller.start(platform: TargetPlatform.windows);
+        final registrations = calls
+            .where((call) => call.method == 'register')
+            .toList();
+        expect(registrations, hasLength(3));
+        expect(
+          registrations.map((call) => (call.arguments as Map)['keyCode']),
+          <int>[0xb3, 0xb1, 0xb0],
+        );
+        for (final call in registrations) {
+          final arguments = call.arguments as Map<Object?, Object?>;
+          expect(arguments['identifier'], isA<String>());
+          expect(arguments['keyCode'], isA<int>());
+          expect(arguments['modifiers'], isA<List<Object?>>());
+          expect(arguments['modifiers'], isEmpty);
+        }
+        await controller.dispose();
+        expect(
+          calls.where((call) => call.method == 'unregister'),
+          hasLength(3),
+        );
+      } finally {
+        await controller.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+        messenger.setMockMethodCallHandler(events, null);
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
+  test('keeps native key-code lookup on non-Windows desktops', () async {
+    final registry = _FakeDesktopHotkeyRegistry();
+    final controller = DesktopGlobalHotkeyController(
+      registry: registry,
+      onTogglePlayPause: () async {},
+      onPrevious: () async {},
+      onNext: () async {},
+    );
+    for (final platform in <TargetPlatform>[
+      TargetPlatform.linux,
+      TargetPlatform.macOS,
+    ]) {
+      debugDefaultTargetPlatformOverride = platform;
+      try {
+        await controller.start(platform: platform);
+        expect(registry._hotkeys, hasLength(3));
+        for (final hotKey in registry._hotkeys.values) {
+          expect(hotKey.toJson().containsKey('keyCode'), isFalse);
+          expect(hotKey.toJson()['modifiers'], isEmpty);
+        }
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    }
+    await controller.dispose();
+  });
+
   test(
     'registers desktop-wide transport keys and routes their commands',
     () async {
