@@ -80,6 +80,18 @@ class DependencyLockPolicyTest(unittest.TestCase):
                 if "dart pub get" in text:
                     self.assertIn("dart pub get --enforce-lockfile", text)
 
+    def test_dependabot_ignores_incompatible_flutter_intl_updates(self) -> None:
+        config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertRegex(
+            config,
+            r"(?ms)^  - package-ecosystem: pub\n"
+            r"    directories:\n"
+            r".*?^    ignore:\n"
+            r"      - dependency-name: intl\n"
+            r"        versions:\n"
+            r"          - \">=0\.20\.3\"\n",
+        )
+
     def test_docker_base_images_are_multiarch_digest_pinned(self) -> None:
         dockerfile = (ROOT / "services" / "server" / "Dockerfile").read_text(
             encoding="utf-8"
