@@ -8,6 +8,7 @@ import 'package:aethertune/main.dart' as app;
 import 'package:aethertune/src/data/library_storage.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/local_diagnostic_log.dart';
+import 'package:aethertune/src/data/offline_cache_background_scheduler.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/home_screen.dart';
@@ -68,6 +69,8 @@ void main() {
     void passed(String name) => checks.add({'name': name, 'passed': true});
     PlayerController? player;
     try {
+      await OfflineCacheBackgroundScheduler().cancel();
+      passed('native-background-cancellation');
       final prefs = await SharedPreferences.getInstance();
       const vault = FlutterSecureStorage();
       final media = File(p.join(support.path, 'ios-acceptance.wav'));

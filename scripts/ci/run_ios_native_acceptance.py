@@ -24,7 +24,7 @@ PREFIX = "AetherTune_Acceptance_"
 TARGET = "integration_test/ios_native_acceptance_test.dart"
 MARKER = "aethertune-ios-native-acceptance-v1\n"
 PHASES = ("seed", "reopen", "sync")
-COMMON = {"production-app-startup"}
+COMMON = {"production-app-startup", "native-background-cancellation"}
 CHECKS = {
     "seed": COMMON | {
         "native-keychain-round-trip", "native-library-snapshot",

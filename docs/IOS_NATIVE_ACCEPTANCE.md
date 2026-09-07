@@ -22,6 +22,19 @@ score increase is claimed merely for adding this workflow. First-run evidence:
 [run 34149732012](https://github.com/Yunushan/aethertune/actions/runs/34149732012),
 artifact SHA-256 `e6c4f5a59cfd507844bcff97416fd9579f506e639cbc6c7d3311e88c22713f9b`.
 
+The second run passed the seed keychain, startup, library and playback checks,
+then caught `MissingPluginException` for background-cache cancellation. The
+generated AppDelegate still registered channels through its launch-time window,
+which is nil under the pinned Flutter SDK's scene lifecycle. Registration now
+uses `didInitializeImplicitFlutterEngine`, and audio-route presentation resolves
+the calling engine's current view controller. This follows Flutter's
+[scene migration guidance](https://docs.flutter.dev/release/breaking-changes/uiscenedelegate).
+Each phase explicitly requires native cancellation acknowledgment as well.
+Second-run evidence: [run 34151934490](https://github.com/Yunushan/aethertune/actions/runs/34151934490),
+artifact SHA-256 `be961729275085144872e6ecbfb367f7248a410aa9d5435a1a461e8dadc4990e`.
+The run restored ordinary output and deleted its guest. The corrected wrapper
+still needs a complete passing native run; none is claimed from unit tests.
+
 ## Execution
 
 The workflow uses the repository-pinned Flutter SDK and existing platform
@@ -51,7 +64,8 @@ phases:
 | Sync | A third process runs the existing strict native TLS contracts: platform-trusted UTF-8/auth/status/redirect, wrong-host and unknown-root rejection before HTTP credentials, three stalled TLS cleanups and three independent isolate requests |
 
 Each phase records its exact source commit, simulator ID, process ID, named
-checks and a PNG of the rendered app. The launcher checks all required names,
+checks and a PNG of the rendered app. Every phase also requires an acknowledged
+native background-work cancellation before accessing the library. The launcher checks all required names,
 success values and identities; missing/duplicate checks and reused process IDs
 fail. A PNG signature check detects missing/corrupt output but is not a substitute
 for inspecting the rendered evidence for a blank or broken screen.
