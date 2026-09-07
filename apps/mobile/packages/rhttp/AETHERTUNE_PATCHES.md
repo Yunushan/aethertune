@@ -20,6 +20,12 @@ Local changes:
 - Android verifier discovery uses locked Cargo metadata resolution.
 - Read Android Gradle's numeric `compileSdk` property; legacy display strings
   such as `android-37.0` are not integer API levels.
+- Make the Windows Cargokit wrapper reject missing SDK/build directories and
+  preserve failures from dependency resolution, kernel compilation, native
+  builds, and snapshot-version retries. Create its metadata directory before
+  writing it. A failed native build must not produce a successful Gradle result.
+- Pass Flutter's configured SDK path to Cargokit for direct Gradle/Android Studio
+  builds, including builds launched without a `FLUTTER_ROOT` environment variable.
 - Resolve native advisories with h2 0.4.16, quinn-proto 0.11.15 and anyhow 1.0.103.
 - Add optional `maxStreamResponseBytes` (uint32) for decoded stream responses.
   It rejects known oversize lengths and enforces cumulative chunk size before
