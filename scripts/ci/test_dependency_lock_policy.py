@@ -71,6 +71,18 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertNotIn("/apps/mobile/pubspec.lock", gitignore)
         self.assertNotIn("/services/server/pubspec.lock", gitignore)
 
+    def test_dependabot_ignores_incompatible_flutter_intl_updates(self) -> None:
+        config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertRegex(
+            config,
+            r"(?ms)^  - package-ecosystem: pub\n"
+            r"    directory: /apps/mobile\n"
+            r".*?^    ignore:\n"
+            r"      - dependency-name: intl\n"
+            r"        versions:\n"
+            r"          - \">=0\.20\.3\"\n",
+        )
+
     def test_dependency_commands_enforce_lockfiles(self) -> None:
         for command_file in COMMAND_FILES:
             text = command_file.read_text(encoding="utf-8")
