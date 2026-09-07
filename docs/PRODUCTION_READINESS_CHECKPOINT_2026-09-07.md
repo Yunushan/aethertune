@@ -106,3 +106,19 @@ workflow additions are not yet evidence of their execution on GitHub or macOS.
 
 These external acceptance requirements remain unverified, not waived or
 fabricated. Meaningful work remains available, so the goal is still active.
+
+## Follow-Up: Cross-Platform PR Acceptance
+
+The initial PR #31 Linux CI execution of the authenticated load gate passed in
+[run 34140900614](https://github.com/Yunushan/aethertune/actions/runs/34140900614).
+Review then found that Windows/macOS would only execute the gate at release
+time. CI now also compiles the current locked server and executes the existing
+fixture in the Windows and macOS desktop matrix jobs, with separate retained
+evidence. Linux continues using the server job; no duplicate Linux load run or
+additional signing/deployment step was added.
+
+A regression test first failed on the absent PR steps, then passed with them.
+Local Python discovery now passes 218 of 230 tests with 12 platform skips; the
+edited YAML and embedded Bash steps validate. The runtime fixture and production
+server code are unchanged from the hash-identified local runs above. Execution
+of the new macOS/Windows CI steps remains pending, not assumed successful.

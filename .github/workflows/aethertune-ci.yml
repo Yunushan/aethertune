@@ -316,6 +316,44 @@ jobs:
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
 
+      - name: Compile native server for sync acceptance
+        if: matrix.target != 'linux'
+        working-directory: services/server
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart pub get --enforce-lockfile
+          mkdir -p build
+          binary=build/aethertune-server-sync-load
+          if [[ "$RUNNER_OS" == 'Windows' ]]; then binary+='.exe'; fi
+          dart compile exe bin/server.dart -o "$binary"
+
+      - name: Verify native server sync load and restart
+        if: matrix.target != 'linux'
+        shell: bash
+        env:
+          SOURCE_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          binary=services/server/build/aethertune-server-sync-load
+          python_command=python3
+          if [[ "$RUNNER_OS" == 'Windows' ]]; then
+            binary+='.exe'
+            python_command=python
+          fi
+          "$python_command" scripts/ci/test_server_sync_load_runtime.py
+          "$python_command" scripts/ci/server_sync_load_runtime.py \
+            --executable "$binary" --evidence build/native-server-sync
+
+      - name: Upload native server sync evidence
+        if: ${{ always() && matrix.target != 'linux' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-native-server-sync-${{ matrix.target }}-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/native-server-sync/
+
       - name: Build native client storage probe
         shell: bash
         run: |

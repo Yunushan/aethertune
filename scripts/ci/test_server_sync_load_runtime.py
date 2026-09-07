@@ -197,6 +197,26 @@ class RunnerTest(unittest.TestCase):
         self.assertIn('--evidence build/server-load/authenticated', ci)
         self.assertIn('build/server-sync-load-${{ matrix.label }}/', release)
 
+    def test_pr_ci_executes_the_compiled_gate_on_windows_and_macos(self):
+        ci = (load.ROOT / '.github/workflows/aethertune-ci.yml').read_text()
+        desktop = ci.split('\n  desktop:', 1)[1].split('\n  server:', 1)[0]
+        build = desktop.split('- name: Compile native server for sync acceptance', 1)[1].split('- name:', 1)[0]
+        run = desktop.split('- name: Verify native server sync load and restart', 1)[1].split('- name:', 1)[0]
+        upload = desktop.split('- name: Upload native server sync evidence', 1)[1].split('- name:', 1)[0]
+        for step in (build, run):
+            self.assertIn("if: matrix.target != 'linux'", step)
+            self.assertNotIn('continue-on-error', step)
+        self.assertIn('working-directory: services/server', build)
+        self.assertIn('dart pub get --enforce-lockfile', build)
+        self.assertIn('dart compile exe bin/server.dart', build)
+        self.assertIn('server_sync_load_runtime.py', run)
+        self.assertIn('SOURCE_COMMIT_SHA', run)
+        self.assertIn('test_server_sync_load_runtime.py', run)
+        self.assertIn('--evidence build/native-server-sync', run)
+        self.assertIn("always() && matrix.target != 'linux'", upload)
+        self.assertIn('if-no-files-found: error', upload)
+        self.assertIn('path: build/native-server-sync/', upload)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -366,8 +366,10 @@ and snapshot bodies are not published as evidence.
 
 CI retains the JSON report with request counts, status distribution, payload
 bytes, p50/p95/max latency, executed checks, executable hash, and source input
-hashes. Release builds run the same gate on Linux, Windows, and macOS before
-uploading the executable. A failed assertion, transport error, or failed cleanup
+hashes. PR CI compiles and exercises the server on Linux, Windows, and macOS;
+Windows/macOS use the existing desktop matrix runners. Release builds run the
+same gate on all three platforms before uploading the executable. A failed
+assertion, transport error, or failed cleanup
 fails the gate. The original public-route load smoke remains enabled.
 
 This is repeatable local acceptance, not a production throughput claim, a TLS
