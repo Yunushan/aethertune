@@ -76,6 +76,9 @@ jobs:
       - name: Test Android release artifact verifier
         run: python3 scripts/ci/test_verify_android_release_artifacts.py
 
+      - name: Test disposable Android TLS fixture safety
+        run: python3 scripts/ci/test_android_sync_fixture.py
+
       - name: Test iOS release artifact verifier
         run: python3 scripts/ci/test_verify_ios_release_artifact.py
 
@@ -275,6 +278,11 @@ jobs:
       - name: Build Android debug app
         run: cd apps/mobile && flutter build apk --debug
 
+      - name: Verify Android native payload
+        run: >-
+          python3 scripts/ci/verify_android_release_artifacts.py
+          --apk apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+
   desktop:
     name: Desktop build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
@@ -313,6 +321,11 @@ jobs:
 
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: Test Windows native build failure handling
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: python scripts/ci/test_cargokit_windows_runner.py
 
       - name: Build native client storage probe
         shell: bash

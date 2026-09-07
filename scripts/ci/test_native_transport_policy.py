@@ -52,6 +52,19 @@ class NativeTransportPolicyTest(unittest.TestCase):
         self.assertIn('compileSdkVersion = plugin.project.android.compileSdk\n', plugin)
         self.assertNotIn('compileSdkVersion.substring', plugin)
 
+    def test_gradle_provides_the_configured_flutter_sdk_to_the_native_builder(self) -> None:
+        plugin = (APP / 'packages/rhttp/cargokit/gradle/plugin.gradle').read_text()
+        self.assertIn('flutterProperties.load(it)', plugin)
+        self.assertIn('plugin.project.findProperty("flutter.sdk")', plugin)
+        self.assertIn('flutterRoot = plugin.project.file(flutterSdk).absolutePath', plugin)
+        self.assertIn('environment "FLUTTER_ROOT", flutterRoot', plugin)
+
+    def test_ci_checks_android_payload_and_windows_native_failures(self) -> None:
+        workflow = (ROOT / '.github/workflows/aethertune-ci.yml').read_text()
+        self.assertIn('python scripts/ci/test_cargokit_windows_runner.py', workflow)
+        self.assertIn('Verify Android native payload', workflow)
+        self.assertIn('--apk apps/mobile/build/app/outputs/flutter-apk/app-debug.apk', workflow)
+
     def test_linux_acceptance_defines_a_real_unavailable_documents_fixture(self) -> None:
         launcher = (ROOT / 'scripts/ci/run_linux_native_acceptance.sh').read_text()
         self.assertIn('XDG_DOCUMENTS_DIR="$HOME/unavailable-documents"', launcher)

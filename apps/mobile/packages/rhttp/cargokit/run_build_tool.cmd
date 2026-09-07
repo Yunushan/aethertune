@@ -5,13 +5,27 @@ setlocal ENABLEDELAYEDEXPANSION
 
 SET BASEDIR=%~dp0
 
+if not defined FLUTTER_ROOT (
+    echo FLUTTER_ROOT must identify the Flutter SDK. 1>&2
+    exit /b 2
+)
+SET "DART=%FLUTTER_ROOT%\bin\cache\dart-sdk\bin\dart.exe"
+if not exist "%DART%" (
+    echo Flutter Dart executable was not found. 1>&2
+    exit /b 2
+)
+if not defined CARGOKIT_TOOL_TEMP_DIR (
+    echo CARGOKIT_TOOL_TEMP_DIR must identify the build directory. 1>&2
+    exit /b 2
+)
 if not exist "%CARGOKIT_TOOL_TEMP_DIR%" (
     mkdir "%CARGOKIT_TOOL_TEMP_DIR%"
+    if errorlevel 1 exit /b !ERRORLEVEL!
 )
 cd /D "%CARGOKIT_TOOL_TEMP_DIR%"
+if errorlevel 1 exit /b %ERRORLEVEL%
 
 SET BUILD_TOOL_PKG_DIR=%BASEDIR%build_tool
-SET DART=%FLUTTER_ROOT%\bin\cache\dart-sdk\bin\dart
 
 set BUILD_TOOL_PKG_DIR_POSIX=%BUILD_TOOL_PKG_DIR:\=/%
 
@@ -25,11 +39,17 @@ set BUILD_TOOL_PKG_DIR_POSIX=%BUILD_TOOL_PKG_DIR:\=/%
     echo.
     echo dependencies:
     echo   build_tool:
-    echo     path: %BUILD_TOOL_PKG_DIR_POSIX%
+    echo     path: "%BUILD_TOOL_PKG_DIR_POSIX%"
 ) >pubspec.yaml
+if errorlevel 1 exit /b %ERRORLEVEL%
 
 if not exist bin (
     mkdir bin
+    if errorlevel 1 exit /b !ERRORLEVEL!
+)
+if not exist .dart_tool (
+    mkdir .dart_tool
+    if errorlevel 1 exit /b !ERRORLEVEL!
 )
 
 (
@@ -38,6 +58,7 @@ if not exist bin (
     echo    build_tool.runMain^(args^);
     echo ^}
 ) >bin\build_tool_runner.dart
+if errorlevel 1 exit /b %ERRORLEVEL%
 
 SET PRECOMPILED=bin\build_tool_runner.dill
 
@@ -46,6 +67,7 @@ set PREV_PACKAGE_INFO=.dart_tool\package_info.prev
 set CUR_PACKAGE_INFO=.dart_tool\package_info.cur
 
 DIR "%BUILD_TOOL_PKG_DIR%" /s > "%CUR_PACKAGE_INFO%_orig"
+if errorlevel 1 exit /b %ERRORLEVEL%
 
 REM Last line in dir output is free space on harddrive. That is bound to
 REM change between invocation so we need to remove it
@@ -68,6 +90,7 @@ If %ERRORLEVEL% neq 0 (
         DEL "%PREV_PACKAGE_INFO%"
     )
     MOVE /Y "%CUR_PACKAGE_INFO%" "%PREV_PACKAGE_INFO%"
+    if errorlevel 1 exit /b !ERRORLEVEL!
     if exist "%PRECOMPILED%" (
         DEL "%PRECOMPILED%"
     )
@@ -75,17 +98,24 @@ If %ERRORLEVEL% neq 0 (
 
 REM There is no CUR_PACKAGE_INFO it was renamed in previous step to %PREV_PACKAGE_INFO%
 REM which means  we need to do pub get and precompile
-if not exist "%PRECOMPILED%" (
-    echo Running pub get in "%cd%"
-    "%DART%" pub get --no-precompile
-    "%DART%" compile kernel bin/build_tool_runner.dart
-)
+if exist "%PRECOMPILED%" goto run_builder
+call :prepare_kernel
+if errorlevel 1 exit /b %ERRORLEVEL%
 
+:run_builder
 "%DART%" "%PRECOMPILED%" %*
+SET "BUILD_EXIT_CODE=%ERRORLEVEL%"
 
 REM 253 means invalid snapshot version.
-If %ERRORLEVEL% equ 253 (
-    "%DART%" pub get --no-precompile
-    "%DART%" compile kernel bin/build_tool_runner.dart
-    "%DART%" "%PRECOMPILED%" %*
-)
+if %BUILD_EXIT_CODE% neq 253 exit /b %BUILD_EXIT_CODE%
+call :prepare_kernel
+if errorlevel 1 exit /b %ERRORLEVEL%
+"%DART%" "%PRECOMPILED%" %*
+exit /b %ERRORLEVEL%
+
+:prepare_kernel
+echo Running pub get in "%cd%"
+"%DART%" pub get --no-precompile
+if errorlevel 1 exit /b %ERRORLEVEL%
+"%DART%" compile kernel bin/build_tool_runner.dart
+exit /b %ERRORLEVEL%
