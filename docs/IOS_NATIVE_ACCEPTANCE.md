@@ -8,6 +8,35 @@ file-backed library storage, preferences, decoder/player and Rust TLS transport.
 It does not replace physical-device audio/lifecycle, accessibility, signed
 installation, upgrade/rollback or deployed hosted-sync acceptance.
 
+**Bounded native acceptance passed on 2026-09-07.**
+[Run 34154001516](https://github.com/Yunushan/aethertune/actions/runs/34154001516)
+tested PR head `42101c5a3e0d1d5e3a8db88d18240b049bbf6fa9` through GitHub's
+merge commit `52e8e6bb8355c4d4f6dc287c4a32387f3aea9136`, using Flutter 3.44.6,
+Dart 3.12.2, Xcode 26.6 and an iPhone SE (3rd generation) on iOS 26.5.
+The downloaded artifact hash was verified, the reports and driver logs inspected,
+and all three 375 x 667 screenshots visually checked: the application and restored
+player are nonblank, with no error screen or overlapping controls.
+
+| Phase | Process | Passed checks |
+| --- | ---: | ---: |
+| Seed | 94440 | 6 |
+| Reopen | 96833 | 6 |
+| Sync | 98403 | 10 |
+
+All 22 checks passed with distinct processes and the same installed binary.
+TLS stall callers returned in 304 ms and peers disconnected in 304-305 ms.
+`result.json` reports no errors, ordinary-output restoration, and deletion of
+the owned guest `9CD26E9F-5931-4C7A-8223-97C3A2A34D79`.
+Artifact SHA-256:
+`4f5311465cadfed16272ee0e7c001f1097d96c319a1c5918486059f06280b9e1`.
+Probe executable SHA-256:
+`4f1a1b3b13440ab8241f9cfd16c9199992c07a24661c2f8d2f325259abff2c39`.
+All eight PR workflows also passed on that head. This is exact-candidate
+Simulator evidence, not a passing signed release, a production deployment, or
+a 100/100 readiness claim. Later code changes require fresh validation.
+
+### Failures Resolved Before Acceptance
+
 The first hosted run built and installed the probe on iOS 26.5 with Xcode 26.6,
 then rejected missing fixture identity before touching the library. The pinned
 Dart runtime returns an empty `Platform.environment` on iOS, so environment-based
@@ -16,9 +45,8 @@ container, checked against the compiled guest UUID, fixture name, source commit
 and native application-support path. A physical-device container cannot satisfy
 that path check. The failed run restored ordinary output and deleted its guest.
 
-**An actual passing iOS run is not yet established.** Passing the launcher and
-control-parser tests does not count as native runtime evidence, and no readiness
-score increase is claimed merely for adding this workflow. First-run evidence:
+Passing the launcher and control-parser tests did not establish native runtime
+acceptance. The first-run failure evidence is retained at:
 [run 34149732012](https://github.com/Yunushan/aethertune/actions/runs/34149732012),
 artifact SHA-256 `e6c4f5a59cfd507844bcff97416fd9579f506e639cbc6c7d3311e88c22713f9b`.
 
@@ -32,8 +60,9 @@ the calling engine's current view controller. This follows Flutter's
 Each phase explicitly requires native cancellation acknowledgment as well.
 Second-run evidence: [run 34151934490](https://github.com/Yunushan/aethertune/actions/runs/34151934490),
 artifact SHA-256 `be961729275085144872e6ecbfb367f7248a410aa9d5435a1a461e8dadc4990e`.
-The run restored ordinary output and deleted its guest. The corrected wrapper
-still needs a complete passing native run; none is claimed from unit tests.
+The run restored ordinary output and deleted its guest. The third run above
+verified the corrected wrapper, including native cancellation acknowledgment
+in each process; the missing handler was not suppressed or mocked.
 
 ## Execution
 
