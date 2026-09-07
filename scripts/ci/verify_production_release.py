@@ -22,6 +22,7 @@ PROVENANCE_ARTIFACTS = frozenset(
     {
         "aethertune-mobile-dependencies.json",
         "aethertune-mobile.cdx.json",
+        "aethertune-native-transport.cdx.json",
         "aethertune-server-dependencies.json",
         "aethertune-server.cdx.json",
     }

@@ -7,13 +7,192 @@ import 'package:aethertune/src/player/playback_audio_effects.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/offline_playback_policy.dart';
 import 'package:aethertune/src/player/player_controller.dart';
+import 'package:aethertune/src/player/player_state_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/player_storage_fixture.dart';
+
+Future<String> _persistedPlayerValue(String key) async {
+  final storage = PlayerStateStore();
+  expect(await storage.load(), isTrue);
+  return storage.values[key] as String;
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  for (final action in ['create', 'rename', 'switch', 'delete']) {
+    test('failed $action queue save rolls back and reports failure', () async {
+      final storage = ControlledPlayerStorage();
+      final engine = _FakePlaybackAudioEngine();
+      final player = PlayerController(
+        audioEngine: engine,
+        stateStore: PlayerStateStore(storage: storage),
+      );
+      addTearDown(player.dispose);
+      await player.playTrack(_track('saved'));
+      final later = await player.createSavedQueue('Later');
+      final saved = storage.current!.values;
+      storage.failWrites = true;
+      final Object? result = switch (action) {
+        'create' => await player.createSavedQueue('Rejected'),
+        'rename' => await player.renameSavedQueue('default', 'Rejected'),
+        'switch' => await player.switchSavedQueue(later!.id),
+        _ => await player.deleteSavedQueue('default'),
+      };
+      expect(result, action == 'create' ? isNull : isFalse);
+      expect(player.persistenceError, isNotNull);
+      expect(player.activeQueueId, 'default');
+      expect(player.savedQueues.map((queue) => queue.name), [
+        'Queue 1',
+        'Later',
+      ]);
+      expect(player.current?.id, 'saved');
+      expect(engine.playing, isFalse);
+      expect(storage.current!.values, saved);
+      final reopened = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+        stateStore: PlayerStateStore(storage: storage),
+      );
+      addTearDown(reopened.dispose);
+      await reopened.loadPersistedQueue();
+      expect(reopened.savedQueues.map((queue) => queue.name), [
+        'Queue 1',
+        'Later',
+      ]);
+      expect(reopened.activeQueueId, 'default');
+      storage.failWrites = false;
+      expect(await player.createSavedQueue('Still blocked'), isNull);
+      await player.reloadSavedPlayerState();
+      expect(player.persistenceError, isNull);
+      expect(await player.createSavedQueue('Retry'), isNotNull);
+    });
+  }
+
+  test('failed playback save does not load or play an unsaved track', () async {
+    final storage = ControlledPlayerStorage();
+    final engine = _FakePlaybackAudioEngine();
+    final player = PlayerController(
+      audioEngine: engine,
+      stateStore: PlayerStateStore(storage: storage),
+    );
+    addTearDown(player.dispose);
+    await player.playTrack(_track('saved'));
+    storage.failWrites = true;
+    final calls = engine.setQueueCalls;
+    await player.playTrack(_track('rejected'));
+    expect(engine.setQueueCalls, calls);
+    expect(engine.playing, isFalse);
+    expect(player.current?.id, 'saved');
+    expect(player.queue.map((track) => track.id), ['saved']);
+    expect(player.persistenceError, isNotNull);
+  });
+
+  test(
+    'failed playback settings save restores both memory and engine',
+    () async {
+      final storage = ControlledPlayerStorage();
+      final engine = _FakePlaybackAudioEngine();
+      final player = PlayerController(
+        audioEngine: engine,
+        stateStore: PlayerStateStore(storage: storage),
+      );
+      addTearDown(player.dispose);
+      await player.setVolume(0.35);
+      await player.setPlaybackSpeed(1.5);
+      final saved = storage.current!.values;
+      storage.failWrites = true;
+      await player.setVolume(0.9);
+      expect(player.volume, 0.35);
+      expect(engine.volumeValue, 0.35);
+      expect(engine.speedValue, 1.5);
+      expect(player.persistenceError, isNotNull);
+      expect(storage.current!.values, saved);
+      final reopenedEngine = _FakePlaybackAudioEngine();
+      final reopened = PlayerController(
+        audioEngine: reopenedEngine,
+        stateStore: PlayerStateStore(storage: storage),
+      );
+      addTearDown(reopened.dispose);
+      await reopened.loadPersistedPlaybackSettings();
+      expect(reopened.volume, 0.35);
+      expect(reopenedEngine.speedValue, 1.5);
+    },
+  );
+
+  test(
+    'a first queue action hydrates existing named queues before saving',
+    () async {
+      final storage = ControlledPlayerStorage();
+      final first = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+        stateStore: PlayerStateStore(storage: storage),
+        clock: () => DateTime.utc(2026),
+      );
+      addTearDown(first.dispose);
+      expect(await first.createSavedQueue('Existing'), isNotNull);
+      final reopened = PlayerController(
+        audioEngine: _FakePlaybackAudioEngine(),
+        stateStore: PlayerStateStore(storage: storage),
+        clock: () => DateTime.utc(2026),
+      );
+      addTearDown(reopened.dispose);
+      expect(await reopened.createSavedQueue('New'), isNotNull);
+      expect(reopened.savedQueues.map((queue) => queue.name), [
+        'Queue 1',
+        'Existing',
+        'New',
+      ]);
+    },
+  );
+
+  test('a first settings edit preserves other persisted settings', () async {
+    final storage = ControlledPlayerStorage();
+    final first = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+      stateStore: PlayerStateStore(storage: storage),
+    );
+    addTearDown(first.dispose);
+    await first.setPlaybackSpeed(1.5);
+    final engine = _FakePlaybackAudioEngine();
+    final reopened = PlayerController(
+      audioEngine: engine,
+      stateStore: PlayerStateStore(storage: storage),
+    );
+    addTearDown(reopened.dispose);
+    await reopened.setVolume(0.2);
+    expect(engine.speedValue, 1.5);
+    expect(
+      storage.current!.values[PlayerStateStore.settingsKey],
+      contains('"playbackSpeed":1.5'),
+    );
+  });
+
+  test('invalid saved settings are preserved and block new writes', () async {
+    SharedPreferences.setMockInitialValues({
+      PlayerStateStore.settingsKey: '{"shuffleEnabled":"invalid"}',
+    });
+    final storage = ControlledPlayerStorage();
+    final player = PlayerController(
+      audioEngine: _FakePlaybackAudioEngine(),
+      stateStore: PlayerStateStore(storage: storage),
+    );
+    addTearDown(player.dispose);
+    await player.loadPersistedPlaybackSettings();
+    expect(player.persistenceError, isNotNull);
+    final saved = storage.current!.values;
+    await player.setVolume(0.2);
+    expect(storage.current!.values, saved);
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        PlayerStateStore.settingsKey,
+      ),
+      '{"shuffleEnabled":"invalid"}',
+    );
   });
 
   test(
@@ -951,10 +1130,60 @@ void main() {
           .snapshot;
       expect(inactiveSnapshot.tracks.single.title, 'Updated inactive');
 
-      final prefs = await SharedPreferences.getInstance();
-      final persisted = prefs.getString('aethertune.player_queues.v2')!;
+      final persisted = await _persistedPlayerValue(PlayerStateStore.queuesKey);
       expect(persisted, contains('Updated inactive'));
       expect(persisted, isNot(contains('private-token')));
+    },
+  );
+
+  test('coalesces library changes while the native queue is loading', () async {
+    final engine = _BlockingQueueAudioEngine();
+    final controller = PlayerController(audioEngine: engine);
+    addTearDown(controller.dispose);
+    final original = _track('loading', title: 'Original');
+    final playback = controller.playTrack(original);
+    await engine.firstLoadStarted.future;
+    final firstUpdate = controller.reconcileLibraryTracks([
+      original.copyWith(title: 'Intermediate'),
+    ]);
+    await _flushAsyncWork();
+    final secondUpdate = controller.reconcileLibraryTracks([
+      original.copyWith(title: 'Latest', rating: 4),
+    ]);
+    await _flushAsyncWork();
+    engine.releaseFirstLoad.complete();
+    await Future.wait([playback, firstUpdate, secondUpdate]);
+
+    expect(engine.maximumConcurrentLoads, 1);
+    expect(engine.setQueueCalls, 2);
+    expect(engine.queue.single.title, 'Latest');
+    expect(engine.queue.single.rating, 4);
+    expect(controller.current?.title, 'Latest');
+    expect(controller.isPlaying, isTrue);
+  });
+
+  test(
+    'a failed native load releases waiting library reconciliation',
+    () async {
+      final engine = _BlockingQueueAudioEngine(failFirstLoad: true);
+      final controller = PlayerController(audioEngine: engine);
+      addTearDown(controller.dispose);
+      final track = _track('retry', title: 'Before');
+      final failure = expectLater(
+        controller.playTrack(track),
+        throwsStateError,
+      );
+      await engine.firstLoadStarted.future;
+      final updated = track.copyWith(title: 'After');
+      final reconciliation = controller.reconcileLibraryTracks([updated]);
+      await _flushAsyncWork();
+      engine.releaseFirstLoad.complete();
+      await Future.wait([failure, reconciliation]);
+      await controller.playTrack(updated);
+
+      expect(engine.maximumConcurrentLoads, 1);
+      expect(engine.queue.single.title, 'After');
+      expect(controller.isPlaying, isTrue);
     },
   );
 
@@ -1093,8 +1322,9 @@ void main() {
         firstEngine.queue.every((track) => track.streamUrl!.contains(secret)),
         isTrue,
       );
-      final prefs = await SharedPreferences.getInstance();
-      final firstSnapshot = prefs.getString('aethertune.player_queue.v1')!;
+      final firstSnapshot = await _persistedPlayerValue(
+        PlayerStateStore.queueKey,
+      );
       expect(firstSnapshot, isNot(contains(secret)));
       expect(firstSnapshot, isNot(contains('api_key')));
       firstController.dispose();
@@ -1121,7 +1351,9 @@ void main() {
         ),
         isTrue,
       );
-      final restoredSnapshot = prefs.getString('aethertune.player_queue.v1')!;
+      final restoredSnapshot = await _persistedPlayerValue(
+        PlayerStateStore.queueKey,
+      );
       expect(restoredSnapshot, isNot(contains(secret)));
       expect(restoredSnapshot, isNot(contains('api_key')));
     },
@@ -1148,8 +1380,7 @@ void main() {
     expect(controller.current, isNull);
     expect(controller.queue.map((track) => track.id), <String>['local']);
     expect(engine.stopCalls, 1);
-    final prefs = await SharedPreferences.getInstance();
-    final snapshot = prefs.getString('aethertune.player_queue.v1')!;
+    final snapshot = await _persistedPlayerValue(PlayerStateStore.queueKey);
     expect(snapshot, isNot(contains('music.example.test')));
     expect(snapshot, contains('local'));
   });
@@ -1260,8 +1491,7 @@ void main() {
       expect(controller.current?.id, 'private-1');
       expect(controller.position, const Duration(seconds: 43));
 
-      final prefs = await SharedPreferences.getInstance();
-      final snapshot = prefs.getString('aethertune.player_queue.v1')!;
+      final snapshot = await _persistedPlayerValue(PlayerStateStore.queueKey);
       expect(snapshot, isNot(contains(oldSecret)));
       expect(snapshot, isNot(contains(newSecret)));
       expect(snapshot, isNot(contains('music.example.test')));
@@ -1298,8 +1528,7 @@ void main() {
       expect(engine.playing, isFalse);
       expect(controller.current?.streamUrl, isNull);
       expect(controller.current?.isPlayable, isFalse);
-      final prefs = await SharedPreferences.getInstance();
-      final snapshot = prefs.getString('aethertune.player_queue.v1')!;
+      final snapshot = await _persistedPlayerValue(PlayerStateStore.queueKey);
       expect(snapshot, isNot(contains(oldSecret)));
       expect(snapshot, isNot(contains('music.example.test')));
     },
@@ -1378,6 +1607,44 @@ Track _track(
     replayGainTrackPeak: replayGainTrackPeak,
     replayGainAlbumPeak: replayGainAlbumPeak,
   );
+}
+
+class _BlockingQueueAudioEngine extends _FakePlaybackAudioEngine {
+  _BlockingQueueAudioEngine({this.failFirstLoad = false});
+
+  final bool failFirstLoad;
+  final firstLoadStarted = Completer<void>();
+  final releaseFirstLoad = Completer<void>();
+  int _activeLoads = 0;
+  int maximumConcurrentLoads = 0;
+
+  @override
+  Future<void> setQueue(
+    List<Track> tracks, {
+    required int initialIndex,
+    Duration initialPosition = Duration.zero,
+  }) async {
+    _activeLoads++;
+    if (_activeLoads > maximumConcurrentLoads) {
+      maximumConcurrentLoads = _activeLoads;
+    }
+    try {
+      if (!firstLoadStarted.isCompleted) {
+        firstLoadStarted.complete();
+        await releaseFirstLoad.future;
+        if (failFirstLoad) {
+          throw StateError('Synthetic native load failure');
+        }
+      }
+      await super.setQueue(
+        tracks,
+        initialIndex: initialIndex,
+        initialPosition: initialPosition,
+      );
+    } finally {
+      _activeLoads--;
+    }
+  }
 }
 
 class _FakePlaybackAudioEngine

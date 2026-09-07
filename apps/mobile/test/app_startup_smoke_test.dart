@@ -1,11 +1,14 @@
 import 'dart:ui' show Size;
 
+import 'package:aethertune/src/data/local_diagnostic_log.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/player/playback_audio_engine.dart';
 import 'package:aethertune/src/player/player_controller.dart';
 import 'package:aethertune/src/ui/aethertune_app.dart';
 import 'package:aethertune/src/ui/home_screen.dart';
+import 'package:flutter/material.dart'
+    show FilledButton, IconButton, Key, Scrollable;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
@@ -119,6 +122,74 @@ void main() {
     expect(player.current?.title, 'Morning Signal (Edited)');
     expect(audio.queue.single.title, 'Morning Signal (Edited)');
   });
+  for (final failClear in [false, true]) {
+    testWidgets('diagnostic clear reports its actual result: $failClear', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 1600);
+      addTearDown(tester.view.reset);
+      final diagnostics = _ClearDiagnosticLog(failClear);
+      if (!failClear) {
+        await diagnostics.record(
+          Exception('private-payload'),
+          origin: 'flutter',
+        );
+      }
+      await tester.pumpWidget(
+        AetherTuneApp(
+          audioEngine: _SmokePlaybackAudioEngine(),
+          diagnostics: diagnostics,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Skip setup'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Options').last);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('local-diagnostic-log')),
+        600,
+        scrollable: find.byType(Scrollable).last,
+        maxScrolls: 60,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('local-diagnostic-log'))),
+        alignment: 0.25,
+      );
+      await tester.pumpAndSettle();
+      final clearButton = find.byWidgetPredicate(
+        (widget) =>
+            widget is IconButton && widget.tooltip == 'Clear local diagnostics',
+      );
+      await tester.tap(clearButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          failClear
+              ? 'Could not clear saved diagnostics. Check device storage and retry.'
+              : 'Cleared local diagnostics.',
+        ),
+        findsOneWidget,
+      );
+      if (failClear) {
+        expect(find.text('Cleared local diagnostics.'), findsNothing);
+        expect(tester.widget<IconButton>(clearButton).onPressed, isNotNull);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+}
+
+class _ClearDiagnosticLog extends LocalDiagnosticLog {
+  _ClearDiagnosticLog(this.failClear);
+  final bool failClear;
+  @override
+  bool get persistenceError => failClear || super.persistenceError;
+  @override
+  Future<bool> clear() async => failClear ? false : super.clear();
 }
 
 class _SmokePlaybackAudioEngine

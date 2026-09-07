@@ -4,12 +4,19 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/offline_cache_cancellation.dart';
 import '../domain/offline_cache_entry.dart';
 import '../domain/track.dart';
+import 'offline_cache_budget.dart';
+import 'offline_cache_paths.dart';
+import 'offline_cache_resume.dart';
+import 'offline_media_integrity.dart';
+
+export 'offline_media_integrity.dart' show OfflineMediaSizeLimitExceeded;
+export 'offline_cache_budget.dart'
+    show OfflineCacheBudget, OfflineCacheBusy, OfflineCacheQuotaExceeded;
 
 typedef OfflineMediaDownloader = Future<List<int>> Function(Uri uri);
 
@@ -19,22 +26,41 @@ final class OfflineCacheMaterialization {
     required this.byteCount,
     required this.checksum,
     required this.expectedMediaChecksumVerified,
+    this.evictedEntryIds = const [],
+    this.evictedBytes = 0,
   });
 
   final Track track;
   final int byteCount;
   final String checksum;
   final bool expectedMediaChecksumVerified;
+  final List<String> evictedEntryIds;
+  final int evictedBytes;
 }
 
 final class OfflineCacheUsage {
   const OfflineCacheUsage({
     required this.byteCount,
     required this.cachedEntryCount,
+    this.partialByteCount = 0,
+    this.unindexedByteCount = 0,
   });
 
   final int byteCount;
   final int cachedEntryCount;
+  final int partialByteCount;
+  final int unindexedByteCount;
+}
+
+final class OfflineCacheClearResult {
+  const OfflineCacheClearResult({
+    required this.deletedPaths,
+    required this.byteCount,
+    required this.failedFileCount,
+  });
+  final List<String> deletedPaths;
+  final int byteCount;
+  final int failedFileCount;
 }
 
 final class OfflineCacheEvictionResult {
@@ -64,13 +90,14 @@ final class OfflineCacheExport {
 }
 
 final class _OfflineCacheFileCandidate {
-  const _OfflineCacheFileCandidate({
-    required this.entry,
+  _OfflineCacheFileCandidate({
+    required OfflineCacheEntry entry,
     required this.file,
     required this.byteCount,
-  });
+  }) : entries = [entry];
 
-  final OfflineCacheEntry entry;
+  final List<OfflineCacheEntry> entries;
+  OfflineCacheEntry get entry => entries.first;
   final File file;
   final int byteCount;
 }
@@ -79,19 +106,59 @@ final class OfflineCacheManager {
   OfflineCacheManager({
     required this.cacheRoot,
     OfflineMediaDownloader? downloader,
-  }) : _downloader = downloader;
+    this.requestTimeout = const Duration(seconds: 30),
+    this.idleTimeout = const Duration(seconds: 30),
+    this.transferTimeout = const Duration(minutes: 30),
+  }) : _downloader = downloader,
+       _paths = OfflineCachePaths(cacheRoot) {
+    if (requestTimeout <= Duration.zero ||
+        idleTimeout <= Duration.zero ||
+        transferTimeout <= Duration.zero) {
+      throw ArgumentError('Offline transfer timeouts must be positive.');
+    }
+  }
+
+  static const defaultMaximumMediaBytes = 500 * 1024 * 1024;
 
   final Directory cacheRoot;
   final OfflineMediaDownloader? _downloader;
+  final OfflineCachePaths _paths;
+  final Duration requestTimeout;
+  final Duration idleTimeout;
+  final Duration transferTimeout;
 
-  Directory get mediaDirectory {
-    return Directory(p.join(cacheRoot.path, 'aethertune', 'offline_media'));
-  }
+  Directory get mediaDirectory => _paths.mediaDirectory;
 
   Future<OfflineCacheMaterialization> materialize(
     OfflineCacheEntry entry, {
     OfflineCacheCancellationToken? cancellationToken,
+    int maxBytes = defaultMaximumMediaBytes,
+    OfflineCacheBudget? budget,
   }) async {
+    OfflineCachePaths.fileStem(entry.id);
+    return withOfflineCacheLock(
+      _paths,
+      () => _materialize(
+        entry,
+        cancellationToken: cancellationToken,
+        maxBytes: maxBytes,
+        budget:
+            budget ?? OfflineCacheBudget(totalBytes: defaultMaximumMediaBytes),
+      ),
+      cancellationToken: cancellationToken,
+    );
+  }
+
+  Future<OfflineCacheMaterialization> _materialize(
+    OfflineCacheEntry entry, {
+    OfflineCacheCancellationToken? cancellationToken,
+    required int maxBytes,
+    required OfflineCacheBudget budget,
+  }) async {
+    final fileStem = OfflineCachePaths.fileStem(entry.id);
+    if (maxBytes <= 0) {
+      throw ArgumentError.value(maxBytes, 'maxBytes', 'Must be positive.');
+    }
     cancellationToken?.throwIfCancelled();
     if (entry.track.hasLocalSource) {
       return OfflineCacheMaterialization(
@@ -113,72 +180,90 @@ final class OfflineCacheManager {
       );
     }
 
-    await mediaDirectory.create(recursive: true);
+    await _paths.verifyDirectory(create: true);
 
     final file = File(
-      p.join(mediaDirectory.path, '${entry.id}${_mediaExtension(streamUri)}'),
+      p.join(mediaDirectory.path, '$fileStem${_mediaExtension(streamUri)}'),
     );
     final partialFile = File('${file.path}.part');
+    await _paths.verifyDestination(file);
+    await _paths.verifyDestination(partialFile);
+    final resume = OfflineCacheResume(_paths, partialFile);
+    final reservation = await OfflineCacheReservation.create(
+      paths: _paths,
+      budget: budget,
+      entry: entry,
+      destination: file,
+      partial: partialFile,
+    );
     final downloader = _downloader;
-    if (downloader == null) {
-      await _downloadWithHttpClient(
-        streamUri,
-        file,
-        partialFile,
-        cancellationToken: cancellationToken,
-      );
-    } else {
-      cancellationToken?.throwIfCancelled();
-      final bytes = await downloader(streamUri);
-      cancellationToken?.throwIfCancelled();
-      if (bytes.isEmpty) {
-        throw StateError('Downloaded media is empty for ${entry.track.title}.');
-      }
-      await _deleteIfExists(partialFile);
-      await partialFile.writeAsBytes(bytes, flush: true);
-      cancellationToken?.throwIfCancelled();
-      await _deleteIfExists(file);
-      await partialFile.rename(file.path);
-      try {
+    try {
+      if (downloader == null) {
+        await _downloadWithHttpClient(
+          streamUri,
+          partialFile,
+          maxBytes: maxBytes,
+          cancellationToken: cancellationToken,
+          expectedChecksum: entry.track.expectedMediaChecksum,
+          reservation: reservation,
+          resume: resume,
+        );
+      } else {
+        final bytes = await downloader(streamUri).timeout(transferTimeout);
         cancellationToken?.throwIfCancelled();
-      } on OfflineCacheCancelled {
-        await _restoreCompletedFileAsPartial(file, partialFile);
-        rethrow;
+        if (bytes.length > maxBytes) {
+          throw OfflineMediaSizeLimitExceeded(maxBytes);
+        }
+        await reservation.reserve(bytes.length);
+        await resume.delete();
+        await _paths.verifyDestination(partialFile);
+        await partialFile.writeAsBytes(bytes, flush: true);
       }
+    } on OfflineMediaSizeLimitExceeded {
+      await _paths.deleteFile(partialFile);
+      await resume.delete();
+      rethrow;
+    } on OfflineCacheQuotaExceeded {
+      await _paths.deleteFile(partialFile);
+      await resume.delete();
+      rethrow;
     }
 
     cancellationToken?.throwIfCancelled();
-    final savedBytes = await file.readAsBytes();
-    if (savedBytes.isEmpty) {
+    await _paths.verifyDestination(partialFile);
+    final inspection = await inspectOfflineMedia(
+      partialFile,
+      expectedChecksum: entry.track.expectedMediaChecksum,
+      maxBytes: maxBytes,
+      cancellationToken: cancellationToken,
+    );
+    if (inspection.byteCount == 0) {
+      await _paths.deleteFile(partialFile);
+      await resume.delete();
       throw StateError('Downloaded media is empty for ${entry.track.title}.');
     }
-    final checksum = offlineMediaChecksum(savedBytes);
-    final expectedMediaChecksumVerified = _verifyExpectedMediaChecksum(
-      entry.track.expectedMediaChecksum,
-      savedBytes,
-    );
     if (entry.track.expectedMediaChecksum != null &&
-        !expectedMediaChecksumVerified) {
-      await _deleteIfExists(file);
-      await _deleteIfExists(partialFile);
+        !inspection.expectedChecksumVerified) {
+      await _paths.deleteFile(partialFile);
+      await resume.delete();
       throw StateError(
         'Provider media checksum mismatch for ${entry.track.title}.',
       );
     }
-    final savedBytesAfterChecksum = await file.readAsBytes();
-    if (savedBytesAfterChecksum.length != savedBytes.length ||
-        offlineMediaChecksum(savedBytesAfterChecksum) != checksum) {
-      throw StateError(
-        'Cached media checksum verification failed for ${entry.track.title}.',
-      );
-    }
     cancellationToken?.throwIfCancelled();
+    // Never replace an existing cache until the new bytes pass verification.
+    await _paths.verifyDestination(file);
+    await _paths.verifyDestination(partialFile);
+    await resume.delete();
+    await partialFile.rename(file.path);
 
     return OfflineCacheMaterialization(
       track: entry.track.copyWith(localPath: file.path),
-      byteCount: savedBytes.length,
-      checksum: checksum,
-      expectedMediaChecksumVerified: expectedMediaChecksumVerified,
+      byteCount: inspection.byteCount,
+      checksum: inspection.checksum,
+      expectedMediaChecksumVerified: inspection.expectedChecksumVerified,
+      evictedEntryIds: List.unmodifiable(reservation.evictedEntryIds),
+      evictedBytes: reservation.evictedBytes,
     );
   }
 
@@ -194,7 +279,86 @@ final class OfflineCacheManager {
     );
   }
 
+  Future<OfflineCacheUsage> storageUsage(Iterable<OfflineCacheEntry> entries) =>
+      withOfflineCacheLock(_paths, () async {
+        final cached = await _privateCachedFiles(entries);
+        final known = cached.map((item) => _cachePathKey(item.file)).toSet();
+        var total = 0;
+        var partial = 0;
+        var unindexed = 0;
+        await for (final entity in mediaDirectory.list(followLinks: false)) {
+          final file = File(entity.path);
+          await _paths.verifyDestination(file);
+          final size = await file.length();
+          if (file.path.endsWith('.part.resume') && size <= 4096) continue;
+          total += size;
+          if (file.path.endsWith('.part')) {
+            partial += size;
+          } else if (!known.contains(_cachePathKey(file))) {
+            unindexed += size;
+          }
+        }
+        return OfflineCacheUsage(
+          byteCount: total,
+          cachedEntryCount: cached.length,
+          partialByteCount: partial,
+          unindexedByteCount: unindexed,
+        );
+      });
+
+  /// Explicit user-directed cleanup, never automatic quota eviction. Validate
+  /// all destinations first and report locked files without hiding partial work.
+  Future<OfflineCacheClearResult> clearPrivateMedia() =>
+      withOfflineCacheLock(_paths, () async {
+        final files = <File>[];
+        await for (final entity in mediaDirectory.list(followLinks: false)) {
+          final file = File(entity.path);
+          await _paths.verifyDestination(file);
+          files.add(file);
+        }
+        final deleted = <String>[];
+        var bytes = 0;
+        var failures = 0;
+        for (final file in files) {
+          try {
+            final size = await file.length();
+            await _paths.deleteFile(file);
+            bytes += size;
+            deleted.add(file.absolute.path);
+          } on FileSystemException {
+            failures++;
+          }
+        }
+        return OfflineCacheClearResult(
+          deletedPaths: List.unmodifiable(deleted),
+          byteCount: bytes,
+          failedFileCount: failures,
+        );
+      });
+
   Future<OfflineCacheEvictionResult> evictToSize({
+    required Iterable<OfflineCacheEntry> entries,
+    required int maxBytes,
+    bool skipIfBusy = false,
+  }) async {
+    try {
+      return await withOfflineCacheLock(
+        _paths,
+        () => _evictToSize(entries: entries, maxBytes: maxBytes),
+      );
+    } on OfflineCacheBusy {
+      if (!skipIfBusy) rethrow;
+      final current = await usage(entries);
+      return OfflineCacheEvictionResult(
+        bytesBefore: current.byteCount,
+        bytesAfter: current.byteCount,
+        evictedEntryIds: const [],
+        evictedBytes: 0,
+      );
+    }
+  }
+
+  Future<OfflineCacheEvictionResult> _evictToSize({
     required Iterable<OfflineCacheEntry> entries,
     required int maxBytes,
   }) async {
@@ -227,13 +391,14 @@ final class OfflineCacheManager {
       }
 
       try {
-        await candidate.file.delete();
+        await _paths.deleteFile(candidate.file);
       } on FileSystemException {
-        // Missing or locked files should not prevent metadata cleanup.
+        // A locked file still consumes storage and must remain in the index.
+        continue;
       }
       currentBytes -= candidate.byteCount;
       evictedBytes += candidate.byteCount;
-      evictedEntryIds.add(candidate.entry.id);
+      evictedEntryIds.addAll(candidate.entries.map((entry) => entry.id));
     }
 
     return OfflineCacheEvictionResult(
@@ -257,20 +422,32 @@ final class OfflineCacheManager {
       entry,
       p.extension(sourceFile.path),
     );
-    final sourceBytes = await sourceFile.readAsBytes();
-    await exportFile.writeAsBytes(sourceBytes, flush: true);
-
-    final exportedBytes = await exportFile.readAsBytes();
-    if (exportedBytes.length != verifiedCache.byteCount ||
-        offlineMediaChecksum(exportedBytes) != verifiedCache.checksum) {
-      throw StateError(
-        'Exported media checksum verification failed for ${entry.track.title}.',
-      );
+    try {
+      await _paths.verifyDestination(sourceFile);
+      final output = await exportFile.open(mode: FileMode.write);
+      try {
+        await for (final chunk in sourceFile.openRead()) {
+          await output.writeFrom(chunk);
+        }
+        await output.flush();
+      } finally {
+        await output.close();
+      }
+      final exported = await inspectOfflineMedia(exportFile);
+      if (exported.byteCount != verifiedCache.byteCount ||
+          exported.checksum != verifiedCache.checksum) {
+        throw StateError(
+          'Exported media checksum verification failed for ${entry.track.title}.',
+        );
+      }
+    } on Object {
+      await exportFile.delete();
+      rethrow;
     }
 
     return OfflineCacheExport(
       file: exportFile,
-      byteCount: exportedBytes.length,
+      byteCount: verifiedCache.byteCount,
       checksum: verifiedCache.checksum,
     );
   }
@@ -289,19 +466,19 @@ final class OfflineCacheManager {
         'Only private cached media can be exported for ${entry.track.title}.',
       );
     }
-    if (!await sourceFile.exists()) {
+    if (!await _paths.containsRegularFile(sourceFile)) {
       throw StateError('Cached media is missing for ${entry.track.title}.');
     }
 
-    final sourceBytes = await sourceFile.readAsBytes();
+    final inspection = await inspectOfflineMedia(sourceFile);
     if (entry.cachedByteCount > 0 &&
-        sourceBytes.length != entry.cachedByteCount) {
+        inspection.byteCount != entry.cachedByteCount) {
       throw StateError(
         'Cached media byte count changed for ${entry.track.title}.',
       );
     }
 
-    final checksum = offlineMediaChecksum(sourceBytes);
+    final checksum = inspection.checksum;
     if (entry.cachedMediaChecksum.isNotEmpty &&
         checksum != entry.cachedMediaChecksum) {
       throw StateError(
@@ -311,7 +488,7 @@ final class OfflineCacheManager {
 
     return OfflineCacheExport(
       file: sourceFile,
-      byteCount: sourceBytes.length,
+      byteCount: inspection.byteCount,
       checksum: checksum,
     );
   }
@@ -324,23 +501,27 @@ final class OfflineCacheManager {
   Future<List<_OfflineCacheFileCandidate>> _privateCachedFiles(
     Iterable<OfflineCacheEntry> entries,
   ) async {
-    final candidates = <_OfflineCacheFileCandidate>[];
+    final candidates = <String, _OfflineCacheFileCandidate>{};
     for (final entry in entries) {
       final file = _privateCacheFileFor(entry);
-      if (file == null || !await file.exists()) {
+      if (file == null || !await _paths.containsRegularFile(file)) {
         continue;
       }
 
-      candidates.add(
-        _OfflineCacheFileCandidate(
+      final key = _cachePathKey(file);
+      final existing = candidates[key];
+      if (existing != null) {
+        existing.entries.add(entry);
+      } else {
+        candidates[key] = _OfflineCacheFileCandidate(
           entry: entry,
           file: file,
           byteCount: await file.length(),
-        ),
-      );
+        );
+      }
     }
 
-    return candidates;
+    return candidates.values.toList();
   }
 
   File? _privateCacheFileFor(OfflineCacheEntry entry) {
@@ -350,44 +531,67 @@ final class OfflineCacheManager {
     }
 
     final path = entry.track.localPath!;
-    final normalizedMediaPath = p.normalize(mediaDirectory.path);
-    final normalizedFilePath = p.normalize(path);
-    if (normalizedFilePath != normalizedMediaPath &&
-        !p.isWithin(normalizedMediaPath, normalizedFilePath)) {
+    if (!_paths.containsPath(File(path))) {
       return null;
     }
 
     return File(path);
   }
 
-  static Future<void> _downloadWithHttpClient(
+  Future<void> _downloadWithHttpClient(
     Uri uri,
-    File targetFile,
     File partialFile, {
+    required int maxBytes,
     OfflineCacheCancellationToken? cancellationToken,
+    required String? expectedChecksum,
+    required OfflineCacheReservation reservation,
+    required OfflineCacheResume resume,
   }) async {
-    final client = HttpClient();
+    final client = HttpClient()
+      ..connectionTimeout = requestTimeout
+      ..autoUncompress = false;
+    var deadlineExpired = false;
+    final deadline = Timer(transferTimeout, () {
+      deadlineExpired = true;
+      client.close(force: true);
+    });
     cancellationToken?.whenCancelled.then<void>((_) {
       client.close(force: true);
     });
     try {
       var resumeStart = await _fileLength(partialFile);
+      if (resumeStart > maxBytes) {
+        throw OfflineMediaSizeLimitExceeded(maxBytes);
+      }
+      var validator = await resume.validator(uri, expectedChecksum);
+      if (resumeStart > 0 && validator == null && expectedChecksum == null) {
+        await _paths.deleteFile(partialFile);
+        await resume.delete();
+        resumeStart = 0;
+      }
+      await reservation.reserve(resumeStart);
       var restartedAfterInvalidRange = false;
       while (true) {
         cancellationToken?.throwIfCancelled();
-        final request = await client.getUrl(uri);
+        final request = await client.getUrl(uri).timeout(requestTimeout);
+        request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
         if (resumeStart > 0) {
           request.headers.set(HttpHeaders.rangeHeader, 'bytes=$resumeStart-');
+          if (validator != null) {
+            request.headers.set(HttpHeaders.ifRangeHeader, validator);
+          }
         }
-        final response = await request.close();
+        final response = await request.close().timeout(requestTimeout);
         cancellationToken?.throwIfCancelled();
 
         if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable &&
             resumeStart > 0 &&
             !restartedAfterInvalidRange) {
-          await _drainResponse(response);
-          await _deleteIfExists(partialFile);
+          await response.listen(null).cancel();
+          await _paths.deleteFile(partialFile);
+          await resume.delete();
           resumeStart = 0;
+          validator = null;
           restartedAfterInvalidRange = true;
           continue;
         }
@@ -402,25 +606,104 @@ final class OfflineCacheManager {
           );
         }
 
+        final encoding = response.headers.value(
+          HttpHeaders.contentEncodingHeader,
+        );
+        if (encoding != null && encoding.toLowerCase() != 'identity') {
+          throw HttpException(
+            'Offline media must use identity content encoding.',
+            uri: uri,
+          );
+        }
+        if (shouldAppend &&
+            validator != null &&
+            OfflineCacheResume.strongEtag(
+                  response.headers.value(HttpHeaders.etagHeader),
+                ) !=
+                validator) {
+          // A server that ignores If-Range must not splice different versions.
+          await response.listen(null).cancel();
+          if (restartedAfterInvalidRange) {
+            throw HttpException('Media changed while resuming.', uri: uri);
+          }
+          await _paths.deleteFile(partialFile);
+          await resume.delete();
+          resumeStart = 0;
+          validator = null;
+          restartedAfterInvalidRange = true;
+          continue;
+        }
+
+        int? expectedRangeBytes;
+        if (shouldAppend) {
+          final range = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(
+            response.headers.value(HttpHeaders.contentRangeHeader) ?? '',
+          );
+          final start = int.tryParse(range?.group(1) ?? '');
+          final end = int.tryParse(range?.group(2) ?? '');
+          final total = int.tryParse(range?.group(3) ?? '');
+          if (start != resumeStart ||
+              end == null ||
+              total == null ||
+              end < resumeStart ||
+              end + 1 != total) {
+            throw HttpException(
+              'Invalid media resume Content-Range.',
+              uri: uri,
+            );
+          }
+          if (total > maxBytes) {
+            throw OfflineMediaSizeLimitExceeded(maxBytes);
+          }
+          expectedRangeBytes = end - resumeStart + 1;
+        }
+
         if (resumeStart > 0 && !shouldAppend) {
-          await _deleteIfExists(partialFile);
+          await _paths.deleteFile(partialFile);
           resumeStart = 0;
         }
 
         final expectedResponseBytes = response.contentLength;
+        if (expectedResponseBytes > maxBytes - resumeStart) {
+          throw OfflineMediaSizeLimitExceeded(maxBytes);
+        }
+        await reservation.reserve(
+          expectedRangeBytes != null
+              ? resumeStart + expectedRangeBytes
+              : expectedResponseBytes >= 0
+              ? resumeStart + expectedResponseBytes
+              : resumeStart,
+        );
+        if (!shouldAppend) {
+          // Remove old bytes before publishing their replacement's validator.
+          await _paths.deleteFile(partialFile);
+          await resume.write(
+            uri,
+            expectedChecksum,
+            response.headers.value(HttpHeaders.etagHeader),
+          );
+        }
         var receivedBytes = 0;
-        final sink = partialFile.openWrite(
+        await _paths.verifyDestination(partialFile);
+        final output = await partialFile.open(
           mode: shouldAppend ? FileMode.append : FileMode.write,
         );
         try {
-          await for (final chunk in response) {
+          await for (final chunk in response.timeout(idleTimeout)) {
             cancellationToken?.throwIfCancelled();
+            if (deadlineExpired) {
+              throw TimeoutException('Offline transfer deadline exceeded.');
+            }
             receivedBytes += chunk.length;
-            sink.add(chunk);
+            if (resumeStart + receivedBytes > maxBytes) {
+              throw OfflineMediaSizeLimitExceeded(maxBytes);
+            }
+            await reservation.reserve(resumeStart + receivedBytes);
+            await output.writeFrom(chunk);
           }
+          await output.flush();
         } finally {
-          await sink.flush();
-          await sink.close();
+          await output.close();
         }
 
         if (expectedResponseBytes >= 0 &&
@@ -431,42 +714,30 @@ final class OfflineCacheManager {
           );
         }
 
+        if (expectedRangeBytes != null && receivedBytes != expectedRangeBytes) {
+          throw HttpException('Incomplete media resume response.', uri: uri);
+        }
+
         if (await partialFile.length() == 0) {
           throw StateError('Downloaded media is empty.');
         }
 
         cancellationToken?.throwIfCancelled();
-        await _deleteIfExists(targetFile);
-        await partialFile.rename(targetFile.path);
-        try {
-          cancellationToken?.throwIfCancelled();
-        } on OfflineCacheCancelled {
-          await _restoreCompletedFileAsPartial(targetFile, partialFile);
-          rethrow;
+        if (deadlineExpired) {
+          throw TimeoutException('Offline transfer deadline exceeded.');
         }
         return;
       }
     } on Object {
       cancellationToken?.throwIfCancelled();
+      if (deadlineExpired) {
+        throw TimeoutException('Offline transfer deadline exceeded.');
+      }
       rethrow;
     } finally {
+      deadline.cancel();
       client.close(force: true);
     }
-  }
-}
-
-Future<void> _restoreCompletedFileAsPartial(
-  File targetFile,
-  File partialFile,
-) async {
-  if (!await targetFile.exists() || await partialFile.exists()) {
-    return;
-  }
-
-  try {
-    await targetFile.rename(partialFile.path);
-  } on FileSystemException {
-    // The next attempt can resume or replace a locked/missing file.
   }
 }
 
@@ -478,21 +749,9 @@ Future<int> _fileLength(File file) async {
   }
 }
 
-Future<void> _deleteIfExists(File file) async {
-  try {
-    if (await file.exists()) {
-      await file.delete();
-    }
-  } on FileSystemException {
-    // A missing or locked temp file should not mask the real cache operation.
-  }
-}
-
-Future<void> _drainResponse(HttpClientResponse response) async {
-  await for (final _ in response) {
-    // Drain so the client can reuse/close the connection cleanly.
-  }
-}
+String _cachePathKey(File file) => Platform.isWindows
+    ? p.normalize(file.absolute.path).toLowerCase()
+    : p.normalize(file.absolute.path);
 
 String _mediaExtension(Uri uri) {
   final extension = p.extension(uri.path).toLowerCase();
@@ -511,14 +770,21 @@ Future<File> _availableExportFile(
     p.join(destinationDirectory.path, '$baseName$extension'),
   );
   var suffix = 2;
-  while (await candidate.exists()) {
+  while (true) {
+    try {
+      await candidate.create(exclusive: true);
+      return candidate;
+    } on FileSystemException {
+      if (await FileSystemEntity.type(candidate.path, followLinks: false) ==
+          FileSystemEntityType.notFound) {
+        rethrow;
+      }
+    }
     candidate = File(
       p.join(destinationDirectory.path, '$baseName ($suffix)$extension'),
     );
     suffix += 1;
   }
-
-  return candidate;
 }
 
 String _safeExportBaseName(OfflineCacheEntry entry) {
@@ -528,7 +794,7 @@ String _safeExportBaseName(OfflineCacheEntry entry) {
     if (artist.isNotEmpty && artist != 'Unknown Artist') artist,
     if (title.isNotEmpty) title,
   ].join(' - ');
-  final fallback = 'aethertune-${entry.id}';
+  final fallback = 'aethertune-${OfflineCachePaths.fileStem(entry.id)}';
   final sanitized = (rawName.isEmpty ? fallback : rawName)
       .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f]'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
@@ -539,7 +805,14 @@ String _safeExportBaseName(OfflineCacheEntry entry) {
     return fallback;
   }
 
-  return sanitized.length <= 96 ? sanitized : sanitized.substring(0, 96).trim();
+  final portable =
+      RegExp(
+        r'^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\.|$)',
+        caseSensitive: false,
+      ).hasMatch(sanitized)
+      ? 'aethertune-$sanitized'
+      : sanitized;
+  return portable.length <= 96 ? portable : portable.substring(0, 96).trim();
 }
 
 String _safeMediaExtension(String rawExtension) {
@@ -549,32 +822,5 @@ String _safeMediaExtension(String rawExtension) {
 }
 
 String offlineMediaChecksum(List<int> bytes) {
-  var hash = 0x811c9dc5;
-  for (final byte in bytes) {
-    hash = (hash ^ (byte & 0xff)).toUnsigned(32);
-    hash = (hash * 0x01000193).toUnsigned(32);
-  }
-
-  return hash.toRadixString(16).padLeft(8, '0');
-}
-
-bool _verifyExpectedMediaChecksum(String? expected, List<int> bytes) {
-  final normalized = expected?.trim().toLowerCase();
-  if (normalized == null || normalized.isEmpty) {
-    return false;
-  }
-
-  final separator = normalized.indexOf(':');
-  if (separator <= 0 || separator == normalized.length - 1) {
-    return false;
-  }
-  final algorithm = normalized.substring(0, separator);
-  final value = normalized.substring(separator + 1);
-  final actual = switch (algorithm) {
-    'md5' => md5.convert(bytes).toString(),
-    'sha1' => sha1.convert(bytes).toString(),
-    'sha256' => sha256.convert(bytes).toString(),
-    _ => '',
-  };
-  return actual.isNotEmpty && actual == value;
+  return (OfflineMediaChecksum()..add(bytes)).value;
 }

@@ -1,14 +1,16 @@
 version: 2
 updates:
   - package-ecosystem: pub
-    directory: /apps/mobile
+    directories:
+      - /apps/mobile
+      - /scripts/ci/library_storage_probe
     schedule:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
     groups:
       flutter-client:
-        dependency-type: production
+        patterns: ['*']
     # flutter_localizations in the pinned Flutter 3.44.6 SDK requires intl 0.20.2.
     # Do not open updates that cannot resolve with the locked release toolchain.
     ignore:
@@ -24,7 +26,7 @@ updates:
     open-pull-requests-limit: 3
     groups:
       dart-server:
-        dependency-type: production
+        patterns: ['*']
 
   - package-ecosystem: docker
     directory: /services/server

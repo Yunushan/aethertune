@@ -7,6 +7,7 @@
 .pub/
 build/
 coverage/
+/apps/mobile/rust/target/
 __pycache__/
 
 # Android

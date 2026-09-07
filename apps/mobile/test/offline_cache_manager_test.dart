@@ -131,6 +131,7 @@ void main() {
         track: Track(
           id: 'track-resume',
           title: 'Resumable Archive',
+          expectedMediaChecksum: 'sha256:${sha256.convert(mediaBytes)}',
           artist: 'Archive',
           sourceId: 'internet-archive',
           streamUrl: 'http://127.0.0.1:${server.port}/media/song.mp3',
@@ -185,6 +186,10 @@ void main() {
           request.response.headers.contentLength = bytes.length;
           if (startsAt > 0) {
             request.response.statusCode = HttpStatus.partialContent;
+            request.response.headers.set(
+              HttpHeaders.contentRangeHeader,
+              'bytes $startsAt-7/8',
+            );
           }
           request.response.add(bytes.take(2).toList());
           await request.response.flush();
@@ -203,6 +208,8 @@ void main() {
           track: Track(
             id: 'track-cancel',
             title: 'Cancelable archive',
+            expectedMediaChecksum:
+                'sha256:${sha256.convert([1, 2, 3, 4, 5, 6, 7, 8])}',
             sourceId: 'internet-archive',
             streamUrl: 'http://127.0.0.1:${server.port}/media/song.mp3',
           ),
@@ -461,7 +468,7 @@ void main() {
     expect(await newestFile.exists(), isTrue);
     final evictedEntry = store.offlineCacheEntryById(oldEntry.id)!;
     final keptEntry = store.offlineCacheEntryById(newestEntry.id)!;
-    expect(evictedEntry.status, OfflineCacheEntryStatus.queued);
+    expect(evictedEntry.status, OfflineCacheEntryStatus.paused);
     expect(evictedEntry.track.localPath, '');
     expect(evictedEntry.cachedByteCount, 0);
     expect(evictedEntry.cachedMediaChecksum, '');
@@ -537,7 +544,7 @@ void main() {
     expect(await oldFile.exists(), isFalse);
     expect(await newestFile.exists(), isTrue);
     final evictedEntry = store.offlineCacheEntryById(oldEntry.id)!;
-    expect(evictedEntry.status, OfflineCacheEntryStatus.queued);
+    expect(evictedEntry.status, OfflineCacheEntryStatus.paused);
     expect(evictedEntry.cachedByteCount, 0);
     expect(evictedEntry.cachedMediaChecksum, '');
     expect(

@@ -56,7 +56,38 @@ sudo apt install libsecret-1-0 libsecret-1-dev
 ```
 
 Windows builders need the Visual C++ ATL component alongside the Flutter
-desktop toolchain. The bootstrap script creates the required iOS/macOS
+desktop toolchain. ZIP and MSIX packaging also require the installed Visual
+Studio x64 release CRT redistributable directory. Both packagers stage app-local
+runtime DLLs, validate their architecture and Microsoft signatures, and include
+`aethertune-windows-runtime.json` with file versions and SHA-256 hashes. The
+input Flutter bundle is not modified. An explicit `-RuntimeDirectory` can select
+a controlled `VC/Redist/MSVC/<version>/x64/Microsoft.VC14*.CRT` directory; use a
+runtime at least as new as the compiler toolset. Do not source DLLs from System32,
+a debug runtime directory, or third-party download sites. Redistribution remains
+subject to the Visual Studio license terms. App-local runtimes must be updated
+with app releases; they are not serviced automatically like a centrally installed
+Visual C++ Redistributable. See Microsoft's
+[runtime deployment guidance](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170).
+
+Windows packagers also require Visual Studio DUMPBIN. They inspect ordinary and
+delay-load imports, reject debug C++ runtimes using the shared
+`scripts/ci/windows_native_policy.json` policy, reject linked staging payloads,
+and include `aethertune-windows-native.json`. That manifest records native PE
+module imports and hashes plus Dart AOT hashes. Final artifact preflight requires
+complete module coverage, x64 PE headers, matching hashes, approved omission
+records, safe unambiguous archive paths, and identical native payloads between
+the ZIP and MSIX. These integrity checks supplement the signing steps; they do
+not independently establish cryptographic trust or installed behavior.
+
+Only the exact reviewed, unreferenced Chromium-prefixed ANGLE `zlib.dll` is
+omitted from staging. Unknown hashes, static/delay-load consumers or literal
+ASCII/UTF-16 references fail packaging. Debug runtime DLLs must not be bundled
+to work around that artifact. Reference scans cannot rule out every dynamic
+loading path: native codec and video acceptance is still required for release.
+The [Windows native acceptance procedure](WINDOWS_NATIVE_ACCEPTANCE.md) describes
+the isolated fixture and its limits.
+
+The bootstrap script creates the required iOS/macOS
 Keychain entitlements. It also sets Android minimum SDK 23 and disables Android
 auto backup so encrypted credential material is not restored without its key.
 
@@ -269,6 +300,94 @@ Pull-request CI also runs a bounded concurrent load smoke test against the
 compiled loopback server and uploads its latency/status evidence. This proves
 the local request path remains responsive under a small controlled burst; it is
 not a substitute for load testing the deployed public service.
+
+Native client storage acceptance runs in the existing desktop CI and release
+jobs. The probe compiles the production file backend with the client's exact
+locked dependency versions/checksums. It verifies process interruption, stale
+writers, lock release after process death, corruption recovery, and snapshot
+continuity. Linux also runs real bounded tmpfs exhaustion in a private mount
+namespace, using unprivileged storage processes. Reports are retained as
+`aethertune-client-storage-*` or `aethertune-release-client-storage-*` artifacts.
+Failures reject the desktop job and therefore block release assembly.
+See the [native probe instructions](../scripts/ci/library_storage_probe/README.md)
+for local commands and scope. These checks do not replace installed native
+migration, physical power-loss, playback, or mobile-device acceptance.
+
+The Linux desktop jobs additionally run the production Flutter entry point with
+real native plugins in a disposable profile:
+
+```sh
+bash scripts/ci/run_linux_native_acceptance.sh --evidence build/linux-native-local
+```
+
+Run from the repository root after generating the Linux wrapper and resolving
+the enforced client lockfile. Use the pinned Flutter SDK and the workflow's
+Linux build dependencies, including `build-essential`, GTK, libmpv, libsecret,
+`dbus-x11`, `gnome-keyring`, `pulseaudio`, `pulseaudio-utils`, `xauth`, and `xvfb`.
+The evidence destination must not already exist.
+
+The runner creates a marked temporary HOME, private D-Bus/Secret Service,
+software display, and virtual audio sink. Three separate app processes seed
+synthetic legacy preferences/credentials, migrate and play generated WAV audio,
+then verify library/queue/settings/credential continuity after restart. It also
+checks handled missing-Documents errors, English fallback for unsupported
+system locales, native MPRIS controls, and sustained decoded PCM. No personal
+profile or real credential is needed. Cleanup, test, and audio failures reject
+the gate; logs, JSON, and screenshots are retained as Linux acceptance artifacts.
+
+This fixture builds a debug integration-test application. Running it in a release
+job does not validate the signed release artifact, installation/upgrade path,
+physical speakers, Bluetooth, other codecs, background lifecycle, accessibility,
+or other operating systems. Those remain separate release acceptance items.
+
+Container vulnerabilities are enforced in the required **Server analyze and
+test** CI job, the standalone PR/push/scheduled scanner, and the Linux server
+release job that gates release assembly. All use the same container gate:
+
+```sh
+python3 scripts/ci/scan_server_container.py --evidence build/container-scan-local
+```
+
+Use a new evidence directory for each run. Before building, the driver verifies
+the pinned Distroless runtime with pinned Cosign and the exact publisher identity
+`keyless@distroless.iam.gserviceaccount.com`, issued by
+`https://accounts.google.com`. Signature or transparency verification failures
+stop the gate. See the [Distroless verification instructions](https://github.com/GoogleContainerTools/distroless#how-do-i-verify-distroless-images).
+
+The driver builds the current server and exercises that immutable image with
+disposable data and loopback-only ports: readiness, real non-root identity,
+read-only root/capability/resource limits, authentication, saved-state and
+revocation continuity, conflicting writes, second-instance refusal, graceful
+shutdown, container recreation, and missing-secret refusal. Fixture credentials
+are checked for log leakage; redacted logs and runtime results are retained.
+The fixture removes only its own containers and labeled volume. Cleanup errors
+fail the gate rather than producing a successful summary with leftover resources.
+
+The same image is exported and scanned with pinned Trivy without mounting the
+Docker socket or source tree into the scanner. A fresh database is downloaded
+and checked for age (48 hours maximum). HIGH/CRITICAL findings including unfixed
+vulnerabilities, end-of-life operating systems, scanner/database errors, and
+missing or mismatched evidence fail the job. JSON, SARIF when conversion
+succeeds, and signature/build/runtime/scanner logs remain available as artifacts
+on failure. Do not bypass a failure by ignoring unfixed packages, disabling
+required checks, or reusing an old successful report.
+
+This scan identifies the built image by digest but does not publish a container
+or prove an independently rebuilt deployment is identical. Dart package coverage
+still depends on the separate lockfile/SBOM/OSV gates; scanning the AOT binary is
+not a substitute for dependency or application-security testing. The runtime
+fixture covers local volume continuity, not physical storage failure, deployed
+capacity, or migration/rollback across application schema versions. For an
+explicit packaging upgrade check against a retained local image, run:
+
+```sh
+python3 scripts/ci/server_container_runtime.py \
+  --image sha256:<candidate-image-id> \
+  --source-image sha256:<previous-image-id> \
+  --evidence build/container-upgrade-local
+```
+
+Both arguments must be complete immutable local image IDs, not mutable tags.
 
 Dependency maintenance is configured in [`.github/dependabot.yml`](../.github/dependabot.yml)
 for the Flutter client, Dart server, server container definitions, and GitHub

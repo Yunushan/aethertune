@@ -95,7 +95,8 @@ class ActionsNode24ContractTest(unittest.TestCase):
 
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("concurrency:", workflow)
-        self.assertEqual(workflow.count("timeout-minutes:"), 4)
+        # Additional step deadlines do not replace the four job deadlines.
+        self.assertEqual(workflow.count("\n    timeout-minutes:"), 4)
         self.assertEqual(workflow.count("persist-credentials: false"), 4)
 
     def test_dependency_review_is_pull_request_only_and_bounded(self) -> None:

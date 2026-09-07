@@ -31,6 +31,7 @@ import '../domain/track.dart';
 import '../player/playback_audio_engine.dart';
 import '../player/player_controller.dart';
 import 'home_screen.dart';
+import 'library_recovery_screen.dart';
 import 'onboarding_screen.dart';
 import 'theme_colors.dart';
 import 'widgets/library_sync_automatic_upload.dart';
@@ -41,6 +42,7 @@ import 'widgets/podcast_rss_refresh_worker.dart';
 import 'widgets/desktop_tray_controls.dart';
 import 'widgets/aethertune_deep_link_listener.dart';
 import 'widgets/android_screenshot_protection.dart';
+import 'widgets/player_state_failure_notice.dart';
 
 class AetherTuneApp extends StatefulWidget {
   const AetherTuneApp({
@@ -59,6 +61,7 @@ class AetherTuneApp extends StatefulWidget {
 }
 
 class _AetherTuneAppState extends State<AetherTuneApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
   int _onboardingDestination = 0;
   int _homeGeneration = 0;
   bool _startLocalImportAfterOnboarding = false;
@@ -311,6 +314,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                           onPrevious: player.previous,
                           onNext: player.next,
                           child: MaterialApp(
+                            navigatorKey: _navigatorKey,
                             scaffoldMessengerKey: _scaffoldMessengerKey,
                             locale: localeForLanguagePreference(
                               library.languagePreference,
@@ -321,6 +325,7 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                             localizationsDelegates:
                                 AppLocalizations.localizationsDelegates,
                             supportedLocales: AppLocalizations.supportedLocales,
+                            localeListResolutionCallback: resolveAppLocale,
                             themeMode: _themeModeForPreference(
                               library.themePreference,
                             ),
@@ -348,17 +353,23 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
                               ),
                             ),
                             builder: (context, child) =>
-                                AetherTuneDeepLinkListener(
+                                LibrarySaveFailureNotice(
                                   library: library,
-                                  incomingUriStream: widget.incomingUriStream,
-                                  onImported: (_) =>
-                                      _openPlaylistsFromDeepLink(),
-                                  child: child ?? const SizedBox.shrink(),
+                                  child: PlayerStateFailureNotice(
+                                    player: player,
+                                    navigatorKey: _navigatorKey,
+                                    child: AetherTuneDeepLinkListener(
+                                      library: library,
+                                      incomingUriStream:
+                                          widget.incomingUriStream,
+                                      onImported: (_) =>
+                                          _openPlaylistsFromDeepLink(),
+                                      child: child ?? const SizedBox.shrink(),
+                                    ),
+                                  ),
                                 ),
                             home: library.loadError != null
-                                ? _AppLoadErrorScreen(
-                                    message: library.loadError!,
-                                  )
+                                ? LibraryRecoveryScreen(library: library)
                                 : !library.loaded
                                 ? const _AppLoadingScreen()
                                 : CallbackShortcuts(
@@ -460,6 +471,15 @@ class _AetherTuneAppState extends State<AetherTuneApp> {
   }
 }
 
+Locale resolveAppLocale(List<Locale>? preferred, Iterable<Locale> supported) {
+  // Generated locales are alphabetical; the base language is the fallback,
+  // not an implicit preference for the first translation in that list.
+  return basicLocaleListResolution(preferred, [
+    const Locale('en'),
+    ...supported.where((locale) => locale != const Locale('en')),
+  ]);
+}
+
 Locale? localeForLanguagePreference(AppLanguagePreference preference) {
   switch (preference) {
     case AppLanguagePreference.system:
@@ -550,24 +570,6 @@ class _AppLoadingScreen extends StatelessWidget {
     return Scaffold(
       body: Center(
         child: CircularProgressIndicator(semanticsLabel: localizations.loading),
-      ),
-    );
-  }
-}
-
-class _AppLoadErrorScreen extends StatelessWidget {
-  const _AppLoadErrorScreen({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(message, textAlign: TextAlign.center),
-        ),
       ),
     );
   }

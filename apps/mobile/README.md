@@ -24,9 +24,30 @@ For the full project introduction, release artifacts, and server overview, see t
 
 ## Run
 
+Native builds require Rustup and the Rust version pinned in `rust-toolchain.toml`,
+in addition to Flutter and the target platform's compiler/SDK. The sync transport
+is built from the maintained `packages/rhttp` source; no upstream prebuilt
+transport binary is substituted for that source.
+
 ```bash
 flutter pub get --enforce-lockfile
 flutter run
 ```
 
 The repository-level script `../../scripts/bootstrap_client.sh` generates Android, iOS, Linux, macOS, and Windows platform wrappers if they are missing.
+
+## Test
+
+Flutter unit tests do not build FFI plugins. Prepare the host library before
+running the tests (Python 3.11+ and Rustup must be on PATH):
+
+```bash
+python3 ../../scripts/ci/build_native_transport.py --install-toolchain --test
+flutter test --no-pub --coverage
+```
+
+The helper installs the exact toolchain without changing the Rustup default and
+uses `Cargo.lock` for both compilation and native tests. Normal platform builds
+use Cargokit with the same version pin and locked resolution. Native transport
+maintenance and remaining platform acceptance requirements are documented in
+[the transport guide](../../docs/NATIVE_SYNC_TRANSPORT.md).

@@ -1,22 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
 import '../domain/library_sync_account.dart';
 import '../domain/library_sync_profile.dart';
 import '../domain/listen_together_session.dart';
+import 'library_sync_transport.dart';
 import 'provider_error.dart';
 
-const maxLibrarySyncResponseBytes = 9 * 1024 * 1024;
-
-typedef LibrarySyncHttpExecutor =
-    Future<LibrarySyncHttpResponse> Function(
-      String method,
-      Uri uri, {
-      required Map<String, String> headers,
-      String? body,
-    });
+export 'library_sync_transport.dart';
 
 Future<String> redeemLibrarySyncRecoveryCode(
   LibrarySyncAccount account,
@@ -53,13 +46,6 @@ Future<String> redeemLibrarySyncRecoveryCode(
     );
   }
   return token;
-}
-
-class LibrarySyncHttpResponse {
-  const LibrarySyncHttpResponse({required this.statusCode, required this.body});
-
-  final int statusCode;
-  final String body;
 }
 
 class LibrarySyncRemoteSnapshot {
@@ -1949,36 +1935,4 @@ String? _optionalString(Object? value) {
 DateTime? _optionalDate(Object? value) {
   final raw = _optionalString(value);
   return raw == null ? null : DateTime.tryParse(raw)?.toUtc();
-}
-
-Future<LibrarySyncHttpResponse> executeLibrarySyncHttpRequest(
-  String method,
-  Uri uri, {
-  required Map<String, String> headers,
-  String? body,
-}) async {
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
-  try {
-    final request = await client.openUrl(method, uri);
-    request.followRedirects = false;
-    request.maxRedirects = 0;
-    headers.forEach(request.headers.set);
-    if (body != null) {
-      request.write(body);
-    }
-    final response = await request.close();
-    final bytes = <int>[];
-    await for (final chunk in response) {
-      bytes.addAll(chunk);
-      if (bytes.length > maxLibrarySyncResponseBytes) {
-        throw const FormatException('Library sync response is too large.');
-      }
-    }
-    return LibrarySyncHttpResponse(
-      statusCode: response.statusCode,
-      body: utf8.decode(bytes),
-    );
-  } finally {
-    client.close(force: true);
-  }
 }

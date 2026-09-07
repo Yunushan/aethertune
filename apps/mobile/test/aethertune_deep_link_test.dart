@@ -8,6 +8,7 @@ import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/aethertune_deep_link.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:aethertune/src/ui/widgets/aethertune_deep_link_listener.dart';
+import 'support/library_storage_fixture.dart';
 
 void main() {
   setUp(() {
@@ -40,7 +41,9 @@ void main() {
   testWidgets('imports a shared playlist link once and opens playlists', (
     tester,
   ) async {
-    final source = LibraryStore();
+    final source = LibraryStore(
+      storage: PreferencesLibraryStorageFixture(key: 'test.source'),
+    );
     final target = LibraryStore();
     await source.load();
     await target.load();

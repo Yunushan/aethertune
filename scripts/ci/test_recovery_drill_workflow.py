@@ -67,6 +67,30 @@ class RecoveryDrillWorkflowTest(unittest.TestCase):
         self.assertIn("source_commit=%s", workflow)
         self.assertIn("path: build/server-recovery-drill/", workflow)
 
+    def test_runtime_recovery_failure_fails_both_workflows(self) -> None:
+        for path in (WORKFLOW, CI_WORKFLOW):
+            with self.subTest(path=path):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertIn('python3 scripts/ci/test_server_backup.py', workflow)
+                self.assertIn('python3 scripts/ci/server_recovery_runtime.py', workflow)
+                self.assertIn('--executable services/server/build/aethertune-server', workflow)
+                self.assertIn('runtime_status=${PIPESTATUS[0]}', workflow)
+                self.assertIn('"$runtime_status" -ne 0', workflow)
+                self.assertIn('"$backup_unit_status" -ne 0', workflow)
+                self.assertIn('dart compile exe bin/server.dart', workflow)
+                self.assertIn('dart pub get --enforce-lockfile', workflow)
+
+    def test_privilege_and_systemd_failures_fail_both_workflows(self) -> None:
+        for path in (WORKFLOW, CI_WORKFLOW):
+            with self.subTest(path=path):
+                workflow = path.read_text(encoding='utf-8')
+                self.assertIn('sudo -n python3 scripts/ci/test_server_backup_privileges.py', workflow)
+                self.assertIn('python3 scripts/ci/server_systemd_runtime.py', workflow)
+                for status in ('backup_privileges_status', 'systemd_status'):
+                    self.assertIn(f'{status}=${{PIPESTATUS[0]}}', workflow)
+                    self.assertIn(f'"${status}" -ne 0', workflow)
+                    self.assertIn(f"printf '{status}=%s", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
