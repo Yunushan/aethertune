@@ -79,11 +79,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("contents: read", workflow)
         self.assertIn("security-events: write", workflow)
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn("runs-on: ubuntu-latest", workflow)
@@ -110,11 +110,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("merge_group:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             reusable_workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             reusable_workflow,
         )
         self.assertNotIn("Upload to code-scanning", reusable_workflow)
@@ -136,11 +136,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn("--fail-on-vuln=true", workflow)
