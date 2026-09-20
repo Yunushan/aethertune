@@ -78,6 +78,24 @@ class AndroidSyncFixtureTest(unittest.TestCase):
         self.assertNotIn('untrusted-ca.pem', pushes[0])
         self.assertTrue((self.output / 'receipt.json').is_file())
 
+    def test_prepare_unroots_after_partial_failure(self) -> None:
+        def fail_push(args, **kwargs):
+            if 'push' in args:
+                raise RuntimeError('push failed')
+            return self.fake_run(args, **kwargs)
+
+        with patch.object(fixture, 'run', side_effect=fail_push):
+            with self.assertRaisesRegex(RuntimeError, 'push failed'):
+                fixture.prepare(
+                    'adb',
+                    'openssl',
+                    'emulator-5580',
+                    'AetherTune_Acceptance_API35',
+                    self.output,
+                )
+        self.assertTrue(any(args[-1] == 'unroot' for args, _ in self.calls))
+        self.assertFalse(self.rooted)
+
     def write_receipt(self, *, digest=None, path=None) -> None:
         self.output.mkdir(parents=True)
         receipt = {'serial': 'emulator-5580', 'avd': 'AetherTune_Acceptance_API35',
