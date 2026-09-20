@@ -94,7 +94,6 @@ def publish_evidence(evidence, names, owner):
         os.chown(path, owner.st_uid, owner.st_gid, follow_symlinks=False)
     os.chown(evidence, owner.st_uid, owner.st_gid, follow_symlinks=False)
 
-
 def run(executable, evidence):
     require(sys.platform == 'linux' and os.geteuid() == 0, 'Run as root on a Linux systemd test host.')
     command('systemctl', 'show', '--property=Version')
