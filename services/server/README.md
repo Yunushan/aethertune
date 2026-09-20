@@ -331,3 +331,48 @@ The CI executable smoke test also starts the compiled binary on a loopback
 port, checks `/health` and `/ready`, and sends 90 bounded concurrent probes
 across the liveness, readiness, and `/api/v1/info` endpoints before allowing
 the executable to be uploaded.
+
+### Authenticated sync load and restart acceptance
+
+CI also runs `scripts/ci/server_sync_load_runtime.py` against the compiled
+service. Unlike the public-route smoke, this gate creates four disposable
+managed accounts with two device credentials each. For 65 seconds, both devices
+race snapshot writes at the same base revision; each cycle must produce exactly
+one success and one conflict. A second device then verifies the winning content,
+checksum, revision, and metadata. Account-specific content detects cross-account
+mixups. Each snapshot contains 1,000 synthetic tracks.
+
+The fixture force-stops its own server, reopens the same data, and verifies all
+acknowledged snapshots and credentials. It then verifies the default account
+rate limit, including shared limits between devices, while another account and
+the health endpoint remain available. Production limiter settings are unchanged.
+
+From the repository root, after compiling the server:
+
+```bash
+python3 scripts/ci/server_sync_load_runtime.py \
+  --executable services/server/build/aethertune-server \
+  --evidence build/server-sync-load-local
+```
+
+On Windows use `python` and the compiled `.exe` path. The evidence destination
+must not already exist. Optional `--seconds` (5-600), `--accounts` (2-8), and
+`--tracks` (1-10000) select a bounded larger local workload. Requests have a
+five-second total acceptance budget, responses are byte-bounded, and bearer
+credentials are never redirected. The fixture only starts an owned loopback
+service with random synthetic credentials and a disposable data directory; it
+does not accept a deployment URL or reuse production accounts. Logs, credentials,
+and snapshot bodies are not published as evidence.
+
+CI retains the JSON report with request counts, status distribution, payload
+bytes, p50/p95/max latency, executed checks, executable hash, and source input
+hashes. PR CI compiles and exercises the server on Linux, Windows, and macOS;
+Windows/macOS use the existing desktop matrix runners. Release builds run the
+same gate on all three platforms before uploading the executable. A failed
+assertion, transport error, or failed cleanup
+fails the gate. The original public-route load smoke remains enabled.
+
+This is repeatable local acceptance, not a production throughput claim, a TLS
+proxy test, disk-full or physical power-loss testing, an off-host restore, or a
+long-running pilot. Retain separate deployed-load, alert, recovery-objective,
+and release evidence before declaring hosted sync production-ready.
