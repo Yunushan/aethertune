@@ -26,7 +26,7 @@ def elf_header(abi: str) -> bytes:
     header = bytearray(64)
     header[:7] = b'\x7fELF' + bytes([bits, 1, 1])
     struct.pack_into('<HH', header, 16, 3, machine)
-    return bytes(header)
+    return bytes(header) + b'\x00' * 64
 
 
 def write_archive(path: Path, entries: frozenset[str]) -> None:
@@ -111,7 +111,8 @@ class AndroidReleaseArtifactsTest(unittest.TestCase):
     def test_rejects_empty_or_wrong_architecture_transport(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'app.apk'
-            for payload in (b'', b'not an ELF', elf_header('x86_64')):
+            for payload in (b'', b'not an ELF', elf_header('arm64-v8a')[:64],
+                            elf_header('x86_64')):
                 with self.subTest(payload=payload):
                     write_archive(path, APK_ENTRIES - {'lib/arm64-v8a/librhttp.so'})
                     with zipfile.ZipFile(path, 'a') as archive:
