@@ -1728,7 +1728,7 @@ import Flutter
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     private static let offlineCacheTaskIdentifier = "dev.aethertune.aethertune.offline-cache"
     private var audioRoutePickerController: UIViewController?
     private var activeOfflineCacheTask: BGProcessingTask?
@@ -1742,29 +1742,32 @@ import UIKit
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        GeneratedPluginRegistrant.register(with: self)
         registerOfflineCacheTask()
-        if let flutterController = window?.rootViewController as? FlutterViewController {
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+        let messenger = engineBridge.applicationRegistrar.messenger()
+        configureOfflineCacheChannel(messenger: messenger)
+        if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AetherTuneAudioRoutes") {
             let channel = FlutterMethodChannel(
                 name: "dev.aethertune/audio_routes",
-                binaryMessenger: flutterController.binaryMessenger
+                binaryMessenger: messenger
             )
-            channel.setMethodCallHandler { [weak self, weak flutterController] call, result in
+            channel.setMethodCallHandler { [weak self] call, result in
                 guard call.method == "showAudioRoutePicker" else {
                     result(FlutterMethodNotImplemented)
                     return
                 }
-                guard let appDelegate = self, let controller = flutterController else {
+                // Resolve the calling engine's controller when the UI is attached.
+                guard let appDelegate = self, let controller = registrar.viewController else {
                     result(false)
                     return
                 }
                 result(appDelegate.showAudioRoutePicker(from: controller))
             }
-            configureOfflineCacheChannel(
-                messenger: flutterController.binaryMessenger
-            )
         }
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
     private func registerOfflineCacheTask() {
