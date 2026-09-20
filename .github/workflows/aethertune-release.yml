@@ -75,7 +75,7 @@ jobs:
         --lockfile=./apps/mobile/pubspec.lock
         --lockfile=./services/server/pubspec.lock
         --lockfile=./apps/mobile/packages/rhttp/rust/Cargo.lock
-        --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
+        --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,CDLA-Permissive-2.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-3.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
     permissions:
       actions: read
       contents: read

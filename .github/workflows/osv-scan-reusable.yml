@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Run scanner
-        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
         continue-on-error: true
         with:
           scan-args: |-
@@ -36,7 +36,7 @@ jobs:
             ${{ inputs.scan-args }}
 
       - name: Run osv-scanner-reporter
-        uses: google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        uses: google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
         with:
           scan-args: |-
             --output=results.sarif
@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload to code-scanning
         if: ${{ !cancelled() }}
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: results.sarif
 

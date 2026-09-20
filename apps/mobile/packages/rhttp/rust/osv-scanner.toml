@@ -1,0 +1,9 @@
+# The published crate supplies a standard Apache-2.0 LICENSE but no SPDX field.
+# https://docs.rs/crate/allo-isolate/0.1.27/source/LICENSE
+# LICENSE SHA-256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+[[PackageOverrides]]
+name = "allo-isolate"
+version = "0.1.27"
+ecosystem = "crates.io"
+license.override = ["Apache-2.0"]
+reason = "The exact published 0.1.27 LICENSE is Apache-2.0; license-file metadata is reported as non-standard. Vulnerability scanning remains enabled."

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -31,6 +32,35 @@ COMMAND_FILES = (
 
 
 class DependencyLockPolicyTest(unittest.TestCase):
+    def test_osv_license_policy_is_consistent_and_does_not_allow_nonstandard_licenses(self) -> None:
+        policies = []
+        for workflow in (OSV_WORKFLOW, OSV_PR_WORKFLOW, OSV_REQUIRED_CONTEXT_WORKFLOW,
+                         ROOT / '.github/workflows/aethertune-release.yml'):
+            with self.subTest(workflow=workflow):
+                matches = re.findall(r'--licenses=([^\s]+)', workflow.read_text(encoding='utf-8'))
+                self.assertEqual(len(matches), 1)
+                policy = set(matches[0].split(','))
+                self.assertTrue({'Apache-2.0', 'Unicode-3.0', 'CDLA-Permissive-2.0'} <= policy)
+                self.assertNotIn('non-standard', policy)
+                policies.append(policy)
+        self.assertTrue(all(policy == policies[0] for policy in policies))
+
+    def test_native_license_metadata_override_is_exact_and_keeps_vulnerability_scanning(self) -> None:
+        native = ROOT / 'apps/mobile/packages/rhttp/rust'
+        config = tomllib.loads((native / 'osv-scanner.toml').read_text(encoding='utf-8'))
+        self.assertEqual(set(config), {'PackageOverrides'})
+        self.assertEqual(len(config['PackageOverrides']), 1)
+        override = config['PackageOverrides'][0]
+        self.assertEqual(set(override), {'name', 'version', 'ecosystem', 'license', 'reason'})
+        self.assertEqual(override['name'], 'allo-isolate')
+        self.assertEqual(override['version'], '0.1.27')
+        self.assertEqual(override['ecosystem'], 'crates.io')
+        self.assertEqual(override['license'], {'override': ['Apache-2.0']})
+        self.assertTrue(override['reason'])
+        lock = tomllib.loads((native / 'Cargo.lock').read_text(encoding='utf-8'))
+        versions = [package['version'] for package in lock['package'] if package['name'] == override['name']]
+        self.assertEqual(versions, [override['version']], 'Re-review stale license metadata on crate updates')
+
     def test_application_lockfiles_are_present(self) -> None:
         for lockfile in LOCKFILES:
             with self.subTest(lockfile=lockfile):
@@ -41,6 +71,18 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertNotIn("/apps/mobile/pubspec.lock", gitignore)
         self.assertNotIn("/services/server/pubspec.lock", gitignore)
 
+    def test_dependabot_ignores_incompatible_flutter_intl_updates(self) -> None:
+        config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertRegex(
+            config,
+            r"(?ms)^  - package-ecosystem: pub\n"
+            r"    directory: /apps/mobile\n"
+            r".*?^    ignore:\n"
+            r"      - dependency-name: intl\n"
+            r"        versions:\n"
+            r"          - \">=0\.20\.3\"\n",
+        )
+
     def test_dependency_commands_enforce_lockfiles(self) -> None:
         for command_file in COMMAND_FILES:
             text = command_file.read_text(encoding="utf-8")
@@ -49,6 +91,18 @@ class DependencyLockPolicyTest(unittest.TestCase):
                     self.assertIn("flutter pub get --enforce-lockfile", text)
                 if "dart pub get" in text:
                     self.assertIn("dart pub get --enforce-lockfile", text)
+
+    def test_dependabot_ignores_incompatible_flutter_intl_updates(self) -> None:
+        config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertRegex(
+            config,
+            r"(?ms)^  - package-ecosystem: pub\n"
+            r"    directories:\n"
+            r".*?^    ignore:\n"
+            r"      - dependency-name: intl\n"
+            r"        versions:\n"
+            r"          - \">=0\.20\.3\"\n",
+        )
 
     def test_docker_base_images_are_multiarch_digest_pinned(self) -> None:
         dockerfile = (ROOT / "services" / "server" / "Dockerfile").read_text(
@@ -79,11 +133,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("contents: read", workflow)
         self.assertIn("security-events: write", workflow)
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn("runs-on: ubuntu-latest", workflow)
@@ -110,11 +164,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("merge_group:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             reusable_workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             reusable_workflow,
         )
         self.assertNotIn("Upload to code-scanning", reusable_workflow)
@@ -136,11 +190,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8dc09193bb540e09b23da07ad7e30bd33bf87018",
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
         )
         self.assertIn("--fail-on-vuln=true", workflow)

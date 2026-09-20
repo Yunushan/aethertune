@@ -47,6 +47,21 @@ class NativeTransportPolicyTest(unittest.TestCase):
         for path in ("Makefile", "scripts/check.sh", ".github/workflows/aethertune-ci.yml"):
             self.assertIn("build_native_transport.py", (ROOT / path).read_text())
 
+    def test_android_compile_sdk_uses_typed_api_not_display_string(self) -> None:
+        plugin = (APP / 'packages/rhttp/cargokit/gradle/plugin.gradle').read_text()
+        self.assertIn('compileSdkVersion = plugin.project.android.compileSdk\n', plugin)
+        self.assertNotIn('compileSdkVersion.substring', plugin)
+
+    def test_linux_acceptance_defines_a_real_unavailable_documents_fixture(self) -> None:
+        launcher = (ROOT / 'scripts/ci/run_linux_native_acceptance.sh').read_text()
+        self.assertIn('XDG_DOCUMENTS_DIR="$HOME/unavailable-documents"', launcher)
+        self.assertIn('> "$fixture/config/user-dirs.dirs"', launcher)
+        self.assertIn('> "$fixture/unavailable-documents"', launcher)
+        test = (APP / 'integration_test/linux_native_acceptance_test.dart').read_text()
+        self.assertIn("expect(documents.path, p.join(home, 'unavailable-documents'))", test)
+        self.assertIn('FileSystemEntityType.file', test)
+        self.assertIn("find.text('Could not read cache usage.')", test)
+
 
 if __name__ == "__main__":
     unittest.main()

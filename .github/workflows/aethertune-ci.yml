@@ -110,6 +110,11 @@ jobs:
       - name: Test native client storage fixture
         run: python3 scripts/ci/test_client_storage_runtime.py
 
+      - name: Test Linux fixture permissions and evidence ownership
+        run: |
+          sudo -n python3 scripts/ci/test_client_storage_runtime.py
+          sudo -n python3 scripts/ci/test_server_systemd_runtime.py
+
       - name: Test production operations workflow
         run: python3 scripts/ci/test_production_ops_workflow.py
 
@@ -120,7 +125,9 @@ jobs:
         run: python3 scripts/ci/test_production_ops_alert_workflow.py
 
       - name: Test server recovery drill workflow
-        run: python3 scripts/ci/test_recovery_drill_workflow.py
+        run: |
+          python3 scripts/ci/test_recovery_drill_workflow.py
+          python3 scripts/ci/test_server_recovery_runtime.py
 
       - name: Test provider contract workflow
         run: python3 scripts/ci/test_provider_contract_workflow.py

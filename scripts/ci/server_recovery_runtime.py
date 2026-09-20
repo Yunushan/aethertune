@@ -3,6 +3,7 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import ctypes
 from datetime import datetime, timedelta
 import hashlib
 import http.client
@@ -116,6 +117,23 @@ def wait_until(predicate, message, timeout=5):
 
 
 def snapshot_busy(data):
+    if sys.platform == 'linux':
+        import fcntl
+
+        require(platform.machine().lower() in ('x86_64', 'aarch64'), 'Unsupported Linux record-lock query ABI.')
+
+        class Flock(ctypes.Structure):
+            _fields_ = [('type', ctypes.c_short), ('whence', ctypes.c_short),
+                        ('start', ctypes.c_long), ('length', ctypes.c_long), ('pid', ctypes.c_int)]
+
+        path = data / '.backup.snapshot.lock'
+        backup._regular(path)
+        # F_GETLK observes the server's shared lock without briefly acquiring an
+        # exclusive lock that could make the very upload under test return 503.
+        query = Flock(fcntl.F_WRLCK, os.SEEK_SET, 0, 1, 0)
+        with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+            result = fcntl.fcntl(stream.fileno(), fcntl.F_GETLK, bytes(query))
+        return Flock.from_buffer_copy(result).type != fcntl.F_UNLCK
     try:
         with backup.FileLock(data / '.backup.snapshot.lock', timeout=0):
             return False

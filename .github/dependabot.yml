@@ -11,6 +11,12 @@ updates:
     groups:
       flutter-client:
         patterns: ['*']
+    # flutter_localizations in the pinned Flutter 3.44.6 SDK requires intl 0.20.2.
+    # Do not open updates that cannot resolve with the locked release toolchain.
+    ignore:
+      - dependency-name: intl
+        versions:
+          - ">=0.20.3"
 
   - package-ecosystem: pub
     directory: /services/server
