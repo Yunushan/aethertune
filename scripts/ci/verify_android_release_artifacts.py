@@ -43,11 +43,17 @@ def verify_native_libraries(archive: zipfile.ZipFile, entries: set[str], label: 
             entry = f'{prefix}{abi}/{name}'
             if entry not in entries:
                 raise ValueError(f'{label} is missing required native library: {entry}')
-            # Bounded header inspection detects empty, truncated and wrong-ABI
-            # payloads; it does not replace native loading or signature checks.
+            # Read to EOF so ZipExtFile validates the entry CRC before acceptance.
             with archive.open(entry) as stream:
                 header = stream.read(64)
-            if (len(header) < (52 if elf_class == 1 else 64)
+                payload_size = len(header)
+                while True:
+                    chunk = stream.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    payload_size += len(chunk)
+            minimum_size = max(128, 52 if elf_class == 1 else 64)
+            if (payload_size < minimum_size
                     or header[:7] != b'\x7fELF' + bytes([elf_class, 1, 1])
                     or struct.unpack_from('<HH', header, 16) != (3, machine)):
                 raise ValueError(f'{label} has an invalid {abi} ELF library: {entry}')
