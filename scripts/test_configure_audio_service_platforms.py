@@ -20,6 +20,30 @@ SPEC.loader.exec_module(platform_config)
 
 
 class AndroidPlaybackWidgetTest(unittest.TestCase):
+    def test_ios_channels_register_when_the_implicit_engine_is_ready(self) -> None:
+        source = platform_config._APP_DELEGATE_SWIFT
+        self.assertIn("FlutterAppDelegate, FlutterImplicitEngineDelegate", source)
+        launch, initialization = source.split(
+            "func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge)", 1
+        )
+        self.assertIn("registerOfflineCacheTask()", launch)
+        self.assertNotIn("GeneratedPluginRegistrant.register", launch)
+        self.assertNotIn("FlutterMethodChannel(", launch)
+        self.assertNotIn("configureOfflineCacheChannel(", launch)
+        registration = initialization.split("private func registerOfflineCacheTask()", 1)[0]
+        self.assertEqual(registration.count("GeneratedPluginRegistrant.register("), 1)
+        self.assertIn("GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)", registration)
+        self.assertIn("let messenger = engineBridge.applicationRegistrar.messenger()", registration)
+        self.assertIn("configureOfflineCacheChannel(messenger: messenger)", registration)
+        self.assertIn("binaryMessenger: messenger", registration)
+        self.assertNotIn("window?.rootViewController", source)
+        # Presentation must use this engine's current controller, not a cached
+        # nil launch controller or another connected scene's window.
+        self.assertIn('engineBridge.pluginRegistry.registrar(forPlugin: "AetherTuneAudioRoutes")', registration)
+        handler = registration.split("channel.setMethodCallHandler", 1)[1]
+        self.assertIn("let controller = registrar.viewController", handler)
+        self.assertIn("appDelegate.showAudioRoutePicker(from: controller)", handler)
+
     def test_ios_background_engine_runs_before_registering_handlers(self) -> None:
         source = platform_config._APP_DELEGATE_SWIFT
         startup = source.split("private func runOfflineCacheTask(", 1)[1].split(
