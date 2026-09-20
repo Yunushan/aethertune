@@ -54,7 +54,6 @@ def stage_probe_bundle(executable, destination):
     require(staged.is_file(), 'Staged probe executable is missing')
     return staged, hashes
 
-
 def values(label, tracks=3):
     return {
         'aethertune.tracks.v1': json.dumps([
