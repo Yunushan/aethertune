@@ -53,6 +53,14 @@ def root_adb(command: list[str]) -> None:
         raise RuntimeError('AOSP userdebug root service is required inside this disposable AVD.')
 
 
+def unroot_adb(command: list[str]) -> None:
+    for operation in ('unroot', 'wait-for-device'):
+        try:
+            run(command + [operation], check=False)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
 def prepare(adb: str, openssl: str, serial: str, avd: str, output: Path) -> None:
     output = validate_output(output)
     command = validate_target(adb, serial, avd)
@@ -73,29 +81,33 @@ def prepare(adb: str, openssl: str, serial: str, avd: str, output: Path) -> None
     if not re.fullmatch('[0-9a-f]{8}', name):
         raise RuntimeError('Invalid certificate subject hash.')
     guest_certificate = f'{GUEST_CA}/{name}.0'
-    root_adb(command)
-    exists = run(command + ['shell', 'sh', '-c', f'"if test -e {guest_certificate}; then echo exists; fi"'])
-    if exists.strip():
-        raise RuntimeError('Refusing to overwrite an existing guest root certificate.')
-    receipt = {'serial': serial, 'avd': avd, 'guest_certificate': guest_certificate,
-               'certificate_sha256': hashlib.sha256(certificate.read_bytes()).hexdigest()}
-    # Persist ownership before the first trust mutation, so partial setup can be cleaned up.
-    (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
-    run(command + ['shell', 'mkdir', '-p', GUEST_CA])
-    run(command + ['shell', 'chown', 'system:system', GUEST_CA])
-    run(command + ['shell', 'chmod', '755', GUEST_CA])
-    run(command + ['push', str(certificate), guest_certificate])
-    run(command + ['shell', 'chown', 'system:system', guest_certificate])
-    run(command + ['shell', 'chmod', '644', guest_certificate])
-    run(command + ['shell', 'restorecon', '-R', GUEST_CA])
-    run(command + ['shell', 'run-as', PACKAGE, 'mkdir', '-p', GUEST_INPUT])
-    for name in ('trusted-ca.pem', 'trusted-leaf.pem', 'trusted-leaf.key',
-                 'untrusted-leaf.pem', 'untrusted-leaf.key'):
-        run(command + ['shell', '-T', 'run-as', PACKAGE, 'tee', f'{GUEST_INPUT}/{name}'],
-            data=(output / name).read_bytes())
-    run(command + ['shell', '-T', 'run-as', PACKAGE, 'tee', f'{GUEST_INPUT}/marker'], data=MARKER)
-    run(command + ['shell', 'am', 'force-stop', PACKAGE])
-    print(f'Prepared synthetic guest-only TLS fixture: {output}')
+    try:
+        root_adb(command)
+        exists = run(command + ['shell', 'sh', '-c', f'"if test -e {guest_certificate}; then echo exists; fi"'])
+        if exists.strip():
+            raise RuntimeError('Refusing to overwrite an existing guest root certificate.')
+        receipt = {'serial': serial, 'avd': avd, 'guest_certificate': guest_certificate,
+                   'certificate_sha256': hashlib.sha256(certificate.read_bytes()).hexdigest()}
+        # Persist ownership before the first trust mutation, so partial setup can be cleaned up.
+        (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+        run(command + ['shell', 'mkdir', '-p', GUEST_CA])
+        run(command + ['shell', 'chown', 'system:system', GUEST_CA])
+        run(command + ['shell', 'chmod', '755', GUEST_CA])
+        run(command + ['push', str(certificate), guest_certificate])
+        run(command + ['shell', 'chown', 'system:system', guest_certificate])
+        run(command + ['shell', 'chmod', '644', guest_certificate])
+        run(command + ['shell', 'restorecon', '-R', GUEST_CA])
+        run(command + ['shell', 'run-as', PACKAGE, 'mkdir', '-p', GUEST_INPUT])
+        for name in ('trusted-ca.pem', 'trusted-leaf.pem', 'trusted-leaf.key',
+                     'untrusted-leaf.pem', 'untrusted-leaf.key'):
+            run(command + ['shell', '-T', 'run-as', PACKAGE, 'tee', f'{GUEST_INPUT}/{name}'],
+                data=(output / name).read_bytes())
+        run(command + ['shell', '-T', 'run-as', PACKAGE, 'tee', f'{GUEST_INPUT}/marker'], data=MARKER)
+        run(command + ['shell', 'am', 'force-stop', PACKAGE])
+        print(f'Prepared synthetic guest-only TLS fixture: {output}')
+    except BaseException:
+        unroot_adb(command)
+        raise
 
 
 def cleanup(adb: str, serial: str, avd: str, output: Path) -> None:
