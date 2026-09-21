@@ -25,7 +25,7 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.3.2
   shared_preferences_platform_interface: ^2.4.2
-  sqlite3: ^3.6.0
+  sqlite3: ^3.5.2
   flutter_secure_storage: ^11.2.0
   path_provider: ^2.1.5
   path: ^1.9.0
