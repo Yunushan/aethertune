@@ -147,9 +147,10 @@ class SimulatorSafetyTest(unittest.TestCase):
 class FakeCommands:
     """Model simctl state and app reports; these tests are not iOS runtime evidence."""
 
-    def __init__(self, app: Path, failure: str | None):
-        self.app, self.failure = app, failure
+    def __init__(self, app: Path, evidence: Path, failure: str | None):
+        self.app, self.evidence, self.failure = app, evidence, failure
         self.calls = []
+        self.drive_attempts = {phase: 0 for phase in ios.PHASES}
         self.data = inventory()
         self.container = app / "guest" / DEVICE / "data/Containers/Data/Application" / CONTAINER
         self.support = self.container / "Library/Application Support"
@@ -213,10 +214,34 @@ class FakeCommands:
                 raise AssertionError("Driver would uninstall and invalidate persistence")
             control = json.loads((self.support / "aethertune-ios-fixture/control.json").read_text())
             phase = control["phase"]
+            self.drive_attempts[phase] += 1
+            attempt = self.drive_attempts[phase]
             name = self.data["devices"][RUNTIME][0]["name"]
             if control != {"phase": phase, "device": DEVICE, "fixtureName": name, "sourceCommit": SOURCE}:
                 raise AssertionError("Wrong app-container control identity")
             payload = report(phase, 100 + ios.PHASES.index(phase))
+            timeout_failure = (
+                (self.failure == "sync-silent-timeout" and phase == "sync" and attempt == 1)
+                or (self.failure == "sync-always-silent-timeout" and phase == "sync")
+                or (self.failure == "sync-nonempty-timeout" and phase == "sync" and attempt == 1)
+                or (self.failure == "sync-report-timeout" and phase == "sync" and attempt == 1)
+                or (self.failure == "reopen-silent-timeout" and phase == "reopen" and attempt == 1)
+            )
+            if timeout_failure:
+                stdout = self.evidence / f"fake-{phase}-{attempt}.log"
+                stderr = self.evidence / f"fake-{phase}-{attempt}-stderr.log"
+                stdout.write_bytes(
+                    b"EARLY_PREFIX_SHOULD_NOT_BE_IN_TAIL" + b"x" * 3000 + b"Flutter test started\n"
+                    if self.failure == "sync-nonempty-timeout" else b""
+                )
+                stderr.write_bytes(b"")
+                if self.failure == "sync-report-timeout":
+                    payload["status"] = "failed"
+                    ios.write_json(self.support / "ios-acceptance-sync.json", payload)
+                    (self.support / "ios-acceptance-sync.png").write_bytes(
+                        b"\x89PNG\r\n\x1a\n" + b"x" * 1024
+                    )
+                raise ios.CommandTimedOut(args, kwargs.get("timeout", 360), stdout, stderr)
             if self.failure == phase:
                 payload["status"] = "failed"
             ios.write_json(self.support / f"ios-acceptance-{phase}.json", payload)
@@ -242,7 +267,7 @@ class LifecycleTest(unittest.TestCase):
         evidence = root / "evidence"
         evidence.mkdir()
         app = root / "app"
-        run = FakeCommands(app, failure)
+        run = FakeCommands(app, evidence, failure)
         with patch.object(ios, "APP", app), patch.object(ios, "certificates", fake_certificates):
             result = ios.execute(evidence, run, SOURCE)
         self.assertEqual(json.loads((evidence / "result.json").read_text()), result)
@@ -252,6 +277,7 @@ class LifecycleTest(unittest.TestCase):
         result, run, _ = self.execute_fixture()
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["phases"], list(ios.PHASES))
+        self.assertEqual(result["recoveries"], [])
         self.assertTrue(result["ordinaryOutputRestored"])
         self.assertEqual(result["cleanup"], {"status": "deleted", "device": DEVICE})
         self.assertEqual(sum(args[:3] == ["xcrun", "simctl", "terminate"] for args in run.calls), 3)
@@ -264,6 +290,64 @@ class LifecycleTest(unittest.TestCase):
                 self.assertTrue(result["ordinaryOutputRestored"])
                 self.assertEqual(result["cleanup"]["status"], "deleted")
                 self.assertEqual(json.loads((evidence / f"ios-acceptance-{phase}.json").read_text())["status"], "failed")
+
+    def test_silent_sync_launch_timeout_reboots_owned_guest_once_and_preserves_state(self):
+        result, run, evidence = self.execute_fixture("sync-silent-timeout")
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["phases"], list(ios.PHASES))
+        self.assertEqual(result["recoveries"], [{
+            "phase": "sync", "reason": "silent-flutter-drive-timeout", "attempts": 2,
+        }])
+        self.assertEqual(run.drive_attempts, {"seed": 1, "reopen": 1, "sync": 2})
+        self.assertEqual((run.support / "aethertune-ios-fixture/marker").read_text(), ios.MARKER)
+        self.assertTrue((run.support / "ios-acceptance-seed.json").is_file())
+        self.assertTrue((run.support / "ios-acceptance-reopen.json").is_file())
+        self.assertEqual(json.loads((evidence / "ios-acceptance-sync.json").read_text())["status"], "passed")
+        self.assertEqual(sum(args[:3] == ["xcrun", "simctl", "create"] for args in run.calls), 1)
+        self.assertEqual(sum(args[:3] == ["xcrun", "simctl", "install"] for args in run.calls), 1)
+        drives = [index for index, args in enumerate(run.calls)
+                  if args[:2] == ["flutter", "drive"]]
+        self.assertEqual(len(drives), 4)
+        first_sync, retry_sync = drives[-2:]
+        between = run.calls[first_sync + 1:retry_sync]
+        self.assertEqual([args[2] for args in between if args[:2] == ["xcrun", "simctl"]
+                          and args[2] in ("shutdown", "boot", "bootstatus")],
+                         ["shutdown", "boot", "bootstatus"])
+        self.assertNotIn(["xcrun", "simctl", "delete", DEVICE], between)
+        self.assertIn("0 bytes (no output)",
+                      (evidence / "sync-drive-timeout-attempt-1.log").read_text())
+
+    def test_retry_is_bounded_and_only_for_silent_sync_before_a_report(self):
+        for failure, phase, attempts, completed in (
+            ("sync-always-silent-timeout", "sync", 2, ["seed", "reopen"]),
+            ("sync-nonempty-timeout", "sync", 1, ["seed", "reopen"]),
+            ("sync-report-timeout", "sync", 1, ["seed", "reopen"]),
+            ("reopen-silent-timeout", "reopen", 1, ["seed"]),
+            ("sync", "sync", 1, ["seed", "reopen"]),
+        ):
+            with self.subTest(failure=failure):
+                result, run, evidence = self.execute_fixture(failure)
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["phases"], completed)
+                self.assertEqual(result["recoveries"], [])
+                self.assertEqual(run.drive_attempts[phase], attempts)
+                self.assertEqual(result["cleanup"], {"status": "deleted", "device": DEVICE})
+                self.assertTrue(result["ordinaryOutputRestored"])
+                self.assertEqual(
+                    sum(args[:3] == ["xcrun", "simctl", "boot"] for args in run.calls),
+                    2 if failure == "sync-always-silent-timeout" else 1,
+                )
+                if failure == "sync-report-timeout":
+                    self.assertEqual(json.loads((evidence / "ios-acceptance-sync.json").read_text())["status"],
+                                     "failed")
+                if failure == "sync-nonempty-timeout":
+                    diagnostic = (evidence / "sync-drive-timeout-attempt-1.log").read_text()
+                    self.assertIn("last 2048 bytes", diagnostic)
+                    self.assertIn("Flutter test started", diagnostic)
+                    self.assertNotIn("EARLY_PREFIX_SHOULD_NOT_BE_IN_TAIL", diagnostic)
+                if failure == "sync-always-silent-timeout":
+                    self.assertTrue((evidence / "sync-drive-timeout-attempt-1.log").is_file())
+                    self.assertTrue((evidence / "sync-drive-timeout-attempt-2.log").is_file())
 
     def test_restore_or_cleanup_failure_cannot_report_success(self):
         for failure in ("restore", "cleanup"):
@@ -302,8 +386,13 @@ class CommandLifecycleTest(unittest.TestCase):
                   patch.object(ios.os, "killpg", create=True) as kill,
                   patch.object(ios.time, "sleep"),
                   patch.object(ios.signal, "SIGKILL", 9, create=True)):
-                with self.assertRaises(subprocess.TimeoutExpired):
+                with self.assertRaises(ios.CommandTimedOut) as raised:
                     run(["fixture-command"], timeout=1)
+            self.assertEqual(raised.exception.command, ["fixture-command"])
+            self.assertEqual(raised.exception.timeout, 1)
+            self.assertEqual(raised.exception.stdout_path, Path(temporary) / "001-fixture-command.log")
+            self.assertEqual(raised.exception.stderr_path,
+                             Path(temporary) / "001-fixture-command-stderr.log")
             self.assertTrue(launch.call_args.kwargs["start_new_session"])
             self.assertEqual(kill.call_args_list, [call(4321, signal.SIGTERM), call(4321, 9)])
             self.assertEqual(child.wait.call_args_list, [call(timeout=1), call(timeout=30)])

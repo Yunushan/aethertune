@@ -131,6 +131,17 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
+class CommandTimedOut(TimeoutError):
+    def __init__(self, command: list[str], timeout: int,
+                 stdout_path: Path, stderr_path: Path):
+        self.command = command
+        self.timeout = timeout
+        self.stdout_path = stdout_path
+        self.stderr_path = stderr_path
+        super().__init__(f"Command {command!r} timed out after {timeout} seconds; "
+                         f"see {stdout_path.name} and {stderr_path.name}.")
+
+
 class Commands:
     def __init__(self, evidence: Path):
         self.evidence = evidence
@@ -148,7 +159,7 @@ class Commands:
                                      stdout=out, stderr=err, start_new_session=True)
             try:
                 code = child.wait(timeout=timeout)
-            except BaseException:
+            except BaseException as error:
                 # Stop this command's process group, including owned build/driver children.
                 for sig in (signal.SIGTERM, signal.SIGKILL):
                     try:
@@ -158,6 +169,8 @@ class Commands:
                     if sig == signal.SIGTERM:
                         time.sleep(1)
                 child.wait(timeout=30)
+                if isinstance(error, subprocess.TimeoutExpired):
+                    raise CommandTimedOut(args, timeout, stdout, stderr) from error
                 raise
         if code:
             raise RuntimeError(f"Command exited {code}; see {stdout.name} and {stderr.name}.")
@@ -249,8 +262,75 @@ def collect(sim: Simulator, evidence: Path, phase: str) -> dict:
     return json.loads((evidence / f"ios-acceptance-{phase}.json").read_text(encoding="utf-8"))
 
 
+def _drive_timeout_diagnostic(error: CommandTimedOut, phase: str, attempt: int) -> str:
+    lines = [f"{phase} flutter drive attempt {attempt} timed out after "
+             f"{error.timeout} seconds."]
+    for path in (error.stdout_path, error.stderr_path):
+        try:
+            size = path.stat().st_size
+            if size == 0:
+                lines.append(f"{path.name}: 0 bytes (no output)")
+                continue
+            with path.open("rb") as stream:
+                stream.seek(max(0, size - 2048))
+                tail = stream.read().decode("utf-8", errors="replace")
+            lines.append(f"{path.name}: {size} bytes; last {min(size, 2048)} bytes:\n{tail}")
+        except OSError as read_error:
+            lines.append(f"{path.name}: cannot read log: {read_error}")
+    return "\n".join(lines)
+
+
+def _record_drive_timeout(error: CommandTimedOut, phase: str, attempt: int) -> None:
+    diagnostic = _drive_timeout_diagnostic(error, phase, attempt)
+    print(diagnostic, flush=True)
+    (error.stdout_path.parent / f"{phase}-drive-timeout-attempt-{attempt}.log").write_text(
+        diagnostic + "\n", encoding="utf-8")
+
+
+def _silent_drive_timeout(error: CommandTimedOut) -> bool:
+    try:
+        return (error.stdout_path.is_file() and error.stderr_path.is_file()
+                and error.stdout_path.stat().st_size == 0
+                and error.stderr_path.stat().st_size == 0)
+    except OSError:
+        return False
+
+
+def drive_phase(sim: Simulator, run: Commands, bundle: Path, phase: str) -> bool:
+    command = ["flutter", "drive", "--no-pub", "-d", sim.device,
+               "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
+               "--use-application-binary", str(bundle), "--keep-app-running"]
+    try:
+        run(command, cwd=APP, timeout=360)
+        return False
+    except CommandTimedOut as error:
+        _record_drive_timeout(error, phase, 1)
+        if phase != "sync" or not _silent_drive_timeout(error):
+            raise
+        support = sim.support()
+        report = contained(support / f"ios-acceptance-{phase}.json", support)
+        if report.exists():
+            raise
+
+    # A silent launch can wait forever for Flutter's Simulator VM-service log.
+    # Restart only the simulator whose UUID and ownership name are rechecked by
+    # Simulator.command; shutdown and boot retain the app container and keychain.
+    print("Silent sync launch timed out; restarting owned simulator once.", flush=True)
+    if sim.current()["state"] != "Shutdown":
+        sim.command("shutdown")
+    sim.command("boot")
+    sim.command("bootstatus", "-b", timeout=300)
+    try:
+        run(command, cwd=APP, timeout=360)
+    except CommandTimedOut as error:
+        _record_drive_timeout(error, phase, 2)
+        raise
+    return True
+
+
 def execute(evidence: Path, run: Commands, source: str) -> dict:
-    result = {"status": "failed", "sourceCommit": source, "phases": [], "errors": []}
+    result = {"status": "failed", "sourceCommit": source, "phases": [],
+              "recoveries": [], "errors": []}
     sim = Simulator(run, PREFIX + uuid.uuid4().hex)
     build_attempted = False
     try:
@@ -299,10 +379,11 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
                 "sourceCommit": source,
             })
             try:
-                run(["flutter", "drive", "--no-pub", "-d", sim.device,
-                     "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
-                     "--use-application-binary", str(bundle), "--keep-app-running"],
-                    cwd=APP, timeout=360)
+                if drive_phase(sim, run, bundle, phase):
+                    result["recoveries"].append({
+                        "phase": phase, "reason": "silent-flutter-drive-timeout",
+                        "attempts": 2,
+                    })
             except Exception:
                 try:
                     collect(sim, evidence, phase)
