@@ -233,9 +233,12 @@ restore ownership, or rollback compatibility between different release schemas.
 
 Run the same health, readiness, and authenticated metrics contract used by
 Compose against the deployed endpoint. The scheduled systemd probe checks the
-loopback service every five minutes and exits non-zero when any endpoint or
-metrics counter is unhealthy; collect its journal/failure state in the host's
-monitoring system. Set `AETHERTUNE_OPS_PROBE_TOKEN` in the root-only env file
+loopback service every five minutes and exits non-zero when an endpoint fails,
+its JSON status identifies the wrong service or state, or authenticated metrics
+are missing or malformed. It prints cumulative 5xx and rate-limit counts but
+does not apply alert thresholds to them; configure the host's monitoring
+system to evaluate increases and collect the probe's journal/failure state.
+Set `AETHERTUNE_OPS_PROBE_TOKEN` in the root-only env file
 to the raw operations token. This is required when the server's
 `AETHERTUNE_OPS_TOKEN` is stored as a `sha256:` digest; never put the probe
 token in a unit file or command-line argument. The probe accepts HTTPS for
