@@ -1,4 +1,4 @@
-FROM dart:3.12.2@sha256:5ac89dbcae4327278b257920e2786df0f22c87adc630017266b67cfcceef8348 AS build
+FROM dart:3.13.3@sha256:7e57e61d97813dc57dd0801656ff4d5c5efafa47bae563a681571543ad30f199 AS build
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN mkdir -p /out \
     && dart compile exe bin/healthcheck.dart -o /out/aethertune-healthcheck \
     && mkdir -m 0700 /out/data
 
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:c31ff9abcb1910f3ab25c7957bdaf0bfe12a01eb546e8df2282f1c8f682b606c
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:54df941ed0d06a1bd95ef5e0ce391fd8d9f94b64782dc9a60062727849ee3f97
 
 COPY --from=build /out/aethertune-server /usr/local/bin/aethertune-server
 COPY --from=build /out/aethertune-healthcheck /usr/local/bin/aethertune-healthcheck

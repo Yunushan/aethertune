@@ -575,7 +575,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
+        uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
         with:
           sdk: '3.12.2'
 
@@ -597,6 +597,23 @@ jobs:
         if: matrix.label == 'linux-x64'
         shell: bash
         run: bash scripts/ci/test_server_backup_restore.sh
+
+      - name: Run authenticated sync load and restart acceptance
+        env:
+          SOURCE_COMMIT_SHA: ${{ github.sha }}
+        run: >-
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/ci/server_sync_load_runtime.py
+          --executable "services/server/build/${{ matrix.binary_name }}"
+          --evidence "build/server-sync-load-${{ matrix.label }}"
+
+      - name: Upload authenticated sync load evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-server-sync-load-${{ matrix.label }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/server-sync-load-${{ matrix.label }}/
 
       - name: Test compiled server recovery
         env:

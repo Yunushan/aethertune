@@ -34,6 +34,9 @@ abstract class CargoKitBuildTask extends DefaultTask {
     String sdkDirectory
 
     @Input
+    String flutterRoot
+
+    @Input
     int compileSdkVersion;
 
     @Input
@@ -83,6 +86,7 @@ abstract class CargoKitBuildTask extends DefaultTask {
             environment "CARGOKIT_MIN_SDK_VERSION", minSdkVersion
             environment "CARGOKIT_TARGET_PLATFORMS", targetPlatforms.join(",")
             environment "CARGOKIT_JAVA_HOME", System.properties['java.home']
+            environment "FLUTTER_ROOT", flutterRoot
         }
     }
 }
@@ -122,6 +126,19 @@ class CargoKitPlugin implements Plugin<Project> {
         }
 
         def cargoBuildDir = "${project.buildDir}/build"
+
+        // Match Flutter's SDK selection for direct Gradle/Android Studio builds,
+        // where the CLI's FLUTTER_ROOT environment variable may not be present.
+        def flutterProperties = new Properties()
+        def localProperties = new File(plugin.project.projectDir.parentFile, "local.properties")
+        if (localProperties.isFile()) {
+            localProperties.withInputStream { flutterProperties.load(it) }
+        }
+        def flutterSdk = plugin.project.findProperty("flutter.sdk") ?:
+                flutterProperties.getProperty("flutter.sdk", System.getenv("FLUTTER_ROOT"))
+        if (flutterSdk == null) {
+            throw new GradleException("Flutter SDK not found for native build.")
+        }
         
         // Determine if the project is an application or library
         def isApplication = plugin.project.plugins.hasPlugin('com.android.application')
@@ -162,6 +179,7 @@ class CargoKitPlugin implements Plugin<Project> {
                     outputDir = cargoOutputDir
                     ndkVersion = plugin.project.android.ndkVersion
                     sdkDirectory = plugin.project.android.sdkDirectory
+                    flutterRoot = plugin.project.file(flutterSdk).absolutePath
                     minSdkVersion = plugin.project.android.defaultConfig.minSdkVersion.apiLevel as int
                     compileSdkVersion = plugin.project.android.compileSdk
                     targetPlatforms = platforms
