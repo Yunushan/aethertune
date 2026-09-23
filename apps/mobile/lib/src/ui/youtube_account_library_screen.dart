@@ -224,6 +224,7 @@ final class _YouTubeAccountSubscriptionsTab extends StatefulWidget {
 
 final class _YouTubeAccountSubscriptionsTabState
     extends State<_YouTubeAccountSubscriptionsTab> {
+  final Set<String> _savingChannelIds = <String>{};
   List<YouTubeDataChannel> _channels = const <YouTubeDataChannel>[];
   String? _nextCursor;
   bool _loading = false;
@@ -315,10 +316,12 @@ final class _YouTubeAccountSubscriptionsTabState
                   tooltip: follows?.isFollowed(channel.id) == true
                       ? 'Unfollow locally'
                       : 'Follow locally',
-                  onPressed: follows == null
+                  onPressed:
+                      follows == null || _savingChannelIds.contains(channel.id)
                       ? null
                       : () => unawaited(
-                          follows.setFollowed(
+                          _setFollowed(
+                            follows,
                             channel,
                             !follows.isFollowed(channel.id),
                           ),
@@ -423,7 +426,17 @@ final class _YouTubeAccountSubscriptionsTabState
   }
 
   Future<void> _followAll(YouTubeChannelFollowStore follows) async {
-    final changed = await follows.followAll(_channels);
+    int changed;
+    try {
+      changed = await follows.followAll(_channels);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save followed channels.')),
+        );
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
@@ -436,6 +449,31 @@ final class _YouTubeAccountSubscriptionsTabState
         ),
       ),
     );
+  }
+
+  Future<void> _setFollowed(
+    YouTubeChannelFollowStore follows,
+    YouTubeDataChannel channel,
+    bool followed,
+  ) async {
+    if (!_savingChannelIds.add(channel.id)) {
+      return;
+    }
+    setState(() {});
+    try {
+      await follows.setFollowed(channel, followed);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save followed channels.')),
+        );
+      }
+    } finally {
+      _savingChannelIds.remove(channel.id);
+      if (mounted) {
+        setState(() {});
+      }
+    }
   }
 }
 

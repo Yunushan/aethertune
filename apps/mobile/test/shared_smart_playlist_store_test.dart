@@ -8,9 +8,156 @@ import 'package:aethertune/src/data/shared_smart_playlist_store.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  test(
+    'private bindings survive rejected and thrown metadata writes',
+    () async {
+      final backend = _FaultySharedSmartPreferences();
+      SharedPreferencesStorePlatform.instance = backend;
+      final library = LibraryStore();
+      await library.load();
+      final local = await library.createCustomSmartPlaylist(
+        name: 'Durable rules',
+      );
+      final gateway = _FakeSharedSmartPlaylistGateway();
+      final store = SharedSmartPlaylistStore(gatewayFactory: () => gateway);
+
+      backend.rejectWrites = true;
+      await expectLater(store.host(library, local), throwsStateError);
+      expect(store.bindings, isEmpty);
+      expect(gateway.deletedRemoteIds, <String>[
+        _FakeSharedSmartPlaylistGateway.id,
+      ]);
+      final afterRejection = SharedSmartPlaylistStore();
+      await afterRejection.load();
+      expect(afterRejection.bindings, isEmpty);
+
+      backend.rejectWrites = false;
+      final binding = await store.host(library, local);
+      backend.rejectWrites = true;
+      await expectLater(
+        store.createPublicLink(binding, library),
+        throwsStateError,
+      );
+      expect(store.bindings.single.revision, 1);
+      final afterRevisionRejection = SharedSmartPlaylistStore();
+      await afterRevisionRejection.load();
+      expect(afterRevisionRejection.bindings.single.revision, 1);
+
+      backend.rejectWrites = false;
+      backend.throwWrites = true;
+      await expectLater(store.unlink(binding), throwsStateError);
+      expect(store.bindings, hasLength(1));
+      final afterException = SharedSmartPlaylistStore();
+      await afterException.load();
+      expect(afterException.bindings, hasLength(1));
+    },
+  );
+
+  test('failed invite binding removes the new local smart playlist', () async {
+    final backend = _FaultySharedSmartPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final library = LibraryStore();
+    await library.load();
+    final store = SharedSmartPlaylistStore(
+      gatewayFactory: _FakeSharedSmartPlaylistGateway.new,
+    );
+    backend.rejectWrites = true;
+
+    await expectLater(
+      store.joinInvite('BBBBBBBBBBBBBBBBBBBBBBBB', library),
+      throwsStateError,
+    );
+
+    expect(store.bindings, isEmpty);
+    expect(library.customSmartPlaylists, isEmpty);
+  });
+
+  test('public link and metadata remain paired across failures', () async {
+    final backend = _FaultySharedSmartPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final library = LibraryStore();
+    await library.load();
+    final vault = _MemoryCredentialVault();
+    final store = SharedSmartPlaylistStore(publicLinkVault: vault);
+    const link =
+        'https://sync.example.test/api/v1/public-smart-playlists/AAAAAAAAAAAAAAAAAAAAAAAA/BBBBBBBBBBBBBBBBBBBBBBBB';
+    Future<LibrarySyncHttpResponse> executor(
+      String method,
+      Uri uri, {
+      required Map<String, String> headers,
+      String? body,
+    }) async => _publicResponse();
+
+    backend.rejectWrites = true;
+    await expectLater(
+      store.subscribeToPublicLink(link, library, httpExecutor: executor),
+      throwsStateError,
+    );
+    expect(store.publicSubscriptions, isEmpty);
+    expect(vault.values, isEmpty);
+    expect(library.customSmartPlaylists, isEmpty);
+
+    backend.rejectWrites = false;
+    final subscription = await store.subscribeToPublicLink(
+      link,
+      library,
+      httpExecutor: executor,
+    );
+    expect(vault.values, hasLength(1));
+    backend.rejectWrites = true;
+    await expectLater(
+      store.unsubscribeFromPublicLink(subscription),
+      throwsStateError,
+    );
+    expect(store.publicSubscriptions, hasLength(1));
+    expect(vault.values, hasLength(1));
+    final afterRejection = SharedSmartPlaylistStore(publicLinkVault: vault);
+    await afterRejection.load();
+    expect(afterRejection.publicSubscriptions, hasLength(1));
+
+    backend.rejectWrites = false;
+    vault.failDelete = true;
+    await expectLater(
+      store.unsubscribeFromPublicLink(subscription),
+      throwsStateError,
+    );
+    expect(store.publicSubscriptions, hasLength(1));
+    expect(vault.values, hasLength(1));
+    final afterVaultFailure = SharedSmartPlaylistStore(publicLinkVault: vault);
+    await afterVaultFailure.load();
+    expect(afterVaultFailure.publicSubscriptions, hasLength(1));
+
+    vault.failDelete = false;
+    await store.unsubscribeFromPublicLink(subscription);
+    expect(store.publicSubscriptions, isEmpty);
+    expect(vault.values, isEmpty);
+  });
+
+  test('damaged metadata cannot be overwritten by hosting', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.shared_smart_playlists.v1': '{damaged',
+    });
+    final library = LibraryStore();
+    await library.load();
+    final local = await library.createCustomSmartPlaylist(name: 'Local rules');
+    final store = SharedSmartPlaylistStore(
+      gatewayFactory: _FakeSharedSmartPlaylistGateway.new,
+    );
+
+    await expectLater(store.host(library, local), throwsStateError);
+    expect(store.bindings, isEmpty);
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'aethertune.shared_smart_playlists.v1',
+      ),
+      '{damaged',
+    );
+  });
 
   test('keeps existing private bindings when metadata upgrades', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -337,9 +484,13 @@ void main() {
 
 class _MemoryCredentialVault implements ProviderCredentialVault {
   final Map<String, String> values = <String, String>{};
+  bool failDelete = false;
 
   @override
   Future<void> delete(String accountId) async {
+    if (failDelete) {
+      throw StateError('Credential deletion failed.');
+    }
     values.remove(accountId);
   }
 
@@ -352,6 +503,44 @@ class _MemoryCredentialVault implements ProviderCredentialVault {
   }
 }
 
+class _FaultySharedSmartPreferences extends InMemorySharedPreferencesStore {
+  _FaultySharedSmartPreferences() : super.empty();
+
+  bool rejectWrites = false;
+  bool throwWrites = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key.endsWith('aethertune.shared_smart_playlists.v1')) {
+      if (rejectWrites) {
+        return false;
+      }
+      if (throwWrites) {
+        throw StateError('Platform write failed.');
+      }
+    }
+    return super.setValue(valueType, key, value);
+  }
+}
+
+LibrarySyncHttpResponse _publicResponse() {
+  final document = <String, Object?>{
+    'version': 2,
+    'kind': 'smart',
+    'name': 'Subscribed jazz',
+    'rule': _rule(),
+  };
+  final checksum = sha256.convert(utf8.encode(jsonEncode(document))).toString();
+  return LibrarySyncHttpResponse(
+    statusCode: 200,
+    body: jsonEncode(<String, Object?>{
+      'revision': 4,
+      'checksum': checksum,
+      'playlist': document,
+    }),
+  );
+}
+
 class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
   _FakeSharedSmartPlaylistGateway({
     this.joinName = 'Shared jazz',
@@ -362,6 +551,7 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
   final String joinName;
   final Map<String, Object?>? joinRule;
   Map<String, Object?>? createdRule;
+  final List<String> deletedRemoteIds = <String>[];
 
   @override
   Future<SharedPlaylistRemote> createSharedSmartPlaylist({
@@ -452,7 +642,9 @@ class _FakeSharedSmartPlaylistGateway implements SharedSmartPlaylistGateway {
   Future<void> deleteSharedPlaylist({
     required String playlistId,
     required int baseRevision,
-  }) async {}
+  }) async {
+    deletedRemoteIds.add(playlistId);
+  }
 
   @override
   Future<int> invalidateSharedPlaylistInvites({

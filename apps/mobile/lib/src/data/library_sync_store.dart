@@ -584,8 +584,11 @@ class LibrarySyncStore extends ChangeNotifier {
       try {
         await _credentialVault.delete();
         final prefs = await SharedPreferences.getInstance();
-        final removed = await prefs.remove(_metadataKey);
-        if (!removed && prefs.containsKey(_metadataKey)) {
+        await prefs.remove(_metadataKey);
+        // SharedPreferences removes its cache entry before the platform result.
+        // Inspect the durable value after reload before reporting disconnect.
+        await prefs.reload();
+        if (prefs.containsKey(_metadataKey)) {
           throw StateError('Could not remove library sync metadata.');
         }
       } on Object {

@@ -310,11 +310,25 @@ Future<void> _removeListenBrainz(BuildContext context) async {
   if (!context.mounted || confirmed != true) {
     return;
   }
-  await store.remove();
-  if (context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('ListenBrainz disconnected.')));
+  try {
+    await store.remove();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ListenBrainz disconnected.')),
+      );
+    }
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            store.isConfigured
+                ? 'Could not disconnect ListenBrainz.'
+                : 'ListenBrainz disconnected, but local retry data could not be removed.',
+          ),
+        ),
+      );
+    }
   }
 }
 
@@ -575,6 +589,14 @@ Future<void> _configureLyricsTranslation(BuildContext context) async {
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
     }
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save lyrics translation settings.'),
+        ),
+      );
+    }
   } finally {
     endpointController.dispose();
     targetLanguageController.dispose();
@@ -609,11 +631,21 @@ Future<void> _removeLyricsTranslation(BuildContext context) async {
   if (!context.mounted || confirmed != true) {
     return;
   }
-  await store.remove();
-  if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Lyrics translation service removed.')),
-    );
+  try {
+    await store.remove();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lyrics translation service removed.')),
+      );
+    }
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not remove lyrics translation settings.'),
+        ),
+      );
+    }
   }
 }
 
@@ -3653,6 +3685,12 @@ Future<void> _configureLyricsSearchEndpoint(BuildContext context) async {
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
     }
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save lyrics search settings.')),
+      );
+    }
   } finally {
     controller.dispose();
   }
@@ -3685,11 +3723,21 @@ Future<void> _removeLyricsSearchEndpoint(BuildContext context) async {
   if (!context.mounted || confirmed != true) {
     return;
   }
-  await store.remove();
-  if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Using public LRCLIB for lyrics search.')),
-    );
+  try {
+    await store.remove();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Using public LRCLIB for lyrics search.')),
+      );
+    }
+  } on Object {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not remove lyrics search settings.'),
+        ),
+      );
+    }
   }
 }
 

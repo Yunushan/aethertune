@@ -28,8 +28,7 @@ base class _TestPlatformFile extends PlatformFile {
     return (await readAsBytes()).length;
   }
 
-  // Kept for file_picker versions where PlatformFile requires this method.
-  // Newer versions no longer declare it, so this must not use @override.
+  @override
   int lengthSync() {
     if (bytes != null) {
       return bytes!.length;

@@ -177,6 +177,8 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   final List<PublicSmartPlaylistSubscription> _publicSubscriptions =
       <PublicSmartPlaylistSubscription>[];
   bool _loaded = false;
+  Future<void>? _loadFuture;
+  String? _loadError;
   bool _busy = false;
   String? _lastError;
 
@@ -197,10 +199,14 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> load() async {
+  Future<void> load() {
     if (_loaded) {
-      return;
+      return Future<void>.value();
     }
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     try {
       final raw = (await SharedPreferences.getInstance()).getString(
         _metadataKey,
@@ -208,11 +214,13 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       if (raw != null && raw.trim().isNotEmpty) {
         _loadMetadata(jsonDecode(raw));
       }
+      _loadError = null;
       _lastError = null;
     } on Object {
       _bindings.clear();
       _publicSubscriptions.clear();
-      _lastError = 'Could not load shared smart-playlist settings.';
+      _loadError = 'Could not load shared smart-playlist settings.';
+      _lastError = _loadError;
     } finally {
       _loaded = true;
       notifyListeners();
@@ -248,13 +256,26 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       if (bindingForLocalSmartPlaylist(playlist.id) != null) {
         throw StateError('This smart playlist is already shared.');
       }
-      final remote = await _requireGateway().createSharedSmartPlaylist(
+      final gateway = _requireGateway();
+      final remote = await gateway.createSharedSmartPlaylist(
         name: playlist.name,
         rule: _ruleJson(playlist),
       );
-      final binding = _bindingFromRemote(remote, playlist.id);
-      await _addBinding(binding);
-      return binding;
+      try {
+        final binding = _bindingFromRemote(remote, playlist.id);
+        await _addBinding(binding);
+        return binding;
+      } on Object {
+        try {
+          await gateway.deleteSharedPlaylist(
+            playlistId: remote.id,
+            baseRevision: remote.revision,
+          );
+        } on Object {
+          // Keep the original binding failure for the caller.
+        }
+        rethrow;
+      }
     });
   }
 
@@ -279,8 +300,17 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
       }
       final local = await _createLocal(remote, library);
       final binding = _bindingFromRemote(remote, local.id);
-      await _addBinding(binding);
-      return binding;
+      try {
+        await _addBinding(binding);
+        return binding;
+      } on Object {
+        try {
+          await library.deleteCustomSmartPlaylist(local.id);
+        } on Object {
+          // Keep the original binding failure for the caller.
+        }
+        rethrow;
+      }
     });
   }
 
@@ -441,14 +471,23 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
         localSmartPlaylistId: local.id,
         revision: remote.revision,
       );
-      await _publicLinkVault.write(
-        _publicLinkCredentialKey(id),
-        remote.uri.toString(),
-      );
       try {
+        await _publicLinkVault.write(
+          _publicLinkCredentialKey(id),
+          remote.uri.toString(),
+        );
         await _addPublicSubscription(subscription);
       } on Object {
-        await _publicLinkVault.delete(_publicLinkCredentialKey(id));
+        try {
+          await _publicLinkVault.delete(_publicLinkCredentialKey(id));
+        } on Object {
+          // Keep the original subscription failure for the caller.
+        }
+        try {
+          await library.deleteCustomSmartPlaylist(local.id);
+        } on Object {
+          // Keep the original subscription failure for the caller.
+        }
         rethrow;
       }
       return subscription;
@@ -499,8 +538,18 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     PublicSmartPlaylistSubscription subscription,
   ) {
     return _runBusy(() async {
-      await _publicLinkVault.delete(_publicLinkCredentialKey(subscription.id));
+      final previous = List<PublicSmartPlaylistSubscription>.from(
+        _publicSubscriptions,
+      );
       await _removePublicSubscription(subscription);
+      try {
+        await _publicLinkVault.delete(
+          _publicLinkCredentialKey(subscription.id),
+        );
+      } on Object {
+        await _commitMetadata(publicSubscriptions: previous);
+        rethrow;
+      }
     });
   }
 
@@ -657,9 +706,9 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
   }
 
   Future<void> _addBinding(SharedSmartPlaylistBinding binding) async {
-    _bindings.add(binding);
-    await _save();
-    notifyListeners();
+    await _commitMetadata(
+      bindings: <SharedSmartPlaylistBinding>[..._bindings, binding],
+    );
   }
 
   Future<void> _replaceBinding(SharedSmartPlaylistBinding binding) async {
@@ -669,23 +718,26 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     if (index < 0) {
       throw StateError('Shared smart playlist binding no longer exists.');
     }
-    _bindings[index] = binding;
-    await _save();
-    notifyListeners();
+    final next = List<SharedSmartPlaylistBinding>.from(_bindings)
+      ..[index] = binding;
+    await _commitMetadata(bindings: next);
   }
 
   Future<void> _removeBinding(SharedSmartPlaylistBinding binding) async {
-    _bindings.removeWhere((item) => item.remoteId == binding.remoteId);
-    await _save();
-    notifyListeners();
+    final next = List<SharedSmartPlaylistBinding>.from(_bindings)
+      ..removeWhere((item) => item.remoteId == binding.remoteId);
+    await _commitMetadata(bindings: next);
   }
 
   Future<void> _addPublicSubscription(
     PublicSmartPlaylistSubscription subscription,
   ) async {
-    _publicSubscriptions.add(subscription);
-    await _save();
-    notifyListeners();
+    await _commitMetadata(
+      publicSubscriptions: <PublicSmartPlaylistSubscription>[
+        ..._publicSubscriptions,
+        subscription,
+      ],
+    );
   }
 
   Future<void> _replacePublicSubscription(
@@ -697,33 +749,64 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     if (index < 0) {
       throw StateError('Public smart-playlist subscription no longer exists.');
     }
-    _publicSubscriptions[index] = subscription;
-    await _save();
-    notifyListeners();
+    final next = List<PublicSmartPlaylistSubscription>.from(
+      _publicSubscriptions,
+    )..[index] = subscription;
+    await _commitMetadata(publicSubscriptions: next);
   }
 
   Future<void> _removePublicSubscription(
     PublicSmartPlaylistSubscription subscription,
   ) async {
-    _publicSubscriptions.removeWhere((item) => item.id == subscription.id);
-    await _save();
-    notifyListeners();
+    final next = List<PublicSmartPlaylistSubscription>.from(
+      _publicSubscriptions,
+    )..removeWhere((item) => item.id == subscription.id);
+    await _commitMetadata(publicSubscriptions: next);
   }
 
-  Future<void> _save() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
-      _metadataKey,
-      jsonEncode(<String, Object?>{
-        'version': 2,
-        'privateBindings': _bindings
-            .map((binding) => binding.toJson())
-            .toList(growable: false),
-        'publicSubscriptions': _publicSubscriptions
-            .map((subscription) => subscription.toJson())
-            .toList(growable: false),
-      }),
+  Future<void> _commitMetadata({
+    List<SharedSmartPlaylistBinding>? bindings,
+    List<PublicSmartPlaylistSubscription>? publicSubscriptions,
+  }) async {
+    final nextBindings = List<SharedSmartPlaylistBinding>.from(
+      bindings ?? _bindings,
     );
+    final nextSubscriptions = List<PublicSmartPlaylistSubscription>.from(
+      publicSubscriptions ?? _publicSubscriptions,
+    );
+    final preferences = await SharedPreferences.getInstance();
+    try {
+      final saved = await preferences.setString(
+        _metadataKey,
+        jsonEncode(<String, Object?>{
+          'version': 2,
+          'privateBindings': nextBindings
+              .map((binding) => binding.toJson())
+              .toList(growable: false),
+          'publicSubscriptions': nextSubscriptions
+              .map((subscription) => subscription.toJson())
+              .toList(growable: false),
+        }),
+      );
+      if (!saved) {
+        throw StateError('Could not save shared smart-playlist settings.');
+      }
+    } on Object {
+      // SharedPreferences updates its cache before the platform write.
+      try {
+        await preferences.reload();
+      } on Object {
+        // Preserve the original write failure.
+      }
+      rethrow;
+    }
+    _bindings
+      ..clear()
+      ..addAll(nextBindings);
+    _publicSubscriptions
+      ..clear()
+      ..addAll(nextSubscriptions);
+    notifyListeners();
   }
 
   void _loadMetadata(Object? value) {
@@ -801,6 +884,12 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
     try {
+      await load();
+      if (_loadError != null) {
+        throw StateError(
+          'Could not load shared smart-playlist settings. Resolve the storage error before editing shared smart playlists.',
+        );
+      }
       return await action();
     } on Object catch (error) {
       _lastError = error.toString();
