@@ -29,14 +29,6 @@ base class _TestPlatformFile extends PlatformFile {
   }
 
   @override
-  int lengthSync() {
-    if (bytes != null) {
-      return bytes!.length;
-    }
-    throw UnsupportedError('lengthSync is unavailable for streamed test files');
-  }
-
-  @override
   Future<Uint8List> readAsBytes() async {
     if (bytes != null) {
       return bytes!;

@@ -116,6 +116,17 @@ InternetAddress? _remoteAddress(Request request) {
   return null;
 }
 
+bool _isLocalHealthProbe(Request request) {
+  if (request.method != 'GET' ||
+      (request.url.path != 'health' && request.url.path != 'ready')) {
+    return false;
+  }
+  // Container and host supervisors probe over loopback. Keep those checks
+  // useful even when a proxy or a client exhausts an ingress bucket. A
+  // synthetic request without connection metadata does not get this bypass.
+  return _remoteAddress(request)?.isLoopback ?? false;
+}
+
 ServerRequestRateLimiter serverRequestRateLimiterFromEnvironment(
   Map<String, String> environment, {
   DateTime Function()? clock,
@@ -498,15 +509,18 @@ Handler createServerHandler({
     requestsTotal += 1;
     final requestStartedAt = now().toUtc();
     try {
-      var retryAfter = rateLimiter.checkIngress(request);
-      if (retryAfter == null) {
-        final token = _bearerToken(request.headers['authorization'] ?? '');
-        retryAfter = rateLimiter.check(
-          request,
-          authenticatedAccountId: token == null
-              ? null
-              : authenticator.authenticate(token),
-        );
+      Duration? retryAfter;
+      if (!_isLocalHealthProbe(request)) {
+        retryAfter = rateLimiter.checkIngress(request);
+        if (retryAfter == null) {
+          final token = _bearerToken(request.headers['authorization'] ?? '');
+          retryAfter = rateLimiter.check(
+            request,
+            authenticatedAccountId: token == null
+                ? null
+                : authenticator.authenticate(token),
+          );
+        }
       }
       if (retryAfter != null) {
         requestsRateLimited += 1;

@@ -717,12 +717,53 @@ jobs:
           set -euo pipefail
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Download build artifacts
+      - name: Download dependency provenance
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: aethertune-*
+          name: aethertune-dependency-provenance
           path: release
-          merge-multiple: true
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-android
+          path: release
+
+      - name: Download Linux desktop artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-linux-x64
+          path: release
+
+      - name: Download Windows desktop artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-windows-x64
+          path: release
+
+      - name: Download macOS and iOS artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-macos
+          path: release
+
+      - name: Download Linux server executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-server-linux-x64
+          path: release
+
+      - name: Download Windows server executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-server-windows-x64
+          path: release
+
+      - name: Download macOS server executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aethertune-server-macos
+          path: release
 
       - name: Verify downloaded artifact layout
         shell: bash

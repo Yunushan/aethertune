@@ -12,6 +12,30 @@ WORKFLOW = ROOT / ".github" / "workflows" / "aethertune-release.yml"
 
 
 class ReleaseWorkflowTest(unittest.TestCase):
+    def test_assembly_downloads_only_distribution_artifacts(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        assembly = workflow.split("  assemble-release:\n", 1)[1].split(
+            "  publish:\n", 1
+        )[0]
+
+        expected = (
+            "aethertune-dependency-provenance",
+            "aethertune-android",
+            "aethertune-linux-x64",
+            "aethertune-windows-x64",
+            "aethertune-macos",
+            "aethertune-server-linux-x64",
+            "aethertune-server-windows-x64",
+            "aethertune-server-macos",
+        )
+        self.assertEqual(
+            assembly.count("uses: actions/download-artifact@"), len(expected)
+        )
+        for artifact in expected:
+            self.assertIn(f"name: {artifact}\n          path: release", assembly)
+        self.assertNotIn("pattern: aethertune-*", assembly)
+        self.assertNotIn("merge-multiple: true", assembly)
+
     def test_release_workflow_uses_bounded_jobs_and_non_persistent_checkout(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
@@ -63,7 +87,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
             'git merge-base --is-ancestor "$GITHUB_SHA" origin/main',
             workflow,
         )
-        self.assertIn("merge-multiple: true", workflow)
         self.assertIn("- name: Verify downloaded artifact layout", workflow)
         self.assertIn(
             'if [[ ! -f "release/$artifact" ]]; then',

@@ -150,6 +150,40 @@ void main() {
       expect(statuses, [401, 401, 429, 429]);
     },
   );
+
+  test('local probes remain available after ingress is exhausted', () async {
+    final server = await shelf_io.serve(
+      createServerHandler(
+        requestRateLimiter: ServerRequestRateLimiter(
+          maximumRequests: 1,
+          maximumIngressRequests: 1,
+        ),
+      ),
+      InternetAddress.loopbackIPv4,
+      0,
+    );
+    final client = HttpClient()..findProxy = (_) => 'DIRECT';
+    addTearDown(() async {
+      client.close(force: true);
+      await server.close(force: true);
+    });
+
+    Future<int> status(String path) async {
+      final request = await client.getUrl(
+        Uri.parse('http://127.0.0.1:${server.port}$path'),
+      );
+      final response = await request.close();
+      await response.drain<void>();
+      return response.statusCode;
+    }
+
+    expect(await status('/api/v1/info'), 200);
+    expect(await status('/api/v1/info'), 429);
+    expect(await status('/health'), 200);
+    expect(await status('/ready'), 200);
+    expect(await status('/health'), 200);
+    expect(await status('/api/v1/info'), 429);
+  });
 }
 
 final class _CountingAuthenticator implements SyncAuthenticator {

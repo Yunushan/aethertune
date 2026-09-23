@@ -37,6 +37,8 @@ final class CustomCatalogStore extends ChangeNotifier {
       <CustomCatalogDefinition>[];
   bool _loaded = false;
   String? _loadError;
+  Future<void>? _loadFuture;
+  Future<void> _mutationTail = Future<void>.value();
 
   bool get loaded => _loaded;
   String? get loadError => _loadError;
@@ -47,10 +49,14 @@ final class CustomCatalogStore extends ChangeNotifier {
     for (final definition in _definitions) CustomCatalogProvider(definition),
   ];
 
-  Future<void> load() async {
+  Future<void> load() {
     if (_loaded) {
-      return;
+      return Future<void>.value();
     }
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_preferencesKey);
@@ -85,34 +91,42 @@ final class CustomCatalogStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> save(CustomCatalogDefinition definition) async {
-    if (!_loaded) {
-      await load();
-    }
-    final index = _definitions.indexWhere((item) => item.id == definition.id);
-    if (index < 0 && _definitions.length >= maxCatalogs) {
+  Future<void> save(CustomCatalogDefinition definition) => _serialize(() async {
+    await load();
+    _requireLoadedStorage();
+    final next = List<CustomCatalogDefinition>.from(_definitions);
+    final index = next.indexWhere((item) => item.id == definition.id);
+    if (index < 0 && next.length >= maxCatalogs) {
       throw StateError(
         'AetherTune supports at most $maxCatalogs custom catalogs.',
       );
     }
     if (index < 0) {
-      _definitions.add(definition);
+      next.add(definition);
     } else {
-      _definitions[index] = definition;
+      next[index] = definition;
     }
-    await _persist();
+    await _persist(next);
+    _definitions
+      ..clear()
+      ..addAll(next);
     notifyListeners();
-  }
+  });
 
-  Future<void> remove(String id) async {
-    final definitionCount = _definitions.length;
-    _definitions.removeWhere((definition) => definition.id == id);
-    if (_definitions.length == definitionCount) {
+  Future<void> remove(String id) => _serialize(() async {
+    await load();
+    _requireLoadedStorage();
+    final next = List<CustomCatalogDefinition>.from(_definitions)
+      ..removeWhere((definition) => definition.id == id);
+    if (next.length == _definitions.length) {
       return;
     }
-    await _persist();
+    await _persist(next);
+    _definitions
+      ..clear()
+      ..addAll(next);
     notifyListeners();
-  }
+  });
 
   Future<CustomCatalogConfigurationImportResult> importConfiguration(
     String document,
@@ -162,50 +176,79 @@ final class CustomCatalogStore extends ChangeNotifier {
       candidates.add(definition);
     }
 
-    if (!_loaded) {
+    return _serialize(() async {
       await load();
-    }
-    final existingIds = _definitions.map((definition) => definition.id).toSet();
-    final imports = candidates
-        .where((definition) => !existingIds.contains(definition.id))
-        .toList(growable: false);
-    if (_definitions.length + imports.length > maxCatalogs) {
-      throw StateError(
-        'AetherTune supports at most $maxCatalogs custom catalogs.',
+      _requireLoadedStorage();
+      final existingIds = _definitions
+          .map((definition) => definition.id)
+          .toSet();
+      final imports = candidates
+          .where((definition) => !existingIds.contains(definition.id))
+          .toList(growable: false);
+      if (_definitions.length + imports.length > maxCatalogs) {
+        throw StateError(
+          'AetherTune supports at most $maxCatalogs custom catalogs.',
+        );
+      }
+      final result = CustomCatalogConfigurationImportResult(
+        importedCatalogCount: imports.length,
+        skippedExistingCatalogCount: candidates.length - imports.length,
+        skippedInsecureCatalogCount: skippedInsecureCatalogCount,
       );
-    }
-    final result = CustomCatalogConfigurationImportResult(
-      importedCatalogCount: imports.length,
-      skippedExistingCatalogCount: candidates.length - imports.length,
-      skippedInsecureCatalogCount: skippedInsecureCatalogCount,
-    );
-    if (imports.isEmpty) {
-      return result;
-    }
-    final previous = List<CustomCatalogDefinition>.from(_definitions);
-    try {
-      _definitions
+      if (imports.isEmpty) {
+        return result;
+      }
+      final next = List<CustomCatalogDefinition>.from(_definitions)
         ..addAll(imports)
         ..sort((left, right) => left.name.compareTo(right.name));
-      await _persist();
-    } on Object {
+      await _persist(next);
       _definitions
         ..clear()
-        ..addAll(previous);
-      rethrow;
+        ..addAll(next);
+      notifyListeners();
+      return result;
+    });
+  }
+
+  void _requireLoadedStorage() {
+    if (_loadError != null) {
+      throw StateError(
+        'Custom catalog settings could not be loaded. Resolve the storage error before editing catalogs.',
+      );
     }
-    notifyListeners();
+  }
+
+  Future<T> _serialize<T>(Future<T> Function() mutation) {
+    final result = _mutationTail.then((_) => mutation());
+    _mutationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
     return result;
   }
 
-  Future<void> _persist() async {
+  Future<void> _persist(List<CustomCatalogDefinition> definitions) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _preferencesKey,
-      jsonEncode(
-        _definitions.map((definition) => definition.toJson()).toList(),
-      ),
-    );
+    try {
+      final saved = await prefs.setString(
+        _preferencesKey,
+        jsonEncode(
+          definitions.map((definition) => definition.toJson()).toList(),
+        ),
+      );
+      if (!saved) {
+        throw StateError('Custom catalog settings could not be saved.');
+      }
+    } on Object {
+      // SharedPreferences changes its local cache before the platform write.
+      // Reload it so a rejected write cannot appear durable to another store.
+      try {
+        await prefs.reload();
+      } on Object {
+        // Preserve the original write failure for the caller.
+      }
+      rethrow;
+    }
   }
 }
 

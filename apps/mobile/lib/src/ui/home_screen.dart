@@ -18983,10 +18983,23 @@ class _SourcesTabState extends State<_SourcesTab> {
     if (store == null) {
       return;
     }
-    await context.read<PlayerController>().removeTracksFromSource(
-      definition.providerId,
-    );
-    await store.remove(definition.id);
+    final player = context.read<PlayerController>();
+    try {
+      await store.remove(definition.id);
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not remove the catalog.')),
+        );
+      }
+      return;
+    }
+    var queueCleanupFailed = false;
+    try {
+      await player.removeTracksFromSource(definition.providerId);
+    } on Object {
+      queueCleanupFailed = true;
+    }
     if (!context.mounted) {
       return;
     }
@@ -19006,9 +19019,15 @@ class _SourcesTabState extends State<_SourcesTab> {
       _providerSearchContinuations.remove(definition.providerId);
       _providerSearchFailedContinuations.remove(definition.providerId);
     });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Removed ${definition.name}.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          queueCleanupFailed
+              ? 'Removed ${definition.name}, but its playback queue could not be updated.'
+              : 'Removed ${definition.name}.',
+        ),
+      ),
+    );
   }
 
   Future<void> _editSelfHostedAccount(
