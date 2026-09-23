@@ -96,10 +96,10 @@ buckets are never evicted to admit new traffic.
 Forwarded IP headers are not trusted. Behind Caddy or another reverse proxy,
 the ingress budget is shared by clients using that proxy address. Size it for
 the deployment and retain a client-IP limit at the trusted reverse proxy.
-Local loopback `GET /health` and `GET /ready` probes bypass both application
-rate limits so container and host supervisors remain reliable under ingress
-pressure. Requests without a verified loopback connection, including public
-proxy probes, still use the normal limits.
+Direct loopback `GET /health` and `GET /ready` probes using a local Host header
+and no proxy forwarding headers bypass both application rate limits so container
+and host supervisors remain reliable under ingress pressure. Public proxy
+probes still use the normal limits, even when the proxy connects over loopback.
 
 New managed device tokens expire after 365 days by default. Set
 `AETHERTUNE_MANAGED_TOKEN_TTL_DAYS` to an integer from 1 through 3650 to assign

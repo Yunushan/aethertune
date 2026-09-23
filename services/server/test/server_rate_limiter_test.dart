@@ -168,10 +168,17 @@ void main() {
       await server.close(force: true);
     });
 
-    Future<int> status(String path) async {
+    Future<int> status(
+      String path, {
+      Map<String, String> headers = const {},
+    }) async {
       final request = await client.getUrl(
         Uri.parse('http://127.0.0.1:${server.port}$path'),
       );
+      request.persistentConnection = false;
+      for (final entry in headers.entries) {
+        request.headers.set(entry.key, entry.value);
+      }
       final response = await request.close();
       await response.drain<void>();
       return response.statusCode;
@@ -179,6 +186,33 @@ void main() {
 
     expect(await status('/api/v1/info'), 200);
     expect(await status('/api/v1/info'), 429);
+    expect(
+      await status(
+        '/health',
+        headers: {HttpHeaders.hostHeader: 'sync.example.com'},
+      ),
+      429,
+    );
+    expect(
+      await status(
+        '/health',
+        headers: {
+          HttpHeaders.hostHeader: 'sync.example.com',
+          'x-forwarded-for': '203.0.113.7',
+        },
+      ),
+      429,
+    );
+    expect(
+      await status(
+        '/ready',
+        headers: {
+          HttpHeaders.hostHeader: '127.0.0.1:${server.port}',
+          'forwarded': 'for=203.0.113.7',
+        },
+      ),
+      429,
+    );
     expect(await status('/health'), 200);
     expect(await status('/ready'), 200);
     expect(await status('/health'), 200);

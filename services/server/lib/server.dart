@@ -121,9 +121,26 @@ bool _isLocalHealthProbe(Request request) {
       (request.url.path != 'health' && request.url.path != 'ready')) {
     return false;
   }
-  // Container and host supervisors probe over loopback. Keep those checks
-  // useful even when a proxy or a client exhausts an ingress bucket. A
-  // synthetic request without connection metadata does not get this bypass.
+  // A reverse proxy also connects from loopback. Require the direct local
+  // Host used by container/host supervisors, and reject proxy forwarding
+  // headers before exempting a request from ingress limits.
+  final host = request.headers[HttpHeaders.hostHeader]?.toLowerCase();
+  if (host == null ||
+      !RegExp(
+        r'^(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]{1,5})?$',
+      ).hasMatch(host)) {
+    return false;
+  }
+  if (request.headers.keys.any((name) {
+    final lower = name.toLowerCase();
+    return lower == 'forwarded' ||
+        lower.startsWith('x-forwarded-') ||
+        lower == 'x-real-ip' ||
+        lower == 'via';
+  })) {
+    return false;
+  }
+  // Synthetic requests without connection metadata do not get the bypass.
   return _remoteAddress(request)?.isLoopback ?? false;
 }
 
