@@ -222,6 +222,7 @@ class FakeCommands:
             payload = report(phase, 100 + ios.PHASES.index(phase))
             timeout_failure = (
                 (self.failure == "sync-silent-timeout" and phase == "sync" and attempt == 1)
+                or (self.failure == "sync-log-reader-timeout" and phase == "sync" and attempt == 1)
                 or (self.failure == "sync-always-silent-timeout" and phase == "sync")
                 or (self.failure == "sync-nonempty-timeout" and phase == "sync" and attempt == 1)
                 or (self.failure == "sync-report-timeout" and phase == "sync" and attempt == 1)
@@ -234,7 +235,12 @@ class FakeCommands:
                     b"EARLY_PREFIX_SHOULD_NOT_BE_IN_TAIL" + b"x" * 3000 + b"Flutter test started\n"
                     if self.failure == "sync-nonempty-timeout" else b""
                 )
-                stderr.write_bytes(b"")
+                stderr.write_bytes(
+                    (b"Error waiting for a debug connection: "
+                     b"The log reader failed unexpectedly\n"
+                     b"Application failed to start on attempt: 1\n")
+                    if self.failure == "sync-log-reader-timeout" else b""
+                )
                 if self.failure == "sync-report-timeout":
                     payload["status"] = "failed"
                     ios.write_json(self.support / "ios-acceptance-sync.json", payload)
@@ -317,7 +323,20 @@ class LifecycleTest(unittest.TestCase):
         self.assertIn("0 bytes (no output)",
                       (evidence / "sync-drive-timeout-attempt-1.log").read_text())
 
-    def test_retry_is_bounded_and_only_for_silent_sync_before_a_report(self):
+    def test_log_reader_sync_launch_failure_retries_only_unreported_phase(self):
+        result, run, evidence = self.execute_fixture("sync-log-reader-timeout")
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["phases"], list(ios.PHASES))
+        self.assertEqual(result["recoveries"], [{
+            "phase": "sync", "reason": "simulator-log-reader-failure", "attempts": 2,
+        }])
+        self.assertEqual(run.drive_attempts, {"seed": 1, "reopen": 1, "sync": 2})
+        self.assertIn("The log reader failed unexpectedly",
+                      (evidence / "sync-drive-timeout-attempt-1.log").read_text())
+        self.assertEqual(json.loads((evidence / "ios-acceptance-sync.json").read_text())["status"],
+                         "passed")
+
+    def test_retry_is_bounded_and_only_for_recognized_sync_launch_failure(self):
         for failure, phase, attempts, completed in (
             ("sync-always-silent-timeout", "sync", 2, ["seed", "reopen"]),
             ("sync-nonempty-timeout", "sync", 1, ["seed", "reopen"]),
@@ -382,8 +401,12 @@ class CommandLifecycleTest(unittest.TestCase):
             run = ios.Commands(Path(temporary))
             child = Mock(pid=4321)
             child.wait.side_effect = [subprocess.TimeoutExpired("fixture", 1), -9]
+            def group_signal(_pid, sig):
+                if sig == 0:
+                    raise ProcessLookupError()
             with (patch.object(ios.subprocess, "Popen", return_value=child) as launch,
-                  patch.object(ios.os, "killpg", create=True) as kill,
+                  patch.object(ios.os, "killpg", create=True,
+                               side_effect=group_signal) as kill,
                   patch.object(ios.time, "sleep"),
                   patch.object(ios.signal, "SIGKILL", 9, create=True)):
                 with self.assertRaises(ios.CommandTimedOut) as raised:
@@ -394,8 +417,69 @@ class CommandLifecycleTest(unittest.TestCase):
             self.assertEqual(raised.exception.stderr_path,
                              Path(temporary) / "001-fixture-command-stderr.log")
             self.assertTrue(launch.call_args.kwargs["start_new_session"])
-            self.assertEqual(kill.call_args_list, [call(4321, signal.SIGTERM), call(4321, 9)])
+            self.assertEqual(kill.call_args_list,
+                             [call(4321, signal.SIGTERM), call(4321, 9), call(4321, 0)])
             self.assertEqual(child.wait.call_args_list, [call(timeout=1), call(timeout=30)])
+
+    def test_timeout_preserves_diagnostic_after_process_group_permission_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = ios.Commands(Path(temporary))
+            child = Mock(pid=4321)
+            child.wait.side_effect = [subprocess.TimeoutExpired("fixture", 1), -15]
+            with (patch.object(ios.subprocess, "Popen", return_value=child),
+                  patch.object(ios.os, "killpg", create=True,
+                               side_effect=PermissionError(1, "denied")),
+                  patch.object(ios.time, "sleep"),
+                  patch.object(ios.signal, "SIGKILL", 9, create=True)):
+                with self.assertRaises(ios.CommandTimedOut) as raised:
+                    run(["fixture-command"], timeout=1)
+            self.assertTrue(raised.exception.reaped)
+            self.assertFalse(raised.exception.group_gone)
+            self.assertIsNone(ios._sync_launch_recovery_reason(raised.exception))
+            self.assertEqual(child.send_signal.call_args_list,
+                             [call(signal.SIGTERM), call(9)])
+            self.assertEqual(child.wait.call_args_list, [call(timeout=1), call(timeout=30)])
+
+    def test_permission_error_can_recover_after_group_disappears(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = ios.Commands(Path(temporary))
+            child = Mock(pid=4321)
+            child.wait.side_effect = [subprocess.TimeoutExpired("fixture", 1), -15]
+            def group_signal(_pid, sig):
+                if sig == 0:
+                    raise ProcessLookupError()
+                raise PermissionError(1, "denied")
+            with (patch.object(ios.subprocess, "Popen", return_value=child),
+                  patch.object(ios.os, "killpg", create=True,
+                               side_effect=group_signal),
+                  patch.object(ios.time, "sleep"),
+                  patch.object(ios.signal, "SIGKILL", 9, create=True)):
+                with self.assertRaises(ios.CommandTimedOut) as raised:
+                    run(["fixture-command"], timeout=1)
+            self.assertTrue(raised.exception.reaped)
+            self.assertTrue(raised.exception.group_gone)
+            self.assertIn("denied", " ".join(raised.exception.cleanup_warnings))
+
+    def test_unreaped_timeout_fails_closed_and_keeps_cleanup_warning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = ios.Commands(Path(temporary))
+            child = Mock(pid=4321)
+            child.wait.side_effect = [
+                subprocess.TimeoutExpired("fixture", 1),
+                subprocess.TimeoutExpired("fixture", 30),
+                subprocess.TimeoutExpired("fixture", 30),
+            ]
+            with (patch.object(ios.subprocess, "Popen", return_value=child),
+                  patch.object(ios.os, "killpg", create=True,
+                               side_effect=PermissionError(1, "denied")),
+                  patch.object(ios.time, "sleep"),
+                  patch.object(ios.signal, "SIGKILL", 9, create=True)):
+                with self.assertRaises(ios.CommandTimedOut) as raised:
+                    run(["fixture-command"], timeout=1)
+            self.assertFalse(raised.exception.reaped)
+            self.assertFalse(raised.exception.group_gone)
+            self.assertIn("not reaped", " ".join(raised.exception.cleanup_warnings))
+            self.assertIsNone(ios._sync_launch_recovery_reason(raised.exception))
 
     def test_nonzero_command_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as temporary:
