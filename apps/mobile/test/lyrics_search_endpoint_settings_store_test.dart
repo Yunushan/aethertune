@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:aethertune/src/data/lyrics_search_endpoint_settings_store.dart';
 
@@ -78,4 +79,72 @@ void main() {
       );
     },
   );
+
+  test('rejected saves and removals keep the durable endpoint', () async {
+    final backend = _FaultyEndpointPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final store = LyricsSearchEndpointSettingsStore();
+    await store.save('https://old.example.test/api');
+
+    backend.rejectWrites = true;
+    await expectLater(
+      store.save('https://new.example.test/api'),
+      throwsStateError,
+    );
+    expect(store.endpoint, Uri.parse('https://old.example.test/api'));
+    final afterRejectedSave = LyricsSearchEndpointSettingsStore();
+    await afterRejectedSave.load();
+    expect(afterRejectedSave.endpoint, store.endpoint);
+
+    backend.rejectWrites = false;
+    backend.throwWrites = true;
+    await expectLater(
+      store.save('https://new.example.test/api'),
+      throwsStateError,
+    );
+    expect(store.endpoint, Uri.parse('https://old.example.test/api'));
+
+    backend.throwWrites = false;
+    backend.rejectRemoval = true;
+    await expectLater(store.remove(), throwsStateError);
+    expect(store.endpoint, Uri.parse('https://old.example.test/api'));
+    final afterRejectedRemoval = LyricsSearchEndpointSettingsStore();
+    await afterRejectedRemoval.load();
+    expect(afterRejectedRemoval.endpoint, store.endpoint);
+
+    backend.rejectRemoval = false;
+    await store.remove();
+    final restored = LyricsSearchEndpointSettingsStore();
+    await restored.load();
+    expect(restored.endpoint, isNull);
+  });
+}
+
+final class _FaultyEndpointPreferences extends InMemorySharedPreferencesStore {
+  _FaultyEndpointPreferences() : super.empty();
+
+  bool rejectWrites = false;
+  bool throwWrites = false;
+  bool rejectRemoval = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key.endsWith('aethertune.lyrics_search.endpoint.v1')) {
+      if (rejectWrites) {
+        return false;
+      }
+      if (throwWrites) {
+        throw StateError('Endpoint write failed.');
+      }
+    }
+    return super.setValue(valueType, key, value);
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    if (rejectRemoval && key.endsWith('aethertune.lyrics_search.endpoint.v1')) {
+      return false;
+    }
+    return super.remove(key);
+  }
 }

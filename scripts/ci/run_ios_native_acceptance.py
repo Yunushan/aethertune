@@ -131,6 +131,22 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
+class CommandTimedOut(TimeoutError):
+    def __init__(self, command: list[str], timeout: int,
+                 stdout_path: Path, stderr_path: Path,
+                 cleanup_warnings: tuple[str, ...] = (), reaped: bool = True,
+                 group_gone: bool = True):
+        self.command = command
+        self.timeout = timeout
+        self.stdout_path = stdout_path
+        self.stderr_path = stderr_path
+        self.cleanup_warnings = cleanup_warnings
+        self.reaped = reaped
+        self.group_gone = group_gone
+        super().__init__(f"Command {command!r} timed out after {timeout} seconds; "
+                         f"see {stdout_path.name} and {stderr_path.name}.")
+
+
 class Commands:
     def __init__(self, evidence: Path):
         self.evidence = evidence
@@ -148,16 +164,63 @@ class Commands:
                                      stdout=out, stderr=err, start_new_session=True)
             try:
                 code = child.wait(timeout=timeout)
-            except BaseException:
+            except BaseException as error:
                 # Stop this command's process group, including owned build/driver children.
+                cleanup_warnings: list[str] = []
                 for sig in (signal.SIGTERM, signal.SIGKILL):
                     try:
                         os.killpg(child.pid, sig)
                     except ProcessLookupError:
                         pass
+                    except PermissionError as signal_error:
+                        # CoreSimulator can attach a process the runner cannot
+                        # signal to flutter's group. Still stop the owned leader
+                        # and preserve the original timeout for diagnosis.
+                        cleanup_warnings.append(
+                            f"Process group signal {sig} denied: {signal_error}")
+                        try:
+                            child.send_signal(sig)
+                        except ProcessLookupError:
+                            pass
+                        except PermissionError as leader_error:
+                            cleanup_warnings.append(
+                                f"Process leader signal {sig} denied: {leader_error}")
                     if sig == signal.SIGTERM:
                         time.sleep(1)
-                child.wait(timeout=30)
+                reaped = True
+                try:
+                    child.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    try:
+                        child.kill()
+                    except ProcessLookupError:
+                        pass
+                    except PermissionError as kill_error:
+                        cleanup_warnings.append(f"Process leader kill denied: {kill_error}")
+                    try:
+                        child.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        reaped = False
+                        cleanup_warnings.append("Process leader was not reaped after 60 seconds")
+                group_gone = False
+                for attempt in range(5):
+                    try:
+                        os.killpg(child.pid, 0)
+                    except ProcessLookupError:
+                        group_gone = True
+                        break
+                    except PermissionError:
+                        pass
+                    if attempt < 4:
+                        time.sleep(1)
+                if not group_gone:
+                    cleanup_warnings.append(
+                        "Process group remains present or inaccessible after timeout cleanup")
+                for warning in cleanup_warnings:
+                    print(f"Timeout cleanup warning: {warning}", flush=True)
+                if isinstance(error, subprocess.TimeoutExpired):
+                    raise CommandTimedOut(args, timeout, stdout, stderr,
+                                          tuple(cleanup_warnings), reaped, group_gone) from error
                 raise
         if code:
             raise RuntimeError(f"Command exited {code}; see {stdout.name} and {stderr.name}.")
@@ -249,8 +312,97 @@ def collect(sim: Simulator, evidence: Path, phase: str) -> dict:
     return json.loads((evidence / f"ios-acceptance-{phase}.json").read_text(encoding="utf-8"))
 
 
+def _drive_timeout_diagnostic(error: CommandTimedOut, phase: str, attempt: int) -> str:
+    lines = [f"{phase} flutter drive attempt {attempt} timed out after "
+             f"{error.timeout} seconds."]
+    lines.extend(f"Timeout cleanup warning: {item}" for item in error.cleanup_warnings)
+    for path in (error.stdout_path, error.stderr_path):
+        try:
+            size = path.stat().st_size
+            if size == 0:
+                lines.append(f"{path.name}: 0 bytes (no output)")
+                continue
+            with path.open("rb") as stream:
+                stream.seek(max(0, size - 2048))
+                tail = stream.read().decode("utf-8", errors="replace")
+            lines.append(f"{path.name}: {size} bytes; last {min(size, 2048)} bytes:\n{tail}")
+        except OSError as read_error:
+            lines.append(f"{path.name}: cannot read log: {read_error}")
+    return "\n".join(lines)
+
+
+def _record_drive_timeout(error: CommandTimedOut, phase: str, attempt: int) -> None:
+    diagnostic = _drive_timeout_diagnostic(error, phase, attempt)
+    print(diagnostic, flush=True)
+    (error.stdout_path.parent / f"{phase}-drive-timeout-attempt-{attempt}.log").write_text(
+        diagnostic + "\n", encoding="utf-8")
+
+
+def _silent_drive_timeout(error: CommandTimedOut) -> bool:
+    try:
+        return (error.stdout_path.is_file() and error.stderr_path.is_file()
+                and error.stdout_path.stat().st_size == 0
+                and error.stderr_path.stat().st_size == 0)
+    except OSError:
+        return False
+
+
+def _sync_launch_recovery_reason(error: CommandTimedOut) -> str | None:
+    if not error.reaped or not error.group_gone:
+        return None
+    if _silent_drive_timeout(error):
+        return "silent-flutter-drive-timeout"
+    try:
+        if error.stdout_path.stat().st_size != 0:
+            return None
+        stderr = error.stderr_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return None
+    if stderr == ("Error waiting for a debug connection: "
+                  "The log reader failed unexpectedly\n"
+                  "Application failed to start on attempt: 1"):
+        return "simulator-log-reader-failure"
+    return None
+
+
+def drive_phase(sim: Simulator, run: Commands, bundle: Path, phase: str) -> str | None:
+    command = ["flutter", "drive", "--no-pub", "-d", sim.device,
+               "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
+               "--use-application-binary", str(bundle), "--keep-app-running"]
+    try:
+        run(command, cwd=APP, timeout=360)
+        return None
+    except CommandTimedOut as error:
+        _record_drive_timeout(error, phase, 1)
+        reason = _sync_launch_recovery_reason(error)
+        if phase != "sync" or reason is None:
+            raise
+        support = sim.support()
+        report = contained(support / f"ios-acceptance-{phase}.json", support)
+        if report.exists():
+            raise
+
+    # A stalled launch or failed Simulator log reader can leave Flutter waiting
+    # for the VM service. Retry only this unreported sync phase once.
+    # Restart only the simulator whose UUID and ownership name are rechecked by
+    # Simulator.command; shutdown and boot retain the app container and keychain.
+    print("Sync launch failed before a runtime report; restarting owned simulator once.",
+          flush=True)
+    if sim.current()["state"] != "Shutdown":
+        sim.command("shutdown")
+    sim.command("boot")
+    sim.command("bootstatus", "-b", timeout=300)
+    try:
+        run(command, cwd=APP, timeout=360)
+    except CommandTimedOut as error:
+        _record_drive_timeout(error, phase, 2)
+        raise
+    return reason
+
+
 def execute(evidence: Path, run: Commands, source: str) -> dict:
-    result = {"status": "failed", "sourceCommit": source, "phases": [], "errors": []}
+    result = {"status": "failed", "sourceCommit": source, "phases": [],
+              "recoveries": [], "errors": []}
     sim = Simulator(run, PREFIX + uuid.uuid4().hex)
     build_attempted = False
     try:
@@ -299,10 +451,12 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
                 "sourceCommit": source,
             })
             try:
-                run(["flutter", "drive", "--no-pub", "-d", sim.device,
-                     "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
-                     "--use-application-binary", str(bundle), "--keep-app-running"],
-                    cwd=APP, timeout=360)
+                recovery_reason = drive_phase(sim, run, bundle, phase)
+                if recovery_reason is not None:
+                    result["recoveries"].append({
+                        "phase": phase, "reason": recovery_reason,
+                        "attempts": 2,
+                    })
             except Exception:
                 try:
                     collect(sim, evidence, phase)

@@ -19,6 +19,8 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
   final List<YouTubeChannelFollow> _follows = <YouTubeChannelFollow>[];
   bool _loaded = false;
   String? _loadError;
+  Future<void>? _loadFuture;
+  Future<void> _mutationTail = Future<void>.value();
 
   bool get loaded => _loaded;
   String? get loadError => _loadError;
@@ -31,10 +33,14 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
         _follows.any((follow) => follow.id == normalizedId);
   }
 
-  Future<void> load() async {
+  Future<void> load() {
     if (_loaded) {
-      return;
+      return Future<void>.value();
     }
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_preferencesKey);
@@ -68,168 +74,206 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> setFollowed(YouTubeDataChannel channel, bool followed) async {
-    if (!_loaded) {
-      await load();
-    }
-    final id = channel.id.trim();
-    final title = channel.title.trim();
-    if (id.isEmpty || title.isEmpty) {
-      return false;
-    }
-    final index = _follows.indexWhere((follow) => follow.id == id);
-    if (followed) {
-      final replacement = YouTubeChannelFollow.fromChannel(channel);
-      if (index >= 0) {
-        if (_follows[index] == replacement) {
+  Future<bool> setFollowed(YouTubeDataChannel channel, bool followed) =>
+      _serialize(() async {
+        await load();
+        _requireLoadedStorage();
+        final id = channel.id.trim();
+        final title = channel.title.trim();
+        if (id.isEmpty || title.isEmpty) {
           return false;
         }
-        _follows[index] = replacement;
-      } else {
-        _follows.add(replacement);
-      }
-      _follows.sort((a, b) => _compareText(a.title, b.title));
-    } else {
-      if (index < 0) {
-        return false;
-      }
-      _follows.removeAt(index);
-    }
-    await _persist();
-    notifyListeners();
-    return true;
-  }
+        final next = List<YouTubeChannelFollow>.from(_follows);
+        final index = next.indexWhere((follow) => follow.id == id);
+        if (followed) {
+          final replacement = YouTubeChannelFollow.fromChannel(channel);
+          if (index >= 0) {
+            if (next[index] == replacement) {
+              return false;
+            }
+            next[index] = replacement;
+          } else {
+            next.add(replacement);
+          }
+          next.sort((a, b) => _compareText(a.title, b.title));
+        } else {
+          if (index < 0) {
+            return false;
+          }
+          next.removeAt(index);
+        }
+        await _persist(next);
+        _follows
+          ..clear()
+          ..addAll(next);
+        notifyListeners();
+        return true;
+      });
 
   /// Adds valid public channel metadata in one durable device-local update.
   ///
   /// This never imports an account identity, credential, or remote feed.
-  Future<int> followAll(Iterable<YouTubeDataChannel> channels) async {
-    if (!_loaded) {
-      await load();
-    }
-    final next = <String, YouTubeChannelFollow>{
-      for (final follow in _follows) follow.id: follow,
-    };
-    var changed = 0;
-    for (final channel in channels) {
-      final follow = YouTubeChannelFollow.fromChannel(channel);
-      if (follow.id.isEmpty || follow.title.isEmpty) {
-        continue;
-      }
-      if (next[follow.id] != follow) {
-        next[follow.id] = follow;
-        changed += 1;
-      }
-    }
-    if (changed == 0) {
-      return 0;
-    }
-    _follows
-      ..clear()
-      ..addAll(next.values)
-      ..sort((a, b) => _compareText(a.title, b.title));
-    await _persist();
-    notifyListeners();
-    return changed;
-  }
+  Future<int> followAll(Iterable<YouTubeDataChannel> channels) =>
+      _serialize(() async {
+        await load();
+        _requireLoadedStorage();
+        final next = <String, YouTubeChannelFollow>{
+          for (final follow in _follows) follow.id: follow,
+        };
+        var changed = 0;
+        for (final channel in channels) {
+          final follow = YouTubeChannelFollow.fromChannel(channel);
+          if (follow.id.isEmpty || follow.title.isEmpty) {
+            continue;
+          }
+          if (next[follow.id] != follow) {
+            next[follow.id] = follow;
+            changed += 1;
+          }
+        }
+        if (changed == 0) {
+          return 0;
+        }
+        final updated = next.values.toList()
+          ..sort((a, b) => _compareText(a.title, b.title));
+        await _persist(updated);
+        _follows
+          ..clear()
+          ..addAll(updated);
+        notifyListeners();
+        return changed;
+      });
 
   /// Exports only device-local public channel metadata for explicit transfer.
   ///
   /// The document intentionally omits Google credentials, YouTube account
   /// subscriptions, remote-feed results, and playback state.
-  String exportFollowDocument() => jsonEncode(<String, Object?>{
-    'version': _documentVersion,
-    'follows': _follows.map((follow) => follow.toJson()).toList(),
-  });
+  String exportFollowDocument() {
+    if (!_loaded) {
+      throw StateError('Followed channels have not been loaded.');
+    }
+    _requireLoadedStorage();
+    return jsonEncode(<String, Object?>{
+      'version': _documentVersion,
+      'follows': _follows.map((follow) => follow.toJson()).toList(),
+    });
+  }
 
   /// Imports a bounded public-channel follow document.
   ///
   /// Imports merge by channel ID by default, refreshing public display data.
   /// [replace] is reserved for an explicit user choice in the caller.
-  Future<int> importFollowDocument(
-    String document, {
-    bool replace = false,
-  }) async {
-    if (!_loaded) {
-      await load();
-    }
-    if (utf8.encode(document).length > _maxDocumentBytes) {
-      throw const FormatException('Follow document is too large.');
-    }
+  Future<int> importFollowDocument(String document, {bool replace = false}) =>
+      _serialize(() async {
+        await load();
+        _requireLoadedStorage();
+        if (utf8.encode(document).length > _maxDocumentBytes) {
+          throw const FormatException('Follow document is too large.');
+        }
 
-    Object? decoded;
-    try {
-      decoded = jsonDecode(document);
-    } on FormatException {
-      throw const FormatException('Follow document is not valid JSON.');
-    }
-    if (decoded is! Map) {
-      throw const FormatException('Follow document must be an object.');
-    }
-    final root = Map<String, Object?>.from(decoded);
-    if (root['version'] != _documentVersion) {
-      throw const FormatException('Unsupported follow document version.');
-    }
-    final rawFollows = root['follows'];
-    if (rawFollows is! List || rawFollows.length > _maxFollows) {
-      throw const FormatException(
-        'Follow document contains too many channels.',
-      );
-    }
+        Object? decoded;
+        try {
+          decoded = jsonDecode(document);
+        } on FormatException {
+          throw const FormatException('Follow document is not valid JSON.');
+        }
+        if (decoded is! Map) {
+          throw const FormatException('Follow document must be an object.');
+        }
+        final root = Map<String, Object?>.from(decoded);
+        if (root['version'] != _documentVersion) {
+          throw const FormatException('Unsupported follow document version.');
+        }
+        final rawFollows = root['follows'];
+        if (rawFollows is! List || rawFollows.length > _maxFollows) {
+          throw const FormatException(
+            'Follow document contains too many channels.',
+          );
+        }
 
-    final incoming = <YouTubeChannelFollow>[];
-    final incomingIds = <String>{};
-    for (final rawFollow in rawFollows) {
-      if (rawFollow is! Map) {
-        throw const FormatException(
-          'Follow document contains an invalid channel.',
-        );
-      }
-      final follow = YouTubeChannelFollow.tryFromJson(
-        Map<String, Object?>.from(rawFollow),
-      );
-      if (follow == null) {
-        throw const FormatException(
-          'Follow document contains an invalid channel.',
-        );
-      }
-      if (incomingIds.add(follow.id)) {
-        incoming.add(follow);
-      }
-    }
-
-    final previous = <String, YouTubeChannelFollow>{
-      for (final follow in _follows) follow.id: follow,
-    };
-    final merged = replace
-        ? <String, YouTubeChannelFollow>{
-            for (final follow in incoming) follow.id: follow,
+        final incoming = <YouTubeChannelFollow>[];
+        final incomingIds = <String>{};
+        for (final rawFollow in rawFollows) {
+          if (rawFollow is! Map) {
+            throw const FormatException(
+              'Follow document contains an invalid channel.',
+            );
           }
-        : <String, YouTubeChannelFollow>{
-            ...previous,
-            for (final follow in incoming) follow.id: follow,
-          };
-    final next = merged.values.toList()
-      ..sort((a, b) => _compareText(a.title, b.title));
-    final changed = _followDifferenceCount(previous, next);
-    if (changed == 0) {
-      return 0;
-    }
+          final follow = YouTubeChannelFollow.tryFromJson(
+            Map<String, Object?>.from(rawFollow),
+          );
+          if (follow == null) {
+            throw const FormatException(
+              'Follow document contains an invalid channel.',
+            );
+          }
+          if (incomingIds.add(follow.id)) {
+            incoming.add(follow);
+          }
+        }
 
-    _follows
-      ..clear()
-      ..addAll(next);
-    await _persist();
-    notifyListeners();
-    return changed;
+        final previous = <String, YouTubeChannelFollow>{
+          for (final follow in _follows) follow.id: follow,
+        };
+        final merged = replace
+            ? <String, YouTubeChannelFollow>{
+                for (final follow in incoming) follow.id: follow,
+              }
+            : <String, YouTubeChannelFollow>{
+                ...previous,
+                for (final follow in incoming) follow.id: follow,
+              };
+        final next = merged.values.toList()
+          ..sort((a, b) => _compareText(a.title, b.title));
+        final changed = _followDifferenceCount(previous, next);
+        if (changed == 0) {
+          return 0;
+        }
+
+        await _persist(next);
+        _follows
+          ..clear()
+          ..addAll(next);
+        notifyListeners();
+        return changed;
+      });
+
+  void _requireLoadedStorage() {
+    if (_loadError != null) {
+      throw StateError(
+        'Followed channels could not be loaded. Resolve the storage error before editing them.',
+      );
+    }
   }
 
-  Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _preferencesKey,
-      jsonEncode(_follows.map((follow) => follow.toJson()).toList()),
+  Future<T> _serialize<T>(Future<T> Function() mutation) {
+    final result = _mutationTail.then((_) => mutation());
+    _mutationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
     );
+    return result;
+  }
+
+  Future<void> _persist(List<YouTubeChannelFollow> next) async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final saved = await prefs.setString(
+        _preferencesKey,
+        jsonEncode(next.map((follow) => follow.toJson()).toList()),
+      );
+      if (!saved) {
+        throw StateError('Followed channels could not be saved.');
+      }
+    } on Object {
+      // The preferences cache changes before the platform write is confirmed.
+      try {
+        await prefs.reload();
+      } on Object {
+        // Keep the original write error for the caller.
+      }
+      rethrow;
+    }
   }
 }
 

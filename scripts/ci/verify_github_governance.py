@@ -44,6 +44,8 @@ CODEOWNER_PATHS = (
     "/scripts/ci/",
     "/services/server/deploy/",
 )
+PRODUCTION_DEPLOYMENT_POLICIES = frozenset({("branch", "main"), ("tag", "v*")})
+MONITORING_DEPLOYMENT_POLICIES = frozenset({("branch", "main")})
 
 
 def _enabled(value: Any) -> bool:
@@ -69,6 +71,29 @@ def _codeowners_cover_sensitive_paths(codeowners: str) -> bool:
     return set(CODEOWNER_PATHS).issubset(covered)
 
 
+def _deployment_policies(payload: Any) -> frozenset[tuple[str, str]] | None:
+    if not isinstance(payload, dict):
+        return None
+    policies = payload.get("branch_policies")
+    total_count = payload.get("total_count")
+    if (
+        not isinstance(policies, list)
+        or type(total_count) is not int
+        or total_count != len(policies)
+    ):
+        # A partial first page must never authorize an additional unseen rule.
+        return None
+    result: set[tuple[str, str]] = set()
+    for policy in policies:
+        if not isinstance(policy, dict):
+            return None
+        kind, name = policy.get("type"), policy.get("name")
+        if kind not in ("branch", "tag") or not isinstance(name, str):
+            return None
+        result.add((kind, name))
+    return frozenset(result) if len(result) == len(policies) else None
+
+
 def verify_governance_payloads(
     branch_protection: dict[str, Any],
     environment: dict[str, Any],
@@ -76,6 +101,9 @@ def verify_governance_payloads(
     repository_payload: dict[str, Any],
     actions_permissions: dict[str, Any],
     selected_actions: dict[str, Any],
+    production_branch_policies: dict[str, Any] | None = None,
+    monitoring_environment: dict[str, Any] | None = None,
+    monitoring_branch_policies: dict[str, Any] | None = None,
     repository_owner: str | None = None,
     direct_collaborators: list[Any] | None = None,
 ) -> None:
@@ -197,10 +225,32 @@ def verify_governance_payloads(
         failures.append("production environment requires a five-minute wait timer")
     branch_policy = environment.get("deployment_branch_policy")
     if not isinstance(branch_policy, dict) or not (
-        branch_policy.get("protected_branches") is True
-        or branch_policy.get("custom_branch_policies") is True
+        branch_policy.get("protected_branches") is False
+        and branch_policy.get("custom_branch_policies") is True
     ):
-        failures.append("production deployments are not restricted to approved refs")
+        failures.append("production requires selected branch and tag policies")
+    if _deployment_policies(production_branch_policies) != PRODUCTION_DEPLOYMENT_POLICIES:
+        failures.append("production requires exactly a main branch and v* tag rule")
+
+    if not isinstance(monitoring_environment, dict):
+        failures.append("production-monitoring environment is unavailable")
+    else:
+        monitoring_rules = monitoring_environment.get("protection_rules")
+        if not isinstance(monitoring_rules, list) or any(
+            not isinstance(rule, dict) or rule.get("type") != "branch_policy"
+            for rule in monitoring_rules
+        ):
+            failures.append("production-monitoring must have no reviewer, wait, or app gate")
+        monitoring_policy = monitoring_environment.get("deployment_branch_policy")
+        if not isinstance(monitoring_policy, dict) or not (
+            monitoring_policy.get("protected_branches") is False
+            and monitoring_policy.get("custom_branch_policies") is True
+        ):
+            failures.append("production-monitoring requires selected branch policy")
+        if monitoring_environment.get("can_admins_bypass") is not False:
+            failures.append("production-monitoring prevents administrator bypass")
+    if _deployment_policies(monitoring_branch_policies) != MONITORING_DEPLOYMENT_POLICIES:
+        failures.append("production-monitoring requires exactly a main branch rule")
 
     if failures:
         raise ValueError("; ".join(failures))
@@ -267,7 +317,7 @@ def _request_json(url: str, token: str) -> Any:
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "aethertune-governance-audit",
         },
     )
@@ -318,6 +368,17 @@ def verify_github_governance(
     )
     protection = _get_json(f"{base}/branches/{branch_path}/protection", token)
     environment = _get_json(f"{base}/environments/production", token)
+    production_branch_policies = _get_json(
+        f"{base}/environments/production/deployment-branch-policies?per_page=100",
+        token,
+    )
+    monitoring_environment = _get_json(
+        f"{base}/environments/production-monitoring", token
+    )
+    monitoring_branch_policies = _get_json(
+        f"{base}/environments/production-monitoring/deployment-branch-policies?per_page=100",
+        token,
+    )
     actions_permissions = _get_json(f"{base}/actions/permissions", token)
     selected_actions = _get_json(f"{base}/actions/permissions/selected-actions", token)
     verify_governance_payloads(
@@ -327,6 +388,9 @@ def verify_github_governance(
         repository_payload,
         actions_permissions,
         selected_actions,
+        production_branch_policies=production_branch_policies,
+        monitoring_environment=monitoring_environment,
+        monitoring_branch_policies=monitoring_branch_policies,
         repository_owner=repository_owner,
         direct_collaborators=direct_collaborators,
     )

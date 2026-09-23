@@ -54,11 +54,15 @@ void main() {
     expect(caddy, contains('Referrer-Policy "no-referrer"'));
     expect(environment, contains("AETHERTUNE_SYNC_USERS='{}'"));
     expect(environment, contains('AETHERTUNE_OPS_TOKEN='));
+    expect(environment, contains('AETHERTUNE_METRICS_TOKEN='));
+    expect(environment, contains('AETHERTUNE_OPS_PROBE_TOKEN='));
     expect(dockerEnvironment, contains('AETHERTUNE_SYNC_USERS={}'));
     expect(dockerEnvironment, contains('AETHERTUNE_OPS_TOKEN='));
+    expect(dockerEnvironment, contains('AETHERTUNE_METRICS_TOKEN='));
     expect(dockerEnvironment, contains('AETHERTUNE_LISTEN_ADDRESS=0.0.0.0'));
     expect(environment, contains('AETHERTUNE_LISTEN_ADDRESS=127.0.0.1'));
     expect(compose, contains(r'${AETHERTUNE_OPS_TOKEN:?'));
+    expect(compose, contains(r'${AETHERTUNE_METRICS_TOKEN:?'));
     expect(compose, contains(r'${AETHERTUNE_LISTEN_ADDRESS:-0.0.0.0}'));
     expect(compose, contains('read_only: true'));
     expect(compose, contains('cap_drop:'));

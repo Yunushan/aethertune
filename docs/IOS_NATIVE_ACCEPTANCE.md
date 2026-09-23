@@ -117,11 +117,19 @@ are excluded from artifact upload.
 
 After execution or failure, the launcher rebuilds ordinary `lib/main.dart` output
 and shuts down/deletes only the owned simulator. Its deletion removes all guest
-fixture data and test trust. Command timeouts terminate the owned process group;
+fixture data and test trust. Command timeouts signal the owned process group and
+fall back to the command leader if CoreSimulator denies a group signal. The
+evidence records any denied signal, and a remaining process group or unreaped
+command cannot be retried;
 create/delete observation failures are reconciled against fresh simulator
 inventory. Any cleanup or ordinary-output restoration failure prevents a passing
 result. Workflow cancellation can interrupt cleanup; the GitHub-hosted disposable
 runner remains the final isolation boundary, never a personal device.
+
+If the sync phase has produced no app report, the launcher permits one restart
+of its owned simulator after a silent Flutter drive timeout or the exact Flutter
+debug log-reader launch error. It retains the app container and test trust, then
+requires the complete sync report on the retry. Other failures do not retry.
 
 ## Evidence
 

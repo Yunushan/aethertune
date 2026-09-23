@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:aethertune/src/data/listenbrainz_client.dart';
 import 'package:aethertune/src/data/listenbrainz_scrobbling_store.dart';
 import 'package:aethertune/src/data/provider_credential_vault.dart';
 import 'package:aethertune/src/domain/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
+
+const _pendingKey = 'aethertune.listenbrainz.pending.v1';
+const _backgroundRetryKey = 'aethertune.listenbrainz.background-retry.v1';
 
 void main() {
   setUp(() {
@@ -24,7 +30,118 @@ void main() {
     expect(store.userName, 'yunus');
     expect(vault.values['listenbrainz-user-token'], 'token');
     expect(client.validateCalls, 1);
+    await expectLater(store.configure('different-token'), throwsStateError);
+    expect(vault.values['listenbrainz-user-token'], 'token');
   });
+
+  test('disconnect follows an in-flight same-account validation', () async {
+    final vault = _MemoryVault();
+    final validating = Completer<void>();
+    final releaseValidation = Completer<void>();
+    final client = _FakeListenBrainzClient(validUserName: 'yunus');
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+    );
+    addTearDown(store.dispose);
+    await store.configure('token');
+    client.beforeValidate = () async {
+      validating.complete();
+      await releaseValidation.future;
+    };
+
+    final configuring = store.configure('token');
+    await validating.future;
+    final disconnecting = store.remove();
+    releaseValidation.complete();
+    await configuring;
+    await disconnecting;
+
+    expect(store.isConfigured, isFalse);
+    expect(store.userName, isNull);
+    expect(vault.values['listenbrainz-user-token'], isNull);
+  });
+
+  test(
+    'same-token revalidation preserves in-flight submission dedup',
+    () async {
+      final submitting = Completer<void>();
+      final releaseSubmission = Completer<void>();
+      var pauseNextSubmission = true;
+      final client = _FakeListenBrainzClient(validUserName: 'yunus')
+        ..beforeSubmit = (_) async {
+          if (!pauseNextSubmission) return;
+          pauseNextSubmission = false;
+          submitting.complete();
+          await releaseSubmission.future;
+        };
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: _MemoryVault(),
+        clientFactory: (_) => client,
+      );
+      addTearDown(store.dispose);
+      await store.configure('token');
+      final track = Track(
+        id: 'same-token-revalidation',
+        title: 'Signal',
+        artist: 'Aether',
+        duration: const Duration(minutes: 2),
+      );
+      final startedAt = DateTime.utc(2026, 9, 23, 12);
+
+      final first = store.submitIfEligible(
+        track: track,
+        startedAt: startedAt,
+        position: const Duration(minutes: 2),
+      );
+      await submitting.future;
+      await store.configure('token');
+      releaseSubmission.complete();
+      await first;
+      await store.submitIfEligible(
+        track: track,
+        startedAt: startedAt,
+        position: const Duration(minutes: 2),
+      );
+
+      expect(client.submitted, hasLength(1));
+      expect(store.pendingListenCount, 0);
+    },
+  );
+
+  test(
+    'a delayed startup vault read cannot overwrite later credentials',
+    () async {
+      final vault = _MemoryVault()
+        ..values['listenbrainz-user-token'] = 'old-token';
+      final reading = Completer<void>();
+      final releaseRead = Completer<void>();
+      vault.readOverride = (_) async {
+        reading.complete();
+        await releaseRead.future;
+        return 'old-token';
+      };
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => _FakeListenBrainzClient(validUserName: 'yunus'),
+      );
+      addTearDown(store.dispose);
+
+      final loading = store.load();
+      await reading.future;
+      final disconnecting = store.remove();
+      final configuring = store.configure('new-token');
+      releaseRead.complete();
+      await loading;
+      await disconnecting;
+      await configuring;
+
+      expect(store.loaded, isTrue);
+      expect(store.isConfigured, isTrue);
+      expect(vault.values['listenbrainz-user-token'], 'new-token');
+      expect(store.userName, 'yunus');
+    },
+  );
 
   test(
     'submits once only after the ListenBrainz completion threshold',
@@ -139,6 +256,348 @@ void main() {
       expect(retryClient.submitted.single.track.album, 'Vault');
       expect(retryClient.submitted.single.track.localPath, isNull);
       expect(retryClient.submitted.single.track.streamUrl, isNull);
+    },
+  );
+
+  test(
+    'rejected queue write cannot publish a phantom pending listen',
+    () async {
+      final backend = _RejectingPreferences();
+      SharedPreferencesStorePlatform.instance = backend;
+      final vault = _MemoryVault();
+      final client = _FakeListenBrainzClient(failNextSubmission: true);
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+        clock: () => DateTime.utc(2026, 9, 23),
+      );
+      await store.configure('token');
+      final track = Track(
+        id: 'private-track-id',
+        title: 'Signal',
+        artist: 'Aether',
+        duration: const Duration(minutes: 2),
+      );
+      final startedAt = DateTime.utc(2026, 9, 22, 12);
+
+      backend.rejectWrites = true;
+      await store.submitIfEligible(
+        track: track,
+        startedAt: startedAt,
+        position: const Duration(minutes: 1),
+      );
+      expect(store.pendingListenCount, 0);
+      expect(store.lastError, contains('could not be saved'));
+      expect(
+        (await SharedPreferences.getInstance()).getString(_pendingKey),
+        isNull,
+      );
+
+      final reopened = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+        clock: () => DateTime.utc(2026, 9, 23),
+      );
+      await reopened.load();
+      expect(reopened.pendingListenCount, 0);
+
+      backend.rejectWrites = false;
+      client.failNextSubmission = true;
+      await store.submitIfEligible(
+        track: track,
+        startedAt: startedAt,
+        position: const Duration(minutes: 1),
+      );
+      expect(store.pendingListenCount, 1);
+      final restored = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+        clock: () => DateTime.utc(2026, 9, 23),
+      );
+      await restored.load();
+      expect(restored.pendingListenCount, 1);
+    },
+  );
+
+  test('rejected retry save retains the durable queue', () async {
+    final backend = _RejectingPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final vault = _MemoryVault();
+    final client = _FakeListenBrainzClient(failNextSubmission: true);
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await store.configure('token');
+    await store.submitIfEligible(
+      track: Track(
+        id: 'track-1',
+        title: 'Signal',
+        artist: 'Aether',
+        duration: const Duration(minutes: 2),
+      ),
+      startedAt: DateTime.utc(2026, 9, 22, 12),
+      position: const Duration(minutes: 1),
+    );
+    expect(store.pendingListenCount, 1);
+
+    backend.rejectWrites = true;
+    expect(await store.retryPendingListens(), 1);
+    expect(client.submitted, hasLength(1));
+    expect(store.pendingListenCount, 1);
+    expect(store.lastError, contains('could not be saved'));
+    final reopened = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await reopened.load();
+    expect(reopened.pendingListenCount, 1);
+
+    backend.rejectWrites = false;
+    expect(await store.retryPendingListens(), 0);
+    expect(client.submitted, hasLength(1));
+    expect(store.pendingListenCount, 0);
+    final restored = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await restored.load();
+    expect(restored.pendingListenCount, 0);
+  });
+
+  test(
+    'rejected retry opt-in changes leave durable consent unchanged',
+    () async {
+      final backend = _RejectingPreferences();
+      SharedPreferencesStorePlatform.instance = backend;
+      final vault = _MemoryVault();
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => _FakeListenBrainzClient(),
+      );
+      await store.configure('token');
+
+      backend.rejectWrites = true;
+      await expectLater(
+        store.setBackgroundRetryEnabled(true),
+        throwsStateError,
+      );
+      expect(store.backgroundRetryEnabled, isFalse);
+      expect(
+        (await SharedPreferences.getInstance()).getBool(_backgroundRetryKey),
+        isNull,
+      );
+
+      backend.rejectWrites = false;
+      await store.setBackgroundRetryEnabled(true);
+      backend.rejectWrites = true;
+      await expectLater(
+        store.setBackgroundRetryEnabled(false),
+        throwsStateError,
+      );
+      expect(store.backgroundRetryEnabled, isTrue);
+      final reopened = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => _FakeListenBrainzClient(),
+      );
+      await reopened.load();
+      expect(reopened.backgroundRetryEnabled, isTrue);
+    },
+  );
+
+  test('rejected disconnect cleanup blocks orphaned queue reuse', () async {
+    final backend = _RejectingPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final vault = _MemoryVault();
+    final client = _FakeListenBrainzClient(failNextSubmission: true);
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await store.configure('old-token');
+    await store.submitIfEligible(
+      track: Track(
+        id: 'private-track-id',
+        title: 'Signal',
+        artist: 'Aether',
+        duration: const Duration(minutes: 2),
+      ),
+      startedAt: DateTime.utc(2026, 9, 22, 12),
+      position: const Duration(minutes: 1),
+    );
+    await store.setBackgroundRetryEnabled(true);
+
+    backend.rejectRemovals = true;
+    await expectLater(store.remove(), throwsStateError);
+    expect(store.isConfigured, isFalse);
+    expect(store.pendingListenCount, 1);
+    expect(store.backgroundRetryEnabled, isFalse);
+    expect(store.lastError, contains('could not be removed'));
+    expect(vault.values, isEmpty);
+    final reopened = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await reopened.load();
+    expect(reopened.isConfigured, isFalse);
+    expect(reopened.pendingListenCount, 1);
+    expect(reopened.backgroundRetryEnabled, isFalse);
+    await expectLater(reopened.configure('new-token'), throwsStateError);
+    expect(reopened.isConfigured, isFalse);
+
+    backend.rejectRemovals = false;
+    await reopened.configure('new-token');
+    expect(reopened.isConfigured, isTrue);
+    expect(reopened.pendingListenCount, 0);
+    expect(reopened.backgroundRetryEnabled, isFalse);
+    final restored = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await restored.load();
+    expect(restored.pendingListenCount, 0);
+    expect(restored.backgroundRetryEnabled, isFalse);
+    expect(client.submitted, isEmpty);
+  });
+
+  test(
+    'in-flight submission cannot recreate a queue after disconnect',
+    () async {
+      final backend = _RejectingPreferences();
+      SharedPreferencesStorePlatform.instance = backend;
+      final vault = _MemoryVault();
+      final client = _FakeListenBrainzClient();
+      final started = Completer<void>();
+      final release = Completer<void>();
+      client.beforeSubmit = (_) {
+        started.complete();
+        return release.future;
+      };
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+        clock: () => DateTime.utc(2026, 9, 23),
+      );
+      await store.configure('token');
+
+      final submission = store.submitIfEligible(
+        track: Track(
+          id: 'track-1',
+          title: 'Signal',
+          artist: 'Aether',
+          duration: const Duration(minutes: 2),
+        ),
+        startedAt: DateTime.utc(2026, 9, 22, 12),
+        position: const Duration(minutes: 1),
+      );
+      await started.future;
+      await store.remove();
+      release.complete();
+      await submission;
+
+      expect(store.isConfigured, isFalse);
+      expect(store.pendingListenCount, 0);
+      expect(
+        (await SharedPreferences.getInstance()).getString(_pendingKey),
+        isNull,
+      );
+      final reopened = ListenBrainzScrobblingStore(
+        credentialVault: vault,
+        clientFactory: (_) => client,
+        clock: () => DateTime.utc(2026, 9, 23),
+      );
+      await reopened.load();
+      expect(reopened.pendingListenCount, 0);
+      expect(reopened.isConfigured, isFalse);
+    },
+  );
+
+  test('overlapping failed listens both reach durable storage', () async {
+    final backend = _RejectingPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final vault = _MemoryVault();
+    final client = _FakeListenBrainzClient()..failAllSubmissions = true;
+    final store = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await store.configure('token');
+    backend.pauseNextWrite();
+
+    Future<void> submit(String id) => store.submitIfEligible(
+      track: Track(
+        id: id,
+        title: id,
+        artist: 'Aether',
+        duration: const Duration(minutes: 2),
+      ),
+      startedAt: DateTime.utc(2026, 9, 22, 12),
+      position: const Duration(minutes: 1),
+    );
+
+    final first = submit('First');
+    await backend.writeStarted;
+    final second = submit('Second');
+    await Future<void>.delayed(Duration.zero);
+    backend.resumeWrite();
+    await Future.wait(<Future<void>>[first, second]);
+    expect(store.pendingListenCount, 2);
+    final reopened = ListenBrainzScrobblingStore(
+      credentialVault: vault,
+      clientFactory: (_) => client,
+      clock: () => DateTime.utc(2026, 9, 23),
+    );
+    await reopened.load();
+    expect(reopened.pendingListenCount, 2);
+  });
+
+  test(
+    'submitting stays true until every overlapping listen finishes',
+    () async {
+      final client = _FakeListenBrainzClient()..failAllSubmissions = true;
+      final secondStarted = Completer<void>();
+      final releaseSecond = Completer<void>();
+      client.beforeSubmit = (track) {
+        if (track.id == 'Second') {
+          secondStarted.complete();
+          return releaseSecond.future;
+        }
+        return Future<void>.value();
+      };
+      final store = ListenBrainzScrobblingStore(
+        credentialVault: _MemoryVault(),
+        clientFactory: (_) => client,
+        clock: () => DateTime.utc(2026, 9, 23),
+      );
+      await store.configure('token');
+
+      Future<void> submit(String id) => store.submitIfEligible(
+        track: Track(
+          id: id,
+          title: id,
+          artist: 'Aether',
+          duration: const Duration(minutes: 2),
+        ),
+        startedAt: DateTime.utc(2026, 9, 22, 12),
+        position: const Duration(minutes: 1),
+      );
+
+      final second = submit('Second');
+      await secondStarted.future;
+      await submit('First');
+      expect(store.submitting, isTrue);
+      expect(await store.retryPendingListens(), 0);
+      releaseSecond.complete();
+      await second;
+      expect(store.submitting, isFalse);
+      expect(store.pendingListenCount, 2);
     },
   );
 
@@ -340,6 +799,7 @@ void main() {
 
 final class _MemoryVault implements ProviderCredentialVault {
   final Map<String, String> values = <String, String>{};
+  Future<String?> Function(String)? readOverride;
 
   @override
   Future<void> delete(String accountId) async {
@@ -347,11 +807,51 @@ final class _MemoryVault implements ProviderCredentialVault {
   }
 
   @override
-  Future<String?> read(String accountId) async => values[accountId];
+  Future<String?> read(String accountId) async {
+    final override = readOverride;
+    if (override != null) return override(accountId);
+    return values[accountId];
+  }
 
   @override
   Future<void> write(String accountId, String secret) async {
     values[accountId] = secret;
+  }
+}
+
+final class _RejectingPreferences extends InMemorySharedPreferencesStore {
+  _RejectingPreferences() : super.empty();
+
+  bool rejectWrites = false;
+  bool rejectRemovals = false;
+  Completer<void>? _pausedWrite;
+  Completer<void>? _writeStarted;
+
+  Future<void> get writeStarted => _writeStarted!.future;
+
+  void pauseNextWrite() {
+    _pausedWrite = Completer<void>();
+    _writeStarted = Completer<void>();
+  }
+
+  void resumeWrite() => _pausedWrite?.complete();
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (rejectWrites) return false;
+    final pause = _pausedWrite;
+    if (pause != null) {
+      _writeStarted?.complete();
+      await pause.future;
+      _pausedWrite = null;
+    }
+    return super.setValue(valueType, key, value);
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    if (rejectRemovals) return false;
+    return super.remove(key);
   }
 }
 
@@ -371,16 +871,21 @@ final class _FakeListenBrainzClient extends ListenBrainzClient {
 
   final String? validUserName;
   bool failNextSubmission;
+  bool failAllSubmissions = false;
   int validateCalls = 0;
   final List<ListenBrainzHistoryEntry> historyEntries;
   final List<_SubmittedListen> submitted = <_SubmittedListen>[];
   String? requestedUserName;
   int? requestedHistoryCount;
   void Function()? onSubmit;
+  Future<void> Function()? beforeValidate;
+  Future<void> Function(Track)? beforeSubmit;
 
   @override
   Future<String?> validateToken() async {
     validateCalls += 1;
+    final before = beforeValidate;
+    if (before != null) await before();
     return validUserName;
   }
 
@@ -389,7 +894,9 @@ final class _FakeListenBrainzClient extends ListenBrainzClient {
     required Track track,
     required DateTime startedAt,
   }) async {
-    if (failNextSubmission) {
+    final before = beforeSubmit;
+    if (before != null) await before(track);
+    if (failAllSubmissions || failNextSubmission) {
       failNextSubmission = false;
       throw StateError('network failed');
     }

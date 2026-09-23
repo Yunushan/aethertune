@@ -19,6 +19,7 @@ Future<void> main(List<String> arguments) async {
   }
 
   await _assertMissingOperationsTokenRejected(executable);
+  await _assertMissingMetricsTokenRejected(executable);
   await _assertGracefulShutdown(executable);
   await _assertDataDirectoryLock(executable);
 
@@ -40,7 +41,8 @@ Future<void> main(List<String> arguments) async {
         'AETHERTUNE_DATA_DIR': dataDirectory.path,
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'PORT': '$port',
-        'AETHERTUNE_OPS_TOKEN': 'ci-only-executable-metrics-token',
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-executable-operations-token',
+        'AETHERTUNE_METRICS_TOKEN': 'ci-only-executable-metrics-token',
       },
     );
     unawaited(process.stdout.transform(utf8.decoder).forEach(output.write));
@@ -80,14 +82,37 @@ Future<void> main(List<String> arguments) async {
                 path: 'api/v1/metrics',
               ),
             );
-            final unauthorizedMetricsResponse =
-                await unauthorizedMetricsRequest.close();
+            final unauthorizedMetricsResponse = await unauthorizedMetricsRequest
+                .close();
             await unauthorizedMetricsResponse.drain<void>();
             if (unauthorizedMetricsResponse.statusCode !=
                 HttpStatus.unauthorized) {
               throw StateError(
                 'Metrics endpoint accepted an unauthenticated request: '
                 '${unauthorizedMetricsResponse.statusCode}',
+              );
+            }
+
+            final operationsMetricsRequest = await client.getUrl(
+              Uri(
+                scheme: 'http',
+                host: InternetAddress.loopbackIPv4.address,
+                port: port,
+                path: 'api/v1/metrics',
+              ),
+            );
+            operationsMetricsRequest.headers.set(
+              HttpHeaders.authorizationHeader,
+              'Bearer ci-only-executable-operations-token',
+            );
+            final operationsMetricsResponse = await operationsMetricsRequest
+                .close();
+            await operationsMetricsResponse.drain<void>();
+            if (operationsMetricsResponse.statusCode !=
+                HttpStatus.unauthorized) {
+              throw StateError(
+                'Metrics endpoint accepted an administration token: '
+                '${operationsMetricsResponse.statusCode}',
               );
             }
 
@@ -204,6 +229,7 @@ Future<void> _assertMissingOperationsTokenRejected(File executable) async {
         'AETHERTUNE_DATA_DIR': dataDirectory.path,
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'AETHERTUNE_OPS_TOKEN': '',
+        'AETHERTUNE_METRICS_TOKEN': 'ci-only-missing-ops-metrics-token',
         'AETHERTUNE_SYNC_USERS': '{}',
         'PORT': '8080',
       },
@@ -220,11 +246,39 @@ Future<void> _assertMissingOperationsTokenRejected(File executable) async {
   }
 }
 
+Future<void> _assertMissingMetricsTokenRejected(File executable) async {
+  final dataDirectory = await Directory.systemTemp.createTemp(
+    'aethertune-server-missing-metrics-token-',
+  );
+  try {
+    final result = await Process.run(
+      executable.path,
+      const <String>[],
+      environment: <String, String>{
+        ...Platform.environment,
+        'AETHERTUNE_DATA_DIR': dataDirectory.path,
+        'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
+        'AETHERTUNE_OPS_TOKEN': 'ci-only-missing-metrics-operations-token',
+        'AETHERTUNE_METRICS_TOKEN': '',
+        'AETHERTUNE_SYNC_USERS': '{}',
+        'PORT': '8080',
+      },
+    );
+    final output = '${result.stdout}\n${result.stderr}';
+    if (result.exitCode == 0 ||
+        !output.contains('AETHERTUNE_METRICS_TOKEN is required')) {
+      throw StateError(
+        'Server executable did not reject a missing metrics token.\n$output',
+      );
+    }
+  } finally {
+    await dataDirectory.delete(recursive: true);
+  }
+}
+
 Future<void> _assertGracefulShutdown(File executable) async {
   if (Platform.isWindows) {
-    stdout.writeln(
-      'Skipping SIGTERM graceful-shutdown assertion on Windows.',
-    );
+    stdout.writeln('Skipping SIGTERM graceful-shutdown assertion on Windows.');
     return;
   }
   final port = await _reservePort();
@@ -243,6 +297,7 @@ Future<void> _assertGracefulShutdown(File executable) async {
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'PORT': '$port',
         'AETHERTUNE_OPS_TOKEN': 'ci-only-shutdown-token',
+        'AETHERTUNE_METRICS_TOKEN': 'ci-only-shutdown-metrics-token',
       },
     );
     unawaited(process.stdout.transform(utf8.decoder).forEach(output.write));
@@ -293,6 +348,7 @@ Future<void> _assertDataDirectoryLock(File executable) async {
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'PORT': '$port',
         'AETHERTUNE_OPS_TOKEN': 'ci-only-lock-token',
+        'AETHERTUNE_METRICS_TOKEN': 'ci-only-lock-metrics-token',
       },
     );
     unawaited(first.stdout.transform(utf8.decoder).forEach(output.write));
@@ -309,11 +365,11 @@ Future<void> _assertDataDirectoryLock(File executable) async {
         'AETHERTUNE_LISTEN_ADDRESS': InternetAddress.loopbackIPv4.address,
         'PORT': '$secondPort',
         'AETHERTUNE_OPS_TOKEN': 'ci-only-lock-token',
+        'AETHERTUNE_METRICS_TOKEN': 'ci-only-lock-metrics-token',
       },
     );
     final secondOutput = '${second.stdout}\n${second.stderr}';
-    if (second.exitCode != 1 ||
-        !secondOutput.contains('Refusing to start')) {
+    if (second.exitCode != 1 || !secondOutput.contains('Refusing to start')) {
       throw StateError(
         'A second server instance was not rejected for the same data '
         'directory (exit code ${second.exitCode}).\n$secondOutput',

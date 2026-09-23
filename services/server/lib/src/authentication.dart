@@ -17,7 +17,15 @@ abstract interface class OperationsAuthenticator {
   bool authenticate(String token);
 }
 
+abstract interface class MetricsAuthenticator {
+  bool get isConfigured;
+
+  bool authenticate(String token);
+}
+
 const operationsTokenPlaceholder = 'replace-with-a-separate-long-random-token';
+const metricsTokenPlaceholder =
+    'replace-with-a-separate-long-random-metrics-token';
 
 class DisabledOperationsAuthenticator implements OperationsAuthenticator {
   const DisabledOperationsAuthenticator();
@@ -56,6 +64,52 @@ List<int> _configuredOperationsTokenHash(String configuredToken) {
   return _configuredTokenHash(
     configuredToken,
     configurationName: 'AETHERTUNE_OPS_TOKEN',
+  );
+}
+
+class DisabledMetricsAuthenticator implements MetricsAuthenticator {
+  const DisabledMetricsAuthenticator();
+
+  @override
+  bool get isConfigured => false;
+
+  @override
+  bool authenticate(String token) => false;
+}
+
+class StaticMetricsAuthenticator implements MetricsAuthenticator {
+  StaticMetricsAuthenticator(String configuredToken)
+    : _tokenHash = _configuredMetricsTokenHash(configuredToken);
+
+  final List<int> _tokenHash;
+
+  @override
+  bool get isConfigured => true;
+
+  @override
+  bool authenticate(String token) =>
+      _constantTimeEquals(sha256.convert(utf8.encode(token)).bytes, _tokenHash);
+}
+
+List<int> _configuredMetricsTokenHash(String configuredToken) {
+  if (configuredToken == metricsTokenPlaceholder) {
+    throw const FormatException(
+      'AETHERTUNE_METRICS_TOKEN must replace the deployment placeholder.',
+    );
+  }
+  return _configuredTokenHash(
+    configuredToken,
+    configurationName: 'AETHERTUNE_METRICS_TOKEN',
+  );
+}
+
+bool operationsAndMetricsTokensMatch(
+  String operationsToken,
+  String metricsToken,
+) {
+  return _constantTimeEquals(
+    _configuredOperationsTokenHash(operationsToken),
+    _configuredMetricsTokenHash(metricsToken),
   );
 }
 

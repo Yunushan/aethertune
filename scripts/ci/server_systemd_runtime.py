@@ -129,7 +129,9 @@ def run(executable, evidence):
         operations = secrets.token_urlsafe(32)
         credentials.append(operations)
         environment = assets / 'server.env'
-        environment.write_text(f'AETHERTUNE_OPS_TOKEN={operations}\nAETHERTUNE_SYNC_USERS={{}}\n'
+        environment.write_text(f'AETHERTUNE_OPS_TOKEN={operations}\n'
+                               'AETHERTUNE_METRICS_TOKEN=ci-only-systemd-metrics-token\n'
+                               f'AETHERTUNE_SYNC_USERS={{}}\n'
                                f'AETHERTUNE_LISTEN_ADDRESS=127.0.0.1\nPORT={port}\n', encoding='utf-8')
         environment.chmod(0o600)
         configs = [

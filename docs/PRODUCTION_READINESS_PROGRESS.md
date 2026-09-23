@@ -1,5 +1,10 @@
 # Production Readiness Progress
 
+Current published-main assessment: **provisional 75/100 on 2026-09-23**. See
+[the September 23 checkpoint](PRODUCTION_READINESS_CHECKPOINT_2026-09-23.md)
+for the assessed revision, fresh evidence and remaining release gates. The
+dated entries below are historical progress records.
+
 Objective: pursue a fully evidenced 100/100 production-readiness assessment of
 the mobile and desktop clients and optional self-hosted server. This is not a
 claim of bug-free software or a substitute for real release acceptance.

@@ -36,6 +36,7 @@ final class _YouTubeChannelFollowScreenState
   bool _loading = false;
   String? _error;
   String? _query;
+  final Set<String> _savingChannelIds = <String>{};
 
   @override
   void dispose() {
@@ -65,7 +66,7 @@ final class _YouTubeChannelFollowScreenState
           IconButton(
             key: const Key('youtube-channel-follow-export'),
             tooltip: 'Export followed channels',
-            onPressed: follows.loaded
+            onPressed: follows.loaded && follows.loadError == null
                 ? () => _exportFollows(context, follows)
                 : null,
             icon: const Icon(Icons.upload_file_outlined),
@@ -139,9 +140,11 @@ final class _YouTubeChannelFollowScreenState
                 channel: _asChannel(channel),
                 followed: true,
                 onOpen: () => _openChannelVideos(context, _asChannel(channel)),
-                onFollowChanged: (followed) => unawaited(
-                  follows.setFollowed(_asChannel(channel), followed),
-                ),
+                onFollowChanged: _savingChannelIds.contains(channel.id)
+                    ? null
+                    : (followed) => unawaited(
+                        _setFollowed(follows, _asChannel(channel), followed),
+                      ),
               ),
           ],
           if (hasSearch) ...<Widget>[
@@ -178,8 +181,10 @@ final class _YouTubeChannelFollowScreenState
                 channel: channel,
                 followed: follows.isFollowed(channel.id),
                 onOpen: () => _openChannelVideos(context, channel),
-                onFollowChanged: (followed) =>
-                    unawaited(follows.setFollowed(channel, followed)),
+                onFollowChanged: _savingChannelIds.contains(channel.id)
+                    ? null
+                    : (followed) =>
+                          unawaited(_setFollowed(follows, channel, followed)),
               ),
             if (_loading && _channels.isNotEmpty) ...<Widget>[
               const SizedBox(height: 12),
@@ -429,6 +434,31 @@ final class _YouTubeChannelFollowScreenState
     );
   }
 
+  Future<void> _setFollowed(
+    YouTubeChannelFollowStore follows,
+    YouTubeDataChannel channel,
+    bool followed,
+  ) async {
+    if (!_savingChannelIds.add(channel.id)) {
+      return;
+    }
+    setState(() {});
+    try {
+      await follows.setFollowed(channel, followed);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save followed channels.')),
+        );
+      }
+    } finally {
+      _savingChannelIds.remove(channel.id);
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
   void _openFollowedChannelFeed(BuildContext context) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -450,7 +480,7 @@ class _ChannelTile extends StatelessWidget {
   final YouTubeDataChannel channel;
   final bool followed;
   final VoidCallback onOpen;
-  final ValueChanged<bool> onFollowChanged;
+  final ValueChanged<bool>? onFollowChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -470,7 +500,9 @@ class _ChannelTile extends StatelessWidget {
             ),
       trailing: IconButton(
         tooltip: followed ? 'Unfollow channel' : 'Follow channel',
-        onPressed: () => onFollowChanged(!followed),
+        onPressed: onFollowChanged == null
+            ? null
+            : () => onFollowChanged!(!followed),
         icon: Icon(followed ? Icons.bookmark : Icons.bookmark_add_outlined),
       ),
     );

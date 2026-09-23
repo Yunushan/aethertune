@@ -1,5 +1,8 @@
 # Production Readiness Assessment
 
+This dated assessment is historical. The current published-main judgment is in
+[the September 23 checkpoint](PRODUCTION_READINESS_CHECKPOINT_2026-09-23.md).
+
 ## Publication Update: 2026-09-07
 
 PR #20 has merged into `main` at

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_client.dart';
@@ -10,6 +13,104 @@ import 'package:aethertune/src/domain/track.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  test('binding writes publish only after storage accepts them', () async {
+    final backend = _FaultySharedPlaylistPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist('Durable mix');
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    final binding = await store.host(library, playlist);
+
+    backend.rejectWrites = true;
+    await expectLater(store.unlink(binding), throwsStateError);
+    expect(store.bindings.single.remoteId, binding.remoteId);
+    final afterRejection = SharedPlaylistStore();
+    await afterRejection.load();
+    expect(afterRejection.bindings.single.remoteId, binding.remoteId);
+
+    backend.rejectWrites = false;
+    backend.throwWrites = true;
+    await expectLater(store.unlink(binding), throwsStateError);
+    expect(store.bindings, hasLength(1));
+    final afterException = SharedPlaylistStore();
+    await afterException.load();
+    expect(afterException.bindings, hasLength(1));
+
+    backend.throwWrites = false;
+    backend.pauseNextWrite();
+    final unlink = store.unlink(binding);
+    await backend.writeStarted;
+    expect(store.bindings, hasLength(1));
+    await expectLater(store.unlink(binding), throwsStateError);
+    backend.resumeWrite();
+    await unlink;
+    expect(store.bindings, isEmpty);
+    final restored = SharedPlaylistStore();
+    await restored.load();
+    expect(restored.bindings, isEmpty);
+  });
+
+  test(
+    'failed invite binding removes the newly created local playlist',
+    () async {
+      final backend = _FaultySharedPlaylistPreferences();
+      SharedPreferencesStorePlatform.instance = backend;
+      final library = await _libraryWithTracks();
+      final store = SharedPlaylistStore(
+        gatewayFactory: _MemorySharedPlaylistGateway.new,
+      );
+      backend.rejectWrites = true;
+
+      await expectLater(
+        store.joinInvite('BBBBBBBBBBBBBBBBBBBBBBBB', library),
+        throwsStateError,
+      );
+
+      expect(store.bindings, isEmpty);
+      expect(library.playlists, isEmpty);
+      final restored = SharedPlaylistStore();
+      await restored.load();
+      expect(restored.bindings, isEmpty);
+    },
+  );
+
+  test('damaged binding storage cannot be overwritten by hosting', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'aethertune.shared_playlists.v1': '{damaged',
+    });
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist('Local mix');
+    final store = SharedPlaylistStore(
+      gatewayFactory: _MemorySharedPlaylistGateway.new,
+    );
+
+    await expectLater(store.host(library, playlist), throwsStateError);
+    expect(store.bindings, isEmpty);
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'aethertune.shared_playlists.v1',
+      ),
+      '{damaged',
+    );
+  });
+
+  test('failed host binding deletes its newly created remote', () async {
+    final backend = _FaultySharedPlaylistPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final library = await _libraryWithTracks();
+    final playlist = await library.createPlaylist('Local mix');
+    final gateway = _MemorySharedPlaylistGateway();
+    final store = SharedPlaylistStore(gatewayFactory: () => gateway);
+    backend.rejectWrites = true;
+
+    await expectLater(store.host(library, playlist), throwsStateError);
+
+    expect(store.bindings, isEmpty);
+    expect(gateway.deletedRemoteIds, <String>[_MemorySharedPlaylistGateway.id]);
+    expect(library.playlistById(playlist.id), isNotNull);
+  });
 
   test('hosts and explicitly publishes a private shared playlist', () async {
     final library = await _libraryWithTracks();
@@ -572,6 +673,46 @@ void main() {
   );
 }
 
+class _FaultySharedPlaylistPreferences extends InMemorySharedPreferencesStore {
+  _FaultySharedPlaylistPreferences() : super.empty();
+
+  bool rejectWrites = false;
+  bool throwWrites = false;
+  Completer<void>? _pausedWrite;
+  Completer<void>? _activeWrite;
+  Completer<void>? _writeStarted;
+
+  Future<void> get writeStarted => _writeStarted!.future;
+
+  void pauseNextWrite() {
+    _pausedWrite = Completer<void>();
+    _writeStarted = Completer<void>();
+  }
+
+  void resumeWrite() => _activeWrite?.complete();
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key.endsWith('aethertune.shared_playlists.v1')) {
+      if (rejectWrites) {
+        return false;
+      }
+      if (throwWrites) {
+        throw StateError('Platform write failed.');
+      }
+      final pause = _pausedWrite;
+      if (pause != null) {
+        _pausedWrite = null;
+        _activeWrite = pause;
+        _writeStarted?.complete();
+        await pause.future;
+        _activeWrite = null;
+      }
+    }
+    return super.setValue(valueType, key, value);
+  }
+}
+
 Future<LibraryStore> _libraryWithTracks() async {
   final library = LibraryStore();
   await library.load();
@@ -619,6 +760,7 @@ class _SearchProvider implements MusicSourceProvider {
 
 class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
   static const id = 'AAAAAAAAAAAAAAAAAAAAAAAA';
+  final List<String> deletedRemoteIds = <String>[];
   SharedPlaylistRemote remote = _remote(
     role: SharedPlaylistAccessRole.owner,
     revision: 1,
@@ -649,6 +791,7 @@ class _MemorySharedPlaylistGateway implements SharedPlaylistGateway {
     if (baseRevision != remote.revision) {
       throw SharedPlaylistConflictException(currentRevision: remote.revision);
     }
+    deletedRemoteIds.add(playlistId);
   }
 
   @override

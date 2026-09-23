@@ -25,6 +25,7 @@
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="docs/USER_GUIDE.md">User Guide</a> ·
   <a href="docs/RELEASE_GUIDE.md">Release Guide</a> ·
+  <a href="docs/PRODUCTION_READINESS_CHECKPOINT_2026-09-23.md">Release Readiness</a> ·
   <a href="LICENSE">License</a>
 </p>
 
