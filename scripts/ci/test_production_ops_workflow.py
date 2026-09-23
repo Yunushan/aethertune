@@ -16,6 +16,7 @@ class ProductionOpsWorkflowTest(unittest.TestCase):
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("schedule:", workflow)
         self.assertIn("cron: '*/15 * * * *'", workflow)
+        self.assertIn("group: production-ops-probe-${{ github.event_name }}", workflow)
         self.assertIn("environment: production-monitoring", workflow)
         self.assertNotIn("environment: production\n", workflow)
         self.assertIn("timeout-minutes: 5", workflow)
@@ -28,15 +29,39 @@ class ProductionOpsWorkflowTest(unittest.TestCase):
             workflow,
         )
 
-    def test_is_disabled_until_production_is_explicitly_enabled(self) -> None:
+    def test_manual_probe_is_allowed_before_scheduled_probes_are_enabled(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn(
-            "vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'",
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&\n"
+            "      (github.event_name == 'workflow_dispatch' ||\n"
+            "      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true')",
             workflow,
         )
         self.assertIn("AETHERTUNE_PRODUCTION_BASE_URL", workflow)
         self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN", workflow)
+
+    def test_manual_alert_drill_requires_a_successful_probe_first(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("alert_drill:\n", workflow)
+        self.assertIn("type: boolean", workflow)
+        self.assertIn("default: false", workflow)
+        self.assertIn(
+            "if: ${{ github.event_name == 'workflow_dispatch' && inputs.alert_drill }}",
+            workflow,
+        )
+        self.assertLess(
+            workflow.index("- name: Run production operations probe"),
+            workflow.index("- name: Exercise off-host alert drill"),
+        )
+        self.assertLess(
+            workflow.index("- name: Exercise off-host alert drill"),
+            workflow.index("- name: Upload production probe evidence"),
+        )
+        self.assertIn("result=alert-drill", workflow)
+        self.assertIn("Intentional alert drill after a successful", workflow)
+        self.assertIn("exit 1", workflow)
 
     def test_fails_closed_and_runs_the_hardened_probe(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

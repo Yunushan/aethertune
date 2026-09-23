@@ -160,6 +160,17 @@ operations alert` workflow sends failed, cancelled, or timed-out probe-run
 notifications to the configured HTTPS webhook. It sends only repository, run,
 commit, conclusion, and run-URL metadata, never the probe token or endpoint.
 
+Before enabling production releases, configure `production-monitoring` with
+the metrics-only probe token and public HTTPS URL, and configure the alert
+webhook repository secret. After this workflow is on `main`, manually run
+`Production operations probe` from `main` with `alert_drill=false` and verify
+its evidence artifact reports `result=passed`. Then run it with
+`alert_drill=true`. That run first checks the real service, marks its artifact
+`result=alert-drill`, and deliberately fails to trigger `Production operations
+alert`. Confirm the webhook receiver got the drill notification and its run
+link. Scheduled probes remain gated by
+`AETHERTUNE_PRODUCTION_RELEASES_ENABLED=true`.
+
 ## GitHub release workflow
 
 Create a tag such as `v0.1.0` or run the `aethertune-release-artifacts`
@@ -212,7 +223,8 @@ disabled. The scheduled probe cannot pass a release approval unattended.
 
 Credentialed governance and operations jobs use the default-branch policy
 files; production governance and publishing additionally require a pushed
-`v*` tag. Manual dispatch remains non-publishing and skips the production
+`v*` tag. Manual release dispatch is allowed only while production releases
+are disabled. It remains non-publishing and skips the production
 governance-token check, so it cannot execute branch-local policy code with
 production access.
 

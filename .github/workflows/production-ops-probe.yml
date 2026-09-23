@@ -2,6 +2,12 @@ name: Production operations probe
 
 on:
   workflow_dispatch:
+    inputs:
+      alert_drill:
+        description: Fail after a successful probe to test alert delivery
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: '*/15 * * * *'
 
@@ -9,15 +15,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-ops-probe
+  group: production-ops-probe-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   probe:
     name: Probe production service
     if: >-
-      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' &&
-      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'workflow_dispatch' ||
+      vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true')
     runs-on: ubuntu-latest
     # An unattended probe cannot wait for production release approval.
     # This environment admits only main and contains only the probe credential.
@@ -75,6 +82,15 @@ jobs:
             sed -i 's/^result=.*/result=failed/' build/production-ops-probe/metadata.txt
           fi
           exit "$probe_status"
+
+      - name: Exercise off-host alert drill
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.alert_drill }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/^result=.*/result=alert-drill/' build/production-ops-probe/metadata.txt
+          echo 'Intentional alert drill after a successful production operations probe.' >&2
+          exit 1
 
       - name: Upload production probe evidence
         if: ${{ always() }}
