@@ -92,7 +92,8 @@ class ServerOpsProbeContractTest(unittest.TestCase):
             probe,
         )
         self.assertIn("--connect-timeout 5 --max-time 15", probe)
-        self.assertIn('Authorization: Bearer $ops_token', probe)
+        self.assertIn('Authorization: Bearer $metrics_token', probe)
+        self.assertNotIn('AETHERTUNE_OPS_TOKEN:-', probe)
         self.assertIn("requestsTotal", probe)
         self.assertIn("requestsRateLimited", probe)
         self.assertIn("responses5xx", probe)
@@ -154,7 +155,7 @@ class ServerOpsProbeContractTest(unittest.TestCase):
         deploy_readme = (DEPLOY / "README.md").read_text(encoding="utf-8")
 
         self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN=", env_example)
-        self.assertIn("raw operations token", deploy_readme)
+        self.assertIn("raw metrics token", deploy_readme)
         self.assertIn("off-host alert", deploy_readme)
 
     def test_runtime_probe_is_exercised_against_the_compiled_server(self) -> None:
@@ -164,6 +165,7 @@ class ServerOpsProbeContractTest(unittest.TestCase):
         self.assertTrue(RUNTIME_PROBE.is_file())
         self.assertIn("test_server_ops_probe_runtime.sh", workflow)
         self.assertIn("AETHERTUNE_OPS_TOKEN", runtime_probe)
+        self.assertIn("AETHERTUNE_METRICS_TOKEN", runtime_probe)
         self.assertIn("AETHERTUNE_OPS_PROBE_TOKEN", runtime_probe)
         self.assertIn("/ready", runtime_probe)
         self.assertIn("aethertune-ops-probe.sh", runtime_probe)

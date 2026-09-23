@@ -2,9 +2,9 @@
 set -euo pipefail
 
 base_url="${1:?Usage: aethertune-ops-probe.sh BASE_URL}"
-ops_token="${AETHERTUNE_OPS_PROBE_TOKEN:-${AETHERTUNE_OPS_TOKEN:-}}"
-if [[ -z "$ops_token" ]]; then
-  echo 'AETHERTUNE_OPS_PROBE_TOKEN or AETHERTUNE_OPS_TOKEN is required' >&2
+metrics_token="${AETHERTUNE_OPS_PROBE_TOKEN:-${AETHERTUNE_METRICS_TOKEN:-}}"
+if [[ -z "$metrics_token" ]]; then
+  echo 'AETHERTUNE_OPS_PROBE_TOKEN or AETHERTUNE_METRICS_TOKEN is required' >&2
   exit 2
 fi
 
@@ -47,7 +47,7 @@ validate_status_response /health ok "$health_body"
 ready_body="$(curl "${curl_options[@]}" "$base_url/ready")"
 validate_status_response /ready ready "$ready_body"
 metrics_body="$(curl "${curl_options[@]}" \
-  -H "Authorization: Bearer $ops_token" \
+  -H "Authorization: Bearer $metrics_token" \
   "$base_url/api/v1/metrics")"
 
 python3 -c '

@@ -327,6 +327,87 @@ void main() {
     );
 
     test(
+      'metrics credential cannot authorize operations or sync routes',
+      () async {
+        const operationsToken = 'admin-only-token';
+        const metricsToken = 'metrics-only-token';
+        final handler = createServerHandler(
+          operationsAuthenticator: StaticOperationsAuthenticator(
+            operationsToken,
+          ),
+          metricsAuthenticator: StaticMetricsAuthenticator(metricsToken),
+          syncAuthenticator: StaticSyncAuthenticator(const <String, String>{
+            'account': 'device-token',
+          }),
+        );
+
+        expect(
+          (await handler(_request('GET', '/api/v1/metrics'))).statusCode,
+          401,
+        );
+        expect(
+          (await handler(
+            _request('GET', '/api/v1/metrics', token: operationsToken),
+          )).statusCode,
+          401,
+        );
+        expect(
+          (await handler(
+            _request('GET', '/api/v1/metrics', token: metricsToken),
+          )).statusCode,
+          200,
+        );
+        for (final path in <String>[
+          '/api/v1/admin/sync-accounts',
+          '/api/v1/admin/sync-tokens',
+          '/api/v1/admin/sync-recovery-codes',
+          '/api/v1/auth/profile',
+        ]) {
+          expect(
+            (await handler(
+              _request('GET', path, token: metricsToken),
+            )).statusCode,
+            401,
+            reason: path,
+          );
+        }
+
+        final digest = sha256.convert(utf8.encode(metricsToken)).toString();
+        final digestHandler = createServerHandler(
+          metricsAuthenticator: StaticMetricsAuthenticator('sha256:$digest'),
+        );
+        expect(
+          (await digestHandler(
+            _request('GET', '/api/v1/metrics', token: metricsToken),
+          )).statusCode,
+          200,
+        );
+        expect(
+          operationsAndMetricsTokensMatch(operationsToken, metricsToken),
+          isFalse,
+        );
+        expect(
+          operationsAndMetricsTokensMatch(operationsToken, 'sha256:$digest'),
+          isFalse,
+        );
+        final operationsDigest = sha256
+            .convert(utf8.encode(operationsToken))
+            .toString();
+        expect(
+          operationsAndMetricsTokensMatch(
+            'sha256:$operationsDigest',
+            operationsToken,
+          ),
+          isTrue,
+        );
+        expect(
+          () => StaticMetricsAuthenticator(metricsTokenPlaceholder),
+          throwsA(isA<FormatException>()),
+        );
+      },
+    );
+
+    test(
       'writes safe structured request logs without disrupting requests',
       () async {
         final entries = <ServerRequestLogEntry>[];

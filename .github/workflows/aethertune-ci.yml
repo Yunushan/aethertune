@@ -506,6 +506,7 @@ jobs:
         env:
           AETHERTUNE_SYNC_USERS: '{}'
           AETHERTUNE_OPS_TOKEN: ci-only-configuration-check-token
+          AETHERTUNE_METRICS_TOKEN: ci-only-metrics-check-token
         run: docker compose config --quiet
 
       - name: Build and smoke-test Docker deployment

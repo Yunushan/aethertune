@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -41,9 +42,51 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         self.assertIn("concurrency:", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        # Additional step deadlines do not replace the seven job deadlines.
-        self.assertEqual(workflow.count("\n    timeout-minutes:"), 7)
+        # Additional step deadlines do not replace the eight job deadlines.
+        self.assertEqual(workflow.count("\n    timeout-minutes:"), 8)
         self.assertEqual(workflow.count("persist-credentials: false"), 7)
+
+    def test_production_mode_rejects_manual_dispatch_before_release_jobs(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        def job(name: str) -> str:
+            return re.split(
+                r"(?m)^  [a-z][a-z-]*:$",
+                workflow.split(f"  {name}:\n", 1)[1],
+                maxsplit=1,
+            )[0]
+
+        gate = job("release-mode")
+        self.assertIn("vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' &&", gate)
+        self.assertIn(
+            "!(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))",
+            gate,
+        )
+        self.assertIn("exit 1", gate)
+
+        for name in (
+            "provenance",
+            "osv-scan",
+            "governance",
+            "android",
+            "desktop",
+            "server",
+        ):
+            with self.subTest(job=name):
+                self.assertIn("needs: [release-mode]", job(name))
+
+        for name in ("android", "desktop", "server"):
+            with self.subTest(job=name):
+                build = job(name)
+                self.assertIn(
+                    "vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||\n"
+                    "      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))",
+                    build,
+                )
+                self.assertNotIn(
+                    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+                    build,
+                )
 
     def test_assembly_checks_out_release_policy_before_running_verifiers(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -231,7 +274,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
             governance,
         )
-        self.assertIn(
+        self.assertNotIn(
             "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
             workflow,
         )

@@ -16,7 +16,8 @@ export AETHERTUNE_PORT="$test_port"
 export AETHERTUNE_BIND_ADDRESS=127.0.0.1
 export AETHERTUNE_LISTEN_ADDRESS=0.0.0.0
 export AETHERTUNE_SYNC_USERS='{}'
-export AETHERTUNE_OPS_TOKEN='ci-only-compose-metrics-token'
+export AETHERTUNE_OPS_TOKEN='ci-only-compose-operations-token'
+export AETHERTUNE_METRICS_TOKEN='ci-only-compose-metrics-token'
 
 "${compose[@]}" config --quiet
 "${compose[@]}" up --build --detach
@@ -50,8 +51,15 @@ if [[ "$unauthorized_status" != '401' ]]; then
   echo "Docker metrics endpoint returned $unauthorized_status without authentication." >&2
   exit 1
 fi
-metrics_body="$(curl --fail --silent \
+operations_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $AETHERTUNE_OPS_TOKEN" \
+  "$base_url/api/v1/metrics")"
+if [[ "$operations_status" != '401' ]]; then
+  echo "Docker metrics endpoint accepted an administration token: $operations_status." >&2
+  exit 1
+fi
+metrics_body="$(curl --fail --silent \
+  -H "Authorization: Bearer $AETHERTUNE_METRICS_TOKEN" \
   "$base_url/api/v1/metrics")"
 for metric in requestsTotal requestsRateLimited responses5xx; do
   if ! grep -Fq "\"$metric\"" <<< "$metrics_body"; then
@@ -59,7 +67,7 @@ for metric in requestsTotal requestsRateLimited responses5xx; do
     exit 1
   fi
 done
-AETHERTUNE_OPS_TOKEN="$AETHERTUNE_OPS_TOKEN" \
+AETHERTUNE_OPS_PROBE_TOKEN="$AETHERTUNE_METRICS_TOKEN" \
   bash "$root/services/server/deploy/aethertune-ops-probe.sh" "$base_url"
 container_id="$("${compose[@]}" ps -q aethertune-server)"
 if [[ -z "$container_id" ]]; then

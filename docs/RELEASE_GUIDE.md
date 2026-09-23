@@ -143,12 +143,16 @@ The release workflow uploads native server executables as:
 - `aethertune-server-macos`
 - `aethertune-server-windows-x64`
 
-After a real deployment, set the protected `production` environment variable
-`AETHERTUNE_PRODUCTION_BASE_URL` to the public HTTPS service URL and store the
-raw operations token as the environment secret `AETHERTUNE_OPS_PROBE_TOKEN`.
-The `Production operations probe` workflow runs every 15 minutes and on manual
-dispatch, uses the protected environment, and fails closed when either value
-is missing. Each run uploads a 30-day, non-secret evidence artifact containing
+After a real deployment, set `AETHERTUNE_PRODUCTION_BASE_URL` to the public
+HTTPS service URL in both the `production` and `production-monitoring`
+environments. Store the distinct raw metrics token as
+`AETHERTUNE_OPS_PROBE_TOKEN` (legacy variable name)
+in both environments. The release publish job reads the `production` values;
+the `Production operations probe` workflow reads the `production-monitoring`
+values every 15 minutes and on manual dispatch. The monitoring environment
+must allow the exact `main` branch, have no reviewer or wait timer, and contain
+only the probe URL and token. Each probe run fails closed when either value is
+missing and uploads a 30-day, non-secret evidence artifact containing
 the run ID, commit, endpoint host, timestamp, probe log, and result. Keep a
 separate off-host alerting path as well; a workflow or systemd timer cannot
 detect a complete GitHub or host outage by itself. The checked-in `Production
@@ -174,17 +178,18 @@ workflow manually. Both runs assemble the following files into the
 A pushed `v*` tag creates the verified bundle, but publication is intentionally
 disabled unless the repository variable
 `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is exactly `true`. When enabled, the
-publish job also targets the `production` environment; configure that
-environment to allow protected branches and require a separate release
-approval. Immediately before creating the immutable GitHub release, the
+publish job also targets the `production` environment; configure selected
+deployment rules for the `main` branch and `v*` tags and require a separate
+release approval. Immediately before creating the immutable GitHub release, the
 publish job reruns the authenticated production operations probe so a stale
 scheduled result cannot mask a current outage. Production runs also require a
 non-empty versioned `CHANGELOG.md`
 section matching the tag plus the checked-in feature matrix, 0BSD license, and
 NOTICE. Configure the repository variable only after platform signing,
 notarization, installer validation, store metadata, and physical-device smoke
-tests are complete. Manual dispatch remains artifact-only, so it can validate a
-candidate without publishing it. Verify a
+tests are complete. While publication is disabled, manual dispatch remains
+artifact-only and can validate a candidate. Once publication is enabled, manual
+dispatch fails early; only a pushed `v*` tag can proceed. Verify a
 download with `sha256sum -c SHA256SUMS.txt` on Linux/macOS, or
 `Get-FileHash` on Windows. `RELEASE_MANIFEST.json` identifies each artifact's
 platform, kind, byte size, and SHA-256 digest without timestamps or user data;
@@ -197,9 +202,13 @@ Keep production values in GitHub Actions configuration, never in the
 repository. Set `AETHERTUNE_PRODUCTION_RELEASES_ENABLED=true` as a repository
 variable. Set `AETHERTUNE_PRODUCTION_BASE_URL` as a `production` environment
 variable and use an `https://` endpoint. The `production` environment must
-have a five-minute wait timer, protected-branch restriction, and at least one
+use selected deployment branch and tag rules with exactly a `main` branch rule
+and a `v*` tag rule. It must have a five-minute wait timer and at least one
 required reviewer with self-approval disabled; the approver must be a separate
-human or team from the release author.
+human or team from the release author. Configure a separate
+`production-monitoring` environment with exactly a `main` branch rule, no
+reviewer, wait timer, or custom protection gate, and administrator bypass
+disabled. The scheduled probe cannot pass a release approval unattended.
 
 Credentialed governance and operations jobs use the default-branch policy
 files; production governance and publishing additionally require a pushed
@@ -208,13 +217,16 @@ governance-token check, so it cannot execute branch-local policy code with
 production access.
 
 The governance audit reads `AETHERTUNE_GOVERNANCE_TOKEN` as a repository
-secret. The release and probe jobs read these secrets from the protected
-`production` environment:
+secret. Set `AETHERTUNE_PRODUCTION_BASE_URL` as an environment variable and
+`AETHERTUNE_OPS_PROBE_TOKEN` as an environment secret in both `production`
+and `production-monitoring`. It must hold the raw metrics-only token matching
+the server's `AETHERTUNE_METRICS_TOKEN`, despite the legacy probe variable name.
+Existing self-hosted servers must configure the distinct metrics token before
+upgrading, then rotate both probe secrets away from the operations/admin token.
+Keep `AETHERTUNE_OPS_TOKEN` on the server; do not copy it, signing credentials,
+or publishing credentials into `production-monitoring`. The release
+job reads the following additional secrets from `production`:
 
-- Operations: `AETHERTUNE_OPS_PROBE_TOKEN`
-- Alerting: repository secret `AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL`, an
-  HTTPS endpoint that accepts a JSON body with a Slack-compatible `text` field
-  and the non-secret probe-run metadata
 - Android: `AETHERTUNE_ANDROID_KEYSTORE_BASE64`, `AETHERTUNE_ANDROID_KEYSTORE_PASSWORD`, `AETHERTUNE_ANDROID_KEY_ALIAS`, and `AETHERTUNE_ANDROID_KEY_PASSWORD`
 - Apple signing: `AETHERTUNE_APPLE_KEYCHAIN_PASSWORD`,
   `AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64`,
@@ -230,6 +242,11 @@ secret. The release and probe jobs read these secrets from the protected
   `AETHERTUNE_APPLE_NOTARY_ISSUER_ID`
 - Windows signing: `AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_BASE64` and
   `AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD`
+
+The alert workflow reads repository secret
+`AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL`, an HTTPS endpoint that accepts a
+JSON body with a Slack-compatible `text` field and non-secret probe-run
+metadata. It does not read either environment's metrics token.
 
 Use the GitHub Settings UI or `gh variable set` / `gh secret set` with values
 read from a password manager or CI secret store. Do not put raw tokens,
@@ -420,10 +437,11 @@ AetherTune is 0BSD licensed and has no telemetry. To prepare for F-Droid:
 - [ ] APK/AAB/IPA build instructions are verified.
 - [ ] License and third-party notices are updated.
 - [ ] `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is enabled only after signed-release approval.
-- [ ] The protected `production` environment has an independent release approver and the required platform secrets.
+- [ ] The protected `production` environment has an independent release approver, a five-minute wait, exact `main` branch and `v*` tag deployment rules, and the required platform secrets.
+- [ ] The `production-monitoring` environment has only the `main` branch deployment rule, no approval gate, and only the probe URL and raw metrics-only token.
 - [ ] The scheduled repository governance audit passes with `AETHERTUNE_GOVERNANCE_TOKEN`.
 - [ ] A signed tag release has been installed on representative Android, iOS, macOS, and Windows hosts.
 - [ ] The server has been deployed behind TLS, and both public and loopback health/readiness probes pass.
-- [ ] The protected production operations probe has passed from GitHub Actions and its failure notifications reach the on-call path.
+- [ ] The unattended production operations probe has passed from GitHub Actions and its failure notifications reach the on-call path.
 - [ ] A fresh server backup has been restored into an isolated data directory and its checksum verified.
 - [ ] Load, alerting, rollback, and release recovery procedures have been exercised and recorded.

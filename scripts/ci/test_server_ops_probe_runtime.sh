@@ -10,6 +10,7 @@ fi
 data_directory="$(mktemp -d)"
 port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 ops_token='ci-only-runtime-probe-token'
+metrics_token='ci-only-runtime-metrics-token'
 log_file="$data_directory/server.log"
 server_pid=''
 
@@ -26,6 +27,7 @@ env \
   AETHERTUNE_DATA_DIR="$data_directory/data" \
   AETHERTUNE_LISTEN_ADDRESS=127.0.0.1 \
   AETHERTUNE_OPS_TOKEN="$ops_token" \
+  AETHERTUNE_METRICS_TOKEN="$metrics_token" \
   AETHERTUNE_SYNC_USERS='{}' \
   PORT="$port" \
   "$server_executable" >"$log_file" 2>&1 &
@@ -50,6 +52,6 @@ if [[ "$ready" != true ]]; then
   exit 1
 fi
 
-AETHERTUNE_OPS_PROBE_TOKEN="$ops_token" \
+AETHERTUNE_OPS_PROBE_TOKEN="$metrics_token" \
   bash services/server/deploy/aethertune-ops-probe.sh \
     "http://127.0.0.1:$port"

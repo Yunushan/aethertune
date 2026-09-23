@@ -363,11 +363,13 @@ attribution. Missing capability fields default to false for older servers.
 Failed vault or metadata writes restore the previous account, profile, and
 token state.
 
-Operators set a distinct `AETHERTUNE_OPS_TOKEN`, in raw or `sha256:` form, to
-protect aggregate metrics and all managed credential mutations with
-constant-time bearer verification. Managed administration fails closed when
-operations authentication is absent. Docker and native deployment templates
-supply this token separately from sync users. Structured request logs normalize
+Operators set separate `AETHERTUNE_OPS_TOKEN` and
+`AETHERTUNE_METRICS_TOKEN` values, in raw or `sha256:` form. The operations
+token protects managed credential mutations; the metrics token can access only
+aggregate metrics. Both use constant-time bearer verification. Managed
+administration fails closed when operations authentication is absent. Docker
+and native deployment templates supply these tokens separately from sync users.
+Structured request logs normalize
 the new routes and never include account IDs, request bodies, authorization
 headers, or tokens.
 

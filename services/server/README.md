@@ -19,7 +19,8 @@ persistence-readiness checks.
 ```bash
 cd services/server
 cp .env.example .env
-# Edit .env and replace the example operations token with a long random value.
+# Edit .env and replace the example operations and metrics tokens with distinct
+# long random values.
 docker compose up --build -d
 docker compose ps
 curl http://127.0.0.1:8080/health
@@ -32,11 +33,15 @@ than `docker exec sh` or `curl` inside the runtime. The shared container gate
 verifies the base publisher's signature, exercises the exact built image, and
 enforces its vulnerability scan; see the [release guide](../../docs/RELEASE_GUIDE.md).
 
-The service rejects a missing or placeholder `AETHERTUNE_OPS_TOKEN` at startup.
-This operations token protects metrics and all managed-account administration;
-keep it separate from device sync tokens and never expose it to clients.
-Replace `replace-with-a-separate-long-random-token` before starting the server;
-the operations token must be different from every managed-account token.
+The service rejects missing or placeholder `AETHERTUNE_OPS_TOKEN` and
+`AETHERTUNE_METRICS_TOKEN` values at startup, and rejects reuse of one token
+for both roles. The operations token authorizes managed-account
+administration. The metrics token authorizes only `GET /api/v1/metrics`.
+Keep both separate from device sync tokens and never expose them to clients.
+Existing self-hosted deployments must add `AETHERTUNE_METRICS_TOKEN` before
+upgrading or the new executable will refuse to start. Rotate local and GitHub
+probe credentials to the raw metrics token; the probe's existing
+`AETHERTUNE_OPS_PROBE_TOKEN` variable name remains for compatibility.
 
 `AETHERTUNE_SYNC_USERS` must remain valid JSON. Leave it as `{}` to use the
 managed account registry described below. Static compatibility mode accepts a
@@ -51,9 +56,9 @@ hashes the presented bearer token and compares it to that digest without
 keeping the raw value in memory. Tokens must be unique across all account and
 device entries; invalid or ambiguous values stop startup. Compose refuses
 to start when the variable is absent, and `.env` is ignored by the image build
-context. `AETHERTUNE_OPS_TOKEN` configures a separate bearer token for metrics
-and managed account administration, accepts the same raw or `sha256:` form,
-and is required by Docker Compose.
+context. `AETHERTUNE_OPS_TOKEN` configures the administration bearer and
+`AETHERTUNE_METRICS_TOKEN` configures a separate metrics-only bearer. Both
+accept the same raw or `sha256:` form and are required by Docker Compose.
 
 Compose binds to `127.0.0.1` by default. Use the supplied
 [`deploy/Caddyfile`](deploy/Caddyfile) for HTTPS and see
@@ -305,10 +310,11 @@ configured. It does not record or expose users, bearer tokens, request paths,
 addresses, or payloads. The total request count includes the metrics request
 itself; response and duration counters are sampled immediately before the
 metrics response is returned. All counters reset when the server restarts.
-When `AETHERTUNE_OPS_TOKEN` is set, requests require
-`Authorization: Bearer <operations-token>` and rejected tokens are never
-echoed. Keep the endpoint behind the same private network or proxy access
-policy as the rest of the service.
+Deployed servers require `Authorization: Bearer <metrics-token>` using the
+separate `AETHERTUNE_METRICS_TOKEN`; the administration token does not unlock
+metrics when a metrics token is configured. Rejected tokens are never echoed.
+Keep the endpoint behind the same private network or proxy access policy as
+the rest of the service.
 
 The server executable writes one JSON log line for each handled request with
 only a timestamp, HTTP method, normalized known route (or `/not-found`), status

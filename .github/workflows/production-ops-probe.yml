@@ -19,7 +19,9 @@ jobs:
       vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-    environment: production
+    # An unattended probe cannot wait for production release approval.
+    # This environment admits only main and contains only the probe credential.
+    environment: production-monitoring
     timeout-minutes: 5
     env:
       AETHERTUNE_PRODUCTION_BASE_URL: ${{ vars.AETHERTUNE_PRODUCTION_BASE_URL }}

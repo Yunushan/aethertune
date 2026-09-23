@@ -260,6 +260,7 @@ Handler createServerHandler({
   SyncAuthenticator? syncAuthenticator,
   ManagedSyncAccountRegistry? managedSyncAccounts,
   OperationsAuthenticator? operationsAuthenticator,
+  MetricsAuthenticator? metricsAuthenticator,
   LibrarySyncSnapshotStore? syncStore,
   LibrarySyncSnapshotStore? providerConfigurationStore,
   LibrarySyncSnapshotStore? listenTogetherStore,
@@ -278,6 +279,7 @@ Handler createServerHandler({
   final authenticator = syncAuthenticator ?? const DisabledSyncAuthenticator();
   final operations =
       operationsAuthenticator ?? const DisabledOperationsAuthenticator();
+  final metrics = metricsAuthenticator ?? const DisabledMetricsAuthenticator();
   final snapshots = syncStore ?? MemoryLibrarySyncSnapshotStore();
   final providerConfigurations =
       providerConfigurationStore ?? MemoryLibrarySyncSnapshotStore();
@@ -389,9 +391,14 @@ Handler createServerHandler({
         if (request.method != 'GET') {
           return _methodNotAllowed(request);
         }
-        if (operations.isConfigured) {
+        if (metrics.isConfigured || operations.isConfigured) {
           final token = _bearerToken(request.headers['authorization'] ?? '');
-          if (token == null || !operations.authenticate(token)) {
+          final authenticated =
+              token != null &&
+              (metrics.isConfigured
+                  ? metrics.authenticate(token)
+                  : operations.authenticate(token));
+          if (!authenticated) {
             return _unauthorizedResponse();
           }
         }

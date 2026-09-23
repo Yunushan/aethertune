@@ -1,4 +1,4 @@
-"""Regression checks for the protected production operations probe workflow."""
+"""Regression checks for the unattended production operations probe workflow."""
 
 from pathlib import Path
 import unittest
@@ -16,7 +16,8 @@ class ProductionOpsWorkflowTest(unittest.TestCase):
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("schedule:", workflow)
         self.assertIn("cron: '*/15 * * * *'", workflow)
-        self.assertIn("environment: production", workflow)
+        self.assertIn("environment: production-monitoring", workflow)
+        self.assertNotIn("environment: production\n", workflow)
         self.assertIn("timeout-minutes: 5", workflow)
         self.assertIn(
             "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
