@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
@@ -17,6 +20,68 @@ RUNTIME_PROBE = ROOT / "scripts" / "ci" / "test_server_ops_probe_runtime.sh"
 
 
 class ServerOpsProbeContractTest(unittest.TestCase):
+    def test_probe_rejects_misrouted_success_responses(self) -> None:
+        bash = shutil.which("bash")
+        if os.name == "nt" or bash is None or shutil.which("curl") is None:
+            self.skipTest("A POSIX Bash and curl runtime is unavailable on this host")
+
+        responses = {
+            "/health": {"service": "aethertune-server", "status": "ok"},
+            "/ready": {"service": "aethertune-server", "status": "ready"},
+            "/api/v1/metrics": {
+                "service": "aethertune-server",
+                "requestsTotal": 1,
+                "requestsRateLimited": 0,
+                "responses5xx": 0,
+            },
+        }
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                body = json.dumps(responses[self.path]).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: object) -> None:
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            probe_path = DEPLOY / "aethertune-ops-probe.sh"
+            environment = os.environ.copy()
+            environment["AETHERTUNE_OPS_PROBE_TOKEN"] = "fixture-only-token"
+
+            def probe() -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [bash, str(probe_path), f"http://127.0.0.1:{server.server_port}"],
+                    capture_output=True,
+                    check=False,
+                    env=environment,
+                    text=True,
+                    timeout=20,
+                )
+
+            self.assertEqual(probe().returncode, 0)
+            for endpoint, payload in (
+                ("/health", {"service": "another-service", "status": "ok"}),
+                ("/health", {"service": "aethertune-server", "status": "stale"}),
+                ("/ready", {"service": "aethertune-server", "status": "not_ready"}),
+            ):
+                with self.subTest(endpoint=endpoint, payload=payload):
+                    original = responses[endpoint]
+                    responses[endpoint] = payload
+                    self.assertNotEqual(probe().returncode, 0)
+                    responses[endpoint] = original
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_probe_is_authenticated_bounded_and_https_first(self) -> None:
         probe = (DEPLOY / "aethertune-ops-probe.sh").read_text(encoding="utf-8")
 
