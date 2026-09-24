@@ -1,10 +1,20 @@
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/domain/track.dart';
-import 'package:aethertune/src/ui/home_screen.dart';
+import 'package:aethertune/src/ui/library_stats_charts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('formats library statistics durations', () {
+    expect(formatLibraryStatsDuration(Duration.zero), '0m');
+    expect(formatLibraryStatsDuration(const Duration(minutes: 59)), '59m');
+    expect(formatLibraryStatsDuration(const Duration(hours: 1)), '1h');
+    expect(
+      formatLibraryStatsDuration(const Duration(hours: 1, minutes: 30)),
+      '1h 30m',
+    );
+  });
+
   testWidgets('renders all compact chart dimensions and listening-time mode', (
     tester,
   ) async {

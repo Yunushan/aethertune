@@ -1,7 +1,7 @@
 # Production Readiness Progress
 
-Current published-main assessment: **provisional 75/100 on 2026-09-23**. See
-[the September 23 checkpoint](PRODUCTION_READINESS_CHECKPOINT_2026-09-23.md)
+Current published-main assessment: **provisional 81/100 on 2026-09-24**. See
+[the post-merge September 23 checkpoint](PRODUCTION_READINESS_POST_MERGE_2026-09-23.md)
 for the assessed revision, fresh evidence and remaining release gates. The
 dated entries below are historical progress records.
 
