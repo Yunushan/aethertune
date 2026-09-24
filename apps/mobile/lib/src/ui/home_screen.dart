@@ -99,6 +99,7 @@ import '../player/offline_playback_policy.dart';
 import '../player/android_pinned_shortcut_bridge.dart';
 import '../player/player_controller.dart';
 import 'library_stats_charts.dart';
+import 'library_stats_sections.dart';
 import 'now_playing_screen.dart';
 import 'offline_cache_maintenance_dialog.dart';
 import 'desktop_audio_output_settings.dart';
@@ -6962,37 +6963,37 @@ class _LocalChartsPreview extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _LibraryStatsOverview(stats: stats),
+        LibraryStatsOverview(stats: stats),
         const SizedBox(height: 16),
         LibraryStatsCharts(stats: stats),
         const SizedBox(height: 16),
-        _LibraryStatsTrackSection(stats: stats),
+        LibraryStatsTrackSection(stats: stats),
         const SizedBox(height: 12),
-        _LibraryStatsGroupSection(
+        LibraryStatsGroupSection(
           title: 'Top artists',
           icon: Icons.person_outline,
           groups: stats.topArtists,
         ),
         const SizedBox(height: 12),
-        _LibraryStatsGroupSection(
+        LibraryStatsGroupSection(
           title: 'Top albums',
           icon: Icons.album_outlined,
           groups: stats.topAlbums,
         ),
         const SizedBox(height: 12),
-        _LibraryStatsGroupSection(
+        LibraryStatsGroupSection(
           title: 'Top genres',
           icon: Icons.category_outlined,
           groups: stats.topGenres,
         ),
         const SizedBox(height: 12),
-        _LibraryStatsGroupSection(
+        LibraryStatsGroupSection(
           title: 'Top sources',
           icon: Icons.source_outlined,
           groups: stats.topSources,
         ),
         const SizedBox(height: 12),
-        _LibraryStatsGroupSection(
+        LibraryStatsGroupSection(
           title: 'Top folders',
           icon: Icons.folder_outlined,
           groups: stats.topFolders,
@@ -12962,12 +12963,12 @@ class _HistoryTabState extends State<_HistoryTab> {
           },
         ),
         const SizedBox(height: 12),
-        _LibraryStatsOverview(stats: stats),
+        LibraryStatsOverview(stats: stats),
         if (stats.playbackCount > 0) ...<Widget>[
           const SizedBox(height: 16),
           LibraryStatsCharts(stats: stats),
           const SizedBox(height: 16),
-          _StatsSection(
+          LibraryStatsSection(
             title: 'Listening calendar',
             children: <Widget>[
               Padding(
@@ -12977,53 +12978,53 @@ class _HistoryTabState extends State<_HistoryTab> {
             ],
           ),
           const SizedBox(height: 16),
-          _ListeningRecapSection(
+          ListeningRecapSection(
             title: 'Monthly recaps',
             icon: Icons.calendar_month_outlined,
             recaps: monthlyRecaps,
             onShare: (recap) => _showListeningRecapPreview(context, recap),
           ),
           const SizedBox(height: 12),
-          _ListeningRecapSection(
+          ListeningRecapSection(
             title: 'Yearly recaps',
             icon: Icons.event_note_outlined,
             recaps: yearlyRecaps,
             onShare: (recap) => _showListeningRecapPreview(context, recap),
           ),
           const SizedBox(height: 12),
-          _LibraryStatsTrackSection(stats: stats),
+          LibraryStatsTrackSection(stats: stats),
           const SizedBox(height: 12),
-          _LibraryStatsGroupSection(
+          LibraryStatsGroupSection(
             title: 'Top artists',
             icon: Icons.person_outline,
             groups: stats.topArtists,
           ),
           const SizedBox(height: 12),
-          _LibraryStatsGroupSection(
+          LibraryStatsGroupSection(
             title: 'Top albums',
             icon: Icons.album_outlined,
             groups: stats.topAlbums,
           ),
           const SizedBox(height: 12),
-          _LibraryStatsGroupSection(
+          LibraryStatsGroupSection(
             title: 'Top genres',
             icon: Icons.category_outlined,
             groups: stats.topGenres,
           ),
           const SizedBox(height: 12),
-          _LibraryStatsGroupSection(
+          LibraryStatsGroupSection(
             title: 'Top sources',
             icon: Icons.source_outlined,
             groups: stats.topSources,
           ),
           const SizedBox(height: 12),
-          _LibraryStatsGroupSection(
+          LibraryStatsGroupSection(
             title: 'Top folders',
             icon: Icons.folder_outlined,
             groups: stats.topFolders,
           ),
           const SizedBox(height: 12),
-          _PlaybackHistoryEntrySection(
+          PlaybackHistoryEntrySection(
             entries: historyEntries,
             tracksById: historyTracksById,
             onPlay: (track) => _playTrackWithResume(
@@ -13060,7 +13061,7 @@ class _HistoryTabState extends State<_HistoryTab> {
                 '${library.playCountForTrack(track.id, from: statsFrom, to: statsTo)} play(s)',
               ),
               trailing: Text(
-                _formatHistoryTime(
+                formatLibraryHistoryTime(
                   library.lastPlayedAt(track.id, from: statsFrom, to: statsTo),
                 ),
               ),
@@ -13585,309 +13586,6 @@ IconData _statsExportFormatIcon(LibraryStatsExportFormat format) {
   }
 }
 
-class _LibraryStatsOverview extends StatelessWidget {
-  const _LibraryStatsOverview({required this.stats});
-
-  final LibraryStatsSummary stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: <Widget>[
-        _StatsMetricTile(
-          icon: Icons.library_music_outlined,
-          label: 'Tracks',
-          value: stats.trackCount.toString(),
-        ),
-        _StatsMetricTile(
-          icon: Icons.favorite_border,
-          label: 'Favorites',
-          value: stats.favoriteTrackCount.toString(),
-        ),
-        _StatsMetricTile(
-          icon: Icons.play_circle_outline,
-          label: 'Plays',
-          value: stats.playbackCount.toString(),
-        ),
-        _StatsMetricTile(
-          icon: Icons.schedule,
-          label: 'Listening',
-          value: formatLibraryStatsDuration(stats.estimatedListeningDuration),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatsMetricTile extends StatelessWidget {
-  const _StatsMetricTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 150,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: <Widget>[
-              Icon(icon),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(value, style: Theme.of(context).textTheme.titleMedium),
-                    Text(label, style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LibraryStatsTrackSection extends StatelessWidget {
-  const _LibraryStatsTrackSection({required this.stats});
-
-  final LibraryStatsSummary stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return _StatsSection(
-      title: 'Top tracks',
-      children: <Widget>[
-        for (final trackStats in stats.topTracks)
-          ListTile(
-            leading: const Icon(Icons.music_note_outlined),
-            title: Text(trackStats.track.title),
-            subtitle: Text(
-              '${trackStats.track.artist} · '
-              '${trackStats.playCount} play(s) · '
-              '${formatLibraryStatsDuration(trackStats.estimatedListeningDuration)}',
-            ),
-            trailing: Text(_formatHistoryTime(trackStats.lastPlayedAt)),
-          ),
-      ],
-    );
-  }
-}
-
-class _LibraryStatsGroupSection extends StatelessWidget {
-  const _LibraryStatsGroupSection({
-    required this.title,
-    required this.icon,
-    required this.groups,
-  });
-
-  final String title;
-  final IconData icon;
-  final List<LibraryStatsGroup> groups;
-
-  @override
-  Widget build(BuildContext context) {
-    if (groups.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return _StatsSection(
-      title: title,
-      children: <Widget>[
-        for (final group in groups)
-          ListTile(
-            leading: Icon(icon),
-            title: Text(group.label),
-            subtitle: Text(
-              '${group.playCount} play(s) · '
-              '${group.trackCount} track(s) · '
-              '${formatLibraryStatsDuration(group.estimatedListeningDuration)}',
-            ),
-            trailing: Text(_formatHistoryTime(group.lastPlayedAt)),
-          ),
-      ],
-    );
-  }
-}
-
-class _ListeningRecapSection extends StatelessWidget {
-  const _ListeningRecapSection({
-    required this.title,
-    required this.icon,
-    required this.recaps,
-    required this.onShare,
-  });
-
-  final String title;
-  final IconData icon;
-  final List<LibraryListeningRecap> recaps;
-  final ValueChanged<LibraryListeningRecap> onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    if (recaps.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: <Widget>[
-            for (final recap in recaps)
-              SizedBox(
-                width: 220,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Icon(icon),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                listeningRecapLabel(recap),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                            ),
-                            IconButton(
-                              key: ValueKey<String>(
-                                'listening-recap-preview-'
-                                '${recap.period.name}-'
-                                '${recap.start.year}-'
-                                '${recap.start.month}',
-                              ),
-                              tooltip: 'Save recap image',
-                              onPressed: () => onShare(recap),
-                              icon: const Icon(Icons.image_outlined),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _listeningRecapSummary(recap.stats),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${recap.stats.uniquePlayedTrackCount} track(s)',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-String _listeningRecapSummary(LibraryStatsSummary stats) {
-  final parts = <String>[
-    '${stats.playbackCount} play(s)',
-    formatLibraryStatsDuration(stats.estimatedListeningDuration),
-  ];
-  if (stats.topTracks.isNotEmpty) {
-    parts.add('Top track: ${stats.topTracks.first.track.title}');
-  } else if (stats.topArtists.isNotEmpty) {
-    parts.add('Top artist: ${stats.topArtists.first.label}');
-  }
-
-  return parts.join(' · ');
-}
-
-class _StatsSection extends StatelessWidget {
-  const _StatsSection({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    if (children.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Card(child: Column(children: children)),
-      ],
-    );
-  }
-}
-
-class _PlaybackHistoryEntrySection extends StatelessWidget {
-  const _PlaybackHistoryEntrySection({
-    required this.entries,
-    required this.tracksById,
-    required this.onPlay,
-    required this.onRemove,
-  });
-
-  final List<PlaybackHistoryEntry> entries;
-  final Map<String, Track> tracksById;
-  final ValueChanged<Track> onPlay;
-  final ValueChanged<PlaybackHistoryEntry> onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final tiles = <Widget>[];
-    for (final entry in entries) {
-      final track = tracksById[entry.trackId];
-      if (track == null) {
-        continue;
-      }
-
-      tiles.add(
-        ListTile(
-          leading: const Icon(Icons.history),
-          title: Text(track.title),
-          subtitle: Text(
-            '${track.artist} · ${_formatHistoryTime(entry.playedAt)}',
-          ),
-          trailing: IconButton(
-            tooltip: 'Remove this play',
-            onPressed: () => onRemove(entry),
-            icon: const Icon(Icons.close),
-          ),
-          onTap: () => onPlay(track),
-        ),
-      );
-    }
-
-    return _StatsSection(title: 'Play history entries', children: tiles);
-  }
-}
-
 class _EmptyHistory extends StatelessWidget {
   const _EmptyHistory({required this.title, required this.message});
 
@@ -13909,17 +13607,6 @@ class _EmptyHistory extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatHistoryTime(DateTime? value) {
-  if (value == null) {
-    return '';
-  }
-
-  String twoDigits(int number) => number.toString().padLeft(2, '0');
-
-  return '${value.year}-${twoDigits(value.month)}-${twoDigits(value.day)} '
-      '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
 }
 
 Future<void> _playLibraryCollection(
