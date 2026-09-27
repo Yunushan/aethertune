@@ -22,6 +22,7 @@ APP = ROOT / "apps/mobile"
 BUNDLE = "dev.aethertune.aethertune"
 PREFIX = "AetherTune_Acceptance_"
 TARGET = "integration_test/ios_native_acceptance_test.dart"
+IOS_ACCEPTANCE_BUILD_TIMEOUT_SECONDS = 1500
 MARKER = "aethertune-ios-native-acceptance-v1\n"
 PHASES = ("seed", "reopen", "sync")
 COMMON = {"production-app-startup", "native-background-cancellation"}
@@ -425,7 +426,7 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
              "--target", TARGET, f"--dart-define=AETHERTUNE_ACCEPTANCE_SHA={source}",
              f"--dart-define=AETHERTUNE_ACCEPTANCE_UDID={sim.device}",
              f"--dart-define=AETHERTUNE_ACCEPTANCE_NAME={sim.name}"],
-            cwd=APP, timeout=1200)
+            cwd=APP, timeout=IOS_ACCEPTANCE_BUILD_TIMEOUT_SECONDS)
         bundles = list((APP / "build/ios/iphonesimulator").glob("*.app"))
         if len(bundles) != 1:
             raise ValueError("Expected exactly one compiled Simulator app.")
