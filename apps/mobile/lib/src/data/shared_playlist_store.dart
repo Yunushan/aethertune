@@ -158,7 +158,7 @@ class SharedPlaylistStore extends ChangeNotifier {
         }
         final seenRemoteIds = <String>{};
         final seenLocalIds = <String>{};
-        for (final value in decoded.whereType<Map>()) {
+        for (final value in decoded.whereType<Map<dynamic, dynamic>>()) {
           final binding = SharedPlaylistBinding.tryFromJson(
             Map<String, Object?>.from(value),
           );

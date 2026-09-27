@@ -93,7 +93,7 @@ void main() {
           'activeQueueId': 'default',
           'queues': [null],
         },
-        {'version': 2, 'activeQueueId': 'default', 'queues': []},
+        {'version': 2, 'activeQueueId': 'default', 'queues': <Object?>[]},
         {
           'version': 1,
           'activeQueueId': 'default',
@@ -102,7 +102,7 @@ void main() {
             (i) => {
               'id': i == 0 ? 'default' : '$i',
               'name': '$i',
-              'snapshot': {'tracks': []},
+              'snapshot': {'tracks': <Object?>[]},
             },
           ),
         },

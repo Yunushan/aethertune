@@ -436,7 +436,7 @@ void main() {
         LocalDiagnosticLog.storageKey: jsonEncode({
           'version': 2,
           'discardedReports': 7,
-          'entries': [],
+          'entries': <Object?>[],
         }),
       });
       final log = LocalDiagnosticLog();

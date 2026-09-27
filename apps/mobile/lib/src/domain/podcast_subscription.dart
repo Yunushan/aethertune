@@ -98,7 +98,7 @@ final class PodcastSubscription {
       lastFetchedAt: DateTime.tryParse(json['lastFetchedAt'] as String? ?? ''),
       lastFetchError: json['lastFetchError'] as String? ?? '',
       episodes: (json['episodes'] as List<Object?>? ?? const <Object?>[])
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((item) => Track.fromJson(Map<String, Object?>.from(item))),
     );
   }

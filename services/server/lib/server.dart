@@ -23,6 +23,7 @@ const maxSyncSnapshotBytes = 8 * 1024 * 1024;
 const maxManagedAuthRequestBytes = 16 * 1024;
 const maxListenTogetherSessionBytes = 32 * 1024;
 const maxSharedPlaylistBytes = 64 * 1024;
+const maxJsonNestingDepth = 64;
 const defaultServerPort = 8080;
 const serverIdleTimeout = Duration(seconds: 60);
 const serverBodyReadTimeout = Duration(seconds: 30);
@@ -2091,11 +2092,43 @@ Future<Map<String, Object?>> _readBoundedJson(
     await input.cancel();
   }
 
-  final decoded = jsonDecode(utf8.decode(builder.takeBytes()));
+  final source = utf8.decode(builder.takeBytes());
+  _validateJsonNestingDepth(source);
+  final decoded = jsonDecode(source);
   if (decoded is! Map) {
     throw const FormatException('Request body must be an object.');
   }
   return Map<String, Object?>.from(decoded);
+}
+
+void _validateJsonNestingDepth(String source) {
+  var depth = 0;
+  var inString = false;
+  var escaped = false;
+  for (final codeUnit in source.codeUnits) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (codeUnit == 0x5c) {
+        escaped = true;
+      } else if (codeUnit == 0x22) {
+        inString = false;
+      }
+      continue;
+    }
+    if (codeUnit == 0x22) {
+      inString = true;
+    } else if (codeUnit == 0x7b || codeUnit == 0x5b) {
+      depth += 1;
+      if (depth > maxJsonNestingDepth) {
+        throw const FormatException('Request JSON nesting is too deep.');
+      }
+    } else if (codeUnit == 0x7d || codeUnit == 0x5d) {
+      if (depth > 0) {
+        depth -= 1;
+      }
+    }
+  }
 }
 
 final class _BodyReadTimeout implements Exception {
@@ -2252,8 +2285,8 @@ void _validateLyricsSearchEndpointConfiguration(Map<String, Object?> document) {
   }
 }
 
-Map _requireMap(Object? value, String message) {
-  if (value is! Map) {
+Map<dynamic, dynamic> _requireMap(Object? value, String message) {
+  if (value is! Map<dynamic, dynamic>) {
     throw FormatException(message);
   }
   return value;

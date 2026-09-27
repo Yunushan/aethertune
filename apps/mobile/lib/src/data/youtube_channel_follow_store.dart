@@ -54,7 +54,7 @@ final class YouTubeChannelFollowStore extends ChangeNotifier {
       }
       final parsed = <YouTubeChannelFollow>[];
       final ids = <String>{};
-      for (final item in decoded.whereType<Map>()) {
+      for (final item in decoded.whereType<Map<dynamic, dynamic>>()) {
         final follow = YouTubeChannelFollow.tryFromJson(
           Map<String, Object?>.from(item),
         );

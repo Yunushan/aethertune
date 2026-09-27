@@ -280,7 +280,7 @@ final class SelfHostedProviderStore extends ChangeNotifier {
           ? const <Object?>[]
           : jsonDecode(raw) as List<dynamic>;
       final accounts = <SelfHostedProviderAccount>[];
-      for (final item in decoded.whereType<Map>()) {
+      for (final item in decoded.whereType<Map<dynamic, dynamic>>()) {
         try {
           accounts.add(
             SelfHostedProviderAccount.fromJson(Map<String, Object?>.from(item)),
