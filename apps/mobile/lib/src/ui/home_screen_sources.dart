@@ -32,12 +32,14 @@ enum _SpotifyAction {
 class _SourcesTab extends StatefulWidget {
   const _SourcesTab({
     this.archiveProvider,
+    this.radioProvider,
     this.podcastDirectory,
     this.podcastProviderFactory,
     this.providerSearchProviders,
   });
 
   final InternetArchiveProvider? archiveProvider;
+  final RadioBrowserProvider? radioProvider;
   final ItunesPodcastDirectory? podcastDirectory;
   final PodcastRssProvider Function(Uri feedUri)? podcastProviderFactory;
   final List<MusicSourceProvider>? providerSearchProviders;
@@ -46,28 +48,18 @@ class _SourcesTab extends StatefulWidget {
   State<_SourcesTab> createState() => _SourcesTabState();
 }
 
-class _SourcesTabState extends State<_SourcesTab> {
+class _SourcesTabState extends State<_SourcesTab>
+    with _SourcesRadioSection, _SourcesArchiveSection {
   final _provider = const DemoSourceProvider();
+  @override
   late final InternetArchiveProvider _archiveProvider;
   final AudiusProvider _audiusProvider = AudiusProvider();
   late final ItunesPodcastDirectory _podcastDirectory;
   final _providerSearchController = TextEditingController();
-  final _archiveSearchController = TextEditingController();
-  final _archiveCollectionController = TextEditingController();
-  final _archiveSubjectController = TextEditingController();
-  final _archiveCreatorController = TextEditingController();
-  final _archiveYearController = TextEditingController();
   final _podcastFeedController = TextEditingController();
   final _podcastDirectoryQueryController = TextEditingController();
-  final _radioProvider = RadioBrowserProvider();
-  final _radioSearchController = TextEditingController();
-  final _radioCountryCodeController = TextEditingController();
-  final _radioLanguageController = TextEditingController();
-  final _radioTagController = TextEditingController();
-  final _radioCodecController = TextEditingController();
-  final _radioMinBitrateController = TextEditingController();
-  final _radioMaxBitrateController = TextEditingController();
-  List<InternetArchiveItem> _archiveItems = <InternetArchiveItem>[];
+  @override
+  late final RadioBrowserProvider _radioProvider;
   List<Track> _demoTracks = <Track>[];
   List<Track> _podcastEpisodeTracks = <Track>[];
   List<PodcastDirectoryResult> _podcastDirectoryResults =
@@ -80,18 +72,6 @@ class _SourcesTabState extends State<_SourcesTab> {
       <ProviderSearchSuggestion>[];
   Map<String, String> _providerSearchContinuations = <String, String>{};
   Map<String, String> _providerSearchFailedContinuations = <String, String>{};
-  List<Track> _radioTracks = <Track>[];
-  List<RadioBrowserStation> _radioStations = <RadioBrowserStation>[];
-  int _radioNextOffset = 0;
-  int _radioRequestSerial = 0;
-  bool _radioHasMore = false;
-  List<InternetArchiveFacet> _archiveFacets = <InternetArchiveFacet>[];
-  int _archivePage = 0;
-  int? _archiveTotalResults;
-  int _archiveRequestSerial = 0;
-  bool _archiveHasMore = false;
-  bool _archiveLoading = false;
-  String? _archiveError;
   bool _podcastLoading = false;
   bool _podcastDirectoryLoading = false;
   bool _podcastDirectorySuggestionLoading = false;
@@ -110,15 +90,12 @@ class _SourcesTabState extends State<_SourcesTab> {
   Timer? _podcastDirectorySuggestionDebounce;
   String _providerSearchQuery = '';
   String? _providerSearchMessage;
-  bool _radioLoading = false;
-  bool _radioLoadingMore = false;
-  String? _radioError;
-  String? _radioLoadMoreError;
 
   @override
   void initState() {
     super.initState();
     _archiveProvider = widget.archiveProvider ?? InternetArchiveProvider();
+    _radioProvider = widget.radioProvider ?? RadioBrowserProvider();
     _podcastDirectory = widget.podcastDirectory ?? ItunesPodcastDirectory();
     _provider.search('').then((tracks) {
       if (mounted) {
@@ -132,20 +109,10 @@ class _SourcesTabState extends State<_SourcesTab> {
     _providerSearchSuggestionDebounce?.cancel();
     _podcastDirectorySuggestionDebounce?.cancel();
     _providerSearchController.dispose();
-    _archiveSearchController.dispose();
-    _archiveCollectionController.dispose();
-    _archiveSubjectController.dispose();
-    _archiveCreatorController.dispose();
-    _archiveYearController.dispose();
     _podcastFeedController.dispose();
     _podcastDirectoryQueryController.dispose();
-    _radioSearchController.dispose();
-    _radioCountryCodeController.dispose();
-    _radioLanguageController.dispose();
-    _radioTagController.dispose();
-    _radioCodecController.dispose();
-    _radioMinBitrateController.dispose();
-    _radioMaxBitrateController.dispose();
+    _disposeRadioBrowserSection();
+    _disposeInternetArchiveSection();
     super.dispose();
   }
 
@@ -1699,293 +1666,14 @@ class _SourcesTabState extends State<_SourcesTab> {
                 ),
               ),
         ],
-        const SizedBox(height: 16),
-        Text(
-          'Radio Browser search',
-          style: Theme.of(context).textTheme.titleMedium,
+        ..._radioBrowserSectionWidgets(
+          context,
+          offlineModeEnabled: offlineModeEnabled,
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: TextField(
-                controller: _radioSearchController,
-                enabled: !offlineModeEnabled,
-                decoration: const InputDecoration(
-                  labelText: 'Station search',
-                  prefixIcon: Icon(Icons.search),
-                ),
-                textInputAction: TextInputAction.search,
-                onSubmitted: offlineModeEnabled
-                    ? null
-                    : (_) => _searchRadioStations(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: 'Search stations',
-              onPressed:
-                  _radioLoading || _radioLoadingMore || offlineModeEnabled
-                  ? null
-                  : _searchRadioStations,
-              icon: const Icon(Icons.search),
-            ),
-          ],
+        ..._internetArchiveSectionWidgets(
+          context,
+          offlineModeEnabled: offlineModeEnabled,
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            _radioFilterField(
-              controller: _radioCountryCodeController,
-              labelText: 'Country',
-              icon: Icons.flag_outlined,
-              textCapitalization: TextCapitalization.characters,
-            ),
-            _radioFilterField(
-              controller: _radioLanguageController,
-              labelText: 'Language',
-              icon: Icons.translate_outlined,
-            ),
-            _radioFilterField(
-              controller: _radioTagController,
-              labelText: 'Tag',
-              icon: Icons.sell_outlined,
-            ),
-            _radioFilterField(
-              controller: _radioCodecController,
-              labelText: 'Codec',
-              icon: Icons.graphic_eq_outlined,
-              textCapitalization: TextCapitalization.characters,
-            ),
-            _radioFilterField(
-              controller: _radioMinBitrateController,
-              labelText: 'Min kbps',
-              icon: Icons.speed_outlined,
-              keyboardType: TextInputType.number,
-            ),
-            _radioFilterField(
-              controller: _radioMaxBitrateController,
-              labelText: 'Max kbps',
-              icon: Icons.speed,
-              keyboardType: TextInputType.number,
-            ),
-            OutlinedButton.icon(
-              onPressed: _clearRadioFilters,
-              icon: const Icon(Icons.filter_alt_off_outlined),
-              label: const Text('Clear'),
-            ),
-          ],
-        ),
-        if (_radioLoading) ...<Widget>[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(),
-        ],
-        if (_radioError != null) ...<Widget>[
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.error_outline),
-            title: const Text('Radio search failed'),
-            subtitle: Text(_radioError!),
-          ),
-        ] else if (_radioStations.isEmpty && !_radioLoading) ...<Widget>[
-          const SizedBox(height: 8),
-          const ListTile(
-            leading: Icon(Icons.radio_outlined),
-            title: Text('No stations loaded'),
-            subtitle: Text(
-              'Search by station name, country, language, tag, codec, or '
-              'bitrate.',
-            ),
-          ),
-        ] else ...<Widget>[
-          const SizedBox(height: 8),
-          for (final station in _radioStations)
-            ListTile(
-              leading: const Icon(Icons.radio_outlined),
-              title: Text(station.name),
-              subtitle: Text(_radioStationSummary(station)),
-              onTap: () => _openRadioStation(context, station),
-              trailing: const Icon(Icons.chevron_right),
-            ),
-        ],
-        if (_radioLoadingMore) ...<Widget>[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(),
-        ],
-        if (_radioLoadMoreError != null) ...<Widget>[
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.error_outline),
-            title: const Text('Could not load more stations'),
-            subtitle: Text(_radioLoadMoreError!),
-            trailing: IconButton(
-              tooltip: 'Retry loading stations',
-              onPressed: _radioLoadingMore || offlineModeEnabled
-                  ? null
-                  : _loadMoreRadioStations,
-              icon: const Icon(Icons.refresh),
-            ),
-          ),
-        ],
-        if (_radioStations.isNotEmpty && _radioHasMore) ...<Widget>[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed:
-                  _radioLoading || _radioLoadingMore || offlineModeEnabled
-                  ? null
-                  : _loadMoreRadioStations,
-              icon: const Icon(Icons.expand_more),
-              label: const Text('Load more stations'),
-            ),
-          ),
-        ],
-        const SizedBox(height: 16),
-        Text(
-          'Internet Archive audio',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: TextField(
-                controller: _archiveSearchController,
-                enabled: !offlineModeEnabled,
-                decoration: const InputDecoration(
-                  labelText: 'Archive search',
-                  prefixIcon: Icon(Icons.search),
-                ),
-                textInputAction: TextInputAction.search,
-                onSubmitted: offlineModeEnabled || _archiveLoading
-                    ? null
-                    : (_) => _searchArchiveItems(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: 'Search archive audio',
-              onPressed: _archiveLoading || offlineModeEnabled
-                  ? null
-                  : _searchArchiveItems,
-              icon: const Icon(Icons.search),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            _archiveFilterField(
-              controller: _archiveCollectionController,
-              labelText: 'Collection',
-              icon: Icons.collections_bookmark_outlined,
-            ),
-            _archiveFilterField(
-              controller: _archiveSubjectController,
-              labelText: 'Subject',
-              icon: Icons.sell_outlined,
-            ),
-            _archiveFilterField(
-              controller: _archiveCreatorController,
-              labelText: 'Creator',
-              icon: Icons.person_search_outlined,
-            ),
-            _archiveFilterField(
-              controller: _archiveYearController,
-              labelText: 'Year',
-              icon: Icons.calendar_month_outlined,
-              keyboardType: TextInputType.number,
-            ),
-            OutlinedButton.icon(
-              onPressed: _archiveLoading ? null : _clearArchiveFilters,
-              icon: const Icon(Icons.filter_alt_off_outlined),
-              label: const Text('Clear'),
-            ),
-          ],
-        ),
-        if (_archiveFacets.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _archiveFacetChips(
-              offlineModeEnabled: offlineModeEnabled,
-            ),
-          ),
-        ],
-        if (_archiveLoading) ...<Widget>[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(),
-        ],
-        if (_archiveError != null && _archiveItems.isEmpty) ...<Widget>[
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.error_outline),
-            title: const Text('Archive search failed'),
-            subtitle: Text(_archiveError!),
-          ),
-        ] else if (_archiveItems.isEmpty && !_archiveLoading) ...<Widget>[
-          const SizedBox(height: 8),
-          const ListTile(
-            leading: Icon(Icons.archive_outlined),
-            title: Text('No archive audio loaded'),
-            subtitle: Text(
-              'Search by keyword, collection, subject, creator, or year.',
-            ),
-          ),
-        ] else ...<Widget>[
-          const SizedBox(height: 8),
-          for (final item in _archiveItems)
-            ListTile(
-              leading: const Icon(Icons.archive_outlined),
-              title: Text(item.title),
-              subtitle: Text(_archiveItemSubtitle(item)),
-              onTap: () => _openArchiveItem(context, item),
-              trailing: const Icon(Icons.chevron_right),
-            ),
-        ],
-        if (_archiveItems.isNotEmpty && _archiveError != null) ...<Widget>[
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.error_outline),
-            title: const Text('Could not load more archive audio'),
-            subtitle: Text(_archiveError!),
-            trailing: IconButton(
-              tooltip: 'Retry loading archive results',
-              onPressed: _archiveLoading || offlineModeEnabled
-                  ? null
-                  : _loadMoreArchiveItems,
-              icon: const Icon(Icons.refresh),
-            ),
-          ),
-        ],
-        if (_archiveItems.isNotEmpty && _archiveHasMore) ...<Widget>[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: _archiveLoading || offlineModeEnabled
-                  ? null
-                  : _loadMoreArchiveItems,
-              icon: const Icon(Icons.expand_more),
-              label: Text(_archiveLoadMoreLabel),
-            ),
-          ),
-        ] else if (_archiveItems.isNotEmpty &&
-            _archiveTotalResults != null) ...<Widget>[
-          const SizedBox(height: 8),
-          Text(
-            'All $_archiveTotalResults archive results loaded.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
         const SizedBox(height: 16),
         Text(
           'Demo provider tracks',
@@ -3980,6 +3668,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     );
   }
 
+  @override
   bool _offlineModeBlocksSourceNetwork(BuildContext context) {
     if (!context.read<LibraryStore>().offlineModeEnabled) {
       return false;
@@ -3993,6 +3682,7 @@ class _SourcesTabState extends State<_SourcesTab> {
     return true;
   }
 
+  @override
   bool _offlineModeBlocksStream(BuildContext context, Track track) {
     if (!context.read<LibraryStore>().offlineModeEnabled ||
         track.hasLocalSource) {
@@ -5179,526 +4869,6 @@ class _SourcesTabState extends State<_SourcesTab> {
   }
 
   Future<void> _savePodcastEpisode(BuildContext context, Track track) async {
-    final library = context.read<LibraryStore>();
-    final messenger = ScaffoldMessenger.of(context);
-
-    await library.addTracks(<Track>[track]);
-
-    if (!context.mounted) {
-      return;
-    }
-
-    messenger.showSnackBar(SnackBar(content: Text('Saved ${track.title}.')));
-  }
-
-  Future<void> _searchArchiveItems() async {
-    await _loadArchiveItems(reset: true);
-  }
-
-  Future<void> _loadMoreArchiveItems() async {
-    await _loadArchiveItems(reset: false);
-  }
-
-  Future<void> _loadArchiveItems({required bool reset}) async {
-    if (_archiveLoading || (!reset && !_archiveHasMore)) {
-      return;
-    }
-
-    if (_offlineModeBlocksSourceNetwork(context)) {
-      setState(() {
-        _archiveRequestSerial += 1;
-        _archiveItems = <InternetArchiveItem>[];
-        _archiveFacets = <InternetArchiveFacet>[];
-        _archivePage = 0;
-        _archiveTotalResults = null;
-        _archiveHasMore = false;
-        _archiveLoading = false;
-        _archiveError = 'Offline mode is on.';
-      });
-      return;
-    }
-
-    final requestSerial = reset
-        ? ++_archiveRequestSerial
-        : _archiveRequestSerial;
-    final requestedPage = reset ? 1 : _archivePage + 1;
-
-    setState(() {
-      _archiveLoading = true;
-      _archiveError = null;
-      if (reset) {
-        _archiveItems = <InternetArchiveItem>[];
-        _archiveFacets = <InternetArchiveFacet>[];
-        _archivePage = 0;
-        _archiveTotalResults = null;
-        _archiveHasMore = false;
-      }
-    });
-
-    try {
-      final page = await _archiveProvider.searchAudioPage(
-        _archiveSearchController.text,
-        filters: _archiveFilters(),
-        page: requestedPage,
-        includeFacets: reset,
-      );
-      if (!mounted || requestSerial != _archiveRequestSerial) {
-        return;
-      }
-
-      setState(() {
-        _archiveItems = reset
-            ? page.items
-            : _mergeArchiveItems(_archiveItems, page.items);
-        if (reset) {
-          _archiveFacets = page.facets;
-        }
-        _archivePage = page.page;
-        _archiveTotalResults = page.totalResults;
-        _archiveHasMore = page.hasMore;
-        _archiveLoading = false;
-      });
-    } catch (error) {
-      if (!mounted || requestSerial != _archiveRequestSerial) {
-        return;
-      }
-
-      setState(() {
-        if (reset) {
-          _archiveItems = <InternetArchiveItem>[];
-          _archiveFacets = <InternetArchiveFacet>[];
-          _archivePage = 0;
-          _archiveTotalResults = null;
-          _archiveHasMore = false;
-        }
-        _archiveLoading = false;
-        _archiveError = error.toString();
-      });
-    }
-  }
-
-  List<InternetArchiveItem> _mergeArchiveItems(
-    List<InternetArchiveItem> current,
-    List<InternetArchiveItem> incoming,
-  ) {
-    final identifiers = current.map((item) => item.identifier).toSet();
-    return <InternetArchiveItem>[
-      ...current,
-      for (final item in incoming)
-        if (identifiers.add(item.identifier)) item,
-    ];
-  }
-
-  String get _archiveLoadMoreLabel {
-    final totalResults = _archiveTotalResults;
-    if (totalResults == null) {
-      return 'Load more archive results';
-    }
-
-    final remaining = totalResults - _archiveItems.length;
-    return remaining > 0
-        ? 'Load more archive results ($remaining remaining)'
-        : 'Load more archive results';
-  }
-
-  String _archiveItemSubtitle(InternetArchiveItem item) {
-    final playableFileCount = item.files
-        .where((file) => file.isPlayableAudio)
-        .length;
-    final parts = <String>[
-      if (item.creator.isNotEmpty) item.creator,
-      if (item.year.isNotEmpty) item.year,
-      '$playableFileCount playable ${playableFileCount == 1 ? 'file' : 'files'}',
-    ];
-    return parts.join(' / ');
-  }
-
-  Future<void> _openArchiveItem(
-    BuildContext context,
-    InternetArchiveItem item,
-  ) {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => InternetArchiveItemScreen(
-          item: item,
-          provider: _archiveProvider,
-          onOpenCollection: (collection) =>
-              _openArchiveCollection(context, collection),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openArchiveCollection(BuildContext context, String collection) {
-    final normalized = collection.trim();
-    if (normalized.isEmpty) {
-      return Future<void>.value();
-    }
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => InternetArchiveCollectionScreen(
-          collection: normalized,
-          provider: _archiveProvider,
-        ),
-      ),
-    );
-  }
-
-  Widget _archiveFilterField({
-    required TextEditingController controller,
-    required String labelText,
-    required IconData icon,
-    TextInputType? keyboardType,
-  }) {
-    return SizedBox(
-      width: 168,
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          labelText: labelText,
-          prefixIcon: Icon(icon),
-        ),
-        keyboardType: keyboardType,
-        textInputAction: TextInputAction.search,
-        onSubmitted: (_) => _searchArchiveItems(),
-      ),
-    );
-  }
-
-  List<Widget> _archiveFacetChips({required bool offlineModeEnabled}) {
-    final chips = <Widget>[];
-    for (final field in <String>['collection', 'subject', 'creator', 'year']) {
-      chips.addAll(
-        _archiveFacets
-            .where((facet) => facet.field == field)
-            .take(4)
-            .map(
-              (facet) => ActionChip(
-                avatar: Icon(_archiveFacetIcon(facet.field), size: 18),
-                label: Text(
-                  '${_archiveFacetLabel(facet.field)}: ${facet.value} '
-                  '(${facet.count})',
-                ),
-                tooltip: 'Filter ${_archiveFacetLabel(facet.field)}',
-                onPressed: offlineModeEnabled || _archiveLoading
-                    ? null
-                    : () => _applyArchiveFacet(facet),
-              ),
-            ),
-      );
-    }
-
-    return chips;
-  }
-
-  TextEditingController? _archiveFacetController(String field) {
-    switch (field) {
-      case 'collection':
-        return _archiveCollectionController;
-      case 'subject':
-        return _archiveSubjectController;
-      case 'creator':
-        return _archiveCreatorController;
-      case 'year':
-        return _archiveYearController;
-    }
-
-    return null;
-  }
-
-  IconData _archiveFacetIcon(String field) {
-    switch (field) {
-      case 'collection':
-        return Icons.collections_bookmark_outlined;
-      case 'subject':
-        return Icons.sell_outlined;
-      case 'creator':
-        return Icons.person_search_outlined;
-      case 'year':
-        return Icons.calendar_month_outlined;
-    }
-
-    return Icons.filter_alt_outlined;
-  }
-
-  String _archiveFacetLabel(String field) {
-    switch (field) {
-      case 'collection':
-        return 'Collection';
-      case 'subject':
-        return 'Subject';
-      case 'creator':
-        return 'Creator';
-      case 'year':
-        return 'Year';
-    }
-
-    return 'Facet';
-  }
-
-  void _applyArchiveFacet(InternetArchiveFacet facet) {
-    final controller = _archiveFacetController(facet.field);
-    if (controller == null) {
-      return;
-    }
-
-    controller.text = facet.value;
-    unawaited(_searchArchiveItems());
-  }
-
-  InternetArchiveSearchFilters _archiveFilters() {
-    return InternetArchiveSearchFilters(
-      collection: _archiveCollectionController.text,
-      subject: _archiveSubjectController.text,
-      creator: _archiveCreatorController.text,
-      year: _archiveYearController.text,
-    );
-  }
-
-  void _clearArchiveFilters() {
-    setState(() {
-      _archiveCollectionController.clear();
-      _archiveSubjectController.clear();
-      _archiveCreatorController.clear();
-      _archiveYearController.clear();
-      _archiveRequestSerial += 1;
-      _archiveItems = <InternetArchiveItem>[];
-      _archiveFacets = <InternetArchiveFacet>[];
-      _archivePage = 0;
-      _archiveTotalResults = null;
-      _archiveHasMore = false;
-      _archiveError = null;
-    });
-  }
-
-  Widget _radioFilterField({
-    required TextEditingController controller,
-    required String labelText,
-    required IconData icon,
-    TextInputType? keyboardType,
-    TextCapitalization textCapitalization = TextCapitalization.none,
-  }) {
-    return SizedBox(
-      width: 156,
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          labelText: labelText,
-          prefixIcon: Icon(icon),
-        ),
-        keyboardType: keyboardType,
-        textCapitalization: textCapitalization,
-        textInputAction: TextInputAction.search,
-        onSubmitted: (_) => _searchRadioStations(),
-      ),
-    );
-  }
-
-  RadioBrowserSearchFilters _radioFilters() {
-    return RadioBrowserSearchFilters(
-      countryCode: _radioCountryCodeController.text,
-      language: _radioLanguageController.text,
-      tag: _radioTagController.text,
-      codec: _radioCodecController.text,
-      minBitrateKbps: _positiveInt(_radioMinBitrateController.text),
-      maxBitrateKbps: _positiveInt(_radioMaxBitrateController.text),
-    );
-  }
-
-  int? _positiveInt(String value) {
-    final parsed = int.tryParse(value.trim());
-    if (parsed == null || parsed <= 0) {
-      return null;
-    }
-
-    return parsed;
-  }
-
-  void _clearRadioFilters() {
-    _radioCountryCodeController.clear();
-    _radioLanguageController.clear();
-    _radioTagController.clear();
-    _radioCodecController.clear();
-    _radioMinBitrateController.clear();
-    _radioMaxBitrateController.clear();
-  }
-
-  Future<void> _searchRadioStations() async {
-    if (_radioLoading || _radioLoadingMore) {
-      return;
-    }
-
-    if (_offlineModeBlocksSourceNetwork(context)) {
-      setState(() {
-        _radioRequestSerial += 1;
-        _radioTracks = <Track>[];
-        _radioStations = <RadioBrowserStation>[];
-        _radioNextOffset = 0;
-        _radioHasMore = false;
-        _radioLoading = false;
-        _radioLoadingMore = false;
-        _radioError = 'Offline mode is on.';
-        _radioLoadMoreError = null;
-      });
-      return;
-    }
-
-    final requestSerial = ++_radioRequestSerial;
-    setState(() {
-      _radioLoading = true;
-      _radioError = null;
-      _radioLoadMoreError = null;
-      _radioHasMore = false;
-    });
-
-    try {
-      final page = await _radioProvider.searchStationPage(
-        _radioSearchController.text,
-        filters: _radioFilters(),
-      );
-      if (!mounted || requestSerial != _radioRequestSerial) {
-        return;
-      }
-
-      setState(() {
-        _radioTracks = page.tracks;
-        _radioStations = page.stations;
-        _radioNextOffset = page.nextOffset;
-        _radioHasMore = page.hasMore;
-        _radioLoading = false;
-      });
-    } catch (error) {
-      if (!mounted || requestSerial != _radioRequestSerial) {
-        return;
-      }
-
-      setState(() {
-        _radioTracks = <Track>[];
-        _radioStations = <RadioBrowserStation>[];
-        _radioNextOffset = 0;
-        _radioHasMore = false;
-        _radioLoading = false;
-        _radioError = error.toString();
-      });
-    }
-  }
-
-  Future<void> _loadMoreRadioStations() async {
-    if (_radioLoading || _radioLoadingMore || !_radioHasMore) {
-      return;
-    }
-
-    if (_offlineModeBlocksSourceNetwork(context)) {
-      setState(() => _radioLoadMoreError = 'Offline mode is on.');
-      return;
-    }
-
-    final requestSerial = _radioRequestSerial;
-    final offset = _radioNextOffset;
-    final query = _radioSearchController.text;
-    final filters = _radioFilters();
-    setState(() {
-      _radioLoadingMore = true;
-      _radioLoadMoreError = null;
-    });
-
-    try {
-      final page = await _radioProvider.searchStationPage(
-        query,
-        filters: filters,
-        offset: offset,
-      );
-      if (!mounted || requestSerial != _radioRequestSerial) {
-        return;
-      }
-
-      setState(() {
-        _radioStations = _mergeRadioStations(_radioStations, page.stations);
-        _radioTracks = _mergeRadioTracks(_radioTracks, page.tracks);
-        _radioNextOffset = page.nextOffset;
-        _radioHasMore = page.hasMore;
-        _radioLoadingMore = false;
-      });
-    } catch (error) {
-      if (!mounted || requestSerial != _radioRequestSerial) {
-        return;
-      }
-
-      setState(() {
-        _radioLoadingMore = false;
-        _radioLoadMoreError = error.toString();
-      });
-    }
-  }
-
-  List<RadioBrowserStation> _mergeRadioStations(
-    List<RadioBrowserStation> current,
-    List<RadioBrowserStation> incoming,
-  ) {
-    final keys = current
-        .map((station) => '${station.stationUuid}|${station.streamUri}')
-        .toSet();
-    return <RadioBrowserStation>[
-      ...current,
-      ...incoming.where(
-        (station) => keys.add('${station.stationUuid}|${station.streamUri}'),
-      ),
-    ];
-  }
-
-  List<Track> _mergeRadioTracks(List<Track> current, List<Track> incoming) {
-    final ids = current.map((track) => track.id).toSet();
-    return <Track>[...current, ...incoming.where((track) => ids.add(track.id))];
-  }
-
-  Future<void> _playRadioStation(BuildContext context, Track track) async {
-    if (_offlineModeBlocksStream(context, track)) {
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    final player = context.read<PlayerController>();
-
-    try {
-      await player.playTrack(track, queue: _radioTracks);
-    } catch (_) {
-      if (!context.mounted) {
-        return;
-      }
-
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not play ${track.title}.')),
-      );
-    }
-  }
-
-  String _radioStationSummary(RadioBrowserStation station) {
-    final parts = <String>[
-      if (station.countryCode.isNotEmpty) station.countryCode,
-      if (station.language.isNotEmpty) station.language,
-      if (station.codec.isNotEmpty) station.codec,
-      if (station.bitrateKbps > 0) '${station.bitrateKbps} kbps',
-    ];
-    return parts.isEmpty ? 'Station details' : parts.join(' / ');
-  }
-
-  Future<void> _openRadioStation(
-    BuildContext context,
-    RadioBrowserStation station,
-  ) {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => RadioBrowserStationScreen(
-          station: station,
-          provider: _radioProvider,
-          onPlay: (track) => _playRadioStation(context, track),
-          onSave: (track) => _saveRadioStation(context, track),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _saveRadioStation(BuildContext context, Track track) async {
     final library = context.read<LibraryStore>();
     final messenger = ScaffoldMessenger.of(context);
 

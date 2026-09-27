@@ -147,6 +147,8 @@ import 'widgets/track_artwork.dart';
 part 'home_screen_home_tab.dart';
 part 'home_screen_playlists.dart';
 part 'home_screen_sources.dart';
+part 'home_screen_sources_archive.dart';
+part 'home_screen_sources_radio.dart';
 part 'home_screen_history.dart';
 part 'home_screen_library.dart';
 part 'home_screen_settings.dart';
@@ -1209,6 +1211,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const _HistoryTab(),
               _SourcesTab(
                 archiveProvider: widget.internetArchiveProvider,
+                radioProvider: widget.radioBrowserProvider,
                 podcastDirectory: widget.podcastDirectory,
                 podcastProviderFactory: widget.podcastProviderFactory,
                 providerSearchProviders: widget.providerSearchProviders,
