@@ -149,6 +149,7 @@ part 'home_screen_playlists.dart';
 part 'home_screen_sources.dart';
 part 'home_screen_sources_archive.dart';
 part 'home_screen_sources_radio.dart';
+part 'home_screen_sources_podcast.dart';
 part 'home_screen_history.dart';
 part 'home_screen_library.dart';
 part 'home_screen_settings.dart';
