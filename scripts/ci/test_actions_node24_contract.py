@@ -46,6 +46,15 @@ class ActionsNode24ContractTest(unittest.TestCase):
             references,
         )
 
+    def test_codeql_init_and_analyze_use_the_same_release(self) -> None:
+        workflow = (ROOT / ".github/workflows/codeql.yml").read_text(encoding="utf-8")
+        pins = dict(re.findall(
+            r"github/codeql-action/(init|analyze)@([0-9a-f]{40})", workflow
+        ))
+        self.assertEqual(set(pins), {"init", "analyze"})
+        self.assertEqual(pins["init"], pins["analyze"],
+                         "CodeQL analyze cannot read another release's init configuration")
+
     def test_uses_node24_era_action_commit_pins(self) -> None:
         workflows = "\n".join(
             workflow.read_text(encoding="utf-8") for workflow in WORKFLOWS
