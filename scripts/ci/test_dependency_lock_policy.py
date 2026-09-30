@@ -71,18 +71,6 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertNotIn("/apps/mobile/pubspec.lock", gitignore)
         self.assertNotIn("/services/server/pubspec.lock", gitignore)
 
-    def test_dependabot_ignores_incompatible_flutter_intl_updates(self) -> None:
-        config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
-        self.assertRegex(
-            config,
-            r"(?ms)^  - package-ecosystem: pub\n"
-            r"    directory: /apps/mobile\n"
-            r".*?^    ignore:\n"
-            r"      - dependency-name: intl\n"
-            r"        versions:\n"
-            r"          - \">=0\.20\.3\"\n",
-        )
-
     def test_dependency_commands_enforce_lockfiles(self) -> None:
         for command_file in COMMAND_FILES:
             text = command_file.read_text(encoding="utf-8")
@@ -92,17 +80,24 @@ class DependencyLockPolicyTest(unittest.TestCase):
                 if "dart pub get" in text:
                     self.assertIn("dart pub get --enforce-lockfile", text)
 
-    def test_dependabot_ignores_incompatible_flutter_intl_updates(self) -> None:
+    def test_dependabot_defers_updates_incompatible_with_pinned_flutter(self) -> None:
         config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
-        self.assertRegex(
-            config,
-            r"(?ms)^  - package-ecosystem: pub\n"
-            r"    directories:\n"
-            r".*?^    ignore:\n"
-            r"      - dependency-name: intl\n"
-            r"        versions:\n"
-            r"          - \">=0\.20\.3\"\n",
+        client = config.split("  - package-ecosystem: pub\n", 2)[1]
+        self.assertIn("      - /apps/mobile\n", client)
+        self.assertIn("      - /scripts/ci/library_storage_probe\n", client)
+        entries = re.findall(
+            r'(?m)^      - dependency-name: ([a-z0-9_]+)\n'
+            r'        versions:\n'
+            r'          - "([^"\n]+)"$',
+            client,
         )
+        self.assertEqual(len(entries), 4)
+        self.assertEqual(dict(entries), {
+            "intl": ">=0.20.3",
+            "material_ui": ">=1.4.0",
+            "sqlite3": ">=3.6.0",
+            "tray_manager": ">=0.6.0",
+        })
 
     def test_docker_base_images_are_multiarch_digest_pinned(self) -> None:
         dockerfile = (ROOT / "services" / "server" / "Dockerfile").read_text(

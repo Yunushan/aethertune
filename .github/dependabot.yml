@@ -11,12 +11,24 @@ updates:
     groups:
       flutter-client:
         patterns: ['*']
-    # flutter_localizations in the pinned Flutter 3.44.6 SDK requires intl 0.20.2.
-    # Do not open updates that cannot resolve with the locked release toolchain.
+    # Keep updates compatible with the digest-pinned Flutter 3.44.6 toolchain.
+    # flutter_localizations pins intl 0.20.2; material_ui >=1.4 needs Flutter 3.47.
+    # sqlite3 >=3.6 requires meta >=1.19 through hooks/record_use, while Flutter
+    # pins meta 1.18. Tray 0.6 releases are retracted; 0.7 needs Flutter 3.47
+    # and a native API migration. Revisit these together with a toolchain upgrade.
     ignore:
       - dependency-name: intl
         versions:
           - ">=0.20.3"
+      - dependency-name: material_ui
+        versions:
+          - ">=1.4.0"
+      - dependency-name: sqlite3
+        versions:
+          - ">=3.6.0"
+      - dependency-name: tray_manager
+        versions:
+          - ">=0.6.0"
 
   - package-ecosystem: pub
     directory: /services/server
